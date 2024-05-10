@@ -5,7 +5,7 @@ plugins {
 apply plugin: 'maven-publish'
 
 group = 'com.github.istin'
-version = '1.2.5'
+version = '1.3.0'
 
 repositories {
     mavenCentral()
@@ -41,6 +41,10 @@ dependencies {
 
     api(group: 'org.jsoup', name: 'jsoup', version: '1.15.3')
 
+    api 'org.apache.logging.log4j:log4j-api:2.20.0'
+    api 'org.apache.logging.log4j:log4j-core:2.20.0'
+    api 'org.apache.logging.log4j:log4j-slf4j-impl:2.20.0'
+
     api group: 'org.jxls', name: 'jxls', version: '2.14.0'
     api group: 'org.jxls', name: 'jxls-jexcel', version: '1.0.9'
     api group: 'org.jxls', name: 'jxls-poi', version: '2.14.0'
@@ -72,7 +76,7 @@ publishing {
         maven(MavenPublication) {
             groupId = 'com.github.istin'
             artifactId = 'dmtools'
-            version = "v1.2.5"
+            version = "v1.3.0"
             from components.java
 
             pom {
