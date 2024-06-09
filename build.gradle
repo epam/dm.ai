@@ -18,7 +18,7 @@ compileJava {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(8)
+        languageVersion = JavaLanguageVersion.of(11)
     }
 }
 
@@ -60,8 +60,8 @@ dependencies {
     api group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.5'
     api 'org.apache.pdfbox:pdfbox:3.0.2'
     api 'io.github.furstenheim:copy_down:1.1'
-    api 'com.vladsch.flexmark:flexmark-html2md-converter:0.64.8'
-
+    api 'org.seleniumhq.selenium:selenium-java:4.21.0'
+    api 'io.github.bonigarcia:webdrivermanager:5.8.0'
 }
 
 test {
@@ -71,6 +71,9 @@ test {
 java {
     withSourcesJar()
     withJavadocJar()
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(11)) // Specify Java 11 or later
+    }
 }
 
 publishing {
