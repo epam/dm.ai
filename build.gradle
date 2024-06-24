@@ -92,11 +92,11 @@ publishing {
     }
 }
 
-shadowJar {
-    archiveBaseName.set('lib')
-    archiveClassifier.set('')
-    archiveVersion.set('')
-    manifest {
-        attributes 'Main-Class': 'com.github.istin.dmtools.job.JobRunner'
-    }
-}
+//shadowJar {
+//    archiveBaseName.set('lib')
+//    archiveClassifier.set('')
+//    archiveVersion.set('')
+//    manifest {
+//        attributes 'Main-Class': 'com.github.istin.dmtools.job.JobRunner'
+//    }
+//}
