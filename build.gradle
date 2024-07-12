@@ -63,6 +63,10 @@ dependencies {
     api 'io.github.furstenheim:copy_down:1.1'
     api 'org.seleniumhq.selenium:selenium-java:4.21.0'
     api 'io.github.bonigarcia:webdrivermanager:5.8.0'
+    // https://mvnrepository.com/artifact/org.graalvm.js/js
+    api group: 'org.graalvm.js', name: 'js', version: '22.0.0'
+    api group: 'org.graalvm.js', name: 'js-scriptengine', version: '22.0.0'
+
 }
 
 test {
