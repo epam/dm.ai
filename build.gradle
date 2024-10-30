@@ -98,7 +98,10 @@ tasks.withType(JavaCompile) {
 
 shadowJar {
     // Configure the shadow JAR task as needed
-    archiveClassifier.set('')
+    archiveBaseName.set('dmtools')
+    archiveVersion.set('v'+version)
+    archiveClassifier.set('all')
+    archiveExtension.set('jar')
     // Optionally specify main class
      manifest {
          attributes 'Main-Class': 'com.github.istin.dmtools.job.JobRunner'
