@@ -51,7 +51,7 @@ dependencies {
     api 'org.apache.pdfbox:pdfbox:3.0.2'
     api 'io.github.furstenheim:copy_down:1.1'
     api 'org.seleniumhq.selenium:selenium-java:4.21.0'
-    api 'io.github.bonigarcia:webdrivermanager:5.8.0'
+    api 'io.github.bonigarcia:webdrivermanager:5.9.2'
     // https://mvnrepository.com/artifact/org.graalvm.js/js
     api group: 'org.graalvm.js', name: 'js', version: '24.1.1'
     api group: 'org.graalvm.js', name: 'js-scriptengine', version: '24.1.1'
