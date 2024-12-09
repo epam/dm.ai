@@ -22,7 +22,7 @@ jobs:
           java-version: '23'
 
       - name: Cache Gradle files
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
