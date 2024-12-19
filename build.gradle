@@ -76,6 +76,13 @@ dependencies {
     api group: 'org.graalvm.js', name: 'js-scriptengine', version: '24.1.1'
 
     api 'com.github.mpkorstanje:simmetrics-core:4.1.1'
+
+    // Add Dagger dependencies
+    api 'com.google.dagger:dagger:2.53.1'
+    annotationProcessor 'com.google.dagger:dagger-compiler:2.53.1'
+
+    compileOnly 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.36'
 }
 
 configurations.all {
