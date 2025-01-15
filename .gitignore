@@ -26,3 +26,4 @@ replay_pid*
 .gradle/
 build/
 local.properties
+/cache_nanny/*
