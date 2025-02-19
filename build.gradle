@@ -14,19 +14,16 @@ ext {
     semVersion = version.startsWith('v') ? version.substring(1) : version
 }
 
+// Gradle’s internal project group/version
 group = 'com.github.istin'
+// The project.version might be "v1.0.0" or "1.0.1-SNAPSHOT" etc.
+version = "${version}"
 
-// Keep the build's internal "version" property as-is (including the 'v' prefix if present).
-// This will be reported in logs, etc.
-version = "${version}" // e.g. "v1.0.0" or "1.0.1-SNAPSHOT"
-
-// Repositories
 repositories {
     mavenCentral()
     maven { url 'https://jitpack.io' }
 }
 
-// Code coverage
 jacocoTestReport {
     reports {
         xml.required = true
@@ -34,17 +31,16 @@ jacocoTestReport {
     }
 }
 
-// Test tasks
 test {
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         exceptionFormat "full"
     }
     finalizedBy jacocoTestReport
-    useJUnitPlatform() // if you have JUnit5 tests
+    useJUnitPlatform() // if you have JUnit 5 tests
 }
 
-// Integration test setup
+// Integration test source set
 sourceSets {
     integrationTest {
         java.srcDir file('src/integrationTest/java')
@@ -69,13 +65,12 @@ task integrationTest(type: Test) {
 
 check.dependsOn integrationTest
 
-// Versions for some libraries
+// Library versions
 def log4jVersion = '2.20.0'
 def slf4jVersion = '1.7.36'
 
-// Dependencies
 dependencies {
-    // Your test libs
+    // Test libraries
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.mockito:mockito-core:5.14.2'
     testImplementation 'org.mockito:mockito-inline:5.2.0'
@@ -83,7 +78,7 @@ dependencies {
     testImplementation 'org.powermock:powermock-api-mockito2:2.0.9'
     testRuntimeOnly "org.junit.vintage:junit-vintage-engine:5.8.2"
 
-    // Your main libs
+    // Main libraries
     api 'org.json:json:20231013'
     api 'com.squareup.okhttp3:okhttp:4.12.0'
     api 'org.apache.commons:commons-lang3:3.8.1'
@@ -120,7 +115,7 @@ dependencies {
 }
 
 configurations.all {
-    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+    resolutionStrategy.eachDependency { details ->
         if (details.requested.group == 'org.slf4j') {
             details.useVersion slf4jVersion
         }
@@ -130,20 +125,18 @@ configurations.all {
     }
 }
 
-// Create sources/javadoc JARs
 java {
     withSourcesJar()
     withJavadocJar()
 }
 
-// Standard Maven Publishing (Sonatype)
 publishing {
     publications {
         maven(MavenPublication) {
-            // Use the groupId and artifactId you want in Maven Central
-            groupId = 'com.github.istin'
+            // PUBLISH to Maven Central as io.github.istin
+            groupId = 'io.github.istin'
             artifactId = 'dmtools'
-            // Publish the "stripped" version (no 'v' prefix) from semVersion
+            // Use stripped version (no 'v') from semVersion
             version = semVersion
 
             from components.java
@@ -175,7 +168,7 @@ publishing {
     }
 }
 
-// Sign published artifacts
+// Sign the published artifacts
 signing {
     def signingKey = System.getenv("GPG_SIGNING_KEY")
     def signingPassword = System.getenv("GPG_SIGNING_PASSWORD")
@@ -183,11 +176,9 @@ signing {
     sign publishing.publications.maven
 }
 
-// Configure the Gradle Nexus Publish Plugin
 nexusPublishing {
     repositories {
         sonatype {
-            // s01 if your account is on the "new" Sonatype host
             nexusUrl = uri("https://s01.oss.sonatype.org/service/local/")
             snapshotRepositoryUrl = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
             username = System.getenv("OSSRH_USERNAME")
@@ -199,7 +190,7 @@ nexusPublishing {
 // Shadow JAR
 shadowJar {
     archiveBaseName.set('dmtools')
-    // Include the full (possibly 'v'-prefixed) version in the filename if you want:
+    // The filename can retain the 'v' prefix if project.version starts with it
     archiveVersion.set(project.version)
     archiveClassifier.set('all')
     archiveExtension.set('jar')
