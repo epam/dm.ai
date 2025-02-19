@@ -52,7 +52,7 @@ jobs:
 
       - name: Build and Publish
         run: |
-          ./gradlew clean build shadowJar jreleaserDeploy -x integrationTest
+          ./gradlew clean build shadowJar prepareJReleaser jreleaserDeploy -x integrationTest
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

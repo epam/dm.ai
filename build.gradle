@@ -159,6 +159,14 @@ publishing {
     }
 }
 
+// Add this before the jreleaser configuration
+tasks.register('prepareJReleaser') {
+    doLast {
+        mkdir("${buildDir}/jreleaser")
+        mkdir("${buildDir}/staging-deploy")
+    }
+}
+
 jreleaser {
     project {
         name = 'dmtools'
@@ -191,6 +199,21 @@ jreleaser {
             }
         }
     }
+
+    files {
+        artifacts {
+            path = 'build/libs/dmtools-v${project.version}-all.jar'
+        }
+    }
+}
+
+// Add these task dependencies
+tasks.named('jreleaserDeploy').configure {
+    dependsOn 'prepareJReleaser', 'shadowJar'
+}
+
+tasks.named('jreleaserPackage').configure {
+    dependsOn 'prepareJReleaser', 'shadowJar'
 }
 
 signing {
