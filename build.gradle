@@ -137,18 +137,39 @@ publishing {
             version = "v${version}"
             from components.java
 
+            // Include dependencies information in the POM
             pom {
+                name = 'DM Tools'
                 description = 'DM Tools Library'
+                url = 'https://github.com/IstiN/dmtools'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'istin'
+                        name = 'Uladzimir Klyshevich'
+                        email = 'uladzimir.klyshevich@gmail.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/IstiN/dmtools.git'
+                    developerConnection = 'scm:git:ssh://github.com:IstiN/dmtools.git'
+                    url = 'https://github.com/IstiN/dmtools'
+                }
             }
         }
     }
     repositories {
         maven {
             name = "GitHubPackages"
-            url = "https://maven.pkg.github.com/IstiN/dmtools"
+            url = uri("https://maven.pkg.github.com/IstiN/dmtools")
             credentials {
-                username = System.getenv("USERNAME")
-                password = System.getenv("TOKEN")
+                username = System.getenv("GITHUB_USERNAME")
+                password = System.getenv("GITHUB_TOKEN")
             }
         }
     }

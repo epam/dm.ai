@@ -1,4 +1,4 @@
-name: Build Fat JAR
+name: Build Fat JAR and Publish Package
 
 on:
   push:
@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - name: Checkout code
@@ -32,7 +35,10 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Build with Gradle
-        run: ./gradlew clean build shadowJar -x integrationTest
+        run: ./gradlew clean build shadowJar publish -x integrationTest
+        env:
+          GITHUB_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Test Results
         if: always()
