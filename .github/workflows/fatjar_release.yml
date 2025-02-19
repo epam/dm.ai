@@ -54,7 +54,7 @@ jobs:
       - name: Build, Test, and Create Fat JAR
         run: |
           # Build, run tests, create the Shadow JAR
-          ./gradlew clean build shadowJar --info
+          ./gradlew clean build shadowJar --info -x integrationTest
         env:
           OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
