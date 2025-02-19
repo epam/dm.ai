@@ -189,12 +189,16 @@ jreleaser {
 
     release {
         github {
+            owner = 'IstiN'
+            name = 'dmtools'
             tagName = "v${project.version}"
             releaseName = "v${project.version}"
-            changelog.enabled = true
-            repository {
-                repoOwner = 'IstiN'
-                name = 'dmtools'
+            draft = false
+            prerelease = false
+            overwrite = true
+            changelog {
+                enabled = true
+                formatted = true
             }
         }
     }
