@@ -80,17 +80,17 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Publish to Sonatype
-        run: |
-          # Publish artifacts to Sonatype.
-          # If your version doesn't end with "-SNAPSHOT", this will create a staging repo and
-          # then close and release it. For snapshots, it just uploads to the snapshot repo.
-          ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository --info
-        env:
-          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
-          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
-          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+#      - name: Publish to Sonatype
+#        run: |
+#          # Publish artifacts to Sonatype.
+#          # If your version doesn't end with "-SNAPSHOT", this will create a staging repo and
+#          # then close and release it. For snapshots, it just uploads to the snapshot repo.
+#          ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository --info
+#        env:
+#          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+#          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+#          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+#          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
 
       - name: Create a GitHub Release
         # Only run if tag starts with 'v'
