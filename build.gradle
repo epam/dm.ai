@@ -14,9 +14,8 @@ ext {
     semVersion = version.startsWith('v') ? version.substring(1) : version
 }
 
-// Gradle’s internal project group/version
 group = 'com.github.istin'
-// The project.version might be "v1.0.0" or "1.0.1-SNAPSHOT" etc.
+// The project.version remains as provided (e.g. "v1.0.0" or "1.0.1-SNAPSHOT")
 version = "${version}"
 
 repositories {
@@ -37,10 +36,10 @@ test {
         exceptionFormat "full"
     }
     finalizedBy jacocoTestReport
-    useJUnitPlatform() // if you have JUnit 5 tests
+    useJUnitPlatform() // if you have JUnit5 tests
 }
 
-// Integration test source set
+// Integration test setup
 sourceSets {
     integrationTest {
         java.srcDir file('src/integrationTest/java')
@@ -65,7 +64,7 @@ task integrationTest(type: Test) {
 
 check.dependsOn integrationTest
 
-// Library versions
+// Versions for some libraries
 def log4jVersion = '2.20.0'
 def slf4jVersion = '1.7.36'
 
@@ -130,13 +129,14 @@ java {
     withJavadocJar()
 }
 
+// Standard Maven Publishing (Sonatype)
 publishing {
     publications {
         maven(MavenPublication) {
-            // PUBLISH to Maven Central as io.github.istin
+            // Override published coordinates: Maven Central will see these values.
             groupId = 'io.github.istin'
             artifactId = 'dmtools'
-            // Use stripped version (no 'v') from semVersion
+            // Use the stripped version (no 'v' prefix) from semVersion
             version = semVersion
 
             from components.java
@@ -160,7 +160,7 @@ publishing {
                 }
                 scm {
                     connection = 'scm:git:git://github.com/IstiN/dmtools.git'
-                    developerConnection = 'scm:git:ssh://github.com:IstiN/dmtools.git'
+                    developerConnection = 'scm:git:ssh://github.com/IstiN/dmtools.git'
                     url = 'https://github.com/IstiN/dmtools'
                 }
             }
@@ -168,7 +168,7 @@ publishing {
     }
 }
 
-// Sign the published artifacts
+// Sign published artifacts
 signing {
     def signingKey = System.getenv("GPG_SIGNING_KEY")
     def signingPassword = System.getenv("GPG_SIGNING_PASSWORD")
@@ -176,7 +176,10 @@ signing {
     sign publishing.publications.maven
 }
 
+// Configure the Gradle Nexus Publish Plugin
 nexusPublishing {
+    // Override packageGroup so the plugin queries for the correct namespace
+    packageGroup = 'io.github.istin'
     repositories {
         sonatype {
             nexusUrl = uri("https://s01.oss.sonatype.org/service/local/")
@@ -187,10 +190,10 @@ nexusPublishing {
     }
 }
 
-// Shadow JAR
+// Shadow JAR configuration
 shadowJar {
     archiveBaseName.set('dmtools')
-    // The filename can retain the 'v' prefix if project.version starts with it
+    // The filename retains the 'v' prefix if project.version includes it.
     archiveVersion.set(project.version)
     archiveClassifier.set('all')
     archiveExtension.set('jar')
