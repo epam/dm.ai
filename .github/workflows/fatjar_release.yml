@@ -53,7 +53,6 @@ jobs:
 
       - name: Build, Test, and Create Fat JAR
         run: |
-          # Build, run tests, create the Shadow JAR
           ./gradlew clean build shadowJar --info -x integrationTest
         env:
           OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
@@ -93,27 +92,24 @@ jobs:
 #          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
 
       - name: Create a GitHub Release
-        # Only run if tag starts with 'v'
         if: startsWith(github.ref_name, 'v')
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref_name }}      # e.g. v1.0.0
-          release_name: ${{ github.ref_name }}  # e.g. v1.0.0
+          tag_name: ${{ github.ref_name }}
+          release_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
 
       - name: Upload Fat JAR to GitHub Release
-        # Only run if tag starts with 'v'
         if: startsWith(github.ref_name, 'v')
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          # The Shadow JAR is in build/libs with a name like dmtools-v1.0.0-all.jar
-          asset_path: build/libs/dmtools-${{ github.ref_name }}-all.jar
-          asset_name: dmtools-${{ github.ref_name }}-all.jar
+          asset_path: build/libs/dmtools-${{ github.ref_name[1:] }}-all.jar
+          asset_name: dmtools-${{ github.ref_name[1:] }}-all.jar
           asset_content_type: application/java-archive

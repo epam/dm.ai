@@ -9,14 +9,13 @@ plugins {
 }
 
 ext {
-    // Keep your original logic for release checking and 'v' prefix removal
+    // Original logic: if version starts with 'v', remove it for publishing
     isReleaseVersion = !version.endsWith("SNAPSHOT")
     semVersion = version.startsWith('v') ? version.substring(1) : version
 }
 
 group = 'com.github.istin'
-// The project.version remains as provided (e.g. "v1.0.0" or "1.0.1-SNAPSHOT")
-version = "${version}"
+version = "${version}" // e.g., "v1.4.89" or "1.4.89-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -64,7 +63,7 @@ task integrationTest(type: Test) {
 
 check.dependsOn integrationTest
 
-// Versions for some libraries
+// Versions for libraries
 def log4jVersion = '2.20.0'
 def slf4jVersion = '1.7.36'
 
@@ -129,15 +128,13 @@ java {
     withJavadocJar()
 }
 
-// Standard Maven Publishing (Sonatype)
+// Publishing configuration – published coordinates override the internal group.
 publishing {
     publications {
         maven(MavenPublication) {
-            // Override published coordinates: Maven Central will see these values.
             groupId = 'io.github.istin'
             artifactId = 'dmtools'
-            // Use the stripped version (no 'v' prefix) from semVersion
-            version = semVersion
+            version = semVersion // e.g., "1.4.89"
 
             from components.java
 
@@ -176,9 +173,8 @@ signing {
     sign publishing.publications.maven
 }
 
-// Configure the Gradle Nexus Publish Plugin
+// Nexus Publish Plugin configuration
 nexusPublishing {
-    // Override packageGroup so the plugin queries for the correct namespace
     packageGroup = 'io.github.istin'
     repositories {
         sonatype {
@@ -190,11 +186,10 @@ nexusPublishing {
     }
 }
 
-// Shadow JAR configuration
+// Shadow JAR configuration – now using semVersion to match the published version.
 shadowJar {
     archiveBaseName.set('dmtools')
-    // The filename retains the 'v' prefix if project.version includes it.
-    archiveVersion.set(project.version)
+    archiveVersion.set(semVersion)  // e.g., "1.4.89"
     archiveClassifier.set('all')
     archiveExtension.set('jar')
     manifest {
