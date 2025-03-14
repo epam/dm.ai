@@ -3,6 +3,18 @@ Delivery Management Tools
 
 [![codecov](https://codecov.io/gh/IstiN/dmtools/branch/main/graph/badge.svg)](https://codecov.io/gh/IstiN/dmtools)
 
+
+# Simple Run
+Download release 
+* set environment variables
+  
+https://github.com/IstiN/dmtools/releases
+
+Run command:
+java -cp dmtools.jar com.github.istin.dmtools.job.UrlEncodedJobTrigger "$JOB_PARAMS"
+
+API of base64 encoded JOB_PARAMS: https://github.com/IstiN/dmtools/blob/main/api_description.md
+
 # Build jar
 gradle shadowJar
 
