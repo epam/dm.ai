@@ -23,6 +23,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '23'
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -45,10 +46,30 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Build with Gradle
+        id: gradle
+        continue-on-error: true
         run: ./gradlew clean build shadowJar publish -x integrationTest
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print Failed Tests
+        if: steps.gradle.outcome == 'failure'
+        run: |
+          echo "Failed Tests Summary:"
+          if [ -f build/test-results/test/TEST-*.xml ]; then
+            failed_tests=$(grep -l "failures=\"[1-9]" build/test-results/test/TEST-*.xml)
+            for test_file in $failed_tests; do
+              echo "Test file: $test_file"
+              echo "Failed test cases:"
+              grep -A 2 "<failure" "$test_file" | grep -v "<failure" | grep -v "--"
+              echo "Failure messages:"
+              grep -A 2 "message=" "$test_file"
+              echo "----------------------------------------"
+            done
+          else
+            echo "No test result files found"
+          fi
 
       - name: Upload Test Results
         if: always()
@@ -59,18 +80,20 @@ jobs:
           retention-days: 7
 
       - name: Upload coverage reports to Codecov
+        if: success() || steps.gradle.outcome == 'failure'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: success() || steps.gradle.outcome == 'failure'
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Create a Release
         id: create_release
+        if: success()
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -81,10 +104,12 @@ jobs:
           prerelease: false
 
       - name: Extract Tag Name
+        if: success()
         id: extract_tag
         run: echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: Upload Release Asset
+        if: success()
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,3 +118,7 @@ jobs:
           asset_path: build/libs/dmtools-${{ env.tag_name }}-all.jar
           asset_name: dmtools-${{ env.tag_name }}-all.jar
           asset_content_type: application/java-archive
+
+      - name: Fail workflow if tests failed
+        if: steps.gradle.outcome == 'failure'
+        run: exit 1
