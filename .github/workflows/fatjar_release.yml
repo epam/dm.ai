@@ -13,6 +13,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      checks: write # Required for test reporting
 
     steps:
       - name: Checkout code
@@ -35,6 +36,11 @@ jobs:
           npm install -D @playwright/test
           npx playwright install --with-deps
 
+      - name: Install xmllint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+
       - name: Cache Gradle files
         uses: actions/cache@v4
         with:
@@ -45,6 +51,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Build with Gradle
         id: gradle
         continue-on-error: true
@@ -53,22 +67,58 @@ jobs:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: JUnit Tests
+          path: build/test-results/test/TEST-*.xml
+          reporter: java-junit
+          fail-on-error: true
+
       - name: Print Failed Tests
         if: steps.gradle.outcome == 'failure'
         run: |
           echo "Failed Tests Summary:"
-          if [ -f build/test-results/test/TEST-*.xml ]; then
-            failed_tests=$(grep -l "failures=\"[1-9]" build/test-results/test/TEST-*.xml)
-            for test_file in $failed_tests; do
-              echo "Test file: $test_file"
-              echo "Failed test cases:"
-              grep -A 2 "<failure" "$test_file" | grep -v "<failure" | grep -v "--"
-              echo "Failure messages:"
-              grep -A 2 "message=" "$test_file"
-              echo "----------------------------------------"
+          TEST_RESULTS_DIR="build/test-results/test"
+          if [ -d "$TEST_RESULTS_DIR" ]; then
+            find "$TEST_RESULTS_DIR" -name "TEST-*.xml" -type f | while read -r test_file; do
+              if grep -q 'failures="[1-9]' "$test_file" || grep -q 'errors="[1-9]' "$test_file"; then
+                echo "Test file: $test_file"
+                echo "Failed test cases:"
+                # Extract test class name
+                class_name=$(xmllint --xpath "string(//testsuite/@name)" "$test_file")
+                echo "Class: $class_name"
+          
+                # Extract failed test cases
+                echo "Failed methods:"
+                xmllint --xpath "//testcase[failure or error]/@name" "$test_file" 2>/dev/null | tr ' ' '\n' | sed 's/name=//g' | sed 's/"//g'
+          
+                echo "Failure details:"
+                xmllint --xpath "//failure/text() | //error/text()" "$test_file" 2>/dev/null
+          
+                echo "----------------------------------------"
+              fi
             done
           else
-            echo "No test result files found"
+            echo "Test results directory not found at: $TEST_RESULTS_DIR"
+            echo "Current directory contents:"
+            ls -R build/
+          fi
+
+      - name: Print HTML Test Report
+        if: steps.gradle.outcome == 'failure'
+        run: |
+          TEST_REPORT_DIR="build/reports/tests/test"
+          if [ -d "$TEST_REPORT_DIR" ]; then
+            echo "Test Report Summary:"
+            find "$TEST_REPORT_DIR" -name "*.html" -type f -exec grep -l "failures" {} \; | while read -r html_file; do
+              echo "Found failed tests in: $html_file"
+              echo "Failed test details:"
+              grep -A 5 "failures" "$html_file"
+            done
+          else
+            echo "Test report directory not found at: $TEST_REPORT_DIR"
           fi
 
       - name: Upload Test Results
@@ -76,7 +126,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: build/reports/tests/test
+          path: |
+            build/reports/tests/test
+            build/test-results/test
           retention-days: 7
 
       - name: Upload coverage reports to Codecov
