@@ -1,9 +1,7 @@
 # DMTools
 Delivery Management Tools
 
-[![codecov](https://codecov.io/gh/IstiN/dmtools/branch/main/graph/badge.svg)](https://codecov.io/gh/IstiN/dmtools)
-
-[![](https://jitpack.io/v/IstiN/dmtools.svg)](https://jitpack.io/#IstiN/dmtools)
+[![codecov](https://codecov.io/gh/IstiN/dmtools/branch/main/graph/badge.svg)](https://codecov.io/gh/IstiN/dmtools) [![](https://jitpack.io/v/IstiN/dmtools.svg)](https://jitpack.io/#IstiN/dmtools)
 
 ---
 
