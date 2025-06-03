@@ -2,6 +2,8 @@ plugins {
     id 'java-library'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'jacoco'
+    id 'org.springframework.boot' version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.4'
 }
 
 apply plugin: 'maven-publish'
@@ -11,7 +13,7 @@ version = "${version}"
 
 repositories {
     mavenCentral()
-    maven { url 'https://jitpack.io' }
+    maven { url = uri("https://maven.pkg.github.com/IstiN/dmtools") }
 }
 
 // Define versions
@@ -110,6 +112,18 @@ dependencies {
     annotationProcessor 'com.google.dagger:dagger-compiler:2.53.1'
     compileOnly 'org.projectlombok:lombok:1.18.36'
     annotationProcessor 'org.projectlombok:lombok:1.18.36'
+
+    // Spring dependencies
+    api 'org.springframework.boot:spring-boot-starter-web'
+    api 'com.google.code.gson:gson:2.10.1'
+    api 'org.apache.logging.log4j:log4j-api:2.17.1'
+    api 'org.apache.logging.log4j:log4j-core:2.17.1'
+    api 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
+    api 'com.google.firebase:firebase-admin:9.1.1'
+
+    // Spring test dependencies
+    testImplementation platform('org.junit:junit-bom:5.9.1')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
 configurations.all {
