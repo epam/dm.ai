@@ -188,6 +188,11 @@ sourceSets {
     }
 }
 
+// Configure the processIntegrationTestResources task specifically
+processIntegrationTestResources {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
 task integrationTest(type: Test) {
     description = 'Runs integration tests.'
     group = 'verification'
