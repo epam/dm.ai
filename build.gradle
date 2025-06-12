@@ -267,17 +267,6 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
-shadowJar {
-    archiveBaseName.set('dmtools')
-    archiveVersion.set('v' + version)
-    archiveClassifier.set('all')
-    archiveExtension.set('jar')
-    zip64 true
-    manifest {
-        attributes 'Main-Class': 'com.github.istin.dmtools.job.JobRunner'
-    }
-}
-
 // Task to process resources for production build
 task processProductionResources(type: Copy) {
     from 'src/main/resources'
@@ -301,6 +290,9 @@ task processDevelopmentResources(type: Copy) {
 jar.dependsOn processDevelopmentResources
 compileIntegrationTestJava.dependsOn processDevelopmentResources
 compileTestJava.dependsOn processDevelopmentResources
+
+// Fix shadowJar dependency issue
+shadowJar.dependsOn processDevelopmentResources
 
 bootJar {
     mainClass = 'com.github.istin.dmtools.server.DmToolsServerApplication'

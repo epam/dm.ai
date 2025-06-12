@@ -52,6 +52,31 @@ public class JobRunner {
     );
 
     public static void main(String[] args) throws Exception {
+        // Handle special arguments
+        if (args.length > 0) {
+            String firstArg = args[0];
+            if ("--version".equals(firstArg) || "-v".equals(firstArg)) {
+                String version = getVersion();
+                System.out.println("DMTools " + version);
+                System.out.println("A comprehensive development management toolkit");
+                return;
+            }
+            if ("--help".equals(firstArg) || "-h".equals(firstArg)) {
+                printHelp();
+                return;
+            }
+            if ("--list-jobs".equals(firstArg)) {
+                listJobs();
+                return;
+            }
+        }
+        
+        if (args.length == 0) {
+            System.err.println("Error: No arguments provided.");
+            printHelp();
+            System.exit(1);
+        }
+        
         JobParams jobParams = new JobParams(new String(decodeBase64(args[0])));
         for (Job job : JOBS) {
             if (job.getName().equalsIgnoreCase(jobParams.getName())) {
@@ -61,6 +86,32 @@ public class JobRunner {
                 return;
             }
         }
+        System.err.println("Job '" + jobParams.getName() + "' not found.");
+        System.exit(1);
+    }
+
+    private static void printHelp() {
+        System.out.println("DMTools - Development Management Toolkit");
+        System.out.println();
+        System.out.println("Usage: java -jar dmtools.jar [OPTIONS] [BASE64_ENCODED_JOB_PARAMS]");
+        System.out.println();
+        System.out.println("Options:");
+        System.out.println("  --version, -v     Show version information");
+        System.out.println("  --help, -h        Show this help message");
+        System.out.println("  --list-jobs       List all available jobs");
+        System.out.println();
+        System.out.println("For job execution, provide Base64-encoded JSON parameters.");
+        System.out.println("Use the web interface at http://localhost:8080 for easier job configuration.");
+    }
+
+    private static void listJobs() {
+        System.out.println("Available Jobs:");
+        System.out.println("===============");
+        for (Job job : JOBS) {
+            System.out.println("- " + job.getName());
+        }
+        System.out.println();
+        System.out.println("Total: " + JOBS.size() + " jobs available");
     }
 
     public static void initMetadata(Job job, Object paramsByClass) {
@@ -86,5 +137,37 @@ public class JobRunner {
         byte[] decodedBytes = Base64.getEncoder().encode(input.getBytes());
         // Convert the decoded bytes to a string
         return new String(decodedBytes);
+    }
+
+    private static String getVersion() {
+        // Try to get version from manifest first
+        try {
+            Package pkg = JobRunner.class.getPackage();
+            String version = pkg.getImplementationVersion();
+            if (version != null && !version.isEmpty()) {
+                return version;
+            }
+        } catch (Exception e) {
+            // Ignore and try other methods
+        }
+        
+        // Try to read from properties file
+        try {
+            java.util.Properties props = new java.util.Properties();
+            java.io.InputStream is = JobRunner.class.getClassLoader().getResourceAsStream("version.properties");
+            if (is != null) {
+                props.load(is);
+                String version = props.getProperty("version");
+                if (version != null && !version.isEmpty()) {
+                    return "v" + version;
+                }
+                is.close();
+            }
+        } catch (Exception e) {
+            // Ignore and use default
+        }
+        
+        // Default fallback
+        return "v0.0.0";
     }
 }
