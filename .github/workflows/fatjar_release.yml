@@ -72,7 +72,10 @@ jobs:
         if: always()
         with:
           name: JUnit Tests
-          path: build/test-results/test/TEST-*.xml
+          path: |
+            build/test-results/test/TEST-*.xml
+            dmtools-core/build/test-results/test/TEST-*.xml
+            dmtools-server/build/test-results/test/TEST-*.xml
           reporter: java-junit
           fail-on-error: true
 
@@ -80,9 +83,13 @@ jobs:
         if: steps.gradle.outcome == 'failure'
         run: |
           echo "Failed Tests Summary:"
-          TEST_RESULTS_DIR="build/test-results/test"
-          if [ -d "$TEST_RESULTS_DIR" ]; then
-            find "$TEST_RESULTS_DIR" -name "TEST-*.xml" -type f | while read -r test_file; do
+          # Check multiple possible test result directories
+          TEST_RESULTS_DIRS=("build/test-results/test" "dmtools-core/build/test-results/test" "dmtools-server/build/test-results/test")
+          
+          for TEST_RESULTS_DIR in "${TEST_RESULTS_DIRS[@]}"; do
+            if [ -d "$TEST_RESULTS_DIR" ]; then
+              echo "Checking directory: $TEST_RESULTS_DIR"
+              find "$TEST_RESULTS_DIR" -name "TEST-*.xml" -type f | while read -r test_file; do
               if grep -q 'failures="[1-9]' "$test_file" || grep -q 'errors="[1-9]' "$test_file"; then
                 echo "Test file: $test_file"
                 echo "Failed test cases:"
@@ -98,28 +105,34 @@ jobs:
                 xmllint --xpath "//failure/text() | //error/text()" "$test_file" 2>/dev/null
           
                 echo "----------------------------------------"
-              fi
-            done
-          else
-            echo "Test results directory not found at: $TEST_RESULTS_DIR"
-            echo "Current directory contents:"
-            ls -R build/
-          fi
+                fi
+              done
+            else
+              echo "Test results directory not found at: $TEST_RESULTS_DIR"
+            fi
+          done
+          
+          echo "Current directory contents:"
+          ls -R build/ 2>/dev/null || echo "No build directory found"
 
       - name: Print HTML Test Report
         if: steps.gradle.outcome == 'failure'
         run: |
-          TEST_REPORT_DIR="build/reports/tests/test"
-          if [ -d "$TEST_REPORT_DIR" ]; then
-            echo "Test Report Summary:"
-            find "$TEST_REPORT_DIR" -name "*.html" -type f -exec grep -l "failures" {} \; | while read -r html_file; do
-              echo "Found failed tests in: $html_file"
-              echo "Failed test details:"
-              grep -A 5 "failures" "$html_file"
-            done
-          else
-            echo "Test report directory not found at: $TEST_REPORT_DIR"
-          fi
+          # Check multiple possible test report directories
+          TEST_REPORT_DIRS=("build/reports/tests/test" "dmtools-core/build/reports/tests/test" "dmtools-server/build/reports/tests/test")
+          
+          for TEST_REPORT_DIR in "${TEST_REPORT_DIRS[@]}"; do
+            if [ -d "$TEST_REPORT_DIR" ]; then
+              echo "Test Report Summary for: $TEST_REPORT_DIR"
+              find "$TEST_REPORT_DIR" -name "*.html" -type f -exec grep -l "failures" {} \; | while read -r html_file; do
+                echo "Found failed tests in: $html_file"
+                echo "Failed test details:"
+                grep -A 5 "failures" "$html_file"
+              done
+            else
+              echo "Test report directory not found at: $TEST_REPORT_DIR"
+            fi
+          done
 
       - name: Upload Test Results
         if: always()
@@ -129,6 +142,10 @@ jobs:
           path: |
             build/reports/tests/test
             build/test-results/test
+            dmtools-core/build/reports/tests/test
+            dmtools-core/build/test-results/test
+            dmtools-server/build/reports/tests/test
+            dmtools-server/build/test-results/test
           retention-days: 7
 
       - name: Upload coverage reports to Codecov

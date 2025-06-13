@@ -185,8 +185,8 @@ test {
 
 jacocoTestReport {
     reports {
-        xml.required = true
-        html.required = true
+        xml.required.set(true)
+        html.required.set(true)
     }
 }
 
@@ -269,7 +269,7 @@ tasks.withType(JavaCompile) {
 // Task to process resources for production build
 task processProductionResources(type: Copy) {
     from 'src/main/resources'
-    into "${buildDir}/resources/main"
+    into layout.buildDirectory.dir("resources/main")
     exclude 'config.properties'
     
     // Copy production config as config.properties
@@ -281,7 +281,7 @@ task processProductionResources(type: Copy) {
 // Task to process resources for development build  
 task processDevelopmentResources(type: Copy) {
     from 'src/main/resources'
-    into "${buildDir}/resources/main"
+    into layout.buildDirectory.dir("resources/main")
     // Use existing config.properties as-is for development
 }
 
@@ -291,9 +291,9 @@ compileIntegrationTestJava.dependsOn processDevelopmentResources
 compileTestJava.dependsOn processDevelopmentResources
 
 bootJar {
-    mainClass = 'com.github.istin.dmtools.server.DmToolsServerApplication'
-    archiveFileName = 'dmtools-appengine.jar'
-    destinationDirectory = file("${project.rootDir}")
+    mainClass.set('com.github.istin.dmtools.server.DmToolsServerApplication')
+    archiveFileName.set('dmtools-appengine.jar')
+    destinationDirectory.set(file("${project.rootDir}"))
     
     // Determine which config to use based on environment
     def buildProfile = project.findProperty('buildProfile') ?: 'development'
@@ -327,5 +327,5 @@ task bootJarDevelopment {
 }
 
 bootRun {
-    mainClass = 'com.github.istin.dmtools.server.DmToolsServerApplication'
+    mainClass.set('com.github.istin.dmtools.server.DmToolsServerApplication')
 }

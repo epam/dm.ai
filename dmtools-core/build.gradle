@@ -175,8 +175,8 @@ test {
 
 jacocoTestReport {
     reports {
-        xml.required = true
-        html.required = true
+        xml.required.set(true)
+        html.required.set(true)
     }
 }
 
@@ -276,5 +276,5 @@ shadowJar {
     exclude 'META-INF/*.RSA'
     
     // Move the JAR to the root build directory
-    destinationDirectory = file("${project.rootDir}/build/libs")
+    destinationDirectory.set(file("${project.rootDir}/build/libs"))
 }
