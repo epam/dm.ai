@@ -72,10 +72,7 @@ jobs:
         if: always()
         with:
           name: JUnit Tests
-          path: |
-            build/test-results/test/TEST-*.xml
-            dmtools-core/build/test-results/test/TEST-*.xml
-            dmtools-server/build/test-results/test/TEST-*.xml
+          path: '**/build/test-results/test/TEST-*.xml'
           reporter: java-junit
           fail-on-error: true
 
@@ -83,37 +80,21 @@ jobs:
         if: steps.gradle.outcome == 'failure'
         run: |
           echo "Failed Tests Summary:"
-          # Check multiple possible test result directories
-          TEST_RESULTS_DIRS=("build/test-results/test" "dmtools-core/build/test-results/test" "dmtools-server/build/test-results/test")
-          
-          for TEST_RESULTS_DIR in "${TEST_RESULTS_DIRS[@]}"; do
-            if [ -d "$TEST_RESULTS_DIR" ]; then
-              echo "Checking directory: $TEST_RESULTS_DIR"
-              find "$TEST_RESULTS_DIR" -name "TEST-*.xml" -type f | while read -r test_file; do
-              if grep -q 'failures="[1-9]' "$test_file" || grep -q 'errors="[1-9]' "$test_file"; then
-                echo "Test file: $test_file"
-                echo "Failed test cases:"
-                # Extract test class name
-                class_name=$(xmllint --xpath "string(//testsuite/@name)" "$test_file")
-                echo "Class: $class_name"
-          
-                # Extract failed test cases
-                echo "Failed methods:"
-                xmllint --xpath "//testcase[failure or error]/@name" "$test_file" 2>/dev/null | tr ' ' '\n' | sed 's/name=//g' | sed 's/"//g'
-          
-                echo "Failure details:"
-                xmllint --xpath "//failure/text() | //error/text()" "$test_file" 2>/dev/null
-          
-                echo "----------------------------------------"
-                fi
-              done
-            else
-              echo "Test results directory not found at: $TEST_RESULTS_DIR"
+          find . -path "*/build/test-results/test/TEST-*.xml" -type f | while read -r test_file; do
+            if grep -q 'failures="[1-9]' "$test_file" || grep -q 'errors="[1-9]' "$test_file"; then
+              echo "Test file: $test_file"
+              echo "Failed test cases:"
+              class_name=$(xmllint --xpath "string(//testsuite/@name)" "$test_file" 2>/dev/null || echo "Unknown")
+              echo "Class: $class_name"
+              echo "Failed methods:"
+              xmllint --xpath "//testcase[failure or error]/@name" "$test_file" 2>/dev/null | tr ' ' '\n' | sed 's/name=//g' | sed 's/"//g' || echo "Could not extract method names"
+              echo "Failure details:"
+              xmllint --xpath "//failure/text() | //error/text()" "$test_file" 2>/dev/null || echo "Could not extract failure details"
+              echo "----------------------------------------"
             fi
           done
-          
-          echo "Current directory contents:"
-          ls -R build/ 2>/dev/null || echo "No build directory found"
+          test_file_count=$(find . -path "*/build/test-results/test/TEST-*.xml" -type f | wc -l)
+          echo "Total test result files found: $test_file_count"
 
       - name: Print HTML Test Report
         if: steps.gradle.outcome == 'failure'
