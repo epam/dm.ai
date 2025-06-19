@@ -7,6 +7,7 @@ import com.github.istin.dmtools.atlassian.jira.utils.ChangelogAssessment;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.timeline.QuartersReleaseGenerator;
 import com.github.istin.dmtools.common.timeline.Release;
 import com.github.istin.dmtools.common.timeline.WeeksReleaseGenerator;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -17,6 +18,7 @@ import com.github.istin.dmtools.excel.model.ExcelMetricConfig;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.metrics.*;
 import com.github.istin.dmtools.metrics.rules.TicketMovedToStatusRule;
+import com.github.istin.dmtools.report.IReleaseGenerator;
 import com.github.istin.dmtools.report.ProductivityTools;
 import com.github.istin.dmtools.report.model.KeyTime;
 import com.github.istin.dmtools.report.timeinstatus.TimeInStatus;
@@ -32,7 +34,9 @@ public class DevProductivityReport extends AbstractJob<DevProductivityReportPara
 
     @Override
     public void runJob(DevProductivityReportParams devProductivityReportParams) throws Exception {
-        WeeksReleaseGenerator releaseGenerator = new WeeksReleaseGenerator(devProductivityReportParams.getStartDate());
+        IReleaseGenerator releaseGenerator = devProductivityReportParams.getTimePeriodType() == DevProductivityReportParams.TimePeriodType.WEEKS ?
+                new WeeksReleaseGenerator(devProductivityReportParams.getStartDate())
+                : new QuartersReleaseGenerator(devProductivityReportParams.getStartDate());
         String formula = devProductivityReportParams.getFormula();
         TrackerClient<? extends ITicket> trackerClient = BasicJiraClient.getInstance();
         String team = devProductivityReportParams.getReportName() + (devProductivityReportParams.isWeight() ? "_sp" : "");

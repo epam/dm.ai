@@ -19,9 +19,14 @@ public class DevProductivityReportParams extends ProductivityJobParams {
     public static final String CALC_WEIGHT_TYPE = "calc_weight_type";
     public static final String EXCEL_METRICS_PARAMS = "excel_metrics_params";
     public static final String COMMENTS_REGEX_RESPONSIBLE = "comment_regex_responsible";
+    public static final String TIME_PERIOD_TYPE = "time_period_type";
 
     public enum CalcWeightType {
         TIME_SPENT, STORY_POINTS
+    }
+
+    public enum TimePeriodType {
+        WEEKS, QUARTERS
     }
 
     public DevProductivityReportParams() {
@@ -80,4 +85,13 @@ public class DevProductivityReportParams extends ProductivityJobParams {
         return getModels(ExcelMetricConfig.class, EXCEL_METRICS_PARAMS);
     }
 
+    public DevProductivityReportParams setTimePeriodType(TimePeriodType timePeriodType) {
+        set(TIME_PERIOD_TYPE, timePeriodType.name());
+        return this;
+    }
+
+    public TimePeriodType getTimePeriodType() {
+        String value = getString(TIME_PERIOD_TYPE);
+        return value != null ? TimePeriodType.valueOf(value) : TimePeriodType.WEEKS; // Default to WEEKS for backward compatibility
+    }
 }
