@@ -1,7 +1,9 @@
 package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.ai.model.Metadata;
+import com.github.istin.dmtools.common.ai.config.AIPromptConfig;
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
+import com.github.istin.dmtools.common.tracker.model.TrackerConfig;
 import com.google.gson.annotations.SerializedName;
 import lombok.*;
 
@@ -15,7 +17,6 @@ public class Params {
     public static final String INPUT_JQL = "inputJql";
     public static final String INITIATOR = "initiator";
     public static final String CONFLUENCE_PAGES = "confluencePages";
-    public static final String MODEL = "model";
     public static final String IS_CODE_AS_SOURCE = "isCodeAsSource";
     public static final String IS_CONFLUENCE_AS_SOURCE = "isConfluenceAsSource";
     public static final String IS_TRACKER_AS_SOURCE = "isTrackerAsSource";
@@ -40,9 +41,6 @@ public class Params {
 
     @SerializedName(INITIATOR)
     private String initiator;
-
-    @SerializedName(MODEL)
-    private String model;
 
     @SerializedName(IS_CODE_AS_SOURCE)
     private boolean isCodeAsSource = false;
@@ -88,8 +86,22 @@ public class Params {
     @SerializedName(SourceCodeConfig._KEY)
     private SourceCodeConfig[] sourceCodeConfig;
 
+    @SerializedName(TrackerConfig._KEY)
+    private TrackerConfig[] trackerConfig;
+
+    @SerializedName(AIPromptConfig._KEY)
+    private AIPromptConfig aiPromptConfig;
+
     public void setSourceCodeConfigs(SourceCodeConfig... sourceCodeConfig) {
         this.sourceCodeConfig = sourceCodeConfig;
+    }
+
+    public void setTrackerConfigs(TrackerConfig... trackerConfig) {
+        this.trackerConfig = trackerConfig;
+    }
+
+    public void setAiPromptConfig(AIPromptConfig aiPromptConfig) {
+        this.aiPromptConfig = aiPromptConfig;
     }
 
     public void setConfluencePages(String... confluencePages) {

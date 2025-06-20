@@ -13,6 +13,7 @@ import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
+import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -23,6 +24,7 @@ import com.github.istin.dmtools.context.ContextOrchestrator;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.context.UriToObjectFactory;
 import com.github.istin.dmtools.di.DaggerExpertComponent;
+import com.github.istin.dmtools.di.ExpertComponent;
 import com.github.istin.dmtools.di.SourceCodeFactory;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.Params;
@@ -67,6 +69,9 @@ public class Expert extends AbstractJob<ExpertParams> {
     @Inject
     TeamAssistantAgent teamAssistantAgent;
 
+    @Inject
+    ApplicationConfiguration configuration;
+
     List<CodebaseSearchOrchestrator> listOfCodebaseSearchOrchestrator = new ArrayList<>();
 
     // @Inject
@@ -78,12 +83,28 @@ public class Expert extends AbstractJob<ExpertParams> {
     @Inject
     ContextOrchestrator contextOrchestrator;
 
+    private static ExpertComponent expertComponent;
+
+    /**
+     * Creates a new Expert instance with the default configuration
+     */
     public Expert() {
-        DaggerExpertComponent.create().inject(this);
+        this(null);
+    }
+
+    /**
+     * Creates a new Expert instance with the provided configuration
+     * @param configuration The application configuration to use
+     */
+    public Expert(ApplicationConfiguration configuration) {
+        if (expertComponent == null) {
+            expertComponent = DaggerExpertComponent.create();
+        }
+        expertComponent.inject(this);
     }
 
     @Override
-    public void runJob(ExpertParams expertParams) throws Exception {
+    protected void runJobImpl(ExpertParams expertParams) throws Exception {
         String projectContext = expertParams.getProjectContext();
         String request = expertParams.getRequest();
         String systemRequest = expertParams.getSystemRequest();

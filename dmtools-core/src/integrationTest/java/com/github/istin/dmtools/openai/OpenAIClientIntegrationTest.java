@@ -50,7 +50,7 @@ public class OpenAIClientIntegrationTest {
 
     @Test
     public void testChatModelAndStringMessage() throws Exception {
-        String response = openAIClient.chat(BasicOpenAI.MODEL, "Hello, OpenAI from a specific model call! Can you tell me a fun fact?");
+        String response = openAIClient.chat(openAIClient.getModel(), "Hello, OpenAI from a specific model call! Can you tell me a fun fact?");
         assertResponse(response);
     }
 
@@ -60,7 +60,7 @@ public class OpenAIClientIntegrationTest {
             System.out.println("Skipping testChatModelStringMessageAndFile: test_image_icon.png not found.");
             return;
         }
-        String response = openAIClient.chat(BasicOpenAI.MODEL, "Describe the main subject of this image.", iconFile);
+        String response = openAIClient.chat(openAIClient.getModel(), "Describe the main subject of this image.", iconFile);
         assertResponse(response);
         // Add more specific assertions based on expected content related to test_image_icon.png if possible
         assertTrue("Response should ideally mention an 'icon' or 'logo' or 'emoticon' if that's what test_image_icon.png is.", response.toLowerCase().contains("icon") || response.toLowerCase().contains("logo") || response.toLowerCase().contains("emoticon") || response.toLowerCase().contains("smiley"));
@@ -69,11 +69,11 @@ public class OpenAIClientIntegrationTest {
     @Test
     public void testChatModelStringMessageAndFileList() throws Exception {
         // Test with null file list
-        String responseNullList = openAIClient.chat(BasicOpenAI.MODEL, "Hello, OpenAI with null file list!", (java.util.List<File>) null);
+        String responseNullList = openAIClient.chat(openAIClient.getModel(), "Hello, OpenAI with null file list!", (java.util.List<File>) null);
         assertResponse(responseNullList);
 
         // Test with empty file list
-        String responseEmptyList = openAIClient.chat(BasicOpenAI.MODEL, "Hello, OpenAI with empty file list!", new ArrayList<>());
+        String responseEmptyList = openAIClient.chat(openAIClient.getModel(), "Hello, OpenAI with empty file list!", new ArrayList<>());
         assertResponse(responseEmptyList);
         
         // Test with a list containing the iconFile
@@ -81,7 +81,7 @@ public class OpenAIClientIntegrationTest {
             System.out.println("Skipping image part of testChatModelStringMessageAndFileList: test_image_icon.png not found.");
             return;
         }
-        String responseWithFile = openAIClient.chat(BasicOpenAI.MODEL, "What is depicted in the provided image?", Collections.singletonList(iconFile));
+        String responseWithFile = openAIClient.chat(openAIClient.getModel(), "What is depicted in the provided image?", Collections.singletonList(iconFile));
         assertResponse(responseWithFile);
         assertTrue("Response should be relevant to the image provided in the list.", responseWithFile.toLowerCase().contains("icon") || responseWithFile.toLowerCase().contains("smiley") || responseWithFile.toLowerCase().contains("illustration"));
     }
@@ -106,7 +106,7 @@ public class OpenAIClientIntegrationTest {
         Message element2 = new Message("user", "The second element is: a mysterious old library.", null);
         Message request = new Message("user", "Suggest a story title.", null);
 
-        String response = openAIClient.chat(BasicOpenAI.MODEL, sysPrompt, element1, element2, request);
+        String response = openAIClient.chat(openAIClient.getModel(), sysPrompt, element1, element2, request);
         assertResponse(response);
         assertTrue("Response should mention 'cat' or 'feline'.", response.toLowerCase().contains("cat") || response.toLowerCase().contains("feline"));
         assertTrue("Response should mention 'library' or 'books'.", response.toLowerCase().contains("library") || response.toLowerCase().contains("book"));
@@ -121,7 +121,7 @@ public class OpenAIClientIntegrationTest {
         Message imageMessage = new Message("user", "Consider this image carefully.", Collections.singletonList(iconFile));
         Message questionMessage = new Message("user", "Based on the image I just sent you, what is one primary color you observe in it? Be specific.", null);
 
-        String response = openAIClient.chat(BasicOpenAI.MODEL, imageMessage, questionMessage);
+        String response = openAIClient.chat(openAIClient.getModel(), imageMessage, questionMessage);
         assertResponse(response);
         // This assertion is highly dependent on the content of test_image_icon.png
         // Example: if test_image_icon.png has a prominent yellow smiley.

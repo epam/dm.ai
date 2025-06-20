@@ -6,7 +6,7 @@ import dagger.Component;
 import javax.inject.Singleton;
 
 @Singleton
-@Component(modules = {JiraModule.class, AIComponentsModule.class, ConfluenceModule.class, AIAgentsModule.class})
+@Component(modules = {ConfigurationModule.class, JiraModule.class, AIComponentsModule.class, ConfluenceModule.class, AIAgentsModule.class})
 public interface TestCasesGeneratorComponent {
     void inject(TestCasesGenerator testCasesGenerator);
 }

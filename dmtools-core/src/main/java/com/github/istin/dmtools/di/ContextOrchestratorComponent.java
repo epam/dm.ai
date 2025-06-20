@@ -6,7 +6,7 @@ import dagger.Component;
 import javax.inject.Singleton;
 
 @Singleton
-@Component(modules = {AIAgentsModule.class, AIComponentsModule.class})
+@Component(modules = {ConfigurationModule.class, AIAgentsModule.class, AIComponentsModule.class})
 public interface ContextOrchestratorComponent {
     void inject(ContextOrchestrator contextOrchestrator);
 }

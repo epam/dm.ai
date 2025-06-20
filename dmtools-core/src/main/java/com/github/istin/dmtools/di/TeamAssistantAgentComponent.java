@@ -6,7 +6,7 @@ import dagger.Component;
 import javax.inject.Singleton;
 
 @Singleton
-@Component(modules = {AIComponentsModule.class})
+@Component(modules = {ConfigurationModule.class, AIComponentsModule.class})
 public interface TeamAssistantAgentComponent {
     void inject(TeamAssistantAgent teamAssistantAgent);
 }

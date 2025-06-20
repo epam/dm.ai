@@ -5,6 +5,7 @@ import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.ai.js.JSAIClient;
 import com.github.istin.dmtools.bridge.DMToolsBridge;
+import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
 import com.github.istin.dmtools.openai.BasicOpenAI;
@@ -30,25 +31,19 @@ public class AIComponentsModule {
 
     @Provides
     @Singleton
-    PropertyReader providePropertyReader() {
-        return new PropertyReader();
-    }
-
-    @Provides
-    @Singleton
     DMToolsBridge provideDMToolsBridge() {
         return DMToolsBridge.withAllPermissions("DefaultBridge");
     }
 
     @Provides
     @Singleton
-    AI provideAI(ConversationObserver observer, PropertyReader propertyReader) {
+    AI provideAI(ConversationObserver observer, ApplicationConfiguration configuration) {
         // 1. Attempt to initialize AI via BasicGeminiAI if GEMINI_API_KEY is configured
-        String geminiApiKey = propertyReader.getGeminiApiKey();
+        String geminiApiKey = configuration.getGeminiApiKey();
         if (geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.startsWith("$")) {
             try {
                 System.out.println("Attempting to initialize AI via BasicGeminiAI as GEMINI_API_KEY is set...");
-                AI geminiAI = BasicGeminiAI.create(observer, propertyReader);
+                AI geminiAI = BasicGeminiAI.create(observer, configuration);
                 System.out.println("BasicGeminiAI initialized successfully.");
                 return geminiAI;
             } catch (Exception e) {
@@ -59,24 +54,24 @@ public class AIComponentsModule {
         }
 
         // 2. Try to initialize JSAIClient using generic JSAI_SCRIPT_PATH if configured
-        String jsScriptPath = propertyReader.getJsScriptPath();
+        String jsScriptPath = configuration.getJsScriptPath();
         if (jsScriptPath != null && !jsScriptPath.trim().isEmpty()) {
             try {
                 JSONObject configJson = new JSONObject();
                 configJson.put("jsScriptPath", jsScriptPath);
-                configJson.put("clientName", propertyReader.getJsClientName());
+                configJson.put("clientName", configuration.getJsClientName());
 
-                String jsModel = propertyReader.getJsDefaultModel();
-                configJson.put("defaultModel", jsModel != null ? jsModel : propertyReader.getOpenAIModel());
+                String jsModel = configuration.getJsDefaultModel();
+                configJson.put("defaultModel", jsModel != null ? jsModel : configuration.getOpenAIModel());
 
-                String jsBasePath = propertyReader.getJsBasePath();
-                configJson.put("basePath", jsBasePath != null ? jsBasePath : propertyReader.getOpenAIBathPath());
+                String jsBasePath = configuration.getJsBasePath();
+                configJson.put("basePath", jsBasePath != null ? jsBasePath : configuration.getOpenAIBathPath());
 
                 JSONObject secretsJson = new JSONObject();
-                String[] secretKeys = propertyReader.getJsSecretsKeys();
+                String[] secretKeys = configuration.getJsSecretsKeys();
                 if (secretKeys != null) {
                     for (String key : secretKeys) {
-                        String value = propertyReader.getValue(key.trim());
+                        String value = configuration.getValue(key.trim());
                         if (value != null) {
                             secretsJson.put(key.trim(), value);
                         }
@@ -106,7 +101,7 @@ public class AIComponentsModule {
         // 4. Default fallback to BasicOpenAI
         try {
             System.out.println("Falling back to BasicOpenAI.");
-            AI basicOpenAI = new BasicOpenAI(observer);
+            AI basicOpenAI = new BasicOpenAI(observer, configuration);
             System.out.println("BasicOpenAI initialized successfully.");
             return basicOpenAI;
         } catch (IOException e) {

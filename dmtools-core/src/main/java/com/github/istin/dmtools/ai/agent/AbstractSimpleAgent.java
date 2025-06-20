@@ -5,7 +5,6 @@ import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import com.github.istin.dmtools.prompt.PromptContext;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import org.json.JSONObject;
 
 import javax.inject.Inject;
@@ -14,7 +13,6 @@ import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
 import java.util.List;
 
-@RequiredArgsConstructor
 public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Params, Result> {
 
     public interface GetFiles {
@@ -30,106 +28,114 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
     }
 
     @Inject
-    AI ai;
+    protected AI ai;
 
     @Inject
-    IPromptTemplateReader promptTemplateReader;
+    protected IPromptTemplateReader promptTemplateReader;
 
     @Getter
     private final String promptName;
-
+    
+    /**
+     * Default constructor with prompt name
+     * @param promptName The name of the prompt template to use
+     */
+    public AbstractSimpleAgent(String promptName) {
+        this.promptName = promptName;
+    }
+    
     @Override
     public Result run(Params params) throws Exception {
-        if (params instanceof GetChunks chunksParams) {
-            List<ChunkPreparation.Chunk> chunks = chunksParams.getChunks();
-            long chunksProcessingTimeout = chunksParams.getChunksProcessingTimeout();
-            long started = System.currentTimeMillis();
-            if (chunks != null && !chunks.isEmpty()) {
-                if (chunks.size() > 1) {
-                    StringBuilder chunksSummaries = new StringBuilder();
-                    for (int i = 0; i < chunks.size(); i++) {
-                        if (chunksProcessingTimeout == 0 || chunksProcessingTimeout + started < System.currentTimeMillis()) {
-                            ChunkPreparation.Chunk chunk = chunks.get(i);
-                            if (i != 0) {
-                                chunksSummaries.append("\n");
-                            }
-                            Result result = processSinglePrompt(params, i + 1, chunk, chunks.size());
-                            chunksSummaries.append(result);
-                        } else {
-                            System.out.println("Timeout of chunks processing was processed only " + (i+1) + " chunks from " + chunks.size());
-                            break;
-                        }
-                    }
-                    return processSinglePrompt(params, 1, new ChunkPreparation.Chunk(chunksSummaries.toString(), null, 0), 1);
-                } else {
-                    return processSinglePrompt(params, 1, chunks.getFirst(), 1);
-                }
-            } else {
-                return processSinglePrompt(params, -1, null, 0);
-            }
-        } else {
-            return processSinglePrompt(params, -1, null, 0);
-        }
+        return executeWithDependencies(params);
     }
-
-    private Result processSinglePrompt(Params params, int i, ChunkPreparation.Chunk chunk, int size) throws Exception {
-        String prompt = preparePrompt(params, i, chunk, size);
-        String aiResponse = null;
+    
+    /**
+     * Executes the agent with the given parameters and dependencies
+     * @param params The parameters
+     * @return The result
+     * @throws Exception If an error occurs
+     */
+    protected Result executeWithDependencies(Params params) throws Exception {
+        PromptContext context = new PromptContext(params);
+        
         List<File> files = new ArrayList<>();
-        if (chunk != null) {
-            List<File> chunkFiles = chunk.getFiles();
-            if (chunkFiles != null) {
-                files.addAll(chunkFiles);
-            }
-        }
-
         if (params instanceof GetFiles) {
-            List<File> paramFiles = ((GetFiles) params).getFiles();
-            if (paramFiles != null) {
-                files.addAll(paramFiles);
+            List<File> fileList = ((GetFiles) params).getFiles();
+            if (fileList != null) {
+                files.addAll(fileList);
             }
         }
-        try {
-            aiResponse = executePrompt(files, prompt);
-            return transformAIResponse(params, aiResponse);
-        } catch (Exception e) {
-            System.out.println("Wrong Response Format: \n" + aiResponse);
-            //TODO send as separate messages
-            aiResponse = executePrompt(files, prompt + "\n Your previous response was: " + aiResponse +  "\nDuring processing of response was error: "+e.getMessage()+"\nReturn fixed response. If it was cut because of limitation, you must cut last part (last item in JSONArray) and return valid object.");
-            return transformAIResponse(params, aiResponse);
+        
+        List<ChunkPreparation.Chunk> chunks = new ArrayList<>();
+        long chunksProcessingTimeout = 0;
+        if (params instanceof GetChunks) {
+            GetChunks getChunks = (GetChunks) params;
+            List<ChunkPreparation.Chunk> chunksList = getChunks.getChunks();
+            if (chunksList != null) {
+                chunks.addAll(chunksList);
+            }
+            chunksProcessingTimeout = getChunks.getChunksProcessingTimeout();
         }
-    }
 
-    private String executePrompt(List<File> files, String prompt) throws Exception {
-        String aiResponse;
+        String prompt = promptTemplateReader.read(promptName, context);
+
+        String response;
         if (!files.isEmpty()) {
-            aiResponse = ai.chat(null, prompt, files);
-        } else {
-            aiResponse = ai.chat(prompt);
-        }
-        return aiResponse;
-    }
-
-    public String preparePrompt(Params params, int i, ChunkPreparation.Chunk chunk, int size) {
-        try {
-            PromptContext context = new PromptContext(params != null ? params : new Object());
-            if (params != null) {
-                context.set("global", params);
+            if (files.size() == 1) {
+                response = ai.chat(null, prompt, files.get(0));
+            } else {
+                response = ai.chat(null, prompt, files);
             }
-            context.set("chunkIndex", i);
-            context.set("totalChunks", size);
-            context.set("chunk", chunk);
-            return promptTemplateReader.read(promptName, context);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } else if (!chunks.isEmpty()) {
+            // Process chunks one by one
+            StringBuilder chunkResponses = new StringBuilder();
+            long startTime = System.currentTimeMillis();
+            
+            for (int i = 0; i < chunks.size(); i++) {
+                ChunkPreparation.Chunk chunk = chunks.get(i);
+                
+                // Check for timeout
+                if (chunksProcessingTimeout > 0 && 
+                    System.currentTimeMillis() - startTime > chunksProcessingTimeout) {
+                    break;
+                }
+                
+                // Process the chunk
+                PromptContext chunkContext = new PromptContext(params);
+                chunkContext.set("chunk", chunk);
+                chunkContext.set("chunkIndex", i + 1);
+                chunkContext.set("totalChunks", chunks.size());
+                
+                String chunkPrompt = promptTemplateReader.read(promptName, chunkContext);
+                String chunkResponse = ai.chat(chunkPrompt);
+                
+                if (i > 0) {
+                    chunkResponses.append("\n\n");
+                }
+                chunkResponses.append(chunkResponse);
+            }
+            
+            response = chunkResponses.toString();
+        } else {
+            response = ai.chat(prompt);
         }
-    }
 
+        return transformAIResponse(params, response);
+    }
+    
     @Override
     @SuppressWarnings("unchecked")
     public Class<Params> getParamsClass() {
         return (Class<Params>) ((ParameterizedType) getClass()
                 .getGenericSuperclass()).getActualTypeArguments()[0];
     }
-
+    
+    /**
+     * Default implementation that returns the response as is
+     * Override this method to transform the AI response into the result type
+     */
+    @Override
+    public Result transformAIResponse(Params params, String response) throws Exception {
+        return (Result) response;
+    }
 }

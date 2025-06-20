@@ -7,7 +7,7 @@ import dagger.Component;
 import javax.inject.Singleton;
 
 @Singleton
-@Component(modules = {AIComponentsModule.class})
+@Component(modules = {AIComponentsModule.class, ConfigurationModule.class})
 public interface AIComponent {
     AI ai();
     IPromptTemplateReader promptTemplateReader();

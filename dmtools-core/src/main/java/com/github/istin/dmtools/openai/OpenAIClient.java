@@ -52,6 +52,14 @@ public class OpenAIClient extends AbstractRestClient implements AI {
         return model;
     }
 
+    /**
+     * Gets the model name used by this client
+     * @return The model name
+     */
+    public String getModel() {
+        return model;
+    }
+
     @Override
     public String path(String path) {
         return getBasePath() + path;// + "?api-version=" + API_VERSION;
