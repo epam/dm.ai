@@ -51,6 +51,6 @@ public class ChatResponse {
     }
     
     public static ChatResponse error(String error) {
-        return new ChatResponse(null, null, false, error, null, null);
+        return new ChatResponse(error, null, false, error, null, null);
     }
 } 

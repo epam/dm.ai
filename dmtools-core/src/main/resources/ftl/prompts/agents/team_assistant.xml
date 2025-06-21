@@ -247,9 +247,10 @@
                 *Rollback time: ~2 minutes if issues detected*
             </response>
         </example>
-        <improtant_example>
-            ${global.request.fewShots}
-        </improtant_example>
     </examples>
-    <#include "chunk_processing.xml">
+    <context>
+        <ticket_description>
+            ${(global.ticket.description)!}
+        </ticket_description>
+    </context>
 </prompt>
