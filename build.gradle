@@ -266,6 +266,9 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+// Determine which config to use based on environment
+def buildProfile = project.findProperty('buildProfile') ?: 'development'
+
 // Task to process resources for production build
 task processProductionResources(type: Copy) {
     from 'src/main/resources'
@@ -285,8 +288,12 @@ task processDevelopmentResources(type: Copy) {
     // Use existing config.properties as-is for development
 }
 
-// Fix the dependency issue by making jar depend on processDevelopmentResources
-jar.dependsOn processDevelopmentResources
+// Fix the dependency issue by making jar depend on appropriate resources task
+if (buildProfile == 'production') {
+    jar.dependsOn processProductionResources
+} else {
+    jar.dependsOn processDevelopmentResources
+}
 compileIntegrationTestJava.dependsOn processDevelopmentResources
 compileTestJava.dependsOn processDevelopmentResources
 
@@ -294,9 +301,6 @@ bootJar {
     mainClass.set('com.github.istin.dmtools.server.DmToolsServerApplication')
     archiveFileName.set('dmtools-appengine.jar')
     destinationDirectory.set(file("${project.rootDir}"))
-    
-    // Determine which config to use based on environment
-    def buildProfile = project.findProperty('buildProfile') ?: 'development'
     
     if (buildProfile == 'production') {
         dependsOn processProductionResources
