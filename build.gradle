@@ -266,35 +266,7 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
-// Determine which config to use based on environment
-def buildProfile = project.findProperty('buildProfile') ?: 'development'
-
-// Task to process resources for production build
-task processProductionResources(type: Copy) {
-    from 'src/main/resources'
-    into layout.buildDirectory.dir("resources/main")
-    exclude 'config.properties'
-    
-    // Copy production config as config.properties
-    from('src/main/resources/config.prod.properties') {
-        rename 'config.prod.properties', 'config.properties'
-    }
-}
-
-// Task to process resources for development build  
-task processDevelopmentResources(type: Copy) {
-    from 'src/main/resources'
-    into layout.buildDirectory.dir("resources/main")
-    // Use existing config.properties as-is for development
-}
-
-// Fix the dependency issue by making jar depend on appropriate resources task
-if (buildProfile == 'production') {
-    jar.dependsOn processProductionResources
-} else {
-    jar.dependsOn processDevelopmentResources
-}
-compileIntegrationTestJava.dependsOn processDevelopmentResources
-compileTestJava.dependsOn processDevelopmentResources
+// Removed problematic production build configuration
+// Using Spring Boot profiles instead (application-*.properties files)
 
 // bootJar configuration moved to dmtools-server subproject
