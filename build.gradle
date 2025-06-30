@@ -297,39 +297,4 @@ if (buildProfile == 'production') {
 compileIntegrationTestJava.dependsOn processDevelopmentResources
 compileTestJava.dependsOn processDevelopmentResources
 
-bootJar {
-    mainClass.set('com.github.istin.dmtools.server.DmToolsServerApplication')
-    archiveFileName.set('dmtools-appengine.jar')
-    destinationDirectory.set(file("${project.rootDir}"))
-    
-    if (buildProfile == 'production') {
-        dependsOn processProductionResources
-        println "Building for PRODUCTION - using config.prod.properties"
-    } else {
-        dependsOn processDevelopmentResources  
-        println "Building for DEVELOPMENT - using config.properties"
-    }
-}
-
-// Create convenience tasks for different build profiles
-task bootJarProduction {
-    group = 'build'
-    description = 'Builds production JAR with production configuration'
-    doLast {
-        project.ext.buildProfile = 'production'
-        tasks.bootJar.execute()
-    }
-}
-
-task bootJarDevelopment {
-    group = 'build'
-    description = 'Builds development JAR with development configuration'
-    doLast {
-        project.ext.buildProfile = 'development'
-        tasks.bootJar.execute()
-    }
-}
-
-bootRun {
-    mainClass.set('com.github.istin.dmtools.server.DmToolsServerApplication')
-}
+// bootJar configuration moved to dmtools-server subproject
