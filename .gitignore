@@ -83,3 +83,5 @@ jwt_token.txt
 /playwright-api-tests/playwright/.cache/
 /playwright-api-tests/allure-results/
 /playwright-api-tests/allure-report/
+/dmtools-server/cacheCustomServerManagedJiraClient/**
+/cacheCustomServerManagedJiraClient/**

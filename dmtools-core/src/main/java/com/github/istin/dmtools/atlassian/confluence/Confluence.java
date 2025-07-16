@@ -107,7 +107,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
                 // [wiki, spaces, spaceKey, pages, pageId, title]
                 //   0      1        2        3       4      5
                 if (segments.size() > baseIndex + 3 && "pages".equals(segments.get(baseIndex + 2))) {
-                    String contentId = segments.get(4); // pageId
+                    String contentId = segments.get(baseIndex + 3); // Use dynamic index instead of hardcoded 4
                     return contentById(contentId);
                 }
                 break;

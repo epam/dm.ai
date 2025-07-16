@@ -39,7 +39,23 @@ public class AIComponentsModule {
     @Singleton
     AI provideAI(ConversationObserver observer, ApplicationConfiguration configuration) {
         // 1. Attempt to initialize AI via BasicGeminiAI if GEMINI_API_KEY is configured
+        // Skip Gemini if OpenAI is explicitly preferred or if Gemini has known issues
         String geminiApiKey = configuration.getGeminiApiKey();
+        String openAiApiKey = configuration.getOpenAIApiKey();
+        
+        // Prefer OpenAI if both are available (to avoid Gemini location restrictions)
+        if (openAiApiKey != null && !openAiApiKey.trim().isEmpty() && !openAiApiKey.startsWith("$")) {
+            try {
+                System.out.println("Attempting to initialize AI via BasicOpenAI as OPEN_AI_API_KEY is set...");
+                AI openAI = new BasicOpenAI(observer, configuration);
+                System.out.println("BasicOpenAI initialized successfully.");
+                return openAI;
+            } catch (Exception e) {
+                System.err.println("Failed to initialize BasicOpenAI, trying fallback options. Error: " + e.getMessage());
+            }
+        }
+        
+        // Only try Gemini if OpenAI is not available
         if (geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.startsWith("$")) {
             try {
                 System.out.println("Attempting to initialize AI via BasicGeminiAI as GEMINI_API_KEY is set...");
