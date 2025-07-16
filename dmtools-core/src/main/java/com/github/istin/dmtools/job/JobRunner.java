@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Properties;
+import org.json.JSONObject;
 
 public class JobRunner {
 
@@ -86,9 +87,19 @@ public class JobRunner {
     }
 
     public Object run(JobParams jobParams) throws Exception {
+        ExecutionMode mode = jobParams.getExecutionMode();
+        JSONObject resolvedIntegrations = jobParams.getResolvedIntegrations();
+        
         for (Job job : JOBS) {
             if (job.getName().equalsIgnoreCase(jobParams.getName())) {
                 Object paramsByClass = jobParams.getParamsByClass(job.getParamsClass());
+                
+                // Initialize job for the appropriate execution mode
+                if (job instanceof AbstractJob) {
+                    AbstractJob<?, ?> abstractJob = (AbstractJob<?, ?>) job;
+                    abstractJob.initializeForMode(mode, resolvedIntegrations);
+                }
+                
                 initMetadata(job, paramsByClass);
                 return job.runJob(paramsByClass);
             }

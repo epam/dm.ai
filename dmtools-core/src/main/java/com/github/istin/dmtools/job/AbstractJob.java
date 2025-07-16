@@ -1,9 +1,13 @@
 package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.ai.AI;
+import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
+import dagger.Component;
 import lombok.Getter;
 import lombok.Setter;
+import org.json.JSONObject;
 
+import javax.inject.Singleton;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 
@@ -74,5 +78,53 @@ public abstract class AbstractJob<Params, Result> implements Job<Params, Result>
     protected Result runJobImpl(Params params) throws Exception {
         // This method should be overridden by subclasses that don't implement executeJob
         throw new UnsupportedOperationException("Either executeJob or runJobImpl must be implemented");
+    }
+    
+    /**
+     * Initializes the job for the specified execution mode with optional resolved integrations.
+     * This method handles dependency injection based on the execution mode.
+     * 
+     * @param mode The execution mode (STANDALONE or SERVER_MANAGED)
+     * @param resolvedIntegrations Pre-resolved integrations (null for standalone mode)
+     */
+    protected void initializeForMode(ExecutionMode mode, JSONObject resolvedIntegrations) {
+        if (mode == ExecutionMode.STANDALONE) {
+            // Use existing Dagger components (current behavior)
+            // Each subclass will handle its own injection in standalone mode
+            initializeStandalone();
+        } else if (mode == ExecutionMode.SERVER_MANAGED) {
+            // Use dynamic module with pre-resolved integrations
+            // Each subclass will handle its own injection in server-managed mode
+            initializeServerManaged(resolvedIntegrations);
+        }
+    }
+    
+    /**
+     * Initializes the job for standalone execution.
+     * Subclasses should override this to provide their specific injection logic.
+     */
+    protected void initializeStandalone() {
+        // Default implementation - subclasses should override this
+        // For backward compatibility, jobs that don't override this will work as before
+    }
+    
+    /**
+     * Initializes the job for server-managed execution.
+     * Subclasses should override this to provide their specific injection logic.
+     * @param resolvedIntegrations Pre-resolved integrations from the server
+     */
+    protected void initializeServerManaged(JSONObject resolvedIntegrations) {
+        // Default implementation - subclasses should override this
+        throw new UnsupportedOperationException("Server-managed execution not implemented for this job type");
+    }
+    
+    /**
+     * Component interface for server-managed execution.
+     * Jobs that support server-managed mode should create a similar component.
+     */
+    @Singleton
+    @Component(modules = {ServerManagedIntegrationsModule.class})
+    public interface ServerManagedComponent {
+        // Injection methods will be defined by specific job implementations
     }
 }

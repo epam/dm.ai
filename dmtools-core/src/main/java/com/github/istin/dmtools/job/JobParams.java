@@ -13,6 +13,8 @@ public class JobParams extends JSONModel {
 
     public static String NAME = "name";
     public static String PARAMS = "params";
+    public static String EXECUTION_MODE = "executionMode"; // NEW for hybrid execution
+    public static String RESOLVED_INTEGRATIONS = "resolvedIntegrations"; // NEW - pre-resolved by server
 
     public JobParams() {
 
@@ -49,6 +51,28 @@ public class JobParams extends JSONModel {
 
     public void setParams(JSONModel model) {
         set(PARAMS, model.getJSONObject());
+    }
+
+    // NEW: ExecutionMode support
+    public ExecutionMode getExecutionMode() {
+        String mode = getString(EXECUTION_MODE);
+        if (mode == null) {
+            return ExecutionMode.STANDALONE; // Default to standalone for backward compatibility
+        }
+        return ExecutionMode.valueOf(mode);
+    }
+
+    public void setExecutionMode(ExecutionMode executionMode) {
+        set(EXECUTION_MODE, executionMode.name());
+    }
+
+    // NEW: ResolvedIntegrations support
+    public JSONObject getResolvedIntegrations() {
+        return getJSONObject(RESOLVED_INTEGRATIONS);
+    }
+
+    public void setResolvedIntegrations(JSONObject resolvedIntegrations) {
+        set(RESOLVED_INTEGRATIONS, resolvedIntegrations);
     }
 
     public JEstimatorParams getJEstimatorParams() {

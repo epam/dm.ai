@@ -13,8 +13,10 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.di.DaggerTestCasesGeneratorComponent;
+import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ResultItem;
+import com.github.istin.dmtools.job.ExecutionMode;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import lombok.*;
 import org.jetbrains.annotations.NotNull;
@@ -22,6 +24,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
+import dagger.Component;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,7 +41,6 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         private List<ITicket> similarTestCases;
         private List<TestCaseGeneratorAgent.TestCase> newTestCases;
     }
-
 
     @Inject
     TrackerClient<? extends ITicket> trackerClient;
@@ -61,9 +64,38 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     @Inject
     RelatedTestCaseAgent relatedTestCaseAgent;
 
+    /**
+     * Server-managed Dagger component that uses pre-resolved integrations
+     * Only includes ServerManagedIntegrationsModule to avoid duplicate bindings
+     */
+    @Singleton
+    @Component(modules = {ServerManagedIntegrationsModule.class, com.github.istin.dmtools.di.AIAgentsModule.class})
+    public interface ServerManagedTestCasesGeneratorComponent {
+        void inject(TestCasesGenerator testCasesGenerator);
+    }
 
     public TestCasesGenerator() {
+        // Don't initialize here - will be done in initializeForMode based on execution mode
+    }
+
+    @Override
+    protected void initializeStandalone() {
+        // Use existing Dagger component for standalone mode
         DaggerTestCasesGeneratorComponent.create().inject(this);
+    }
+
+    @Override
+    protected void initializeServerManaged(JSONObject resolvedIntegrations) {
+        // Create dynamic component with pre-resolved integrations
+        try {
+            ServerManagedIntegrationsModule module = new ServerManagedIntegrationsModule(resolvedIntegrations);
+            ServerManagedTestCasesGeneratorComponent component = com.github.istin.dmtools.qa.DaggerTestCasesGenerator_ServerManagedTestCasesGeneratorComponent.builder()
+                .serverManagedIntegrationsModule(module)
+                .build();
+            component.inject(this);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize TestCasesGenerator in server-managed mode", e);
+        }
     }
 
     @Override
