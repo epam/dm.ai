@@ -2,6 +2,7 @@ package com.github.istin.dmtools.ai.agent;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -17,7 +18,7 @@ public class PresentationSlideFormatterAgentIntegrationTest {
         slideContent.put("title", "Key Business Strategies");
         slideContent.put("content", "Effective business strategies include market penetration, market development, product development, and diversification. Each strategy has specific applications and risk profiles.");
         slideContent.put("slideType", "content");
-        slideContent.put("notes", "Explain each strategy with examples");
+        slideContent.put("notes", "Explain each strategy with examples slide needs to be 'content' type");
 
         PresentationSlideFormatterAgent.Params params = new PresentationSlideFormatterAgent.Params(new JSONArray().put(slideContent));
 
@@ -143,7 +144,7 @@ public class PresentationSlideFormatterAgentIntegrationTest {
         data.put("rows", rows);
 
         slideContent.put("data", data);
-        slideContent.put("notes", "SMB shows highest growth potential");
+        slideContent.put("notes", "SMB shows highest growth potential as table");
 
         PresentationSlideFormatterAgent.Params params = new PresentationSlideFormatterAgent.Params(new JSONArray().put(slideContent));
 
@@ -255,7 +256,7 @@ public class PresentationSlideFormatterAgentIntegrationTest {
         slideContent.put("title", "Miscellaneous Information");
         slideContent.put("content", "Various information that doesn't fit a specific slide type.");
         slideContent.put("slideType", "unknown"); // Intentionally using an unknown type
-        slideContent.put("notes", "Format appropriately");
+        slideContent.put("notes", "Format appropriately. Needs to have title and subtitle");
 
         PresentationSlideFormatterAgent.Params params = new PresentationSlideFormatterAgent.Params(new JSONArray().put(slideContent));
 

@@ -5,7 +5,6 @@ import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import com.github.istin.dmtools.prompt.PromptContext;
 import lombok.Getter;
-import org.json.JSONObject;
 
 import javax.inject.Inject;
 import java.io.File;
@@ -77,16 +76,10 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
             chunksProcessingTimeout = getChunks.getChunksProcessingTimeout();
         }
 
-        String prompt = promptTemplateReader.read(promptName, context);
+
 
         String response;
-        if (!files.isEmpty()) {
-            if (files.size() == 1) {
-                response = ai.chat(null, prompt, files.get(0));
-            } else {
-                response = ai.chat(null, prompt, files);
-            }
-        } else if (!chunks.isEmpty()) {
+        if (!chunks.isEmpty()) {
             // Process chunks one by one
             StringBuilder chunkResponses = new StringBuilder();
             long startTime = System.currentTimeMillis();
@@ -117,7 +110,17 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
             
             response = chunkResponses.toString();
         } else {
-            response = ai.chat(prompt);
+            context.set("chunkIndex", -1);
+            String prompt = promptTemplateReader.read(promptName, context);
+            if (!files.isEmpty()) {
+                if (files.size() == 1) {
+                    response = ai.chat(null, prompt, files.getFirst());
+                } else {
+                    response = ai.chat(null, prompt, files);
+                }
+            } else {
+                response = ai.chat(prompt);
+            }
         }
 
         return transformAIResponse(params, response);

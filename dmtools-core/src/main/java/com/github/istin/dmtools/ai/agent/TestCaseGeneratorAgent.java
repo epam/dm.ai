@@ -1,7 +1,9 @@
 package com.github.istin.dmtools.ai.agent;
 
+import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.di.DaggerTestCaseGeneratorAgentComponent;
 import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
