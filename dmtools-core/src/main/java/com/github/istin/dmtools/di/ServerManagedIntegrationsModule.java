@@ -82,6 +82,9 @@ public class ServerManagedIntegrationsModule {
             if (confluenceConfig.has("token")) {
                 config.setProperty("CONFLUENCE_LOGIN_PASS_TOKEN", confluenceConfig.getString("token"));
             }
+            if (confluenceConfig.has("authType")) {
+                config.setProperty("CONFLUENCE_AUTH_TYPE", confluenceConfig.getString("authType"));
+            }
             if (confluenceConfig.has("defaultSpace")) {
                 config.setProperty("CONFLUENCE_DEFAULT_SPACE", confluenceConfig.getString("defaultSpace"));
             }
@@ -162,9 +165,10 @@ public class ServerManagedIntegrationsModule {
             
             // Replicate BasicJiraClient configuration with reasonable defaults
             setLogEnabled(true);
-            setWaitBeforePerform(false);
-            setSleepTimeRequest(0L);
-            setClearCache(false);
+            setWaitBeforePerform(true);
+            setCacheGetRequestsEnabled(false);
+            setSleepTimeRequest(100L);
+            setClearCache(true);
             
             // Initialize field arrays exactly like BasicJiraClient
             java.util.List<String> defaultFields = new java.util.ArrayList<>();
@@ -244,6 +248,7 @@ public class ServerManagedIntegrationsModule {
             String url = confluenceConfig.optString("url", null);
             String token = confluenceConfig.optString("token", null);
             String defaultSpace = confluenceConfig.optString("defaultSpace", null);
+            String authType = confluenceConfig.optString("authType", null);
             
             if (url == null || token == null) {
                 System.err.println("❌ [ServerManagedIntegrationsModule] Confluence configuration missing required parameters (url=" + 
@@ -258,9 +263,10 @@ public class ServerManagedIntegrationsModule {
             
             System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedConfluence with url=" + url + 
                 ", defaultSpace=" + (defaultSpace != null ? defaultSpace : "null") +
+                ", authType=" + (authType != null ? authType : "null") +
                 ", executionTracking=" + (executionId != null && logCallback != null ? "enabled" : "disabled"));
             
-            return new CustomServerManagedConfluence(url, token, defaultSpace, executionId, logCallback);
+            return new CustomServerManagedConfluence(url, token, defaultSpace, authType, executionId, logCallback);
             
         } catch (Exception e) {
             System.err.println("❌ [ServerManagedIntegrationsModule] Failed to provide Confluence integration: " + e.getMessage());
@@ -284,16 +290,24 @@ public class ServerManagedIntegrationsModule {
         private final CallbackLogger callbackLogger;
         
         public CustomServerManagedConfluence(String basePath, String token, String defaultSpace) throws IOException {
-            this(basePath, token, defaultSpace, null, null);
+            this(basePath, token, defaultSpace, null, null, null);
         }
         
-        public CustomServerManagedConfluence(String basePath, String token, String defaultSpace, String executionId, LogCallback logCallback) throws IOException {
+        public CustomServerManagedConfluence(String basePath, String token, String defaultSpace, String authType, String executionId, LogCallback logCallback) throws IOException {
             super(basePath, token);
+            setCacheGetRequestsEnabled(false);
             this.defaultSpace = defaultSpace;
+            
+            // Set auth type if provided
+            if (authType != null && !authType.trim().isEmpty()) {
+                setAuthType(authType);
+            }
+            
             this.callbackLogger = (executionId != null && logCallback != null) ? 
                 new CallbackLogger(Confluence.class, executionId, logCallback) : null;
             System.out.println("🔧 [CustomServerManagedConfluence] Initialized with basePath=" + basePath + 
                 ", defaultSpace=" + (defaultSpace != null ? defaultSpace : "null") +
+                ", authType=" + (authType != null ? authType : "null") +
                 ", callbackLogging=" + (callbackLogger != null ? "enabled" : "disabled"));
         }
         
