@@ -1,3 +1,9 @@
 include 'dmtools-core', 'dmtools-server'
 
 
+include ':dmtools-core:mcp-processor'
+
+
+include ':dmtools-core:mcp-annotations'
+
+
