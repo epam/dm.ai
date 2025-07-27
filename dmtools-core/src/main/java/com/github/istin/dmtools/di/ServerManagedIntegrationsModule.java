@@ -22,6 +22,7 @@ import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import dagger.Module;
 import dagger.Provides;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.json.JSONObject;
 
 import javax.inject.Singleton;
@@ -285,8 +286,6 @@ public class ServerManagedIntegrationsModule {
      * but uses resolved credentials instead of static properties from PropertyReader
      */
     private static class CustomServerManagedConfluence extends Confluence {
-        private final String defaultSpace;
-        
         private final CallbackLogger callbackLogger;
         
         public CustomServerManagedConfluence(String basePath, String token, String defaultSpace) throws IOException {
@@ -294,9 +293,8 @@ public class ServerManagedIntegrationsModule {
         }
         
         public CustomServerManagedConfluence(String basePath, String token, String defaultSpace, String authType, String executionId, LogCallback logCallback) throws IOException {
-            super(basePath, token);
+            super(basePath, token, LogManager.getLogger(CustomServerManagedConfluence.class), defaultSpace);
             setCacheGetRequestsEnabled(false);
-            this.defaultSpace = defaultSpace;
             
             // Set auth type if provided
             if (authType != null && !authType.trim().isEmpty()) {
@@ -309,27 +307,6 @@ public class ServerManagedIntegrationsModule {
                 ", defaultSpace=" + (defaultSpace != null ? defaultSpace : "null") +
                 ", authType=" + (authType != null ? authType : "null") +
                 ", callbackLogging=" + (callbackLogger != null ? "enabled" : "disabled"));
-        }
-        
-        public String getDefaultSpace() {
-            return defaultSpace;
-        }
-        
-        // Add BasicConfluence-like methods if needed
-        public com.github.istin.dmtools.atlassian.confluence.model.Content findOrCreate(String title, String parentId, String body) throws IOException {
-            com.github.istin.dmtools.atlassian.confluence.model.Content content = findContent(title, defaultSpace);
-            if (content == null) {
-                content = createPage(title, parentId, body, defaultSpace);
-            }
-            return content;
-        }
-        
-        public com.github.istin.dmtools.atlassian.confluence.model.Content findContent(String title) throws IOException {
-            return findContent(title, defaultSpace);
-        }
-        
-        public com.github.istin.dmtools.atlassian.confluence.model.ContentResult content(String title) throws IOException {
-            return content(title, defaultSpace);
         }
     }
     

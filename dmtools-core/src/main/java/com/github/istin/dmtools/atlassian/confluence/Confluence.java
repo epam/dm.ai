@@ -12,6 +12,9 @@ import com.github.istin.dmtools.common.utils.HtmlCleaner;
 import com.github.istin.dmtools.common.utils.MarkdownToJiraConverter;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.networking.AbstractRestClient;
+import com.github.istin.dmtools.mcp.MCPTool;
+import com.github.istin.dmtools.mcp.MCPParam;
+import dagger.multibindings.StringKey;
 import lombok.Getter;
 import lombok.Setter;
 import okhttp3.*;
@@ -36,15 +39,26 @@ import java.util.stream.Collectors;
 public class Confluence extends AtlassianRestClient implements UriToObject {
     private final Logger logger;  // Changed from static to instance member
     private String graphQLPath;
+
+    @Getter
+    @Setter
+    private String defaultSpace; // Added defaultSpace field
+    
     // Default constructor - backward compatibility
     public Confluence(String basePath, String authorization) throws IOException {
         this(basePath, authorization, LogManager.getLogger(Confluence.class));
     }
     
-    // NEW: Constructor with logger injection for server-managed mode
+    // Constructor with logger injection for server-managed mode
     public Confluence(String basePath, String authorization, Logger logger) throws IOException {
+        this(basePath, authorization, logger, null);
+    }
+    
+    // NEW: Constructor with defaultSpace support
+    public Confluence(String basePath, String authorization, Logger logger, String defaultSpace) throws IOException {
         super(basePath, authorization);
         this.logger = logger != null ? logger : LogManager.getLogger(Confluence.class);
+        this.defaultSpace = defaultSpace;
         setClearCache(true);
         setCacheGetRequestsEnabled(false);
     }
@@ -54,11 +68,24 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         return getBasePath() + "/rest/api/" + path;
     }
 
-    public List<Content> contentsByUrls(String ... urlStrings) throws IOException {
+    @MCPTool(
+        name = "confluence_contents_by_urls",
+        description = "Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public List<Content> contentsByUrls(
+        @MCPParam(name = "urlStrings", description = "Array of Confluence URLs to retrieve content from", required = true, example = "['https://confluence.example.com/wiki/spaces/SPACE/pages/123/Page+Title']")
+        String ... urlStrings
+    ) throws IOException {
         List<Content> result = new ArrayList<>();
         for (String url : urlStrings) {
             if (url != null && !url.isEmpty()) {
-                result.add(contentByUrl(url));
+                try {
+                    result.add(contentByUrl(url));
+                } catch (Exception e) {
+                    logger.error(e);
+                }
             }
         }
         return result;
@@ -144,7 +171,18 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     }
 
 
-    public List<SearchResult> searchContentByText(String query, int limit) throws IOException {
+    @MCPTool(
+        name = "confluence_search_content_by_text",
+        description = "Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts.",
+        integration = "confluence",
+        category = "search"
+    )
+    public List<SearchResult> searchContentByText(
+        @MCPParam(name = "query", description = "Search query text to find in Confluence content", required = true, example = "project documentation")
+        String query,
+        @MCPParam(name = "limit", description = "Maximum number of search results to return", required = true, example = "10")
+        int limit
+    ) throws IOException {
         if (graphQLPath != null) {
             JSONArray results = new ConfluenceGraphQLClient(graphQLPath, authorization).search(query, limit);
             List<SearchResult> searchResults = new ArrayList<>();
@@ -175,8 +213,16 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         return JSONModel.convertToModels(SearchResult.class, new JSONObject(response).getJSONArray("results"));
     }
 
-
-    public Content contentById(String contentId) throws IOException {
+    @MCPTool(
+        name = "confluence_content_by_id",
+        description = "Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public Content contentById(
+        @MCPParam(name = "contentId", description = "The unique content ID of the Confluence page", required = true, example = "123456")
+        String contentId
+    ) throws IOException {
         // Construct the path using the content ID and expand needed fields
         GenericRequest content = new GenericRequest(this, path("content/" + contentId + "?expand=body.storage,ancestors,version"));
 
@@ -193,10 +239,23 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         }
     }
 
-    public ContentResult content(String title, String space) throws IOException {
+    @MCPTool(
+        name = "confluence_content_by_title_and_space",
+        description = "Get Confluence content by title and space key. Returns content result with metadata and body information.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public ContentResult content(
+        @MCPParam(name = "title", description = "The title of the Confluence page", required = true, example = "Project Documentation")
+        String title,
+        @MCPParam(name = "space", description = "The space key where the content is located", required = true, example = "PROJ")
+        String space
+    ) throws IOException {
         GenericRequest content = new GenericRequest(this, path("content?expand=body.storage,ancestors,version"));
         content.param("title", title);
-        content.param("spaceKey", space);
+        if (space != null && !space.isEmpty()) {
+            content.param("spaceKey", space);
+        }
         String response = execute(content);
         try {
             return new ContentResult(response);
@@ -206,17 +265,41 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         }
     }
 
+    @MCPTool(
+        name = "confluence_get_current_user_profile",
+        description = "Get the current user's profile information from Confluence. Returns user details for the authenticated user.",
+        integration = "confluence",
+        category = "user_management"
+    )
     public String profile() throws IOException {
         GenericRequest content = new GenericRequest(this, path("user/current"));
         return execute(content);
     }
 
-    public String profile(String userId) throws IOException {
+    @MCPTool(
+        name = "confluence_get_user_profile_by_id",
+        description = "Get a specific user's profile information from Confluence by user ID. Returns user details for the specified user.",
+        integration = "confluence",
+        category = "user_management"
+    )
+    public String profile(
+        @MCPParam(name = "userId", description = "The account ID of the user to get profile for", required = true, example = "123456:abcdef-1234-5678-90ab-cdef12345678")
+        String userId
+    ) throws IOException {
         GenericRequest content = new GenericRequest(this, path("user?accountId=" + userId));
         return execute(content);
     }
 
-    public List<Attachment> getContentAttachments(String contentId) throws IOException {
+    @MCPTool(
+        name = "confluence_get_content_attachments",
+        description = "Get all attachments for a specific Confluence content. Returns a list of attachment objects with metadata.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public List<Attachment> getContentAttachments(
+        @MCPParam(name = "contentId", description = "The content ID to get attachments for", required = true, example = "123456")
+        String contentId
+    ) throws IOException {
         GenericRequest content = new GenericRequest(this, path("content/" + contentId + "/child/attachment"));
 
         String response = execute(content);
@@ -241,7 +324,18 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         }
     }
 
-    public Content findContent(String title, String space) throws IOException {
+    @MCPTool(
+        name = "confluence_find_content_by_title_and_space",
+        description = "Find Confluence content by title and space key. Returns the first matching content or null if not found.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public Content findContent(
+        @MCPParam(name = "title", description = "The title of the content to find", required = true, example = "Project Documentation")
+        String title,
+        @MCPParam(name = "space", description = "The space key where to search for the content", required = true, example = "PROJ")
+        String space
+    ) throws IOException {
         List<Content> contents = content(title, space).getContents();
         if (contents.isEmpty()) {
             return null;
@@ -250,7 +344,22 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         }
     }
 
-    public Content createPage(String title, String parentId, String body, String space) throws IOException {
+    @MCPTool(
+        name = "confluence_create_page",
+        description = "Create a new Confluence page with specified title, parent, body content, and space. Returns the created content object.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public Content createPage(
+        @MCPParam(name = "title", description = "The title of the new page", required = true, example = "New Project Page")
+        String title,
+        @MCPParam(name = "parentId", description = "The ID of the parent page", required = true, example = "123456")
+        String parentId,
+        @MCPParam(name = "body", description = "The body content of the page in Confluence storage format", required = true, example = "<p>This is the page content.</p>")
+        String body,
+        @MCPParam(name = "space", description = "The space key where to create the page", required = true, example = "PROJ")
+        String space
+    ) throws IOException {
         GenericRequest content = new GenericRequest(this, path("content"));
         content.setBody(new JSONObject()
                 .put("type", "page")
@@ -263,11 +372,47 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         return new Content(content.post());
     }
 
-    public Content updatePage(String contentId, String title, String parentId, String body, String space) throws IOException {
+    @MCPTool(
+        name = "confluence_update_page",
+        description = "Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public Content updatePage(
+        @MCPParam(name = "contentId", description = "The ID of the page to update", required = true, example = "123456")
+        String contentId,
+        @MCPParam(name = "title", description = "The new title for the page", required = true, example = "Updated Project Page")
+        String title,
+        @MCPParam(name = "parentId", description = "The ID of the new parent page", required = true, example = "123456")
+        String parentId,
+        @MCPParam(name = "body", description = "The new body content of the page in Confluence storage format", required = true, example = "<p>This is the updated page content.</p>")
+        String body,
+        @MCPParam(name = "space", description = "The space key where the page is located", required = true, example = "PROJ")
+        String space
+    ) throws IOException {
         return updatePage(contentId, title, parentId, body, space, "");
     }
 
-    public Content updatePage(String contentId, String title, String parentId, String body, String space, String historyComment) throws IOException {
+    @MCPTool(
+        name = "confluence_update_page_with_history",
+        description = "Update an existing Confluence page with new content and add a history comment. Returns the updated content object.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public Content updatePage(
+        @MCPParam(name = "contentId", description = "The ID of the page to update", required = true, example = "123456")
+        String contentId,
+        @MCPParam(name = "title", description = "The new title for the page", required = true, example = "Updated Project Page")
+        String title,
+        @MCPParam(name = "parentId", description = "The ID of the new parent page", required = true, example = "123456")
+        String parentId,
+        @MCPParam(name = "body", description = "The new body content of the page in Confluence storage format", required = true, example = "<p>This is the updated page content.</p>")
+        String body,
+        @MCPParam(name = "space", description = "The space key where the page is located", required = true, example = "PROJ")
+        String space,
+        @MCPParam(name = "historyComment", description = "Comment to add to the page history", required = true, example = "Updated content based on user feedback")
+        String historyComment
+    ) throws IOException {
         body = prepareBodyForConfluence(body);
         logger.info("{} {} {} {} {} {}", contentId, title, parentId, body, space, historyComment);
         Content oldContent = new Content(new GenericRequest(this, path("content/" + contentId + "?expand=version")).execute());
@@ -371,19 +516,115 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         updatePage(contentId, content.getTitle(), content.getParentId(), newBody, spaceKey);
     }
 
-
-    public List<Content> getChildrenOfContentByName(String spaceKey, String contentName) throws IOException {
+    @MCPTool(
+        name = "confluence_get_children_by_name",
+        description = "Get child pages of a Confluence page by space key and content name. Returns a list of child content objects.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public List<Content> getChildrenOfContentByName(
+        @MCPParam(name = "spaceKey", description = "The space key where the parent page is located", required = true, example = "PROJ")
+        String spaceKey,
+        @MCPParam(name = "contentName", description = "The name/title of the parent page", required = true, example = "Project Documentation")
+        String contentName
+    ) throws IOException {
         Content pageContent = findContent(contentName, spaceKey);
         String contentId = pageContent.getId();
         return getChildrenOfContentById(contentId);
     }
 
-    public List<Content> getChildrenOfContentById(String contentId) throws IOException {
+    @MCPTool(
+        name = "confluence_get_children_by_id",
+        description = "Get child pages of a Confluence page by content ID. Returns a list of child content objects.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public List<Content> getChildrenOfContentById(
+        @MCPParam(name = "contentId", description = "The content ID of the parent page", required = true, example = "123456")
+        String contentId
+    ) throws IOException {
         return new ContentResult(execute(new GenericRequest(this, path("content/" + contentId + "/child/page?limit=100")))).getContents();
     }
 
     protected void setGraphQLPath(String graphQLPath) {
         this.graphQLPath = graphQLPath;
+    }
+    
+
+    /**
+     * Find content by title in the default space.
+     * @param title the title to search for
+     * @return the content if found, null otherwise
+     * @throws IOException if an error occurs
+     */
+    @MCPTool(
+        name = "confluence_find_content",
+        description = "Find a Confluence page by title in the default space. Returns the page content if found.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public Content findContent(
+        @MCPParam(name = "title", description = "Title of the Confluence page to find", required = true, example = "Project Documentation")
+        String title
+    ) throws IOException {
+        if (defaultSpace == null) {
+            throw new IllegalStateException("Default space not set. Use findContent(String title, String space) instead.");
+        }
+        return findContent(title, defaultSpace);
+    }
+    
+    /**
+     * Create or find content by title in the default space.
+     * @param title the title to search for or create
+     * @param parentId the parent content ID
+     * @param body the content body
+     * @return the content (created or found)
+     * @throws IOException if an error occurs
+     */
+    @MCPTool(
+        name = "confluence_find_or_create",
+        description = "Find a Confluence page by title in the default space, or create it if it doesn't exist. Returns the found or created content.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public Content findOrCreate(
+        @MCPParam(name = "title", description = "Title of the page to find or create", required = true, example = "Project Documentation")
+        String title,
+        @MCPParam(name = "parentId", description = "ID of the parent page for creation", required = true, example = "123456")
+        String parentId,
+        @MCPParam(name = "body", description = "Body content for the new page (if creation is needed)", required = true, example = "<p>This is the page content.</p>")
+        String body
+    ) throws IOException {
+        if (defaultSpace == null) {
+            throw new IllegalStateException("Default space not set. Use findOrCreate(String title, String parentId, String body, String space) instead.");
+        }
+        Content content = findContent(title, defaultSpace);
+        if (content == null) {
+            content = createPage(title, parentId, body, defaultSpace);
+        }
+        return content;
+    }
+    
+    /**
+     * Get content by title in the default space.
+     * @param title the title to search for
+     * @return the content result
+     * @throws IOException if an error occurs
+     */
+    @MCPTool(
+        name = "confluence_content_by_title",
+        description = "Get Confluence content by title in the default space. Returns content result with metadata and body information.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public ContentResult content(
+        @MCPParam(name = "title", description = "Title of the Confluence page to get", required = true, example = "Project Documentation")
+        String title
+    ) throws IOException {
+        if (defaultSpace == null) {
+            throw new IllegalStateException("Default space not set. Use content(String title, String space) instead.");
+        }
+        return content(title, defaultSpace);
     }
 
     @Override

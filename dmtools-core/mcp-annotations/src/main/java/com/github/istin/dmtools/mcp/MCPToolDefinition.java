@@ -15,16 +15,18 @@ public class MCPToolDefinition {
     private final String category;
     private final String className;
     private final String methodName;
+    private final String returnType;
     private final List<MCPParameterDefinition> parameters;
     
     public MCPToolDefinition(String name, String description, String integration, String category,
-                           String className, String methodName, List<MCPParameterDefinition> parameters) {
+                           String className, String methodName, String returnType, List<MCPParameterDefinition> parameters) {
         this.name = name;
         this.description = description;
         this.integration = integration;
         this.category = category;
         this.className = className;
         this.methodName = methodName;
+        this.returnType = returnType;
         this.parameters = parameters;
     }
     
@@ -50,6 +52,10 @@ public class MCPToolDefinition {
     
     public String getMethodName() {
         return methodName;
+    }
+    
+    public String getReturnType() {
+        return returnType;
     }
     
     public List<MCPParameterDefinition> getParameters() {

@@ -105,6 +105,7 @@ public class MCPToolProcessor extends AbstractProcessor {
         TypeElement enclosingClass = (TypeElement) method.getEnclosingElement();
         String className = enclosingClass.getQualifiedName().toString();
         String methodName = method.getSimpleName().toString();
+        String returnType = method.getReturnType().toString();
 
         List<MCPParameterDefinition> parameters = new ArrayList<>();
         List<? extends VariableElement> methodParams = method.getParameters();
@@ -143,6 +144,7 @@ public class MCPToolProcessor extends AbstractProcessor {
             annotation.category(),
             className,
             methodName,
+            returnType,
             parameters
         );
     }
@@ -212,6 +214,7 @@ public class MCPToolProcessor extends AbstractProcessor {
         sb.append("\"").append(tool.getCategory()).append("\", ");
         sb.append("\"").append(tool.getClassName()).append("\", ");
         sb.append("\"").append(tool.getMethodName()).append("\", ");
+        sb.append("\"").append(tool.getReturnType()).append("\", ");
         sb.append("Arrays.asList(");
         
         for (int i = 0; i < tool.getParameters().size(); i++) {
@@ -242,6 +245,8 @@ public class MCPToolProcessor extends AbstractProcessor {
             out.println("import com.github.istin.dmtools.mcp.MCPParameterDefinition;");
             out.println("import java.util.*;");
             out.println("import java.lang.reflect.Method;");
+            out.println("import org.json.JSONArray;");
+            out.println("import org.json.JSONObject;");
             out.println();
             out.println("/**");
             out.println(" * Auto-generated MCP tool executor.");
@@ -269,6 +274,9 @@ public class MCPToolProcessor extends AbstractProcessor {
                 generateToolExecutionMethod(out, tool);
             }
             
+            // Generate parameter conversion helper method
+            generateParameterConversionMethod(out);
+            
             out.println("}");
         }
     }
@@ -282,24 +290,45 @@ public class MCPToolProcessor extends AbstractProcessor {
         for (MCPParameterDefinition param : tool.getParameters()) {
             String paramName = param.getName();
             String javaType = param.getJavaType();
+            boolean isPrimitive = isPrimitiveType(javaType);
             
             if (param.isRequired()) {
-                out.println("        " + javaType + " " + paramName + " = (" + javaType + ") args.get(\"" + paramName + "\");");
-                out.println("        if (" + paramName + " == null) {");
-                out.println("            throw new IllegalArgumentException(\"Required parameter '" + paramName + "' is missing\");");
-                out.println("        }");
+                if (isPrimitive) {
+                    out.println("        " + javaType + " " + paramName + " = convertParameter(args.get(\"" + paramName + "\"), \"" + javaType + "\", \"" + paramName + "\");");
+                    out.println("        if (args.get(\"" + paramName + "\") == null) {");
+                    out.println("            throw new IllegalArgumentException(\"Required parameter '" + paramName + "' is missing\");");
+                    out.println("        }");
+                } else {
+                    out.println("        " + javaType + " " + paramName + " = convertParameter(args.get(\"" + paramName + "\"), \"" + javaType + "\", \"" + paramName + "\");");
+                    out.println("        if (" + paramName + " == null) {");
+                    out.println("            throw new IllegalArgumentException(\"Required parameter '" + paramName + "' is missing\");");
+                    out.println("        }");
+                }
             } else {
-                out.println("        " + javaType + " " + paramName + " = (" + javaType + ") args.get(\"" + paramName + "\");");
+                out.println("        " + javaType + " " + paramName + " = convertParameter(args.get(\"" + paramName + "\"), \"" + javaType + "\", \"" + paramName + "\");");
             }
         }
         
+        // Check if method returns void
+        boolean isVoid = "void".equals(tool.getReturnType());
+        
         // Generate method call
-        out.print("        return client." + tool.getMethodName() + "(");
-        for (int i = 0; i < tool.getParameters().size(); i++) {
-            if (i > 0) out.print(", ");
-            out.print(tool.getParameters().get(i).getName());
+        if (isVoid) {
+            out.print("        client." + tool.getMethodName() + "(");
+            for (int i = 0; i < tool.getParameters().size(); i++) {
+                if (i > 0) out.print(", ");
+                out.print(tool.getParameters().get(i).getName());
+            }
+            out.println(");");
+            out.println("        return null;");
+        } else {
+            out.print("        return client." + tool.getMethodName() + "(");
+            for (int i = 0; i < tool.getParameters().size(); i++) {
+                if (i > 0) out.print(", ");
+                out.print(tool.getParameters().get(i).getName());
+            }
+            out.println(");");
         }
-        out.println(");");
         out.println("    }");
         out.println();
     }
@@ -390,6 +419,54 @@ public class MCPToolProcessor extends AbstractProcessor {
         out.println();
     }
 
+    private void generateParameterConversionMethod(PrintWriter out) {
+        out.println("    @SuppressWarnings(\"unchecked\")");
+        out.println("    private static <T> T convertParameter(Object value, String targetType, String paramName) {");
+        out.println("        if (value == null) {");
+        out.println("            return null;");
+        out.println("        }");
+        out.println();
+        out.println("        // Handle JSONArray to String[] conversion");
+        out.println("        if (targetType.equals(\"java.lang.String[]\") && value instanceof JSONArray) {");
+        out.println("            JSONArray jsonArray = (JSONArray) value;");
+        out.println("            String[] result = new String[jsonArray.length()];");
+        out.println("            for (int i = 0; i < jsonArray.length(); i++) {");
+        out.println("                result[i] = jsonArray.getString(i);");
+        out.println("            }");
+        out.println("            return (T) result;");
+        out.println("        }");
+        out.println();
+        out.println("        // Handle JSONArray to Object[] conversion");
+        out.println("        if (targetType.equals(\"java.lang.Object[]\") && value instanceof JSONArray) {");
+        out.println("            JSONArray jsonArray = (JSONArray) value;");
+        out.println("            Object[] result = new Object[jsonArray.length()];");
+        out.println("            for (int i = 0; i < jsonArray.length(); i++) {");
+        out.println("                result[i] = jsonArray.get(i);");
+        out.println("            }");
+        out.println("            return (T) result;");
+        out.println("        }");
+        out.println();
+        out.println("        // Handle direct casting for other types");
+        out.println("        try {");
+        out.println("            return (T) value;");
+        out.println("        } catch (ClassCastException e) {");
+        out.println("            throw new IllegalArgumentException(\"Parameter '\" + paramName + \"' cannot be converted to \" + targetType + \". Value: \" + value + \", Type: \" + value.getClass().getSimpleName());");
+        out.println("        }");
+        out.println("    }");
+        out.println();
+    }
+
+    private boolean isPrimitiveType(String javaType) {
+        return javaType.equals("int") || 
+               javaType.equals("long") || 
+               javaType.equals("double") || 
+               javaType.equals("float") || 
+               javaType.equals("boolean") || 
+               javaType.equals("char") || 
+               javaType.equals("byte") || 
+               javaType.equals("short");
+    }
+    
     private String toCamelCase(String input) {
         StringBuilder result = new StringBuilder();
         boolean capitalizeNext = true;

@@ -185,6 +185,13 @@ jacocoTestReport {
 }
 
 sourceSets {
+    main {
+        java {
+            srcDirs += [
+                file('build/generated/sources/annotationProcessor/java/main')
+            ]
+        }
+    }
     integrationTest {
         java.srcDir file('src/integrationTest/java')
         resources.srcDir file('src/integrationTest/resources')

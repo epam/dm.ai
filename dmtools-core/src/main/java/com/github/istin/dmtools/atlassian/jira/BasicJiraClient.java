@@ -117,17 +117,8 @@ public class BasicJiraClient extends JiraClient<Ticket> {
     }
 
 
-    @Override
-    @MCPTool(
-        name = "jira_get_text_fields",
-        description = "Extract all text fields from a Jira ticket for analysis or processing",
-        integration = "jira",
-        category = "data_extraction"
-    )
-    public String getTextFieldsOnly(
-        @MCPParam(name = "ticket", description = "The Jira ticket to extract text fields from", required = true)
-        ITicket ticket
-    ) {
+
+    public String getTextFieldsOnly(ITicket ticket) {
         StringBuilder ticketDescription = null;
         try {
             ticketDescription = new StringBuilder(ticket.getTicketTitle());

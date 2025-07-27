@@ -7,10 +7,9 @@ import com.github.istin.dmtools.common.kb.KnowledgeBaseConfig;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.report.ReportUtils;
 import com.github.istin.dmtools.report.freemarker.GenericReport;
-import com.github.istin.dmtools.mcp.MCPTool;
-import com.github.istin.dmtools.mcp.MCPParam;
 import freemarker.template.TemplateException;
 import org.apache.commons.io.FileUtils;
+import org.apache.logging.log4j.LogManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,48 +43,20 @@ public class BasicConfluence extends Confluence {
         return instance;
     }
 
-    private final String defaultSpace;
-
     public BasicConfluence(String basePath, String authorization, String defaultSpace) throws IOException {
-        super(basePath, authorization);
-        this.defaultSpace = defaultSpace;
-    }
-
-    public Content findOrCreate(String title, String parentId, String body) throws IOException {
-        Content content = findContent(title, defaultSpace);
-        if (content == null) {
-            content = createPage(title, parentId, body, defaultSpace);
-        }
-        return content;
+        super(basePath, authorization, LogManager.getLogger(BasicConfluence.class), defaultSpace);
     }
 
     public Content updatePage(Content content, String body) throws IOException {
-        return updatePage(content.getId(), content.getTitle(), content.getParentId(), body, defaultSpace);
+        return updatePage(content.getId(), content.getTitle(), content.getParentId(), body, getDefaultSpace());
     }
 
     public Content updatePage(String contentId, String title, String parentId, String body) throws IOException {
-        return updatePage(contentId, title, parentId, body, defaultSpace);
+        return updatePage(contentId, title, parentId, body, getDefaultSpace());
     }
 
-    public String getDefaultSpace() {
-        return defaultSpace;
-    }
-
-    @MCPTool(
-        name = "confluence_find_content",
-        description = "Find a Confluence page by title in the default space. Returns the page content if found.",
-        integration = "confluence",
-        category = "search"
-    )
-    public Content findContent(
-        @MCPParam(name = "title", description = "Title of the Confluence page to find", required = true, example = "Project Documentation")
-        String title
-    ) throws IOException {
-        return findContent(title, defaultSpace);
-    }
-
-    public ContentResult content(String title) throws IOException {
-        return content(title, defaultSpace);
+    public Content findContent(String title) throws IOException {
+        return findContent(title, getDefaultSpace());
     }
 
     public List<Attachment> contentAttachments(String contentId) throws IOException {
@@ -108,7 +79,7 @@ public class BasicConfluence extends Confluence {
     public void attachFileToPageInDefaultSpace(String contentTitle, File file) throws IOException {
         Content content = findContent(contentTitle);
         attachFileToPage(content.getId(), file);
-        insertImageInPageBody(defaultSpace, content.getId(), file.getName());
+        insertImageInPageBody(getDefaultSpace(), content.getId(), file.getName());
     }
 
     public List<Content> getChildrenOfContentByName(String contentName) throws IOException {
