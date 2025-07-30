@@ -10,6 +10,7 @@ import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.common.timeline.ReportIteration;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.tracker.model.Status;
+import com.github.istin.dmtools.common.utils.CacheManager;
 import com.github.istin.dmtools.common.utils.DateUtils;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.context.UriToObject;
@@ -41,6 +42,7 @@ import java.nio.file.Files;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -69,16 +71,19 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     private boolean isLogEnabled = true;
     
-    // Cache for Cloud/Server Jira detection to avoid repeated API calls
-    private Boolean isCloudJiraCached = null;
+    // Cache manager for keys logic only (field mappings, Cloud/Server detection, etc.)
+    private final CacheManager cacheManager;
+    
+    // Field mapping cache TTL in milliseconds (24 hours)
+    private static final long FIELD_MAPPING_CACHE_TTL = 24 * 60 * 60 * 1000L;
 
     public void setClearCache(boolean clearCache) throws IOException {
         isClearCache = clearCache;
         initCache();
         
-        // Also clear the Cloud/Server detection cache when clearing cache
+        // Also clear the CacheManager memory caches for keys
         if (clearCache) {
-            isCloudJiraCached = null;
+            cacheManager.clearAllMemoryCache();
         }
     }
     public static String parseJiraProject(String key) {
@@ -105,6 +110,10 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         builder.readTimeout(20, TimeUnit.SECONDS);
         this.client = builder.build();
 
+        // Initialize cache manager for keys logic only (memory caching for field mappings, cloud detection, etc.)
+        this.cacheManager = new CacheManager(this.logger);
+        
+        // Initialize GET requests cache with original logic
         setCacheFolderNameAndReinit("cache" + getClass().getSimpleName());
     }
 
@@ -119,6 +128,12 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             FileUtils.deleteDirectory(cache);
         }
     }
+
+    private void setCacheFolderNameAndReinit(String cacheFolderName) throws IOException {
+        this.cacheFolderName = cacheFolderName;
+        initCache();
+    }
+
 
     @Override
     @MCPTool(
@@ -286,8 +301,11 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @Override
     public void searchAndPerform(Performer<T> performer, String searchQueryJQL, String[] fields) throws Exception {
+        // Resolve field names to support user-friendly custom field names
+        String[] resolvedFields = resolveFieldNamesForSearch(searchQueryJQL, fields);
+        
         int startAt = 0;
-        SearchResult searchResults = search(searchQueryJQL, startAt, fields);
+        SearchResult searchResults = search(searchQueryJQL, startAt, resolvedFields);
         JSONArray errorMessages = searchResults.getErrorMessages();
         if (errorMessages != null) {
             System.err.println(errorMessages);
@@ -325,7 +343,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 break;
             }
             log(startAt + " " + total);
-            searchResults = search(searchQueryJQL, startAt, fields);
+            searchResults = search(searchQueryJQL, startAt, resolvedFields);
             maxResults = searchResults.getMaxResults();
             total = searchResults.getTotal();
         }
@@ -346,9 +364,12 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         @MCPParam(name = "fields", description = "Array of field names to include in the response", required = true, example = "['summary', 'status', 'assignee']")
         String[] fields
     ) throws IOException {
+        // Resolve field names to support user-friendly custom field names
+        String[] resolvedFields = resolveFieldNamesForSearch(jql, fields);
+        
         GenericRequest jqlSearchRequest = search().
                 param(PARAM_JQL, jql)
-                .param(PARAM_FIELDS, StringUtils.concatenate(",", fields))
+                .param(PARAM_FIELDS, StringUtils.concatenate(",", resolvedFields))
                 .param(PARAM_START_AT, String.valueOf(startAt));
 
         Integer expired = jqlExpirationInHours.get(jql);
@@ -447,7 +468,13 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     protected GenericRequest createPerformTicketRequest(String ticketKey, String[] fields) {
         GenericRequest jiraRequest = getTicket(ticketKey);
         if (fields != null && fields.length > 0) {
-            jiraRequest.param("fields", StringUtils.concatenate(",", fields));
+            // Extract project key from ticket key for field resolution
+            String projectKey = extractProjectKeyFromTicketKey(ticketKey);
+            
+            // Resolve field names to support user-friendly custom field names
+            String[] resolvedFields = resolveFieldNames(fields, projectKey);
+            
+            jiraRequest.param("fields", StringUtils.concatenate(",", resolvedFields));
         }
         return jiraRequest;
     }
@@ -1016,28 +1043,325 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return updateResult;
     }
 
+    /**
+     * Checks if a field name is already a custom field ID (format: customfield_XXXXX)
+     * 
+     * @param fieldName The field name to check
+     * @return true if it's a custom field ID, false if it's a user-friendly name
+     */
+    private boolean isCustomFieldId(String fieldName) {
+        return fieldName != null && fieldName.matches("^customfield_\\d+$");
+    }
+    
+    /**
+     * Gets cached field mapping for a project or loads it if not cached/expired
+     * 
+     * @param projectKey The project key to get field mappings for
+     * @return Map of field name to custom field ID mappings for the project
+     * @throws IOException if field loading fails
+     */
+    private Map<String, String> getFieldMappingForProject(String projectKey) throws IOException {
+        String cacheKey = "fieldMapping_" + projectKey;
+        
+        return cacheManager.getOrComputeWithTTL(cacheKey, () -> {
+            log("Loading field mappings for project: " + projectKey);
+            Map<String, String> projectFieldMapping = new ConcurrentHashMap<>();
+            
+            try {
+                String response = getFields(projectKey);
+                
+                // Parse all fields and build mapping
+                if (isCloudJira()) {
+                    populateFieldMappingFromCloudResponse(projectFieldMapping, response);
+                } else {
+                    populateFieldMappingFromServerResponse(projectFieldMapping, response);
+                }
+                
+                log("Cached " + projectFieldMapping.size() + " field mappings for project: " + projectKey);
+                return projectFieldMapping;
+                
+            } catch (Exception e) {
+                log("Failed to load field mappings for project " + projectKey + ": " + e.getMessage());
+                // Return empty mapping to avoid repeated failures
+                return new ConcurrentHashMap<>();
+            }
+        }, FIELD_MAPPING_CACHE_TTL);
+    }
+    
+    /**
+     * Populates field mapping from Cloud Jira response
+     */
+    private void populateFieldMappingFromCloudResponse(Map<String, String> mapping, String response) {
+        try {
+            JSONArray issueTypesWithFields = new JSONObject(response).getJSONArray("projects").getJSONObject(0).getJSONArray("issuetypes");
+            Set<String> processedFields = new HashSet<>();
+            
+            for (int i = 0; i < issueTypesWithFields.length(); i++) {
+                JSONObject issueTypeFields = issueTypesWithFields.getJSONObject(i);
+                JSONObject fieldsJSONObject = issueTypeFields.getJSONObject("fields");
+                Set<String> keys = fieldsJSONObject.keySet();
+                
+                for (String key : keys) {
+                    if (!processedFields.contains(key)) {
+                        try {
+                            String humanNameOfField = fieldsJSONObject.getJSONObject(key).getString("name");
+                            mapping.put(humanNameOfField.toLowerCase(), key);
+                            processedFields.add(key);
+                        } catch (JSONException e) {
+                            // Skip malformed field entries
+                        }
+                    }
+                }
+            }
+        } catch (JSONException e) {
+            log("Error parsing Cloud Jira field response: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Populates field mapping from Server Jira response
+     */
+    private void populateFieldMappingFromServerResponse(Map<String, String> mapping, String response) {
+        try {
+            JSONArray fields = new JSONArray(response);
+            
+            for (int i = 0; i < fields.length(); i++) {
+                JSONObject field = fields.getJSONObject(i);
+                try {
+                    String fieldName = field.getString("name");
+                    String fieldId = field.getString("id");
+                    mapping.put(fieldName.toLowerCase(), fieldId);
+                } catch (JSONException e) {
+                    // Skip malformed field entries
+                }
+            }
+        } catch (JSONException e) {
+            log("Error parsing Server Jira field response: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Resolves a field name to its custom field ID using cached mappings
+     * 
+     * @param projectKey The project key
+     * @param fieldName The user-friendly field name
+     * @return The custom field ID or null if not found
+     * @throws IOException if field resolution fails
+     */
+    private String resolveFieldNameToCustomFieldId(String projectKey, String fieldName) throws IOException {
+        // If it's already a custom field ID, return as-is
+        if (isCustomFieldId(fieldName)) {
+            return fieldName;
+        }
+        
+        // Get field mapping for project
+        Map<String, String> projectMapping = getFieldMappingForProject(projectKey);
+        
+        // Try case-insensitive lookup
+        String customFieldId = projectMapping.get(fieldName.toLowerCase());
+        
+        if (customFieldId != null) {
+            log("Resolved field '" + fieldName + "' to '" + customFieldId + "' for project " + projectKey);
+            return customFieldId;
+        }
+        
+        // Fallback: try using the existing getFieldCustomCode method for single field resolution
+        try {
+            String resolvedFieldId = getFieldCustomCode(projectKey, fieldName);
+            if (resolvedFieldId != null) {
+                // Cache this mapping for future use
+                projectMapping.put(fieldName.toLowerCase(), resolvedFieldId);
+                log("Resolved and cached field '" + fieldName + "' to '" + resolvedFieldId + "' for project " + projectKey);
+                return resolvedFieldId;
+            }
+        } catch (Exception e) {
+            log("Fallback field resolution failed for '" + fieldName + "': " + e.getMessage());
+        }
+        
+        log("Could not resolve field '" + fieldName + "' for project " + projectKey);
+        return null;
+    }
+    
+    /**
+     * Resolves an array of field names, converting user-friendly names to custom field IDs where possible
+     * Supports mixing regular field names with user-friendly custom field names
+     * 
+     * @param fields Array of field names (mix of user-friendly names and custom field IDs)
+     * @param projectKey The project key for field resolution context
+     * @return Array of resolved field names (preserves original names if resolution fails)
+     */
+    private String[] resolveFieldNames(String[] fields, String projectKey) {
+        if (fields == null || fields.length == 0) {
+            return fields;
+        }
+        
+        String[] resolvedFields = new String[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            try {
+                String resolvedField = resolveFieldNameToCustomFieldId(projectKey, fields[i]);
+                // If resolution returns null, keep the original field name
+                resolvedFields[i] = (resolvedField != null) ? resolvedField : fields[i];
+            } catch (Exception e) {
+                log("Error resolving field '" + fields[i] + "' for project " + projectKey + ": " + e.getMessage() + ". Using original name.");
+                resolvedFields[i] = fields[i]; // Fallback to original field name
+            }
+        }
+        
+        if (logger != null) {
+            logger.debug("Resolved {} field names for project {}", fields.length, projectKey);
+        }
+        
+        return resolvedFields;
+    }
+    
+    /**
+     * Extracts the project key from a Jira ticket key
+     * Ticket keys are in format "PROJECT-123", this method returns "PROJECT"
+     * 
+     * @param ticketKey The Jira ticket key (e.g., "TP-123")
+     * @return The project key (e.g., "TP")
+     */
+    private String extractProjectKeyFromTicketKey(String ticketKey) {
+        if (ticketKey == null || !ticketKey.contains("-")) {
+            return ""; // Return empty string if invalid format
+        }
+        return ticketKey.substring(0, ticketKey.indexOf("-"));
+    }
+    
+    /**
+     * Extracts project key from JQL query for field resolution
+     * Looks for "project = PROJECTKEY" or "project in (PROJECTKEY)" patterns
+     * 
+     * @param jql The JQL query string
+     * @return The project key if found, empty string otherwise
+     */
+    private String extractProjectKeyFromJQL(String jql) {
+        if (jql == null) {
+            return "";
+        }
+        
+        // Convert to lowercase for pattern matching, but keep original for extraction
+        String lowerJql = jql.toLowerCase();
+        
+        // Pattern 1: "project = PROJECTKEY" (with or without spaces)
+        String[] patterns = {"project=", "project ="};
+        
+        for (String pattern : patterns) {
+            int patternIndex = lowerJql.indexOf(pattern);
+            if (patternIndex >= 0) {
+                int startIndex = patternIndex + pattern.length();
+                
+                // Skip any additional whitespace after the pattern
+                while (startIndex < jql.length() && Character.isWhitespace(jql.charAt(startIndex))) {
+                    startIndex++;
+                }
+                
+                if (startIndex < jql.length()) {
+                    // Extract from the original JQL (preserve case) starting from startIndex
+                    String remainder = jql.substring(startIndex);
+                    
+                    // Find the end of the project key (stop at whitespace, AND, OR, etc.)
+                    int endIndex = 0;
+                    for (int i = 0; i < remainder.length(); i++) {
+                        char c = remainder.charAt(i);
+                        if (Character.isWhitespace(c) || c == '(' || c == ')') {
+                            break;
+                        }
+                        endIndex = i + 1;
+                    }
+                    
+                    if (endIndex > 0) {
+                        String projectKey = remainder.substring(0, endIndex).trim();
+                        if (logger != null) {
+                            logger.debug("Extracted project key '{}' from JQL: {}", projectKey, jql);
+                        }
+                        return projectKey;
+                    }
+                }
+            }
+        }
+        
+        if (logger != null) {
+            logger.debug("Could not extract project key from JQL: {}", jql);
+        }
+        return ""; // Return empty string if no project found
+    }
+    
+    /**
+     * Resolves field names for search operations by extracting project context from JQL
+     * 
+     * @param searchQueryJQL The JQL query (used to extract project context)
+     * @param fields Array of field names to resolve
+     * @return Array of resolved field names
+     */
+    private String[] resolveFieldNamesForSearch(String searchQueryJQL, String[] fields) {
+        if (fields == null || fields.length == 0) {
+            return fields;
+        }
+        
+        log("Attempting to resolve fields for search. JQL: " + searchQueryJQL);
+        
+        // Try to extract project key from JQL query
+        String projectKey = extractProjectKeyFromJQL(searchQueryJQL);
+        
+        if (projectKey.isEmpty()) {
+            // If we can't determine project, return original fields
+            log("Could not extract project key from JQL for field resolution: " + searchQueryJQL);
+            return fields;
+        }
+        
+        log("Extracted project key '" + projectKey + "' from JQL. Resolving " + fields.length + " fields.");
+        
+        // Resolve field names using the extracted project key
+        String[] resolvedFields = resolveFieldNames(fields, projectKey);
+        
+        log("Field resolution completed. Original fields: " + String.join(", ", fields) + 
+            " -> Resolved fields: " + String.join(", ", resolvedFields));
+        
+        return resolvedFields;
+    }
+
     @MCPTool(
             name = "jira_update_field",
-            description = "Update a specific field of a Jira ticket",
+            description = "Update a specific field of a Jira ticket. Supports both custom field IDs (e.g., 'customfield_10091') and user-friendly field names (e.g., 'Diagram')",
             integration = "jira",
             category = "ticket_management"
     )
     public String updateField(@MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key, 
-                            @MCPParam(name = "field", description = "The field name to update", required = true) String field, 
+                            @MCPParam(name = "field", description = "The field name to update (supports both custom field IDs like 'customfield_10091' and user-friendly names like 'Diagram')", required = true) String field, 
                             @MCPParam(name = "value", description = "The new value for the field", required = true) Object value) throws IOException {
         if ("".equals(value)) {
             return clearField(key, field);
         }
+        
+        // Extract project key from ticket key for field resolution
+        String projectKey = parseJiraProject(key);
+        
+        // Resolve field name to custom field ID if needed
+        String resolvedFieldName = field;
+        try {
+            String customFieldId = resolveFieldNameToCustomFieldId(projectKey, field);
+            if (customFieldId != null) {
+                resolvedFieldName = customFieldId;
+                log("Field resolution: '" + field + "' resolved to '" + resolvedFieldName + "' for ticket " + key);
+            } else {
+                log("Field resolution: Using original field name '" + field + "' for ticket " + key + " (no custom field mapping found)");
+            }
+        } catch (Exception e) {
+            log("Field resolution failed for '" + field + "', using original field name: " + e.getMessage());
+            // Continue with original field name as fallback
+        }
+        
         GenericRequest jiraRequest = getTicket(key);
         JSONObject body = new JSONObject();
         body.put("update", new JSONObject()
-                .put(field, new JSONArray()
+                .put(resolvedFieldName, new JSONArray()
                         .put(new JSONObject()
                                 .put("set", value)
                         )));
         jiraRequest.setBody(body.toString());
         String updateResult = jiraRequest.put();
-        log("params " + key + " " + field + " " + value + " " + updateResult);
+        log("Updated field '" + resolvedFieldName + "' (originally '" + field + "') on ticket " + key + " with value: " + value);
 
         return updateResult;
     }
@@ -1151,7 +1475,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 cache.mkdirs();
                 File cachedFile = new File(getCacheFolderName() + "/" + value);
                 if (cachedFile.exists()) {
-                    return FileUtils.readFileToString(cachedFile);
+                    return FileUtils.readFileToString(cachedFile, "UTF-8");
                 }
             }
             if (isWaitBeforePerform) {
@@ -1174,7 +1498,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                             File cache = new File(getCacheFolderName());
                             cache.mkdirs();
                             File cachedFile = new File(getCacheFolderName() + "/" + value);
-                            FileUtils.writeStringToFile(cachedFile, result);
+                            FileUtils.writeStringToFile(cachedFile, result, "UTF-8");
                         }
                         return result;
                     } else {
@@ -1210,11 +1534,6 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     public String getCacheFolderName() {
         return cacheFolderName;
-    }
-
-    private void setCacheFolderNameAndReinit(String cacheFolderName) throws IOException {
-        this.cacheFolderName = cacheFolderName;
-        initCache();
     }
 
     public static final MediaType JSON
@@ -1721,7 +2040,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
      * This forces a new API call on the next detection request
      */
     public void clearCloudJiraDetectionCache() {
-        isCloudJiraCached = null;
+        cacheManager.removeFromCache("isCloudJira");
         log("Cleared Cloud/Server Jira detection cache");
     }
 
@@ -1730,40 +2049,36 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
      * Results are cached to avoid repeated API calls
      */
     private boolean isCloudJira() {
-        // Return cached result if available
-        if (isCloudJiraCached != null) {
-            return isCloudJiraCached;
-        }
+        String cacheKey = "isCloudJira";
         
-        try {
-            // Use the official REST API endpoint to determine deployment type
-            GenericRequest genericRequest = new GenericRequest(this, path("serverInfo"));
-            String response = genericRequest.execute();
-            
-            JSONObject serverInfo = new JSONObject(response);
-            
-            // Check for deploymentType field - Cloud instances have "Cloud" value
-            if (serverInfo.has("deploymentType")) {
-                String deploymentType = serverInfo.getString("deploymentType");
-                log("Detected Jira deployment type: " + deploymentType);
-                isCloudJiraCached = "Cloud".equalsIgnoreCase(deploymentType);
-                return isCloudJiraCached;
+        return cacheManager.getOrComputeSimple(cacheKey, () -> {
+            try {
+                // Use the official REST API endpoint to determine deployment type
+                GenericRequest genericRequest = new GenericRequest(this, path("serverInfo"));
+                String response = genericRequest.execute();
+                
+                JSONObject serverInfo = new JSONObject(response);
+                
+                // Check for deploymentType field - Cloud instances have "Cloud" value
+                if (serverInfo.has("deploymentType")) {
+                    String deploymentType = serverInfo.getString("deploymentType");
+                    log("Detected Jira deployment type: " + deploymentType);
+                    return "Cloud".equalsIgnoreCase(deploymentType);
+                }
+                
+                // Fallback: Check URL pattern for atlassian.net (Cloud indicator)
+                boolean isAtlassianNet = getBasePath().contains("atlassian.net");
+                log("No deploymentType field found, using URL pattern. atlassian.net detected: " + isAtlassianNet);
+                return isAtlassianNet;
+                
+            } catch (Exception e) {
+                log("Error detecting Jira type via serverInfo API: " + e.getMessage());
+                // Fallback: Check URL pattern for atlassian.net (Cloud indicator)
+                boolean isAtlassianNet = getBasePath().contains("atlassian.net");
+                log("Using URL pattern fallback. atlassian.net detected: " + isAtlassianNet);
+                return isAtlassianNet;
             }
-            
-            // Fallback: Check URL pattern for atlassian.net (Cloud indicator)
-            boolean isAtlassianNet = getBasePath().contains("atlassian.net");
-            log("No deploymentType field found, using URL pattern. atlassian.net detected: " + isAtlassianNet);
-            isCloudJiraCached = isAtlassianNet;
-            return isCloudJiraCached;
-            
-        } catch (Exception e) {
-            log("Error detecting Jira type via serverInfo API: " + e.getMessage());
-            // Fallback: Check URL pattern for atlassian.net (Cloud indicator)
-            boolean isAtlassianNet = getBasePath().contains("atlassian.net");
-            log("Using URL pattern fallback. atlassian.net detected: " + isAtlassianNet);
-            isCloudJiraCached = isAtlassianNet;
-            return isCloudJiraCached;
-        }
+        });
     }
 
     @MCPTool(
