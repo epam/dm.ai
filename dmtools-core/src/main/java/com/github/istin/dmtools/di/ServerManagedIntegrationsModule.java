@@ -13,6 +13,7 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.UriToObjectFactory;
 import com.github.istin.dmtools.di.SourceCodeFactory;
+import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.logging.CallbackLogger;
 import com.github.istin.dmtools.logging.LogCallback;
 import com.github.istin.dmtools.openai.BasicOpenAI;
@@ -114,6 +115,16 @@ public class ServerManagedIntegrationsModule {
             }
             if (geminiConfig.has("basePath")) {
                 config.setProperty("GEMINI_BASE_PATH", geminiConfig.getString("basePath"));
+            }
+        }
+        
+        if (resolvedIntegrations.has("figma")) {
+            JSONObject figmaConfig = resolvedIntegrations.getJSONObject("figma");
+            if (figmaConfig.has("token")) {
+                config.setProperty("FIGMA_TOKEN", figmaConfig.getString("token"));
+            }
+            if (figmaConfig.has("basePath")) {
+                config.setProperty("FIGMA_BASE_PATH", figmaConfig.getString("basePath"));
             }
         }
         
@@ -386,5 +397,50 @@ public class ServerManagedIntegrationsModule {
                                                  SourceCodeFactory sourceCodeFactory) {
         System.out.println("🔧 [ServerManagedIntegrationsModule] Creating UriToObjectFactory with server-managed integrations");
         return new UriToObjectFactory(trackerClient, confluence, sourceCodeFactory);
+    }
+
+    @Provides
+    @Singleton
+    public FigmaClient provideFigmaClient() {
+        try {
+            System.out.println("🎨 [ServerManagedIntegrationsModule] Providing Figma integration...");
+            
+            if (resolvedIntegrations == null) {
+                System.out.println("⚠️ [ServerManagedIntegrationsModule] No resolved integrations found, skipping Figma");
+                return null;
+            }
+            
+            if (!resolvedIntegrations.has("figma")) {
+                System.out.println("⚠️ [ServerManagedIntegrationsModule] No Figma integration found in resolved integrations");
+                return null;
+            }
+            
+            JSONObject figmaConfig = resolvedIntegrations.getJSONObject("figma");
+            System.out.println("🎨 [ServerManagedIntegrationsModule] Found Figma configuration: " + figmaConfig.length() + " parameters");
+            
+            // Log configuration details (without sensitive data)
+            for (String key : figmaConfig.keySet()) {
+                Object value = figmaConfig.get(key);
+                System.out.println("  🎨 Figma config: " + key + "=" + 
+                    (key.toLowerCase().contains("token") ? "[SENSITIVE]" : value));
+            }
+            
+            String basePath = figmaConfig.optString("basePath", "https://api.figma.com/v1/");
+            String token = figmaConfig.optString("token", null);
+            
+            if (token == null) {
+                System.err.println("❌ [ServerManagedIntegrationsModule] Figma configuration missing required token parameter");
+                return null;
+            }
+            
+            System.out.println("✅ [ServerManagedIntegrationsModule] Creating FigmaClient with basePath=" + basePath);
+            
+            return new FigmaClient(basePath, token);
+            
+        } catch (Exception e) {
+            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to provide Figma integration: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
     }
 } 

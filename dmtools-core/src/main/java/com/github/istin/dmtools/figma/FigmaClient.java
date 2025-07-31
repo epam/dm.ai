@@ -8,6 +8,8 @@ import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.utils.ImageUtils;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.figma.model.FigmaComment;
+import com.github.istin.dmtools.mcp.MCPTool;
+import com.github.istin.dmtools.mcp.MCPParam;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import okhttp3.Request;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -48,8 +50,21 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         return 300;
     }
 
-
-    public String getImageOfSource(String url) throws Exception {
+    /**
+     * Get image URL from Figma design URL for screen source access.
+     * This method provides access to the underlying screen source content.
+     *
+     * @param url The Figma design URL containing node-id parameter
+     * @return Image URL for the specified Figma node, or null if not found
+     * @throws Exception if there's an error accessing Figma API
+     */
+    @MCPTool(
+        name = "figma_get_screen_source",
+        description = "Get screen source content by URL. Returns the image URL for the specified Figma design node.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public String getImageOfSource(@MCPParam(name = "url", description = "Figma design URL with node-id parameter", required = true, example = "https://www.figma.com/file/abc123/Design?node-id=1%3A2") String url) throws Exception {
         GenericRequest getRequest = new GenericRequest(this, path("images/"+ parseFileId(url)));
         String nodeId = extractValueByParameter(url, "node-id");
         getRequest.param("ids", nodeId);
@@ -139,8 +154,22 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         return isFigmaLink;
     }
 
+    /**
+     * Download image file from Figma design URL.
+     * This method converts a Figma design URL to a downloadable File object.
+     *
+     * @param href The Figma design URL to convert to file
+     * @return File object containing the downloaded image, or null if conversion fails
+     * @throws Exception if there's an error during download or URL conversion
+     */
+    @MCPTool(
+        name = "figma_download_image_file",
+        description = "Download image by URL as File type. Converts Figma design URL to downloadable image file.",
+        integration = "figma",
+        category = "file_management"
+    )
     @Override
-    public File convertUrlToFile(String href) throws Exception {
+    public File convertUrlToFile(@MCPParam(name = "href", description = "Figma design URL to download as image file", required = true, example = "https://www.figma.com/file/abc123/Design?node-id=1%3A2") String href) throws Exception {
         href = href.replaceAll("&amp;", "&");
         String imageOfSource = getImageOfSource(href);
         if (imageOfSource == null || !imageOfSource.startsWith("http")) {
