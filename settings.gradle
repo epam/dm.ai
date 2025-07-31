@@ -1,3 +1,5 @@
-include 'dmtools-core'
-// Temporarily exclude dmtools-server until MCP annotation processor is fixed
-// include 'dmtools-server'
+include 'dmtools-core', 'dmtools-server'
+
+// MCP submodules (for development mode - JitPack will use committed generated code)
+include ':dmtools-core:mcp-processor'
+include ':dmtools-core:mcp-annotations'
