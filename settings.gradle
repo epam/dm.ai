@@ -1,9 +1,3 @@
-include 'dmtools-core', 'dmtools-server'
-
-
-include ':dmtools-core:mcp-processor'
-
-
-include ':dmtools-core:mcp-annotations'
-
-
+include 'dmtools-core'
+// Temporarily exclude dmtools-server until MCP annotation processor is fixed
+// include 'dmtools-server'
