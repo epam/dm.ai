@@ -38,7 +38,7 @@ import java.util.Set;
  */
 @AutoService(Processor.class)
 @SupportedAnnotationTypes("com.github.istin.dmtools.mcp.MCPTool")
-@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@SupportedSourceVersion(SourceVersion.RELEASE_17)
 public class MCPToolProcessor extends AbstractProcessor {
 
     private Types typeUtils;
@@ -61,6 +61,7 @@ public class MCPToolProcessor extends AbstractProcessor {
             return false;
         }
 
+        System.out.println("=== MCP ANNOTATION PROCESSOR RUNNING ===");
         List<MCPToolDefinition> toolDefinitions = new ArrayList<>();
 
         // Scan for @MCPTool annotations
@@ -406,6 +407,7 @@ public class MCPToolProcessor extends AbstractProcessor {
         }
         out.println(");");
         
+        // Generate schema without outputSchema - let tools return data as text
         out.println("        return Map.of(");
         out.println("            \"name\", \"" + tool.getName() + "\",");
         out.println("            \"description\", \"" + escapeJavaString(tool.getDescription()) + "\",");

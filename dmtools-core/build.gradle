@@ -112,10 +112,11 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.36'
     annotationProcessor 'org.projectlombok:lombok:1.18.36'
     
-    // MCP Tools annotation processor - self-referencing since processor is in same module
-    // This needs to be handled specially because the processor is in the same module as the annotations
-    compileOnly 'com.google.auto.service:auto-service-annotations:1.1.1'
-    annotationProcessor 'com.google.auto.service:auto-service:1.1.1'
+    // MCP annotations from separate module
+    api project(':dmtools-mcp-annotations')
+    
+    // MCP Tools annotation processor - now in separate module
+    annotationProcessor project(':dmtools-annotation-processor')
     
     // MCP Tools dependencies (all classes now bundled in main source)
     // No external dependencies needed - annotations and generated classes are included

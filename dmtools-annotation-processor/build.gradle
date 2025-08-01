@@ -1,0 +1,28 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'com.github.istin'
+version = "${version}"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Only dependencies needed for annotation processing
+    implementation 'com.google.auto.service:auto-service-annotations:1.1.1'
+    annotationProcessor 'com.google.auto.service:auto-service:1.1.1'
+    
+    // Need access to MCP annotations from separate module
+    implementation project(':dmtools-mcp-annotations')
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+} 

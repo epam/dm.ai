@@ -1,0 +1,15 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'com.github.istin'
+version = "${version}"
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+} 

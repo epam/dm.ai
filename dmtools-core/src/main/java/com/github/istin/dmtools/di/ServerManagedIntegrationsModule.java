@@ -425,8 +425,8 @@ public class ServerManagedIntegrationsModule {
                     (key.toLowerCase().contains("token") ? "[SENSITIVE]" : value));
             }
             
-            String basePath = figmaConfig.optString("basePath", "https://api.figma.com/v1/");
-            String token = figmaConfig.optString("token", null);
+            String basePath = figmaConfig.optString("FIGMA_BASE_PATH", "https://api.figma.com/v1/");
+            String token = figmaConfig.optString("FIGMA_TOKEN", null);
             
             if (token == null) {
                 System.err.println("❌ [ServerManagedIntegrationsModule] Figma configuration missing required token parameter");

@@ -1,4 +1,4 @@
-include 'dmtools-core', 'dmtools-server'
+include 'dmtools-core', 'dmtools-server', 'dmtools-mcp-annotations', 'dmtools-annotation-processor'
 
 // MCP submodules (commented out - classes now bundled in dmtools-core for JitPack)
 // include ':dmtools-core:mcp-processor'
