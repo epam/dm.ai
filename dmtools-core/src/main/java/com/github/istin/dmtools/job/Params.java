@@ -94,7 +94,7 @@ public class Params {
     private AIPromptConfig aiPromptConfig;
 
     @SerializedName(ATTACH_RESPONSE_AS_FILE)
-    private boolean attachResponseAsFile = false;
+    private boolean attachResponseAsFile = true;
 
     public void setSourceCodeConfigs(SourceCodeConfig... sourceCodeConfig) {
         this.sourceCodeConfig = sourceCodeConfig;

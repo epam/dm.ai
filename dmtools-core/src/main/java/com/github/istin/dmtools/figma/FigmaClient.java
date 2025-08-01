@@ -45,10 +45,11 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
 
     @Override
     public String path(String path) {
-        if (path.endsWith("/")) {
-            return getBasePath() + path;
+        String basePath = getBasePath();
+        if (path.startsWith("/") || basePath.endsWith("/")) {
+            return basePath + path;
         }
-        return getBasePath() + "/" + path;
+        return basePath + "/" + path;
     }
 
     @Override
