@@ -3,26 +3,21 @@ package com.github.istin.dmtools.di;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.google.BasicGeminiAI;
-import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
-import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.config.InMemoryConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.UriToObjectFactory;
-import com.github.istin.dmtools.di.SourceCodeFactory;
 import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.logging.CallbackLogger;
 import com.github.istin.dmtools.logging.LogCallback;
 import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.OpenAIClient;
 import com.github.istin.dmtools.openai.PromptManager;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import dagger.Module;
 import dagger.Provides;
-import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 import org.json.JSONObject;
 
@@ -31,7 +26,9 @@ import java.io.IOException;
 
 /**
  * Dagger module for server-managed job execution with pre-resolved integrations.
- * This module creates dependencies from credentials that have been resolved by the server.
+ * This module creates dependencies EXCLUSIVELY from credentials that have been resolved by the server.
+ * If required integrations are not provided in resolvedIntegrations, methods will return null
+ * instead of falling back to default implementations, ensuring consistent server-managed behavior.
  * Enhanced to support callback logger injection for execution monitoring.
  */
 @Module
@@ -135,6 +132,13 @@ public class ServerManagedIntegrationsModule {
     @Singleton
     public TrackerClient<? extends ITicket> provideTrackerClient() {
         try {
+            System.out.println("🔧 [ServerManagedIntegrationsModule] Providing TrackerClient integration...");
+            
+            if (resolvedIntegrations == null) {
+                System.err.println("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null TrackerClient");
+                return null;
+            }
+            
             // Create a custom JiraClient instance using resolved credentials
             if (resolvedIntegrations.has("jira")) {
                 JSONObject jiraConfig = resolvedIntegrations.getJSONObject("jira");
@@ -143,18 +147,21 @@ public class ServerManagedIntegrationsModule {
                 String authType = jiraConfig.optString("authType", "Basic");
                 
                 if (!basePath.isEmpty() && !token.isEmpty()) {
-                    // Create a custom JiraClient that replicates BasicJiraClient functionality
-                    // but uses resolved credentials instead of static properties
-                    // Create a custom JiraClient that replicates BasicJiraClient functionality
-                    // but uses resolved credentials instead of static properties
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials");
                     return new CustomServerManagedJiraClient(basePath, token, authType);
+                } else {
+                    System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (url=" + 
+                        (basePath.isEmpty() ? "empty" : basePath) + ", token=" + (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
                 }
+            } else {
+                System.err.println("❌ [ServerManagedIntegrationsModule] No Jira integration found in resolved integrations");
             }
             
-            // Fallback to default instance
-            return new BasicJiraClient();
+            System.err.println("❌ [ServerManagedIntegrationsModule] No valid Jira integration available - returning null TrackerClient");
+            return null;
         } catch (IOException e) {
-            throw new RuntimeException("Failed to create TrackerClient instance with resolved credentials", e);
+            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to create TrackerClient instance with resolved credentials: " + e.getMessage());
+            return null;
         }
     }
     
@@ -238,13 +245,13 @@ public class ServerManagedIntegrationsModule {
             System.out.println("🔧 [ServerManagedIntegrationsModule] Providing Confluence integration...");
             
             if (resolvedIntegrations == null) {
-                System.out.println("⚠️ [ServerManagedIntegrationsModule] No resolved integrations found, falling back to BasicConfluence");
-                return BasicConfluence.getInstance();
+                System.err.println("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null Confluence");
+                return null;
             }
             
             if (!resolvedIntegrations.has("confluence")) {
-                System.out.println("⚠️ [ServerManagedIntegrationsModule] No Confluence integration found in resolved integrations, falling back to BasicConfluence");
-                return BasicConfluence.getInstance();
+                System.err.println("❌ [ServerManagedIntegrationsModule] No Confluence integration found in resolved integrations - returning null");
+                return null;
             }
             
             JSONObject confluenceConfig = resolvedIntegrations.getJSONObject("confluence");
@@ -264,8 +271,8 @@ public class ServerManagedIntegrationsModule {
             
             if (url == null || token == null) {
                 System.err.println("❌ [ServerManagedIntegrationsModule] Confluence configuration missing required parameters (url=" + 
-                    (url != null ? url : "null") + ", token=" + (token != null ? "[SENSITIVE]" : "null") + ")");
-                return BasicConfluence.getInstance();
+                    (url != null ? url : "null") + ", token=" + (token != null ? "[SENSITIVE]" : "null") + ") - returning null");
+                return null;
             }
             
             // Ensure URL ends with /wiki for proper URL parsing by parseUris method
@@ -283,12 +290,7 @@ public class ServerManagedIntegrationsModule {
         } catch (Exception e) {
             System.err.println("❌ [ServerManagedIntegrationsModule] Failed to provide Confluence integration: " + e.getMessage());
             e.printStackTrace();
-            try {
-                return BasicConfluence.getInstance();
-            } catch (Exception fallbackException) {
-                System.err.println("❌ [ServerManagedIntegrationsModule] Fallback to BasicConfluence also failed: " + fallbackException.getMessage());
-                return null;
-            }
+            return null;
         }
     }
     
@@ -298,10 +300,6 @@ public class ServerManagedIntegrationsModule {
      */
     private static class CustomServerManagedConfluence extends Confluence {
         private final CallbackLogger callbackLogger;
-        
-        public CustomServerManagedConfluence(String basePath, String token, String defaultSpace) throws IOException {
-            this(basePath, token, defaultSpace, null, null, null);
-        }
         
         public CustomServerManagedConfluence(String basePath, String token, String defaultSpace, String authType, String executionId, LogCallback logCallback) throws IOException {
             super(basePath, token, LogManager.getLogger(CustomServerManagedConfluence.class), defaultSpace);
@@ -334,8 +332,8 @@ public class ServerManagedIntegrationsModule {
             System.out.println("🤖 [ServerManagedIntegrationsModule] Providing AI integration...");
             
             if (resolvedIntegrations == null) {
-                System.out.println("⚠️ [ServerManagedIntegrationsModule] No resolved integrations found, falling back to BasicOpenAI");
-                return new BasicOpenAI(observer, configuration);
+                System.err.println("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null AI");
+                return null;
             }
             
             // Check available AI integrations in priority order
@@ -348,7 +346,7 @@ public class ServerManagedIntegrationsModule {
                 
                 String apiKey = geminiConfig.optString("apiKey", null);
                 if (apiKey != null && !apiKey.isEmpty()) {
-                    System.out.println("🤖 Using resolved Gemini integration for AI provider");
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Using resolved Gemini integration for AI provider");
                     return BasicGeminiAI.create(observer, configuration);
                 } else {
                     System.out.println("⚠️ [ServerManagedIntegrationsModule] Gemini configuration missing apiKey, skipping");
@@ -362,25 +360,20 @@ public class ServerManagedIntegrationsModule {
                 
                 String apiKey = openaiConfig.optString("apiKey", null);
                 if (apiKey != null && !apiKey.isEmpty()) {
-                    System.out.println("🤖 Using resolved OpenAI integration for AI provider");
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Using resolved OpenAI integration for AI provider");
                     return new BasicOpenAI(observer, configuration);
                 } else {
                     System.out.println("⚠️ [ServerManagedIntegrationsModule] OpenAI configuration missing apiKey, skipping");
                 }
             }
             
-            System.out.println("⚠️ [ServerManagedIntegrationsModule] No valid AI integration found, falling back to BasicOpenAI");
-            return new BasicOpenAI(observer, configuration);
+            System.err.println("❌ [ServerManagedIntegrationsModule] No valid AI integration found - returning null AI");
+            return null;
             
         } catch (Exception e) {
             System.err.println("❌ [ServerManagedIntegrationsModule] Failed to provide AI integration: " + e.getMessage());
             e.printStackTrace();
-            try {
-                return new BasicOpenAI(observer, configuration);
-            } catch (Exception fallbackException) {
-                System.err.println("❌ [ServerManagedIntegrationsModule] Fallback to BasicOpenAI also failed: " + fallbackException.getMessage());
-                return null;
-            }
+            return null;
         }
     }
     
