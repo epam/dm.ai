@@ -3,12 +3,8 @@ package com.github.istin.dmtools.di;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.agent.*;
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
-import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
-import com.github.istin.dmtools.common.model.ITicket;
-import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.ContextOrchestrator;
-import com.github.istin.dmtools.context.UriToObjectFactory;
 import com.github.istin.dmtools.presentation.PresentationMakerOrchestrator;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import com.github.istin.dmtools.search.ConfluenceSearchOrchestrator;
@@ -61,8 +57,8 @@ public class AIAgentsModule {
     }
 
     @Provides
-    TeamAssistantAgent provideTeamAssistantAgent() {
-        return new TeamAssistantAgent();
+    TeamAssistantAgent provideTeamAssistantAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
+        return new TeamAssistantAgent(ai, promptTemplateReader);
     }
 
     @Provides

@@ -276,9 +276,9 @@ public class ServerManagedIntegrationsModule {
             }
             
             // Ensure URL ends with /wiki for proper URL parsing by parseUris method
-            if (!url.endsWith("/wiki")) {
-                url = url + "/wiki";
-            }
+//            if (!url.endsWith("/wiki")) {
+//                url = url + "/wiki";
+//            }
             
             System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedConfluence with url=" + url + 
                 ", defaultSpace=" + (defaultSpace != null ? defaultSpace : "null") +
@@ -382,6 +382,8 @@ public class ServerManagedIntegrationsModule {
     IPromptTemplateReader providePromptTemplateReader() {
         return new PromptManager();
     }
+
+
 
     @Provides
     @Singleton

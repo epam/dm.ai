@@ -2,7 +2,6 @@ package com.github.istin.dmtools.ai.agent;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
-import com.github.istin.dmtools.di.DaggerTeamAssistantAgentComponent;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -14,7 +13,7 @@ public class TeamAssistantAgent extends AbstractSimpleAgent<TeamAssistantAgent.P
 
     @AllArgsConstructor
     @Getter
-    public static class Params implements GetFiles, GetChunks {
+    public static class Params implements AbstractSimpleAgent.GetFiles, AbstractSimpleAgent.GetChunks {
         private RequestDecompositionAgent.Result request;
         private List<File> files;
         private List<ChunkPreparation.Chunk> chunks;
@@ -36,10 +35,10 @@ public class TeamAssistantAgent extends AbstractSimpleAgent<TeamAssistantAgent.P
         }
     }
 
-    // Default constructor for standalone mode
+    // Default constructor - dependencies will be injected by Dagger
     public TeamAssistantAgent() {
         super("agents/team_assistant");
-        DaggerTeamAssistantAgentComponent.create().inject(this);
+        // Dependencies injected via constructor or module provider
     }
 
     // Constructor for server-managed mode with injected dependencies

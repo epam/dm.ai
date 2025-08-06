@@ -2,7 +2,6 @@ package com.github.istin.dmtools.di;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
-import com.github.istin.dmtools.expert.Expert;
 import com.github.istin.dmtools.teammate.Teammate;
 import dagger.Component;
 
@@ -14,4 +13,5 @@ public interface TeammateComponent {
     void inject(Teammate teammate);
     AI getAI();
     ApplicationConfiguration getConfiguration();
+    com.github.istin.dmtools.ai.agent.TeamAssistantAgent getTeamAssistantAgent();
 }
