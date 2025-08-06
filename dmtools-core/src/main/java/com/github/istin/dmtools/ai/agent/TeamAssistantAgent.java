@@ -1,7 +1,9 @@
 package com.github.istin.dmtools.ai.agent;
 
+import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.di.DaggerTeamAssistantAgentComponent;
+import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -34,9 +36,17 @@ public class TeamAssistantAgent extends AbstractSimpleAgent<TeamAssistantAgent.P
         }
     }
 
+    // Default constructor for standalone mode
     public TeamAssistantAgent() {
         super("agents/team_assistant");
         DaggerTeamAssistantAgentComponent.create().inject(this);
+    }
+
+    // Constructor for server-managed mode with injected dependencies
+    public TeamAssistantAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
+        super("agents/team_assistant");
+        this.ai = ai;
+        this.promptTemplateReader = promptTemplateReader;
     }
 
     @Override

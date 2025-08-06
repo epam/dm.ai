@@ -69,7 +69,6 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     @Inject
     RequestDecompositionAgent requestDecompositionAgent;
 
-    @Inject
     TeamAssistantAgent teamAssistantAgent;
 
     @Inject
@@ -124,6 +123,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             teammateComponent = DaggerTeammateComponent.create();
         }
         teammateComponent.inject(this);
+        
+        // Initialize TeamAssistantAgent with injected dependencies
+        teamAssistantAgent = new TeamAssistantAgent(ai, promptTemplateReader);
     }
 
     @Override
@@ -135,6 +137,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     .serverManagedIntegrationsModule(module)
                     .build();
             component.inject(this);
+            
+            // Initialize TeamAssistantAgent with server-managed dependencies
+            teamAssistantAgent = new TeamAssistantAgent(ai, promptTemplateReader);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize Expert in server-managed mode", e);
         }
