@@ -97,7 +97,7 @@ class DataToPresentationExamplesIntegrationTest {
     @Test
     void testExample_csvDataAnalysis_generatesRealFile() throws Exception {
         // This is a full end-to-end test that calls the real PresentationMakerOrchestrator,
-        // which will in turn make a real call to the OpenAI API.
+        // which will in turn make a real call to the Dial API.
         // Ensure your API keys are configured correctly before running.
 
         // Step 1: Configure the JSPresentationMakerBridge

@@ -7,7 +7,6 @@ import org.apache.commons.io.IOUtils;
 import org.json.JSONObject;
 
 import javax.script.ScriptException;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
@@ -17,13 +16,13 @@ public class BasicJSAIClient extends JSAIClient {
     public static final String BASE_PATH;
     public static final String API_KEY;
     public static final String MODEL;
-    public static final String JS_SCRIPT_CLASSPATH = "js/openAiChatViaJs.js"; // Path within resources
+    public static final String JS_SCRIPT_CLASSPATH = "js/dialChatViaJs.js"; // Path within resources
 
     static {
         PropertyReader propertyReader = new PropertyReader();
-        BASE_PATH = propertyReader.getOpenAIBathPath(); // Reuse OpenAI properties
-        API_KEY = propertyReader.getOpenAIApiKey();
-        MODEL = propertyReader.getOpenAIModel();
+        BASE_PATH = propertyReader.getDialBathPath(); // Reuse Dial properties
+        API_KEY = propertyReader.getDialIApiKey();
+        MODEL = propertyReader.getDialModel();
     }
 
     public BasicJSAIClient() throws IOException, ScriptException, URISyntaxException, TemplateException {
@@ -47,7 +46,7 @@ public class BasicJSAIClient extends JSAIClient {
         String jsCode = loadTestScriptContent();
 
         JSONObject config = new JSONObject();
-        config.put("clientName", "BasicJSAIOpenAI");
+        config.put("clientName", "BasicJSAIClient");
         config.put("basePath", BASE_PATH);
         config.put("defaultModel", MODEL);
         

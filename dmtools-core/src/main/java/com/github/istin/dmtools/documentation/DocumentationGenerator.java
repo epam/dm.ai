@@ -15,8 +15,8 @@ import com.github.istin.dmtools.documentation.area.TicketDocumentationHistoryTra
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.job.AbstractJob;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import com.github.istin.dmtools.report.model.KeyTime;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,7 +42,7 @@ public class DocumentationGenerator extends AbstractJob<DocumentationGeneratorPa
 
     public static JSONObject runJob(String confluenceRootPage, String eachPagePrefix, String jql, String[] listOfStatusesToSort, boolean isReadFeatureAreasFromConfluenceRootPage) throws Exception {
         ConversationObserver conversationObserver = new ConversationObserver();
-        BasicOpenAI openAIClient = new BasicOpenAI(conversationObserver);
+        BasicDialAI ai = new BasicDialAI(conversationObserver);
         PromptManager promptManager = new PromptManager();
         TrackerClient tracker = BasicJiraClient.getInstance();
         BasicConfluence confluence = BasicConfluence.getInstance();
@@ -50,7 +50,7 @@ public class DocumentationGenerator extends AbstractJob<DocumentationGeneratorPa
 
         List<? extends ITicket> tickets = retrieveTickets(tracker, jql, listOfStatusesToSort);
 
-        JAssistant jAssistant = new JAssistant(tracker, null, openAIClient, promptManager);
+        JAssistant jAssistant = new JAssistant(tracker, null, ai, promptManager);
 
         KeyAreaMapperViaConfluence ticketAreaMapper = new KeyAreaMapperViaConfluence(eachPagePrefix, confluenceRootPage, confluence);
         DocumentationEditor documentationEditor = new DocumentationEditor(jAssistant, tracker,  confluence, eachPagePrefix);

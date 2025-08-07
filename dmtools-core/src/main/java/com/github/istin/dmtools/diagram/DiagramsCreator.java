@@ -6,8 +6,8 @@ import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.job.AbstractJob;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import lombok.*;
 
 import java.io.File;
@@ -36,9 +36,9 @@ public class DiagramsCreator extends AbstractJob<DiagramsCreatorParams, List<Dia
     public static List<Result> runJob(String roleSpecific, String projectSpecific, String storiesJql, String labelNameToMarkAsReviewed) throws Exception {
         TrackerClient<? extends ITicket> trackerClient = BasicJiraClient.getInstance();
         ConversationObserver conversationObserver = new ConversationObserver();
-        BasicOpenAI openAI = new BasicOpenAI(conversationObserver);
+        BasicDialAI dial = new BasicDialAI(conversationObserver);
         PromptManager promptManager = new PromptManager();
-        JAssistant jAssistant = new JAssistant(trackerClient, null, openAI, promptManager);
+        JAssistant jAssistant = new JAssistant(trackerClient, null, dial, promptManager);
         DiagramsDrawer diagramsDrawer = new DiagramsDrawer();
         List<Result> resultItems = new ArrayList<>();
         trackerClient.searchAndPerform(new JiraClient.Performer() {

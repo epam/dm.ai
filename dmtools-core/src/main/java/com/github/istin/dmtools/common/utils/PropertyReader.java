@@ -266,16 +266,16 @@ public class PropertyReader {
 		return getValue("CONFLUENCE_DEFAULT_SPACE");
 	}
 
-	public String getOpenAIBathPath() {
-		return getValue("OPEN_AI_BATH_PATH");
+	public String getDialBathPath() {
+		return getValue("DIAL_BATH_PATH");
 	}
 
-	public String getOpenAIApiKey() {
-		return getValue("OPEN_AI_API_KEY");
+	public String getDialIApiKey() {
+		return getValue("DIAL_API_KEY");
 	}
 
-	public String getOpenAIModel() {
-		return getValue("OPEN_AI_MODEL");
+	public String getDialModel() {
+		return getValue("DIAL_MODEL");
 	}
 
 	public String getCodeAIModel() {
@@ -510,7 +510,7 @@ public class PropertyReader {
 		return props;
 	}
 
-	public static final String OPEN_AI_MODEL = "OPEN_AI_MODEL";
+	public static final String DIAL_MODEL = "DIAL_MODEL";
 	public static final String CODE_AI_MODEL = "CODE_AI_MODEL";
 	public static final String TEST_AI_MODEL = "TEST_AI_MODEL";
 	public static final String GEMINI_API_KEY = "GEMINI_API_KEY";

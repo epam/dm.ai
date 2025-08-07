@@ -26,7 +26,7 @@ public class AIPromptConfig {
     public static final String PROMPT_CHUNK_MAX_FILES = "prompt_chunk_max_files";
 
     public enum ModelProvider {
-        OPENAI, ANTHROPIC, GEMINI, AZURE_OPENAI, MISTRAL
+        DIAL, ANTHROPIC, GEMINI, AZURE_OPENAI, MISTRAL
     }
 
     @SerializedName(MODEL_NAME)

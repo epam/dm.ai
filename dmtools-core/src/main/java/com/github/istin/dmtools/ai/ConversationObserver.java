@@ -1,6 +1,5 @@
 package com.github.istin.dmtools.ai;
 
-import com.github.istin.dmtools.openai.OpenAIClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

@@ -166,18 +166,18 @@ CONFLUENCE_DEFAULT_SPACE=TEAM
 
 ### AI Configuration
 ```properties
-OPEN_AI_BATH_PATH=https://api.openai.com/v1
-OPEN_AI_API_KEY=your_openai_key
-OPEN_AI_MODEL=gpt-4
+DIAL_BATH_PATH=https://api.dial.com/v1
+DIAL_API_KEY=your_dial_key
+DIAL_MODEL=gpt-4
 ```
 
-#### How to Get OpenAI Token:
-1. Go to the [OpenAI Platform](https://platform.openai.com).
-2. Navigate to the **API Keys** section.
+#### How to Get DIAL Token:
+1. Go to the [DIAL Platform](https://platform.openai.com).
+2. Request your API key.
 3. Create a new secret key.
 4. Copy the key and add it to the configuration:
    ```properties
-   OPEN_AI_API_KEY=[token]
+   DIAL_API_KEY=[token]
    ```
 
 ---

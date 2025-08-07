@@ -10,8 +10,8 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ResultItem;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,9 +26,9 @@ public class SolutionArchitectureCreator extends AbstractJob<SolutionArchitectur
     public static List<ResultItem> runJob(String roleSpecific, String projectSpecific, String storiesJql, String labelNameToMarkAsReviewed) throws Exception {
         TrackerClient<? extends ITicket> trackerClient = BasicJiraClient.getInstance();
         ConversationObserver conversationObserver = new ConversationObserver();
-        BasicOpenAI openAI = new BasicOpenAI(conversationObserver);
+        BasicDialAI ai = new BasicDialAI(conversationObserver);
         PromptManager promptManager = new PromptManager();
-        JAssistant jAssistant = new JAssistant(trackerClient, null, openAI, promptManager);
+        JAssistant jAssistant = new JAssistant(trackerClient, null, ai, promptManager);
         List<ResultItem> resultItems = new ArrayList<>();
         trackerClient.searchAndPerform(new JiraClient.Performer() {
             @Override

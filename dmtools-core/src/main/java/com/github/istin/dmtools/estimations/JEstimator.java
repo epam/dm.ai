@@ -9,8 +9,8 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ResultItem;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import com.github.istin.dmtools.report.ReportUtils;
 import com.github.istin.dmtools.report.freemarker.*;
 import freemarker.template.TemplateException;
@@ -83,10 +83,10 @@ public class JEstimator extends AbstractJob<JEstimatorParams, ResultItem> {
 
     private static ResultItem runJob(String jql, String reportName) throws Exception {
         TrackerClient<? extends ITicket> jira = BasicJiraClient.getInstance();
-        BasicOpenAI openAIClient = new BasicOpenAI();
+        BasicDialAI ai = new BasicDialAI();
         ConversationObserver conversationObserver = new ConversationObserver();
-        openAIClient.setConversationObserver(conversationObserver);
-        JAssistant jAssistant = new JAssistant(jira, null, openAIClient, new PromptManager(), conversationObserver);
+        ai.setConversationObserver(conversationObserver);
+        JAssistant jAssistant = new JAssistant(jira, null, ai, new PromptManager(), conversationObserver);
         List<? extends ITicket> list = jira.searchAndPerform(jql, jira.getDefaultQueryFields());
         List<AIEstimatedTicket> tickets = list.stream()
                 //.limit(5)

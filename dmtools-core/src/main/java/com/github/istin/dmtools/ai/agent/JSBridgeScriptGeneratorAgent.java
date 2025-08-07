@@ -1,8 +1,7 @@
 package com.github.istin.dmtools.ai.agent;
 
-import com.github.istin.dmtools.ai.agent.AbstractSimpleAgent.GetFiles;
 import com.github.istin.dmtools.di.DaggerJSBridgeScriptGeneratorAgentComponent;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import lombok.Getter;
 
 import java.io.File;

@@ -13,9 +13,9 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.dev.UnitTestsGeneratorParams;
-import com.github.istin.dmtools.openai.PromptManager;
-import com.github.istin.dmtools.openai.input.*;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.prompt.PromptManager;
+import com.github.istin.dmtools.prompt.input.*;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,7 +45,7 @@ public class JAssistant {
     static {
         PropertyReader propertyReader = new PropertyReader();
         String codeAIModel = propertyReader.getCodeAIModel();
-        String defaultModel = propertyReader.getOpenAIModel();
+        String defaultModel = propertyReader.getDialModel();
         if (codeAIModel == null || codeAIModel.isEmpty()) {
             CODE_AI_MODEL = defaultModel;
         } else {

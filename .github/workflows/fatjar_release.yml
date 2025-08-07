@@ -62,7 +62,7 @@ jobs:
       - name: Build with Gradle
         id: gradle
         continue-on-error: true
-        run: ./gradlew clean build :dmtools-core:shadowJar publish -x integrationTest -x :dmtools-server:test
+        run: ./gradlew clean build :dmtools-core:shadowJar publish -x integrationTest
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

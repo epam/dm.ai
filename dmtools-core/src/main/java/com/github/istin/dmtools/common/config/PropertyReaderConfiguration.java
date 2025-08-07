@@ -97,18 +97,18 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
     
     @Override
-    public String getOpenAIBathPath() {
-        return propertyReader.getOpenAIBathPath();
+    public String getDialBathPath() {
+        return propertyReader.getDialBathPath();
     }
     
     @Override
-    public String getOpenAIApiKey() {
-        return propertyReader.getOpenAIApiKey();
+    public String getDialApiKey() {
+        return propertyReader.getDialIApiKey();
     }
     
     @Override
-    public String getOpenAIModel() {
-        return propertyReader.getOpenAIModel();
+    public String getDialModel() {
+        return propertyReader.getDialModel();
     }
     
     @Override

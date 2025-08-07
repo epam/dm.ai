@@ -12,7 +12,7 @@ import com.github.istin.dmtools.di.DaggerCommitsTriageComponent;
 import com.github.istin.dmtools.di.SourceCodeFactory;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ResultItem;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import com.github.istin.dmtools.prompt.Prompt;
 import com.github.istin.dmtools.prompt.PromptContext;

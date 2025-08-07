@@ -1,7 +1,7 @@
 package com.github.istin.dmtools.ai.agent;
 
 import com.github.istin.dmtools.di.DaggerSnippetExtensionAgentComponent;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

@@ -6,10 +6,9 @@ import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.ai.js.JSAIClient;
 import com.github.istin.dmtools.bridge.DMToolsBridge;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
-import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import dagger.Module;
 import dagger.Provides;
@@ -39,23 +38,23 @@ public class AIComponentsModule {
     @Singleton
     AI provideAI(ConversationObserver observer, ApplicationConfiguration configuration) {
         // 1. Attempt to initialize AI via BasicGeminiAI if GEMINI_API_KEY is configured
-        // Skip Gemini if OpenAI is explicitly preferred or if Gemini has known issues
+        // Skip Gemini if DialAI is explicitly preferred or if Gemini has known issues
         String geminiApiKey = configuration.getGeminiApiKey();
-        String openAiApiKey = configuration.getOpenAIApiKey();
+        String dialApiKey = configuration.getDialApiKey();
         
-        // Prefer OpenAI if both are available (to avoid Gemini location restrictions)
-        if (openAiApiKey != null && !openAiApiKey.trim().isEmpty() && !openAiApiKey.startsWith("$")) {
+        // Prefer Dial if both are available (to avoid Gemini location restrictions)
+        if (dialApiKey != null && !dialApiKey.trim().isEmpty() && !dialApiKey.startsWith("$")) {
             try {
-                System.out.println("Attempting to initialize AI via BasicOpenAI as OPEN_AI_API_KEY is set...");
-                AI openAI = new BasicOpenAI(observer, configuration);
-                System.out.println("BasicOpenAI initialized successfully.");
-                return openAI;
+                System.out.println("Attempting to initialize AI via BasicDIAL as DIAL_API_KEY is set...");
+                AI dial = new BasicDialAI(observer, configuration);
+                System.out.println("BasicDIAL initialized successfully.");
+                return dial;
             } catch (Exception e) {
-                System.err.println("Failed to initialize BasicOpenAI, trying fallback options. Error: " + e.getMessage());
+                System.err.println("Failed to initialize BasicDIAL, trying fallback options. Error: " + e.getMessage());
             }
         }
         
-        // Only try Gemini if OpenAI is not available
+        // Only try Gemini if Dial is not available
         if (geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.startsWith("$")) {
             try {
                 System.out.println("Attempting to initialize AI via BasicGeminiAI as GEMINI_API_KEY is set...");
@@ -78,10 +77,10 @@ public class AIComponentsModule {
                 configJson.put("clientName", configuration.getJsClientName());
 
                 String jsModel = configuration.getJsDefaultModel();
-                configJson.put("defaultModel", jsModel != null ? jsModel : configuration.getOpenAIModel());
+                configJson.put("defaultModel", jsModel != null ? jsModel : configuration.getDialModel());
 
                 String jsBasePath = configuration.getJsBasePath();
-                configJson.put("basePath", jsBasePath != null ? jsBasePath : configuration.getOpenAIBathPath());
+                configJson.put("basePath", jsBasePath != null ? jsBasePath : configuration.getDialBathPath());
 
                 JSONObject secretsJson = new JSONObject();
                 String[] secretKeys = configuration.getJsSecretsKeys();
@@ -114,15 +113,15 @@ public class AIComponentsModule {
             return customAI;
         }
 
-        // 4. Default fallback to BasicOpenAI
+        // 4. Default fallback to BasicDial
         try {
-            System.out.println("Falling back to BasicOpenAI.");
-            AI basicOpenAI = new BasicOpenAI(observer, configuration);
-            System.out.println("BasicOpenAI initialized successfully.");
-            return basicOpenAI;
+            System.out.println("Falling back to BasicDIAL.");
+            AI dial = new BasicDialAI(observer, configuration);
+            System.out.println("BasicDIAL initialized successfully.");
+            return dial;
         } catch (IOException e) {
-            System.err.println("Failed to initialize BasicOpenAI: " + e.getMessage());
-            throw new RuntimeException("Failed to initialize BasicOpenAI and no other AI clients were available.", e);
+            System.err.println("Failed to initialize BasicDIAL: " + e.getMessage());
+            throw new RuntimeException("Failed to initialize BasicDIAL and no other AI clients were available.", e);
         }
     }
 

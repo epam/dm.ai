@@ -15,8 +15,8 @@ import com.github.istin.dmtools.documentation.DocumentationEditor;
 import com.github.istin.dmtools.documentation.area.TicketDocumentationHistoryTrackerViaConfluence;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ResultItem;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -33,9 +33,9 @@ public class RequirementsCollector extends AbstractJob<RequirementsCollectorPara
     public static List<ResultItem> runJob(String roleSpecific, String projectSpecific, String storiesJql, String excludeJQL, String labelNameToMarkAsReviewed, String eachPagePrefix) throws Exception {
         TrackerClient<? extends ITicket> trackerClient = BasicJiraClient.getInstance();
         ConversationObserver conversationObserver = new ConversationObserver();
-        BasicOpenAI openAI = new BasicOpenAI(conversationObserver);
+        BasicDialAI ai = new BasicDialAI(conversationObserver);
         PromptManager promptManager = new PromptManager();
-        JAssistant jAssistant = new JAssistant(trackerClient, null, openAI, promptManager);
+        JAssistant jAssistant = new JAssistant(trackerClient, null, ai, promptManager);
         List<ResultItem> results = new ArrayList<>();
         trackerClient.searchAndPerform(new JiraClient.Performer() {
             @Override

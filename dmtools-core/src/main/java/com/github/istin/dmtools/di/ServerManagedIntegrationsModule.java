@@ -13,8 +13,8 @@ import com.github.istin.dmtools.context.UriToObjectFactory;
 import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.logging.CallbackLogger;
 import com.github.istin.dmtools.logging.LogCallback;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import dagger.Module;
 import dagger.Provides;
@@ -89,16 +89,16 @@ public class ServerManagedIntegrationsModule {
             }
         }
         
-        if (resolvedIntegrations.has("openai")) {
-            JSONObject openaiConfig = resolvedIntegrations.getJSONObject("openai");
-            if (openaiConfig.has("apiKey")) {
-                config.setProperty("OPEN_AI_API_KEY", openaiConfig.getString("apiKey"));
+        if (resolvedIntegrations.has("dial")) {
+            JSONObject dialaiConfig = resolvedIntegrations.getJSONObject("dial");
+            if (dialaiConfig.has("apiKey")) {
+                config.setProperty("DIAL_API_KEY", dialaiConfig.getString("apiKey"));
             }
-            if (openaiConfig.has("model")) {
-                config.setProperty("OPEN_AI_MODEL", openaiConfig.getString("model"));
+            if (dialaiConfig.has("model")) {
+                config.setProperty("DIAL_MODEL", dialaiConfig.getString("model"));
             }
-            if (openaiConfig.has("basePath")) {
-                config.setProperty("OPEN_AI_BATH_PATH", openaiConfig.getString("basePath"));
+            if (dialaiConfig.has("basePath")) {
+                config.setProperty("DIAl_BATH_PATH", dialaiConfig.getString("basePath"));
             }
         }
         
@@ -353,17 +353,17 @@ public class ServerManagedIntegrationsModule {
                 }
             }
             
-            // Then check for OpenAI
-            if (resolvedIntegrations.has("openai")) {
-                JSONObject openaiConfig = resolvedIntegrations.getJSONObject("openai");
-                System.out.println("🔍 [ServerManagedIntegrationsModule] Found OpenAI configuration: " + openaiConfig.length() + " parameters");
+            // Then check for Dial
+            if (resolvedIntegrations.has("dial")) {
+                JSONObject dialConfig = resolvedIntegrations.getJSONObject("dial");
+                System.out.println("🔍 [ServerManagedIntegrationsModule] Found Dial configuration: " + dialConfig.length() + " parameters");
                 
-                String apiKey = openaiConfig.optString("apiKey", null);
+                String apiKey = dialConfig.optString("apiKey", null);
                 if (apiKey != null && !apiKey.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Using resolved OpenAI integration for AI provider");
-                    return new BasicOpenAI(observer, configuration);
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Using resolved Dial integration for AI provider");
+                    return new BasicDialAI(observer, configuration);
                 } else {
-                    System.out.println("⚠️ [ServerManagedIntegrationsModule] OpenAI configuration missing apiKey, skipping");
+                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Dial configuration missing apiKey, skipping");
                 }
             }
             

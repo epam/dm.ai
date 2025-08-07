@@ -147,18 +147,18 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     // AIConfiguration
     
     @Override
-    public String getOpenAIBathPath() {
-        return getValue("OPEN_AI_BATH_PATH");
+    public String getDialBathPath() {
+        return getValue("DIAL_BATH_PATH");
     }
     
     @Override
-    public String getOpenAIApiKey() {
-        return getValue("OPEN_AI_API_KEY");
+    public String getDialApiKey() {
+        return getValue("DIAL_API_KEY");
     }
     
     @Override
-    public String getOpenAIModel() {
-        return getValue("OPEN_AI_MODEL");
+    public String getDialModel() {
+        return getValue("DIAL_MODEL");
     }
     
     @Override

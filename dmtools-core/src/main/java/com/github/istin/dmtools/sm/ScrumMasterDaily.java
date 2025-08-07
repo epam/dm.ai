@@ -9,8 +9,8 @@ import com.github.istin.dmtools.common.model.*;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.DateUtils;
 import com.github.istin.dmtools.job.AbstractJob;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -93,9 +93,9 @@ public class ScrumMasterDaily extends AbstractJob<ScrumMasterDailyParams, String
 
         logger.log(Level.INFO, listOfChanges.size());
 
-        BasicOpenAI openAI = new BasicOpenAI(null);
+        BasicDialAI ai = new BasicDialAI(null);
         PromptManager promptManager = new PromptManager();
-        JAssistant jAssistant = new JAssistant(trackerClient, null, openAI, promptManager);
+        JAssistant jAssistant = new JAssistant(trackerClient, null, ai, promptManager);
 
         // Group by IUser.getName()
         Map<String, List<Change>> groupedByUserName = listOfChanges.stream()

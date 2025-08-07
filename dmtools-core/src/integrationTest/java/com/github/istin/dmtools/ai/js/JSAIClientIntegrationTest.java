@@ -13,9 +13,9 @@ import java.util.Collections;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-// Ensure your dmtools.properties has OPENAI_BASE_PATH, OPENAI_API_KEY, OPENAI_MODEL set for Azure OpenAI for this test
-// as openAiChatViaJs.js is currently written to use an 'api-key' header.
-//@Ignore("This test requires actual OpenAI API key (for Azure) and network access properly configured in properties.")
+// Ensure your dmtools.properties has DIAL_BASE_PATH, DIAL_API_KEY, DIAL_MODEL set for Azure DIAL for this test
+// as dialChatViaJs.js is currently written to use an 'api-key' header.
+//@Ignore("This test requires actual DIAL API key (for Azure) and network access properly configured in properties.")
 public class JSAIClientIntegrationTest {
 
     private BasicJSAIClient jsAIClient;
@@ -59,7 +59,7 @@ public class JSAIClientIntegrationTest {
     @Test
     public void testChatModelStringMessageAndFile() throws Exception {
         when(jsAIClient.chat(anyString(), anyString(), any(File.class))).thenReturn("mock response");
-        // The current openAiChatViaJs.js logs a warning but doesn't process the image file content.
+        // The current dialChatViaJs.js logs a warning but doesn't process the image file content.
         // This test primarily checks that the call doesn't break the Java/JS interaction.
         String response = jsAIClient.chat(BasicJSAIClient.MODEL, 
                                         "This message is sent with an image (JS will ignore image content). Describe a generic icon.", 

@@ -466,11 +466,11 @@ public class MarkdownToJiraConverterTest {
                         "</li>\n" +
                         "<li><strong>AI Integration</strong>\n" +
                         "<ul>\n" +
-                        "    <li><em>OpenAI:</em>\n" +
+                        "    <li><em>Dial:</em>\n" +
                         "        <code class=\"properties\">\n" +
-                        "        OPEN_AI_BATH_PATH\n" +
-                        "        OPEN_AI_API_KEY\n" +
-                        "        OPEN_AI_MODEL\n" +
+                        "        DIAL_BATH_PATH\n" +
+                        "        DIAL_API_KEY\n" +
+                        "        DIAL_MODEL\n" +
                         "        </code>\n" +
                         "    </li>\n" +
                         "    <li>AI Models: CODE_AI_MODEL, TEST_AI_MODEL</li>\n" +
@@ -554,9 +554,9 @@ public class MarkdownToJiraConverterTest {
                         "        {code}\n" +
                         "* _GitLab:_ (Similar parameters with GITLAB_ prefix)\n" +
                         "# *AI Integration*\n" +
-                        "* _OpenAI:_ {code:bash}        OPEN_AI_BATH_PATH\n" +
-                        "        OPEN_AI_API_KEY\n" +
-                        "        OPEN_AI_MODEL\n" +
+                        "* _Dial:_ {code:bash}        DIAL_BATH_PATH\n" +
+                        "        DIAL_API_KEY\n" +
+                        "        DIAL_MODEL\n" +
                         "        {code}\n" +
                         "* AI Models: CODE_AI_MODEL, TEST_AI_MODEL\n" +
                         "# *Other Tools*\n" +

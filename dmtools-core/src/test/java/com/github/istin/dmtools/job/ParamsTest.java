@@ -76,7 +76,7 @@ class ParamsTest {
         
         AIPromptConfig aiPromptConfig = AIPromptConfig.builder()
                 .modelName("gpt-4")
-                .modelProvider(AIPromptConfig.ModelProvider.OPENAI)
+                .modelProvider(AIPromptConfig.ModelProvider.DIAL)
                 .apiKey("sk-1234567890abcdef")
                 .promptChunkTokenLimit(8000)
                 .promptChunkMaxSingleFileSize(1024L * 1024L) // 1MB
@@ -88,7 +88,7 @@ class ParamsTest {
         
         assertNotNull(params.getAiPromptConfig());
         assertEquals("gpt-4", params.getAiPromptConfig().getModelName());
-        assertEquals(AIPromptConfig.ModelProvider.OPENAI, params.getAiPromptConfig().getModelProvider());
+        assertEquals(AIPromptConfig.ModelProvider.DIAL, params.getAiPromptConfig().getModelProvider());
         assertEquals("sk-1234567890abcdef", params.getAiPromptConfig().getApiKey());
         assertEquals(8000, params.getAiPromptConfig().getPromptChunkTokenLimit());
         assertEquals(1024L * 1024L, params.getAiPromptConfig().getPromptChunkMaxSingleFileSize());

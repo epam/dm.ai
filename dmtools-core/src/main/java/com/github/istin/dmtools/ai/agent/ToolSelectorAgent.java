@@ -2,21 +2,15 @@ package com.github.istin.dmtools.ai.agent;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.di.DaggerToolSelectorAgentComponent;
 import com.github.istin.dmtools.dto.ToolCallRequest;
-import com.github.istin.dmtools.openai.model.Tool;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
-import com.github.istin.dmtools.prompt.IPromptTemplateReader;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
-import java.util.Map;
 
 public class ToolSelectorAgent extends AbstractSimpleAgent<ToolSelectorAgent.Params, List<ToolCallRequest>> {
 

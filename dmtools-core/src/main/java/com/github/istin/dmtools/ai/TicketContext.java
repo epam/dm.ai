@@ -6,7 +6,7 @@ import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
-import com.github.istin.dmtools.openai.input.TicketBasedPrompt;
+import com.github.istin.dmtools.prompt.input.TicketBasedPrompt;
 import lombok.Getter;
 import lombok.Setter;
 

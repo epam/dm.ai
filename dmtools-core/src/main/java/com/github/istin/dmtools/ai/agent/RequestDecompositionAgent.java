@@ -2,7 +2,7 @@ package com.github.istin.dmtools.ai.agent;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

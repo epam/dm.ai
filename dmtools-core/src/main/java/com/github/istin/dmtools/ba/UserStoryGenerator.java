@@ -8,8 +8,8 @@ import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.job.AbstractJob;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import lombok.*;
 import org.json.JSONArray;
 
@@ -40,10 +40,10 @@ public class UserStoryGenerator extends AbstractJob<UserStoryGeneratorParams, Li
         TrackerClient<? extends ITicket> trackerClient = BasicJiraClient.getInstance();
 
         ConversationObserver conversationObserver = new ConversationObserver();
-        BasicOpenAI openAI = new BasicOpenAI(conversationObserver);
+        BasicDialAI ai = new BasicDialAI(conversationObserver);
         PromptManager promptManager = new PromptManager();
 
-        JAssistant jAssistant = new JAssistant(trackerClient, null, openAI, promptManager);
+        JAssistant jAssistant = new JAssistant(trackerClient, null, ai, promptManager);
 
         List<Result> results = new ArrayList<>();
         trackerClient.searchAndPerform(ticket -> {

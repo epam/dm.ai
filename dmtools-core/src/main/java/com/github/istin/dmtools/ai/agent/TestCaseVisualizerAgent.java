@@ -1,13 +1,8 @@
 package com.github.istin.dmtools.ai.agent;
 
-import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.di.DaggerTestCaseVisualizerAgentComponent;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import org.json.JSONObject;
-
-import java.util.List;
 
 public class TestCaseVisualizerAgent extends AbstractSimpleAgent<TestCaseVisualizerAgent.Params, String> {
 

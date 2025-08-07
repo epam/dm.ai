@@ -14,7 +14,7 @@ public class DataToPresentationScriptGeneratorAgentTest {
 
     @BeforeEach
     void setUp() {
-        // The agent should handle its own OpenAI and PromptManager initialization internally
+        // The agent should handle its own Dial and PromptManager initialization internally
         // (likely in AbstractSimpleAgent or its own constructor)
         dataToPresentationScriptGeneratorAgent = new DataToPresentationScriptGeneratorAgent();
         userRequestToPresentationScriptParamsAgent = new UserRequestToPresentationScriptParamsAgent();

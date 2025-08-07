@@ -9,8 +9,8 @@ import com.github.istin.dmtools.documentation.DocumentationEditor;
 import com.github.istin.dmtools.documentation.area.KeyAreaMapperViaConfluence;
 import com.github.istin.dmtools.documentation.area.TicketDocumentationHistoryTrackerViaConfluence;
 import com.github.istin.dmtools.job.AbstractJob;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 import com.github.istin.dmtools.pdf.PdfAsTrackerClient;
 import com.github.istin.dmtools.pdf.model.PdfPageAsTicket;
 import org.json.JSONArray;
@@ -27,10 +27,10 @@ public class PreSaleSupport extends AbstractJob<PreSaleSupportParams, String> {
         String folderWithPdfAssets = preSaleSupportParams.getFolderWithPdfAssets();
         String prefix = "jai";
         PdfAsTrackerClient rfpInputTracker = new PdfAsTrackerClient(folderWithPdfAssets);
-        BasicOpenAI openAI = new BasicOpenAI();
+        BasicDialAI ai = new BasicDialAI();
         PromptManager promptManager = new PromptManager();
 
-        JAssistant jAssistant = new JAssistant(rfpInputTracker, null, openAI, promptManager);
+        JAssistant jAssistant = new JAssistant(rfpInputTracker, null, ai, promptManager);
 
         rfpInputTracker.searchAndPerform(ticket -> {
             List<? extends IAttachment> attachments = ticket.getAttachments();

@@ -1,10 +1,9 @@
 package com.github.istin.dmtools.ai.agent;
 
 import com.github.istin.dmtools.di.DaggerPresentationSlideFormatterAgentComponent;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.json.JSONArray;
 

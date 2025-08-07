@@ -9,7 +9,7 @@ class AIPromptConfigTest {
     void testAIPromptConfigBuilder() {
         AIPromptConfig config = AIPromptConfig.builder()
                 .modelName("gpt-4")
-                .modelProvider(AIPromptConfig.ModelProvider.OPENAI)
+                .modelProvider(AIPromptConfig.ModelProvider.DIAL)
                 .apiKey("sk-1234567890abcdef")
                 .promptChunkTokenLimit(8000)
                 .promptChunkMaxSingleFileSize(1024L * 1024L) // 1MB
@@ -19,7 +19,7 @@ class AIPromptConfigTest {
 
         // Test model configuration
         assertEquals("gpt-4", config.getModelName());
-        assertEquals(AIPromptConfig.ModelProvider.OPENAI, config.getModelProvider());
+        assertEquals(AIPromptConfig.ModelProvider.DIAL, config.getModelProvider());
         assertEquals("sk-1234567890abcdef", config.getApiKey());
         
         // Test chunk configuration
@@ -42,21 +42,21 @@ class AIPromptConfigTest {
 
         // Only provider, missing name
         AIPromptConfig configOnlyProvider = AIPromptConfig.builder()
-                .modelProvider(AIPromptConfig.ModelProvider.OPENAI)
+                .modelProvider(AIPromptConfig.ModelProvider.DIAL)
                 .build();
         assertFalse(configOnlyProvider.isModelConfigured());
 
         // Both name and provider
         AIPromptConfig configComplete = AIPromptConfig.builder()
                 .modelName("gpt-4")
-                .modelProvider(AIPromptConfig.ModelProvider.OPENAI)
+                .modelProvider(AIPromptConfig.ModelProvider.DIAL)
                 .build();
         assertTrue(configComplete.isModelConfigured());
         
         // With API key
         AIPromptConfig configWithApiKey = AIPromptConfig.builder()
                 .modelName("gpt-4")
-                .modelProvider(AIPromptConfig.ModelProvider.OPENAI)
+                .modelProvider(AIPromptConfig.ModelProvider.DIAL)
                 .apiKey("sk-1234567890abcdef")
                 .build();
         assertTrue(configWithApiKey.isModelConfigured());

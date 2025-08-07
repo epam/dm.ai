@@ -1,7 +1,7 @@
 package com.github.istin.dmtools.ai;
 
 import com.github.istin.dmtools.ai.model.Metadata;
-import com.github.istin.dmtools.openai.utils.AIResponseParser;
+import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 

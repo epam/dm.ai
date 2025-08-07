@@ -1,6 +1,6 @@
 package com.github.istin.dmtools;
 
-import com.github.istin.dmtools.openai.BasicOpenAI;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
 import okhttp3.Headers;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -70,12 +70,12 @@ public class NannyaTest {
                 }
             }
 
-            // Read nanny data files and make requests to OpenAI
+            // Read nanny data files and make requests to Dial
             File nannyDataDir = new File(NANNY_DATA_DIRECTORY);
             File[] nannyFiles = nannyDataDir.listFiles((dir, name) -> name.startsWith("nanny_") && name.endsWith(".html"));
 
             if (nannyFiles != null) {
-                BasicOpenAI openAI = new BasicOpenAI();
+                BasicDialAI ai = new BasicDialAI();
                 String outputFilePath = NANNY_DATA_DIRECTORY + "/output.txt";
 
                 for (File nannyFile : nannyFiles) {
@@ -86,12 +86,12 @@ public class NannyaTest {
                                 "Пример: 10, Опыт работы логопедом. А также другие позитивные моменты\n\n" +
                                 "Профиль няни:\n" + nannyInfo;
 
-                        String chatResponse = openAI.chat(prompt);
+                        String chatResponse = ai.chat(prompt);
 
                         // Write the response to the output file
                         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath, true))) {
                             writer.write("Nanny ID: " + nannyFile.getName() + "\n");
-                            writer.write("OpenAI Response: " + chatResponse + "\n\n");
+                            writer.write("DIAL Response: " + chatResponse + "\n\n");
                         }
 
                         System.out.println("Processed and saved response for: " + nannyFile.getName());
@@ -249,13 +249,13 @@ public class NannyaTest {
 
                         // Read the next line for the response
                         line = reader.readLine();
-                        if (line != null && line.startsWith("OpenAI Response:")) {
+                        if (line != null && line.startsWith("DIAL Response:")) {
                             // Split the line by the comma
                             String[] parts = line.split(",", 2);
 
                             // Check if the rating is a valid number
                             try {
-                                String ratingStr = parts[0].replace("OpenAI Response:", "").trim();
+                                String ratingStr = parts[0].replace("DIAL Response:", "").trim();
                                 int rating = Integer.parseInt(ratingStr);
                                 String explanation = (parts.length > 1) ? parts[1].trim() : "No explanation available";
                                 nannies.add(new Nanny(id, rating, explanation));

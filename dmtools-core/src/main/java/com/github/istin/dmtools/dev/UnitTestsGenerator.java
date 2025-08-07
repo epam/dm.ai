@@ -7,8 +7,8 @@ import com.github.istin.dmtools.file.FileContentListener;
 import com.github.istin.dmtools.file.SourceCodeReader;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ResultItem;
-import com.github.istin.dmtools.openai.BasicOpenAI;
-import com.github.istin.dmtools.openai.PromptManager;
+import com.github.istin.dmtools.ai.dial.BasicDialAI;
+import com.github.istin.dmtools.prompt.PromptManager;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,9 +27,9 @@ public class UnitTestsGenerator extends AbstractJob<UnitTestsGeneratorParams, Re
         String[] excludeClasses = params.getExcludeClasses();
         SourceCodeReader sourceCodeReader = new SourceCodeReader(extensionsList, Paths.get(params.getSrcFolder()));
         ConversationObserver conversationObserver = new ConversationObserver();
-        BasicOpenAI openAI = new BasicOpenAI(conversationObserver);
+        BasicDialAI ai = new BasicDialAI(conversationObserver);
         PromptManager promptManager = new PromptManager();
-        JAssistant jAssistant = new JAssistant(null, null, openAI, promptManager);
+        JAssistant jAssistant = new JAssistant(null, null, ai, promptManager);
         sourceCodeReader.readSourceFiles(Paths.get(params.getSrcFolder()), new FileContentListener() {
             @Override
             public void onFileRead(String folderPath, String packageName, String fileName, String fileContent) throws Exception {
