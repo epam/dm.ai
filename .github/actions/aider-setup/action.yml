@@ -1,0 +1,267 @@
+name: 'Setup and Run Aider with Gemini'
+description: 'Common setup for Aider with Gemini models including caching, installation, and execution'
+
+inputs:
+  user_request:
+    description: 'Base64 encoded user request for Aider'
+    required: true
+  target_files:
+    description: 'Files to include in context (comma-separated, optional)'
+    required: false
+    default: ''
+  model:
+    description: 'Google Gemini model to use'
+    required: false
+    default: 'gemini/gemini-2.5-flash-preview-05-20'
+  gemini_api_key:
+    description: 'Gemini API key'
+    required: true
+  max_tokens:
+    description: 'Maximum tokens for context'
+    required: false
+    default: '1000000'
+  prompt_file:
+    description: 'Path to prompt file relative to repo root'
+    required: true
+  mode:
+    description: 'Operation mode: analysis or coding'
+    required: false
+    default: 'analysis'
+
+outputs:
+  aider_response:
+    description: 'Extracted response from Aider'
+    value: ${{ steps.extract_response.outputs.response }}
+  response_found:
+    description: 'Whether a valid response was found'
+    value: ${{ steps.extract_response.outputs.found }}
+  output_file:
+    description: 'Path to the execution log file'
+    value: ${{ steps.run_aider.outputs.output_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-aider-gemini-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-aider-gemini-
+          ${{ runner.os }}-pip-
+
+    - name: Cache Aider installation
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.local/bin/aider
+          ~/.local/share/aider
+          ~/.cache/aider
+          ~/.aider
+        key: ${{ runner.os }}-aider-install-v085-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-aider-install-v085-
+          ${{ runner.os }}-aider-install-
+          ${{ runner.os }}-aider-
+
+    - name: Cache Aider repo index
+      uses: actions/cache@v4
+      with:
+        path: |
+          .aider*
+          .aider.repo.map
+          .aider.tags
+        key: ${{ runner.os }}-aider-repo-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-aider-repo-
+
+    - name: Install Aider and dependencies
+      shell: bash
+      run: |
+        pip install --upgrade pip
+        
+        # Check if aider is already cached and working
+        if command -v aider >/dev/null 2>&1 && aider --version >/dev/null 2>&1; then
+          echo "✅ Aider found in cache and working, skipping installation"
+          aider --version
+          INSTALL_AIDER=false
+        else
+          echo "📦 Aider not found in cache or not working, installing..."
+          INSTALL_AIDER=true
+        fi
+        
+        # Install Aider if needed
+        if [ "$INSTALL_AIDER" = "true" ]; then
+          echo "🔧 Installing Aider using recommended method..."
+          pip install aider-install
+          aider-install
+          
+          # Verify new installation
+          echo "🔍 Verifying new Aider installation..."
+          aider --version
+          echo "✅ Aider installation verified"
+        fi
+        
+        # Install additional dependencies for Gemini models
+        pip install google-generativeai
+
+    - name: Create output directories and safe user input file
+      shell: bash
+      env:
+        USER_REQUEST_RAW: ${{ inputs.user_request }}
+      run: |
+        mkdir -p aider-outputs
+        mkdir -p aider
+        
+        # User request is already base64 encoded, decode it directly to file
+        echo "$USER_REQUEST_RAW" | base64 -d > aider-outputs/user-request.txt
+        echo "💾 User request decoded and saved to aider-outputs/user-request.txt"
+        
+        # Print the actual user request content for debugging  
+        echo "🔍 USER REQUEST CONTENT:"
+        cat aider-outputs/user-request.txt
+        echo "🔍 END USER REQUEST"
+
+    - name: Validate Gemini API Key
+      shell: bash
+      env:
+        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+      run: |
+        # Check if the API key is provided
+        if [ -z "$GEMINI_API_KEY" ]; then
+          echo "ERROR: No Gemini API key provided."
+          exit 1
+        fi
+        echo "✅ Gemini API key validation passed"
+
+    - name: Run Aider with Gemini model
+      id: run_aider
+      shell: bash
+      env:
+        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+        GOOGLE_API_KEY: ${{ inputs.gemini_api_key }}
+      run: |
+        # Set timestamp for unique output file
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        OUTPUT_FILE="aider-outputs/response_${TIMESTAMP}.txt"
+        
+        # Prepare the command with optimization flags
+        AIDER_CMD="aider --model ${{ inputs.model }}"
+        AIDER_CMD="$AIDER_CMD --max-chat-history-tokens ${{ inputs.max_tokens }}"
+        AIDER_CMD="$AIDER_CMD --no-check-update --yes-always --no-stream"
+        
+        # For coding mode, allow commits and modifications
+        if [ "${{ inputs.mode }}" = "coding" ]; then
+          AIDER_CMD="$AIDER_CMD --no-auto-commits --dirty-commits"
+          echo "🔧 Coding mode: allowing file modifications"
+        else
+          # Analysis mode - more restrictive
+          echo "📊 Analysis mode: read-only analysis"
+        fi
+        
+        # Add only the user request file to context
+        AIDER_CMD="$AIDER_CMD aider-outputs/user-request.txt"
+        
+        # Add additional target files if specified
+        if [ -n "${{ inputs.target_files }}" ]; then
+          IFS=',' read -ra FILES <<< "${{ inputs.target_files }}"
+          for file in "${FILES[@]}"; do
+            file=$(echo "$file" | xargs)  # Trim whitespace
+            if [ -f "$file" ]; then
+              AIDER_CMD="$AIDER_CMD $file"
+            else
+              echo "Warning: File '$file' not found" | tee -a "$OUTPUT_FILE"
+            fi
+          done
+        fi
+        
+        # Execute and capture output
+        echo "=== AIDER EXECUTION START ===" | tee -a "$OUTPUT_FILE"
+        echo "Mode: ${{ inputs.mode }}" | tee -a "$OUTPUT_FILE"
+        echo "Model: ${{ inputs.model }}" | tee -a "$OUTPUT_FILE"
+        echo "Max Tokens: ${{ inputs.max_tokens }}" | tee -a "$OUTPUT_FILE"
+        echo "Target Files: ${{ inputs.target_files || 'All files' }}" | tee -a "$OUTPUT_FILE"
+        echo "Prompt File: ${{ inputs.prompt_file }}" | tee -a "$OUTPUT_FILE"
+        echo "Timestamp: $TIMESTAMP" | tee -a "$OUTPUT_FILE"
+        echo "=== USER REQUEST CONTENT ===" | tee -a "$OUTPUT_FILE"
+        cat aider-outputs/user-request.txt | tee -a "$OUTPUT_FILE"
+        echo "=== END USER REQUEST ===" | tee -a "$OUTPUT_FILE"
+        echo "=== AIDER RESPONSE ===" | tee -a "$OUTPUT_FILE"
+        
+        # Use the specified prompt file
+        FINAL_CMD="$AIDER_CMD --message-file ${{ inputs.prompt_file }}"
+        echo "=== AIDER COMMAND TO BE EXECUTED ===" | tee -a "$OUTPUT_FILE"
+        echo "$FINAL_CMD" | tee -a "$OUTPUT_FILE"
+        echo "=== END AIDER COMMAND ===" | tee -a "$OUTPUT_FILE"
+        
+        # Run aider with detailed prompt file and context files
+        eval "$FINAL_CMD" 2>&1 | tee -a "$OUTPUT_FILE"
+        
+        echo "=== AIDER EXECUTION END ===" | tee -a "$OUTPUT_FILE"
+        
+        # Store output file path for other steps
+        echo "output_file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+
+    - name: Extract Aider response
+      id: extract_response
+      shell: bash
+      run: |
+        OUTPUT_FILE="${{ steps.run_aider.outputs.output_file }}"
+        
+        # Parse AIDER_RESPONSE tags from console output
+        echo "🔍 Parsing AIDER_RESPONSE from console output..."
+        
+        # Extract content between <AIDER_RESPONSE> and </AIDER_RESPONSE> tags (excluding the tags)
+        if grep -q "<AIDER_RESPONSE>" "$OUTPUT_FILE"; then
+          echo "✅ Found AIDER_RESPONSE tags in console output"
+          
+          # Use awk to extract only the LAST AIDER_RESPONSE block to avoid duplicates
+          EXTRACTED_RESPONSE=$(awk '
+            /<AIDER_RESPONSE>/ { 
+              in_response = 1; 
+              response = ""; 
+              next 
+            }
+            /<\/AIDER_RESPONSE>/ { 
+              in_response = 0; 
+              final_response = response; 
+              next 
+            }
+            in_response { 
+              response = response $0 "\n" 
+            }
+            END { 
+              if (final_response != "") print final_response; 
+              else print response 
+            }
+          ' "$OUTPUT_FILE")
+          
+          RESPONSE_SIZE=$(echo "$EXTRACTED_RESPONSE" | wc -c)
+          echo "✅ Response extracted from console (size: $RESPONSE_SIZE bytes)"
+          
+          # Store response for output
+          echo "response<<EOF" >> $GITHUB_OUTPUT
+          echo "$EXTRACTED_RESPONSE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "found=true" >> $GITHUB_OUTPUT
+          
+          # Show preview for verification in logs
+          echo "🔍 First 5 lines of analysis response:"
+          echo "$EXTRACTED_RESPONSE" | head -5
+          echo "🔍 Last 3 lines of analysis response:"
+          echo "$EXTRACTED_RESPONSE" | tail -3
+          
+        else
+          echo "❌ AIDER_RESPONSE tags not found in console output"
+          echo "found=false" >> $GITHUB_OUTPUT
+          
+          # Show what we have for debugging
+          echo "📁 Console output search results:"
+          grep -n "AIDER" "$OUTPUT_FILE" || echo "No AIDER tags found"
+        fi
