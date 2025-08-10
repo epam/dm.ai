@@ -5,6 +5,7 @@ import com.github.istin.dmtools.atlassian.common.networking.AtlassianRestClient;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.*;
 import com.github.istin.dmtools.common.networking.GenericRequest;
+import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.github.model.*;
@@ -764,4 +765,317 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         
         return result;
     }
+
+    @Override
+    public String callHookAndWaitResponse(String hookUrl, String requestParams) throws Exception {
+        try {
+            logger.info("Triggering GitHub workflow for URL: {}", hookUrl);
+            
+            String owner, repo, workflowId;
+            
+            // Handle both GitHub web URLs and API URLs
+            if (hookUrl.contains("github.com/") && hookUrl.contains("/actions/workflows/")) {
+                // GitHub web URL format: https://github.com/{owner}/{repo}/actions/workflows/{workflow_file}
+                String[] parts = hookUrl.replace("https://github.com/", "").split("/");
+                if (parts.length >= 4 && "actions".equals(parts[2]) && "workflows".equals(parts[3])) {
+                    owner = parts[0];
+                    repo = parts[1];
+                    workflowId = parts[4]; // This could be filename.yml or workflow ID
+                    logger.info("Parsed GitHub web URL - owner: {}, repo: {}, workflow: {}", owner, repo, workflowId);
+                } else {
+                    logger.error("Invalid GitHub web URL format: {}", hookUrl);
+                    return "Error: Invalid GitHub web URL format. Expected: https://github.com/{owner}/{repo}/actions/workflows/{workflow_file}";
+                }
+            } else if (hookUrl.contains("/actions/workflows/") && hookUrl.endsWith("/dispatches")) {
+                // API URL format: https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches
+                String[] urlParts = hookUrl.split("/");
+                if (urlParts.length < 7) {
+                    logger.error("Cannot parse GitHub API URL: {}", hookUrl);
+                    return "Error: Cannot parse GitHub API workflow URL";
+                }
+                
+                owner = urlParts[urlParts.length - 6]; // repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches
+                repo = urlParts[urlParts.length - 5];
+                workflowId = urlParts[urlParts.length - 2];
+                logger.info("Parsed GitHub API URL - owner: {}, repo: {}, workflow: {}", owner, repo, workflowId);
+            } else {
+                logger.error("Unsupported GitHub URL format: {}", hookUrl);
+                return "Error: Unsupported GitHub URL format. Expected either GitHub web URL or API dispatch URL";
+            }
+
+            // 1. Trigger the workflow
+            logger.info("Triggering workflow {}/{}/{}", owner, repo, workflowId);
+            triggerWorkflow(owner, repo, workflowId, requestParams);
+
+            // 2. Wait a bit for the workflow to be created
+            Thread.sleep(10000);
+
+            // 3. Find the triggered workflow run
+            logger.info("Finding latest workflow run...");
+            Long runId = findLatestWorkflowRun(owner, repo, workflowId);
+
+            if (runId != null) {
+                logger.info("Found workflow run ID: {}", runId);
+
+                // 4. Wait for workflow completion
+                logger.info("Waiting for workflow to complete...");
+                boolean completed = waitForWorkflowCompletion(owner, repo, runId);
+
+                if (completed) {
+                    // 5. Get workflow summary
+                    String summary = getWorkflowSummary(owner, repo, runId);
+                    logger.info("Workflow completed. Summary: {}", summary);
+                    return summary;
+                } else {
+                    logger.warn("Workflow did not complete within timeout");
+                    return "Workflow timeout - did not complete within expected time";
+                }
+            } else {
+                logger.error("Could not find triggered workflow run");
+                return "Error: Could not find triggered workflow run";
+            }
+
+        } catch (Exception e) {
+            // If hook fails, log the error but don't fail the whole workflow
+            logger.error("Hook call failed for URL: {}, error: {}", hookUrl, e.getMessage());
+            return "Error: " + e.getMessage();
+        }
+    }
+    
+    private void triggerWorkflow(String owner, String repo, String workflowId, String request) throws IOException {
+        String triggerPath = path(String.format("repos/%s/%s/actions/workflows/%s/dispatches", owner, repo, workflowId));
+        
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("ref", "main");
+        requestBody.put("inputs", new JSONObject().put("user_request", JobRunner.encodeBase64(request)));
+        
+        GenericRequest postRequest = new GenericRequest(this, triggerPath);
+        postRequest.setBody(requestBody.toString());
+        String response = post(postRequest);
+        
+        logger.debug("Workflow trigger response: {}", response);
+    }
+    
+    private Long findLatestWorkflowRun(String owner, String repo, String workflowId) throws IOException {
+        String runsPath = path(String.format("repos/%s/%s/actions/workflows/%s/runs?per_page=1", owner, repo, workflowId));
+        GenericRequest getRequest = new GenericRequest(this, runsPath);
+        String response = execute(getRequest);
+        
+        if (response != null && !response.isEmpty()) {
+            JSONObject json = new JSONObject(response);
+            JSONArray runs = json.optJSONArray("workflow_runs");
+            
+            if (runs != null && !runs.isEmpty()) {
+                return runs.getJSONObject(0).getLong("id");
+            }
+        }
+
+        return null;
+    }
+
+    private boolean waitForWorkflowCompletion(String owner, String repo, Long runId) throws IOException, InterruptedException {
+        int maxAttempts = 180; // 15 minutes with 5-second intervals
+        int attempts = 0;
+
+        while (attempts < maxAttempts) {
+            String status = getWorkflowStatus(owner, repo, runId);
+
+            switch (status) {
+                case "completed":
+                    return true;
+                case "cancelled":
+                case "failure":
+                case "timed_out":
+                    logger.info("Workflow ended with status: {}", status);
+                    return true;
+                default:
+                    logger.debug("Current status: {} - waiting...", status);
+                    Thread.sleep(5000);
+                    attempts++;
+            }
+        }
+
+        logger.warn("Timeout waiting for workflow completion");
+        return false;
+    }
+
+    public String getWorkflowStatus(String owner, String repo, Long runId) throws IOException {
+        String statusPath = path(String.format("repos/%s/%s/actions/runs/%d", owner, repo, runId));
+        GenericRequest getRequest = new GenericRequest(this, statusPath);
+        getRequest.setIgnoreCache(true);
+        clearCache(getRequest);
+        String response = execute(getRequest);
+        
+        if (response != null && !response.isEmpty()) {
+            JSONObject json = new JSONObject(response);
+            return json.optString("status", "unknown");
+        }
+        
+        throw new IOException("Failed to get workflow status");
+    }
+    
+    public String getWorkflowSummary(String owner, String repo, Long runId) throws IOException {
+        String summaryPath = path(String.format("repos/%s/%s/actions/runs/%d", owner, repo, runId));
+        GenericRequest getRequest = new GenericRequest(this, summaryPath);
+        String response = execute(getRequest);
+        
+        if (response != null && !response.isEmpty()) {
+
+            StringBuilder summary = new StringBuilder();
+
+            // Try to get the actual analysis response from artifacts
+            String analysisResponse = getAnalysisResponseFromArtifacts(owner, repo, runId);
+            if (analysisResponse != null && !analysisResponse.isEmpty()) {
+                summary.append(analysisResponse);
+            }
+            return summary.toString();
+        }
+
+        throw new IOException("Failed to get workflow summary");
+    }
+    
+    public String getAnalysisResponseFromArtifacts(String owner, String repo, Long runId) throws IOException {
+        try {
+            String artifactsPath = path(String.format("repos/%s/%s/actions/runs/%d/artifacts", owner, repo, runId));
+            GenericRequest artifactsRequest = new GenericRequest(this, artifactsPath);
+            String artifactsResponse = execute(artifactsRequest);
+            
+            if (artifactsResponse != null && !artifactsResponse.isEmpty()) {
+                GitHubArtifactsResponse artifactsModel = new GitHubArtifactsResponse(artifactsResponse);
+                List<GitHubArtifact> artifacts = artifactsModel.getArtifacts();
+                
+                if (artifacts != null && !artifacts.isEmpty()) {
+                    // Look for the dedicated response artifact (try multiple patterns)
+                    for (GitHubArtifact artifact : artifacts) {
+                        String name = artifact.getName();
+                        
+                        if (name != null) {
+                            String nameLower = name.toLowerCase();
+                            // Check for various response artifact patterns
+                            if (nameLower.startsWith("response-") || 
+                                nameLower.contains("response")) {
+                                
+                                // Found a response artifact
+                                String downloadUrl = artifact.getArchiveDownloadUrl();
+                                if (downloadUrl != null && !downloadUrl.isEmpty()) {
+                                    logger.info("Found response artifact: {} at {}", name, downloadUrl);
+                                    
+                                    // Download and extract the artifact content
+                                    String responseContent = downloadAndExtractResponse(downloadUrl);
+                                    if (responseContent != null && !responseContent.isEmpty()) {
+                                        return responseContent;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to get analysis response from artifacts: {}", e.getMessage());
+        }
+        
+        return null;
+    }
+    
+    private String downloadAndExtractResponse(String downloadUrl) throws IOException {
+        try {
+            logger.info("Downloading and extracting response artifact from: {}", downloadUrl);
+            
+            // Download the ZIP artifact
+            GenericRequest downloadRequest = new GenericRequest(this, downloadUrl);
+            byte[] zipData = executeRaw(downloadRequest);
+            
+            if (zipData.length == 0) {
+                logger.warn("No data received from artifact download");
+                return null;
+            }
+            
+            // Extract response.md from the ZIP using IOUtils
+            String responseContent = IOUtils.extractFileFromZip(zipData, "response.md");
+            if (responseContent != null && !responseContent.isEmpty()) {
+                logger.info("Successfully extracted response content ({} characters)", responseContent.length());
+                return responseContent;
+            } else {
+                logger.warn("No response.md found in artifact");
+                return null;
+            }
+            
+        } catch (Exception e) {
+            logger.warn("Failed to download and extract artifact: {}", e.getMessage());
+            return String.format("Analysis response artifact available but extraction failed.\n" +
+                               "Download URL: %s\n" +
+                               "Error: %s", downloadUrl, e.getMessage());
+        }
+    }
+    
+    private byte[] executeRaw(GenericRequest request) throws IOException {
+        String url = request.url();
+        logger.info("Downloading binary artifact from: {}", url);
+        
+        okhttp3.Request.Builder requestBuilder = sign(new okhttp3.Request.Builder())
+                .url(url)
+                .get();
+        
+        // Apply headers from GenericRequest
+        for (String key : request.getHeaders().keySet()) {
+            requestBuilder.header(key, request.getHeaders().get(key));
+        }
+        
+        okhttp3.Request okHttpRequest = requestBuilder.build();
+        
+        try (okhttp3.Response response = client.newCall(okHttpRequest).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Failed to download artifact: HTTP " + response.code() + " " + response.message());
+            }
+            
+            if (response.body() == null) {
+                throw new IOException("Response body is null");
+            }
+            
+            byte[] data = response.body().bytes();
+            logger.info("Downloaded {} bytes", data.length);
+            return data;
+            
+        } catch (Exception e) {
+            logger.error("Failed to download binary artifact: {}", e.getMessage());
+            throw new IOException("Failed to download binary artifact", e);
+        }
+    }
+    
+    private String getWorkflowArtifacts(String owner, String repo, Long runId) throws IOException {
+        try {
+            String artifactsPath = path(String.format("repos/%s/%s/actions/runs/%d/artifacts", owner, repo, runId));
+            GenericRequest artifactsRequest = new GenericRequest(this, artifactsPath);
+            String artifactsResponse = execute(artifactsRequest);
+            
+            if (artifactsResponse != null && !artifactsResponse.isEmpty()) {
+                GitHubArtifactsResponse artifactsModel = new GitHubArtifactsResponse(artifactsResponse);
+                List<GitHubArtifact> artifacts = artifactsModel.getArtifacts();
+                
+                if (artifacts != null && !artifacts.isEmpty()) {
+                    StringBuilder artifactsSummary = new StringBuilder();
+                    
+                    for (GitHubArtifact artifact : artifacts) {
+                        String name = artifact.getName();
+                        String downloadUrl = artifact.getArchiveDownloadUrl();
+                        
+                        artifactsSummary.append("- Artifact: ").append(name != null ? name : "Unknown");
+                        if (downloadUrl != null && !downloadUrl.isEmpty()) {
+                            artifactsSummary.append(" (Download: ").append(downloadUrl).append(")");
+                        }
+                        artifactsSummary.append("\n");
+                    }
+                    
+                    return artifactsSummary.toString();
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to get workflow artifacts: {}", e.getMessage());
+        }
+        
+        return null;
+    }
+    
 }
