@@ -203,18 +203,35 @@ runs:
         echo "=== END AIDER COMMAND ===" | tee -a "$OUTPUT_FILE"
         
         # Run aider with detailed prompt file and context files
-        eval "$FINAL_CMD" 2>&1 | tee -a "$OUTPUT_FILE"
+        # Use timeout to prevent hanging and capture exit code
+        set +e  # Don't exit on command failure
+        timeout 1800 bash -c "eval '$FINAL_CMD'" 2>&1 | tee -a "$OUTPUT_FILE"
+        AIDER_EXIT_CODE=$?
+        set -e  # Re-enable exit on error
+        
+        echo "=== AIDER EXIT CODE: $AIDER_EXIT_CODE ===" | tee -a "$OUTPUT_FILE"
+        
+        if [ $AIDER_EXIT_CODE -eq 124 ]; then
+          echo "⚠️ Aider execution timed out after 30 minutes" | tee -a "$OUTPUT_FILE"
+        elif [ $AIDER_EXIT_CODE -ne 0 ]; then
+          echo "⚠️ Aider exited with error code: $AIDER_EXIT_CODE" | tee -a "$OUTPUT_FILE"
+          echo "This may indicate a crash or command error, but checking for outputs..." | tee -a "$OUTPUT_FILE"
+        else
+          echo "✅ Aider completed successfully" | tee -a "$OUTPUT_FILE"
+        fi
         
         echo "=== AIDER EXECUTION END ===" | tee -a "$OUTPUT_FILE"
         
-        # Store output file path for other steps
+        # Store output file path and exit code for other steps
         echo "output_file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+        echo "aider_exit_code=$AIDER_EXIT_CODE" >> $GITHUB_OUTPUT
 
     - name: Extract Aider response
       id: extract_response
       shell: bash
       run: |
         OUTPUT_FILE="${{ steps.run_aider.outputs.output_file }}"
+        AIDER_EXIT_CODE="${{ steps.run_aider.outputs.aider_exit_code }}"
         
         # Parse AIDER_RESPONSE tags from console output
         echo "🔍 Parsing AIDER_RESPONSE from console output..."
@@ -261,9 +278,34 @@ runs:
           
         else
           echo "❌ AIDER_RESPONSE tags not found in console output"
-          echo "found=false" >> $GITHUB_OUTPUT
+          
+          # Check if Aider crashed and provide fallback response
+          if [ $AIDER_EXIT_CODE -ne 0 ]; then
+            echo "⚠️ Aider crashed (exit code: $AIDER_EXIT_CODE), creating fallback response"
+            FALLBACK_RESPONSE="# Aider Execution Error
+
+**Status**: Aider execution failed with exit code $AIDER_EXIT_CODE
+
+**Issue**: This appears to be a crash in Aider, possibly related to command usage or model limitations.
+
+**Recommendation**: 
+- Check the execution logs for specific error details
+- Review the user request for problematic commands
+- Consider simplifying the request or breaking it into smaller tasks
+
+**Next Steps**:
+- Check if any files were modified despite the crash
+- Manual implementation may be required if Aider cannot handle this request"
+
+            echo "response<<EOF" >> $GITHUB_OUTPUT
+            echo "$FALLBACK_RESPONSE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
           
           # Show what we have for debugging
           echo "📁 Console output search results:"
-          grep -n "AIDER" "$OUTPUT_FILE" || echo "No AIDER tags found"
+          grep -n "AIDER\|ERROR\|Exception\|Traceback" "$OUTPUT_FILE" || echo "No relevant tags found"
         fi
