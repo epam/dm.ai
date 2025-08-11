@@ -3,14 +3,21 @@ package com.github.istin.dmtools.di;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.google.BasicGeminiAI;
+import com.github.istin.dmtools.ai.dial.DialAIClient;
+import com.github.istin.dmtools.ai.js.JSAIClient;
+import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
+import com.github.istin.dmtools.atlassian.jira.model.Ticket;
+import com.github.istin.dmtools.common.utils.SecurityUtils;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
+import com.github.istin.dmtools.common.config.InMemoryConfiguration;
+
 import com.github.istin.dmtools.github.BasicGithub;
 import com.github.istin.dmtools.github.GitHub;
-import com.github.istin.dmtools.common.config.InMemoryConfiguration;
+
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.UriToObjectFactory;
@@ -27,8 +34,7 @@ import org.json.JSONObject;
 
 import javax.inject.Singleton;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Dagger module for server-managed job execution with pre-resolved integrations.
@@ -56,98 +62,16 @@ public class ServerManagedIntegrationsModule {
         this.logCallback = logCallback;
     }
     
+    /**
+     * Provides a minimal ApplicationConfiguration for backward compatibility.
+     * Server-managed integrations should NOT rely on this configuration as it's empty.
+     * All integration parameters are resolved directly from the integrations JSON.
+     */
     @Provides
     @Singleton
-    ApplicationConfiguration provideConfiguration() {
-        // Create an in-memory configuration from resolved integrations
-        InMemoryConfiguration config = new InMemoryConfiguration();
-        
-        // Map resolved integrations to configuration properties using correct property names
-        if (resolvedIntegrations.has("jira")) {
-            JSONObject jiraConfig = resolvedIntegrations.getJSONObject("jira");
-            if (jiraConfig.has("url")) {
-                config.setProperty("JIRA_BASE_PATH", jiraConfig.getString("url"));
-            }
-            if (jiraConfig.has("token")) {
-                config.setProperty("JIRA_LOGIN_PASS_TOKEN", jiraConfig.getString("token"));
-            }
-            if (jiraConfig.has("authType")) {
-                config.setProperty("JIRA_AUTH_TYPE", jiraConfig.getString("authType"));
-            }
-            if (jiraConfig.has("username")) {
-                config.setProperty("JIRA_USERNAME", jiraConfig.getString("username"));
-            }
-        }
-        
-        if (resolvedIntegrations.has("confluence")) {
-            JSONObject confluenceConfig = resolvedIntegrations.getJSONObject("confluence");
-            if (confluenceConfig.has("url")) {
-                config.setProperty("CONFLUENCE_BASE_PATH", confluenceConfig.getString("url"));
-            }
-            if (confluenceConfig.has("token")) {
-                config.setProperty("CONFLUENCE_LOGIN_PASS_TOKEN", confluenceConfig.getString("token"));
-            }
-            if (confluenceConfig.has("authType")) {
-                config.setProperty("CONFLUENCE_AUTH_TYPE", confluenceConfig.getString("authType"));
-            }
-            if (confluenceConfig.has("defaultSpace")) {
-                config.setProperty("CONFLUENCE_DEFAULT_SPACE", confluenceConfig.getString("defaultSpace"));
-            }
-        }
-        
-        if (resolvedIntegrations.has("dial")) {
-            JSONObject dialaiConfig = resolvedIntegrations.getJSONObject("dial");
-            if (dialaiConfig.has("apiKey")) {
-                config.setProperty("DIAL_API_KEY", dialaiConfig.getString("apiKey"));
-            }
-            if (dialaiConfig.has("model")) {
-                config.setProperty("DIAL_MODEL", dialaiConfig.getString("model"));
-            }
-            if (dialaiConfig.has("basePath")) {
-                config.setProperty("DIAl_BATH_PATH", dialaiConfig.getString("basePath"));
-            }
-        }
-        
-        if (resolvedIntegrations.has("gemini")) {
-            JSONObject geminiConfig = resolvedIntegrations.getJSONObject("gemini");
-            if (geminiConfig.has("apiKey")) {
-                config.setProperty("GEMINI_API_KEY", geminiConfig.getString("apiKey"));
-            }
-            if (geminiConfig.has("model")) {
-                config.setProperty("GEMINI_DEFAULT_MODEL", geminiConfig.getString("model"));
-            }
-            if (geminiConfig.has("basePath")) {
-                config.setProperty("GEMINI_BASE_PATH", geminiConfig.getString("basePath"));
-            }
-        }
-        
-        if (resolvedIntegrations.has("figma")) {
-            JSONObject figmaConfig = resolvedIntegrations.getJSONObject("figma");
-            if (figmaConfig.has("token")) {
-                config.setProperty("FIGMA_TOKEN", figmaConfig.getString("token"));
-            }
-            if (figmaConfig.has("basePath")) {
-                config.setProperty("FIGMA_BASE_PATH", figmaConfig.getString("basePath"));
-            }
-        }
-
-        if (resolvedIntegrations.has("github")) {
-            JSONObject githubConfig = resolvedIntegrations.getJSONObject("github");
-            if (githubConfig.has("url")) {
-                config.setProperty("GITHUB_BASE_PATH", githubConfig.getString("url"));
-            }
-            if (githubConfig.has("token")) {
-                config.setProperty("GITHUB_TOKEN", githubConfig.getString("token"));
-            }
-            if (githubConfig.has("workspace")) {
-                config.setProperty("GITHUB_WORKSPACE", githubConfig.getString("workspace"));
-            }
-            if (githubConfig.has("repository")) {
-                config.setProperty("GITHUB_REPOSITORY", githubConfig.getString("repository"));
-            }
-        }
-        
-        return config;
+    ApplicationConfiguration provideServerManagedConfiguration() {
+        System.out.println("⚠️ [ServerManagedIntegrationsModule] Providing empty ApplicationConfiguration for backward compatibility only");
+        return new InMemoryConfiguration(); // Empty configuration
     }
 
     @Provides
@@ -166,10 +90,10 @@ public class ServerManagedIntegrationsModule {
             // Check if GitHub is configured and add it
             if (resolvedIntegrations.has("github")) {
                 JSONObject githubConfig = resolvedIntegrations.getJSONObject("github");
-                String url = githubConfig.optString("url", null);
-                String token = githubConfig.optString("token", null);
-                String workspace = githubConfig.optString("workspace", null);
-                String repository = githubConfig.optString("repository", null);
+                String url = githubConfig.optString("SOURCE_GITHUB_BASE_PATH", null);
+                String token = githubConfig.optString("SOURCE_GITHUB_TOKEN", null);
+                String workspace = githubConfig.optString("SOURCE_GITHUB_WORKSPACE", null);
+                String repository = githubConfig.optString("SOURCE_GITHUB_REPOSITORY", null);
                 
                 if (url != null && token != null) {
                     System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedGitHub with resolved credentials");
@@ -199,18 +123,33 @@ public class ServerManagedIntegrationsModule {
                 return null;
             }
             
-            // Create a custom JiraClient instance using resolved credentials
+            // Create a custom JiraClient instance using resolved credentials with JSON parameter names
             if (resolvedIntegrations.has("jira")) {
                 JSONObject jiraConfig = resolvedIntegrations.getJSONObject("jira");
-                String basePath = jiraConfig.optString("url", "");
-                String token = jiraConfig.optString("token", "");
-                String authType = jiraConfig.optString("authType", "Basic");
+                String basePath = jiraConfig.optString("JIRA_BASE_PATH", "");
+                String authType = jiraConfig.optString("JIRA_AUTH_TYPE", "Basic");
+                String extraFields = jiraConfig.optString("JIRA_EXTRA_FIELDS_PROJECT", "");
+                
+                // Handle authentication - priority: email+token combination > legacy token
+                String token = "";
+                if (jiraConfig.has("JIRA_EMAIL") && jiraConfig.has("JIRA_API_TOKEN")) {
+                    String email = jiraConfig.optString("JIRA_EMAIL", "");
+                    String apiToken = jiraConfig.optString("JIRA_API_TOKEN", "");
+                    if (!email.isEmpty() && !apiToken.isEmpty()) {
+                        // Combine email:token and base64 encode
+                        String credentials = email.trim() + ":" + apiToken.trim();
+                        token = Base64.getEncoder().encodeToString(credentials.getBytes());
+                        System.out.println("✅ [ServerManagedIntegrationsModule] Combined JIRA_EMAIL + JIRA_API_TOKEN for authentication");
+                    }
+                } else if (jiraConfig.has("JIRA_LOGIN_PASS_TOKEN")) {
+                    token = jiraConfig.optString("JIRA_LOGIN_PASS_TOKEN", "");
+                }
                 
                 if (!basePath.isEmpty() && !token.isEmpty()) {
                     System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials");
                     return new CustomServerManagedJiraClient(basePath, token, authType);
                 } else {
-                    System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (url=" + 
+                    System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (JIRA_BASE_PATH=" + 
                         (basePath.isEmpty() ? "empty" : basePath) + ", token=" + (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
                 }
             } else {
@@ -229,7 +168,7 @@ public class ServerManagedIntegrationsModule {
      * Custom JiraClient implementation that replicates BasicJiraClient functionality
      * but uses resolved credentials instead of static properties from PropertyReader
      */
-    private static class CustomServerManagedJiraClient extends JiraClient<com.github.istin.dmtools.atlassian.jira.model.Ticket> {
+    private static class CustomServerManagedJiraClient extends JiraClient<Ticket> {
         private final String[] defaultJiraFields;
         private final String[] extendedJiraFields;
         
@@ -250,12 +189,11 @@ public class ServerManagedIntegrationsModule {
             setClearCache(true);
             
             // Initialize field arrays exactly like BasicJiraClient
-            java.util.List<String> defaultFields = new java.util.ArrayList<>();
-            defaultFields.addAll(java.util.Arrays.asList(com.github.istin.dmtools.atlassian.jira.BasicJiraClient.DEFAULT_QUERY_FIELDS));
+            List<String> defaultFields = new ArrayList<>(Arrays.asList(BasicJiraClient.DEFAULT_QUERY_FIELDS));
             defaultJiraFields = defaultFields.toArray(new String[0]);
             
-            java.util.List<String> extendedFields = new java.util.ArrayList<>();
-            extendedFields.addAll(java.util.Arrays.asList(com.github.istin.dmtools.atlassian.jira.BasicJiraClient.EXTENDED_QUERY_FIELDS));
+            List<String> extendedFields = new ArrayList<>();
+            extendedFields.addAll(Arrays.asList(BasicJiraClient.EXTENDED_QUERY_FIELDS));
             extendedFields.addAll(defaultFields);
             extendedJiraFields = extendedFields.toArray(new String[0]);
         }
@@ -288,8 +226,8 @@ public class ServerManagedIntegrationsModule {
         }
         
         @Override
-        public java.util.List<? extends ITicket> getTestCases(ITicket ticket) throws IOException {
-            return java.util.Collections.emptyList();
+        public List<? extends ITicket> getTestCases(ITicket ticket) throws IOException {
+            return Collections.emptyList();
         }
         
         @Override
@@ -324,10 +262,29 @@ public class ServerManagedIntegrationsModule {
                     (key.toLowerCase().contains("token") || key.toLowerCase().contains("password") ? "[SENSITIVE]" : value));
             }
             
-            String url = confluenceConfig.optString("url", null);
-            String token = confluenceConfig.optString("token", null);
-            String defaultSpace = confluenceConfig.optString("defaultSpace", null);
-            String authType = confluenceConfig.optString("authType", null);
+            String url = confluenceConfig.optString("CONFLUENCE_BASE_PATH", null);
+            String defaultSpace = confluenceConfig.optString("CONFLUENCE_DEFAULT_SPACE", null);
+            String authType = confluenceConfig.optString("CONFLUENCE_AUTH_TYPE", null);
+            
+            // Handle authentication - priority: email+token combination > legacy token
+            String token = null;
+            if (confluenceConfig.has("CONFLUENCE_EMAIL") && confluenceConfig.has("CONFLUENCE_API_TOKEN")) {
+                String email = confluenceConfig.optString("CONFLUENCE_EMAIL", "");
+                String apiToken = confluenceConfig.optString("CONFLUENCE_API_TOKEN", "");
+                if (!email.isEmpty() && !apiToken.isEmpty()) {
+                    if ("Bearer".equalsIgnoreCase(authType)) {
+                        // For Bearer auth, use token directly
+                        token = apiToken.trim();
+                    } else {
+                        // For Basic auth, combine email:token and base64 encode
+                        String credentials = email.trim() + ":" + apiToken.trim();
+                        token = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
+                    }
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Combined CONFLUENCE_EMAIL + CONFLUENCE_API_TOKEN for authentication");
+                }
+            } else if (confluenceConfig.has("CONFLUENCE_LOGIN_PASS_TOKEN")) {
+                token = confluenceConfig.optString("CONFLUENCE_LOGIN_PASS_TOKEN", null);
+            }
             
             if (url == null || token == null) {
                 System.err.println("❌ [ServerManagedIntegrationsModule] Confluence configuration missing required parameters (url=" + 
@@ -387,7 +344,7 @@ public class ServerManagedIntegrationsModule {
     
     @Provides
     @Singleton
-    AI provideAI(ConversationObserver observer, ApplicationConfiguration configuration) {
+    AI provideAI(ConversationObserver observer) {
         try {
             System.out.println("🤖 [ServerManagedIntegrationsModule] Providing AI integration...");
             
@@ -404,12 +361,15 @@ public class ServerManagedIntegrationsModule {
                 JSONObject geminiConfig = resolvedIntegrations.getJSONObject("gemini");
                 System.out.println("🔍 [ServerManagedIntegrationsModule] Found Gemini configuration: " + geminiConfig.length() + " parameters");
                 
-                String apiKey = geminiConfig.optString("apiKey", null);
+                String apiKey = geminiConfig.optString("GEMINI_API_KEY", null);
+                String model = geminiConfig.optString("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash");
+                String basePath = geminiConfig.optString("GEMINI_BASE_PATH", null);
+                
                 if (apiKey != null && !apiKey.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Using resolved Gemini integration for AI provider");
-                    return BasicGeminiAI.create(observer, configuration);
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating custom Gemini JSAIClient with resolved credentials");
+                    return createCustomGeminiAI(apiKey, model, basePath, observer);
                 } else {
-                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Gemini configuration missing apiKey, skipping");
+                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Gemini configuration missing GEMINI_API_KEY, skipping");
                 }
             }
             
@@ -418,12 +378,15 @@ public class ServerManagedIntegrationsModule {
                 JSONObject dialConfig = resolvedIntegrations.getJSONObject("dial");
                 System.out.println("🔍 [ServerManagedIntegrationsModule] Found Dial configuration: " + dialConfig.length() + " parameters");
                 
-                String apiKey = dialConfig.optString("apiKey", null);
+                String apiKey = dialConfig.optString("DIAL_AI_API_KEY", null);
+                String model = dialConfig.optString("DIAL_AI_MODEL", "gpt-4");
+                String basePath = dialConfig.optString("DIAL_AI_BATH_PATH", "https://api.openai.com/v1");
+                
                 if (apiKey != null && !apiKey.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Using resolved Dial integration for AI provider");
-                    return new BasicDialAI(observer, configuration);
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating custom DialAIClient with resolved credentials");
+                    return new DialAIClient(basePath, apiKey, model, observer);
                 } else {
-                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Dial configuration missing apiKey, skipping");
+                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Dial configuration missing DIAL_AI_API_KEY, skipping");
                 }
             }
             
@@ -543,6 +506,46 @@ public class ServerManagedIntegrationsModule {
         @Override
         public SourceCodeConfig getDefaultConfig() {
             return config;
+        }
+    }
+    
+    /**
+     * Creates a custom Gemini AI client directly with resolved credentials, bypassing ApplicationConfiguration.
+     * This replicates BasicGeminiAI.create() logic but uses resolved credentials directly.
+     */
+    private AI createCustomGeminiAI(String apiKey, String model, String basePath, ConversationObserver observer) {
+        try {
+            JSONObject configJson = new JSONObject();
+            
+            // Use the same script path as BasicGeminiAI
+            configJson.put("jsScriptPath", "js/geminiChatViaJs.js");
+            
+            // Use a specific client name for server-managed Gemini
+            configJson.put("clientName", "GeminiJSAIClientViaServerManagedIntegrationsModule");
+            
+            // Use resolved model
+            configJson.put("defaultModel", model);
+            
+            // Use resolved base path
+            if (basePath != null && !basePath.trim().isEmpty()) {
+                configJson.put("basePath", basePath);
+            }
+            
+            // Set up secrets with resolved API key
+            JSONObject secretsJson = new JSONObject();
+            secretsJson.put("GEMINI_API_KEY", apiKey);
+            configJson.put("secrets", secretsJson);
+            
+            // Log the masked version to protect sensitive information
+            JSONObject maskedConfig = SecurityUtils.maskSensitiveInformation(configJson);
+            System.out.println("✅ [ServerManagedIntegrationsModule] Initializing custom Gemini JSAIClient with config: " + maskedConfig.toString(2));
+            
+            return new JSAIClient(configJson, observer);
+            
+        } catch (Exception e) {
+            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to create custom Gemini AI: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to create custom Gemini AI", e);
         }
     }
 } 
