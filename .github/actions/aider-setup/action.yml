@@ -3,7 +3,7 @@ description: 'Common setup for Aider with Gemini models including caching, insta
 
 inputs:
   user_request:
-    description: 'Base64 encoded user request for Aider'
+    description: 'User request for Aider (can be raw text or base64 encoded)'
     required: true
   target_files:
     description: 'Files to include in context (comma-separated, optional)'
@@ -120,9 +120,18 @@ runs:
         mkdir -p aider-outputs/pr-summary
         mkdir -p aider
         
-        # User request is already base64 encoded, decode it directly to file
-        echo "$USER_REQUEST_RAW" | base64 -d > aider-outputs/user-request.txt
-        echo "💾 User request decoded and saved to aider-outputs/user-request.txt"
+        # Handle both raw text and base64 encoded user requests
+        if echo "$USER_REQUEST_RAW" | base64 -d >/dev/null 2>&1 && [ ${#USER_REQUEST_RAW} -gt 100 ]; then
+          # Input appears to be base64 encoded (long string that decodes successfully)
+          echo "🔍 Detected base64 encoded input, decoding..."
+          echo "$USER_REQUEST_RAW" | base64 -d > aider-outputs/user-request.txt
+          echo "💾 User request decoded and saved to aider-outputs/user-request.txt"
+        else
+          # Input appears to be raw text
+          echo "🔍 Detected raw text input, saving directly..."
+          echo "$USER_REQUEST_RAW" > aider-outputs/user-request.txt
+          echo "💾 User request saved to aider-outputs/user-request.txt"
+        fi
         
         # Initialize empty discovery file structure for two-phase approach
         if [ "${{ inputs.mode }}" = "coding" ]; then
