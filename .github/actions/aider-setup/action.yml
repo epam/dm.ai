@@ -199,6 +199,66 @@ runs:
         # Add user request file to context - /ask command in prompt will handle auto-discovery
         AIDER_CMD="$AIDER_CMD aider-outputs/user-request.txt"
         
+        # For coding mode, check if discovery JSON exists and add discovered files
+        if [ "${{ inputs.mode }}" = "coding" ] && [ -f "aider-outputs/affected-files.json" ]; then
+          echo "🔍 Found discovery JSON file, processing discovered files..."
+          
+          # Add the JSON file itself to context first
+          AIDER_CMD="$AIDER_CMD aider-outputs/affected-files.json"
+          echo "📋 Added discovery JSON to context"
+          
+          # Install jq for JSON parsing if not available
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "📦 Installing jq for JSON parsing..."
+            sudo apt-get update >/dev/null 2>&1
+            sudo apt-get install -y jq >/dev/null 2>&1
+          fi
+          
+          # Extract file lists from JSON and add to Aider command
+          echo "📋 Extracting discovered files from JSON..."
+          
+          # Function to add files if they exist
+          add_files_from_json() {
+            local json_path="$1"
+            local file_type="$2"
+            echo "🔍 Processing $file_type files..."
+            
+            local files=$(jq -r ".affected_files.$json_path[]?" aider-outputs/affected-files.json 2>/dev/null | grep -v "^null$" || true)
+            if [ -n "$files" ]; then
+              while IFS= read -r file; do
+                if [ -n "$file" ] && [ "$file" != "null" ]; then
+                  if [ -f "$file" ]; then
+                    AIDER_CMD="$AIDER_CMD $file"
+                    echo "✅ Added $file_type: $file"
+                  else
+                    echo "⚠️ $file_type file not found: $file" | tee -a "$OUTPUT_FILE"
+                  fi
+                fi
+              done <<< "$files"
+            else
+              echo "ℹ️ No $file_type files specified"
+            fi
+          }
+          
+          # Add files to modify (highest priority)
+          add_files_from_json "to_modify" "to_modify"
+          
+          # Add files to create (if they already exist as templates/examples)
+          add_files_from_json "to_create" "to_create"
+          
+          # Add reference files for context
+          add_files_from_json "to_reference" "reference"
+          
+          # Add test files
+          add_files_from_json "tests_needed" "test"
+          
+          echo "✅ Discovery file processing complete"
+        else
+          if [ "${{ inputs.mode }}" = "coding" ]; then
+            echo "ℹ️ No discovery JSON found, proceeding with manual file specification"
+          fi
+        fi
+        
         # Add additional target files if specified
         if [ -n "${{ inputs.target_files }}" ]; then
           IFS=',' read -ra FILES <<< "${{ inputs.target_files }}"
@@ -217,9 +277,16 @@ runs:
         echo "Mode: ${{ inputs.mode }}" | tee -a "$OUTPUT_FILE"
         echo "Model: ${{ inputs.model }}" | tee -a "$OUTPUT_FILE"
         echo "Max Tokens: ${{ inputs.max_tokens }}" | tee -a "$OUTPUT_FILE"
-        echo "Target Files: ${{ inputs.target_files || 'All files' }}" | tee -a "$OUTPUT_FILE"
+        echo "Target Files: ${{ inputs.target_files || 'Auto-discovered + specified' }}" | tee -a "$OUTPUT_FILE"
         echo "Prompt File: ${{ inputs.prompt_file }}" | tee -a "$OUTPUT_FILE"
         echo "Timestamp: $TIMESTAMP" | tee -a "$OUTPUT_FILE"
+        
+        # Log discovered files if in coding mode and JSON exists
+        if [ "${{ inputs.mode }}" = "coding" ] && [ -f "aider-outputs/affected-files.json" ]; then
+          echo "=== DISCOVERED FILES FROM JSON ===" | tee -a "$OUTPUT_FILE"
+          cat aider-outputs/affected-files.json | tee -a "$OUTPUT_FILE"
+          echo "=== END DISCOVERED FILES ===" | tee -a "$OUTPUT_FILE"
+        fi
         echo "=== USER REQUEST CONTENT ===" | tee -a "$OUTPUT_FILE"
         cat aider-outputs/user-request.txt | tee -a "$OUTPUT_FILE"
         echo "=== END USER REQUEST ===" | tee -a "$OUTPUT_FILE"
