@@ -117,11 +117,31 @@ runs:
         USER_REQUEST_RAW: ${{ inputs.user_request }}
       run: |
         mkdir -p aider-outputs
+        mkdir -p aider-outputs/pr-summary
         mkdir -p aider
         
         # User request is already base64 encoded, decode it directly to file
         echo "$USER_REQUEST_RAW" | base64 -d > aider-outputs/user-request.txt
         echo "💾 User request decoded and saved to aider-outputs/user-request.txt"
+        
+        # Initialize empty discovery file structure for two-phase approach
+        if [ "${{ inputs.mode }}" = "coding" ]; then
+          echo "🔧 Creating file discovery structure for two-phase implementation"
+          cat > aider-outputs/affected-files-template.json << 'TEMPLATE_EOF'
+        {
+          "request_summary": "",
+          "affected_files": {
+            "to_modify": [],
+            "to_create": [], 
+            "to_reference": [],
+            "tests_needed": []
+          },
+          "dependencies": [],
+          "implementation_notes": []
+        }
+        TEMPLATE_EOF
+          echo "📝 File discovery template created at aider-outputs/affected-files-template.json"
+        fi
         
         # Print the actual user request content for debugging  
         echo "🔍 USER REQUEST CONTENT:"
