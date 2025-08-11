@@ -167,8 +167,68 @@ runs:
           echo "📊 Analysis mode: read-only analysis"
         fi
         
-        # Add only the user request file to context
+        # Add user request file to context
         AIDER_CMD="$AIDER_CMD aider-outputs/user-request.txt"
+        
+        # For coding mode, try to auto-discover relevant files based on common patterns
+        if [ "${{ inputs.mode }}" = "coding" ]; then
+          echo "🔍 Auto-discovering relevant files for coding mode..."
+          
+          # Check user request content for clues about what files to include
+          USER_REQUEST_CONTENT=$(cat aider-outputs/user-request.txt)
+          
+          # Look for database/JPA related issues
+          if echo "$USER_REQUEST_CONTENT" | grep -qi "foreign key\|constraint\|hibernate\|jpa\|sql\|database"; then
+            echo "📊 Detected database/JPA related request, adding entity and repository files..."
+            
+            # Find and add entity files (avoid subshell issue)
+            for file in $(find . -name "*.java" -path "*/entity/*" -o -name "*Entity.java" | head -10); do
+              if [ -f "$file" ]; then
+                AIDER_CMD="$AIDER_CMD \"$file\""
+                echo "  Added entity: $file"
+              fi
+            done
+            
+            # Find and add repository files
+            for file in $(find . -name "*Repository.java" -o -name "*Repo.java" | head -10); do
+              if [ -f "$file" ]; then
+                AIDER_CMD="$AIDER_CMD \"$file\""
+                echo "  Added repository: $file"
+              fi
+            done
+            
+            # Find and add service files
+            for file in $(find . -name "*Service.java" | head -10); do
+              if [ -f "$file" ]; then
+                AIDER_CMD="$AIDER_CMD \"$file\""
+                echo "  Added service: $file"
+              fi
+            done
+            
+            # Find and add controller files
+            for file in $(find . -name "*Controller.java" | head -10); do
+              if [ -f "$file" ]; then
+                AIDER_CMD="$AIDER_CMD \"$file\""
+                echo "  Added controller: $file"
+              fi
+            done
+          fi
+          
+          # Look for job configuration related issues
+          if echo "$USER_REQUEST_CONTENT" | grep -qi "job.config\|job_config\|JobConfiguration"; then
+            echo "🔧 Detected job configuration related request, adding job config files..."
+            
+            # Find job configuration related files
+            for file in $(find . -name "*JobConfig*.java" -o -name "*Job*.java" | head -5); do
+              if [ -f "$file" ]; then
+                AIDER_CMD="$AIDER_CMD \"$file\""
+                echo "  Added job config: $file"
+              fi
+            done
+          fi
+          
+          echo "✅ Auto-discovery completed"
+        fi
         
         # Add additional target files if specified
         if [ -n "${{ inputs.target_files }}" ]; then
