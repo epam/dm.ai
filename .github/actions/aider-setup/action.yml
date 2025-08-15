@@ -1,20 +1,20 @@
-name: 'Setup and Run Aider with Gemini'
-description: 'Common setup for Aider with Gemini models including caching, installation, and execution'
+name: 'Setup and Run CLI Agent (Aider/Gemini)'
+description: 'Common setup for CLI agents with AI models including caching, installation, and execution'
 
 inputs:
   user_request:
-    description: 'User request for Aider (can be raw text or base64 encoded)'
+    description: 'User request for CLI agent (can be raw text or base64 encoded)'
     required: true
   target_files:
     description: 'Files to include in context (comma-separated, optional)'
     required: false
     default: ''
   model:
-    description: 'Google Gemini model to use'
+    description: 'AI model to use'
     required: false
     default: 'gemini/gemini-2.5-flash-preview-05-20'
-  gemini_api_key:
-    description: 'Gemini API key'
+  api_key:
+    description: 'API key for the AI model'
     required: true
   max_tokens:
     description: 'Maximum tokens for context'
@@ -27,17 +27,21 @@ inputs:
     description: 'Operation mode: analysis or coding'
     required: false
     default: 'analysis'
+  cli_tool:
+    description: 'CLI tool to use: aider or gemini'
+    required: false
+    default: 'aider'
 
 outputs:
-  aider_response:
-    description: 'Extracted response from Aider'
+  cli_response:
+    description: 'Extracted response from CLI agent'
     value: ${{ steps.extract_response.outputs.response }}
   response_found:
     description: 'Whether a valid response was found'
     value: ${{ steps.extract_response.outputs.found }}
   output_file:
     description: 'Path to the execution log file'
-    value: ${{ steps.run_aider.outputs.output_file }}
+    value: ${{ steps.run_cli.outputs.output_file }}
 
 runs:
   using: 'composite'
@@ -48,6 +52,7 @@ runs:
         python-version: '3.11'
 
     - name: Cache pip packages
+      if: inputs.cli_tool == 'aider'
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
@@ -57,6 +62,7 @@ runs:
           ${{ runner.os }}-pip-
 
     - name: Cache Aider installation
+      if: inputs.cli_tool == 'aider'
       uses: actions/cache@v4
       with:
         path: |
@@ -71,6 +77,7 @@ runs:
           ${{ runner.os }}-aider-
 
     - name: Cache Aider repo index
+      if: inputs.cli_tool == 'aider'
       uses: actions/cache@v4
       with:
         path: |
@@ -81,62 +88,34 @@ runs:
         restore-keys: |
           ${{ runner.os }}-aider-repo-
 
-    - name: Install Aider and dependencies
-      shell: bash
-      run: |
-        pip install --upgrade pip
-        
-        # Check if aider is already cached and working
-        if command -v aider >/dev/null 2>&1 && aider --version >/dev/null 2>&1; then
-          echo "✅ Aider found in cache and working, skipping installation"
-          aider --version
-          INSTALL_AIDER=false
-        else
-          echo "📦 Aider not found in cache or not working, installing..."
-          INSTALL_AIDER=true
-        fi
-        
-        # Install Aider if needed
-        if [ "$INSTALL_AIDER" = "true" ]; then
-          echo "🔧 Installing Aider using recommended method..."
-          pip install aider-install
-          aider-install
-          
-          # Verify new installation
-          echo "🔍 Verifying new Aider installation..."
-          aider --version
-          echo "✅ Aider installation verified"
-        fi
-        
-        # Install additional dependencies for Gemini models
-        pip install google-generativeai
+    - name: Cache npm packages
+      if: inputs.cli_tool == 'gemini'
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-npm-gemini-cli-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-npm-gemini-cli-
+          ${{ runner.os }}-npm-
 
-    - name: Create output directories and safe user input file
+    - name: Setup CLI environment
+      shell: bash
+      env:
+        API_KEY: ${{ inputs.api_key }}
+      run: |
+        ./cli_agents/scripts/setup-cli-env.sh "${{ inputs.cli_tool }}" "${{ inputs.model }}" "$API_KEY"
+
+    - name: Prepare user request
       shell: bash
       env:
         USER_REQUEST_RAW: ${{ inputs.user_request }}
       run: |
-        mkdir -p aider-outputs
-        mkdir -p aider-outputs/pr-summary
-        mkdir -p aider
-        
-        # Handle both raw text and base64 encoded user requests
-        if echo "$USER_REQUEST_RAW" | base64 -d >/dev/null 2>&1 && [ ${#USER_REQUEST_RAW} -gt 100 ]; then
-          # Input appears to be base64 encoded (long string that decodes successfully)
-          echo "🔍 Detected base64 encoded input, decoding..."
-          echo "$USER_REQUEST_RAW" | base64 -d > aider-outputs/user-request.txt
-          echo "💾 User request decoded and saved to aider-outputs/user-request.txt"
-        else
-          # Input appears to be raw text
-          echo "🔍 Detected raw text input, saving directly..."
-          echo "$USER_REQUEST_RAW" > aider-outputs/user-request.txt
-          echo "💾 User request saved to aider-outputs/user-request.txt"
-        fi
+        ./cli_agents/scripts/prepare-user-request.sh "$USER_REQUEST_RAW" "outputs"
         
         # Initialize empty discovery file structure for two-phase approach
         if [ "${{ inputs.mode }}" = "coding" ]; then
           echo "🔧 Creating file discovery structure for two-phase implementation"
-          cat > aider-outputs/affected-files-template.json << 'TEMPLATE_EOF'
+          cat > outputs/affected-files-template.json << 'TEMPLATE_EOF'
         {
           "request_summary": "",
           "affected_files": {
@@ -149,261 +128,73 @@ runs:
           "implementation_notes": []
         }
         TEMPLATE_EOF
-          echo "📝 File discovery template created at aider-outputs/affected-files-template.json"
+          echo "📝 File discovery template created at outputs/affected-files-template.json"
         fi
-        
-        # Print the actual user request content for debugging  
-        echo "🔍 USER REQUEST CONTENT:"
-        cat aider-outputs/user-request.txt
-        echo "🔍 END USER REQUEST"
 
-    - name: Validate Gemini API Key
+    - name: Validate API Key
       shell: bash
       env:
-        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+        API_KEY: ${{ inputs.api_key }}
       run: |
         # Check if the API key is provided
-        if [ -z "$GEMINI_API_KEY" ]; then
-          echo "ERROR: No Gemini API key provided."
+        if [ -z "$API_KEY" ]; then
+          echo "ERROR: No API key provided."
           exit 1
         fi
-        echo "✅ Gemini API key validation passed"
+        echo "✅ API key validation passed"
 
-    - name: Run Aider with Gemini model
-      id: run_aider
+    - name: Run CLI Agent
+      id: run_cli
       shell: bash
       env:
-        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
-        GOOGLE_API_KEY: ${{ inputs.gemini_api_key }}
+        GEMINI_API_KEY: ${{ inputs.api_key }}
+        GOOGLE_API_KEY: ${{ inputs.api_key }}
+        API_KEY: ${{ inputs.api_key }}
       run: |
-        # Set timestamp for unique output file
-        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-        OUTPUT_FILE="aider-outputs/response_${TIMESTAMP}.txt"
-        
-        # Prepare the command with optimization flags
-        AIDER_CMD="aider --model ${{ inputs.model }}"
-        AIDER_CMD="$AIDER_CMD --max-chat-history-tokens ${{ inputs.max_tokens }}"
-        AIDER_CMD="$AIDER_CMD --no-check-update --yes-always --no-stream"
-        
-        # For coding mode, allow commits and modifications
-        if [ "${{ inputs.mode }}" = "coding" ]; then
-          # Allow Aider to make commits and work with git
-          AIDER_CMD="$AIDER_CMD --dirty-commits"
-          echo "🔧 Coding mode: allowing file modifications and git operations"
-        else
-          # Analysis mode - more restrictive
-          AIDER_CMD="$AIDER_CMD --no-auto-commits"
-          echo "📊 Analysis mode: read-only analysis"
-        fi
-        
-        # Add user request file to context - /ask command in prompt will handle auto-discovery
-        AIDER_CMD="$AIDER_CMD aider-outputs/user-request.txt"
-        
-        # For coding mode, check if discovery JSON exists and add discovered files
-        if [ "${{ inputs.mode }}" = "coding" ]; then
-          echo "🔍 Checking for discovery JSON file..."
-          echo "📁 Current directory: $(pwd)"
-          echo "📁 Files in aider-outputs:"
-          ls -la aider-outputs/ || echo "No aider-outputs directory found"
-          
-          if [ -f "aider-outputs/affected-files.json" ]; then
-            echo "✅ Found discovery JSON file, processing discovered files..."
-            
-            # Add the JSON file itself to context first
-            AIDER_CMD="$AIDER_CMD aider-outputs/affected-files.json"
-            echo "📋 Added discovery JSON to context"
-          
-            # Install jq for JSON parsing if not available
-            if ! command -v jq >/dev/null 2>&1; then
-              echo "📦 Installing jq for JSON parsing..."
-              sudo apt-get update >/dev/null 2>&1
-              sudo apt-get install -y jq >/dev/null 2>&1
-            fi
-            
-            # Extract file lists from JSON and add to Aider command
-            echo "📋 Extracting discovered files from JSON..."
-            
-            # Function to add files if they exist
-            add_files_from_json() {
-              local json_path="$1"
-              local file_type="$2"
-              echo "🔍 Processing $file_type files..."
-              
-              local files=$(jq -r ".affected_files.$json_path[]?" aider-outputs/affected-files.json 2>/dev/null | grep -v "^null$" || true)
-              if [ -n "$files" ]; then
-                while IFS= read -r file; do
-                  if [ -n "$file" ] && [ "$file" != "null" ]; then
-                    if [ -f "$file" ]; then
-                      AIDER_CMD="$AIDER_CMD $file"
-                      echo "✅ Added $file_type: $file"
-                    else
-                      echo "⚠️ $file_type file not found: $file" | tee -a "$OUTPUT_FILE"
-                    fi
-                  fi
-                done <<< "$files"
-              else
-                echo "ℹ️ No $file_type files specified"
-              fi
-            }
-            
-            # Add files to modify (highest priority)
-            add_files_from_json "to_modify" "to_modify"
-            
-            # Add files to create (if they already exist as templates/examples)
-            add_files_from_json "to_create" "to_create"
-            
-            # Add reference files for context
-            add_files_from_json "to_reference" "reference"
-            
-            # Add test files
-            add_files_from_json "tests_needed" "test"
-            
-            echo "✅ Discovery file processing complete"
+        if [ "${{ inputs.cli_tool }}" = "aider" ]; then
+          OUTPUT_FILE=$(./cli_agents/scripts/run-aider.sh "${{ inputs.prompt_file }}" "outputs/user-request.txt" "${{ inputs.target_files }}" "${{ inputs.model }}" "${{ inputs.max_tokens }}" "${{ inputs.mode }}" "outputs")
+          CLI_EXIT_CODE=$?
+        elif [ "${{ inputs.cli_tool }}" = "gemini" ]; then
+          # For Gemini CLI, determine phase from prompt file
+          if [[ "${{ inputs.prompt_file }}" == *"discovery"* ]]; then
+            PHASE="discovery"
+          elif [[ "${{ inputs.prompt_file }}" == *"implementation"* ]]; then
+            PHASE="implementation"
           else
-            echo "ℹ️ No discovery JSON found, proceeding with manual file specification"
+            PHASE="discovery"  # default
           fi
-        fi
-        
-        # Add additional target files if specified
-        if [ -n "${{ inputs.target_files }}" ]; then
-          IFS=',' read -ra FILES <<< "${{ inputs.target_files }}"
-          for file in "${FILES[@]}"; do
-            file=$(echo "$file" | xargs)  # Trim whitespace
-            if [ -f "$file" ]; then
-              AIDER_CMD="$AIDER_CMD $file"
-            else
-              echo "Warning: File '$file' not found" | tee -a "$OUTPUT_FILE"
-            fi
-          done
-        fi
-        
-        # Execute and capture output
-        echo "=== AIDER EXECUTION START ===" | tee -a "$OUTPUT_FILE"
-        echo "Mode: ${{ inputs.mode }}" | tee -a "$OUTPUT_FILE"
-        echo "Model: ${{ inputs.model }}" | tee -a "$OUTPUT_FILE"
-        echo "Max Tokens: ${{ inputs.max_tokens }}" | tee -a "$OUTPUT_FILE"
-        echo "Target Files: ${{ inputs.target_files || 'Auto-discovered + specified' }}" | tee -a "$OUTPUT_FILE"
-        echo "Prompt File: ${{ inputs.prompt_file }}" | tee -a "$OUTPUT_FILE"
-        echo "Timestamp: $TIMESTAMP" | tee -a "$OUTPUT_FILE"
-        
-        # Log discovered files if in coding mode and JSON exists
-        if [ "${{ inputs.mode }}" = "coding" ] && [ -f "aider-outputs/affected-files.json" ]; then
-          echo "=== DISCOVERED FILES FROM JSON ===" | tee -a "$OUTPUT_FILE"
-          cat aider-outputs/affected-files.json | tee -a "$OUTPUT_FILE"
-          echo "=== END DISCOVERED FILES ===" | tee -a "$OUTPUT_FILE"
-        fi
-        echo "=== USER REQUEST CONTENT ===" | tee -a "$OUTPUT_FILE"
-        cat aider-outputs/user-request.txt | tee -a "$OUTPUT_FILE"
-        echo "=== END USER REQUEST ===" | tee -a "$OUTPUT_FILE"
-        echo "=== AIDER RESPONSE ===" | tee -a "$OUTPUT_FILE"
-        
-        # Use the specified prompt file
-        FINAL_CMD="$AIDER_CMD --message-file ${{ inputs.prompt_file }}"
-        echo "=== AIDER COMMAND TO BE EXECUTED ===" | tee -a "$OUTPUT_FILE"
-        echo "$FINAL_CMD" | tee -a "$OUTPUT_FILE"
-        echo "=== END AIDER COMMAND ===" | tee -a "$OUTPUT_FILE"
-        
-        # Run aider with detailed prompt file and context files
-        # Capture exit code and handle errors gracefully
-        set +e  # Don't exit on command failure
-        eval "$FINAL_CMD" 2>&1 | tee -a "$OUTPUT_FILE"
-        AIDER_EXIT_CODE=$?
-        set -e  # Re-enable exit on error
-        
-        echo "=== AIDER EXIT CODE: $AIDER_EXIT_CODE ===" | tee -a "$OUTPUT_FILE"
-        
-        if [ $AIDER_EXIT_CODE -ne 0 ]; then
-          echo "⚠️ Aider exited with error code: $AIDER_EXIT_CODE" | tee -a "$OUTPUT_FILE"
-          echo "This may indicate a crash or command error, but checking for outputs..." | tee -a "$OUTPUT_FILE"
+          OUTPUT_FILE=$(./cli_agents/scripts/run-gemini.sh "$PHASE" "outputs/user-request.txt" "${{ inputs.model }}" "false" "false" "outputs")
+          CLI_EXIT_CODE=$?
         else
-          echo "✅ Aider completed successfully" | tee -a "$OUTPUT_FILE"
+          echo "ERROR: Unknown CLI tool: ${{ inputs.cli_tool }}"
+          exit 1
         fi
-        
-        echo "=== AIDER EXECUTION END ===" | tee -a "$OUTPUT_FILE"
         
         # Store output file path and exit code for other steps
         echo "output_file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
-        echo "aider_exit_code=$AIDER_EXIT_CODE" >> $GITHUB_OUTPUT
+        echo "cli_exit_code=$CLI_EXIT_CODE" >> $GITHUB_OUTPUT
 
-    - name: Extract Aider response
+
+    - name: Extract CLI response
       id: extract_response
       shell: bash
       run: |
-        OUTPUT_FILE="${{ steps.run_aider.outputs.output_file }}"
-        AIDER_EXIT_CODE="${{ steps.run_aider.outputs.aider_exit_code }}"
+        OUTPUT_FILE="${{ steps.run_cli.outputs.output_file }}"
+        CLI_EXIT_CODE="${{ steps.run_cli.outputs.cli_exit_code }}"
         
-        # Parse AIDER_RESPONSE tags from console output
-        echo "🔍 Parsing AIDER_RESPONSE from console output..."
+        # Determine response tag based on CLI tool
+        if [ "${{ inputs.cli_tool }}" = "aider" ]; then
+          RESPONSE_TAG="AIDER_RESPONSE"
+        else
+          RESPONSE_TAG="RESPONSE"
+        fi
         
-        # Extract content between <AIDER_RESPONSE> and </AIDER_RESPONSE> tags (excluding the tags)
-        if grep -q "<AIDER_RESPONSE>" "$OUTPUT_FILE"; then
-          echo "✅ Found AIDER_RESPONSE tags in console output"
-          
-          # Use awk to extract only the LAST AIDER_RESPONSE block to avoid duplicates
-          EXTRACTED_RESPONSE=$(awk '
-            /<AIDER_RESPONSE>/ { 
-              in_response = 1; 
-              response = ""; 
-              next 
-            }
-            /<\/AIDER_RESPONSE>/ { 
-              in_response = 0; 
-              final_response = response; 
-              next 
-            }
-            in_response { 
-              response = response $0 "\n" 
-            }
-            END { 
-              if (final_response != "") print final_response; 
-              else print response 
-            }
-          ' "$OUTPUT_FILE")
-          
-          RESPONSE_SIZE=$(echo "$EXTRACTED_RESPONSE" | wc -c)
-          echo "✅ Response extracted from console (size: $RESPONSE_SIZE bytes)"
-          
-          # Store response for output
+        # Use our extract script to get the response
+        if EXTRACTED_RESPONSE=$(./cli_agents/scripts/extract-response.sh "$OUTPUT_FILE" "$RESPONSE_TAG" "$CLI_EXIT_CODE"); then
           echo "response<<EOF" >> $GITHUB_OUTPUT
           echo "$EXTRACTED_RESPONSE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "found=true" >> $GITHUB_OUTPUT
-          
-          # Show preview for verification in logs
-          echo "🔍 First 5 lines of analysis response:"
-          echo "$EXTRACTED_RESPONSE" | head -5
-          echo "🔍 Last 3 lines of analysis response:"
-          echo "$EXTRACTED_RESPONSE" | tail -3
-          
         else
-          echo "❌ AIDER_RESPONSE tags not found in console output"
-          
-          # Check if Aider crashed and provide fallback response
-          if [ $AIDER_EXIT_CODE -ne 0 ]; then
-            echo "⚠️ Aider crashed (exit code: $AIDER_EXIT_CODE), creating fallback response"
-            
-            echo "response<<EOF" >> $GITHUB_OUTPUT
-            echo "# Aider Execution Error" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "**Status**: Aider execution failed with exit code $AIDER_EXIT_CODE" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "**Issue**: This appears to be a crash in Aider, possibly related to command usage or model limitations." >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "**Recommendation**:" >> $GITHUB_OUTPUT
-            echo "- Check the execution logs for specific error details" >> $GITHUB_OUTPUT
-            echo "- Review the user request for problematic commands" >> $GITHUB_OUTPUT
-            echo "- Consider simplifying the request or breaking it into smaller tasks" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "**Next Steps**:" >> $GITHUB_OUTPUT
-            echo "- Check if any files were modified despite the crash" >> $GITHUB_OUTPUT
-            echo "- Manual implementation may be required if Aider cannot handle this request" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "found=true" >> $GITHUB_OUTPUT
-          else
-            echo "found=false" >> $GITHUB_OUTPUT
-          fi
-          
-          # Show what we have for debugging
-          echo "📁 Console output search results:"
-          grep -n "AIDER\|ERROR\|Exception\|Traceback" "$OUTPUT_FILE" || echo "No relevant tags found"
+          echo "found=false" >> $GITHUB_OUTPUT
         fi
