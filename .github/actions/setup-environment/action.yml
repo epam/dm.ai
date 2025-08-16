@@ -61,9 +61,11 @@ runs:
         path: |
           ~/.cache/ms-playwright
           /home/runner/.cache/ms-playwright
-        key: ${{ runner.os }}-playwright${{ inputs.cache-key-suffix }}-${{ hashFiles('**/package*.json') }}-v1
+          ~/Library/Caches/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('**/package*.json') }}-${{ inputs.cache-key-suffix }}-v2
         restore-keys: |
-          ${{ runner.os }}-playwright${{ inputs.cache-key-suffix }}-
+          ${{ runner.os }}-playwright-${{ hashFiles('**/package*.json') }}-${{ inputs.cache-key-suffix }}-
+          ${{ runner.os }}-playwright-${{ hashFiles('**/package*.json') }}-
           ${{ runner.os }}-playwright-
 
     - name: Install Playwright
@@ -72,13 +74,35 @@ runs:
         npm init -y
         npm install -D @playwright/test
         
-        # Check if browsers are already installed
-        if npx playwright install --dry-run 2>/dev/null | grep -q "browsers are up to date"; then
-          echo "Playwright browsers are already installed and up to date"
+        # First check if browsers are available
+        PLAYWRIGHT_CACHE_DIR=$(npx playwright --version > /dev/null 2>&1 && echo "$HOME/.cache/ms-playwright" || echo "")
+        echo "Playwright cache directory: $PLAYWRIGHT_CACHE_DIR"
+        
+        # List existing browsers if cache exists
+        if [ -d "$PLAYWRIGHT_CACHE_DIR" ] && [ "$(ls -A $PLAYWRIGHT_CACHE_DIR 2>/dev/null)" ]; then
+          echo "📦 Found cached Playwright browsers:"
+          ls -la "$PLAYWRIGHT_CACHE_DIR" || echo "No cache directory found"
         else
-          echo "Installing Playwright browsers..."
-          npx playwright install --with-deps
+          echo "📦 No cached browsers found"
         fi
+        
+        # Check browser status more reliably
+        echo "🔍 Checking Playwright browser status..."
+        if npx playwright install --dry-run chromium 2>&1 | grep -q "browsers are up to date\|already installed"; then
+          echo "✅ Playwright browsers are already installed and up to date"
+          echo "🚀 Skipping browser download - using cached browsers"
+        else
+          echo "📥 Installing Playwright browsers and system dependencies..."
+          # Install browsers with system dependencies
+          npx playwright install --with-deps chromium
+          echo "✅ Playwright browser installation completed"
+        fi
+        
+        # Verify installation
+        echo "🔍 Verifying browser installation..."
+        npx playwright --version
+        echo "📊 Cache directory size after installation:"
+        du -sh ~/.cache/ms-playwright 2>/dev/null || echo "Cache directory not found"
 
     - name: Install xmllint
       shell: bash

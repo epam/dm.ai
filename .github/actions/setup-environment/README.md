@@ -37,18 +37,21 @@ This composite action sets up the complete development environment for DMTools w
 - **Playwright Cache**: Uses `package*.json` hash with smart installation checks
 - **Cache Isolation**: Different workflows use different cache keys via `cache-key-suffix`
 
-### Playwright Caching Improvements
+### Playwright Caching Improvements (Enhanced v2)
 
-- Caches are restored **before** Playwright installation
-- Smart installation check using `--dry-run` to avoid unnecessary downloads
-- Multiple cache paths to handle different runner environments
-- Version-specific cache keys to handle Playwright updates
+- **Enhanced Detection**: Checks cache directory existence and browser installation status
+- **Efficient Installation**: Only installs Chromium browser (not all browsers) to reduce download time
+- **Better Cache Paths**: Multiple platform-specific cache directories
+- **Improved Key Strategy**: Package hash first for better cache organization
+- **Detailed Logging**: Shows cache hits, directory sizes, and installation progress
+- **Smart Dependencies**: System dependencies managed separately from browser binaries
+- **Faster Fallbacks**: Multiple restore keys for maximum cache reuse
 
-## Cache Keys
+## Cache Keys (Updated v2)
 
-- Gradle: `{os}-gradle{suffix}-{gradle-files-hash}`
+- Gradle: `{os}-gradle-{gradle-files-hash}{suffix}`
 - Node.js: `{os}-node{suffix}-{package-files-hash}`
-- Playwright: `{os}-playwright{suffix}-{package-files-hash}-v1`
+- Playwright: `{os}-playwright-{package-files-hash}-{suffix}-v2`
 
 ## Used in Workflows
 
