@@ -51,15 +51,25 @@ public class GitHubWorkflowIntegrationTest {
     }
     
     @Test
+    @Disabled("Enable for manual testing with real GitHub credentials")
     public void testSpecificWorkflowRunSummary() throws Exception {
         // Test with specific workflow run ID: https://github.com/IstiN/dmtools/actions/runs/16858480819
         String owner = "IstiN";
         String repo = "dmtools";
         Long runId = 16859458667L;
         
-        BasicGithub github = (BasicGithub) BasicGithub.getInstance();
-
-        // Use reflection to test private method
+        String token = System.getenv("GITHUB_TOKEN");
+        assertNotNull(token, "GITHUB_TOKEN environment variable must be set for integration test");
+        
+        SourceCodeConfig config = SourceCodeConfig.builder()
+                .path("https://api.github.com")
+                .auth(token)
+                .workspaceName("IstiN")
+                .repoName("dmtools")
+                .branchName("main")
+                .type(SourceCodeConfig.Type.GITHUB)
+                .build();
+        BasicGithub github = new BasicGithub(config);
 
         String summary = github.getWorkflowSummary(owner, repo, runId);
         
