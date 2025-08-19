@@ -166,4 +166,69 @@ public class GitHubWorkflowIntegrationTest {
         }
         System.out.println("=== END ARTIFACT TEST ===");
     }
+    
+    @Test
+    @Disabled("Enable for manual testing with real GitHub credentials")
+    public void testWorkflowTimestampValidation() throws Exception {
+        // Test the new timestamp validation functionality to ensure we don't process old workflows
+        String owner = "IstiN";
+        String repo = "dmtools";
+        String workflowId = "gemini-cli-discovery.yml";
+        
+        String token = System.getenv("GITHUB_TOKEN");
+        assertNotNull(token, "GITHUB_TOKEN environment variable must be set for integration test");
+        
+        SourceCodeConfig config = SourceCodeConfig.builder()
+                .path("https://api.github.com")
+                .auth(token)
+                .workspaceName("IstiN")
+                .repoName("dmtools")
+                .branchName("main")
+                .type(SourceCodeConfig.Type.GITHUB)
+                .build();
+        BasicGithub github = new BasicGithub(config);
+        
+        // Use reflection to test private methods
+        java.lang.reflect.Method findLatestMethod = GitHub.class.getDeclaredMethod("findLatestWorkflowRun", String.class, String.class, String.class);
+        findLatestMethod.setAccessible(true);
+        
+        java.lang.reflect.Method findAfterTimestampMethod = GitHub.class.getDeclaredMethod("findWorkflowRunAfterTimestamp", String.class, String.class, String.class, long.class);
+        findAfterTimestampMethod.setAccessible(true);
+        
+        System.out.println("=== WORKFLOW TIMESTAMP VALIDATION TEST ===");
+        
+        // Test 1: Get latest workflow run (old behavior)
+        Long latestRunId = (Long) findLatestMethod.invoke(github, owner, repo, workflowId);
+        System.out.println("Latest workflow run ID (old method): " + latestRunId);
+        
+        // Test 2: Try to find workflow run after a future timestamp (should return null)
+        long futureTimestamp = System.currentTimeMillis() + 10000; // 10 seconds in the future
+        Long futureRunId = (Long) findAfterTimestampMethod.invoke(github, owner, repo, workflowId, futureTimestamp);
+        System.out.println("Workflow run after future timestamp: " + futureRunId + " (should be null)");
+        assertNull(futureRunId, "Should not find workflow runs in the future");
+        
+        // Test 3: Try to find workflow run after a very old timestamp (should find runs)
+        long oldTimestamp = System.currentTimeMillis() - 86400000; // 24 hours ago
+        Long oldRunId = (Long) findAfterTimestampMethod.invoke(github, owner, repo, workflowId, oldTimestamp);
+        System.out.println("Workflow run after old timestamp: " + oldRunId + " (should find something)");
+        
+        if (latestRunId != null && oldRunId != null) {
+            assertEquals(latestRunId, oldRunId, "When looking for runs after old timestamp, should get the latest run");
+            System.out.println("✅ Timestamp validation working correctly");
+        } else {
+            System.out.println("⚠️  No workflow runs found - this is expected if no runs exist for this workflow");
+        }
+        
+        // Test 4: Verify the fix prevents processing old workflows
+        if (latestRunId != null) {
+            // Simulate the bug scenario: trigger timestamp is newer than the latest run
+            long simulatedTriggerTime = System.currentTimeMillis(); // Current time (newer than any existing run)
+            Long simulatedRunId = (Long) findAfterTimestampMethod.invoke(github, owner, repo, workflowId, simulatedTriggerTime);
+            System.out.println("Simulated current trigger - run found: " + simulatedRunId + " (should be null, proving bug is fixed)");
+            assertNull(simulatedRunId, "Should not find old workflow runs when using current timestamp");
+            System.out.println("✅ Bug fix confirmed - old workflows are correctly ignored");
+        }
+        
+        System.out.println("=== END TIMESTAMP VALIDATION TEST ===");
+    }
 }

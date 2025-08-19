@@ -803,26 +803,27 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
                 return "Error: Unsupported GitHub URL format. Expected either GitHub web URL or API dispatch URL";
             }
 
-            // 1. Trigger the workflow
+            // 1. Record trigger timestamp before triggering the workflow
+            long triggerTimestamp = System.currentTimeMillis();
+            logger.info("Recording webhook trigger timestamp: {}", triggerTimestamp);
+
+            // 2. Trigger the workflow
             logger.info("Triggering workflow {}/{}/{}", owner, repo, workflowId);
             triggerWorkflow(owner, repo, workflowId, requestParams);
 
-            // 2. Wait a bit for the workflow to be created
-            Thread.sleep(10000);
-
-            // 3. Find the triggered workflow run
-            logger.info("Finding latest workflow run...");
-            Long runId = findLatestWorkflowRun(owner, repo, workflowId);
+            // 3. Wait and retry to find the triggered workflow run
+            logger.info("Waiting for workflow run to appear in GitHub API...");
+            Long runId = waitAndFindWorkflowRun(owner, repo, workflowId, triggerTimestamp);
 
             if (runId != null) {
                 logger.info("Found workflow run ID: {}", runId);
 
-                // 4. Wait for workflow completion
+                // 5. Wait for workflow completion
                 logger.info("Waiting for workflow to complete...");
                 boolean completed = waitForWorkflowCompletion(owner, repo, runId);
 
                 if (completed) {
-                    // 5. Get workflow summary
+                    // 6. Get workflow summary
                     String summary = getWorkflowSummary(owner, repo, runId);
                     logger.info("Workflow completed. Summary: {}", summary);
                     return summary;
@@ -831,10 +832,14 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
                     return "Workflow timeout - did not complete within expected time";
                 }
             } else {
-                logger.error("Could not find triggered workflow run");
-                return "Error: Could not find triggered workflow run";
+                logger.error("Could not find workflow run triggered by this webhook. No new workflow was triggered.");
+                return "Error: No new workflow was triggered by this webhook call. This may indicate a webhook configuration issue or the workflow dispatch failed.";
             }
 
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Restore interrupted status
+            logger.error("Workflow processing was interrupted for URL: {}", hookUrl);
+            return "Error: Workflow processing was interrupted";
         } catch (Exception e) {
             // If hook fails, log the error but don't fail the whole workflow
             logger.error("Hook call failed for URL: {}, error: {}", hookUrl, e.getMessage());
@@ -849,14 +854,181 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         requestBody.put("ref", "main");
         requestBody.put("inputs", new JSONObject().put("user_request", JobRunner.encodeBase64(request)));
         
+        logger.info("Triggering workflow with request body: {}", requestBody.toString());
+        
         GenericRequest postRequest = new GenericRequest(this, triggerPath);
         postRequest.setBody(requestBody.toString());
-        String response = post(postRequest);
-        
-        logger.debug("Workflow trigger response: {}", response);
+        postRequest.setIgnoreCache(true);
+
+        try {
+            String response = post(postRequest);
+            logger.info("Workflow trigger response: {}", response != null ? response : "No response (this is normal for GitHub workflow dispatches)");
+            
+            // GitHub workflow dispatch typically returns 204 No Content on success
+            // The lack of a response body is normal and indicates success
+            
+        } catch (Exception e) {
+            logger.error("Failed to trigger workflow: {}", e.getMessage());
+            
+            // Provide specific guidance for common failure reasons
+            String errorDetails = getWorkflowTriggerErrorDetails(e, owner, repo, workflowId);
+            throw new IOException("Workflow trigger failed: " + e.getMessage() + ". " + errorDetails, e);
+        }
     }
     
+    /**
+     * Provides detailed error information for workflow trigger failures.
+     * 
+     * @param error The exception that occurred
+     * @param owner Repository owner
+     * @param repo Repository name  
+     * @param workflowId Workflow ID or filename
+     * @return Detailed error information and possible solutions
+     */
+    private String getWorkflowTriggerErrorDetails(Exception error, String owner, String repo, String workflowId) {
+        StringBuilder details = new StringBuilder();
+        
+        String errorMessage = error.getMessage();
+        
+        if (errorMessage != null) {
+            if (errorMessage.contains("404")) {
+                details.append("Possible causes: ")
+                      .append("1) Workflow file '").append(workflowId).append("' not found in repository. ")
+                      .append("2) Repository '").append(owner).append("/").append(repo).append("' not found or not accessible. ")
+                      .append("3) Workflow does not have 'workflow_dispatch' trigger enabled.");
+            } else if (errorMessage.contains("403")) {
+                details.append("Possible causes: ")
+                      .append("1) Insufficient permissions to trigger workflows. ")
+                      .append("2) GitHub token does not have 'actions:write' permission. ")
+                      .append("3) Repository actions are disabled.");
+            } else if (errorMessage.contains("422")) {
+                details.append("Possible causes: ")
+                      .append("1) Invalid workflow inputs format. ")
+                      .append("2) Required workflow inputs are missing. ")
+                      .append("3) Branch 'main' does not exist (workflow trying to run on non-existent branch).");
+            } else if (errorMessage.contains("401")) {
+                details.append("Possible causes: ")
+                      .append("1) GitHub token is invalid or expired. ")
+                      .append("2) Authentication header is malformed.");
+            }
+        }
+        
+        if (details.length() == 0) {
+            details.append("Check that: ")
+                  .append("1) The workflow file exists and has 'workflow_dispatch' trigger. ")
+                  .append("2) GitHub token has proper permissions. ")
+                  .append("3) Repository actions are enabled.");
+        }
+        
+        return details.toString();
+    }
+    
+    /**
+     * Waits for and finds a workflow run triggered after the specified timestamp.
+     * Retries multiple times to handle delays in GitHub API.
+     * 
+     * @param owner Repository owner
+     * @param repo Repository name
+     * @param workflowId Workflow ID or filename
+     * @param triggerTimestamp Timestamp when the workflow was triggered (in milliseconds)
+     * @return Workflow run ID if found, null if no matching run exists after all retries
+     * @throws IOException If the API call fails
+     * @throws InterruptedException If the waiting is interrupted
+     */
+    private Long waitAndFindWorkflowRun(String owner, String repo, String workflowId, long triggerTimestamp) throws IOException, InterruptedException {
+        int maxAttempts = 6; // Try 6 times over 60 seconds
+        int[] waitTimes = {5000, 10000, 15000, 15000, 10000, 5000}; // Increasing then decreasing wait times
+        
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            logger.info("Attempt {} of {} to find workflow run after timestamp {}", attempt + 1, maxAttempts, triggerTimestamp);
+            
+            Long runId = findWorkflowRunAfterTimestamp(owner, repo, workflowId, triggerTimestamp);
+            if (runId != null) {
+                logger.info("Successfully found workflow run ID: {} on attempt {}", runId, attempt + 1);
+                return runId;
+            }
+            
+            if (attempt < maxAttempts - 1) {
+                int waitTime = waitTimes[attempt];
+                logger.info("No workflow run found yet, waiting {} ms before retry...", waitTime);
+                Thread.sleep(waitTime);
+            }
+        }
+        
+        logger.error("Failed to find workflow run after {} attempts over ~60 seconds", maxAttempts);
+        return null;
+    }
+
+    /**
+     * Finds a workflow run that was created after the specified timestamp.
+     * This ensures we get the run triggered by the current webhook call, not an older one.
+     * 
+     * @param owner Repository owner
+     * @param repo Repository name
+     * @param workflowId Workflow ID or filename
+     * @param triggerTimestamp Timestamp when the workflow was triggered (in milliseconds)
+     * @return Workflow run ID if found, null if no matching run exists
+     * @throws IOException If the API call fails
+     */
+    private Long findWorkflowRunAfterTimestamp(String owner, String repo, String workflowId, long triggerTimestamp) throws IOException {
+        // Get multiple runs to find the one triggered by this webhook
+        String runsPath = path(String.format("repos/%s/%s/actions/workflows/%s/runs?per_page=10", owner, repo, workflowId));
+        GenericRequest getRequest = new GenericRequest(this, runsPath);
+        String response = execute(getRequest);
+        
+        if (response != null && !response.isEmpty()) {
+            JSONObject json = new JSONObject(response);
+            JSONArray runs = json.optJSONArray("workflow_runs");
+            
+            if (runs != null && !runs.isEmpty()) {
+                for (int i = 0; i < runs.length(); i++) {
+                    JSONObject run = runs.getJSONObject(i);
+                    String createdAtStr = run.optString("created_at");
+                    long runId = run.getLong("id");
+                    
+                    if (createdAtStr != null && !createdAtStr.isEmpty()) {
+                        try {
+                            // Parse GitHub's ISO 8601 timestamp format
+                            java.time.Instant createdAt = java.time.Instant.parse(createdAtStr);
+                            long createdTimestamp = createdAt.toEpochMilli();
+                            
+                            logger.debug("Checking workflow run ID: {}, created at: {} ({}), trigger time: {}",
+                                runId, createdAtStr, createdTimestamp, triggerTimestamp);
+                            
+                            // Check if this run was created after our trigger timestamp
+                            // Allow for a small buffer (5 seconds) to account for timing differences
+                            if (createdTimestamp >= (triggerTimestamp - 5000)) {
+                                logger.info("Found workflow run ID: {} created after trigger timestamp", runId);
+                                return runId;
+                            }
+                        } catch (Exception e) {
+                            logger.warn("Failed to parse created_at timestamp for run {}: {}", runId, createdAtStr);
+                        }
+                    }
+                }
+                
+                logger.warn("No workflow runs found after trigger timestamp {}. Found {} total runs.", triggerTimestamp, runs.length());
+                if (runs.length() > 0) {
+                    // Log details about the runs we found for debugging
+                    for (int i = 0; i < Math.min(3, runs.length()); i++) {
+                        JSONObject run = runs.getJSONObject(i);
+                        logger.debug("Available run {}: ID={}, created_at={}", 
+                            i, run.getLong("id"), run.optString("created_at"));
+                    }
+                }
+            } else {
+                logger.warn("No workflow runs found in response");
+            }
+        } else {
+            logger.warn("Empty or null response when fetching workflow runs");
+        }
+
+        return null;
+    }
+
+    @Deprecated
     private Long findLatestWorkflowRun(String owner, String repo, String workflowId) throws IOException {
+        logger.warn("Using deprecated findLatestWorkflowRun method - should use findWorkflowRunAfterTimestamp instead");
         String runsPath = path(String.format("repos/%s/%s/actions/workflows/%s/runs?per_page=1", owner, repo, workflowId));
         GenericRequest getRequest = new GenericRequest(this, runsPath);
         String response = execute(getRequest);

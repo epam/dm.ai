@@ -473,6 +473,7 @@ public class ServerManagedIntegrationsModule {
             super(basePath, token);
             setClearCache(true);
             setCacheGetRequestsEnabled(false);
+            setCachePostRequestsEnabled(false);
             this.config = SourceCodeConfig.builder()
                     .path(basePath)
                     .auth(token)

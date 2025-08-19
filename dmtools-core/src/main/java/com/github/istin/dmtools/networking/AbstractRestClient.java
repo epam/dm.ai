@@ -309,16 +309,17 @@ public abstract class AbstractRestClient implements RestClient {
         }
 
         RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
-        try (Response response = client.newCall(applyHeaders(sign(
+        Request request = applyHeaders(sign(
                 new Request.Builder())
                 .url(url)
                 .header("User-Agent", "DMTools")
                 , genericRequest)
                 .post(body)
-                .build()
-        ).execute()) {
-            String responseAsString = response.body().string();
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
             if (response.isSuccessful()) {
+                String responseAsString = response.body() != null ? response.body().string() : "";
                 if (isCachePostRequestsEnabled) {
                     String value = getCacheFileName(genericRequest);
                     File cache = new File(getCacheFolderName());
@@ -326,8 +327,10 @@ public abstract class AbstractRestClient implements RestClient {
                     File cachedFile = new File(getCacheFolderName() + "/" + value);
                     FileUtils.writeStringToFile(cachedFile, responseAsString);
                 }
+                return responseAsString;
+            } else {
+                throw AbstractRestClient.printAndCreateException(request, response);
             }
-            return responseAsString;
         } finally {
             client.connectionPool().evictAll();
         }
@@ -349,14 +352,19 @@ public abstract class AbstractRestClient implements RestClient {
         }
 
         RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
-        try (Response response = client.newCall(applyHeaders(sign(
+        Request request = applyHeaders(sign(
                 new Request.Builder())
                 .url(url)
                 .header("User-Agent", "DMTools"), genericRequest)
                 .put(body)
-                .build()
-        ).execute()) {
-            return response.body().string();
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                return response.body() != null ? response.body().string() : "";
+            } else {
+                throw AbstractRestClient.printAndCreateException(request, response);
+            }
         } finally {
             client.connectionPool().evictAll();
         }
@@ -374,14 +382,19 @@ public abstract class AbstractRestClient implements RestClient {
         }
 
         RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
-        try (Response response = client.newCall(applyHeaders(sign(
+        Request request = applyHeaders(sign(
                 new Request.Builder())
                 .url(url)
                 .header("User-Agent", "DMTools"), genericRequest)
                 .patch(body)
-                .build()
-        ).execute()) {
-            return response.body().string();
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                return response.body() != null ? response.body().string() : "";
+            } else {
+                throw AbstractRestClient.printAndCreateException(request, response);
+            }
         } finally {
             client.connectionPool().evictAll();
         }
@@ -403,14 +416,19 @@ public abstract class AbstractRestClient implements RestClient {
         if (jiraRequestBody != null) {
             body = RequestBody.create(JSON, jiraRequestBody);
         }
-        try (Response response = client.newCall(applyHeaders(sign(
+        Request request = applyHeaders(sign(
                 new Request.Builder())
                 .url(url)
                 .header("User-Agent", "DMTools"), genericRequest)
                 .delete(body)
-                .build()
-        ).execute()) {
-            return response.body().string();
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                return response.body() != null ? response.body().string() : "";
+            } else {
+                throw AbstractRestClient.printAndCreateException(request, response);
+            }
         } finally {
             client.connectionPool().evictAll();
         }
