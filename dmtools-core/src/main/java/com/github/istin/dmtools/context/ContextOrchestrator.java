@@ -111,7 +111,7 @@ public class ContextOrchestrator {
                 // Process results sequentially
                 for (Future<ObjectUriPair> future : futures) {
                     try {
-                        ObjectUriPair pair = future.get(30, TimeUnit.SECONDS);
+                        ObjectUriPair pair = future.get(60, TimeUnit.SECONDS); // Increased timeout for external URIs
                         if (pair.object != null) {
                             processFullContent(pair.uri, pair.object, processor, uriToObjectList, depth - 1);
                         }

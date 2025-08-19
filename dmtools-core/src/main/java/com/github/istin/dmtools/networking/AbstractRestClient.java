@@ -4,6 +4,7 @@ import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.networking.RestClient;
 import okhttp3.*;
 import org.apache.commons.codec.digest.DigestUtils;
+import java.util.Arrays;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -52,6 +53,7 @@ public abstract class AbstractRestClient implements RestClient {
                 .connectTimeout(getTimeout(), TimeUnit.SECONDS)
                 .writeTimeout(getTimeout(), TimeUnit.SECONDS)
                 .readTimeout(getTimeout(), TimeUnit.SECONDS)
+                .protocols(Arrays.asList(Protocol.HTTP_1_1)) // Force HTTP/1.1 to avoid HTTP/2 protocol issues
                 .build();
         this.basePath = basePath;
         this.authorization = authorization;
