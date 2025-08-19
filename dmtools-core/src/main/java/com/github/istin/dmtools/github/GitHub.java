@@ -850,14 +850,27 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     private void triggerWorkflow(String owner, String repo, String workflowId, String request) throws IOException {
         String triggerPath = path(String.format("repos/%s/%s/actions/workflows/%s/dispatches", owner, repo, workflowId));
         
+        // Handle large payloads by implementing size limiting and compression
+        String processedRequest = processLargePayload(request);
+        
         JSONObject requestBody = new JSONObject();
         requestBody.put("ref", "main");
-        requestBody.put("inputs", new JSONObject().put("user_request", JobRunner.encodeBase64(request)));
+        requestBody.put("inputs", new JSONObject().put("user_request", processedRequest));
         
-        logger.info("Triggering workflow with request body: {}", requestBody.toString());
+        // Log request size for debugging
+        String requestBodyStr = requestBody.toString();
+        int requestSize = requestBodyStr.length();
+        logger.info("Triggering workflow with processed request body size: {} characters", requestSize);
+        
+        // Only log full request body if it's reasonably sized
+        if (requestSize <= 1000) {
+            logger.debug("Request body: {}", requestBodyStr);
+        } else {
+            logger.debug("Request body (truncated): {}...", requestBodyStr.substring(0, 500));
+        }
         
         GenericRequest postRequest = new GenericRequest(this, triggerPath);
-        postRequest.setBody(requestBody.toString());
+        postRequest.setBody(requestBodyStr);
         postRequest.setIgnoreCache(true);
 
         try {
@@ -869,6 +882,15 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             
         } catch (Exception e) {
             logger.error("Failed to trigger workflow: {}", e.getMessage());
+            
+            // Check for specific "inputs are too large" error
+            if (e.getMessage() != null && e.getMessage().toLowerCase().contains("inputs are too large")) {
+                logger.error("GitHub workflow inputs exceed size limit. Original request size: {} characters, processed size: {} characters", 
+                    request.length(), processedRequest.length());
+                throw new IOException("GitHub workflow inputs are too large even after compression. " +
+                    "Consider reducing the input data size or implementing request chunking. " +
+                    "Original size: " + request.length() + " chars, processed: " + processedRequest.length() + " chars", e);
+            }
             
             // Provide specific guidance for common failure reasons
             String errorDetails = getWorkflowTriggerErrorDetails(e, owner, repo, workflowId);
@@ -902,10 +924,17 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
                       .append("2) GitHub token does not have 'actions:write' permission. ")
                       .append("3) Repository actions are disabled.");
             } else if (errorMessage.contains("422")) {
-                details.append("Possible causes: ")
-                      .append("1) Invalid workflow inputs format. ")
-                      .append("2) Required workflow inputs are missing. ")
-                      .append("3) Branch 'main' does not exist (workflow trying to run on non-existent branch).");
+                if (errorMessage.toLowerCase().contains("inputs are too large")) {
+                    details.append("GitHub workflow inputs exceed size limit. ")
+                          .append("The request payload is too large for GitHub Actions workflow dispatch. ")
+                          .append("Solutions: 1) Reduce input data size. 2) Use compression. 3) Split into multiple smaller requests.");
+                } else {
+                    details.append("Possible causes: ")
+                          .append("1) Invalid workflow inputs format. ")
+                          .append("2) Required workflow inputs are missing. ")
+                          .append("3) Branch 'main' does not exist (workflow trying to run on non-existent branch). ")
+                          .append("4) Workflow inputs are too large (>65KB limit).");
+                }
             } else if (errorMessage.contains("401")) {
                 details.append("Possible causes: ")
                       .append("1) GitHub token is invalid or expired. ")
@@ -921,6 +950,153 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         }
         
         return details.toString();
+    }
+    
+    /**
+     * Processes large payloads to fit within GitHub's workflow input size limits.
+     * GitHub Actions has input size limits (approximately 65KB for workflow dispatch).
+     * 
+     * @param request The original request string
+     * @return Processed request that fits within GitHub's limits
+     */
+    private String processLargePayload(String request) {
+        if (request == null) {
+            return JobRunner.encodeBase64("");
+        }
+        
+        // Check the size of the base64 encoded request
+        String encoded = JobRunner.encodeBase64(request);
+        int encodedSize = encoded.length();
+        
+        // GitHub workflow dispatch input limit is approximately 65KB (65536 bytes)
+        // We'll use 60KB as a safe threshold to account for JSON overhead
+        final int MAX_GITHUB_INPUT_SIZE = 60000; // 60KB
+        
+        logger.info("Original request size: {} characters, encoded size: {} characters", request.length(), encodedSize);
+        
+        if (encodedSize <= MAX_GITHUB_INPUT_SIZE) {
+            logger.debug("Request within size limits, no processing needed");
+            return encoded;
+        }
+        
+        logger.warn("Request size {} exceeds GitHub input limit of {}. Implementing compression and truncation.", 
+            encodedSize, MAX_GITHUB_INPUT_SIZE);
+        
+        // Try compression first
+        try {
+            String compressed = compressAndEncode(request);
+            if (compressed.length() <= MAX_GITHUB_INPUT_SIZE) {
+                logger.info("Successfully compressed request from {} to {} characters", encodedSize, compressed.length());
+                return compressed;
+            }
+            
+            logger.warn("Compression insufficient. Compressed size: {} still exceeds limit.", compressed.length());
+        } catch (Exception e) {
+            logger.error("Failed to compress request: {}", e.getMessage());
+        }
+        
+        // If compression doesn't work, truncate intelligently
+        String truncated = truncateIntelligently(request, MAX_GITHUB_INPUT_SIZE);
+        logger.warn("Applied intelligent truncation. Final size: {} characters", truncated.length());
+        
+        return truncated;
+    }
+    
+    /**
+     * Compresses the request using GZIP and base64 encodes the result.
+     * Adds a compression marker so the receiving workflow can detect and decompress.
+     * 
+     * @param request The original request string
+     * @return Compressed and encoded request with compression marker
+     * @throws IOException If compression fails
+     */
+    private String compressAndEncode(String request) throws IOException {
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.GZIPOutputStream gzipOut = new java.util.zip.GZIPOutputStream(baos)) {
+            gzipOut.write(request.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        
+        byte[] compressed = baos.toByteArray();
+        String compressedBase64 = java.util.Base64.getEncoder().encodeToString(compressed);
+        
+        // Add compression marker for the workflow to detect
+        return "GZIP_COMPRESSED:" + compressedBase64;
+    }
+    
+    /**
+     * Intelligently truncates the request to fit within size limits.
+     * Preserves the most important parts: ticket key, summary, and essential data.
+     * 
+     * @param request The original request string
+     * @param maxEncodedSize Maximum size for the base64 encoded result
+     * @return Truncated and encoded request
+     */
+    private String truncateIntelligently(String request, int maxEncodedSize) {
+        // Parse the request to extract key information
+        StringBuilder truncated = new StringBuilder();
+        
+        try {
+            // Try to parse as JSON to preserve structure
+            if (request.trim().startsWith("{")) {
+                org.json.JSONObject json = new org.json.JSONObject(request);
+                
+                // Create a minimal version with essential fields
+                org.json.JSONObject minimal = new org.json.JSONObject();
+                
+                // Preserve essential fields in order of importance
+                String[] essentialFields = {"knownInfo", "request", "ticket", "key", "summary", "description"};
+                
+                for (String field : essentialFields) {
+                    if (json.has(field)) {
+                        Object value = json.get(field);
+                        
+                        // For large string fields, truncate them
+                        if (value instanceof String) {
+                            String stringValue = (String) value;
+                            if (stringValue.length() > 1000) {
+                                stringValue = stringValue.substring(0, 1000) + "...[TRUNCATED]";
+                            }
+                            minimal.put(field, stringValue);
+                        } else {
+                            minimal.put(field, value);
+                        }
+                        
+                        // Check if we're approaching the limit
+                        String currentEncoded = JobRunner.encodeBase64(minimal.toString());
+                        if (currentEncoded.length() > maxEncodedSize * 0.9) { // 90% of limit
+                            break;
+                        }
+                    }
+                }
+                
+                minimal.put("_truncation_note", "Request was truncated to fit GitHub workflow input limits. " +
+                    "Original size: " + request.length() + " characters. " +
+                    "Only essential fields are preserved.");
+                
+                truncated.append(minimal.toString());
+            } else {
+                // Handle non-JSON strings
+                int maxPlainTextSize = (int) (maxEncodedSize * 0.75); // Account for base64 expansion
+                if (request.length() > maxPlainTextSize) {
+                    truncated.append(request, 0, maxPlainTextSize - 100);
+                    truncated.append("\n\n[TRUNCATED - Original size: ").append(request.length()).append(" characters]");
+                } else {
+                    truncated.append(request);
+                }
+            }
+        } catch (Exception e) {
+            // Fallback to simple truncation if JSON parsing fails
+            logger.warn("Failed to parse request as JSON for intelligent truncation: {}", e.getMessage());
+            int maxPlainTextSize = (int) (maxEncodedSize * 0.75);
+            if (request.length() > maxPlainTextSize) {
+                truncated.append(request, 0, maxPlainTextSize - 100);
+                truncated.append("\n\n[TRUNCATED - Original size: ").append(request.length()).append(" characters]");
+            } else {
+                truncated.append(request);
+            }
+        }
+        
+        return JobRunner.encodeBase64(truncated.toString());
     }
     
     /**
