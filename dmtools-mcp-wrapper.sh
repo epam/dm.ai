@@ -1,35 +1,57 @@
 #!/bin/bash
 
 # DMTools MCP Command Wrapper
-# This script acts as a command-based MCP server for Cursor
+# This script acts as a stdio transport bridge for Gemini CLI to communicate with DMTools MCP server
 
-# Function to call the HTTP MCP server
+# Server URL (can be overridden by environment variable)
+SERVER_URL="${DMTOOLS_SERVER_URL:-http://localhost:8080}"
+
+# Function to call the HTTP MCP server with proper JSON-RPC format
 call_mcp_server() {
-    local method="$1"
-    local params="$2"
-    local id="mcp-$(date +%s)"
+    local request="$1"
     
-    local payload="{\"method\":\"$method\",\"id\":\"$id\",\"params\":$params}"
-    
-    curl -s -X POST http://localhost:8080/mcp/ \
+    # Forward the complete JSON-RPC request to our HTTP endpoint
+    response=$(curl -s -X POST "${SERVER_URL}/mcp/" \
         -H "Content-Type: application/json" \
-        -d "$payload"
+        -d "$request" \
+        --max-time 30)
+    
+    # Check if curl succeeded
+    if [ $? -eq 0 ] && [ -n "$response" ]; then
+        echo "$response"
+    else
+        # Generate error response if server call failed
+        local request_id=$(echo "$request" | jq -r '.id // "unknown"' 2>/dev/null || echo "unknown")
+        echo "{\"jsonrpc\":\"2.0\",\"id\":\"$request_id\",\"error\":{\"code\":-32603,\"message\":\"Server communication failed\"}}"
+    fi
 }
 
-# Read JSON-RPC request from stdin
-while IFS= read -r line; do
-    echo "$line" >&2  # Log to stderr for debugging
+# Function to validate JSON-RPC request
+validate_jsonrpc() {
+    local request="$1"
     
-    # Parse the JSON request (simple parsing for demo)
-    if echo "$line" | grep -q '"method":"initialize"'; then
-        call_mcp_server "initialize" "{}"
-    elif echo "$line" | grep -q '"method":"tools/list"'; then
-        call_mcp_server "tools/list" "{}"
-    elif echo "$line" | grep -q '"method":"tools/call"'; then
-        # Extract tool name and arguments (simplified)
-        call_mcp_server "tools/call" "{\"name\":\"jira_get_instance\",\"arguments\":{}}"
+    # Check if it's valid JSON and has required fields
+    if echo "$request" | jq -e '.jsonrpc and .method and (.id != null)' >/dev/null 2>&1; then
+        return 0
     else
-        # Default response
-        echo '{"id":"unknown","error":{"code":-32601,"message":"Method not found"}}'
+        return 1
     fi
-done 
+}
+
+# Read JSON-RPC requests from stdin and forward to HTTP server
+while IFS= read -r line; do
+    # Skip empty lines
+    [ -z "$line" ] && continue
+    
+    # Log request to stderr for debugging
+    echo "DEBUG: Received request: $line" >&2
+    
+    # Validate JSON-RPC format
+    if validate_jsonrpc "$line"; then
+        # Forward valid request to HTTP server
+        call_mcp_server "$line"
+    else
+        # Generate error response for invalid requests
+        echo "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid JSON-RPC request\"}}"
+    fi
+done

@@ -2011,8 +2011,26 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     }
 
     @Override
-    public File convertUrlToFile(String href) throws IOException {
-        return Impl.downloadFile(this, new GenericRequest(this, href), getCachedFile(href));
+    @MCPTool(
+            name = "jira_download_attachment",
+            description = "Download a Jira attachment by URL and save it as a file",
+            integration = "jira",
+            category = "file_management"
+    )
+    public File convertUrlToFile(@MCPParam(name = "href", description = "The attachment URL to download", required = true) String href) throws IOException {
+        File targetFile = getCachedFile(href);
+        
+        // Ensure the parent directory exists before downloading
+        File parentDir = targetFile.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            boolean created = parentDir.mkdirs();
+            if (!created && !parentDir.exists()) {
+                throw new IOException("Failed to create directory: " + parentDir.getAbsolutePath());
+            }
+            log("Created directory for download: " + parentDir.getAbsolutePath());
+        }
+        
+        return Impl.downloadFile(this, new GenericRequest(this, href), targetFile);
     }
 
     @Override
