@@ -105,7 +105,12 @@ public class GitHubWorkflowUtils {
                 errorMessage.toLowerCase().contains("connection reset") ||
                 errorMessage.toLowerCase().contains("connection refused") ||
                 errorMessage.toLowerCase().contains("timeout") ||
-                errorMessage.toLowerCase().contains("network is unreachable")
+                errorMessage.toLowerCase().contains("network is unreachable") ||
+                errorMessage.toLowerCase().contains("unexpected end of stream") ||
+                errorMessage.toLowerCase().contains("end of stream") ||
+                errorMessage.toLowerCase().contains("remote host terminated the handshake") ||
+                errorMessage.toLowerCase().contains("handshake") ||
+                errorMessage.toLowerCase().contains("ssl")
             );
             
             // Maximum of 3 attempts (2 retries)

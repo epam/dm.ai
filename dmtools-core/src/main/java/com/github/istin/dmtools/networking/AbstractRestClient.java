@@ -109,6 +109,9 @@ public abstract class AbstractRestClient implements RestClient {
                lowerMessage.contains("premature eof") ||
                lowerMessage.contains("unexpected end of stream") ||
                lowerMessage.contains("end of stream") ||
+               lowerMessage.contains("remote host terminated the handshake") ||
+               lowerMessage.contains("handshake") ||
+               lowerMessage.contains("ssl") ||
                exception instanceof java.net.SocketTimeoutException ||
                exception instanceof java.net.ConnectException;
     }
