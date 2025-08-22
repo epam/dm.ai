@@ -6,6 +6,8 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Utility class for GitHub workflow operations with enhanced cloud environment support.
@@ -63,39 +65,50 @@ public class GitHubWorkflowUtils {
             logger.debug("Request body (truncated): {}...", requestBodyStr.substring(0, 500));
         }
         
-        // Use native Java HTTP client instead of OkHttp for better cloud compatibility
+        // Use OkHttp with cloud-optimized TLS configuration for better handshake reliability
         String triggerUrl = String.format("https://api.github.com/repos/%s/%s/actions/workflows/%s/dispatches", owner, repo, workflowId);
         
         try {
-            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(java.time.Duration.ofSeconds(30))
+            // Use OkHttp with cloud-optimized TLS configuration
+            okhttp3.OkHttpClient cloudOptimizedClient = new okhttp3.OkHttpClient.Builder()
+                .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(github.getTimeout(), java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                // Force HTTP/1.1 to avoid HTTP/2 handshake issues in cloud environments
+                .protocols(java.util.Arrays.asList(okhttp3.Protocol.HTTP_1_1))
+                // Configure connection specs for better cloud compatibility
+                .connectionSpecs(java.util.Arrays.asList(
+                    okhttp3.ConnectionSpec.MODERN_TLS,
+                    okhttp3.ConnectionSpec.COMPATIBLE_TLS
+                ))
+                .followRedirects(false)
+                .retryOnConnectionFailure(false) // We handle retries manually
                 .build();
             
-            java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create(triggerUrl))
-                .timeout(java.time.Duration.ofSeconds(github.getTimeout()))
-                .header("Authorization", "Bearer " + github.getAuthorization())
-                .header("Accept", "application/vnd.github.v3+json")
-                .header("Content-Type", "application/json")
-                .header("User-Agent", "DMTools")
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(requestBodyStr))
-                .build();
+            okhttp3.MediaType mediaType = okhttp3.MediaType.parse("application/json");
+            okhttp3.RequestBody httpRequestBody = okhttp3.RequestBody.create(requestBodyStr, mediaType);
             
-            logger.info("Sending native HTTP request to: {}", triggerUrl);
+            okhttp3.Request httpRequest = new okhttp3.Request.Builder()
+                .url(triggerUrl)
+                .post(httpRequestBody)
+                .addHeader("Authorization", "Bearer " + github.getAuthorization())
+                .addHeader("Accept", "application/vnd.github.v3+json")
+                .addHeader("Content-Type", "application/json")
+                .addHeader("User-Agent", "DMTools")
+                .build();
+
+            logger.info("Sending cloud-optimized HTTP request to: {}", triggerUrl);
             logger.info("Request size: {} chars", requestBodyStr.length());
-            
-            java.net.http.HttpResponse<String> response = httpClient.send(httpRequest, 
-                java.net.http.HttpResponse.BodyHandlers.ofString());
-            
-            logger.info("Native HTTP response: {} {}", response.statusCode(), response.body() != null ? response.body() : "No response (this is normal for GitHub workflow dispatches)");
-            
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+
+            try (okhttp3.Response response = cloudOptimizedClient.newCall(httpRequest).execute()) {
+                logger.info("Cloud-optimized HTTP response: {} {}", response.code(), 
+                    response.body() != null ? "Response received" : "No response (normal for GitHub workflow dispatches)");
+
+                if (response.code() < 200 || response.code() >= 300) {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    throw new IOException("HTTP " + response.code() + ": " + responseBody);
+                }
             }
-            
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("HTTP request interrupted", e);
             
         } catch (IOException e) {
             // Enhanced error handling for connection issues with retry logic
