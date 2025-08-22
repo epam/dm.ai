@@ -724,6 +724,249 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     /**
+     * Comprehensive network diagnostics for cloud environments.
+     * Tests various aspects of GitHub API connectivity to identify issues.
+     */
+    public Map<String, Object> runNetworkDiagnostics() {
+        Map<String, Object> diagnostics = new HashMap<>();
+        diagnostics.put("timestamp", System.currentTimeMillis());
+        diagnostics.put("environment", detectEnvironment());
+        
+        // Test 1: Basic connectivity
+        logger.info("🔍 Running GitHub network diagnostics...");
+        diagnostics.put("basicConnectivity", testBasicConnectivity());
+        
+        // Test 2: Authentication
+        diagnostics.put("authentication", testAuthentication());
+        
+        // Test 3: Small POST request
+        diagnostics.put("smallPost", testSmallPost());
+        
+        // Test 4: Large payload test
+        diagnostics.put("largePayload", testLargePayload());
+        
+        // Test 5: Connection pool test
+        diagnostics.put("connectionPool", testConnectionPool());
+        
+        logger.info("📊 Network diagnostics completed: {}", diagnostics);
+        return diagnostics;
+    }
+    
+    private Map<String, Object> detectEnvironment() {
+        Map<String, Object> env = new HashMap<>();
+        env.put("googleCloudProject", System.getenv("GOOGLE_CLOUD_PROJECT"));
+        env.put("kubernetesService", System.getenv("KUBERNETES_SERVICE_HOST"));
+        env.put("cloudRun", System.getenv("K_SERVICE"));
+        env.put("javaVersion", System.getProperty("java.version"));
+        env.put("osName", System.getProperty("os.name"));
+        return env;
+    }
+    
+    private Map<String, Object> testBasicConnectivity() {
+        Map<String, Object> result = new HashMap<>();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            String path = path("user");
+            GenericRequest getRequest = new GenericRequest(this, path);
+            String response = execute(getRequest);
+            
+            long duration = System.currentTimeMillis() - startTime;
+            result.put("success", true);
+            result.put("duration", duration);
+            result.put("responseSize", response != null ? response.length() : 0);
+            
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                result.put("login", jsonResponse.optString("login", "unknown"));
+            }
+            
+            logger.info("✅ Basic connectivity: {}ms", duration);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorType", e.getClass().getSimpleName());
+            result.put("duration", System.currentTimeMillis() - startTime);
+            logger.error("❌ Basic connectivity failed: {}", e.getMessage());
+        }
+        
+        return result;
+    }
+    
+    private Map<String, Object> testAuthentication() {
+        Map<String, Object> result = new HashMap<>();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            // Test rate limit endpoint (doesn't require specific permissions)
+            String path = path("rate_limit");
+            GenericRequest getRequest = new GenericRequest(this, path);
+            String response = execute(getRequest);
+            
+            long duration = System.currentTimeMillis() - startTime;
+            result.put("success", true);
+            result.put("duration", duration);
+            
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                JSONObject rate = jsonResponse.optJSONObject("rate");
+                if (rate != null) {
+                    result.put("remaining", rate.optInt("remaining", -1));
+                    result.put("limit", rate.optInt("limit", -1));
+                }
+            }
+            
+            logger.info("✅ Authentication test: {}ms", duration);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorType", e.getClass().getSimpleName());
+            result.put("duration", System.currentTimeMillis() - startTime);
+            logger.error("❌ Authentication test failed: {}", e.getMessage());
+        }
+        
+        return result;
+    }
+    
+    private Map<String, Object> testSmallPost() {
+        Map<String, Object> result = new HashMap<>();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            // Create a minimal POST request (gist creation)
+            String path = path("gists");
+            GenericRequest postRequest = new GenericRequest(this, path);
+            
+            JSONObject gist = new JSONObject();
+            gist.put("description", "DMTools network test - " + System.currentTimeMillis());
+            gist.put("public", false);
+            
+            JSONObject files = new JSONObject();
+            JSONObject testFile = new JSONObject();
+            testFile.put("content", "This is a network connectivity test from DMTools cloud environment");
+            files.put("network-test.txt", testFile);
+            gist.put("files", files);
+            
+            postRequest.setBody(gist.toString());
+            String response = post(postRequest);
+            
+            long duration = System.currentTimeMillis() - startTime;
+            result.put("success", true);
+            result.put("duration", duration);
+            result.put("requestSize", gist.toString().length());
+            result.put("responseSize", response != null ? response.length() : 0);
+            
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                result.put("gistId", jsonResponse.optString("id", "unknown"));
+                result.put("gistUrl", jsonResponse.optString("html_url", "unknown"));
+            }
+            
+            logger.info("✅ Small POST test: {}ms ({}B request)", duration, gist.toString().length());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorType", e.getClass().getSimpleName());
+            result.put("duration", System.currentTimeMillis() - startTime);
+            logger.error("❌ Small POST test failed: {}", e.getMessage());
+        }
+        
+        return result;
+    }
+    
+    private Map<String, Object> testLargePayload() {
+        Map<String, Object> result = new HashMap<>();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            // Test with a large payload similar to workflow dispatch
+            String path = path("gists");
+            GenericRequest postRequest = new GenericRequest(this, path);
+            
+            JSONObject gist = new JSONObject();
+            gist.put("description", "DMTools large payload test - " + System.currentTimeMillis());
+            gist.put("public", false);
+            
+            // Create large content similar to workflow inputs
+            StringBuilder largeContent = new StringBuilder();
+            largeContent.append("DMTools Large Payload Network Test\n");
+            largeContent.append("=".repeat(50)).append("\n");
+            for (int i = 0; i < 1000; i++) {
+                largeContent.append("Line ").append(i).append(": This is test data to simulate large workflow dispatch payloads. ");
+                largeContent.append("Testing network connectivity with substantial data transfer in cloud environment. ");
+                largeContent.append("Error investigation for broken pipe issues.\n");
+            }
+            
+            JSONObject files = new JSONObject();
+            JSONObject testFile = new JSONObject();
+            testFile.put("content", largeContent.toString());
+            files.put("large-payload-test.txt", testFile);
+            gist.put("files", files);
+            
+            postRequest.setBody(gist.toString());
+            String response = post(postRequest);
+            
+            long duration = System.currentTimeMillis() - startTime;
+            result.put("success", true);
+            result.put("duration", duration);
+            result.put("requestSize", gist.toString().length());
+            result.put("responseSize", response != null ? response.length() : 0);
+            
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                result.put("gistId", jsonResponse.optString("id", "unknown"));
+            }
+            
+            logger.info("✅ Large payload test: {}ms ({}B request)", duration, gist.toString().length());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorType", e.getClass().getSimpleName());
+            result.put("duration", System.currentTimeMillis() - startTime);
+            result.put("requestSize", e.getMessage().contains("too large") ? "TOO_LARGE" : "UNKNOWN");
+            logger.error("❌ Large payload test failed: {}", e.getMessage());
+        }
+        
+        return result;
+    }
+    
+    private Map<String, Object> testConnectionPool() {
+        Map<String, Object> result = new HashMap<>();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            // Make multiple rapid requests to test connection pooling
+            List<Long> requestTimes = new ArrayList<>();
+            
+            for (int i = 0; i < 5; i++) {
+                long reqStart = System.currentTimeMillis();
+                String path = path("rate_limit");
+                GenericRequest getRequest = new GenericRequest(this, path);
+                execute(getRequest);
+                requestTimes.add(System.currentTimeMillis() - reqStart);
+                Thread.sleep(100); // Small delay between requests
+            }
+            
+            long totalDuration = System.currentTimeMillis() - startTime;
+            result.put("success", true);
+            result.put("totalDuration", totalDuration);
+            result.put("requestTimes", requestTimes);
+            result.put("averageTime", requestTimes.stream().mapToLong(Long::longValue).average().orElse(0));
+            
+            logger.info("✅ Connection pool test: {}ms total, avg: {}ms per request", 
+                totalDuration, requestTimes.stream().mapToLong(Long::longValue).average().orElse(0));
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorType", e.getClass().getSimpleName());
+            result.put("duration", System.currentTimeMillis() - startTime);
+            logger.error("❌ Connection pool test failed: {}", e.getMessage());
+        }
+        
+        return result;
+    }
+
+    /**
      * Tests the GitHub connection and returns detailed information about the result.
      * 
      * @return Map containing test result details
@@ -807,9 +1050,10 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             long triggerTimestamp = System.currentTimeMillis();
             logger.info("Recording webhook trigger timestamp: {}", triggerTimestamp);
 
-            // 2. Trigger the workflow
-            logger.info("Triggering workflow {}/{}/{}", owner, repo, workflowId);
-            triggerWorkflow(owner, repo, workflowId, requestParams);
+            // 2. Trigger the workflow with alternatives and diagnostics
+            logger.info("Triggering workflow {}/{}/{} using enhanced methods", owner, repo, workflowId);
+            String triggerResult = triggerWorkflowWithAlternatives(owner, repo, workflowId, requestParams);
+            logger.info("Workflow trigger result: {}", triggerResult);
             Thread.sleep(2000L);
             // 3. Wait and retry to find the triggered workflow run
             logger.info("Waiting for workflow run to appear in GitHub API...");
@@ -847,6 +1091,56 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         }
     }
     
+    /**
+     * Alternative workflow triggering using different HTTP client configurations.
+     * Tries multiple approaches to work around cloud networking issues.
+     */
+    public String triggerWorkflowWithAlternatives(String owner, String repo, String workflowId, String request) throws IOException {
+        logger.info("🔄 Attempting workflow trigger with alternative methods...");
+        
+        Map<String, String> attempts = new LinkedHashMap<>();
+        
+        // Attempt 1: Original method
+        try {
+            logger.info("📋 Attempt 1: Standard OkHttp client");
+            triggerWorkflow(owner, repo, workflowId, request);
+            attempts.put("standard", "SUCCESS");
+            return "Workflow triggered successfully using standard method";
+        } catch (Exception e) {
+            attempts.put("standard", "FAILED: " + e.getMessage());
+            logger.warn("❌ Standard method failed: {}", e.getMessage());
+        }
+        
+        // Attempt 2: Simple HTTP client
+        try {
+            logger.info("📋 Attempt 2: Simple HTTP connection");
+            triggerWorkflowSimpleHttp(owner, repo, workflowId, request);
+            attempts.put("simpleHttp", "SUCCESS");
+            return "Workflow triggered successfully using simple HTTP";
+        } catch (Exception e) {
+            attempts.put("simpleHttp", "FAILED: " + e.getMessage());
+            logger.warn("❌ Simple HTTP failed: {}", e.getMessage());
+        }
+        
+        // Attempt 3: Chunked request
+        try {
+            logger.info("📋 Attempt 3: Chunked request");
+            triggerWorkflowChunked(owner, repo, workflowId, request);
+            attempts.put("chunked", "SUCCESS");
+            return "Workflow triggered successfully using chunked transfer";
+        } catch (Exception e) {
+            attempts.put("chunked", "FAILED: " + e.getMessage());
+            logger.warn("❌ Chunked method failed: {}", e.getMessage());
+        }
+        
+        // All attempts failed
+        StringBuilder errorMessage = new StringBuilder("All workflow trigger attempts failed:\n");
+        attempts.forEach((method, result) -> 
+            errorMessage.append("- ").append(method).append(": ").append(result).append("\n"));
+        
+        throw new IOException(errorMessage.toString());
+    }
+
     private void triggerWorkflow(String owner, String repo, String workflowId, String request) throws IOException {
         String triggerPath = path(String.format("repos/%s/%s/actions/workflows/%s/dispatches", owner, repo, workflowId));
         
@@ -891,8 +1185,8 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             );
             
             if (isConnectionError) {
-                logger.warn("GitHub API connection issue detected: {}. This is common in cloud environments and will be retried.", errorMessage);
-                // The AbstractRestClient will handle the retry logic
+                logger.warn("GitHub API connection issue detected: {}. This is common in cloud environments.", errorMessage);
+                // Let AbstractRestClient handle the retry logic (already handled before reaching here)
                 throw e;
             }
             
@@ -914,6 +1208,126 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             logger.error("Unexpected error during workflow trigger: {}", e.getMessage(), e);
             String errorDetails = getWorkflowTriggerErrorDetails(e, owner, repo, workflowId);
             throw new IOException("Workflow trigger failed with unexpected error: " + e.getMessage() + ". " + errorDetails, e);
+        }
+    }
+    
+    /**
+     * Alternative workflow trigger using plain Java HTTP client.
+     * Bypasses OkHttp to test if the issue is client-specific.
+     */
+    private void triggerWorkflowSimpleHttp(String owner, String repo, String workflowId, String request) throws IOException {
+        String triggerUrl = String.format("https://api.github.com/repos/%s/%s/actions/workflows/%s/dispatches", owner, repo, workflowId);
+        String processedRequest = processLargePayload(request);
+        
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("ref", "main");
+        requestBody.put("inputs", new JSONObject().put("user_request", processedRequest));
+        
+        // Use java.net.http.HttpClient (Java 11+)
+        try {
+            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(30))
+                .build();
+            
+            java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(triggerUrl))
+                .timeout(java.time.Duration.ofSeconds(120))
+                .header("Authorization", "Bearer " + authorization)
+                .header("Accept", "application/vnd.github.v3+json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "DMTools")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .build();
+            
+            logger.info("🌐 Sending simple HTTP request to: {}", triggerUrl);
+            logger.info("📦 Request size: {} chars", requestBody.toString().length());
+            
+            java.net.http.HttpResponse<String> response = httpClient.send(httpRequest, 
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+            
+            logger.info("✅ Simple HTTP response: {} {}", response.statusCode(), response.body());
+            
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+            }
+            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Simple HTTP request interrupted", e);
+        }
+    }
+    
+    /**
+     * Alternative workflow trigger using chunked transfer encoding.
+     * May help with large payloads in cloud environments.
+     */
+    private void triggerWorkflowChunked(String owner, String repo, String workflowId, String request) throws IOException {
+        String triggerUrl = String.format("https://api.github.com/repos/%s/%s/actions/workflows/%s/dispatches", owner, repo, workflowId);
+        String processedRequest = processLargePayload(request);
+        
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("ref", "main");
+        requestBody.put("inputs", new JSONObject().put("user_request", processedRequest));
+        
+        // Use URLConnection with chunked encoding
+        java.net.URL url = new java.net.URL(triggerUrl);
+        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+        
+        try {
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + authorization);
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("User-Agent", "DMTools");
+            conn.setRequestProperty("Transfer-Encoding", "chunked");
+            conn.setDoOutput(true);
+            conn.setChunkedStreamingMode(8192); // 8KB chunks
+            conn.setConnectTimeout(30000); // 30 seconds
+            conn.setReadTimeout(120000); // 2 minutes
+            
+            logger.info("🌐 Sending chunked HTTP request to: {}", triggerUrl);
+            logger.info("📦 Request size: {} chars (chunked)", requestBody.toString().length());
+            
+            // Write request body
+            try (java.io.OutputStream os = conn.getOutputStream()) {
+                byte[] input = requestBody.toString().getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
+            
+            // Get response
+            int responseCode = conn.getResponseCode();
+            String responseBody = "";
+            
+            if (responseCode < 400) {
+                try (java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream(), "utf-8"))) {
+                    StringBuilder response = new StringBuilder();
+                    String responseLine;
+                    while ((responseLine = br.readLine()) != null) {
+                        response.append(responseLine.trim());
+                    }
+                    responseBody = response.toString();
+                }
+            } else {
+                try (java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getErrorStream(), "utf-8"))) {
+                    StringBuilder response = new StringBuilder();
+                    String responseLine;
+                    while ((responseLine = br.readLine()) != null) {
+                        response.append(responseLine.trim());
+                    }
+                    responseBody = response.toString();
+                }
+            }
+            
+            logger.info("✅ Chunked HTTP response: {} {}", responseCode, responseBody);
+            
+            if (responseCode < 200 || responseCode >= 300) {
+                throw new IOException("HTTP " + responseCode + ": " + responseBody);
+            }
+            
+        } finally {
+            conn.disconnect();
         }
     }
     

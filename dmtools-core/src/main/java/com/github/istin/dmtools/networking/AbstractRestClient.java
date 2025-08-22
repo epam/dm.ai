@@ -66,7 +66,19 @@ public abstract class AbstractRestClient implements RestClient {
     }
 
     public int getTimeout() {
-        return 60;
+        // Check if running in cloud environment and adjust timeout accordingly
+        String cloudEnv = System.getenv("GOOGLE_CLOUD_PROJECT");
+        boolean isCloudEnvironment = cloudEnv != null && !cloudEnv.isEmpty();
+        
+        if (isCloudEnvironment) {
+            // Cloud environments may need longer timeouts due to network latency
+            int cloudTimeout = 120; // 2 minutes for cloud
+            logger.debug("Detected cloud environment ({}), using extended timeout: {}s", cloudEnv, cloudTimeout);
+            return cloudTimeout;
+        } else {
+            // Local development timeout
+            return 60;
+        }
     }
 
     /**
@@ -336,6 +348,10 @@ public abstract class AbstractRestClient implements RestClient {
 
     @Override
     public String post(GenericRequest genericRequest) throws IOException {
+        return post(genericRequest, 0);
+    }
+    
+    private String post(GenericRequest genericRequest, int retryCount) throws IOException {
         if (genericRequest == null) {
             return "";
         }
@@ -373,9 +389,17 @@ public abstract class AbstractRestClient implements RestClient {
                 .post(body)
                 .build();
         
+        long startTime = System.currentTimeMillis();
+        logger.debug("POST request starting for URL: {} (attempt: {})", url, retryCount + 1);
+        
         try (Response response = client.newCall(request).execute()) {
+            long responseTime = System.currentTimeMillis() - startTime;
+            logger.debug("POST response received for URL: {} in {}ms, status: {}", url, responseTime, response.code());
+            
             if (response.isSuccessful()) {
                 String responseAsString = response.body() != null ? response.body().string() : "";
+                logger.debug("POST success for URL: {} ({}ms, {} chars response)", url, responseTime, responseAsString.length());
+                
                 if (isCachePostRequestsEnabled) {
                     String value = getCacheFileName(genericRequest);
                     File cache = new File(getCacheFolderName());
@@ -385,7 +409,39 @@ public abstract class AbstractRestClient implements RestClient {
                 }
                 return responseAsString;
             } else {
+                logger.warn("POST failed for URL: {} ({}ms, status: {})", url, responseTime, response.code());
                 throw AbstractRestClient.printAndCreateException(request, response);
+            }
+        } catch (IOException e) {
+            logger.warn("POST connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            
+            // Check if it's a recoverable connection error
+            boolean isRecoverableError = isRecoverableConnectionError(e);
+            
+            // Maximum of 3 attempts (2 retries)
+            final int MAX_RETRIES = 2;
+            
+            if (isRecoverableError && retryCount < MAX_RETRIES) {
+                logger.info("Retrying POST request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
+                if (isWaitBeforePerform) {
+                    try {
+                        // Exponential backoff: 200ms, 400ms, 800ms
+                        long waitTime = 200L * (long) Math.pow(2, retryCount);
+                        logger.debug("Waiting {}ms before retry", waitTime);
+                        Thread.sleep(waitTime);
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("POST request interrupted during retry", interruptedException);
+                    }
+                }
+                return post(genericRequest, retryCount + 1);
+            } else {
+                if (!isRecoverableError) {
+                    logger.error("Non-recoverable POST connection error for URL: {}", url, e);
+                } else if (retryCount >= MAX_RETRIES) {
+                    logger.error("Max POST retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
+                }
+                throw e;
             }
         } finally {
             // Removed aggressive connection pool eviction - let OkHttp manage connection lifecycle
@@ -398,6 +454,10 @@ public abstract class AbstractRestClient implements RestClient {
 
     @Override
     public String put(GenericRequest genericRequest) throws IOException {
+        return put(genericRequest, 0);
+    }
+    
+    private String put(GenericRequest genericRequest, int retryCount) throws IOException {
         String url = genericRequest.url();
         if (isWaitBeforePerform) {
             try {
@@ -421,13 +481,46 @@ public abstract class AbstractRestClient implements RestClient {
             } else {
                 throw AbstractRestClient.printAndCreateException(request, response);
             }
+        } catch (IOException e) {
+            logger.warn("PUT connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            
+            // Check if it's a recoverable connection error
+            boolean isRecoverableError = isRecoverableConnectionError(e);
+            
+            // Maximum of 3 attempts (2 retries)
+            final int MAX_RETRIES = 2;
+            
+            if (isRecoverableError && retryCount < MAX_RETRIES) {
+                logger.info("Retrying PUT request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
+                try {
+                    // Exponential backoff: 200ms, 400ms, 800ms
+                    long waitTime = 200L * (long) Math.pow(2, retryCount);
+                    logger.debug("Waiting {}ms before PUT retry", waitTime);
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("PUT request interrupted during retry", interruptedException);
+                }
+                return put(genericRequest, retryCount + 1);
+            } else {
+                if (!isRecoverableError) {
+                    logger.error("Non-recoverable PUT connection error for URL: {}", url, e);
+                } else if (retryCount >= MAX_RETRIES) {
+                    logger.error("Max PUT retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
+                }
+                throw e;
+            }
         } finally {
-            // Removed aggressive connection pool eviction - let OkHttp manage connection lifecycle
+            // Let OkHttp manage connection lifecycle automatically
         }
     }
 
     @Override
     public String patch(GenericRequest genericRequest) throws IOException {
+        return patch(genericRequest, 0);
+    }
+    
+    private String patch(GenericRequest genericRequest, int retryCount) throws IOException {
         String url = genericRequest.url();
         if (isWaitBeforePerform) {
             try {
@@ -451,8 +544,37 @@ public abstract class AbstractRestClient implements RestClient {
             } else {
                 throw AbstractRestClient.printAndCreateException(request, response);
             }
+        } catch (IOException e) {
+            logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            
+            // Check if it's a recoverable connection error
+            boolean isRecoverableError = isRecoverableConnectionError(e);
+            
+            // Maximum of 3 attempts (2 retries)
+            final int MAX_RETRIES = 2;
+            
+            if (isRecoverableError && retryCount < MAX_RETRIES) {
+                logger.info("Retrying PATCH request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
+                try {
+                    // Exponential backoff: 200ms, 400ms, 800ms
+                    long waitTime = 200L * (long) Math.pow(2, retryCount);
+                    logger.debug("Waiting {}ms before PATCH retry", waitTime);
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("PATCH request interrupted during retry", interruptedException);
+                }
+                return patch(genericRequest, retryCount + 1);
+            } else {
+                if (!isRecoverableError) {
+                    logger.error("Non-recoverable PATCH connection error for URL: {}", url, e);
+                } else if (retryCount >= MAX_RETRIES) {
+                    logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
+                }
+                throw e;
+            }
         } finally {
-            // Removed aggressive connection pool eviction - let OkHttp manage connection lifecycle
+            // Let OkHttp manage connection lifecycle automatically
         }
     }
 
