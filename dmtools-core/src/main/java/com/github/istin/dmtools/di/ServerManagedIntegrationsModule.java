@@ -125,6 +125,7 @@ public class ServerManagedIntegrationsModule {
                 JSONObject jiraConfig = resolvedIntegrations.getJSONObject("jira");
                 String basePath = jiraConfig.optString("JIRA_BASE_PATH", "");
                 String authType = jiraConfig.optString("JIRA_AUTH_TYPE", "Basic");
+                String extraFields = jiraConfig.optString("JIRA_EXTRA_FIELDS_PROJECT", "");
                 
                 // Handle authentication - priority: email+token combination > legacy token
                 String token = "";
@@ -143,7 +144,7 @@ public class ServerManagedIntegrationsModule {
                 
                 if (!basePath.isEmpty() && !token.isEmpty()) {
                     System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials");
-                    return new CustomServerManagedJiraClient(basePath, token, authType);
+                    return new CustomServerManagedJiraClient(basePath, token, authType, extraFields);
                 } else {
                     System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (JIRA_BASE_PATH=" + 
                         (basePath.isEmpty() ? "empty" : basePath) + ", token=" + (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
@@ -168,7 +169,7 @@ public class ServerManagedIntegrationsModule {
         private final String[] defaultJiraFields;
         private final String[] extendedJiraFields;
         
-        public CustomServerManagedJiraClient(String basePath, String token, String authType) throws IOException {
+        public CustomServerManagedJiraClient(String basePath, String token, String authType, String extraFields) throws IOException {
             // Call parent constructor with resolved credentials
             super(basePath, token);
             
@@ -194,6 +195,19 @@ public class ServerManagedIntegrationsModule {
             List<String> extendedFields = new ArrayList<>();
             extendedFields.addAll(Arrays.asList(BasicJiraClient.EXTENDED_QUERY_FIELDS));
             extendedFields.addAll(defaultFields);
+            
+            // Add extra fields if configured
+            if (extraFields != null && !extraFields.trim().isEmpty()) {
+                String[] additionalFields = extraFields.split(",");
+                for (String field : additionalFields) {
+                    String trimmedField = field.trim();
+                    if (!trimmedField.isEmpty()) {
+                        extendedFields.add(trimmedField);
+                    }
+                }
+                System.out.println("✅ [CustomServerManagedJiraClient] Added extra fields: " + extraFields);
+            }
+            
             extendedJiraFields = extendedFields.toArray(new String[0]);
         }
         
