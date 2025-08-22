@@ -107,6 +107,8 @@ public abstract class AbstractRestClient implements RestClient {
                lowerMessage.contains("connection lost") ||
                lowerMessage.contains("socket closed") ||
                lowerMessage.contains("premature eof") ||
+               lowerMessage.contains("unexpected end of stream") ||
+               lowerMessage.contains("end of stream") ||
                exception instanceof java.net.SocketTimeoutException ||
                exception instanceof java.net.ConnectException;
     }
