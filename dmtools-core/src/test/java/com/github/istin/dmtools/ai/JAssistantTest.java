@@ -55,7 +55,7 @@ public class JAssistantTest {
         when(trackerClientMock.performTicket(anyString(), any())).thenReturn(ticketMock);
         when(promptManagerMock.requestNiceLookingStoryInGherkinStyleAndPotentialQuestionsToPO(any())).thenReturn("AI Request");
         when(aiClientMock.chat(anyString())).thenReturn("AI Response");
-
+        when(ticketMock.toText()).thenReturn("");
         jAssistant.generateNiceLookingStoryInGherkinStyleAndPotentialQuestionsToPO("TICKET-1");
 
         verify(trackerClientMock).postComment(anyString(), contains("JAI Generated Nice Looking Story In Gherkin Style And Potential Questions To PO: "));
@@ -67,6 +67,7 @@ public class JAssistantTest {
         when(trackerClientMock.performTicket(anyString(), any())).thenReturn(ticketMock);
         when(promptManagerMock.checkTaskTechnicalOrProduct(any())).thenReturn("AI Request");
         when(aiClientMock.chat(anyString())).thenReturn("Technical");
+        when(ticketMock.toText()).thenReturn("");
 
         String result = jAssistant.checkStoryIsTechnicalOrProduct(ticketMock);
 
@@ -209,6 +210,7 @@ public class JAssistantTest {
         ITicket ticketMock = mock(ITicket.class);
         when(promptManagerMock.isContentRelatedToRequirements(any())).thenReturn("AI Request");
         when(aiClientMock.chat(any(), anyString())).thenReturn("true");
+        when(ticketMock.toText()).thenReturn("");
 
         jAssistant.identifyIsContentRelatedToRequirementsAndMarkViaLabel("prefix", ticketMock);
 
@@ -220,7 +222,7 @@ public class JAssistantTest {
         ITicket ticketMock = mock(ITicket.class);
         when(promptManagerMock.isContentRelatedToTimeline(any())).thenReturn("AI Request");
         when(aiClientMock.chat(any(), anyString())).thenReturn("true");
-
+        when(ticketMock.toText()).thenReturn("");
         jAssistant.identifyIsContentRelatedToTimelineAndMarkViaLabel("prefix", ticketMock);
 
         verify(trackerClientMock).addLabelIfNotExists(ticketMock, "prefix_timeline");
@@ -231,6 +233,7 @@ public class JAssistantTest {
         ITicket ticketMock = mock(ITicket.class);
         when(promptManagerMock.isContentRelatedToTeamSetup(any())).thenReturn("AI Request");
         when(aiClientMock.chat(any(), anyString())).thenReturn("true");
+        when(ticketMock.toText()).thenReturn("");
 
         jAssistant.identifyIsContentRelatedToTeamSetupAndMarkViaLabel("prefix", ticketMock);
 
