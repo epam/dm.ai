@@ -36,7 +36,7 @@ public class TicketDataFetcher {
                         trackerClient, ticket.getKey(), ticket, completedStatuses);
 
                 if (!datesWhenTicketWasInStatus.isEmpty()) {
-                    KeyTime first = datesWhenTicketWasInStatus.get(0);
+                    KeyTime first = datesWhenTicketWasInStatus.getFirst();
                     Calendar when = first.getWhen();
 
                     // Check if it's after start date

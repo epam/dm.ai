@@ -136,7 +136,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             }
             allPullRequests.addAll(pullRequests);
 
-            if (startDate != null && !pullRequests.isEmpty() && pullRequests.get(pullRequests.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
+            if (startDate != null && !pullRequests.isEmpty() && pullRequests.getLast().getCreatedDate() < startDate.getTimeInMillis()) {
                 break;
             }
 

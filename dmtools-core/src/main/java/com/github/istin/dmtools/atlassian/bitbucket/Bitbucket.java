@@ -87,7 +87,7 @@ public abstract class Bitbucket extends AtlassianRestClient implements SourceCod
                 logger.info("pull requests response first item: {}", values.get(0).getId());
             }
             result.addAll(values);
-            if (startDate != null && !result.isEmpty() && result.get(result.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
+            if (startDate != null && !result.isEmpty() && result.getLast().getCreatedDate() < startDate.getTimeInMillis()) {
                 break;
             }
         }

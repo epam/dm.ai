@@ -114,7 +114,7 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
             String prompt = promptTemplateReader.read(promptName, context);
             if (!files.isEmpty()) {
                 if (files.size() == 1) {
-                    response = ai.chat(null, prompt, files.get(0));
+                    response = ai.chat(null, prompt, files.getFirst());
                 } else {
                     response = ai.chat(null, prompt, files);
                 }

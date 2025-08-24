@@ -66,7 +66,7 @@ public class ContextOrchestrator {
                 logger.info("TIMING: FileToTextTransformer.transform() took {}ms for {}", fileTransformDuration, resourceUriKey);
                 if (transformationResults != null) {
                     if (transformationResults.size() == 1) {
-                        FileToTextTransformer.TransformationResult first = transformationResults.get(0);
+                        FileToTextTransformer.TransformationResult first = transformationResults.getFirst();
                         processorMemory.put(resourceUriKey, first.text());
                         List<File> files = first.files();
                         if (files != null) {

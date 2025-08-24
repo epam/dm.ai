@@ -156,7 +156,7 @@ public class DialAIClient extends AbstractRestClient implements AI {
                 content = "";
             }
         } else {
-            content = choices.get(0).getMessage().getContent();
+            content = choices.getFirst().getMessage().getContent();
         }
         if (conversationObserver != null) {
             conversationObserver.addMessage(new ConversationObserver.Message(model, content));
@@ -188,7 +188,7 @@ public class DialAIClient extends AbstractRestClient implements AI {
 
             if (message.getFiles() != null && !message.getFiles().isEmpty()) {
                 // Assuming we process only the first file as an image, similar to the existing chat method
-                File imageFile = message.getFiles().get(0);
+                File imageFile = message.getFiles().getFirst();
                 String extension = ImageUtils.getExtension(imageFile);
                 String imageBase64 = ImageUtils.convertToBase64(imageFile, "png"); // Assuming png, or derive from extension
 
@@ -220,7 +220,7 @@ public class DialAIClient extends AbstractRestClient implements AI {
 
     @Override
     public String chat(String model, String message, List<File> files) throws Exception {
-        return chat(model, message, files != null && !files.isEmpty() ? files.get(0) : null);
+        return chat(model, message, files != null && !files.isEmpty() ? files.getFirst() : null);
     }
 
     public String chat(String model, String message) throws Exception {

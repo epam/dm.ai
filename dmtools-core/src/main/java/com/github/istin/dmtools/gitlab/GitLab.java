@@ -63,7 +63,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
             List<IPullRequest> pullRequests = JSONModel.convertToModels(GitLabPullRequest.class, new JSONArray(response));
             allPullRequests.addAll(pullRequests);
-            if (startDate != null && !pullRequests.isEmpty() && pullRequests.get(pullRequests.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
+            if (startDate != null && !pullRequests.isEmpty() && pullRequests.getLast().getCreatedDate() < startDate.getTimeInMillis()) {
                 break;
             }
             if (!checkAllRequests || pullRequests.size() < perPage) {
