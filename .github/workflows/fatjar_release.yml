@@ -23,6 +23,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           cache-key-suffix: '-release'
+          install-playwright: 'false'
 
       - name: Build with Gradle
         id: gradle

@@ -46,6 +46,7 @@ runs:
 
     - name: Cache Node modules
       uses: actions/cache@v4
+      if: ${{ inputs.install-playwright == 'true' }}
       with:
         path: |
           ~/.npm
@@ -57,6 +58,7 @@ runs:
 
     - name: Cache Playwright browsers
       uses: actions/cache@v4
+      if: ${{ inputs.install-playwright == 'true' }}
       with:
         path: |
           ~/.cache/ms-playwright
@@ -68,11 +70,38 @@ runs:
           ${{ runner.os }}-playwright-${{ hashFiles('**/package*.json') }}-
           ${{ runner.os }}-playwright-
 
-    - name: Install Playwright
+    - name: Setup package.json if needed
       shell: bash
+      if: ${{ inputs.install-playwright == 'true' }}
       run: |
-        npm init -y
-        npm install -D @playwright/test
+        # Only create package.json if it doesn't exist
+        if [ ! -f package.json ]; then
+          echo "📦 Creating package.json..."
+          npm init -y
+        else
+          echo "📦 Using existing package.json"
+        fi
+
+    - name: Install Playwright dependencies
+      shell: bash  
+      if: ${{ inputs.install-playwright == 'true' }}
+      run: |
+        # Check if @playwright/test is already installed
+        if [ -d "node_modules/@playwright/test" ] && [ -f "node_modules/@playwright/test/package.json" ]; then
+          echo "✅ @playwright/test already installed (from cache)"
+          PLAYWRIGHT_VERSION=$(cat node_modules/@playwright/test/package.json | grep '"version"' | cut -d'"' -f4)
+          echo "📦 Cached version: $PLAYWRIGHT_VERSION"
+        else
+          echo "📥 Installing @playwright/test..."
+          npm install -D @playwright/test --prefer-offline --no-audit --progress=false
+          echo "✅ @playwright/test installation completed"
+        fi
+        
+        # Verify playwright CLI is available
+        if ! command -v npx >/dev/null 2>&1; then
+          echo "❌ npx not available"
+          exit 1
+        fi
         
         # First check if browsers are available
         PLAYWRIGHT_CACHE_DIR=$(npx playwright --version > /dev/null 2>&1 && echo "$HOME/.cache/ms-playwright" || echo "")
@@ -124,6 +153,13 @@ runs:
         npx playwright --version
         echo "📊 Cache directory size after installation:"
         du -sh ~/.cache/ms-playwright 2>/dev/null || echo "Cache directory not found"
+        
+    - name: Skip Playwright installation
+      shell: bash
+      if: ${{ inputs.install-playwright == 'false' }}
+      run: |
+        echo "⏭️ Skipping Playwright installation (install-playwright: false)"
+        echo "✅ Unit tests don't require Playwright - saving time and avoiding npm rate limits"
 
     - name: Install xmllint
       shell: bash
