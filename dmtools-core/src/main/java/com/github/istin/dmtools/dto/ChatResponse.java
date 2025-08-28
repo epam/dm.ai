@@ -13,6 +13,7 @@ public class ChatResponse {
     
     private String content;
     private String model;
+    private String ai; // AI integration ID used for the response
     private boolean success;
     private String error;
     private ResponseSource source;
@@ -43,14 +44,18 @@ public class ChatResponse {
     }
     
     public static ChatResponse success(String content, String model) {
-        return new ChatResponse(content, model, true, null, ResponseSource.llm(), null);
+        return new ChatResponse(content, model, null, true, null, ResponseSource.llm(), null);
     }
     
     public static ChatResponse success(String content, String model, ResponseSource source, List<AgentExecutionResponse> agentExecutions) {
-        return new ChatResponse(content, model, true, null, source, agentExecutions);
+        return new ChatResponse(content, model, null, true, null, source, agentExecutions);
+    }
+    
+    public static ChatResponse success(String content, String model, String ai) {
+        return new ChatResponse(content, model, ai, true, null, ResponseSource.llm(), null);
     }
     
     public static ChatResponse error(String error) {
-        return new ChatResponse(error, null, false, error, null, null);
+        return new ChatResponse(error, null, null, false, error, null, null);
     }
 } 

@@ -13,6 +13,7 @@ public class ChatRequest {
     
     private List<ChatMessage> messages;
     private String model;
+    private String ai; // Optional AI integration UUID for selecting specific AI provider
     private AgentToolsConfig agentTools;
     
     @Data
