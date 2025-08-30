@@ -30,7 +30,6 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
@@ -313,11 +312,14 @@ public class JSAIClient extends AbstractRestClient implements AI {
         String modelToUse = (modelName == null || modelName.trim().isEmpty()) ? this.defaultModel : modelName;
         logger.info("-------- messages to JSAI ({}/{}) --------", scriptName, modelToUse);
 
+        // Normalize message roles to ensure compatibility with this AI provider
+        Message[] normalizedMessages = normalizeMessageRoles(messages);
+
         JSONArray messagesJsonArray = new JSONArray();
         String firstUserMessageForObserver = null; 
 
-        for (int i = 0; i < messages.length; i++) {
-            Message msg = messages[i];
+        for (int i = 0; i < normalizedMessages.length; i++) {
+            Message msg = normalizedMessages[i];
             if (conversationObserver != null) {
                 conversationObserver.addMessage(new ConversationObserver.Message(msg.getRole(), msg.getText()));
             }
@@ -342,6 +344,32 @@ public class JSAIClient extends AbstractRestClient implements AI {
     @Override
     public String chat(Message... messages) throws Exception {
         return chat(this.defaultModel, messages);
+    }
+
+    @Override
+    public String roleName() {
+        try {
+            if (!(this.scriptEngine instanceof Invocable)) {
+                logger.warn("JavaScript engine does not support function invocation, falling back to default role name 'assistant'");
+                return "assistant";
+            }
+            
+            Invocable invocable = (Invocable) this.scriptEngine;
+            Object result = invocable.invokeFunction("getRoleName");
+            if (result != null) {
+                String roleName = result.toString();
+                logger.debug("JavaScript script returned role name: {}", roleName);
+                return roleName;
+            } else {
+                logger.debug("JavaScript getRoleName() returned null, using default 'assistant'");
+                return "assistant";
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to invoke getRoleName() from JavaScript ({}), falling back to default 'assistant': {}", 
+                        scriptName, e.getMessage());
+            // Fallback to default for backward compatibility
+            return "assistant";
+        }
     }
 
     @Override

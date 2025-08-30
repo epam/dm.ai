@@ -2,7 +2,6 @@ package com.github.istin.dmtools.ai.google;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
-import com.github.istin.dmtools.ai.js.JSAIClient;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
@@ -59,12 +58,12 @@ public class BasicGeminiAI {
         try {
             // Log the masked version to protect sensitive information
             JSONObject maskedConfig = SecurityUtils.maskSensitiveInformation(configJson);
-            logger.info("Initializing JSAIClient for Gemini via BasicGeminiAI with config: {}", maskedConfig.toString(2));
-            return new JSAIClient(configJson, observer);
+            logger.info("Initializing GeminiJSAIClient via BasicGeminiAI with config: {}", maskedConfig.toString(2));
+            return new GeminiJSAIClient(configJson, observer);
         } catch (Exception e) {
-            logger.error("Failed to create JSAIClient for Gemini via BasicGeminiAI: {}", e.getMessage(), e);
+            logger.error("Failed to create GeminiJSAIClient via BasicGeminiAI: {}", e.getMessage(), e);
             // Propagate as a runtime exception that AIComponentsModule can catch
-            throw new RuntimeException("Failed to create JSAIClient for Gemini via BasicGeminiAI", e);
+            throw new RuntimeException("Failed to create GeminiJSAIClient via BasicGeminiAI", e);
         }
     }
     
@@ -112,12 +111,12 @@ public class BasicGeminiAI {
         try {
             // Log the masked version to protect sensitive information
             JSONObject maskedConfig = SecurityUtils.maskSensitiveInformation(configJson);
-            logger.info("Initializing JSAIClient for Gemini via BasicGeminiAI with config: {}", maskedConfig.toString(2));
-            return new JSAIClient(configJson, observer);
+            logger.info("Initializing GeminiJSAIClient via BasicGeminiAI with config: {}", maskedConfig.toString(2));
+            return new GeminiJSAIClient(configJson, observer);
         } catch (Exception e) {
-            logger.error("Failed to create JSAIClient for Gemini via BasicGeminiAI: {}", e.getMessage(), e);
+            logger.error("Failed to create GeminiJSAIClient via BasicGeminiAI: {}", e.getMessage(), e);
             // Propagate as a runtime exception that AIComponentsModule can catch
-            throw new RuntimeException("Failed to create JSAIClient for Gemini via BasicGeminiAI", e);
+            throw new RuntimeException("Failed to create GeminiJSAIClient via BasicGeminiAI", e);
         }
     }
 } 

@@ -24,6 +24,44 @@ public interface AI {
 
     String chat(Message... messages) throws Exception;
 
+    /**
+     * Returns the role name used by this AI provider for assistant/model responses.
+     * This allows clients to use a consistent role naming while the AI provider
+     * handles the appropriate mapping internally.
+     * 
+     * @return "assistant" for OpenAI/Dial integrations, "model" for Gemini integration
+     */
+    String roleName();
+
+    /**
+     * Converts message roles to match this AI provider's expected role naming.
+     * Centralizes role mapping logic to support both "assistant" and "model" 
+     * from clients while ensuring provider-specific role names are used internally.
+     * Modifies roles in-place for optimal performance.
+     * 
+     * @param messages Array of messages that may contain mixed role names
+     * @return The same array with roles converted to provider-specific naming
+     */
+    default Message[] normalizeMessageRoles(Message... messages) {
+        if (messages == null || messages.length == 0) {
+            return messages;
+        }
+        
+        String expectedRole = roleName();
+        
+        // Directly modify roles in-place - much more efficient than creating new objects
+        for (Message message : messages) {
+            String role = message.getRole();
+            // Convert both "assistant" and "model" to provider-specific role
+            if (("assistant".equals(role) || "model".equals(role)) && !expectedRole.equals(role)) {
+                message.setRole(expectedRole);
+            }
+            // Other roles (user, system, etc.) remain unchanged
+        }
+        
+        return messages; // Return the same array with modified roles
+    }
+
     class Utils {
 
         public static Boolean chatAsBoolean(AI ai, String model, String message) throws Exception {

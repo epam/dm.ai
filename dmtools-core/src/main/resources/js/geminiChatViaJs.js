@@ -101,7 +101,13 @@
         }
     }
 
+    // Function to return the role name used by Gemini for assistant/model responses
+    function getRoleName() {
+        return "model";
+    }
+
     // graaljs-java-production-bindings-commonjs-footer-pre
     global.handleChat = handleChat;
+    global.getRoleName = getRoleName;
 })(this);
 // graaljs-java-production-bindings-commonjs-footer-post 

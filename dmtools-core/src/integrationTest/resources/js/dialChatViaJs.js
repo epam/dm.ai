@@ -140,4 +140,9 @@ function handleChat(messagesString, modelToUse, metadataString, javaClient) {
         javaClient.jsLogErrorWithException("Exception in OpenAI JS handleChat: " + e.toString(), stack);
         return "Error: Exception in JavaScript - " + e.toString();
     }
+}
+
+// Function to return the role name used by DIAL/OpenAI for assistant/model responses
+function getRoleName() {
+    return "assistant";
 } 
