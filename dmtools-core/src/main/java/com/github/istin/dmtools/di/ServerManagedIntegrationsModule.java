@@ -562,4 +562,16 @@ public class ServerManagedIntegrationsModule {
             throw new RuntimeException("Failed to create custom Gemini AI", e);
         }
     }
+    
+    /**
+     * Public method to create AI instance directly from the module.
+     * This allows external services to use the module's AI creation logic
+     * without duplicating the implementation.
+     * 
+     * @return AI instance created using the module's logic
+     */
+    public AI createAI() {
+        ConversationObserver observer = provideConversationObserver();
+        return provideAI(observer);
+    }
 } 
