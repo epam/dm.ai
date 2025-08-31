@@ -50,6 +50,9 @@ dependencies {
     api "org.apache.logging.log4j:log4j-api:${versions.log4j}"
     api "org.apache.logging.log4j:log4j-core:${versions.log4j}"
     api "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
+    
+    // JBoss Logging - explicitly add to prevent version conflicts
+    api 'org.jboss.logging:jboss-logging:3.5.3.Final'
 
     // Apache Commons
     api 'commons-io:commons-io:2.14.0'
@@ -63,8 +66,9 @@ dependencies {
     api 'org.jxls:jxls:2.14.0'
     api 'org.jxls:jxls-poi:2.14.0'
     api 'org.jxls:jxls-reader:2.1.0'
-    api 'org.apache.poi:poi:4.1.1'
-    api 'org.apache.poi:poi-ooxml:3.17'
+    // Apache POI dependencies - ensure consistent versions
+    api 'org.apache.poi:poi:5.2.2'
+    api 'org.apache.poi:poi-ooxml:5.2.2'
     api 'org.apache.pdfbox:pdfbox:3.0.2'
     api 'io.github.furstenheim:copy_down:1.1'
 
@@ -148,6 +152,9 @@ dependencies {
         force "org.apache.logging.log4j:log4j-core:${versions.log4j}"
         force "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
         force "io.swagger.core.v3:swagger-annotations:2.2.15"
+        force "org.jboss.logging:jboss-logging:3.5.3.Final"
+        force "org.apache.poi:poi:5.2.2"
+        force "org.apache.poi:poi-ooxml:5.2.2"
 
         // Handle transitive dependencies
         eachDependency { DependencyResolveDetails details ->
@@ -167,6 +174,14 @@ dependencies {
             if (details.requested.group == 'org.apache.logging.log4j') {
                 if (details.requested.name in ['log4j-api', 'log4j-core', 'log4j-slf4j-impl']) {
                     details.useVersion versions.log4j
+                }
+            }
+            if (details.requested.group == 'org.jboss.logging') {
+                details.useVersion '3.5.3.Final'
+            }
+            if (details.requested.group == 'org.apache.poi') {
+                if (details.requested.name in ['poi', 'poi-ooxml', 'poi-ooxml-lite']) {
+                    details.useVersion '5.2.2'
                 }
             }
         }
