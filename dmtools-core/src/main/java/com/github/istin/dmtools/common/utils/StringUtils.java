@@ -340,7 +340,7 @@ public class StringUtils {
             return "";
         }
         // Simple markdown conversion - can be enhanced later
-        return text.replace("\n", "  \n"); // Markdown line break
+        return MarkdownToJiraConverter.convertToJiraMarkdown(text);
     }
 
     /**
