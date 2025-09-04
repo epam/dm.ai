@@ -5,8 +5,6 @@ import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
-import com.github.istin.dmtools.mcp.MCPTool;
-import com.github.istin.dmtools.mcp.MCPParam;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,6 +28,8 @@ public class BasicJiraClient extends JiraClient<Ticket> {
     private static final String[] JIRA_EXTRA_FIELDS;
 
     private static final String JIRA_EXTRA_FIELDS_PROJECT;
+
+    private static final int JIRA_SEARCH_MAX_RESULTS;
 
     public static final String[] DEFAULT_QUERY_FIELDS = {
             Fields.SUMMARY,
@@ -63,6 +63,7 @@ public class BasicJiraClient extends JiraClient<Ticket> {
         SLEEP_TIME_REQUEST = propertyReader.getSleepTimeRequest();
         JIRA_EXTRA_FIELDS = propertyReader.getJiraExtraFields();
         JIRA_EXTRA_FIELDS_PROJECT = propertyReader.getJiraExtraFieldsProject();
+        JIRA_SEARCH_MAX_RESULTS = propertyReader.getJiraMaxSearchResults();
     }
 
 
@@ -76,14 +77,13 @@ public class BasicJiraClient extends JiraClient<Ticket> {
             if (BASE_PATH == null || BASE_PATH.isEmpty()) {
                 return null;
             }
-            BasicJiraClient basicJiraClient = new BasicJiraClient();
-            instance = basicJiraClient;
+            instance = new BasicJiraClient();
         }
         return instance;
     }
 
     public BasicJiraClient() throws IOException {
-        super(BASE_PATH, TOKEN);
+        super(BASE_PATH, TOKEN, JIRA_SEARCH_MAX_RESULTS);
         if (AUTH_TYPE != null) {
             setAuthType(AUTH_TYPE);
         }
@@ -92,8 +92,7 @@ public class BasicJiraClient extends JiraClient<Ticket> {
         setSleepTimeRequest(SLEEP_TIME_REQUEST);
         setClearCache(IS_JIRA_CLEAR_CACHE);
 
-        List<String> defaultFields = new ArrayList<>();
-        defaultFields.addAll(Arrays.asList(DEFAULT_QUERY_FIELDS));
+        List<String> defaultFields = new ArrayList<>(Arrays.asList(DEFAULT_QUERY_FIELDS));
 
         if (JIRA_EXTRA_FIELDS_PROJECT != null && JIRA_EXTRA_FIELDS != null) {
             customCodesOfConfigFields = new String[JIRA_EXTRA_FIELDS.length];

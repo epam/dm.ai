@@ -126,6 +126,7 @@ public class ServerManagedIntegrationsModule {
                 String basePath = jiraConfig.optString("JIRA_BASE_PATH", "");
                 String authType = jiraConfig.optString("JIRA_AUTH_TYPE", "Basic");
                 String extraFields = jiraConfig.optString("JIRA_EXTRA_FIELDS_PROJECT", "");
+                int maxSearchResults = jiraConfig.optInt("JIRA_MAX_SEARCH_RESULTS", -1);
                 
                 // Handle authentication - priority: email+token combination > legacy token
                 String token = "";
@@ -143,8 +144,8 @@ public class ServerManagedIntegrationsModule {
                 }
                 
                 if (!basePath.isEmpty() && !token.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials");
-                    return new CustomServerManagedJiraClient(basePath, token, authType, extraFields);
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials (maxSearchResults=" + maxSearchResults + ")");
+                    return new CustomServerManagedJiraClient(basePath, token, authType, extraFields, maxSearchResults);
                 } else {
                     System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (JIRA_BASE_PATH=" + 
                         (basePath.isEmpty() ? "empty" : basePath) + ", token=" + (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
@@ -169,9 +170,9 @@ public class ServerManagedIntegrationsModule {
         private final String[] defaultJiraFields;
         private final String[] extendedJiraFields;
         
-        public CustomServerManagedJiraClient(String basePath, String token, String authType, String extraFields) throws IOException {
-            // Call parent constructor with resolved credentials
-            super(basePath, token);
+        public CustomServerManagedJiraClient(String basePath, String token, String authType, String extraFields, int maxSearchResults) throws IOException {
+            // Call parent constructor with resolved credentials and maxSearchResults
+            super(basePath, token, maxSearchResults);
             
             // Set auth type if provided
             if (authType != null) {
@@ -187,6 +188,8 @@ public class ServerManagedIntegrationsModule {
             setClearCache(true);  // This cleans the cache folder
             setCacheGetRequestsEnabled(true);  // Enable caching for better performance
             System.out.println("✅ [CustomServerManagedJiraClient] Cache cleaned and enabled for performance optimization");
+            System.out.println("✅ [CustomServerManagedJiraClient] Max search results configured: " + 
+                (maxSearchResults == -1 ? "unlimited" : String.valueOf(maxSearchResults)));
             
             // Initialize field arrays exactly like BasicJiraClient
             List<String> defaultFields = new ArrayList<>(Arrays.asList(BasicJiraClient.DEFAULT_QUERY_FIELDS));

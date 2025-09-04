@@ -45,31 +45,41 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
 public abstract class JiraClient<T extends Ticket> implements RestClient, TrackerClient<T>, UriToObject {
+    public static final String SUCCESS = "Success";
     private final Logger logger;  // Changed from static to instance member
     public static final String PARAM_JQL = "jql";
+    public static final String PARAM_MAX_RESULTS = "maxResults";
     public static final String PARAM_FIELDS = "fields";
     public static final String PARAM_START_AT = "startAt";
+    public static final String NEXT_PAGE_TOKEN = "nextPageToken";
+    
+    // Constants
+    private static final int UNLIMITED_RESULTS = -1;
+
     private final OkHttpClient client;
-    private String basePath;
+    private final String basePath;
     private boolean isReadCacheGetRequestsEnabled = true;
+    @Setter
+    @Getter
     private boolean isWaitBeforePerform = false;
     @Setter
     @Getter
     private long sleepTimeRequest;
-    private String authorization;
+    private final String authorization;
+    @Getter
     private String cacheFolderName;
     private boolean isClearCache = false;
     @Setter
     @Getter
     private String authType = "Basic";
-    private Long instanceCreationTime = System.currentTimeMillis();
+    private final Long instanceCreationTime = System.currentTimeMillis();
 
+    @Setter
     private boolean isLogEnabled = true;
     
     // Cache manager for keys logic only (field mappings, Cloud/Server detection, etc.)
@@ -83,6 +93,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     
     // Special marker for cached negative results
     private static final String FIELD_NOT_FOUND_MARKER = "__FIELD_NOT_FOUND__";
+    private final int maxResults;
 
     public void setClearCache(boolean clearCache) throws IOException {
         isClearCache = clearCache;
@@ -98,20 +109,25 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return key.split("-")[0].toUpperCase();
     }
 
-    public void setLogEnabled(boolean logEnabled) {
-        isLogEnabled = logEnabled;
+    public JiraClient(String basePath, String authorization) throws IOException {
+        this(basePath, authorization, LogManager.getLogger(JiraClient.class), -1);
     }
 
     // Default constructor - backward compatibility
-    public JiraClient(String basePath, String authorization) throws IOException {
-        this(basePath, authorization, LogManager.getLogger(JiraClient.class));
+    public JiraClient(String basePath, String authorization, int maxResults) throws IOException {
+        this(basePath, authorization, LogManager.getLogger(JiraClient.class), maxResults);
     }
-    
-    // NEW: Constructor with logger injection for server-managed mode
+
     public JiraClient(String basePath, String authorization, Logger logger) throws IOException {
+        this(basePath, authorization, logger, -1);
+    }
+
+    // NEW: Constructor with logger injection for server-managed mode
+    public JiraClient(String basePath, String authorization, Logger logger, int maxResults) throws IOException {
         this.basePath = basePath;
         this.authorization = authorization;
         this.logger = logger != null ? logger : LogManager.getLogger(JiraClient.class);
+        this.maxResults = maxResults;
         Builder builder = new Builder();
         builder.connectTimeout(60, TimeUnit.SECONDS);
         builder.writeTimeout(60, TimeUnit.SECONDS);
@@ -142,26 +158,12 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         initCache();
     }
 
-
-    @Override
-    @MCPTool(
-            name = "jira_get_ticket_browse_url",
-            description = "return jira ticket url to open in broswer",
-            integration = "jira",
-            category = "data_extraction"
-    )
-    public String getTicketBrowseUrl(@MCPParam(name = "ticket_key", description = "The Jira ticket key to to generate url to", required = true)
-                                         String ticketKey
-    ) {
+    public String getTicketBrowseUrl(String ticketKey) {
         return basePath + "/browse/" + ticketKey;
     }
 
     public void setCacheGetRequestsEnabled(boolean cacheGetRequestsEnabled) {
         isReadCacheGetRequestsEnabled = cacheGetRequestsEnabled;
-    }
-
-    public GenericRequest search() {
-        return new GenericRequest(this, path("search"));
     }
 
     public void deleteIssueLink(String id) throws IOException {
@@ -174,15 +176,29 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String deleteTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to delete", required = true) String ticketKey) throws IOException {
+    public String deleteTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to delete", required = true, example = "PRJ-123") String ticketKey) throws IOException {
         GenericRequest deleteRequest = new GenericRequest(this, path("issue/" + ticketKey));
         String response = deleteRequest.delete();
         log("Ticket deleted: " + ticketKey);
+        if (response == null || response.isEmpty()) {
+            return SUCCESS;
+        }
         return response;
     }
 
     @Override
-    public String assignTo(String ticketKey, String userName) throws IOException {
+    @MCPTool(
+            name = "jira_assign_ticket_to",
+            description = "Assigns a Jira ticket to user",
+            integration = "jira",
+            category = "ticket_management"
+    )
+    public String assignTo(
+            @MCPParam(name = "ticketKey", description = "The Jira ticket key to delete", required = true, example = "PRJ-123")
+            String ticketKey,
+            @MCPParam(name = "userName", description = "The Jira user name to assign to", required = true, example = "email@email.com")
+            String userName
+    ) throws IOException {
         GenericRequest jiraRequest = new GenericRequest(this, path("issue/" + ticketKey + "/assignee"));
         jiraRequest.setBody(new JSONObject().put("name", userName).toString());
         return jiraRequest.put();
@@ -282,6 +298,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     public static abstract class ProgressPerformer implements Performer<Ticket> {
 
+        @Deprecated
         public abstract boolean perform(Ticket ticket, int index, int start, int end) throws Exception;
 
         @Override
@@ -292,8 +309,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @Override
     @MCPTool(
-            name = "jira_search_and_perform",
-            description = "Search for Jira tickets using JQL and perform an action on each ticket",
+            name = "jira_search_by_jql",
+            description = "Search for Jira tickets using JQL and returns all results",
             integration = "jira",
             category = "search"
     )
@@ -311,7 +328,70 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     public void searchAndPerform(Performer<T> performer, String searchQueryJQL, String[] fields) throws Exception {
         // Resolve field names to support user-friendly custom field names
         String[] resolvedFields = resolveFieldNamesForSearch(searchQueryJQL, fields);
-        
+        if (isCloudJira()) {
+            SearchResult searchResults = searchByPage(searchQueryJQL, null, resolvedFields);
+            if (searchResults == null) {
+                logger.error("Received null search results for JQL: {}", searchQueryJQL);
+                throw new RestClient.RestClientException("Search returned null results", "null");
+            }
+            
+            JSONArray errorMessages = searchResults.getErrorMessages();
+            if (errorMessages != null && errorMessages.length() > 0) {
+                logger.error("Search failed with errors: {}", errorMessages);
+                throw new RestClient.RestClientException("Search failed: " + errorMessages.toString(), errorMessages.toString());
+            }
+            
+            boolean isBreak = false;
+            int ticketIndex = 0;
+            while (true) {
+                List<Ticket> tickets = searchResults.getIssues();
+                if (tickets == null || tickets.isEmpty()) {
+                    log("No more tickets to process");
+                    break;
+                }
+                
+                for (Ticket ticket : tickets) {
+                    if (performer instanceof ProgressPerformer) {
+                        isBreak = ((ProgressPerformer) performer).perform(createTicket(ticket), ticketIndex, -1, -1);
+                    } else {
+                        isBreak = performer.perform(createTicket(ticket));
+                    }
+                    if (isBreak) {
+                        break;
+                    }
+                    ticketIndex++;
+                }
+                if (isBreak) {
+                    break;
+                }
+                if (searchResults.isLast()) {
+                    break;
+                }
+                
+                String nextToken = searchResults.getNextPageToken();
+                if (nextToken == null || nextToken.isEmpty()) {
+                    log("No next page token available, ending pagination");
+                    break;
+                }
+                
+                log("current index : " + ticketIndex);
+                try {
+                    searchResults = searchByPage(searchQueryJQL, nextToken, resolvedFields);
+                    if (searchResults == null) {
+                        log("Received null search results during pagination, ending");
+                        break;
+                    }
+                } catch (Exception e) {
+                    logger.error("Error during pagination at token {}: {}", nextToken, e.getMessage());
+                    throw new RestClient.RestClientException("Pagination failed: " + e.getMessage(), e.toString());
+                }
+            }
+        } else {
+            legacyServerJiraSearch(performer, searchQueryJQL, resolvedFields);
+        }
+    }
+
+    private void legacyServerJiraSearch(Performer<T> performer, String searchQueryJQL, String[] resolvedFields) throws Exception {
         int startAt = 0;
         SearchResult searchResults = search(searchQueryJQL, startAt, resolvedFields);
         JSONArray errorMessages = searchResults.getErrorMessages();
@@ -355,15 +435,15 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             maxResults = searchResults.getMaxResults();
             total = searchResults.getTotal();
         }
-
     }
 
     @MCPTool(
             name = "jira_search_with_pagination",
-            description = "Search for Jira tickets using JQL with pagination support",
+            description = "[Deprecated] Search for Jira tickets using JQL with pagination support",
             integration = "jira",
             category = "search"
     )
+    @Deprecated
     public SearchResult search(
         @MCPParam(name = "jql", description = "JQL query string to search for tickets", required = true, example = "project = PROJ AND status = Open")
         String jql,
@@ -375,7 +455,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         // Resolve field names to support user-friendly custom field names
         String[] resolvedFields = resolveFieldNamesForSearch(jql, fields);
         
-        GenericRequest jqlSearchRequest = search().
+        GenericRequest jqlSearchRequest = new GenericRequest(this, path("search")).
                 param(PARAM_JQL, jql)
                 .param(PARAM_FIELDS, StringUtils.concatenate(",", resolvedFields))
                 .param(PARAM_START_AT, String.valueOf(startAt));
@@ -385,6 +465,53 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             clearRequestIfExpired(jqlSearchRequest, System.currentTimeMillis() - expired*60*60*1000);
         }
 
+        try {
+            String body = jqlSearchRequest.execute();
+            return new SearchResult(body);
+        } catch (JSONException e) {
+            clearCache(jqlSearchRequest);
+            String body = jqlSearchRequest.execute();
+            try {
+                return new SearchResult(body);
+            } catch (JSONException e1) {
+                logger.error("response: {}", body);
+                throw e1;
+            }
+        }
+    }
+
+    @MCPTool(
+            name = "jira_search_by_page",
+            description = "Search for Jira tickets using JQL with paging support",
+            integration = "jira",
+            category = "search"
+    )
+    public SearchResult searchByPage(
+            @MCPParam(name = "jql", description = "JQL query string to search for tickets", required = true, example = "project = PROJ AND status = Open")
+            String jql,
+            @MCPParam(name = "nextPageToken", description = "Next Page Token from previous response, empty by default for 1 page", required = true, example = "AasvvasasaSASdada")
+            String nextPageToken,
+            @MCPParam(name = "fields", description = "Array of field names to include in the response", required = true, example = "['summary', 'status', 'assignee']")
+            String[] fields
+    ) throws IOException {
+        // Resolve field names to support user-friendly custom field names
+        String[] resolvedFields = resolveFieldNamesForSearch(jql, fields);
+
+        GenericRequest jqlSearchRequest = new GenericRequest(this, path("search/jql")).
+                param(PARAM_JQL, jql)
+                .param(PARAM_FIELDS, StringUtils.concatenate(",", resolvedFields))
+                ;
+        if (nextPageToken != null && !nextPageToken.isEmpty()) {
+            jqlSearchRequest.param(NEXT_PAGE_TOKEN, nextPageToken);
+        }
+        if (maxResults != UNLIMITED_RESULTS) {
+            jqlSearchRequest.param(PARAM_MAX_RESULTS, String.valueOf(maxResults));
+        }
+
+        Integer expired = jqlExpirationInHours.get(jql);
+        if (expired != null) {
+            clearRequestIfExpired(jqlSearchRequest, System.currentTimeMillis() - expired*60*60*1000);
+        }
 
         try {
             String body = jqlSearchRequest.execute();
@@ -495,17 +622,17 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @MCPTool(
             name = "jira_get_subtasks",
-            description = "Get all subtasks of a specific Jira ticket",
+            description = "Get all subtasks of a specific Jira ticket using jql: parent = PRJ-123 and issueType in (subtask, sub-task, 'sub task')",
             integration = "jira",
             category = "ticket_management"
     )
-    public List<T> performGettingSubtask(@MCPParam(name = "ticket", description = "The parent ticket key to get subtasks for", required = true) String ticket) throws Exception {
+    public List<T> performGettingSubtask(@MCPParam(name = "ticketKey", description = "The parent ticket key to get subtasks for", required = true) String ticketKey) throws Exception {
         if (subtasksCallIsNotSupported) {
             return Collections.emptyList();
         }
         
         // Get subtask issue types for the project
-        List<IssueType> issueTypes = getIssueTypes(ticket.split("-")[0]);
+        List<IssueType> issueTypes = getIssueTypes(ticketKey.split("-")[0]);
         List<String> subtaskTypeNames = issueTypes.stream()
                 .filter(new Predicate<IssueType>() {
                     @Override
@@ -521,7 +648,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
         if (subtaskTypeNames.isEmpty()) {
             subtasksCallIsNotSupported = true;
-            log("No subtask types found for project " + ticket.split("-")[0] + ", returning empty list");
+            log("No subtask types found for project " + ticketKey.split("-")[0] + ", returning empty list");
             return Collections.emptyList();
         }
 
@@ -534,7 +661,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                     .map(name -> "'" + name + "'")
                     .toArray(String[]::new);
                 String issueTypeList = StringUtils.concatenate(", ", quotedNames);
-                String jql = "parent = " + ticket + " and issueType in (" + issueTypeList + ")";
+                String jql = "parent = " + ticketKey + " and issueType in (" + issueTypeList + ")";
                 
                 return searchAndPerform(jql, getDefaultQueryFields());
             } catch (Exception e) {
@@ -545,7 +672,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         } else {
             // For Server Jira, try the dedicated subtasks API endpoint first
             log("Using dedicated subtasks API endpoint for Server Jira instance");
-            GenericRequest subtasks = getSubtasks(ticket);
+            GenericRequest subtasks = getSubtasks(ticketKey);
             try {
                 return JSONModel.convertToModels(getTicketClass(), new JSONArray(subtasks.execute()));
             } catch (Exception e) {
@@ -557,7 +684,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                         .map(name -> "'" + name + "'")
                         .toArray(String[]::new);
                     String issueTypeList = StringUtils.concatenate(", ", quotedNames);
-                    String jql = "parent = " + ticket + " and issueType in (" + issueTypeList + ")";
+                    String jql = "parent = " + ticketKey + " and issueType in (" + issueTypeList + ")";
                     
                     return searchAndPerform(jql, getDefaultQueryFields());
                 } catch (Exception ex) {
@@ -841,7 +968,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     public String createTicketInProjectMcp(@MCPParam(name = "project", description = "The Jira project key to create the ticket in (e.g., PROJ)", required = true) String project,
                                          @MCPParam(name = "issueType", description = "The type of issue to create (e.g., Bug, Story, Task)", required = true) String issueType,
                                          @MCPParam(name = "summary", description = "The ticket summary/title (e.g., Fix login issue)", required = true) String summary,
-                                         @MCPParam(name = "description", description = "The ticket description (e.g., Users are unable to log in with valid credentials)", required = true) String description) throws IOException {
+                                         @MCPParam(name = "description", description = "The ticket description. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists", required = true) String description) throws IOException {
         return createTicketInProject(project, issueType, summary, description, null);
     }
 
@@ -861,7 +988,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             category = "ticket_management"
     )
     public String createTicketInProjectWithJson(@MCPParam(name = "project", description = "The Jira project key to create the ticket in (e.g., PROJ)", required = true) String project,
-                                              @MCPParam(name = "fieldsJson", description = "JSON object containing ticket fields in Jira format (e.g., {\"summary\": \"Ticket Summary\", \"description\": \"Ticket Description\", \"issuetype\": {\"name\": \"Task\"}, \"priority\": {\"name\": \"High\"}})", required = true) JSONObject fieldsJson) throws IOException {
+                                              @MCPParam(name = "fieldsJson", description = "JSON object containing ticket fields in Jira format (e.g., {\"summary\": \"Ticket Summary\", \"description\": \"Ticket Description\", \"issuetype\": {\"name\": \"Task\"}, \"priority\": {\"name\": \"High\"}}), Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists", required = true) JSONObject fieldsJson) throws IOException {
         GenericRequest jiraRequest = createTicket();
 
         JSONObject jsonObject = new JSONObject();
@@ -889,15 +1016,9 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     }
 
 
-    @MCPTool(
-            name = "jira_get_issues_in_parent_by_type",
-            description = "Get all issues in an parent filtered by issue type",
-            integration = "jira",
-            category = "ticket_management"
-    )
-    public List<Ticket> issuesInParentByType(@MCPParam(name = "key", description = "The parent key to get issues from", required = true) String key,
-                                          @MCPParam(name = "type", description = "The issue type to filter by", required = true) String type, 
-                                          @MCPParam(name = "fields", description = "Optional array of fields to include", required = false) String... fields) throws Exception {
+    public List<Ticket> issuesInParentByType(String key,
+                                          String type,
+                                          String... fields) throws Exception {
         List<Ticket> tickets = new ArrayList<>();
         issuesInParentByType(key, ticket -> {
             tickets.add(ticket);
@@ -1374,7 +1495,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @MCPTool(
             name = "jira_update_field",
-            description = "Update a specific field of a Jira ticket. Supports both custom field IDs (e.g., 'customfield_10091') and user-friendly field names (e.g., 'Diagram')",
+            description = "Update a specific field of a Jira ticket. Supports both custom field IDs (e.g., description, 'customfield_10091') and user-friendly field names (e.g., 'Diagram')",
             integration = "jira",
             category = "ticket_management"
     )
@@ -1469,7 +1590,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     @Override
     @MCPTool(
             name = "jira_execute_request",
-            description = "Execute a custom HTTP request to Jira API",
+            description = "Execute a custom HTTP GET request to Jira API with auth. Can be used to perform any jira get requests which are required auth.",
             integration = "jira",
             category = "api_operations"
     )
@@ -1581,10 +1702,6 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     private void closeAllConnections() {
         //client.connectionPool().evictAll();
-    }
-
-    public String getCacheFolderName() {
-        return cacheFolderName;
     }
 
     public static final MediaType JSON
@@ -1719,7 +1836,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @MCPTool(
             name = "jira_get_transitions",
-            description = "Get all available transitions for a Jira ticket",
+            description = "Get all available transitions(statuses, workflows) for a Jira ticket",
             integration = "jira",
             category = "ticket_management"
     )
@@ -1730,7 +1847,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     @Override
     @MCPTool(
             name = "jira_move_to_status",
-            description = "Move a Jira ticket to a specific status",
+            description = "Move a Jira ticket to a specific status (workflow, transition)",
             integration = "jira",
             category = "ticket_management"
     )
@@ -1749,7 +1866,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @MCPTool(
             name = "jira_move_to_status_with_resolution",
-            description = "Move a Jira ticket to a specific status with resolution",
+            description = "Move a Jira ticket to a specific status (workflow, transition) with resolution",
             integration = "jira",
             category = "ticket_management"
     )
@@ -1769,11 +1886,11 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @MCPTool(
             name = "jira_clear_field",
-            description = "Clear a specific field value in a Jira ticket",
+            description = "Clear (delete value) a specific field value in a Jira ticket",
             integration = "jira",
             category = "ticket_management"
     )
-    public String clearField(@MCPParam(name = "ticket", description = "The Jira ticket key to clear field from", required = true) String ticket, 
+    public String clearField(@MCPParam(name = "ticketKey", description = "The Jira ticket key to clear field from", required = true) String ticket,
                            @MCPParam(name = "field", description = "The field name to clear", required = true) String field) throws IOException {
         GenericRequest request = getTicket(ticket);
         JSONObject clearedFieldJSON = new JSONObject().put(field,
@@ -1806,7 +1923,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String setTicketFixVersion(@MCPParam(name = "ticket", description = "The Jira ticket key to set fix version for", required = true) String ticket, 
+    public String setTicketFixVersion(@MCPParam(name = "ticketKey", description = "The Jira ticket key to set fix version for", required = true) String ticket,
                                     @MCPParam(name = "fixVersion", description = "The fix version name to set", required = true) String fixVersion) throws IOException {
         GenericRequest request = getTicket(ticket);
         JSONObject jsonObject;
@@ -2022,14 +2139,6 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             return "[" + notifierId + "]";
         }
         return "[~accountid:" + notifierId + "]";
-    }
-
-    public boolean isWaitBeforePerform() {
-        return isWaitBeforePerform;
-    }
-
-    public void setWaitBeforePerform(boolean waitBeforePerform) {
-        isWaitBeforePerform = waitBeforePerform;
     }
 
     @Override
@@ -2254,7 +2363,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @MCPTool(
             name = "jira_get_field_custom_code",
-            description = "Get the custom field code for a field name in a Jira project",
+            description = "Get the custom field code for a human friendly field name in a Jira project",
             integration = "jira",
             category = "project_management"
     )

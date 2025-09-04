@@ -120,6 +120,19 @@ public class PropertyReader {
 		return getValue("JIRA_EXTRA_FIELDS_PROJECT");
 	}
 
+    public int getJiraMaxSearchResults() {
+        String jiraMaxSearchResults = getValue("JIRA_MAX_SEARCH_RESULTS");
+        if (jiraMaxSearchResults == null || jiraMaxSearchResults.trim().isEmpty()) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(jiraMaxSearchResults.trim());
+        } catch (NumberFormatException e) {
+            System.err.println("Invalid JIRA_MAX_SEARCH_RESULTS value: " + jiraMaxSearchResults + ", using default -1");
+            return -1;
+        }
+    }
+
 	public String[] getJiraExtraFields() {
 		String value = getValue("JIRA_EXTRA_FIELDS");
 		if (value == null) {

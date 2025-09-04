@@ -13,6 +13,8 @@ public class SearchResult extends JSONModel {
     static final String TOTAL = "total";
     public static final String ISSUES = "issues";
     public static final String ERROR_MESSAGES = "errorMessages";
+    public static final String NEXT_PAGE_TOKEN = "nextPageToken";
+    public static final String IS_LAST = "isLast";
 
     public SearchResult() {
     }
@@ -29,16 +31,26 @@ public class SearchResult extends JSONModel {
         return getJSONArray(ERROR_MESSAGES);
     }
 
+    @Deprecated
     public int getMaxResults() {
         return getInt(MAX_RESULTS);
     }
 
+    @Deprecated
     public int getTotal() {
         return getInt(TOTAL);
     }
 
     public List<Ticket> getIssues() {
         return getModels(Ticket.class, ISSUES);
+    }
+
+    public boolean isLast() {
+        return getJSONObject().optBoolean(IS_LAST, false);
+    }
+
+    public String getNextPageToken() {
+        return getString(NEXT_PAGE_TOKEN);
     }
 
 }
