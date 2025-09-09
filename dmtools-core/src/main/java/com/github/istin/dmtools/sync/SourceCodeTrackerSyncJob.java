@@ -32,7 +32,7 @@ public class SourceCodeTrackerSyncJob extends AbstractJob<SourceCodeTrackerSyncP
 
     @Override
     public ResultItem runJob(SourceCodeTrackerSyncParams sourceCodeTrackerSyncParams) throws Exception {
-        List<SourceCode> sources = SourceCode.Impl.getConfiguredSourceCodes(new JSONArray());
+        List<SourceCode> sources = SourceCode.Impl.getConfiguredSourceCodes(null);
         for (SourceCode sourceCode : sources) {
             String defaultWorkspace = sourceCode.getDefaultWorkspace();
             String defaultRepository = sourceCode.getDefaultRepository();
