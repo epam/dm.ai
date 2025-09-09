@@ -46,7 +46,7 @@ public class SourceCodeTrackerSyncJobTest {
         when(params.getInProgressReopenedStatuses()).thenReturn(new String[]{});
 
         try (MockedStatic<SourceCode.Impl> sourceCodeMock = mockStatic(SourceCode.Impl.class)) {
-            sourceCodeMock.when(() -> SourceCode.Impl.getConfiguredSourceCodes(any(JSONArray.class)))
+            sourceCodeMock.when(() -> SourceCode.Impl.getConfiguredSourceCodes(any()))
                     .thenReturn(List.of(sourceCode));
 
             job.runJob(params);
