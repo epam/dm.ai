@@ -86,7 +86,7 @@ Loads JavaScript directly from GitHub repository
 #### Jira Operations (40+ tools)
 ```javascript
 // Get ticket information
-const ticket = jira_get_ticket({ticketKey: "PROJ-123"});
+const ticket = jira_get_ticket({key: "PROJ-123"});
 
 // Update fields
 jira_update_field({

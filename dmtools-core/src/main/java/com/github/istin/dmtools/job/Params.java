@@ -61,8 +61,6 @@ public class Params extends TrackerParams {
     @SerializedName(TRACKER_ITERATIONS)
     private int trackerIterations = 1;
 
-    @SerializedName(POST_ACTION)
-    private String postJSAction;
 
     @SerializedName(SourceCodeConfig._KEY)
     private SourceCodeConfig[] sourceCodeConfig;

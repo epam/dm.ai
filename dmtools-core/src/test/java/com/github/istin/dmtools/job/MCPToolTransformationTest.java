@@ -244,7 +244,7 @@ class MCPToolTransformationTest {
                 eq("jira_update_field"),
                 argThat(args -> {
                     Map<String, Object> argsMap = (Map<String, Object>) args;
-                    return "TEST-123".equals(argsMap.get("ticketKey")) &&
+                    return "TEST-123".equals(argsMap.get("key")) &&
                            "customField".equals(argsMap.get("field"));
                 }),
                 any(Map.class)
