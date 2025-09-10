@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import javax.inject.Inject;
@@ -20,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -80,6 +82,58 @@ public class JobJavaScriptBridge {
     }
     
     /**
+     * Convert Java objects to JavaScript-compatible format
+     */
+    private Object convertToJSCompatible(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        
+        if (obj instanceof Map) {
+            // Convert Map to JavaScript object that can be accessed with dot notation
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) obj;
+            JSONObject jsonObj = new JSONObject();
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                jsonObj.put(entry.getKey(), convertToJSCompatible(entry.getValue()));
+            }
+            // Parse JSONObject as JavaScript object
+            try {
+                return jsContext.eval("js", "(" + jsonObj.toString() + ")");
+            } catch (Exception e) {
+                logger.warn("Failed to parse JSON to JS object: {}", e.getMessage());
+                return jsonObj;
+            }
+        } else if (obj instanceof List) {
+            // Convert List to JavaScript array
+            @SuppressWarnings("unchecked")
+            List<Object> list = (List<Object>) obj;
+            JSONArray jsonArray = new JSONArray();
+            for (Object item : list) {
+                jsonArray.put(convertToJSCompatible(item));
+            }
+            try {
+                return jsContext.eval("js", "(" + jsonArray.toString() + ")");
+            } catch (Exception e) {
+                logger.warn("Failed to parse JSON array to JS array: {}", e.getMessage());
+                return jsonArray;
+            }
+        } else if (obj instanceof String || obj instanceof Number || obj instanceof Boolean) {
+            // Primitive types are already JS-compatible
+            return obj;
+        } else {
+            // For other objects, try to convert via JSON
+            try {
+                JSONObject jsonObj = new JSONObject(obj.toString());
+                return jsContext.eval("js", "(" + jsonObj.toString() + ")");
+            } catch (Exception e) {
+                // Fallback to string representation
+                return obj.toString();
+            }
+        }
+    }
+    
+    /**
      * Execute MCP tool from JavaScript
      */
     public Object executeToolFromJS(String toolName, Object jsArgs) {
@@ -111,7 +165,10 @@ public class JobJavaScriptBridge {
             logger.debug("Final args map for tool {}: {}", toolName, argsMap);
             
             // Execute using generated MCP infrastructure
-            return MCPToolExecutor.executeTool(toolName, argsMap, clientInstances);
+            Object result = MCPToolExecutor.executeTool(toolName, argsMap, clientInstances);
+            
+            // Convert result to JavaScript-compatible format
+            return convertToJSCompatible(result);
         } catch (Exception e) {
             logger.error("Tool execution failed for {}: {}", toolName, e.getMessage(), e);
             throw new RuntimeException("Tool execution failed: " + e.getMessage(), e);
@@ -162,25 +219,56 @@ public class JobJavaScriptBridge {
     private void exposeToolToJS(String toolName) {
         // Create a JavaScript function that calls the generated MCP executor
         String jsFunction = String.format("""
-            function %s(argsObj) {
+            function %s() {
                 // Handle both object parameter and individual arguments
                 var args = {};
-                if (typeof argsObj === 'object' && argsObj !== null) {
-                    // Object parameter - use directly
-                    args = argsObj;
+                
+                if (arguments.length === 1 && typeof arguments[0] === 'object' && arguments[0] !== null) {
+                    // Single object parameter - use directly
+                    args = arguments[0];
                 } else if (arguments.length > 0) {
-                    // Individual arguments - map to object
+                    // Individual arguments - map to proper parameter names based on tool
                     if ('%s'.includes('ai_chat')) {
                         args.message = arguments[0];
+                    } else if ('%s' === 'jira_create_ticket_basic') {
+                        args.project = arguments[0];
+                        args.issueType = arguments[1];
+                        args.summary = arguments[2];
+                        args.description = arguments[3];
+                    } else if ('%s' === 'jira_post_comment') {
+                        args.ticketKey = arguments[0];
+                        args.comment = arguments[1];
+                    } else if ('%s' === 'jira_update_field') {
+                        args.key = arguments[0];
+                        args.field = arguments[1];
+                        args.value = arguments[2];
+                    } else if ('%s' === 'confluence_create_page') {
+                        args.title = arguments[0];
+                        args.parentId = arguments[1];
+                        args.body = arguments[2];
+                        args.space = arguments[3];
+                    } else if ('%s' === 'confluence_content_by_title') {
+                        args.title = arguments[0];
                     } else {
-                        // For other tools, create object from first argument
-                        args = arguments[0] || {};
+                        // For other tools, create object from first argument if it's reasonable
+                        if (typeof arguments[0] === 'string') {
+                            // Try to guess the main parameter name
+                            if ('%s'.includes('search')) {
+                                args.query = arguments[0];
+                            } else if ('%s'.includes('get') || '%s'.includes('find')) {
+                                args.id = arguments[0];
+                            } else {
+                                args.value = arguments[0];
+                            }
+                        } else {
+                            args = arguments[0] || {};
+                        }
                     }
                 }
                 console.log('Calling tool %s with args:', JSON.stringify(args));
                 return executeToolViaJava('%s', args);
             }
-            """, toolName, toolName, toolName, toolName);
+            """, toolName, toolName, toolName, toolName, toolName, toolName, toolName, toolName, toolName, toolName, toolName, toolName);
             
         try {
             jsContext.eval("js", jsFunction);
