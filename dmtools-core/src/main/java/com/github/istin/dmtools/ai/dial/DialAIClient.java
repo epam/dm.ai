@@ -7,6 +7,8 @@ import com.github.istin.dmtools.ai.model.Metadata;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.utils.ImageUtils;
 import com.github.istin.dmtools.common.utils.RetryUtil;
+import com.github.istin.dmtools.mcp.MCPTool;
+import com.github.istin.dmtools.mcp.MCPParam;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import com.github.istin.dmtools.ai.dial.model.model.AIResponse;
 import com.github.istin.dmtools.ai.dial.model.model.Choice;
@@ -90,7 +92,12 @@ public class DialAIClient extends AbstractRestClient implements AI {
     }
 
     @Override
-    public String chat(String message) throws Exception {
+    @MCPTool(
+        name = "dial_ai_chat",
+        description = "Send a text message to Dial AI and get response",
+        integration = "ai"
+    )
+    public String chat(@MCPParam(name = "message", description = "Text message to send to AI") String message) throws Exception {
         return chat(model, message);
     }
 

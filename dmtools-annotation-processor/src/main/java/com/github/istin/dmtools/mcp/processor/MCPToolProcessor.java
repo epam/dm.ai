@@ -38,7 +38,7 @@ import java.util.Set;
  */
 @AutoService(Processor.class)
 @SupportedAnnotationTypes("com.github.istin.dmtools.mcp.MCPTool")
-@SupportedSourceVersion(SourceVersion.RELEASE_17)
+@SupportedSourceVersion(SourceVersion.RELEASE_23)
 public class MCPToolProcessor extends AbstractProcessor {
 
     private Types typeUtils;
@@ -383,7 +383,7 @@ public class MCPToolProcessor extends AbstractProcessor {
     private void generateToolSchemaMethod(PrintWriter out, MCPToolDefinition tool) {
         String methodName = "create" + toCamelCase(tool.getName()) + "Tool";
         out.println("    private static Map<String, Object> " + methodName + "() {");
-        out.println("        Map<String, Object> properties = new HashMap<>();");
+        out.println("        Map<String, Object> properties = new LinkedHashMap<>();");
         
         for (MCPParameterDefinition param : tool.getParameters()) {
             out.println("        properties.put(\"" + param.getName() + "\", Map.of(");

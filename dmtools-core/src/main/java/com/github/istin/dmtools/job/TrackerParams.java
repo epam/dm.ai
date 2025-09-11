@@ -4,6 +4,8 @@ import com.github.istin.dmtools.ai.model.Metadata;
 import com.google.gson.annotations.SerializedName;
 import lombok.*;
 
+import static com.github.istin.dmtools.job.Params.POST_ACTION;
+
 @Getter
 @Setter
 @Data
@@ -35,6 +37,8 @@ public class TrackerParams {
     public static final String TICKET_CONTEXT_DEPTH = "ticketContextDepth";
     public static final String CHUNKS_PROCESSING_TIMEOUT_IN_MINUTES = "chunksProcessingTimeout";
 
+    @SerializedName(POST_ACTION)
+    private String postJSAction;
 
     public enum OutputType {
         comment, field, creation

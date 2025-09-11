@@ -566,6 +566,7 @@ public class ServerManagedIntegrationsModule {
         }
     }
     
+
     /**
      * Public method to create AI instance directly from the module.
      * This allows external services to use the module's AI creation logic

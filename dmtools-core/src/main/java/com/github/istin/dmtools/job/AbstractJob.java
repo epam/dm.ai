@@ -5,6 +5,8 @@ import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import dagger.Component;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
 
 import javax.inject.Singleton;
@@ -13,9 +15,12 @@ import java.lang.reflect.Type;
 
 public abstract class AbstractJob<Params, Result> implements Job<Params, Result>{
 
+    private static final Logger logger = LogManager.getLogger(AbstractJob.class);
+
     @Getter
     @Setter
     protected AI ai;
+    
 
     /**
      * Default constructor
@@ -37,6 +42,7 @@ public abstract class AbstractJob<Params, Result> implements Job<Params, Result>
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Class<Params> getParamsClass() {
         return (Class<Params>) getTemplateParameterClass(getClass());
     }
@@ -126,5 +132,26 @@ public abstract class AbstractJob<Params, Result> implements Job<Params, Result>
     @Component(modules = {ServerManagedIntegrationsModule.class})
     public interface ServerManagedComponent {
         // Injection methods will be defined by specific job implementations
+    }
+    
+    // =====================================================
+    // JavaScript Execution Support
+    // =====================================================
+    
+    /**
+     * Creates a fluent JavaScript executor for clean execution syntax
+     * 
+     * Usage:
+     * js(jsCode)
+     *   .mcp(trackerClient, ai, confluence, sourceCode)
+     *   .withJobContext(params, ticket, response)
+     *   .with("initiator", "user@example.com")
+     *   .execute();
+     * 
+     * @param jsCode JavaScript code to execute
+     * @return JavaScriptExecutor for fluent configuration
+     */
+    protected JavaScriptExecutor js(String jsCode) {
+        return new JavaScriptExecutor(jsCode);
     }
 }
