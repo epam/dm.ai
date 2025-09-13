@@ -1,0 +1,311 @@
+name: Create Standalone Release with Flutter SPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      flutter_release_tag:
+        description: 'Flutter SPA release tag (e.g., v2025.09.11-d126e40)'
+        required: true
+        default: 'latest'
+        type: string
+      release_tag:
+        description: 'DMTools standalone release tag (e.g., v1.8.0-standalone)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  create-standalone-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      checks: write
+
+    steps:
+      - name: Checkout DMTools code
+        uses: actions/checkout@v4
+
+      - name: Setup DMTools Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          cache-key-suffix: '-standalone-release'
+          install-playwright: 'false'
+
+      - name: Determine Flutter Release Tag
+        id: flutter_tag
+        run: |
+          if [ "${{ github.event.inputs.flutter_release_tag }}" = "latest" ]; then
+            echo "Getting latest Flutter SPA release..."
+            LATEST_TAG=$(curl -s https://api.github.com/repos/IstiN/dmtools-flutter/releases/latest | jq -r '.tag_name')
+            echo "flutter_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+            echo "Using latest Flutter SPA release: ${LATEST_TAG}"
+          else
+            echo "flutter_tag=${{ github.event.inputs.flutter_release_tag }}" >> $GITHUB_OUTPUT
+            echo "Using specified Flutter SPA release: ${{ github.event.inputs.flutter_release_tag }}"
+          fi
+
+      - name: Download Flutter SPA Release
+        id: download_spa
+        run: |
+          FLUTTER_TAG="${{ steps.flutter_tag.outputs.flutter_tag }}"
+          echo "Downloading Flutter SPA from release: ${FLUTTER_TAG}"
+          
+          # Get release information
+          RELEASE_INFO=$(curl -s "https://api.github.com/repos/IstiN/dmtools-flutter/releases/tags/${FLUTTER_TAG}")
+          
+          # Find the main app ZIP asset
+          DOWNLOAD_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name | test("dmtools-flutter-main-app-.*\\.zip$")) | .browser_download_url')
+          
+          if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
+            echo "ERROR: Could not find dmtools-flutter-main-app-*.zip asset in release ${FLUTTER_TAG}"
+            echo "Available assets:"
+            echo "${RELEASE_INFO}" | jq -r '.assets[].name'
+            exit 1
+          fi
+          
+          echo "Found SPA asset URL: ${DOWNLOAD_URL}"
+          
+          # Create temp directory and download
+          mkdir -p temp
+          SPA_ZIP_PATH="temp/dmtools-flutter-main-app.zip"
+          
+          echo "Downloading to: ${SPA_ZIP_PATH}"
+          curl -L -o "${SPA_ZIP_PATH}" "${DOWNLOAD_URL}"
+          
+          # Verify download
+          if [ ! -f "${SPA_ZIP_PATH}" ]; then
+            echo "ERROR: Failed to download SPA ZIP"
+            exit 1
+          fi
+          
+          echo "Downloaded SPA ZIP ($(du -h "${SPA_ZIP_PATH}" | cut -f1))"
+          echo "spa_zip_path=${SPA_ZIP_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Build DMTools Server
+        id: gradle_build
+        continue-on-error: true
+        run: |
+          echo "Building DMTools server..."
+          ./gradlew clean build :dmtools-server:bootJar -x integrationTest --no-daemon --info
+        env:
+          GITHUB_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: JUnit Tests (Standalone Build)
+          path: '**/build/test-results/test/TEST-*.xml'
+          reporter: java-junit
+          fail-on-error: true
+
+      - name: Fail if build failed
+        if: steps.gradle_build.outcome == 'failure'
+        run: |
+          echo "ERROR: Gradle build failed. Cannot proceed with standalone release."
+          exit 1
+
+      - name: Create Standalone Artifacts
+        id: create_standalone
+        run: |
+          echo "Creating standalone artifacts with Flutter SPA..."
+          
+          # Make script executable
+          chmod +x dmtools-server/scripts/prepare-standalone-war.sh
+          
+          # Run the standalone preparation script
+          SPA_ZIP_PATH="${{ steps.download_spa.outputs.spa_zip_path }}"
+          ./dmtools-server/scripts/prepare-standalone-war.sh "${PWD}/${SPA_ZIP_PATH}"
+          
+          # Verify artifacts were created
+          STANDALONE_DIR="dmtools-server/build/standalone"
+          if [ ! -f "${STANDALONE_DIR}/dmtools-standalone.jar" ]; then
+            echo "ERROR: Standalone JAR not created"
+            exit 1
+          fi
+          
+          if [ ! -f "${STANDALONE_DIR}/dmtools-standalone.war" ]; then
+            echo "ERROR: Standalone WAR not created"
+            exit 1
+          fi
+          
+          # Get file sizes for release notes
+          JAR_SIZE=$(du -h "${STANDALONE_DIR}/dmtools-standalone.jar" | cut -f1)
+          WAR_SIZE=$(du -h "${STANDALONE_DIR}/dmtools-standalone.war" | cut -f1)
+          
+          echo "Standalone artifacts created:"
+          echo "  JAR: ${JAR_SIZE}"
+          echo "  WAR: ${WAR_SIZE}"
+          
+          echo "jar_path=${STANDALONE_DIR}/dmtools-standalone.jar" >> $GITHUB_OUTPUT
+          echo "war_path=${STANDALONE_DIR}/dmtools-standalone.war" >> $GITHUB_OUTPUT
+          echo "jar_size=${JAR_SIZE}" >> $GITHUB_OUTPUT
+          echo "war_size=${WAR_SIZE}" >> $GITHUB_OUTPUT
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          FLUTTER_TAG="${{ steps.flutter_tag.outputs.flutter_tag }}"
+          JAR_SIZE="${{ steps.create_standalone.outputs.jar_size }}"
+          WAR_SIZE="${{ steps.create_standalone.outputs.war_size }}"
+          
+          cat > release_notes.md << EOF
+          # 🚀 DMTools Standalone Release
+          
+          This is a standalone release of DMTools that includes the Flutter SPA and can run without external dependencies.
+          
+          ## 📦 What's Included
+          
+          - **Complete DMTools Server** with embedded Flutter SPA
+          - **Self-contained** - no external database or OAuth setup required
+          - **Local authentication** with admin/admin credentials
+          - **H2 database** for local data storage
+          - **All AI agents and tools** available out of the box
+          
+          ## 🎯 Quick Start
+          
+          ### Option 1: JAR (Recommended)
+          \`\`\`bash
+          # Download and run
+          java -jar dmtools-standalone.jar
+          
+          # Access at http://localhost:8080
+          # Login: admin / admin
+          \`\`\`
+          
+          ### Option 2: WAR (for application servers)
+          Deploy \`dmtools-standalone.war\` to your favorite servlet container (Tomcat, Jetty, etc.)
+          
+          ## 📋 System Requirements
+          
+          - **Java 23+** (required)
+          - **2GB RAM** minimum, 4GB recommended
+          - **1GB disk space** for application and data
+          - **Port 8080** available (configurable)
+          
+          ## 🔧 Configuration
+          
+          The standalone version uses embedded configuration but can be customized:
+          
+          \`\`\`bash
+          # Custom port
+          java -jar dmtools-standalone.jar --server.port=9090
+          
+          # Custom database location
+          java -jar dmtools-standalone.jar --spring.datasource.url=jdbc:h2:./my-data/dmtools-db
+          
+          # Enable debug logging
+          java -jar dmtools-standalone.jar --logging.level.com.github.istin.dmtools=DEBUG
+          \`\`\`
+          
+          ## 📊 Build Information
+          
+          - **Flutter SPA Version:** ${FLUTTER_TAG}
+          - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          - **JAR Size:** ${JAR_SIZE}
+          - **WAR Size:** ${WAR_SIZE}
+          - **Git Commit:** \`${GITHUB_SHA:0:8}\`
+          
+          ## 🔒 Security Notes
+          
+          - Default credentials are **admin/admin** - change them in production
+          - Uses local H2 database with file storage
+          - JWT tokens for session management
+          - No external OAuth dependencies
+          
+          ## 📚 Documentation
+          
+          - **API Documentation:** Available at \`/swagger-ui.html\` after startup
+          - **H2 Console:** Available at \`/h2-console\` (development only)
+          - **Health Check:** \`/actuator/health\`
+          
+          ## 🐛 Troubleshooting
+          
+          ### Common Issues
+          
+          1. **Port already in use:** Use \`--server.port=XXXX\` to change port
+          2. **Java version:** Ensure Java 23+ is installed (\`java -version\`)
+          3. **Memory issues:** Increase heap size with \`-Xmx4g\`
+          4. **Database locked:** Ensure no other instances are running
+          
+          ### Getting Help
+          
+          - **Issues:** [GitHub Issues](https://github.com/IstiN/dmtools/issues)
+          - **Documentation:** [Main Repository](https://github.com/IstiN/dmtools)
+          - **Flutter SPA:** [Flutter Repository](https://github.com/IstiN/dmtools-flutter)
+          
+          ---
+          
+          **Note:** This standalone release is perfect for local development, demos, and small team deployments. For production enterprise use, consider the full OAuth2-enabled deployment.
+          EOF
+          
+          echo "Release notes generated"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          release_name: "DMTools Standalone ${{ github.event.inputs.release_tag }}"
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease }}
+
+      - name: Upload Standalone JAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.create_standalone.outputs.jar_path }}
+          asset_name: dmtools-standalone-${{ github.event.inputs.release_tag }}.jar
+          asset_content_type: application/java-archive
+
+      - name: Upload Standalone WAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.create_standalone.outputs.war_path }}
+          asset_name: dmtools-standalone-${{ github.event.inputs.release_tag }}.war
+          asset_content_type: application/java-archive
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-build-test-results
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+            dmtools-core/build/reports/tests/test
+            dmtools-core/build/test-results/test
+            dmtools-server/build/reports/tests/test
+            dmtools-server/build/test-results/test
+          retention-days: 7
+
+      - name: Summary
+        run: |
+          echo "## 🎉 Standalone Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** [${{ github.event.inputs.release_tag }}](${{ steps.create_release.outputs.html_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Flutter SPA:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**JAR Size:** ${{ steps.create_standalone.outputs.jar_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "**WAR Size:** ${{ steps.create_standalone.outputs.war_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Quick Start" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Download the JAR from the release page, then:" >> $GITHUB_STEP_SUMMARY
+          echo "java -jar dmtools-standalone-${{ github.event.inputs.release_tag }}.jar" >> $GITHUB_STEP_SUMMARY
+          echo "# Access at http://localhost:8080" >> $GITHUB_STEP_SUMMARY
+          echo "# Login: admin / admin" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

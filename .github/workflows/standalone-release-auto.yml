@@ -1,0 +1,121 @@
+name: Auto Standalone Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*-standalone'
+  
+  workflow_dispatch:
+
+jobs:
+  auto-standalone-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      checks: write
+
+    steps:
+      - name: Checkout DMTools code
+        uses: actions/checkout@v4
+
+      - name: Setup DMTools Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          cache-key-suffix: '-auto-standalone'
+          install-playwright: 'false'
+
+      - name: Get Latest Flutter SPA Release
+        id: flutter_release
+        run: |
+          echo "Getting latest Flutter SPA release..."
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/IstiN/dmtools-flutter/releases/latest)
+          FLUTTER_TAG=$(echo "${LATEST_RELEASE}" | jq -r '.tag_name')
+          FLUTTER_URL=$(echo "${LATEST_RELEASE}" | jq -r '.assets[] | select(.name | test("dmtools-flutter-main-app-.*\\.zip$")) | .browser_download_url')
+          
+          if [ -z "${FLUTTER_URL}" ] || [ "${FLUTTER_URL}" = "null" ]; then
+            echo "ERROR: Could not find Flutter SPA main app asset"
+            exit 1
+          fi
+          
+          echo "flutter_tag=${FLUTTER_TAG}" >> $GITHUB_OUTPUT
+          echo "flutter_url=${FLUTTER_URL}" >> $GITHUB_OUTPUT
+          echo "Using Flutter SPA: ${FLUTTER_TAG}"
+
+      - name: Download Flutter SPA
+        run: |
+          mkdir -p temp
+          curl -L -o temp/dmtools-flutter-main-app.zip "${{ steps.flutter_release.outputs.flutter_url }}"
+          echo "Downloaded Flutter SPA ($(du -h temp/dmtools-flutter-main-app.zip | cut -f1))"
+
+      - name: Build and Test
+        run: |
+          ./gradlew clean build :dmtools-server:bootJar -x integrationTest --no-daemon
+
+      - name: Create Standalone Artifacts
+        run: |
+          chmod +x dmtools-server/scripts/prepare-standalone-war.sh
+          ./dmtools-server/scripts/prepare-standalone-war.sh "${PWD}/temp/dmtools-flutter-main-app.zip"
+
+      - name: Extract Tag Name
+        id: extract_tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          else
+            # For workflow_dispatch, create a tag based on current date
+            TAG_NAME="v$(date +%Y.%m.%d)-standalone-$(git rev-parse --short HEAD)"
+          fi
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "Using tag: ${TAG_NAME}"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.extract_tag.outputs.tag_name }}
+          release_name: "DMTools Standalone ${{ steps.extract_tag.outputs.tag_name }}"
+          body: |
+            # 🚀 DMTools Standalone Release (Auto-Generated)
+            
+            Automatically created standalone release with the latest Flutter SPA.
+            
+            **Flutter SPA Version:** ${{ steps.flutter_release.outputs.flutter_tag }}
+            **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            **Git Commit:** `${{ github.sha }}`
+            
+            ## Quick Start
+            ```bash
+            java -jar dmtools-standalone-${{ steps.extract_tag.outputs.tag_name }}.jar
+            # Access at http://localhost:8080
+            # Login: admin / admin
+            ```
+            
+            ## Requirements
+            - Java 23+
+            - 2GB RAM minimum
+            - Port 8080 available
+          draft: false
+          prerelease: false
+
+      - name: Upload Standalone JAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dmtools-server/build/standalone/dmtools-standalone.jar
+          asset_name: dmtools-standalone-${{ steps.extract_tag.outputs.tag_name }}.jar
+          asset_content_type: application/java-archive
+
+      - name: Upload Standalone WAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dmtools-server/build/standalone/dmtools-standalone.war
+          asset_name: dmtools-standalone-${{ steps.extract_tag.outputs.tag_name }}.war
+          asset_content_type: application/java-archive
