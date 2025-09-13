@@ -682,7 +682,7 @@ public class LLMOptimizedJsonTest {
     }
     
     @Test
-    @org.junit.jupiter.api.Disabled("Performance test disabled - can be flaky in CI environment")
+    @org.junit.jupiter.api.Disabled("Performance test - can be flaky due to system load, JVM warm-up, etc. Run manually for performance validation.")
     public void testWellFormedPerformance() throws Exception {
         System.out.println("=== PERFORMANCE TEST: LLMOptimizedJson vs StringUtils ===");
         

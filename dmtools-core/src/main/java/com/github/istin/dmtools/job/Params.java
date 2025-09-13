@@ -27,6 +27,7 @@ public class Params extends TrackerParams {
     public static final String CONFLUENCE_ITERATIONS = "confluenceIterations";
     public static final String TRACKER_ITERATIONS = "trackerIterations";
     public static final String REQUEST_DECOMPOSITION_CHUNK_PROCESSING = "requestDecompositionChunkProcessing";
+    public static final String POST_ACTION = "postJSAction";
 
     @SerializedName(IS_CODE_AS_SOURCE)
     private boolean isCodeAsSource = false;
@@ -60,6 +61,7 @@ public class Params extends TrackerParams {
     @SerializedName(TRACKER_ITERATIONS)
     private int trackerIterations = 1;
 
+
     @SerializedName(SourceCodeConfig._KEY)
     private SourceCodeConfig[] sourceCodeConfig;
 
@@ -75,10 +77,6 @@ public class Params extends TrackerParams {
 
     public void setTrackerConfigs(TrackerConfig... trackerConfig) {
         this.trackerConfig = trackerConfig;
-    }
-
-    public void setAiPromptConfig(AIPromptConfig aiPromptConfig) {
-        this.aiPromptConfig = aiPromptConfig;
     }
 
     public void setConfluencePages(String... confluencePages) {

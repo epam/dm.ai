@@ -13,6 +13,7 @@ import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.model.JSONModel;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.context.ContextOrchestrator;
@@ -24,6 +25,7 @@ import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import com.github.istin.dmtools.di.TeammateComponent;
 import com.github.istin.dmtools.expert.ExpertParams;
 import com.github.istin.dmtools.job.AbstractJob;
+import com.github.istin.dmtools.job.JobJavaScriptBridge;
 import com.github.istin.dmtools.job.JobTrackerParams;
 import com.github.istin.dmtools.job.Params;
 import com.github.istin.dmtools.job.ResultItem;
@@ -45,7 +47,9 @@ import javax.inject.Singleton;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultItem>> {
 
@@ -101,6 +105,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     @Inject
     UriToObjectFactory uriToObjectFactory;
+
+    // JavaScript bridge is now inherited from AbstractJob
 
     private static TeammateComponent teammateComponent;
 
@@ -304,6 +310,11 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
             GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, null, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
             String response = genericRequestAgent.run(genericRequesAgentParams);
+            js(expertParams.getPostJSAction())
+                .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                .withJobContext(expertParams, ticket, response)
+                .with("initiator", initiator)
+                .execute();
             if (expertParams.isAttachResponseAsFile()) {
                 attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
             }

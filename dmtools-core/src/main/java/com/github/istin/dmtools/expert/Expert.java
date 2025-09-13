@@ -16,6 +16,7 @@ import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.model.JSONModel;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.HtmlCleaner;
 import com.github.istin.dmtools.common.utils.MarkdownToJiraConverter;
@@ -47,7 +48,9 @@ import dagger.Component;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
 
@@ -94,6 +97,8 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
 
     @Inject
     UriToObjectFactory uriToObjectFactory;
+
+    // JavaScript bridge is now inherited from AbstractJob
 
     private static ExpertComponent expertComponent;
 
@@ -261,6 +266,16 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
             } else {
                 trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n"+ request + "\n\nAI Response is: \n" + response);
             }
+
+            // Execute JavaScript post-action if provided - ULTRA-CLEAN fluent API
+            js(expertParams.getPostJSAction())
+                .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Expert context
+                .withJobContext(expertParams, ticket, response)
+                .with("initiator", initiator)
+                .with("systemRequest", systemRequestCommentAlias)
+                .with("request", request)
+                .execute();
+            
             results.add(new ResultItem(ticket.getTicketKey(), response));
             return false;
         }, inputJQL, trackerClient.getExtendedQueryFields());

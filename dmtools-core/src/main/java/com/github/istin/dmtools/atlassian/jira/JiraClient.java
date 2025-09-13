@@ -176,7 +176,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String deleteTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to delete", required = true, example = "PRJ-123") String ticketKey) throws IOException {
+    public String deleteTicket(@MCPParam(name = "key", description = "The Jira ticket key to delete", required = true, example = "PRJ-123") String ticketKey) throws IOException {
         GenericRequest deleteRequest = new GenericRequest(this, path("issue/" + ticketKey));
         String response = deleteRequest.delete();
         log("Ticket deleted: " + ticketKey);
@@ -194,7 +194,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             category = "ticket_management"
     )
     public String assignTo(
-            @MCPParam(name = "ticketKey", description = "The Jira ticket key to delete", required = true, example = "PRJ-123")
+            @MCPParam(name = "key", description = "The Jira ticket key to assign", required = true, example = "PRJ-123")
             String ticketKey,
             @MCPParam(name = "userName", description = "The Jira user name to assign to", required = true, example = "email@email.com")
             String userName
@@ -590,7 +590,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public T performTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to retrieve", required = true) String ticketKey, 
+    public T performTicket(@MCPParam(name = "key", description = "The Jira ticket key to retrieve", required = true) String ticketKey, 
                           @MCPParam(name = "fields", description = "Optional array of fields to include in the response", required = false) String[] fields) throws IOException {
         GenericRequest jiraRequest = createPerformTicketRequest(ticketKey, fields);
         String response = jiraRequest.execute();
@@ -626,7 +626,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public List<T> performGettingSubtask(@MCPParam(name = "ticketKey", description = "The parent ticket key to get subtasks for", required = true) String ticketKey) throws Exception {
+    public List<T> performGettingSubtask(@MCPParam(name = "key", description = "The parent ticket key to get subtasks for", required = true) String ticketKey) throws Exception {
         if (subtasksCallIsNotSupported) {
             return Collections.emptyList();
         }
@@ -717,7 +717,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "comment_management"
     )
-    public void postCommentIfNotExists(@MCPParam(name = "ticketKey", description = "The Jira ticket key to post comment to", required = true) String ticketKey, 
+    public void postCommentIfNotExists(@MCPParam(name = "key", description = "The Jira ticket key to post comment to", required = true) String ticketKey, 
                                      @MCPParam(name = "comment", description = "The comment text to post (supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)", required = true) String comment) throws IOException {
         if (getTextType() == TrackerClient.TextType.MARKDOWN) {
             comment = StringUtils.convertToMarkdown(comment);
@@ -785,7 +785,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "comment_management"
     )
-    public void postComment(@MCPParam(name = "ticketKey", description = "The Jira ticket key to post comment to", required = true) String ticketKey, 
+    public void postComment(@MCPParam(name = "key", description = "The Jira ticket key to post comment to", required = true) String ticketKey, 
                           @MCPParam(name = "comment", description = "The comment text to post (supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)", required = true) String comment) throws IOException {
         if (getTextType() == TrackerClient.TextType.MARKDOWN) {
             comment = StringUtils.convertToMarkdown(comment);
@@ -1163,7 +1163,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String updateTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to update", required = true) String ticketKey,
+    public String updateTicket(@MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String ticketKey,
                              @MCPParam(name = "params", description = "JSON object containing update parameters in Jira format (e.g., {\"fields\": {\"summary\": \"New Summary\", \"parent\": {\"key\": \"PROJ-123\"}}})", required = true) JSONObject params) throws IOException {
         GenericRequest jiraRequest = getTicket(ticketKey);
         jiraRequest.setBody(params.toString());
@@ -1840,7 +1840,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public List<Transition> getTransitions(@MCPParam(name = "ticket", description = "The Jira ticket key to get transitions for", required = true) String ticket) throws IOException {
+    public List<Transition> getTransitions(@MCPParam(name = "key", description = "The Jira ticket key to get transitions for", required = true) String ticket) throws IOException {
         return new TransitionsResult(transitions(ticket).execute()).getTransitions();
     }
 
@@ -1851,7 +1851,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String moveToStatus(@MCPParam(name = "ticketKey", description = "The Jira ticket key to move", required = true) String ticketKey, 
+    public String moveToStatus(@MCPParam(name = "key", description = "The Jira ticket key to move", required = true) String ticketKey, 
                              @MCPParam(name = "statusName", description = "The target status name", required = true) String statusName) throws IOException {
         List<Transition> transitions = getTransitions(ticketKey);
         if (transitions != null) {
@@ -1870,7 +1870,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String moveToStatus(@MCPParam(name = "ticket", description = "The Jira ticket key to move", required = true) String ticket, 
+    public String moveToStatus(@MCPParam(name = "key", description = "The Jira ticket key to move", required = true) String ticket, 
                              @MCPParam(name = "statusName", description = "The target status name", required = true) String statusName, 
                              @MCPParam(name = "resolution", description = "The resolution to set", required = true) String resolution) throws IOException {
         List<Transition> transitions = getTransitions(ticket);
@@ -1890,7 +1890,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String clearField(@MCPParam(name = "ticketKey", description = "The Jira ticket key to clear field from", required = true) String ticket,
+    public String clearField(@MCPParam(name = "key", description = "The Jira ticket key to clear field from", required = true) String ticket,
                            @MCPParam(name = "field", description = "The field name to clear", required = true) String field) throws IOException {
         GenericRequest request = getTicket(ticket);
         JSONObject clearedFieldJSON = new JSONObject().put(field,
@@ -1923,7 +1923,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String setTicketFixVersion(@MCPParam(name = "ticketKey", description = "The Jira ticket key to set fix version for", required = true) String ticket,
+    public String setTicketFixVersion(@MCPParam(name = "key", description = "The Jira ticket key to set fix version for", required = true) String ticket,
                                     @MCPParam(name = "fixVersion", description = "The fix version name to set", required = true) String fixVersion) throws IOException {
         GenericRequest request = getTicket(ticket);
         JSONObject jsonObject;
@@ -1947,7 +1947,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String addTicketFixVersion(@MCPParam(name = "ticket", description = "The Jira ticket key to add fix version to", required = true) String ticket, 
+    public String addTicketFixVersion(@MCPParam(name = "key", description = "The Jira ticket key to add fix version to", required = true) String ticket, 
                                     @MCPParam(name = "fixVersion", description = "The fix version name to add", required = true) String fixVersion) throws IOException {
         GenericRequest request = getTicket(ticket);
         JSONObject jsonObject;
@@ -1971,7 +1971,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String setTicketPriority(@MCPParam(name = "ticket", description = "The Jira ticket key to set priority for", required = true) String ticket, 
+    public String setTicketPriority(@MCPParam(name = "key", description = "The Jira ticket key to set priority for", required = true) String ticket, 
                                   @MCPParam(name = "priority", description = "The priority name to set", required = true) String priority) throws IOException {
         GenericRequest request = getTicket(ticket);
         JSONObject jsonObject;
@@ -1992,7 +1992,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String removeTicketFixVersion(@MCPParam(name = "ticket", description = "The Jira ticket key to remove fix version from", required = true) String ticket, 
+    public String removeTicketFixVersion(@MCPParam(name = "key", description = "The Jira ticket key to remove fix version from", required = true) String ticket, 
                                        @MCPParam(name = "fixVersion", description = "The fix version name to remove", required = true) String fixVersion) throws IOException {
         GenericRequest request = getTicket(ticket);
         JSONObject jsonObject = new JSONObject()
