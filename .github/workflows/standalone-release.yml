@@ -226,27 +226,105 @@ jobs:
             echo "Downloading JRE for ${platform} from ${JRE_URL}"
             curl -L -o "${JRE_FILE}" "${JRE_URL}"
             
+            # Verify download
+            if [ ! -f "${JRE_FILE}" ]; then
+              echo "ERROR: Failed to download JRE for ${platform}"
+              exit 1
+            fi
+            JRE_SIZE=$(du -h "${JRE_FILE}" | cut -f1)
+            echo "Downloaded JRE (${JRE_SIZE})"
+            
             # Extract JRE
             if [[ "${platform}" == *"windows"* ]]; then
+              # Extract Windows ZIP
               unzip -q "${JRE_FILE}" -d "${BUNDLE_DIR}/jre-temp"
-              # Move contents from nested directory to jre/
-              mv "${BUNDLE_DIR}/jre-temp"/*/* "${BUNDLE_DIR}/jre/" 2>/dev/null || \
-              mv "${BUNDLE_DIR}/jre-temp"/* "${BUNDLE_DIR}/jre/" 2>/dev/null || \
-              find "${BUNDLE_DIR}/jre-temp" -mindepth 1 -maxdepth 1 -exec mv {} "${BUNDLE_DIR}/jre/" \;
+              
+              # Find the actual JRE directory and move it to jre/
+              JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
+              if [ -n "${JRE_ROOT}" ] && [ -d "${JRE_ROOT}" ]; then
+                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
+              else
+                echo "ERROR: Could not find JRE structure in Windows ZIP for ${platform}"
+                ls -la "${BUNDLE_DIR}/jre-temp"
+                exit 1
+              fi
               rm -rf "${BUNDLE_DIR}/jre-temp"
               
               # Create Windows launcher
               create_windows_launcher "${BUNDLE_DIR}/run.cmd"
             else
-              mkdir -p "${BUNDLE_DIR}/jre"
-              tar -xzf "${JRE_FILE}" -C "${BUNDLE_DIR}/jre" --strip-components=1
+              # Extract macOS/Linux tar.gz
+              mkdir -p "${BUNDLE_DIR}/jre-temp"
+              echo "Extracting ${JRE_FILE} to ${BUNDLE_DIR}/jre-temp"
+              tar -xzf "${JRE_FILE}" -C "${BUNDLE_DIR}/jre-temp"
+              
+              echo "Extracted contents:"
+              ls -la "${BUNDLE_DIR}/jre-temp"
+              
+              # Find the actual JRE directory (usually has Contents/Home on macOS)
+              if [[ "${platform}" == *"macos"* ]]; then
+                echo "Looking for macOS JRE structure..."
+                # macOS JRE structure: jdk-*/Contents/Home/
+                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -path "*/Contents/Home" -type d | head -1)
+                echo "Found Contents/Home at: ${JRE_ROOT}"
+                
+                if [ -z "${JRE_ROOT}" ]; then
+                  echo "Contents/Home not found, looking for bin directory..."
+                  # Fallback: look for bin directory
+                  JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
+                  echo "Found bin directory parent at: ${JRE_ROOT}"
+                fi
+              else
+                echo "Looking for Linux JRE structure..."
+                # Linux JRE structure: jdk-*/
+                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
+                echo "Found bin directory parent at: ${JRE_ROOT}"
+              fi
+              
+              if [ -n "${JRE_ROOT}" ] && [ -d "${JRE_ROOT}" ]; then
+                echo "Moving JRE from ${JRE_ROOT} to ${BUNDLE_DIR}/jre"
+                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
+              else
+                echo "ERROR: Could not find JRE structure in tar.gz for ${platform}"
+                echo "Directory structure:"
+                find "${BUNDLE_DIR}/jre-temp" -type d | head -20
+                echo "Looking for specific patterns:"
+                find "${BUNDLE_DIR}/jre-temp" -type d -name "*jdk*" -o -name "*jre*" -o -name "bin" | head -10
+                exit 1
+              fi
+              rm -rf "${BUNDLE_DIR}/jre-temp"
               
               # Create Unix launcher
               create_unix_launcher "${BUNDLE_DIR}/run.sh"
             fi
             
+            # Verify JRE was extracted correctly
+            if [[ "${platform}" == *"windows"* ]]; then
+              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java.exe"
+            else
+              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java"
+            fi
+            
+            if [ ! -f "${JAVA_EXEC}" ]; then
+              echo "ERROR: Java executable not found at ${JAVA_EXEC} for ${platform}"
+              echo "JRE directory contents:"
+              find "${BUNDLE_DIR}/jre" -type f -name "*java*" || echo "No java executables found"
+              exit 1
+            else
+              echo "✅ Java executable verified at ${JAVA_EXEC}"
+            fi
+            
             # Clean up downloaded JRE archive
             rm "${JRE_FILE}"
+            
+            # Show bundle directory size before zipping
+            BUNDLE_DIR_SIZE=$(du -sh "${BUNDLE_DIR}" | cut -f1)
+            JAR_SIZE_IN_BUNDLE=$(du -h "${BUNDLE_DIR}/dmtools-standalone.jar" | cut -f1)
+            JRE_SIZE_IN_BUNDLE=$(du -sh "${BUNDLE_DIR}/jre" | cut -f1)
+            echo "Bundle directory contents for ${platform}:"
+            echo "  JAR: ${JAR_SIZE_IN_BUNDLE}"
+            echo "  JRE: ${JRE_SIZE_IN_BUNDLE}"
+            echo "  Total directory: ${BUNDLE_DIR_SIZE}"
             
             # Create ZIP bundle
             cd "${BUNDLES_DIR}"
