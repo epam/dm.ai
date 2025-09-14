@@ -2,6 +2,7 @@ package com.github.istin.dmtools.common.utils;
 
 import org.json.JSONObject;
 import org.junit.Test;
+import org.junit.Ignore;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.ByteArrayInputStream;
@@ -682,7 +683,7 @@ public class LLMOptimizedJsonTest {
     }
     
     @Test
-    @org.junit.jupiter.api.Disabled("Performance test - can be flaky due to system load, JVM warm-up, etc. Run manually for performance validation.")
+    @org.junit.Ignore("Performance test - can be flaky due to system load, JVM warm-up, etc. Run manually for performance validation.")
     public void testWellFormedPerformance() throws Exception {
         System.out.println("=== PERFORMANCE TEST: LLMOptimizedJson vs StringUtils ===");
         
