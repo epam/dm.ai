@@ -11,6 +11,7 @@ on:
       release_tag:
         description: 'DMTools standalone release tag (e.g., v1.8.0-standalone)'
         required: true
+        default: 'v1.0.0-standalone'
         type: string
       prerelease:
         description: 'Mark as pre-release'
@@ -27,6 +28,32 @@ jobs:
       checks: write
 
     steps:
+      - name: Validate Input Parameters
+        run: |
+          echo "Validating input parameters..."
+          
+          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          FLUTTER_TAG="${{ github.event.inputs.flutter_release_tag }}"
+          
+          echo "Release tag: ${RELEASE_TAG}"
+          echo "Flutter tag: ${FLUTTER_TAG}"
+          
+          # Validate release tag format
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "ERROR: Invalid release tag format: ${RELEASE_TAG}"
+            echo "Expected format: v1.0.0 or v1.0.0-standalone"
+            exit 1
+          fi
+          
+          # Check if tag starts with refs/ (GitHub fallback issue)
+          if [[ "${RELEASE_TAG}" == refs/* ]]; then
+            echo "ERROR: Release tag cannot start with 'refs/': ${RELEASE_TAG}"
+            echo "Please provide a proper tag like 'v1.0.0-standalone'"
+            exit 1
+          fi
+          
+          echo "✅ Input parameters validated successfully"
+
       - name: Checkout DMTools code
         uses: actions/checkout@v4
 
@@ -249,35 +276,19 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
-          release_name: "DMTools Standalone ${{ github.event.inputs.release_tag }}"
+          name: "DMTools Standalone ${{ github.event.inputs.release_tag }}"
           body_path: release_notes.md
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
+          files: |
+            ${{ steps.create_standalone.outputs.jar_path }}
+            ${{ steps.create_standalone.outputs.war_path }}
 
-      - name: Upload Standalone JAR
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.create_standalone.outputs.jar_path }}
-          asset_name: dmtools-standalone-${{ github.event.inputs.release_tag }}.jar
-          asset_content_type: application/java-archive
-
-      - name: Upload Standalone WAR
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.create_standalone.outputs.war_path }}
-          asset_name: dmtools-standalone-${{ github.event.inputs.release_tag }}.war
-          asset_content_type: application/java-archive
 
       - name: Upload Test Results
         if: always()
@@ -297,7 +308,7 @@ jobs:
         run: |
           echo "## 🎉 Standalone Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Release:** [${{ github.event.inputs.release_tag }}](${{ steps.create_release.outputs.html_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** [${{ github.event.inputs.release_tag }}](${{ steps.create_release.outputs.url }})" >> $GITHUB_STEP_SUMMARY
           echo "**Flutter SPA:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> $GITHUB_STEP_SUMMARY
           echo "**JAR Size:** ${{ steps.create_standalone.outputs.jar_size }}" >> $GITHUB_STEP_SUMMARY
           echo "**WAR Size:** ${{ steps.create_standalone.outputs.war_size }}" >> $GITHUB_STEP_SUMMARY
