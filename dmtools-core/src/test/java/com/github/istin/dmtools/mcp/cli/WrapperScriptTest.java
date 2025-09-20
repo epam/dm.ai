@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,12 +21,41 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnabledOnOs({OS.LINUX, OS.MAC})
 class WrapperScriptTest {
 
-    private static final String SCRIPT_PATH = "../dmtools_mcp.sh";
+    private static final String[] POSSIBLE_SCRIPT_PATHS = {
+        "../dmtools_mcp.sh",           // From dmtools-core subdirectory
+        "dmtools_mcp.sh",              // From root directory
+        "../../dmtools_mcp.sh",        // From deeper nested directory
+        "./dmtools_mcp.sh"             // Current directory
+    };
+
+    /**
+     * Find the wrapper script at one of the possible locations.
+     * @return the path to the script, or null if not found
+     */
+    private String findScriptPath() {
+        for (String path : POSSIBLE_SCRIPT_PATHS) {
+            File candidate = new File(path);
+            if (candidate.exists()) {
+                return path;
+            }
+        }
+        return null;
+    }
 
     @Test
     @DisplayName("Should verify wrapper script exists and is executable")
     void testScriptExistsAndExecutable() {
-        File script = new File(SCRIPT_PATH);
+        File script = null;
+        for (String path : POSSIBLE_SCRIPT_PATHS) {
+            File candidate = new File(path);
+            if (candidate.exists()) {
+                script = candidate;
+                break;
+            }
+        }
+        
+        assertNotNull(script, "Wrapper script should exist at one of the expected locations: " + 
+                     String.join(", ", POSSIBLE_SCRIPT_PATHS));
         assertTrue(script.exists(), "Wrapper script should exist");
         assertTrue(script.canExecute(), "Wrapper script should be executable");
     }
@@ -33,14 +63,26 @@ class WrapperScriptTest {
     @Test
     @DisplayName("Should show help when called without arguments")
     void testScriptHelp() throws Exception {
-        if (!Files.exists(Paths.get(SCRIPT_PATH))) {
+        String scriptPath = findScriptPath();
+        if (scriptPath == null) {
             // Skip test if script doesn't exist (e.g., in CI environment)
             return;
         }
 
-        ProcessBuilder pb = new ProcessBuilder("./" + SCRIPT_PATH);
+        ProcessBuilder pb = new ProcessBuilder(scriptPath);
         pb.directory(new File("."));
         Process process = pb.start();
+
+        // Close stdin to prevent waiting for input
+        process.getOutputStream().close();
+
+        // Use timeout to prevent hanging
+        boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+        
+        if (!finished) {
+            process.destroyForcibly();
+            fail("Script took too long to show help (>10 seconds)");
+        }
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         StringBuilder output = new StringBuilder();
@@ -49,7 +91,6 @@ class WrapperScriptTest {
             output.append(line).append("\n");
         }
 
-        int exitCode = process.waitFor();
         String outputStr = output.toString();
 
         // Should show usage information
@@ -59,13 +100,25 @@ class WrapperScriptTest {
     @Test
     @DisplayName("Should handle help command")
     void testScriptHelpCommand() throws Exception {
-        if (!Files.exists(Paths.get(SCRIPT_PATH))) {
+        String scriptPath = findScriptPath();
+        if (scriptPath == null) {
             return;
         }
 
-        ProcessBuilder pb = new ProcessBuilder("./" + SCRIPT_PATH, "help");
+        ProcessBuilder pb = new ProcessBuilder(scriptPath, "help");
         pb.directory(new File("."));
         Process process = pb.start();
+
+        // Close stdin to prevent waiting for input
+        process.getOutputStream().close();
+
+        // Use timeout to prevent hanging
+        boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+        
+        if (!finished) {
+            process.destroyForcibly();
+            fail("Script took too long to show help (>10 seconds)");
+        }
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         StringBuilder output = new StringBuilder();
@@ -74,7 +127,6 @@ class WrapperScriptTest {
             output.append(line).append("\n");
         }
 
-        int exitCode = process.waitFor();
         String outputStr = output.toString();
 
         assertTrue(outputStr.contains("Usage:") || outputStr.contains("DMTools MCP CLI"));
@@ -83,7 +135,8 @@ class WrapperScriptTest {
     @Test
     @DisplayName("Should handle list command if JAR exists")
     void testScriptListCommand() throws Exception {
-        if (!Files.exists(Paths.get(SCRIPT_PATH))) {
+        String scriptPath = findScriptPath();
+        if (scriptPath == null) {
             return;
         }
 
@@ -94,9 +147,20 @@ class WrapperScriptTest {
             return;
         }
 
-        ProcessBuilder pb = new ProcessBuilder("./" + SCRIPT_PATH, "list");
+        ProcessBuilder pb = new ProcessBuilder(scriptPath, "list");
         pb.directory(new File("."));
         Process process = pb.start();
+
+        // Close stdin to prevent waiting for input
+        process.getOutputStream().close();
+
+        // Use timeout to prevent hanging
+        boolean finished = process.waitFor(15, TimeUnit.SECONDS);
+        
+        if (!finished) {
+            process.destroyForcibly();
+            fail("Script took too long to list tools (>15 seconds)");
+        }
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -113,7 +177,7 @@ class WrapperScriptTest {
             errorOutput.append(line).append("\n");
         }
 
-        int exitCode = process.waitFor();
+        int exitCode = process.exitValue();
         String outputStr = output.toString();
         String errorStr = errorOutput.toString();
 
@@ -132,12 +196,13 @@ class WrapperScriptTest {
     @Test
     @DisplayName("Should validate script syntax")
     void testScriptSyntax() throws Exception {
-        if (!Files.exists(Paths.get(SCRIPT_PATH))) {
+        String scriptPath = findScriptPath();
+        if (scriptPath == null) {
             return;
         }
 
         // Use bash -n to check syntax without executing
-        ProcessBuilder pb = new ProcessBuilder("bash", "-n", SCRIPT_PATH);
+        ProcessBuilder pb = new ProcessBuilder("bash", "-n", scriptPath);
         Process process = pb.start();
 
         BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -155,44 +220,43 @@ class WrapperScriptTest {
     @Test
     @DisplayName("Should handle invalid commands gracefully")
     void testScriptInvalidCommand() throws Exception {
-        if (!Files.exists(Paths.get(SCRIPT_PATH))) {
+        String scriptPath = findScriptPath();
+        if (scriptPath == null) {
             return;
         }
 
-        ProcessBuilder pb = new ProcessBuilder("./" + SCRIPT_PATH, "invalid_command_that_does_not_exist");
+        ProcessBuilder pb = new ProcessBuilder(scriptPath, "invalid_command_that_does_not_exist");
         pb.directory(new File("."));
         Process process = pb.start();
 
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+        // Close stdin to prevent the script from waiting for input
+        process.getOutputStream().close();
+
+        // Use timeout to prevent hanging
+        boolean finished = process.waitFor(10, TimeUnit.SECONDS);
         
-        StringBuilder output = new StringBuilder();
-        StringBuilder errorOutput = new StringBuilder();
-        
-        String line;
-        while ((line = reader.readLine()) != null) {
-            output.append(line).append("\n");
-        }
-        
-        while ((line = errorReader.readLine()) != null) {
-            errorOutput.append(line).append("\n");
+        if (!finished) {
+            process.destroyForcibly();
+            fail("Script took too long to handle invalid command (>10 seconds)");
         }
 
-        int exitCode = process.waitFor();
+        int exitCode = process.exitValue();
 
         // Should handle invalid commands gracefully (not crash)
-        // Exit code might be non-zero, but should not be a shell error
-        assertTrue(exitCode >= 0, "Script should not crash on invalid commands");
+        // Exit code might be non-zero, but should not be a shell error (127 or 126)
+        assertTrue(exitCode >= 0 && exitCode != 127 && exitCode != 126, 
+                  "Script should handle invalid commands gracefully, got exit code: " + exitCode);
     }
 
     @Test
     @DisplayName("Should contain proper shebang and error handling")
     void testScriptContent() throws Exception {
-        if (!Files.exists(Paths.get(SCRIPT_PATH))) {
+        String scriptPath = findScriptPath();
+        if (scriptPath == null) {
             return;
         }
 
-        String content = Files.readString(Paths.get(SCRIPT_PATH));
+        String content = Files.readString(Paths.get(scriptPath));
         
         // Should have proper shebang
         assertTrue(content.startsWith("#!/bin/bash"), "Script should have proper bash shebang");
