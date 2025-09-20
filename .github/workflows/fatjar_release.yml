@@ -26,7 +26,7 @@ jobs:
 
       - name: Build with Gradle
         id: gradle
-        run: ./gradlew clean build :dmtools-core:shadowJar publish -x test -x integrationTest
+        run: ./gradlew clean build :dmtools-core:shadowJar publish -x integrationTest
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

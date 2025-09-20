@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration tests for JobRunner MCP CLI functionality.
  */
+@Timeout(15) // Add a 15-second timeout to all tests in this class
 public class JobRunnerMcpIntegrationTest {
 
     private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
