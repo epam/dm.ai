@@ -7,10 +7,7 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class BasicJiraClient extends JiraClient<Ticket> {
 
@@ -55,7 +52,15 @@ public class BasicJiraClient extends JiraClient<Ticket> {
     static {
         PropertyReader propertyReader = new PropertyReader();
         BASE_PATH = propertyReader.getJiraBasePath();
-        TOKEN = propertyReader.getJiraLoginPassToken();
+        String jiraLoginPassToken = propertyReader.getJiraLoginPassToken();
+        if (jiraLoginPassToken == null || jiraLoginPassToken.isEmpty()) {
+            String email = propertyReader.getJiraEmail();
+            String token = propertyReader.getJiraApiToken();
+            String credentials = email.trim() + ":" + token.trim();
+            TOKEN = Base64.getEncoder().encodeToString(credentials.getBytes());
+        } else {
+            TOKEN = jiraLoginPassToken;
+        }
         AUTH_TYPE = propertyReader.getJiraAuthType();
         IS_JIRA_LOGGING_ENABLED = propertyReader.isJiraLoggingEnabled();
         IS_JIRA_CLEAR_CACHE = propertyReader.isJiraClearCache();
