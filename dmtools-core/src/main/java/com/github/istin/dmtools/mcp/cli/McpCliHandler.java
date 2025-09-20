@@ -40,13 +40,14 @@ public class McpCliHandler {
     public String processMcpCommand(String[] args) {
         try {
             if (args.length < 2) {
-                return createErrorResponse("Usage: mcp <command> [args...]\nCommands: list, <tool_name>");
+                return createErrorResponse("Usage: mcp <command> [args...]\nCommands: list [filter], <tool_name>");
             }
 
             String command = args[1];
 
             if ("list".equals(command)) {
-                return handleListCommand();
+                String filter = args.length > 2 ? args[2] : null;
+                return handleListCommand(filter);
             } else {
                 return handleToolExecutionCommand(args);
             }
@@ -59,11 +60,19 @@ public class McpCliHandler {
 
     /**
      * Handles 'mcp list' command - returns available tools as JSON.
+     * 
+     * @param filter Optional filter to show only tools containing this text (case-insensitive)
      */
-    private String handleListCommand() {
+    private String handleListCommand(String filter) {
         try {
             Set<String> integrationTypes = getAvailableIntegrations();
             Map<String, Object> toolsList = MCPSchemaGenerator.generateToolsListResponse(integrationTypes);
+            
+            // Apply filter if provided
+            if (filter != null && !filter.trim().isEmpty()) {
+                toolsList = filterToolsList(toolsList, filter.toLowerCase());
+            }
+            
             return new JSONObject(toolsList).toString(2);
         } catch (Exception e) {
             logger.error("Error generating tools list", e);
@@ -237,6 +246,40 @@ public class McpCliHandler {
         } catch (Exception e) {
             // Ignore logging configuration errors
         }
+    }
+
+    /**
+     * Filters the tools list to only include tools whose names contain the filter text.
+     * 
+     * @param toolsList Original tools list from MCPSchemaGenerator
+     * @param filter Filter text (already lowercase)
+     * @return Filtered tools list
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> filterToolsList(Map<String, Object> toolsList, String filter) {
+        Map<String, Object> filteredList = new HashMap<>(toolsList);
+        
+        if (toolsList.containsKey("tools") && toolsList.get("tools") instanceof List) {
+            List<Object> tools = (List<Object>) toolsList.get("tools");
+            List<Object> filteredTools = new ArrayList<>();
+            
+            for (Object tool : tools) {
+                if (tool instanceof Map) {
+                    Map<String, Object> toolMap = (Map<String, Object>) tool;
+                    Object nameObj = toolMap.get("name");
+                    if (nameObj instanceof String) {
+                        String toolName = ((String) nameObj).toLowerCase();
+                        if (toolName.contains(filter)) {
+                            filteredTools.add(tool);
+                        }
+                    }
+                }
+            }
+            
+            filteredList.put("tools", filteredTools);
+        }
+        
+        return filteredList;
     }
 
     /**

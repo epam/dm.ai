@@ -48,6 +48,25 @@ class McpCliHandlerTest {
     }
 
     @Test
+    @DisplayName("Should handle list command with filter")
+    void testListCommandWithFilter() {
+        String[] args = {"mcp", "list", "jira"};
+        String result = mcpCliHandler.processMcpCommand(args);
+        
+        // Should return valid JSON with filtered tools array
+        JSONObject response = new JSONObject(result);
+        assertTrue(response.has("tools"));
+        assertTrue(response.get("tools") instanceof org.json.JSONArray);
+        
+        // Check that result contains jira tools (if any exist)
+        String resultStr = result.toLowerCase();
+        if (resultStr.contains("jira_")) {
+            // If jira tools exist, should not contain confluence tools
+            assertFalse(resultStr.contains("confluence_"));
+        }
+    }
+
+    @Test
     @DisplayName("Should parse JSON data arguments correctly")
     void testParseJsonDataArguments() {
         String[] args = {"mcp", "test_tool", "--data", "{\"key\": \"DMC-479\", \"fields\": [\"summary\"]}"};
