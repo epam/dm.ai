@@ -27,7 +27,6 @@ jobs:
 
       - name: Build with Gradle
         id: gradle
-        continue-on-error: true
         run: ./gradlew clean build :dmtools-core:shadowJar publish -x integrationTest
         env:
           GITHUB_USERNAME: ${{ github.actor }}
@@ -107,62 +106,24 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Create a Release
-        id: create_release
-        if: success()
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: false
-          prerelease: false
-
-      - name: Extract Tag Name
-        if: success()
-        id: extract_tag
-        run: echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
       - name: Prepare Release Assets
         if: success()
         run: |
           chmod +x install.sh
           chmod +x dmtools.sh
 
-      - name: Upload JAR Release Asset
+      - name: Create a Release
+        id: create_release
         if: success()
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/libs/dmtools-${{ env.tag_name }}-all.jar
-          asset_name: dmtools-${{ env.tag_name }}-all.jar
-          asset_content_type: application/java-archive
-
-      - name: Upload Install Script
-        if: success()
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: install.sh
-          asset_name: install.sh
-          asset_content_type: application/x-sh
-
-      - name: Upload DMTools Shell Script
-        if: success()
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dmtools.sh
-          asset_name: dmtools.sh
-          asset_content_type: application/x-sh
-
-      - name: Fail workflow if tests failed
-        if: steps.gradle.outcome == 'failure'
-        run: exit 1
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            dmtools-core/build/libs/dmtools-${{ github.ref_name }}-all.jar
+            install.sh
+            dmtools.sh
