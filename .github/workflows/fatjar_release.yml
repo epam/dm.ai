@@ -109,8 +109,17 @@ jobs:
       - name: Prepare Release Assets
         if: success()
         run: |
-          chmod +x install.sh
-          chmod +x dmtools.sh
+          # Copy scripts to build directory for consistent paths
+          cp install.sh build/libs/
+          cp dmtools.sh build/libs/
+          chmod +x build/libs/install.sh
+          chmod +x build/libs/dmtools.sh
+          
+          # List files to verify they exist
+          echo "Release assets prepared:"
+          ls -la build/libs/dmtools-${{ github.ref_name }}-all.jar
+          ls -la build/libs/install.sh
+          ls -la build/libs/dmtools.sh
 
       - name: Create a Release
         id: create_release
@@ -125,5 +134,5 @@ jobs:
           prerelease: false
           files: |
             build/libs/dmtools-${{ github.ref_name }}-all.jar
-            install.sh
-            dmtools.sh
+            build/libs/install.sh
+            build/libs/dmtools.sh
