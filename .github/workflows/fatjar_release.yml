@@ -19,11 +19,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup DMTools Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Java Environment
+        uses: ./.github/actions/setup-java-only
         with:
           cache-key-suffix: '-release'
-          install-playwright: 'false'
 
       - name: Build with Gradle
         id: gradle
@@ -49,12 +48,13 @@ jobs:
             if grep -q 'failures="[1-9]' "$test_file" || grep -q 'errors="[1-9]' "$test_file"; then
               echo "Test file: $test_file"
               echo "Failed test cases:"
-              class_name=$(xmllint --xpath "string(//testsuite/@name)" "$test_file" 2>/dev/null || echo "Unknown")
+              # Use grep instead of xmllint to avoid additional dependencies
+              class_name=$(grep -o 'name="[^"]*"' "$test_file" | head -1 | sed 's/name="//g' | sed 's/"//g' || echo "Unknown")
               echo "Class: $class_name"
               echo "Failed methods:"
-              xmllint --xpath "//testcase[failure or error]/@name" "$test_file" 2>/dev/null | tr ' ' '\n' | sed 's/name=//g' | sed 's/"//g' || echo "Could not extract method names"
+              grep -o '<testcase[^>]*name="[^"]*"[^>]*>' "$test_file" | grep -E 'failure|error' | grep -o 'name="[^"]*"' | sed 's/name="//g' | sed 's/"//g' || echo "Could not extract method names"
               echo "Failure details:"
-              xmllint --xpath "//failure/text() | //error/text()" "$test_file" 2>/dev/null || echo "Could not extract failure details"
+              grep -A 3 '<failure\|<error' "$test_file" | head -10 || echo "Could not extract failure details"
               echo "----------------------------------------"
             fi
           done
@@ -124,6 +124,6 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            dmtools-core/build/libs/dmtools-${{ github.ref_name }}-all.jar
+            build/libs/dmtools-${{ github.ref_name }}-all.jar
             install.sh
             dmtools.sh

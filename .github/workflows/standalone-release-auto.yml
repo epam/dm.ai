@@ -19,11 +19,10 @@ jobs:
       - name: Checkout DMTools code
         uses: actions/checkout@v4
 
-      - name: Setup DMTools Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Java Environment
+        uses: ./.github/actions/setup-java-only
         with:
           cache-key-suffix: '-auto-standalone'
-          install-playwright: 'false'
 
       - name: Get Latest Flutter SPA Release
         id: flutter_release

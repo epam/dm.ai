@@ -1,0 +1,32 @@
+name: 'Setup Java Environment'
+description: 'Sets up Java and Gradle cache for DMTools workflows (no Node.js, no Playwright)'
+
+inputs:
+  java-version:
+    description: 'Java version to use'
+    required: false
+    default: '23'
+  cache-key-suffix:
+    description: 'Additional suffix for cache keys to avoid conflicts'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java-version }}
+
+    - name: Cache Gradle files
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle${{ inputs.cache-key-suffix }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle${{ inputs.cache-key-suffix }}-
+          ${{ runner.os }}-gradle-

@@ -57,11 +57,10 @@ jobs:
       - name: Checkout DMTools code
         uses: actions/checkout@v4
 
-      - name: Setup DMTools Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Java Environment
+        uses: ./.github/actions/setup-java-only
         with:
           cache-key-suffix: '-standalone-release'
-          install-playwright: 'false'
 
       - name: Determine Flutter Release Tag
         id: flutter_tag
