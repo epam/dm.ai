@@ -56,8 +56,12 @@ public class BasicJiraClient extends JiraClient<Ticket> {
         if (jiraLoginPassToken == null || jiraLoginPassToken.isEmpty()) {
             String email = propertyReader.getJiraEmail();
             String token = propertyReader.getJiraApiToken();
-            String credentials = email.trim() + ":" + token.trim();
-            TOKEN = Base64.getEncoder().encodeToString(credentials.getBytes());
+            if (email != null && token != null) {
+                String credentials = email.trim() + ":" + token.trim();
+                TOKEN = Base64.getEncoder().encodeToString(credentials.getBytes());
+            } else {
+                TOKEN = jiraLoginPassToken;
+            }
         } else {
             TOKEN = jiraLoginPassToken;
         }
