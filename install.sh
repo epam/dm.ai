@@ -62,13 +62,55 @@ detect_platform() {
 get_latest_version() {
     progress "Fetching latest release information..." >&2
     local version
-    version=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+    local api_response
+    local curl_exit_code
     
-    if [ -z "$version" ]; then
-        error "Failed to get latest version from GitHub API"
+    # Try GitHub API with proper error handling
+    api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases/latest" 2>&1)
+    curl_exit_code=$?
+    
+    if [ $curl_exit_code -eq 0 ] && [ -n "$api_response" ]; then
+        version=$(echo "$api_response" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+        
+        if [ -n "$version" ]; then
+            echo "$version"
+            return 0
+        fi
     fi
     
-    echo "$version"
+    # If GitHub API failed, try alternative approach with redirect
+    progress "GitHub API failed (exit code: $curl_exit_code), trying redirect method..." >&2
+    
+    local redirect_response
+    redirect_response=$(curl -s --connect-timeout 10 --max-time 30 --fail -I "https://github.com/${REPO}/releases/latest" 2>&1)
+    curl_exit_code=$?
+    
+    if [ $curl_exit_code -eq 0 ] && [ -n "$redirect_response" ]; then
+        version=$(echo "$redirect_response" | grep -i "location:" | sed -E 's/.*\/tag\/([^\/\r\n]+).*/\1/' | tr -d '\r\n')
+        
+        if [ -n "$version" ]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+    
+    # Both methods failed - provide detailed error information
+    error "Failed to get latest version from GitHub API and redirect method.
+    
+Possible causes:
+  - Network connectivity issues
+  - GitHub API rate limiting
+  - Repository access issues
+  - curl version incompatibility
+
+Debug information:
+  - Last curl exit code: $curl_exit_code
+  - API response: ${api_response:-'(empty)'}
+  - Redirect response: ${redirect_response:-'(empty)'}
+  
+Please check your network connection and try again.
+If the issue persists, you can manually download from:
+https://github.com/${REPO}/releases/latest"
 }
 
 # Download file with progress
