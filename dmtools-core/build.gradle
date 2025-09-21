@@ -288,6 +288,7 @@ shadowJar {
         attributes 'Main-Class': 'com.github.istin.dmtools.job.JobRunner'
         attributes 'Implementation-Version': version
         attributes 'Implementation-Title': 'DMTools'
+        attributes 'Multi-Release': 'true'  // Enable multi-release JAR for Log4j Java 9+ classes
     }
     
     // Exclude duplicate files and problematic files
