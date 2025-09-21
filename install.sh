@@ -60,7 +60,7 @@ detect_platform() {
 
 # Get latest release version
 get_latest_version() {
-    progress "Fetching latest release information..."
+    progress "Fetching latest release information..." >&2
     local version
     version=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
     
