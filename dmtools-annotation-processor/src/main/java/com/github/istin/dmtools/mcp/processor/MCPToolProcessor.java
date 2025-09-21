@@ -348,6 +348,31 @@ public class MCPToolProcessor extends AbstractProcessor {
             out.println(" */");
             out.println("public class MCPSchemaGenerator {");
             out.println();
+
+            // Generate static map of required parameters
+            out.println("    private static final Map<String, List<String>> REQUIRED_PARAMS_MAP = createRequiredParamsMap();");
+            out.println();
+            out.println("    private static Map<String, List<String>> createRequiredParamsMap() {");
+            out.println("        Map<String, List<String>> map = new HashMap<>();");
+            for (MCPToolDefinition tool : tools) {
+                List<String> requiredParams = new ArrayList<>();
+                for (MCPParameterDefinition param : tool.getParameters()) {
+                    if (param.isRequired()) {
+                        requiredParams.add(param.getName());
+                    }
+                }
+                String paramsString = requiredParams.isEmpty() ? "" : "\"" + String.join("\", \"", requiredParams) + "\"";
+                out.println("        map.put(\"" + tool.getName() + "\", Arrays.asList(" + paramsString + "));");
+            }
+            out.println("        return Collections.unmodifiableMap(map);");
+            out.println("    }");
+            out.println();
+
+            out.println("    public static List<String> getRequiredParameterNames(String toolName) {");
+            out.println("        return REQUIRED_PARAMS_MAP.getOrDefault(toolName, Collections.emptyList());");
+            out.println("    }");
+            out.println();
+
             out.println("    public static Map<String, Object> generateToolsListResponse(Set<String> userIntegrations) {");
             out.println("        List<Map<String, Object>> tools = new ArrayList<>();");
             out.println();

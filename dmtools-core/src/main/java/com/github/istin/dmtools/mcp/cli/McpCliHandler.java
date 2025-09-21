@@ -116,6 +116,8 @@ public class McpCliHandler {
      */
     private Map<String, Object> parseToolArguments(String[] args) {
         Map<String, Object> arguments = new HashMap<>();
+        List<String> positionalArgs = new ArrayList<>();
+        String toolName = args[1];
 
         for (int i = 2; i < args.length; i++) {
             String arg = args[i];
@@ -147,18 +149,49 @@ public class McpCliHandler {
                 }
                 i++; // Skip next argument as it was consumed
             } else if (!arg.startsWith("--")) {
-                // Positional argument - try to parse as key=value or add as indexed argument
+                // Positional argument - collect for now
                 if (arg.contains("=")) {
                     String[] parts = arg.split("=", 2);
                     arguments.put(parts[0], parts[1]);
                 } else {
-                    // Add as positional argument
-                    arguments.put("arg" + (i - 2), arg);
+                    positionalArgs.add(arg);
                 }
             }
         }
+        
+        // Smartly map positional arguments to schema parameters
+        if (!positionalArgs.isEmpty()) {
+            mapPositionalArguments(toolName, positionalArgs, arguments);
+        }
 
         return arguments;
+    }
+
+    /**
+     * Maps positional arguments to named parameters based on the tool's schema.
+     */
+    private void mapPositionalArguments(String toolName, List<String> positionalArgs, Map<String, Object> arguments) {
+        try {
+            List<String> paramNames = MCPSchemaGenerator.getRequiredParameterNames(toolName);
+            
+            // If there's a 1-to-1 match of positional args to required params, map them
+            if (positionalArgs.size() == paramNames.size()) {
+                for (int i = 0; i < positionalArgs.size(); i++) {
+                    arguments.put(paramNames.get(i), positionalArgs.get(i));
+                }
+            } else {
+                // Fallback for ambiguity or mismatch
+                for (int i = 0; i < positionalArgs.size(); i++) {
+                    arguments.put("arg" + i, positionalArgs.get(i));
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not retrieve schema for tool '{}'. Falling back to indexed arguments.", toolName);
+            // Fallback for when schema cannot be retrieved
+            for (int i = 0; i < positionalArgs.size(); i++) {
+                arguments.put("arg" + i, positionalArgs.get(i));
+            }
+        }
     }
 
     /**
