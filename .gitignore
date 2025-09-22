@@ -72,6 +72,14 @@ data/*.mv.db
 cookies.txt
 jwt_token.txt
 
+# Environment files (contain sensitive API keys and tokens)
+.env
+.env.local
+dmtools.env
+dmtools-local.env
+*.env
+!*.env.example
+
 # Cursor configuration files with sensitive data
 .cursor/mcp.json
 
