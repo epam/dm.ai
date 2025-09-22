@@ -101,12 +101,12 @@ public class RunCommandProcessor {
             }
             
             if (!Files.isReadable(path)) {
-            if (content.trim().isEmpty()) {
+                throw new IllegalArgumentException("Configuration file is not readable: " + filePath);
             }
             
             String content = Files.readString(path);
             
-            if (content == null || content.trim().isEmpty()) {
+            if (content.trim().isEmpty()) {
                 throw new IllegalArgumentException("Configuration file is empty: " + filePath);
             }
             
