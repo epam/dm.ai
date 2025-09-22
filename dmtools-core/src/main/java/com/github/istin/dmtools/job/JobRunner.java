@@ -121,6 +121,19 @@ public class JobRunner {
                 System.out.println(result);
                 return;
             }
+            if ("run".equals(firstArg)) {
+                // Handle new run command with file + optional encoded parameter
+                RunCommandProcessor processor = new RunCommandProcessor();
+                JobParams jobParams = processor.processRunCommand(args);
+                Object result = new JobRunner().run(jobParams);
+                if (result == null) {
+                    System.err.println("Execution result of '" + jobParams.getName() + "' is null.");
+                } else {
+                    System.out.println(result);
+                    return;
+                }
+                System.exit(1);
+            }
         }
         
         if (args.length == 0) {
@@ -129,6 +142,7 @@ public class JobRunner {
             System.exit(1);
         }
         
+        // Existing base64-only parameter handling for backward compatibility
         JobParams jobParams = new JobParams(new String(decodeBase64(args[0])));
         Object result = new JobRunner().run(jobParams);
         if (result == null) {
@@ -181,6 +195,7 @@ public class JobRunner {
         System.out.println("DMTools - Development Management Toolkit");
         System.out.println();
         System.out.println("Usage: java -jar dmtools.jar [OPTIONS] [BASE64_ENCODED_JOB_PARAMS]");
+        System.out.println("       java -jar dmtools.jar run <json-file-path> [encoded-config]");
         System.out.println("       java -jar dmtools.jar mcp <command> [args...]");
         System.out.println();
         System.out.println("Options:");
@@ -188,12 +203,17 @@ public class JobRunner {
         System.out.println("  --help, -h        Show this help message");
         System.out.println("  --list-jobs       List all available jobs");
         System.out.println();
+        System.out.println("Run Commands:");
+        System.out.println("  run <json-file>           Execute job with JSON config file only");
+        System.out.println("  run <json-file> <encoded> Execute job with file + encoded overrides");
+        System.out.println("                            (supports base64 and URL encoding auto-detection)");
+        System.out.println();
         System.out.println("MCP Commands:");
         System.out.println("  mcp list                    List available MCP tools");
         System.out.println("  mcp <tool_name> [args...]   Execute MCP tool");
         System.out.println("  mcp <tool_name> --data '{\"json\": \"data\"}'  Execute with JSON data");
         System.out.println();
-        System.out.println("For job execution, provide Base64-encoded JSON parameters.");
+        System.out.println("For legacy job execution, provide Base64-encoded JSON parameters.");
         String baseUrl = System.getProperty("app.base-url", "http://localhost:8080");
         System.out.println("Use the web interface at " + baseUrl + " for easier job configuration.");
     }

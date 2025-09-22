@@ -15,13 +15,13 @@ find_jar_file() {
     if [ -f "$HOME/.dmtools/dmtools.jar" ]; then
         jar_file="$HOME/.dmtools/dmtools.jar"
     # 2. Check local build directory (development)
-    elif [ -f "$SCRIPT_DIR/build/libs"/*.jar ]; then
+    elif ls "$SCRIPT_DIR/build/libs"/*.jar >/dev/null 2>&1; then
         jar_file=$(find "$SCRIPT_DIR/build/libs" -name "*-all.jar" | head -1)
     # 3. Check for any JAR file in the script directory
-    elif [ -f "$SCRIPT_DIR"/*.jar ]; then
+    elif ls "$SCRIPT_DIR"/*.jar >/dev/null 2>&1; then
         jar_file=$(find "$SCRIPT_DIR" -name "dmtools*.jar" -o -name "*-all.jar" | head -1)
     # 4. Check parent directory build folder (if script is in subdirectory)
-    elif [ -f "$SCRIPT_DIR/../build/libs"/*.jar ]; then
+    elif ls "$SCRIPT_DIR/../build/libs"/*.jar >/dev/null 2>&1; then
         jar_file=$(find "$SCRIPT_DIR/../build/libs" -name "*-all.jar" | head -1)
     fi
     
@@ -52,6 +52,8 @@ DMTools CLI Wrapper
 
 Usage:
   $0 list                           # List available MCP tools
+  $0 run <json-file>                # Execute job with JSON config file
+  $0 run <json-file> <encoded>      # Execute job with file + encoded overrides
   $0 <tool> [args...]              # Execute MCP tool with args
   $0 <tool> --data '{"json"}'      # Execute with inline JSON
   $0 <tool> --file params.json     # Execute with JSON file
@@ -62,6 +64,9 @@ Usage:
 
 Examples:
   $0 list
+  $0 run job-config.json
+  $0 run job-config.json "eyJvdmVycmlkZSI6InZhbHVlIn0="  # base64 encoded
+  $0 run job-config.json "%7B%22override%22%3A%22value%22%7D"  # URL encoded
   $0 jira_get_ticket DMC-479 summary,description
   $0 jira_get_ticket --data '{"key": "DMC-479", "fields": ["summary"]}'
   $0 jira_get_ticket <<EOF
@@ -104,6 +109,34 @@ case "$COMMAND" in
             java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp list 2>/dev/null
         fi
         exit 0
+        ;;
+    "run")
+        # Handle new run command with JSON file + optional encoded parameter
+        if [ $# -lt 1 ]; then
+            error "Run command requires at least one argument: json-file-path"
+        fi
+        
+        JSON_FILE="$1"
+        ENCODED_PARAM="${2:-}"
+        
+        # Validate file exists and is readable
+        if [ ! -f "$JSON_FILE" ]; then
+            error "Configuration file not found: $JSON_FILE"
+        fi
+        
+        if [ ! -r "$JSON_FILE" ]; then
+            error "Configuration file is not readable: $JSON_FILE"
+        fi
+        
+        # Execute run command with JobRunner
+        if [ -n "$ENCODED_PARAM" ]; then
+            info "Executing job with file: $JSON_FILE and encoded parameter"
+            java -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE" "$ENCODED_PARAM"
+        else
+            info "Executing job with file: $JSON_FILE"
+            java -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE"
+        fi
+        exit $?
         ;;
 esac
 
