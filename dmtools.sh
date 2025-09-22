@@ -7,6 +7,62 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Helper functions
+error() {
+    echo -e "${RED}Error: $1${NC}" >&2
+    exit 1
+}
+
+info() {
+    echo -e "${GREEN}Info: $1${NC}" >&2
+}
+
+# Load environment variables from various .env files
+load_env_files() {
+    local env_files=(
+        # Current working directory (highest priority)
+        ".env"
+        "dmtools.env"
+        "dmtools-local.env"
+        # Script directory (lower priority)
+        "$SCRIPT_DIR/.env"
+        "$SCRIPT_DIR/dmtools.env"
+        "$SCRIPT_DIR/dmtools-local.env"
+    )
+    
+    for env_file in "${env_files[@]}"; do
+        if [ -f "$env_file" ] && [ -r "$env_file" ]; then
+            # Check file permissions for security (should not be world-readable for sensitive data)
+            if [ -f "$env_file" ]; then
+                # Load the environment file, ignoring comments and empty lines
+                while IFS= read -r line || [ -n "$line" ]; do
+                    # Skip empty lines and comments
+                    if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
+                        # Export the variable if it's in KEY=VALUE format
+                        if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+                            local key="${BASH_REMATCH[1]}"
+                            local value="${BASH_REMATCH[2]}"
+                            # Remove surrounding quotes if present
+                            value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+                            export "$key"="$value"
+                        fi
+                    fi
+                done < "$env_file"
+                info "Loaded environment variables from: $env_file"
+            fi
+        fi
+    done
+}
+
+# Load environment files before proceeding
+load_env_files
+
 # Try to find JAR file in multiple locations
 find_jar_file() {
     local jar_file=""
@@ -29,22 +85,6 @@ find_jar_file() {
 }
 
 JAR_FILE=$(find_jar_file)
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Helper functions
-error() {
-    echo -e "${RED}Error: $1${NC}" >&2
-    exit 1
-}
-
-info() {
-    echo -e "${GREEN}Info: $1${NC}" >&2
-}
 
 usage() {
     cat << EOF
@@ -78,6 +118,28 @@ Examples:
 
 Environment Variables:
   DMTOOLS_INTEGRATIONS    Comma-separated list of integrations (jira,confluence,figma)
+  
+Environment Files:
+  The script automatically loads environment variables from the following files (in order of precedence):
+  1. .env (current directory)
+  2. dmtools.env (current directory)  
+  3. dmtools-local.env (current directory)
+  4. .env (script directory)
+  5. dmtools.env (script directory)
+  6. dmtools-local.env (script directory)
+  
+  File format supports:
+  - KEY=VALUE pairs
+  - Comments (lines starting with #)
+  - Quoted values: KEY="value with spaces"
+  - Empty lines (ignored)
+  
+  Common variables:
+  - JIRA_BASE_PATH, JIRA_EMAIL, JIRA_API_TOKEN
+  - CONFLUENCE_BASE_PATH, CONFLUENCE_API_TOKEN  
+  - FIGMA_API_KEY
+  - GEMINI_API_KEY, OPEN_AI_API_KEY
+  - GITHUB_TOKEN, GITLAB_TOKEN, BITBUCKET_TOKEN
 
 Installation:
   If you don't have DMTools installed, run:
