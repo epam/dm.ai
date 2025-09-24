@@ -167,6 +167,14 @@ public class CliExecutionHelper {
                 }
             } catch (Exception e) {
                 String errorMsg = "Failed to execute CLI command '" + command + "': " + e.getMessage();
+                
+                // Check if this is a cursor-agent related error and provide helpful message
+                if (command.contains("cursor-agent")) {
+                    errorMsg += "\n\nNote: Cursor AI CLI may not be available on this platform.";
+                    errorMsg += "\nCursor CLI is currently supported on macOS and Windows.";
+                    errorMsg += "\nFor Linux environments, consider using alternative AI tools or running on supported platforms.";
+                }
+                
                 logger.error(errorMsg, e);
                 cliResponses.append("CLI Command: ").append(command).append("\n");
                 cliResponses.append("Error: ").append(errorMsg).append("\n\n");

@@ -77,9 +77,20 @@ public class CommandLineUtils {
             String scriptCommand = String.format("script -q %s %s", tempOutput.getAbsolutePath(), command);
             processBuilder = new ProcessBuilder("/bin/sh", "-c", scriptCommand);
         } else {
-            // Linux - use script command with different syntax
-            String scriptCommand = String.format("script -q -c \"%s\" %s", command, tempOutput.getAbsolutePath());
-            processBuilder = new ProcessBuilder("/bin/sh", "-c", scriptCommand);
+            // Linux - check if script command supports -c flag, otherwise use direct execution
+            try {
+                // Test if script command supports -c flag
+                Process testProcess = new ProcessBuilder("script", "--help").start();
+                testProcess.waitFor();
+                
+                // Use script command if available
+                String scriptCommand = String.format("script -q -c \"%s\" %s", command, tempOutput.getAbsolutePath());
+                processBuilder = new ProcessBuilder("/bin/sh", "-c", scriptCommand);
+            } catch (Exception e) {
+                // Fallback to direct execution without script command
+                System.out.println("LOG: script command not available, using direct execution");
+                processBuilder = new ProcessBuilder("/bin/sh", "-c", command);
+            }
         }
 
         // Set working directory if provided
