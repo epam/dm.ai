@@ -160,7 +160,7 @@ public class TeammateCliIntegrationTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo 'Hello from CLI'"), any(File.class), any(Map.class)))
                       .thenReturn("Hello from CLI\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
@@ -204,7 +204,7 @@ public class TeammateCliIntegrationTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo 'CLI response only'"), any(File.class), any(Map.class)))
                       .thenReturn("CLI response only\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
@@ -248,7 +248,7 @@ public class TeammateCliIntegrationTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(contains("cat"), any(File.class), any(Map.class)))
                       .thenReturn("Attachment content\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
@@ -275,7 +275,7 @@ public class TeammateCliIntegrationTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("invalid-command"), any(File.class), any(Map.class)))
                       .thenThrow(new IOException("Command not found"));
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
@@ -304,7 +304,7 @@ public class TeammateCliIntegrationTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo 'test'"), any(File.class), any(Map.class)))
                       .thenReturn("test\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
@@ -330,7 +330,7 @@ public class TeammateCliIntegrationTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(contains("ls"), any(File.class), any(Map.class)))
                       .thenReturn("request.md\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act

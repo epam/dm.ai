@@ -23,6 +23,18 @@ info() {
     echo -e "${GREEN}Info: $1${NC}" >&2
 }
 
+# Execute java command with proper stderr handling
+execute_java_command() {
+    local java_cmd="$1"
+    if [ "$DEBUG" = true ]; then
+        # Show stderr - execute command directly
+        eval "$java_cmd"
+    else
+        # Suppress stderr
+        eval "$java_cmd 2>/dev/null"
+    fi
+}
+
 # Load environment variables from various .env files
 load_env_files() {
     local env_files=(
@@ -46,8 +58,8 @@ load_env_files() {
                     if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
                         # Export the variable if it's in KEY=VALUE format
                         if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
-                            local key="${BASH_REMATCH[1]}"
-                            local value="${BASH_REMATCH[2]}"
+                            key="${BASH_REMATCH[1]}"
+                            value="${BASH_REMATCH[2]}"
                             # Remove surrounding quotes if present
                             value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
                             export "$key"="$value"
@@ -97,7 +109,8 @@ Usage:
   $0 <tool> [args...]              # Execute MCP tool with args
   $0 <tool> --data '{"json"}'      # Execute with inline JSON
   $0 <tool> --file params.json     # Execute with JSON file
-  $0 <tool> --verbose              # Execute with debug output
+  $0 <tool> --verbose              # Execute with verbose output
+  $0 <tool> --debug                # Execute with debug output and error messages
   $0 <tool> <<EOF                  # Execute with heredoc
   {"json": "data"}
   EOF
@@ -154,66 +167,15 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-COMMAND="$1"
-shift
-
-# Handle special commands
-case "$COMMAND" in
-    "help"|"-h"|"--help")
-        usage
-        ;;
-    "list")
-        if [ $# -gt 0 ]; then
-            # List with filter
-            java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp list "$1" 2>/dev/null
-        else
-            # List all tools
-            java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp list 2>/dev/null
-        fi
-        exit 0
-        ;;
-    "run")
-        # Handle new run command with JSON file + optional encoded parameter
-        if [ $# -lt 1 ]; then
-            error "Run command requires at least one argument: json-file-path"
-        fi
-        
-        JSON_FILE="$1"
-        ENCODED_PARAM="${2:-}"
-        
-        # Validate file exists and is readable
-        if [ ! -f "$JSON_FILE" ]; then
-            error "Configuration file not found: $JSON_FILE"
-        fi
-        
-        if [ ! -r "$JSON_FILE" ]; then
-            error "Configuration file is not readable: $JSON_FILE"
-        fi
-        
-        # Execute run command with JobRunner
-        if [ -n "$ENCODED_PARAM" ]; then
-            info "Executing job with file: $JSON_FILE and encoded parameter"
-            java -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE" "$ENCODED_PARAM"
-        else
-            info "Executing job with file: $JSON_FILE"
-            java -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE"
-        fi
-        exit $?
-        ;;
-esac
-
-# Check if STDIN has data (heredoc/pipe)
-STDIN_DATA=""
-if [ ! -t 0 ]; then
-    STDIN_DATA=$(cat)
-fi
-
-# Parse remaining arguments
+# Initialize variables for argument parsing
 ARGS=()
 DATA=""
 FILE=""
 QUIET=true
+DEBUG=false
+COMMAND=""
 
+# Parse all arguments first to handle flags
 while [[ $# -gt 0 ]]; do
     case $1 in
         --data)
@@ -228,16 +190,81 @@ while [[ $# -gt 0 ]]; do
             QUIET=false
             shift
             ;;
+        --debug)
+            QUIET=false
+            DEBUG=true
+            shift
+            ;;
         --quiet)
             QUIET=true
             shift
             ;;
         *)
-            ARGS+=("$1")
+            if [ -z "$COMMAND" ]; then
+                COMMAND="$1"
+            else
+                ARGS+=("$1")
+            fi
             shift
             ;;
     esac
 done
+
+# Validate command exists
+if [ -z "$COMMAND" ]; then
+    usage
+fi
+
+# Handle special commands
+case "$COMMAND" in
+    "help"|"-h"|"--help")
+        usage
+        ;;
+    "list")
+        if [ $# -gt 0 ]; then
+            # List with filter
+            execute_java_command "java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list \"$1\""
+        else
+            # List all tools
+            execute_java_command "java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list"
+        fi
+        exit 0
+        ;;
+    "run")
+        # Handle new run command with JSON file + optional encoded parameter
+        if [ ${#ARGS[@]} -lt 1 ]; then
+            error "Run command requires at least one argument: json-file-path"
+        fi
+        
+        JSON_FILE="${ARGS[0]}"
+        ENCODED_PARAM="${ARGS[1]:-}"
+        
+        # Validate file exists and is readable
+        if [ ! -f "$JSON_FILE" ]; then
+            error "Configuration file not found: $JSON_FILE"
+        fi
+        
+        if [ ! -r "$JSON_FILE" ]; then
+            error "Configuration file is not readable: $JSON_FILE"
+        fi
+        
+        # Execute run command with JobRunner
+        if [ -n "$ENCODED_PARAM" ]; then
+            info "Executing job with file: $JSON_FILE and encoded parameter"
+            execute_java_command "java -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\" \"$ENCODED_PARAM\""
+        else
+            info "Executing job with file: $JSON_FILE"
+            execute_java_command "java -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\""
+        fi
+        exit $?
+        ;;
+esac
+
+# Check if STDIN has data (heredoc/pipe)
+STDIN_DATA=""
+if [ ! -t 0 ]; then
+    STDIN_DATA=$(cat)
+fi
 
 # Check if JAR file exists
 if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
@@ -254,15 +281,15 @@ fi
 if [ -n "$STDIN_DATA" ]; then
     [ "$QUIET" = false ] && info "Reading JSON from STDIN (${#STDIN_DATA} characters)"
     [ "$QUIET" = false ] && info "Using STDIN data"
-    if [ "$QUIET" = true ]; then
-        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --stdin-data "$STDIN_DATA" "${ARGS[@]}" 2>/dev/null
+    if [ "$DEBUG" = true ]; then
+        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --stdin-data "$STDIN_DATA" "${ARGS[@]}"
     else
         java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --stdin-data "$STDIN_DATA" "${ARGS[@]}" 2>/dev/null
     fi
 elif [ -n "$DATA" ]; then
     [ "$QUIET" = false ] && info "Using inline data"
-    if [ "$QUIET" = true ]; then
-        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --data "$DATA" "${ARGS[@]}" 2>/dev/null
+    if [ "$DEBUG" = true ]; then
+        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --data "$DATA" "${ARGS[@]}"
     else
         java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --data "$DATA" "${ARGS[@]}" 2>/dev/null
     fi
@@ -272,15 +299,15 @@ elif [ -n "$FILE" ]; then
     fi
     [ "$QUIET" = false ] && info "Using file data: $FILE"
     FILE_DATA=$(cat "$FILE")
-    if [ "$QUIET" = true ]; then
-        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --data "$FILE_DATA" "${ARGS[@]}" 2>/dev/null
+    if [ "$DEBUG" = true ]; then
+        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --data "$FILE_DATA" "${ARGS[@]}"
     else
         java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" --data "$FILE_DATA" "${ARGS[@]}" 2>/dev/null
     fi
 else
     [ "$QUIET" = false ] && info "Using positional arguments"
-    if [ "$QUIET" = true ]; then
-        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" "${ARGS[@]}" 2>/dev/null
+    if [ "$DEBUG" = true ]; then
+        java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" "${ARGS[@]}"
     else
         java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/sun.reflect=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "$COMMAND" "${ARGS[@]}" 2>/dev/null
     fi

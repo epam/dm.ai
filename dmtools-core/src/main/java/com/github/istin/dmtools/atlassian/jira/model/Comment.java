@@ -4,13 +4,15 @@ import com.github.istin.dmtools.atlassian.common.model.Assignee;
 import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.IUser;
 import com.github.istin.dmtools.common.model.JSONModel;
+import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.utils.DateUtils;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.Date;
 
-public class Comment extends JSONModel implements IComment {
+public class Comment extends JSONModel implements IComment, ToText {
 
     private static final String ID = "id";
     private static final String AUTHOR = "author";
@@ -49,4 +51,11 @@ public class Comment extends JSONModel implements IComment {
         return getModel(Assignee.class, AUTHOR);
     }
 
+
+    @Override
+    public String toText() throws IOException {
+        String fullName = getAuthor().getFullName();
+        String emailAddress = getAuthor().getEmailAddress();
+        return "author: " + fullName + " " + emailAddress + "\nCreated:" + getString("created") +"\n-\n"+getBody()+"\n-\n";
+    }
 }

@@ -5,9 +5,9 @@ import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
-import org.json.JSONObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONObject;
 
 public class BasicGeminiAI {
 
@@ -119,4 +119,4 @@ public class BasicGeminiAI {
             throw new RuntimeException("Failed to create GeminiJSAIClient via BasicGeminiAI", e);
         }
     }
-} 
+}

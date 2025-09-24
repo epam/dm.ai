@@ -368,19 +368,32 @@ public class JobJavaScriptBridge {
     }
 
     /**
-     * Load JavaScript from classpath resources with caching
+     * Load JavaScript from classpath resources or filesystem with caching
      */
     private String loadFromResources(String resourcePath) throws IOException {
         return resourceCache.computeIfAbsent(resourcePath, path -> {
-            try (InputStream inputStream = getClass().getClassLoader()
-                    .getResourceAsStream(path)) {
-                if (inputStream == null) {
-                    throw new RuntimeException("Resource not found: " + path);
+            try {
+                // First try to load from classpath resources
+                try (InputStream inputStream = getClass().getClassLoader()
+                        .getResourceAsStream(path)) {
+                    if (inputStream != null) {
+                        logger.debug("Loading JavaScript from resource: {}", path);
+                        return IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+                    }
                 }
-                logger.debug("Loading JavaScript from resource: {}", path);
-                return IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+                
+                // If not found in resources, try to load from filesystem
+                java.io.File file = new java.io.File(path);
+                if (file.exists() && file.isFile()) {
+                    logger.debug("Loading JavaScript from filesystem: {}", file.getAbsolutePath());
+                    return java.nio.file.Files.readString(file.toPath(), StandardCharsets.UTF_8);
+                }
+                
+                // If still not found, throw exception
+                throw new RuntimeException("JavaScript file not found in resources or filesystem: " + path);
+                
             } catch (IOException e) {
-                throw new RuntimeException("Failed to load JS resource: " + path, e);
+                throw new RuntimeException("Failed to load JS file: " + path, e);
             }
         });
     }

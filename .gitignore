@@ -115,3 +115,5 @@ dmtools-core/cacheTestableJiraClient
 .gradle-isolated
 dmtools-core/input
 input
+cacheBasicFigmaClient
+cacheGeminiJSAIClient

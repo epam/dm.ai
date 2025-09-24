@@ -186,6 +186,25 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return response;
     }
 
+    @MCPTool(
+            name = "jira_get_account_by_email",
+            description = "Gets account details by email",
+            integration = "jira",
+            category = "information"
+    )
+    public Assignee getAccountByEmail(
+            @MCPParam(name = "email", description = "The Jira Email", required = true, example = "email@email.com")
+            String email
+    ) throws IOException {
+        GenericRequest jiraRequest = new GenericRequest(this, path("user/search?query=" + email));
+        List<Assignee> result = JSONModel.convertToModels(Assignee.class, new JSONArray(jiraRequest.execute()));
+        if (!result.isEmpty()) {
+            return result.getFirst();
+        } else {
+            return null;
+        }
+    }
+
     @Override
     @MCPTool(
             name = "jira_assign_ticket_to",
@@ -196,11 +215,11 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     public String assignTo(
             @MCPParam(name = "key", description = "The Jira ticket key to assign", required = true, example = "PRJ-123")
             String ticketKey,
-            @MCPParam(name = "userName", description = "The Jira user name to assign to", required = true, example = "email@email.com")
-            String userName
+            @MCPParam(name = "accountId", description = "The Jira account ID to assign to. If you know email use first jira_get_account_by_email tools to get account ID", required = true, example = "123457:2a123456-40e8-49d6-8ddc-6852e518451f")
+            String accountId
     ) throws IOException {
         GenericRequest jiraRequest = new GenericRequest(this, path("issue/" + ticketKey + "/assignee"));
-        jiraRequest.setBody(new JSONObject().put("name", userName).toString());
+        jiraRequest.setBody(new JSONObject().put("accountId", accountId).toString());
         return jiraRequest.put();
     }
 
@@ -234,6 +253,22 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 clearCache(genericRequest);
             }
         }
+    }
+
+    @MCPTool(
+            name = "jira_add_label",
+            description = "Adding label to specific ticket key",
+            integration = "jira",
+            category = "ticket_management"
+    )
+    public void addLabel(
+            @MCPParam(name = "key", description = "The Jira ticket key to assign", required = true, example = "PRJ-123")
+            String key,
+            @MCPParam(name = "label", description = "The label to be added to ticket", required = true, example = "custom_label")
+            String label
+    ) throws IOException {
+        T ticket = performTicket(key, new String[]{Fields.LABELS});
+        addLabelIfNotExists(ticket, label);
     }
 
     @Override

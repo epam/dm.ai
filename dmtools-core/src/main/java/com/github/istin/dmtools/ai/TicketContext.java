@@ -53,28 +53,16 @@ public class TicketContext implements ToText {
         prepareContext(false);
     }
     public void prepareContext(boolean withComments) throws IOException {
-        long prepareStart = System.currentTimeMillis();
-        logger.info("TIMING: Starting TicketContext.prepareContext() for {} at {}", ticket.getKey(), prepareStart);
-        
+
         // Step 1: Extract JIRA IDs from ticket text
-        long extractStart = System.currentTimeMillis();
-        logger.info("TIMING: Starting ticket.toText() for JIRA ID extraction for {} at {}", ticket.getKey(), extractStart);
         String ticketText = ticket.toText();
-        long extractTextDuration = System.currentTimeMillis() - extractStart;
-        logger.info("TIMING: ticket.toText() for JIRA ID extraction took {}ms for {} (text length: {})", extractTextDuration, ticket.getKey(), ticketText.length());
-        
-        long parseStart = System.currentTimeMillis();
-        logger.info("TIMING: Starting IssuesIDsParser.extractAllJiraIDs() for {} at {}", ticket.getKey(), parseStart);
+
         Set<String> keys = IssuesIDsParser.extractAllJiraIDs(ticketText);
-        long parseDuration = System.currentTimeMillis() - parseStart;
-        logger.info("TIMING: IssuesIDsParser.extractAllJiraIDs() took {}ms for {} and found {} keys: {}", parseDuration, ticket.getKey(), keys.size(), keys);
-        
+
         // Step 2: Fetch extra tickets (parallel processing for performance)
         extraTickets = new ArrayList<>();
         if (!keys.isEmpty()) {
-            long fetchExtraStart = System.currentTimeMillis();
-            logger.info("TIMING: Starting parallel extra tickets fetch for {} at {}", ticket.getKey(), fetchExtraStart);
-            
+
             // Filter out self-references and prepare list of keys to fetch
             List<String> keysToFetch = keys.stream()
                 .filter(key -> !key.equalsIgnoreCase(ticket.getKey()))
@@ -85,9 +73,7 @@ public class TicketContext implements ToText {
                 // Use a reasonable number of threads to avoid overwhelming the API
                 int threadPoolSize = Math.min(keysToFetch.size(), 5); // Max 5 concurrent requests
                 ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
-                
-                logger.info("TIMING: Fetching {} extra tickets in parallel using {} threads", keysToFetch.size(), threadPoolSize);
-                
+
                 // Create CompletableFutures for parallel ticket fetching
                 List<CompletableFuture<ITicket>> futures = keysToFetch.stream()
                     .map(key -> CompletableFuture.supplyAsync(() -> fetchSingleTicket(key), executorService))
@@ -101,8 +87,7 @@ public class TicketContext implements ToText {
                         .collect(Collectors.toList());
                     
                     extraTickets.addAll(fetchedTickets);
-                    logger.info("TIMING: Successfully fetched {} out of {} extra tickets", fetchedTickets.size(), keysToFetch.size());
-                    
+
                 } catch (Exception e) {
                     logger.error("TIMING: Error during parallel ticket fetching: {}", e.getMessage());
                 } finally {
@@ -120,23 +105,15 @@ public class TicketContext implements ToText {
                 }
             }
             
-            long fetchExtraDuration = System.currentTimeMillis() - fetchExtraStart;
-            logger.info("TIMING: Parallel extra tickets fetch took {}ms for {} (was sequential before optimization)", fetchExtraDuration, ticket.getKey());
         }
         
         // Step 3: Fetch comments if requested
         if (withComments) {
-            long commentsStart = System.currentTimeMillis();
-            logger.info("TIMING: Starting comments fetch for {} at {}", ticket.getKey(), commentsStart);
             @SuppressWarnings("unchecked")
             List<IComment> fetchedComments = (List<IComment>) trackerClient.getComments(ticket.getKey(), ticket);
             comments = fetchedComments;
-            long commentsDuration = System.currentTimeMillis() - commentsStart;
-            logger.info("TIMING: Comments fetch took {}ms for {} ({} comments)", commentsDuration, ticket.getKey(), (comments != null ? comments.size() : 0));
         }
         
-        long prepareDuration = System.currentTimeMillis() - prepareStart;
-        logger.info("TIMING: Overall TicketContext.prepareContext() took {}ms for {}", prepareDuration, ticket.getKey());
     }
 
     /**
@@ -147,7 +124,6 @@ public class TicketContext implements ToText {
      * @return The fetched ticket or null if fetching failed
      */
     private ITicket fetchSingleTicket(String key) {
-        long singleTicketStart = System.currentTimeMillis();
         try {
             ITicket fetchedTicket = null;
             
@@ -162,22 +138,15 @@ public class TicketContext implements ToText {
             
             // Fallback to standard performTicket if custom request failed or unavailable
             if (fetchedTicket == null) {
-                logger.info("TIMING: Fetching extra ticket {} via performTicket()", key);
                 fetchedTicket = trackerClient.performTicket(key, trackerClient.getExtendedQueryFields());
             }
             
-            long singleTicketDuration = System.currentTimeMillis() - singleTicketStart;
-            logger.info("TIMING: Fetching extra ticket {} took {}ms", key, singleTicketDuration);
-            
+
             return fetchedTicket;
             
         } catch (AtlassianRestClient.RestClientException e) {
-            long singleTicketDuration = System.currentTimeMillis() - singleTicketStart;
-            logger.info("TIMING: Failed to fetch extra ticket {} after {}ms: {}", key, singleTicketDuration, e.getMessage());
             return null;
         } catch (Exception e) {
-            long singleTicketDuration = System.currentTimeMillis() - singleTicketStart;
-            logger.error("TIMING: Unexpected error fetching extra ticket {} after {}ms: {}", key, singleTicketDuration, e.getMessage());
             return null;
         }
     }
@@ -188,7 +157,10 @@ public class TicketContext implements ToText {
         if (comments != null) {
             text.append("<previous_discussion>").append("\n");
             for (IComment comment : comments) {
-                text.append("\n").append(comment);
+                text.append("\n");
+                if (comment instanceof ToText) {
+                    text.append(((ToText) comment).toText());
+                }
             }
             text.append("</previous_discussion>").append("\n");
         }

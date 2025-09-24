@@ -63,6 +63,17 @@ public class ChunkPreparation {
         public long getTotalFilesSize() {
             return totalFilesSize;
         }
+
+        @Override
+        public String toString() {
+            StringBuilder result = new StringBuilder();
+            result.append(text);
+            if (files != null && !files.isEmpty()) {
+                result.append("\nfiles:\n").append(files);
+            }
+            return result.toString();
+        }
+
     }
 
     private static class ChunkAccumulator {

@@ -1,7 +1,10 @@
 package com.github.istin.dmtools.mcp.cli;
 
+import com.github.istin.dmtools.ai.ConversationObserver;
+import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
@@ -91,7 +94,6 @@ public class McpCliHandler {
             logger.info("Executing MCP tool: {} with arguments: {}", toolName, arguments);
 
             Object result = MCPToolExecutor.executeTool(toolName, arguments, clientInstances);
-
             if (result == null) {
                 return "Tool executed successfully but returned no result.";
             }
@@ -225,6 +227,14 @@ public class McpCliHandler {
             logger.warn("Failed to create BasicFigmaClient: {}", e.getMessage());
         }
 
+        try {
+            // Create AI client
+            clients.put("ai", BasicGeminiAI.create(new ConversationObserver(), new PropertyReader()));
+            logger.debug("Created BasicGeminiAI instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create BasicGeminiAI: {}", e.getMessage());
+        }
+
         logger.info("Created {} client instances for MCP CLI", clients.size());
         return clients;
     }
@@ -251,7 +261,6 @@ public class McpCliHandler {
         if (integrations.isEmpty()) {
             integrations.addAll(clientInstances.keySet());
         }
-
         logger.debug("Available integrations: {}", integrations);
         return integrations;
     }

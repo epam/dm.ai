@@ -2,7 +2,6 @@ package com.github.istin.dmtools.figma;
 
 import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.networking.GenericRequest;
-import okhttp3.Request;
 import org.json.JSONArray;
 import org.junit.Before;
 import org.junit.Test;
@@ -13,7 +12,6 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.*;
 
 public class FigmaClientTest {
@@ -23,7 +21,7 @@ public class FigmaClientTest {
     private static final String AUTHORIZATION = "Bearer token";
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() throws Exception {
         figmaClient = Mockito.spy(new FigmaClient(BASE_PATH, AUTHORIZATION));
     }
 

@@ -155,11 +155,11 @@ public class CliExecutionHelperTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), isNull(), any(Map.class)))
                       .thenReturn("world\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
-            StringBuilder result = cliHelper.executeCliCommands(commands, null);
+            StringBuilder result = cliHelper.executeCliCommands(commands, null, "dmtools.env");
             
             // Assert
             String resultString = result.toString();
@@ -179,11 +179,11 @@ public class CliExecutionHelperTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("invalid-command"), isNull(), any(Map.class)))
                       .thenThrow(new IOException("Command not found"));
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
-            StringBuilder result = cliHelper.executeCliCommands(commands, null);
+            StringBuilder result = cliHelper.executeCliCommands(commands, null, "dmtools.env");
             
             // Assert
             String resultString = result.toString();
@@ -196,7 +196,7 @@ public class CliExecutionHelperTest {
     @Test
     void testExecuteCliCommands_EmptyCommands() {
         // Act
-        StringBuilder result = cliHelper.executeCliCommands(new String[0], null);
+        StringBuilder result = cliHelper.executeCliCommands(new String[0], null, "dmtools.env");
         
         // Assert
         assertEquals(0, result.length());
@@ -205,7 +205,7 @@ public class CliExecutionHelperTest {
     @Test
     void testExecuteCliCommands_NullCommands() {
         // Act
-        StringBuilder result = cliHelper.executeCliCommands(null, null);
+        StringBuilder result = cliHelper.executeCliCommands(null, null, "dmtools.env");
         
         // Assert
         assertEquals(0, result.length());
@@ -221,11 +221,11 @@ public class CliExecutionHelperTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class)))
                       .thenReturn("test\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
 
             // Act
-            StringBuilder result = cliHelper.executeCliCommands(commands, workingDir);
+            StringBuilder result = cliHelper.executeCliCommands(commands, workingDir, "dmtools.env");
 
             // Assert
             assertTrue(result.toString().contains("test"));
@@ -339,11 +339,11 @@ public class CliExecutionHelperTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), any(File.class), any(Map.class)))
                       .thenReturn("world\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
-            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(commands, workingDir);
+            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(commands, workingDir, "dmtools.env");
             
             // Assert
             assertNotNull(result);
@@ -370,11 +370,11 @@ public class CliExecutionHelperTest {
             mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class)))
                       .thenReturn("test\nExit Code: 0");
             // Mock the environment loading
-            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile())
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                       .thenReturn(Map.of());
             
             // Act
-            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(commands, workingDir);
+            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(commands, workingDir, "dmtools.env");
             
             // Assert
             assertNotNull(result);

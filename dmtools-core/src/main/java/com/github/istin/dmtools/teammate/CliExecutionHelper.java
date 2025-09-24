@@ -122,7 +122,7 @@ public class CliExecutionHelper {
      * @param workingDirectory Working directory for command execution (optional)
      * @return StringBuilder containing all command responses
      */
-    public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory) {
+    public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
         StringBuilder cliResponses = new StringBuilder();
         
         if (cliCommands == null || cliCommands.length == 0) {
@@ -131,7 +131,7 @@ public class CliExecutionHelper {
         }
         
         // Load environment variables from dmtools.env for CLI tools like cursor-agent
-        Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile();
+        Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile(envVariablesFile);
         if (!envVars.isEmpty()) {
             logger.info("Loaded {} environment variables from dmtools.env", envVars.size());
             // Log if CURSOR_API_KEY is available (without revealing the key)
@@ -183,8 +183,8 @@ public class CliExecutionHelper {
      * @param workingDirectory Working directory for command execution (optional)
      * @return CliExecutionResult containing command responses and output response
      */
-    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory) {
-        StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory);
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
+        StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile);
         
         // Check for output response file in the working directory where commands were executed
         String outputResponse = processOutputResponse(workingDirectory);
