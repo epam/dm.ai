@@ -43,8 +43,10 @@ public class JobJavaScriptBridge {
     private final Confluence confluence;
     private final SourceCode sourceCode;
     private final Map<String, String> resourceCache = new ConcurrentHashMap<>();
+    private final Map<String, Object> moduleCache = new ConcurrentHashMap<>();
     private Context jsContext;
     private final Map<String, Object> clientInstances;
+    private String currentScriptDirectory;
 
     @Inject
     public JobJavaScriptBridge(TrackerClient<?> trackerClient, AI ai, Confluence confluence, SourceCode sourceCode) {
@@ -74,6 +76,9 @@ public class JobJavaScriptBridge {
 
             // Expose the Java bridge for tool execution using ProxyObject
             jsContext.getBindings("js").putMember("executeToolViaJava", new ExecuteToolProxy());
+
+            // Expose require function for module loading
+            jsContext.getBindings("js").putMember("require", new RequireProxy());
 
             // Expose MCP tools using generated infrastructure
             exposeMCPToolsUsingGenerated();
@@ -152,6 +157,15 @@ public class JobJavaScriptBridge {
                 if (argsValue.hasMembers()) {
                     for (String key : argsValue.getMemberKeys()) {
                         Object memberValue = argsValue.getMember(key).as(Object.class);
+                        // Convert PolyglotMap to JSONObject or PolyglotList to JSONArray for better compatibility
+                        if (memberValue != null) {
+                            String className = memberValue.getClass().getName();
+                            if (className.contains("PolyglotMap")) {
+                                memberValue = convertPolyglotValueToJSON(memberValue);
+                            } else if (className.contains("PolyglotList")) {
+                                memberValue = convertPolyglotValueToJSON(memberValue);
+                            }
+                        }
                         argsMap.put(key, memberValue);
                         logger.debug("Converted JS arg: {} = {} (type: {})", key, memberValue, memberValue != null ? memberValue.getClass().getName() : "null");
                     }
@@ -279,10 +293,16 @@ public class JobJavaScriptBridge {
      */
     public Object executeJavaScript(String jsSourceOrPath, JSONObject parameters) throws Exception {
         try {
+            // Set current script directory for relative path resolution
+            setCurrentScriptDirectory(jsSourceOrPath);
+            
             String jsCode = loadJavaScriptCode(jsSourceOrPath);
             
             // Make the tool executor available to JavaScript using ProxyExecutable
             jsContext.getBindings("js").putMember("executeToolViaJava", new ExecuteToolProxy());
+            
+            // Ensure require function is available for this execution
+            jsContext.getBindings("js").putMember("require", new RequireProxy());
             
             // Evaluate the JavaScript code
             jsContext.eval("js", jsCode);
@@ -306,6 +326,59 @@ public class JobJavaScriptBridge {
             logger.error("JavaScript execution failed for source: {}", 
                          jsSourceOrPath.length() > 100 ? jsSourceOrPath.substring(0, 100) + "..." : jsSourceOrPath, e);
             throw new RuntimeException("JavaScript execution failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Convert PolyglotMap to JSONObject or PolyglotList to JSONArray for better compatibility with MCP tools
+     */
+    private Object convertPolyglotValueToJSON(Object polyglotValue) {
+        try {
+            Value value = Value.asValue(polyglotValue);
+            String className = polyglotValue.getClass().getName();
+            
+            if (className.contains("PolyglotMap") && value.hasMembers()) {
+                // Convert PolyglotMap to JSONObject
+                JSONObject jsonObject = new JSONObject();
+                for (String key : value.getMemberKeys()) {
+                    Object memberValue = value.getMember(key).as(Object.class);
+                    // Recursively convert nested PolyglotMaps and PolyglotLists
+                    if (memberValue != null) {
+                        String memberClassName = memberValue.getClass().getName();
+                        if (memberClassName.contains("PolyglotMap") || memberClassName.contains("PolyglotList")) {
+                            memberValue = convertPolyglotValueToJSON(memberValue);
+                        }
+                    }
+                    jsonObject.put(key, memberValue);
+                }
+                logger.debug("Converted PolyglotMap to JSONObject: {}", jsonObject.toString());
+                return jsonObject;
+                
+            } else if (className.contains("PolyglotList") && value.hasArrayElements()) {
+                // Convert PolyglotList to JSONArray
+                JSONArray jsonArray = new JSONArray();
+                long arraySize = value.getArraySize();
+                for (long i = 0; i < arraySize; i++) {
+                    Object elementValue = value.getArrayElement(i).as(Object.class);
+                    // Recursively convert nested PolyglotMaps and PolyglotLists
+                    if (elementValue != null) {
+                        String elementClassName = elementValue.getClass().getName();
+                        if (elementClassName.contains("PolyglotMap") || elementClassName.contains("PolyglotList")) {
+                            elementValue = convertPolyglotValueToJSON(elementValue);
+                        }
+                    }
+                    jsonArray.put(elementValue);
+                }
+                logger.debug("Converted PolyglotList to JSONArray: {}", jsonArray.toString());
+                return jsonArray;
+            }
+            
+            // If it's neither a PolyglotMap nor PolyglotList, return as-is
+            return polyglotValue;
+            
+        } catch (Exception e) {
+            logger.warn("Failed to convert Polyglot value to JSON: {}", e.getMessage());
+            return polyglotValue; // Return original value on failure
         }
     }
 
@@ -445,11 +518,120 @@ public class JobJavaScriptBridge {
     }
 
     /**
+     * Set current script directory for relative path resolution
+     */
+    private void setCurrentScriptDirectory(String jsSourceOrPath) {
+        if (jsSourceOrPath.contains("/")) {
+            // Extract directory from path
+            int lastSlash = jsSourceOrPath.lastIndexOf('/');
+            if (lastSlash > 0) {
+                currentScriptDirectory = jsSourceOrPath.substring(0, lastSlash);
+            } else {
+                currentScriptDirectory = "";
+            }
+        } else {
+            currentScriptDirectory = "";
+        }
+        logger.debug("Set current script directory to: {}", currentScriptDirectory);
+    }
+
+    /**
+     * Resolve module path relative to current script
+     */
+    private String resolveModulePath(String modulePath) {
+        if (modulePath.startsWith("./") || modulePath.startsWith("../")) {
+            // Relative path - resolve relative to current script directory
+            if (currentScriptDirectory != null && !currentScriptDirectory.isEmpty()) {
+                String resolvedPath = currentScriptDirectory + "/" + modulePath;
+                // Normalize the path (handle ../ and ./)
+                resolvedPath = java.nio.file.Paths.get(resolvedPath).normalize().toString();
+                logger.debug("Resolved relative path {} to {}", modulePath, resolvedPath);
+                return resolvedPath;
+            }
+        }
+        return modulePath;
+    }
+
+    /**
+     * Load and execute a JavaScript module, returning its exports
+     */
+    private Object loadModule(String modulePath) throws IOException {
+        String resolvedPath = resolveModulePath(modulePath);
+        
+        // Check module cache first
+        if (moduleCache.containsKey(resolvedPath)) {
+            logger.debug("Returning cached module: {}", resolvedPath);
+            return moduleCache.get(resolvedPath);
+        }
+
+        logger.debug("Loading module: {}", resolvedPath);
+        
+        // Put a placeholder in cache to prevent circular dependency loops
+        // This is important for handling circular requires
+        Object placeholder = new Object();
+        moduleCache.put(resolvedPath, placeholder);
+        
+        try {
+            String moduleCode = loadJavaScriptCode(resolvedPath);
+            
+            // Wrap module code to capture exports
+            String wrappedCode = String.format("""
+                (function() {
+                    var module = { exports: {} };
+                    var exports = module.exports;
+                    
+                    %s
+                    
+                    return module.exports;
+                })()
+                """, moduleCode);
+
+            // Execute the wrapped module code
+            Object moduleExports = jsContext.eval("js", wrappedCode);
+            
+            // Replace placeholder with actual exports
+            moduleCache.put(resolvedPath, moduleExports);
+            
+            logger.debug("Successfully loaded module: {}", resolvedPath);
+            return moduleExports;
+            
+        } catch (Exception e) {
+            // Remove failed module from cache
+            moduleCache.remove(resolvedPath);
+            logger.error("Failed to load module: {}", resolvedPath, e);
+            throw new RuntimeException("Failed to load module: " + resolvedPath, e);
+        }
+    }
+
+    /**
+     * ProxyExecutable for require() function
+     */
+    private class RequireProxy implements ProxyExecutable {
+        @Override
+        public Object execute(Value... arguments) {
+            if (arguments.length != 1) {
+                throw new IllegalArgumentException("require() expects exactly one argument (module path)");
+            }
+            
+            String modulePath = arguments[0].asString();
+            logger.debug("require() called with: {}", modulePath);
+            
+            try {
+                return loadModule(modulePath);
+            } catch (Exception e) {
+                logger.error("require() failed for module: {}", modulePath, e);
+                throw new RuntimeException("Failed to require module: " + modulePath, e);
+            }
+        }
+    }
+
+    /**
      * Clean up resources
      */
     public void close() {
         if (jsContext != null) {
             jsContext.close();
         }
+        moduleCache.clear();
     }
 }

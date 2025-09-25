@@ -24,7 +24,7 @@ public class BasicJiraClient extends JiraClient<Ticket> {
 
     private static final String[] JIRA_EXTRA_FIELDS;
 
-    private static final String JIRA_EXTRA_FIELDS_PROJECT;
+    public static final String JIRA_EXTRA_FIELDS_PROJECT;
 
     private static final int JIRA_SEARCH_MAX_RESULTS;
 

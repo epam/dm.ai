@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Properties;
 
 import com.github.istin.dmtools.teammate.Teammate;
+import com.github.istin.dmtools.js.JSRunner;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -65,6 +66,7 @@ public class JobRunner {
             case "userstorygenerator": return new UserStoryGenerator();
             case "unittestsgenerator": return new UnitTestsGenerator();
             case "commitstriage": return new CommitsTriage();
+            case "jsrunner": return new JSRunner();
             default: return null;
         }
     }
@@ -93,7 +95,8 @@ public class JobRunner {
             new SourceCodeCommitTrackerSyncJob(),
             new UserStoryGenerator(),
             new UnitTestsGenerator(),
-            new CommitsTriage()
+            new CommitsTriage(),
+            new JSRunner()
     );
 
     public static void main(String[] args) throws Exception {

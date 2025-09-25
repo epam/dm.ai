@@ -14,6 +14,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -407,6 +408,337 @@ class JobJavaScriptBridgeTest {
 
         // Then - Should only load from GitHub once due to caching
         verify(mockSourceCode, times(1)).getFileContent(githubUrl);
+    }
+
+    @Test
+    void testPolyglotMapToJSONObjectConversion() throws Exception {
+        // Given - JavaScript that passes nested objects to jira_update_ticket
+        String jsWithNestedObjects = """
+            function action(params) {
+                try {
+                    // Test nested object structure that would become PolyglotMap
+                    var updateParams = {
+                        "fields": {
+                            "priority": {
+                                "name": "High"
+                            },
+                            "labels": ["automated", "test"],
+                            "customfield_10001": {
+                                "value": "option1"
+                            }
+                        },
+                        "update": {
+                            "assignee": [{
+                                "set": {
+                                    "accountId": "123456"
+                                }
+                            }]
+                        }
+                    };
+                    
+                    // This should trigger PolyglotMap to JSONObject conversion
+                    var result = jira_update_ticket({
+                        key: "TEST-123",
+                        params: updateParams
+                    });
+                    
+                    return {
+                        success: true,
+                        result: result
+                    };
+                } catch (error) {
+                    return {
+                        success: false,
+                        error: error.toString()
+                    };
+                }
+            }
+            """;
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            // Mock the jira_update_ticket call with JSONObject parameter
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_update_ticket"), 
+                argThat(args -> {
+                    // Verify that the params argument is now a JSONObject (not PolyglotMap)
+                    Object paramsValue = args.get("params");
+                    return paramsValue instanceof JSONObject && 
+                           ((JSONObject) paramsValue).has("fields") &&
+                           ((JSONObject) paramsValue).getJSONObject("fields").has("priority");
+                }), 
+                any(Map.class)
+            )).thenReturn("{\"success\": true}");
+
+            JSONObject params = new JSONObject();
+
+            // When
+            Object result = bridge.executeJavaScript(jsWithNestedObjects, params);
+
+            // Then
+            assertNotNull(result);
+            String resultStr = result.toString();
+            assertTrue(resultStr.contains("success"));
+            
+            // Verify the MCP tool was called with properly converted JSONObject
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_update_ticket"),
+                argThat(args -> {
+                    Object key = args.get("key");
+                    Object paramsObj = args.get("params");
+                    
+                    // Verify key parameter
+                    if (!"TEST-123".equals(key)) {
+                        return false;
+                    }
+                    
+                    // Verify params is JSONObject with proper structure
+                    if (!(paramsObj instanceof JSONObject)) {
+                        return false;
+                    }
+                    
+                    JSONObject jsonParams = (JSONObject) paramsObj;
+                    
+                    // Check nested structure conversion
+                    if (!jsonParams.has("fields")) {
+                        return false;
+                    }
+                    
+                    JSONObject fields = jsonParams.getJSONObject("fields");
+                    if (!fields.has("priority")) {
+                        return false;
+                    }
+                    
+                    JSONObject priority = fields.getJSONObject("priority");
+                    if (!"High".equals(priority.getString("name"))) {
+                        return false;
+                    }
+                    
+                    // Check array conversion
+                    if (!fields.has("labels")) {
+                        return false;
+                    }
+                    
+                    // Check nested update structure
+                    if (!jsonParams.has("update")) {
+                        return false;
+                    }
+                    
+                    return true;
+                }),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testPolyglotMapConversionWithDeeplyNestedStructures() throws Exception {
+        // Given - Test with very deeply nested object structures
+        String jsWithDeeplyNested = """
+            function action(params) {
+                var deeplyNested = {
+                    "level1": {
+                        "level2": {
+                            "level3": {
+                                "level4": {
+                                    "value": "deep",
+                                    "number": 42,
+                                    "boolean": true,
+                                    "array": ["item1", "item2"],
+                                    "nullValue": null
+                                }
+                            }
+                        }
+                    }
+                };
+                
+                return jira_update_ticket({
+                    key: "DEEP-123",
+                    params: deeplyNested
+                });
+            }
+            """;
+
+        // Capture the arguments passed to MCPToolExecutor
+        AtomicReference<Map<String, Object>> capturedArgs = new AtomicReference<>();
+        
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                anyString(),
+                any(Map.class),
+                any(Map.class)
+            )).thenAnswer(invocation -> {
+                // Capture the arguments for verification
+                capturedArgs.set((Map<String, Object>) invocation.getArgument(1));
+                return "{\"updated\": true}";
+            });
+
+            JSONObject params = new JSONObject();
+
+            // When
+            bridge.executeJavaScript(jsWithDeeplyNested, params);
+
+            // Then - Verify deep conversion worked correctly
+            Map<String, Object> args = capturedArgs.get();
+            assertNotNull(args, "Args should be captured");
+            
+            Object paramsObj = args.get("params");
+            assertInstanceOf(JSONObject.class, paramsObj, "params should be converted to JSONObject");
+            
+            JSONObject jsonParams = (JSONObject) paramsObj;
+            
+            // Navigate through the deep structure
+            JSONObject level4 = jsonParams
+                .getJSONObject("level1")
+                .getJSONObject("level2")
+                .getJSONObject("level3")
+                .getJSONObject("level4");
+            
+            // Verify all data types are preserved
+            assertEquals("deep", level4.getString("value"));
+            assertEquals(42, level4.getInt("number"));
+            assertTrue(level4.getBoolean("boolean"));
+            assertEquals(2, level4.getJSONArray("array").length());
+            assertTrue(level4.isNull("nullValue"));
+            
+            // Verify the tool was called
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_update_ticket"),
+                any(Map.class),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testStringToJSONObjectConversion() throws Exception {
+        // Given - JavaScript that passes JSON string that should be converted to JSONObject
+        String jsWithJsonString = """
+            function action(params) {
+                try {
+                    // Simulate the case where JSON.stringify was used (creating a string)
+                    var jsonString = JSON.stringify({
+                        "fields": {
+                            "priority": {
+                                "name": "Critical"
+                            },
+                            "summary": "Updated via string conversion"
+                        }
+                    });
+                    
+                    // This should trigger String to JSONObject conversion in MCPToolExecutor
+                    var result = jira_update_ticket({
+                        key: "STRING-123",
+                        params: jsonString
+                    });
+                    
+                    return {
+                        success: true,
+                        result: result
+                    };
+                } catch (error) {
+                    return {
+                        success: false,
+                        error: error.toString()
+                    };
+                }
+            }
+            """;
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            // Mock successful execution with string parameter that gets converted to JSONObject
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_update_ticket"),
+                argThat(args -> {
+                    Object paramsValue = args.get("params");
+                    // The MCPToolExecutor should convert the JSON string to JSONObject
+                    return paramsValue instanceof String && 
+                           ((String) paramsValue).contains("\"priority\"") &&
+                           ((String) paramsValue).contains("\"Critical\"");
+                }),
+                any(Map.class)
+            )).thenReturn("{\"updated\": true}");
+
+            JSONObject params = new JSONObject();
+
+            // When
+            Object result = bridge.executeJavaScript(jsWithJsonString, params);
+
+            // Then
+            assertNotNull(result);
+            String resultStr = result.toString();
+            assertTrue(resultStr.contains("success"));
+            
+            // Verify the call was made with JSON string parameter
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_update_ticket"),
+                argThat(args -> {
+                    Object key = args.get("key");
+                    Object paramsObj = args.get("params");
+                    
+                    // Verify parameters
+                    return "STRING-123".equals(key) && 
+                           paramsObj instanceof String &&
+                           ((String) paramsObj).contains("\"priority\"");
+                }),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testPolyglotMapConversionFailureHandling() throws Exception {
+        // Given - JavaScript that might cause conversion issues
+        String jsWithPotentialIssues = """
+            function action(params) {
+                try {
+                    // Create an object that might be problematic to convert
+                    var problematicParams = {
+                        "normal": "value",
+                        "circular": {}
+                    };
+                    // Note: We can't actually create a circular reference in this test context,
+                    // but we test the error handling path
+                    
+                    return jira_update_ticket({
+                        key: "ERROR-123",
+                        params: problematicParams
+                    });
+                } catch (error) {
+                    return {
+                        error: error.toString(),
+                        handled: true
+                    };
+                }
+            }
+            """;
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            // Mock successful execution even with potential conversion issues
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_update_ticket"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("{\"handled\": true}");
+
+            JSONObject params = new JSONObject();
+
+            // When
+            Object result = bridge.executeJavaScript(jsWithPotentialIssues, params);
+
+            // Then - Should handle gracefully without throwing exceptions
+            assertNotNull(result);
+            
+            // Verify the call was made with converted parameters
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_update_ticket"),
+                argThat(args -> {
+                    // Just verify params was converted to JSONObject
+                    Object paramsObj = args.get("params");
+                    return paramsObj instanceof JSONObject;
+                }),
+                any(Map.class)
+            ));
+        }
     }
 }
 

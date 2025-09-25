@@ -128,19 +128,8 @@ public class JiraClientMcpToolsIntegrationTest {
     private void verifyTicketField(String ticketKey, String fieldName, String expectedValue) throws IOException {
         Ticket ticket = jiraClient.performTicket(ticketKey, new String[]{fieldName});
         assertNotNull(ticket, "Ticket should exist");
-        
-        String actualValue = null;
-        switch (fieldName) {
-            case "summary":
-                actualValue = ticket.getFields().getSummary();
-                break;
-            case "description":
-                actualValue = ticket.getFields().getDescription();
-                break;
-            default:
-                fail("Unsupported field for verification: " + fieldName);
-        }
-        
+        String fieldCustomCode = jiraClient.getFieldCustomCode(BasicJiraClient.JIRA_EXTRA_FIELDS_PROJECT, fieldName);
+        String actualValue = ticket.getFields().getJSONObject().getString(fieldCustomCode);
         assertEquals(expectedValue, actualValue, "Field " + fieldName + " should match expected value");
     }
 
@@ -180,7 +169,7 @@ public class JiraClientMcpToolsIntegrationTest {
         String jql = "project = " + testProjectKey + " ORDER BY created DESC";
         String[] fields = {"summary", "status", "issuetype"};
         
-        var searchResult = jiraClient.search(jql, 0, fields);
+        var searchResult = jiraClient.searchByPage(jql, null, fields);
         
         assertNotNull(searchResult);
         assertNotNull(searchResult.getIssues());
@@ -642,6 +631,27 @@ public class JiraClientMcpToolsIntegrationTest {
         
         logger.info("Field updated for ticket: {}", ticketKey);
     }
+
+    @Test
+    @Order(18)
+    @DisplayName("Test jira_update_field")
+    void testUpdateDiagramsField() throws IOException {
+        // Create a test ticket
+        String originalSummary = "Update Field Test - " + System.currentTimeMillis();
+        String ticketKey = createTestTicket(originalSummary, "Test ticket", "Task");
+
+        String newSummary = "Diagrams " + System.currentTimeMillis();
+
+        String field = "Diagrams";
+        String response = jiraClient.updateField(ticketKey, field, newSummary);
+
+        assertNotNull(response);
+
+        // Verify the update
+        verifyTicketField(ticketKey, field, newSummary);
+
+        logger.info("Field updated for ticket: {}", ticketKey);
+    }
     
     @Test
     @Order(19)
@@ -774,7 +784,7 @@ public class JiraClientMcpToolsIntegrationTest {
         String jql = "project = " + testProjectKey + " AND summary ~ \"" + searchSummary + "\"";
         String[] fieldsWithUserFriendlyNames = {"summary", "description", "Diagrams", "issuetype"};
         
-        var searchResult = jiraClient.search(jql, 0, fieldsWithUserFriendlyNames);
+        var searchResult = jiraClient.searchByPage(jql, null, fieldsWithUserFriendlyNames);
         
         assertNotNull(searchResult);
         assertNotNull(searchResult.getIssues());
@@ -888,7 +898,7 @@ public class JiraClientMcpToolsIntegrationTest {
         String jql = "project = " + testProjectKey + " AND summary ~ \"" + searchSummary + "\"";
         String[] explicitCustomFields = {"summary", "description", "customfield_10124", "issuetype"};
         
-        var searchResult = jiraClient.search(jql, 0, explicitCustomFields);
+        var searchResult = jiraClient.searchByPage(jql, null, explicitCustomFields);
         
         assertNotNull(searchResult);
         assertNotNull(searchResult.getIssues());
@@ -1193,10 +1203,15 @@ public class JiraClientMcpToolsIntegrationTest {
         // Create a test ticket
         String summary = "Priority Test - " + System.currentTimeMillis();
         String ticketKey = createTestTicket(summary, "Test ticket", "Task");
-        
-        String response = jiraClient.setTicketPriority(ticketKey, "High");
-        
-        assertNotNull(response);
+
+        String priorityToSet = "Low";
+        jiraClient.setTicketPriority(ticketKey, priorityToSet);
+        Ticket ticket = jiraClient.performTicket(ticketKey, new String[]{});
+        assertEquals(priorityToSet, ticket.getPriority());
+        priorityToSet = "High";
+        jiraClient.setTicketPriority(ticketKey, priorityToSet);
+        ticket = jiraClient.performTicket(ticketKey, new String[]{});
+        assertEquals(priorityToSet, ticket.getPriority());
         
         logger.info("Priority set for ticket: {}", ticketKey);
     }

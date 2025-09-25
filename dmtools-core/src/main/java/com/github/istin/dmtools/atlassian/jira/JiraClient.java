@@ -2006,19 +2006,21 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "ticket_management"
     )
-    public String setTicketPriority(@MCPParam(name = "key", description = "The Jira ticket key to set priority for", required = true) String ticket, 
+    public String setTicketPriority(@MCPParam(name = "key", description = "The Jira ticket key to set priority for", required = true) String key,
                                   @MCPParam(name = "priority", description = "The priority name to set", required = true) String priority) throws IOException {
-        GenericRequest request = getTicket(ticket);
-        JSONObject jsonObject;
-        jsonObject = new JSONObject()
-                .put("update",
-                        new JSONObject().put("priority",
-                                new JSONArray().put(new JSONObject().put("set", new JSONObject().put("name", priority)))
-                        )
-                );
-        request.setBody(jsonObject
-                .toString());
-        return request.put();
+        GenericRequest request = getTicket(key);
+        JSONObject params = new JSONObject();
+        JSONObject fields = new JSONObject();
+        JSONObject priorityObject = new JSONObject();
+        priorityObject.put("name", priority);
+        fields.put("priority", priorityObject);
+        params.put("fields", fields);
+        System.out.println("key: " + key);
+        System.out.println("priority: " + priority);
+        String response = updateTicket(key, params);
+        System.out.println("response: " + response);
+        clearCache(request);
+        return  response;
     }
 
     @MCPTool(
