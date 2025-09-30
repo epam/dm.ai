@@ -15,7 +15,7 @@ public class TestCaseDeduplicationAgent extends AbstractSimpleAgent<TestCaseDedu
     @AllArgsConstructor
     @Getter
     public static class Params {
-        private List<TestCaseGeneratorAgent.TestCase> newTestCases;
+        private String newTestCases;
         private String existingTestCases;
         private String existingGeneratedTestCases;
     }

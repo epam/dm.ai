@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.ai.agent;
 
+import com.github.istin.dmtools.common.model.ToText;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -32,10 +33,11 @@ public class TestCaseDeduplicationAgentTest {
                     "Test user logout functionality"
             ));
 
+            String newTestCasesText = ToText.Utils.toText(newTestCases);
             String existingTestCases = "Priority: High\nSummary: User can login\nDescription: Existing login test\n";
 
             List<TestCaseGeneratorAgent.TestCase> result = agent.run(new TestCaseDeduplicationAgent.Params(
-                    newTestCases,
+                    newTestCasesText,
                     existingTestCases,
                     ""
             ));
@@ -70,10 +72,11 @@ public class TestCaseDeduplicationAgentTest {
                     "Test dashboard viewing"
             ));
 
+            String newTestCasesText = ToText.Utils.toText(newTestCases);
             String existingTestCases = "Priority: High\nSummary: User can login\nDescription: Test login functionality\n";
 
             List<TestCaseGeneratorAgent.TestCase> result = agent.run(new TestCaseDeduplicationAgent.Params(
-                    newTestCases,
+                    newTestCasesText,
                     existingTestCases,
                     ""
             ));
@@ -109,11 +112,12 @@ public class TestCaseDeduplicationAgentTest {
                     "Test user login"
             ));
 
+            String newTestCasesText = ToText.Utils.toText(newTestCases);
             String existingTestCases = "";
             String existingGeneratedTestCases = "Priority: Medium\nSummary: User can login\nDescription: Test login\n";
 
             List<TestCaseGeneratorAgent.TestCase> result = agent.run(new TestCaseDeduplicationAgent.Params(
-                    newTestCases,
+                    newTestCasesText,
                     existingTestCases,
                     existingGeneratedTestCases
             ));
@@ -147,11 +151,12 @@ public class TestCaseDeduplicationAgentTest {
                     "Test settings editing"
             ));
 
+            String newTestCasesText = ToText.Utils.toText(newTestCases);
             String existingTestCases = "";
             String existingGeneratedTestCases = "";
 
             List<TestCaseGeneratorAgent.TestCase> result = agent.run(new TestCaseDeduplicationAgent.Params(
-                    newTestCases,
+                    newTestCasesText,
                     existingTestCases,
                     existingGeneratedTestCases
             ));
@@ -173,11 +178,12 @@ public class TestCaseDeduplicationAgentTest {
     public void testDeduplicationWithEmptyNewTestCases() throws Exception {
         try {
             List<TestCaseGeneratorAgent.TestCase> newTestCases = new ArrayList<>();
+            String newTestCasesText = ToText.Utils.toText(newTestCases);
             String existingTestCases = "Some existing test cases";
             String existingGeneratedTestCases = "";
 
             List<TestCaseGeneratorAgent.TestCase> result = agent.run(new TestCaseDeduplicationAgent.Params(
-                    newTestCases,
+                    newTestCasesText,
                     existingTestCases,
                     existingGeneratedTestCases
             ));

@@ -5,7 +5,6 @@ import com.github.istin.dmtools.ai.agent.RelatedTestCaseAgent;
 import com.github.istin.dmtools.ai.agent.RelatedTestCasesAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseGeneratorAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseDeduplicationAgent;
-import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
@@ -220,7 +219,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         if (generatedTokens <= tokenLimit) {
             return testCaseDeduplicationAgent.run(
                 new TestCaseDeduplicationAgent.Params(
-                    allGeneratedTestCases,
+                    allGeneratedText,
                     "", // No existing test cases for self-deduplication
                     "" // No previous deduplicated results
                 )
@@ -232,12 +231,10 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         List<TestCaseGeneratorAgent.TestCase> uniqueResults = new ArrayList<>();
         
         for (ChunkPreparation.Chunk chunk : chunks) {
-            List<TestCaseGeneratorAgent.TestCase> chunkTestCases = parseTestCasesFromChunk(chunk);
-            
             // Deduplicate against accumulated unique results from previous chunks
             List<TestCaseGeneratorAgent.TestCase> deduplicatedChunk = testCaseDeduplicationAgent.run(
                 new TestCaseDeduplicationAgent.Params(
-                    chunkTestCases,
+                    chunk.getText(), // Pass string directly
                     "", // No existing test cases
                     ToText.Utils.toText(uniqueResults) // Previous unique results from earlier chunks
                 )
@@ -253,15 +250,14 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         List<TestCaseGeneratorAgent.TestCase> newTestCases,
         List<ChunkPreparation.Chunk> existingTestCaseChunks
     ) throws Exception {
-        List<TestCaseGeneratorAgent.TestCase> uniqueResults = new ArrayList<>();
-        
         // Deduplicate new test cases against each chunk of existing test cases
         for (ChunkPreparation.Chunk existingChunk : existingTestCaseChunks) {
+            String newTestCasesText = ToText.Utils.toText(newTestCases);
             String existingTestCasesText = existingChunk.getText();
             
             List<TestCaseGeneratorAgent.TestCase> deduplicatedAgainstChunk = testCaseDeduplicationAgent.run(
                 new TestCaseDeduplicationAgent.Params(
-                    newTestCases,
+                    newTestCasesText, // Pass string directly
                     existingTestCasesText,
                     "" // No previous deduplicated results
                 )
@@ -274,22 +270,6 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         }
         
         return newTestCases;
-    }
-
-    private List<TestCaseGeneratorAgent.TestCase> parseTestCasesFromChunk(ChunkPreparation.Chunk chunk) throws Exception {
-        JSONArray jsonArray = AIResponseParser.parseResponseAsJSONArray(chunk.getText());
-        List<TestCaseGeneratorAgent.TestCase> testCases = new ArrayList<>();
-        
-        for (int i = 0; i < jsonArray.length(); i++) {
-            JSONObject jsonObject = jsonArray.getJSONObject(i);
-            testCases.add(new TestCaseGeneratorAgent.TestCase(
-                jsonObject.getString("priority"),
-                jsonObject.getString("summary"),
-                jsonObject.getString("description")
-            ));
-        }
-        
-        return testCases;
     }
 
     @NotNull
