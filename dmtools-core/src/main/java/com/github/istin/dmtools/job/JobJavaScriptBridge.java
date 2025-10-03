@@ -4,6 +4,7 @@ import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import org.apache.commons.io.IOUtils;
@@ -61,6 +62,7 @@ public class JobJavaScriptBridge {
         this.clientInstances.put("jira", trackerClient);  // MCP expects "jira" key for any tracker implementation
         this.clientInstances.put("ai", ai);
         this.clientInstances.put("confluence", confluence);
+        this.clientInstances.put("file", new FileTools());  // File operations for reading files from working directory
         
         initializeJavaScriptContext();
     }
@@ -199,7 +201,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = Set.of("jira", "ai", "confluence", "figma");
+        Set<String> integrations = Set.of("jira", "ai", "confluence", "figma", "file");
         
         // Generate tool schemas using MCP infrastructure
         Map<String, Object> toolsResponse = MCPSchemaGenerator.generateToolsListResponse(integrations);
