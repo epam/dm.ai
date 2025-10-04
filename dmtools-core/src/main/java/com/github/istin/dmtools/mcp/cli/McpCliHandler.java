@@ -4,8 +4,10 @@ import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
+import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
+import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import org.apache.logging.log4j.LogManager;
@@ -233,6 +235,22 @@ public class McpCliHandler {
             logger.debug("Created BasicGeminiAI instance");
         } catch (Exception e) {
             logger.warn("Failed to create BasicGeminiAI: {}", e.getMessage());
+        }
+
+        try {
+            // Create CLI executor
+            clients.put("cli", new CliCommandExecutor());
+            logger.debug("Created CliCommandExecutor instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create CliCommandExecutor: {}", e.getMessage());
+        }
+
+        try {
+            // Create File tools for reading files from working directory
+            clients.put("file", new FileTools());
+            logger.debug("Created FileTools instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create FileTools: {}", e.getMessage());
         }
 
         logger.info("Created {} client instances for MCP CLI", clients.size());
