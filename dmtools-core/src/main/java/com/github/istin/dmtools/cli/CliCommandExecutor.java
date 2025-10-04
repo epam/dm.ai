@@ -139,10 +139,11 @@ public class CliCommandExecutor {
      * @return true if command starts with allowed prefix, false otherwise
      */
     private boolean isCommandWhitelisted(String command) {
-        String lowerCommand = command.toLowerCase();
+        // Extract the first part of the command (the executable name)
+        String commandName = command.split(" ")[0].toLowerCase();
         
         for (String allowedCommand : ALLOWED_COMMANDS) {
-            if (lowerCommand.startsWith(allowedCommand + " ") || lowerCommand.equals(allowedCommand)) {
+            if (commandName.equals(allowedCommand)) {
                 return true;
             }
         }
@@ -206,7 +207,7 @@ public class CliCommandExecutor {
             logger.debug("Found dmtools.env file at: {}", envFilePath);
             return CommandLineUtils.loadEnvironmentFromFile(envFilePath.toString());
         } else {
-            logger.debug("No dmtools.env file found in working directory: {}", workingDirectory.getAbsolutePath());
+            logger.debug("No dmtools.env file found in working directory: {}. Continuing with system environment.", workingDirectory.getAbsolutePath());
             return Map.of(); // Return empty map if file doesn't exist
         }
     }
