@@ -2,6 +2,7 @@ package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.file.FileTools;
@@ -63,6 +64,7 @@ public class JobJavaScriptBridge {
         this.clientInstances.put("ai", ai);
         this.clientInstances.put("confluence", confluence);
         this.clientInstances.put("file", new FileTools());  // File operations for reading files from working directory
+        this.clientInstances.put("cli", new CliCommandExecutor());  // CLI command execution for automation workflows
         
         initializeJavaScriptContext();
     }
