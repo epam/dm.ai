@@ -103,9 +103,9 @@ public class CliCommandExecutor {
         File resolvedWorkingDir = resolveWorkingDirectory(workingDirectory);
         logger.debug("Resolved working directory: {}", resolvedWorkingDir.getAbsolutePath());
         
-        // Load environment variables from dmtools.env file if it exists
+        // Load environment variables (default + dmtools.env file if it exists)
         Map<String, String> envVars = loadEnvironmentVariables(resolvedWorkingDir);
-        logger.debug("Loaded {} environment variables from dmtools.env", envVars.size());
+        logger.debug("Loaded {} environment variables (including defaults)", envVars.size());
         
         // Log command execution (with masked sensitive data)
         String maskedCommand = maskSensitiveData(trimmedCommand);
@@ -196,20 +196,31 @@ public class CliCommandExecutor {
     
     /**
      * Loads environment variables from dmtools.env file if it exists in working directory.
+     * Also adds default environment variables for non-interactive execution.
      * 
      * @param workingDirectory Directory to check for dmtools.env file
      * @return Map of environment variables
      */
     private Map<String, String> loadEnvironmentVariables(File workingDirectory) {
+        Map<String, String> envVars = new java.util.HashMap<>();
+        
+        // Add default environment variables for non-interactive execution
+        // Disable git pager to prevent hangs in CI/CD environments
+        envVars.put("GIT_PAGER", "cat");
+        envVars.put("GIT_TERMINAL_PROMPT", "0");
+        
+        // Load from dmtools.env file if it exists
         Path envFilePath = Paths.get(workingDirectory.getAbsolutePath(), "dmtools.env");
         
         if (Files.exists(envFilePath)) {
             logger.debug("Found dmtools.env file at: {}", envFilePath);
-            return CommandLineUtils.loadEnvironmentFromFile(envFilePath.toString());
+            Map<String, String> fileEnvVars = CommandLineUtils.loadEnvironmentFromFile(envFilePath.toString());
+            envVars.putAll(fileEnvVars);
         } else {
             logger.debug("No dmtools.env file found in working directory: {}. Continuing with system environment.", workingDirectory.getAbsolutePath());
-            return Map.of(); // Return empty map if file doesn't exist
         }
+        
+        return envVars;
     }
     
     /**
