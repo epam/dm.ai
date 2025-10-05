@@ -1,0 +1,86 @@
+name: Release DMTools
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Custom version (e.g., 1.7.54). Leave empty to auto-increment patch version.'
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Read current version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(grep '^version=' gradle.properties | cut -d'=' -f2)
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+      
+      - name: Determine new version
+        id: new_version
+        run: |
+          CURRENT_VERSION="${{ steps.current_version.outputs.current }}"
+          CUSTOM_VERSION="${{ github.event.inputs.version }}"
+          
+          if [ -n "$CUSTOM_VERSION" ]; then
+            NEW_VERSION="$CUSTOM_VERSION"
+            echo "Using custom version: $NEW_VERSION"
+          else
+            # Auto-increment patch version
+            IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+            MAJOR="${VERSION_PARTS[0]}"
+            MINOR="${VERSION_PARTS[1]}"
+            PATCH="${VERSION_PARTS[2]}"
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            echo "Auto-incremented version: $NEW_VERSION"
+          fi
+          
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Update gradle.properties
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          sed -i "s/^version=.*/version=$NEW_VERSION/" gradle.properties
+          cat gradle.properties
+      
+      - name: Commit version change
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          git add gradle.properties
+          git commit -m "version increased to $NEW_VERSION"
+      
+      - name: Create tag
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          git tag "v$NEW_VERSION"
+          echo "Created tag: v$NEW_VERSION"
+      
+      - name: Push changes and tag
+        run: |
+          git push origin main
+          git push origin --tags
+      
+      - name: Summary
+        run: |
+          echo "✅ Release completed successfully!"
+          echo "📦 Old version: ${{ steps.current_version.outputs.current }}"
+          echo "🚀 New version: ${{ steps.new_version.outputs.version }}"
+          echo "🏷️  Tag: v${{ steps.new_version.outputs.version }}"
