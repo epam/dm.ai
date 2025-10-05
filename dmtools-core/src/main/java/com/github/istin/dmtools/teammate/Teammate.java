@@ -14,6 +14,7 @@ import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.FileConfig;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.context.ContextOrchestrator;
 import com.github.istin.dmtools.context.UriToObject;
@@ -366,17 +367,74 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         String[] extractedArray = new String[inputArray.length];
         for (int i = 0; i < inputArray.length; i ++) {
             String input = inputArray[i];
-            if (input != null && input.startsWith("https://")) {
-                String value = confluence.contentByUrl(input).getStorage().getValue();
-                if (StringUtils.isConfluenceYamlFormat(value)) {
-                    input = input + "\n" + StringUtils.extractYamlContentFromConfluence(value);
-                } else {
-                    input = input + "\n" +value;
+            if (input != null) {
+                // Existing Confluence URL detection
+                if (input.startsWith("https://")) {
+                    String value = confluence.contentByUrl(input).getStorage().getValue();
+                    if (StringUtils.isConfluenceYamlFormat(value)) {
+                        input = input + "\n" + StringUtils.extractYamlContentFromConfluence(value);
+                    } else {
+                        input = input + "\n" + value;
+                    }
                 }
+                // NEW: File path detection and processing
+                else if (isFilePath(input)) {
+                    input = processFilePath(input);
+                }
+                // Plain text: no processing needed
             }
             extractedArray[i] = input;
         }
         return extractedArray;
+    }
+
+    /**
+     * Checks if the input string is a file path pattern.
+     * Supports absolute paths (/) and relative paths (./ or ../)
+     * 
+     * @param input the string to check
+     * @return true if the input matches a file path pattern
+     */
+    private boolean isFilePath(String input) {
+        return input.startsWith("/") || input.startsWith("./") || input.startsWith("../");
+    }
+
+    /**
+     * Processes a file path by reading its content and concatenating it to the original path.
+     * Implements graceful error handling per DMC-539 decision (Option B):
+     * - File not found: Log warning and use original value as fallback
+     * - I/O errors: Log warning and use original value as fallback
+     * - Invalid path: Log warning and use original value as fallback
+     * 
+     * @param input the file path to process
+     * @return the original path concatenated with file content, or original path if error occurs
+     */
+    private String processFilePath(String input) {
+        try {
+            // Resolve relative paths from current working directory (DMC-537 Option A)
+            Path basePath = Paths.get(System.getProperty("user.dir"));
+            Path filePath = input.startsWith("/") ? 
+                    Paths.get(input) : basePath.resolve(input).normalize();
+
+            // Read file content using existing FileConfig utility
+            FileConfig fileConfig = new FileConfig();
+            String fileContent = fileConfig.readFile(filePath.toString());
+
+            if (fileContent != null) {
+                // Concatenate content same as Confluence URL processing
+                return input + "\n" + fileContent;
+            } else {
+                // File not found - log warning and use original value (DMC-539 Option B)
+                logger.warn("File not found, using original value as fallback: {}", input);
+                return input;
+            }
+        } catch (RuntimeException e) {
+            // Error reading file or invalid path - log warning and use original value (DMC-539 Option B)
+            // Note: InvalidPathException is a subclass of RuntimeException
+            logger.warn("Error processing file path '{}': {}. Using original value as fallback.", 
+                    input, e.getMessage());
+            return input;
+        }
     }
 
 

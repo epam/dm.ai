@@ -361,4 +361,110 @@ public class TeammateCliIntegrationTest {
         Path inputFolder = tempDir.resolve("input");
         assertFalse(Files.exists(inputFolder));
     }
+    
+    @Test
+    void testFilePathInjectionInInstructions() throws Exception {
+        // Arrange - Create a test file with instructions
+        Path instructionsFile = tempDir.resolve("test-instructions.txt");
+        Files.write(instructionsFile, "File-based instructions content".getBytes(StandardCharsets.UTF_8));
+        
+        // Change working directory to tempDir for relative path resolution
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+            
+            // Set instructions to file path
+            RequestDecompositionAgent.Result agentParams = params.getAgentParams();
+            agentParams.setInstructions(new String[]{"./test-instructions.txt"});
+            
+            // Act
+            List<ResultItem> results = teammate.runJobImpl(params);
+            
+            // Assert
+            assertNotNull(results);
+            assertEquals(1, results.size());
+            
+            // Verify AI agent was called with file content
+            ArgumentCaptor<GenericRequestAgent.Params> captor = ArgumentCaptor.forClass(GenericRequestAgent.Params.class);
+            verify(genericRequestAgent).run(captor.capture());
+            
+            GenericRequestAgent.Params capturedParams = captor.getValue();
+            String[] processedInstructions = capturedParams.getRequest().getInstructions();
+            assertNotNull(processedInstructions);
+            assertTrue(processedInstructions[0].contains("File-based instructions content"),
+                    "Instructions should contain file content");
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+    
+    @Test
+    void testFilePathInjectionInMultipleFields() throws Exception {
+        // Arrange - Create test files for different fields
+        Path roleFile = tempDir.resolve("role.txt");
+        Path formattingFile = tempDir.resolve("formatting.txt");
+        Path fewShotsFile = tempDir.resolve("fewshots.txt");
+        
+        Files.write(roleFile, "Senior Developer".getBytes(StandardCharsets.UTF_8));
+        Files.write(formattingFile, "Markdown format".getBytes(StandardCharsets.UTF_8));
+        Files.write(fewShotsFile, "Example 1\nExample 2".getBytes(StandardCharsets.UTF_8));
+        
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+            
+            // Set multiple fields to file paths
+            RequestDecompositionAgent.Result agentParams = params.getAgentParams();
+            agentParams.setAiRole("./role.txt");
+            agentParams.setFormattingRules("./formatting.txt");
+            agentParams.setFewShots("./fewshots.txt");
+            
+            // Act
+            List<ResultItem> results = teammate.runJobImpl(params);
+            
+            // Assert
+            assertNotNull(results);
+            assertEquals(1, results.size());
+            
+            // Verify AI agent was called with file content in all fields
+            ArgumentCaptor<GenericRequestAgent.Params> captor = ArgumentCaptor.forClass(GenericRequestAgent.Params.class);
+            verify(genericRequestAgent).run(captor.capture());
+            
+            GenericRequestAgent.Params capturedParams = captor.getValue();
+            RequestDecompositionAgent.Result result = capturedParams.getRequest();
+            
+            assertTrue(result.getAiRole().contains("Senior Developer"),
+                    "aiRole should contain file content");
+            assertTrue(result.getFormattingRules().contains("Markdown format"),
+                    "formattingRules should contain file content");
+            assertTrue(result.getFewShots().contains("Example 1"),
+                    "fewShots should contain file content");
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+    
+    @Test
+    void testFilePathInjectionWithMissingFile() throws Exception {
+        // Arrange - Set instructions to non-existent file
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+            
+            RequestDecompositionAgent.Result agentParams = params.getAgentParams();
+            agentParams.setInstructions(new String[]{"./non-existent-file.txt"});
+            
+            // Act - should not throw exception
+            List<ResultItem> results = teammate.runJobImpl(params);
+            
+            // Assert
+            assertNotNull(results);
+            assertEquals(1, results.size());
+            
+            // Verify AI agent was still called (with original path as fallback)
+            verify(genericRequestAgent).run(any());
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
 }
