@@ -16,7 +16,6 @@ public interface ApplicationConfiguration extends
     GitLabConfiguration,
     BitbucketConfiguration,
     RallyConfiguration,
-    AppCenterConfiguration,
     FigmaConfiguration,
     MetricsConfiguration {
     

@@ -473,16 +473,6 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     }
     
     @Override
-    public String getAppCenterToken() {
-        return getValue("APP_CENTER_TOKEN");
-    }
-    
-    @Override
-    public String getAppCenterOrganization() {
-        return getValue("APP_CENTER_ORGANIZATION");
-    }
-    
-    @Override
     public String getFigmaBasePath() {
         return getValue("FIGMA_BASE_PATH");
     }
@@ -552,4 +542,4 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         }
     }
     
-} 
+}

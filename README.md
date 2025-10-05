@@ -262,21 +262,7 @@ CODE_AI_MODEL=gpt-4
 TEST_AI_MODEL=gpt-4
 ```
 
----
-
-### AppCenter Configuration
-```properties
-APP_CENTER_TOKEN=your_appcenter_token
-APP_CENTER_ORGANIZATION=your-org
-```
-
-#### How to Get AppCenter Token:
-1. Log in to AppCenter.
-2. Navigate to **Account Settings > API Tokens**.
-3. Generate a new API token.
-4. Copy the token and add it to the configuration.
-
----
+****---
 
 ### Figma Configuration
 ```properties

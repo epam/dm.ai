@@ -27,7 +27,6 @@ The configuration system consists of:
 - Tool-specific Configurations:
   - `FigmaConfiguration`: Interface for Figma settings
   - `FirebaseConfiguration`: Interface for Firebase settings
-  - `AppCenterConfiguration`: Interface for AppCenter settings
   - `RallyConfiguration`: Interface for Rally settings
   - `MetricsConfiguration`: Interface for metrics settings
 

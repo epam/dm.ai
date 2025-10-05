@@ -1,46 +1,77 @@
 package com.github.istin.dmtools.atlassian.confluence.model;
 
-import org.json.JSONException;
 import org.json.JSONObject;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import org.junit.jupiter.api.Test;
 
-public class StorageTest {
+import static org.junit.jupiter.api.Assertions.*;
+
+class StorageTest {
 
     @Test
-    public void testDefaultConstructor() {
+    void testDefaultConstructor() {
         Storage storage = new Storage();
         assertNotNull(storage);
     }
 
     @Test
-    public void testConstructorWithJSONString() {
-        String jsonString = "{\"value\":\"testValue\"}";
-        try {
-            Storage storage = new Storage(jsonString);
-            assertNotNull(storage);
-            assertEquals("testValue", storage.getValue());
-        } catch (JSONException e) {
-            fail("JSONException should not be thrown");
-        }
-    }
-
-    @Test
-    public void testConstructorWithJSONObject() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("value", "testValue");
-        Storage storage = new Storage(jsonObject);
+    void testJsonStringConstructor() throws Exception {
+        String json = "{\"value\":\"<p>Content body</p>\"}";
+        Storage storage = new Storage(json);
+        
         assertNotNull(storage);
-        assertEquals("testValue", storage.getValue());
+        assertEquals("<p>Content body</p>", storage.getValue());
     }
 
     @Test
-    public void testGetValue() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("value", "testValue");
-        Storage storage = new Storage(jsonObject);
-        assertEquals("testValue", storage.getValue());
+    void testJsonObjectConstructor() {
+        JSONObject json = new JSONObject();
+        json.put("value", "<h1>Title</h1><p>Paragraph</p>");
+        
+        Storage storage = new Storage(json);
+        
+        assertNotNull(storage);
+        assertEquals("<h1>Title</h1><p>Paragraph</p>", storage.getValue());
+    }
+
+    @Test
+    void testGetValue() {
+        JSONObject json = new JSONObject();
+        json.put("value", "Plain text content");
+        
+        Storage storage = new Storage(json);
+        
+        assertEquals("Plain text content", storage.getValue());
+    }
+
+    @Test
+    void testGetValue_Null() {
+        Storage storage = new Storage();
+        assertNull(storage.getValue());
+    }
+
+    @Test
+    void testValueConstant() {
+        assertEquals("value", Storage.VALUE);
+    }
+
+    @Test
+    void testGetValue_EmptyString() {
+        JSONObject json = new JSONObject();
+        json.put("value", "");
+        
+        Storage storage = new Storage(json);
+        
+        assertEquals("", storage.getValue());
+    }
+
+    @Test
+    void testGetValue_ComplexHtml() {
+        String complexHtml = "<div><h2>Header</h2><ul><li>Item 1</li><li>Item 2</li></ul></div>";
+        JSONObject json = new JSONObject();
+        json.put("value", complexHtml);
+        
+        Storage storage = new Storage(json);
+        
+        assertEquals(complexHtml, storage.getValue());
     }
 }

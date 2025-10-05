@@ -332,16 +332,6 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
     
     @Override
-    public String getAppCenterToken() {
-        return propertyReader.getAppCenterToken();
-    }
-    
-    @Override
-    public String getAppCenterOrganization() {
-        return propertyReader.getAppCenterOrganization();
-    }
-    
-    @Override
     public String getFigmaBasePath() {
         return propertyReader.getFigmaBasePath();
     }
@@ -371,4 +361,4 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
         return propertyReader.getTicketFieldsChangedDivider(fieldName);
     }
     
-} 
+}

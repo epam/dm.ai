@@ -15,6 +15,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
 public class ConfluenceTest {
@@ -92,5 +93,79 @@ public class ConfluenceTest {
         verify(confluence, times(1)).contentById("6750210");
     }
 
+    @Test
+    public void testEncodeContent() {
+        String content = "Hello World & Special <chars>";
+        String encoded = confluence.encodeContent(content);
+        
+        assertNotNull(encoded);
+        assert(encoded.startsWith("body="));
+        assert(encoded.contains("Hello"));
+    }
+
+    @Test
+    public void testEncodeContent_EmptyString() {
+        String encoded = confluence.encodeContent("");
+        assertNotNull(encoded);
+        assertEquals("body=", encoded);
+    }
+
+    @Test
+    public void testEncodeContent_SpecialCharacters() {
+        String content = "Test with spaces, commas, and + signs";
+        String encoded = confluence.encodeContent(content);
+        
+        assertNotNull(encoded);
+        assertTrue(encoded.startsWith("body="));
+    }
+
+    @Test
+    public void testGetDefaultSpace() {
+        confluence.setDefaultSpace("TEST");
+        assertEquals("TEST", confluence.getDefaultSpace());
+    }
+
+    @Test
+    public void testSetDefaultSpace() {
+        confluence.setDefaultSpace("MYSPACE");
+        assertEquals("MYSPACE", confluence.getDefaultSpace());
+    }
+
+    @Test
+    public void testDefaultSpace_Null() {
+        confluence.setDefaultSpace(null);
+        assertEquals(null, confluence.getDefaultSpace());
+    }
+
+    @Test
+    public void testConstructorWithDefaultSpace() throws IOException {
+        Confluence confluenceWithSpace = new Confluence("http://test.com", "token", null, "SPACE");
+        assertNotNull(confluenceWithSpace);
+        assertEquals("SPACE", confluenceWithSpace.getDefaultSpace());
+    }
+
+    @Test
+    public void testConstructorWithLogger() throws IOException {
+        Confluence confluenceWithLogger = new Confluence("http://test.com", "token", null);
+        assertNotNull(confluenceWithLogger);
+    }
+
+    @Test
+    public void testUriToObject_NullContent() throws Exception {
+        doReturn(null).when(confluence).contentByUrl(anyString());
+        
+        Object result = confluence.uriToObject("http://example.com/spaces/TEST/pages/123");
+        
+        assertEquals(null, result);
+    }
+
+    @Test
+    public void testUriToObject_WithException() throws Exception {
+        doThrow(new IOException("Test exception")).when(confluence).contentByUrl(anyString());
+        
+        Object result = confluence.uriToObject("http://example.com/invalid");
+        
+        assertEquals(null, result);
+    }
 
 }

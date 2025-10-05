@@ -1,46 +1,56 @@
 package com.github.istin.dmtools.atlassian.confluence.model;
 
-import org.json.JSONException;
 import org.json.JSONObject;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import org.junit.jupiter.api.Test;
 
-public class AttachmentTest {
+import static org.junit.jupiter.api.Assertions.*;
+
+class AttachmentTest {
 
     @Test
-    public void testDefaultConstructor() {
+    void testDefaultConstructor() {
         Attachment attachment = new Attachment();
-        assertNotNull("Attachment object should not be null", attachment);
+        assertNotNull(attachment);
     }
 
     @Test
-    public void testConstructorWithJSONString() {
-        String jsonString = "{\"title\":\"Sample Title\"}";
-        try {
-            Attachment attachment = new Attachment(jsonString);
-            assertNotNull("Attachment object should not be null", attachment);
-            assertEquals("Sample Title", attachment.getTitle());
-        } catch (JSONException e) {
-            fail("JSONException should not be thrown");
-        }
+    void testJsonStringConstructor() throws Exception {
+        String json = "{\"title\":\"test-attachment.pdf\"}";
+        Attachment attachment = new Attachment(json);
+        
+        assertNotNull(attachment);
+        assertEquals("test-attachment.pdf", attachment.getTitle());
     }
 
     @Test
-    public void testConstructorWithJSONObject() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("title", "Sample Title");
-        Attachment attachment = new Attachment(jsonObject);
-        assertNotNull("Attachment object should not be null", attachment);
-        assertEquals("Sample Title", attachment.getTitle());
+    void testJsonObjectConstructor() {
+        JSONObject json = new JSONObject();
+        json.put("title", "document.docx");
+        
+        Attachment attachment = new Attachment(json);
+        
+        assertNotNull(attachment);
+        assertEquals("document.docx", attachment.getTitle());
     }
 
     @Test
-    public void testGetTitle() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("title", "Sample Title");
-        Attachment attachment = new Attachment(jsonObject);
-        assertEquals("Sample Title", attachment.getTitle());
+    void testGetTitle() {
+        JSONObject json = new JSONObject();
+        json.put("title", "image.png");
+        
+        Attachment attachment = new Attachment(json);
+        
+        assertEquals("image.png", attachment.getTitle());
+    }
+
+    @Test
+    void testGetTitle_Null() {
+        Attachment attachment = new Attachment();
+        assertNull(attachment.getTitle());
+    }
+
+    @Test
+    void testTitleConstant() {
+        assertEquals("title", Attachment.TITLE);
     }
 }

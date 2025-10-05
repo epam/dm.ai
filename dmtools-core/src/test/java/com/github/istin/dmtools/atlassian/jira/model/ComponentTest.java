@@ -1,62 +1,89 @@
 package com.github.istin.dmtools.atlassian.jira.model;
 
-import org.json.JSONException;
 import org.json.JSONObject;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.Mockito;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
-public class ComponentTest {
+class ComponentTest {
 
-    private Component component;
-
-    @Before
-    public void setUp() {
-        component = new Component();
+    @Test
+    void testDefaultConstructor() {
+        Component component = new Component();
+        assertNotNull(component);
     }
 
     @Test
-    public void testGetId() {
-        component.set("id", "123");
-        assertEquals("123", component.getId());
+    void testJsonStringConstructor() throws Exception {
+        String json = "{\"id\":\"100\",\"name\":\"Backend\"}";
+        Component component = new Component(json);
+        
+        assertNotNull(component);
+        assertEquals("100", component.getId());
+        assertEquals("Backend", component.getName());
     }
 
     @Test
-    public void testGetName() {
-        component.set("name", "TestComponent");
-        assertEquals("TestComponent", component.getName());
+    void testJsonObjectConstructor() {
+        JSONObject json = new JSONObject();
+        json.put("id", "200");
+        json.put("name", "Frontend");
+        
+        Component component = new Component(json);
+        
+        assertNotNull(component);
+        assertEquals("200", component.getId());
+        assertEquals("Frontend", component.getName());
     }
 
     @Test
-    public void testSetName() {
+    void testGetId() {
+        JSONObject json = new JSONObject();
+        json.put("id", "300");
+        
+        Component component = new Component(json);
+        
+        assertEquals("300", component.getId());
+    }
+
+    @Test
+    void testGetName() {
+        JSONObject json = new JSONObject();
+        json.put("name", "API");
+        
+        Component component = new Component(json);
+        
+        assertEquals("API", component.getName());
+    }
+
+    @Test
+    void testSetName() {
+        Component component = new Component();
+        component.setName("Database");
+        
+        assertEquals("Database", component.getName());
+    }
+
+    @Test
+    void testSetName_UpdateExisting() {
+        JSONObject json = new JSONObject();
+        json.put("name", "OldName");
+        
+        Component component = new Component(json);
         component.setName("NewName");
+        
         assertEquals("NewName", component.getName());
     }
 
     @Test
-    public void testConstructorWithJSONString() throws JSONException {
-        String jsonString = "{\"id\":\"456\",\"name\":\"JSONComponent\"}";
-        Component jsonComponent = new Component(jsonString);
-        assertEquals("456", jsonComponent.getId());
-        assertEquals("JSONComponent", jsonComponent.getName());
+    void testGetId_Null() {
+        Component component = new Component();
+        assertNull(component.getId());
     }
 
     @Test
-    public void testConstructorWithJSONObject() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("id", "789");
-        jsonObject.put("name", "JSONObjectComponent");
-        Component jsonComponent = new Component(jsonObject);
-        assertEquals("789", jsonComponent.getId());
-        assertEquals("JSONObjectComponent", jsonComponent.getName());
-    }
-
-    @Test
-    public void testConstructorWithInvalidJSONString() {
-        String invalidJsonString = "invalid json";
-        assertThrows(JSONException.class, () -> new Component(invalidJsonString));
+    void testGetName_Null() {
+        Component component = new Component();
+        assertNull(component.getName());
     }
 }

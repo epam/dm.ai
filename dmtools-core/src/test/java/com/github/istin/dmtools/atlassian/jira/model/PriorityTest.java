@@ -1,57 +1,88 @@
 package com.github.istin.dmtools.atlassian.jira.model;
 
 import org.json.JSONObject;
-import org.json.JSONException;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
 
-public class PriorityTest {
+import static org.junit.jupiter.api.Assertions.*;
+
+class PriorityTest {
 
     @Test
-    public void testConstructorWithJSONString() throws JSONException {
-        String jsonString = "{\"name\":\"High\",\"id\":\"1\"}";
-        Priority priority = new Priority(jsonString);
+    void testDefaultConstructor() {
+        Priority priority = new Priority();
+        assertNotNull(priority);
+    }
+
+    @Test
+    void testJsonStringConstructor() throws Exception {
+        String json = "{\"id\":\"1\",\"name\":\"High\"}";
+        Priority priority = new Priority(json);
+        
         assertNotNull(priority);
         assertEquals("High", priority.getName());
         assertEquals(1, priority.getId());
     }
 
     @Test
-    public void testConstructorWithJSONObject() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("name", "Medium");
-        jsonObject.put("id", "2");
-        Priority priority = new Priority(jsonObject);
+    void testJsonObjectConstructor() {
+        JSONObject json = new JSONObject();
+        json.put("id", "2");
+        json.put("name", "Medium");
+        
+        Priority priority = new Priority(json);
+        
         assertNotNull(priority);
         assertEquals("Medium", priority.getName());
         assertEquals(2, priority.getId());
     }
 
     @Test
-    public void testGetName() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("name", "Low");
-        Priority priority = new Priority(jsonObject);
-        assertEquals("Low", priority.getName());
+    void testGetName() {
+        JSONObject json = new JSONObject();
+        json.put("name", "Critical");
+        
+        Priority priority = new Priority(json);
+        
+        assertEquals("Critical", priority.getName());
     }
 
     @Test
-    public void testGetId() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("id", "3");
-        Priority priority = new Priority(jsonObject);
+    void testGetId() {
+        JSONObject json = new JSONObject();
+        json.put("id", "3");
+        
+        Priority priority = new Priority(json);
+        
         assertEquals(3, priority.getId());
     }
 
     @Test
-    public void testCreatePostObject() {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("id", "4");
-        Priority priority = new Priority(jsonObject);
+    void testCreatePostObject() {
+        JSONObject json = new JSONObject();
+        json.put("id", "4");
+        json.put("name", "Low");
+        
+        Priority priority = new Priority(json);
         JSONObject postObject = priority.createPostObject();
+        
         assertNotNull(postObject);
         assertEquals("4", postObject.getString("id"));
+    }
+
+    @Test
+    void testCreatePostObject_ContainsOnlyId() {
+        JSONObject json = new JSONObject();
+        json.put("id", "5");
+        json.put("name", "Blocker");
+        json.put("otherField", "otherValue");
+        
+        Priority priority = new Priority(json);
+        JSONObject postObject = priority.createPostObject();
+        
+        assertNotNull(postObject);
+        assertEquals(1, postObject.length());
+        assertTrue(postObject.has("id"));
+        assertFalse(postObject.has("name"));
+        assertFalse(postObject.has("otherField"));
     }
 }

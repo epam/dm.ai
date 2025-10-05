@@ -3,8 +3,8 @@ package com.github.istin.dmtools.common.utils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;
-import java.util.Properties;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 public class PropertyReader {
@@ -156,14 +156,6 @@ public class PropertyReader {
 
 	public String getRallyPath() {
 		return getValue("RALLY_PATH");
-	}
-
-	public String getAppCenterToken() {
-		return getValue("APP_CENTER_TOKEN");
-	}
-
-	public String getAppCenterOrganization() {
-		return getValue("APP_CENTER_ORGANIZATION");
 	}
 
 	public String getBitbucketToken() {
