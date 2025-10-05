@@ -552,13 +552,4 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         }
     }
     
-    @Override
-    public String getFirebaseProjectId() {
-        return getValue("FIREBASE_PROJECT_ID");
-    }
-    
-    @Override
-    public String getFirebaseServiceAccountJsonAuth() {
-        return getValue("FIREBASE_SERVICE_ACCOUNT_JSON_AUTH");
-    }
 } 

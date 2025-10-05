@@ -18,7 +18,6 @@ public interface ApplicationConfiguration extends
     RallyConfiguration,
     AppCenterConfiguration,
     FigmaConfiguration,
-    FirebaseConfiguration,
     MetricsConfiguration {
     
     /**

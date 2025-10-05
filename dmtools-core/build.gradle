@@ -9,17 +9,18 @@ apply plugin: 'maven-publish'
 group = 'com.github.istin'
 version = "${version}"
 
-repositories {
-    mavenCentral()
-    maven { url = uri("https://maven.pkg.github.com/IstiN/dmtools") }
-}
+// Repositories are now configured in root build.gradle
 
 // Define versions
 def versions = [
-        log4j    : '2.20.0',
-        slf4j    : '2.0.7',
-        guava    : '31.1-jre',
-        graalvm  : '24.1.1'
+        log4j    : '2.24.3',
+        slf4j    : '2.0.17',
+        guava    : '33.5.0-jre',
+        graalvm  : '24.1.1',
+        mockito  : '5.18.0',
+        junit    : '5.11.4',
+        jackson  : '2.18.2',
+        poi      : '5.4.1'
 ]
 
 configurations {
@@ -30,47 +31,40 @@ configurations {
 dependencies {
     // Testing
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.mockito:mockito-core:5.14.2'
-    testImplementation 'org.mockito:mockito-inline:5.2.0'
-    testImplementation 'org.mockito:mockito-junit-jupiter:5.14.2'
-    testImplementation 'org.powermock:powermock-module-junit4:2.0.9'
-    testImplementation 'org.powermock:powermock-api-mockito2:2.0.9'
-    testRuntimeOnly 'org.junit.vintage:junit-vintage-engine:5.8.2'
+    testImplementation "org.mockito:mockito-core:${versions.mockito}"
+    testImplementation "org.mockito:mockito-junit-jupiter:${versions.mockito}"
+    testRuntimeOnly "org.junit.vintage:junit-vintage-engine:${versions.junit}"
 
     // Core dependencies
-    api 'org.json:json:20231013'
+    api 'org.json:json:20250517'
     api 'com.squareup.okhttp3:okhttp:4.12.0'
-    api 'org.apache.commons:commons-lang3:3.8.1'
+    api 'org.apache.commons:commons-lang3:3.19.0'
     api 'com.thedeanda:lorem:2.1'
 
     // Logging using Log4j2 with SLF4J Bridge
     api "org.slf4j:slf4j-api:${versions.slf4j}"
     api "org.apache.logging.log4j:log4j-api:${versions.log4j}"
     api "org.apache.logging.log4j:log4j-core:${versions.log4j}"
-    api "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
+    api "org.apache.logging.log4j:log4j-slf4j2-impl:${versions.log4j}"
     
     // JBoss Logging - explicitly add to prevent version conflicts
-    api 'org.jboss.logging:jboss-logging:3.5.3.Final'
+    //api 'org.jboss.logging:jboss-logging:3.6.1.Final'
 
     // Apache Commons
-    api 'commons-io:commons-io:2.14.0'
-    api 'commons-codec:commons-codec:1.15'
-    api 'org.freemarker:freemarker:2.3.30'
-    api 'org.apache.commons:commons-collections4:4.3'
-    api 'org.apache.commons:commons-jexl:2.1.1'
+    //api 'commons-io:commons-io:2.18.0'
+    //api 'commons-codec:commons-codec:1.17.1'
+    api 'org.freemarker:freemarker:2.3.34'
+    //api 'org.apache.commons:commons-collections4:4.4'
+    //api 'org.apache.commons:commons-jexl3:3.4.0'
 
     // Document processing
+    //TODO check tests, some markdown tests are failing if update to 1.21.2
     api 'org.jsoup:jsoup:1.18.3'
-    api 'org.jxls:jxls:2.14.0'
-    api 'org.jxls:jxls-poi:2.14.0'
-    api 'org.jxls:jxls-reader:2.1.0'
     // Apache POI dependencies - ensure consistent versions
-    api 'org.apache.poi:poi:5.2.2'
-    api 'org.apache.poi:poi-ooxml:5.2.2'
-    api 'org.apache.pdfbox:pdfbox:3.0.2'
+    api "org.apache.poi:poi:${versions.poi}"
+    api "org.apache.poi:poi-ooxml:${versions.poi}"
+    api 'org.apache.pdfbox:pdfbox:3.0.5'
     api 'io.github.furstenheim:copy_down:1.1'
-
-    // Selenium & Appium dependencies moved to dmtools-automation module
 
     // Guava and its dependencies
     api "com.google.guava:guava:${versions.guava}"
@@ -85,24 +79,17 @@ dependencies {
     api "org.graalvm.js:js-scriptengine:${versions.graalvm}"
 
     // Other tools
-    // WebDriverManager dependency moved to dmtools-automation module
     api('com.github.mpkorstanje:simmetrics-core:4.1.1') {
         exclude group: 'com.google.guava'
     }
-    api('com.google.dagger:dagger:2.53.1') {
+    api('com.google.dagger:dagger:2.57.2') {
         exclude group: 'com.google.guava'
     }
-    api('com.google.auth:google-auth-library-oauth2-http:1.19.0') {
-        exclude group: 'com.google.guava'
-    }
-    api 'net.sourceforge.tess4j:tess4j:5.8.0'
-    api 'org.bytedeco:javacpp:1.5.11'
-    api 'com.github.eirslett:frontend-maven-plugin:1.12.1'
 
     // Annotation processors
-    annotationProcessor 'com.google.dagger:dagger-compiler:2.53.1'
-    compileOnly 'org.projectlombok:lombok:1.18.36'
-    annotationProcessor 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'com.google.dagger:dagger-compiler:2.57.2'
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
     
     // MCP annotations from separate module
     api project(':dmtools-mcp-annotations')
@@ -110,24 +97,20 @@ dependencies {
     // MCP Tools annotation processor - now in separate module
     annotationProcessor project(':dmtools-annotation-processor')
     
-    // MCP Tools dependencies (all classes now bundled in main source)
-    // No external dependencies needed - annotations and generated classes are included
-    
-    // Basic Spring dependencies (NOT server dependencies - those go in dmtools-server)
-    api 'com.google.code.gson:gson:2.10.1'
-    api 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
-    api 'com.google.firebase:firebase-admin:9.1.1'
+    // Basic dependencies (NOT server dependencies - those go in dmtools-server)
+    api 'com.google.code.gson:gson:2.13.2'
+    //api 'org.apache.httpcomponents.client5:httpclient5:5.4.1'
 
     // Additional dependencies for JSON processing
-    api 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
-    api 'io.swagger.core.v3:swagger-annotations:2.2.15'
+    api "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
+    api 'io.swagger.core.v3:swagger-annotations:2.2.27'
 
-    // Spring test dependencies
-    testImplementation platform('org.junit:junit-bom:5.9.1')
+    // Test dependencies
+    testImplementation platform("org.junit:junit-bom:${versions.junit}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
-    configurations.all {
+    configurations.configureEach {
     resolutionStrategy {
         // Force specific versions for key dependencies
         force "com.google.guava:guava:${versions.guava}"
@@ -137,10 +120,10 @@ dependencies {
         force "org.apache.logging.log4j:log4j-api:${versions.log4j}"
         force "org.apache.logging.log4j:log4j-core:${versions.log4j}"
         force "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
-        force "io.swagger.core.v3:swagger-annotations:2.2.15"
-        force "org.jboss.logging:jboss-logging:3.5.3.Final"
-        force "org.apache.poi:poi:5.2.2"
-        force "org.apache.poi:poi-ooxml:5.2.2"
+        force "io.swagger.core.v3:swagger-annotations:2.2.27"
+        force "org.jboss.logging:jboss-logging:3.6.1.Final"
+        force "org.apache.poi:poi:${versions.poi}"
+        force "org.apache.poi:poi-ooxml:${versions.poi}"
 
         // Handle transitive dependencies
         eachDependency { DependencyResolveDetails details ->
@@ -161,11 +144,11 @@ dependencies {
                 }
             }
             if (details.requested.group == 'org.jboss.logging') {
-                details.useVersion '3.5.3.Final'
+                details.useVersion '3.6.1.Final'
             }
             if (details.requested.group == 'org.apache.poi') {
                 if (details.requested.name in ['poi', 'poi-ooxml', 'poi-ooxml-lite']) {
-                    details.useVersion '5.2.2'
+                    details.useVersion versions.poi
                 }
             }
         }
@@ -209,7 +192,7 @@ processIntegrationTestResources {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
-task integrationTest(type: Test) {
+tasks.register('integrationTest', Test) {
     description = 'Runs integration tests.'
     group = 'verification'
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
@@ -270,7 +253,7 @@ publishing {
     }
 }
 
-tasks.withType(JavaCompile) {
+tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 

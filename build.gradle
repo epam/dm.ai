@@ -1,269 +1,73 @@
+// Root build.gradle - Multi-project coordinator
 plugins {
-    id 'java-library'
-    id 'jacoco'
-    id 'io.spring.dependency-management' version '1.1.4'
+    id 'io.spring.dependency-management' version '1.1.4' apply false
+    id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
 }
-
-apply plugin: 'maven-publish'
 
 group = 'com.github.istin'
 version = "${version}"
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_23
-    targetCompatibility = JavaVersion.VERSION_23
-}
-
-repositories {
-    mavenCentral()
-    maven { url = uri("https://maven.pkg.github.com/IstiN/dmtools") }
-}
-
-// Define versions
-def versions = [
-        log4j    : '2.20.0',
-        slf4j    : '2.0.7',
-        selenium : '4.11.0',
-        appium   : '8.3.0',
-        guava    : '31.1-jre',
-        graalvm  : '24.1.1'
-]
-
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-dependencies {
-    // Testing
-    testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.mockito:mockito-core:5.18.0'
-    testImplementation 'org.mockito:mockito-junit-jupiter:5.18.0'
-    testRuntimeOnly 'org.junit.vintage:junit-vintage-engine:5.8.2'
-
-    // Core dependencies
-    api 'org.json:json:20231013'
-    api 'com.squareup.okhttp3:okhttp:4.12.0'
-    api 'org.apache.commons:commons-lang3:3.8.1'
-    api 'com.thedeanda:lorem:2.1'
-
-    // Logging using Log4j2 with SLF4J Bridge
-    api "org.slf4j:slf4j-api:${versions.slf4j}"
-    api "org.apache.logging.log4j:log4j-api:${versions.log4j}"
-    api "org.apache.logging.log4j:log4j-core:${versions.log4j}"
-    api "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
-
-    // Apache Commons
-    api 'commons-io:commons-io:2.14.0'
-    api 'commons-codec:commons-codec:1.15'
-    api 'org.freemarker:freemarker:2.3.30'
-    api 'org.apache.commons:commons-collections4:4.3'
-    api 'org.apache.commons:commons-jexl:2.1.1'
-
-    // Document processing
-    api 'org.jsoup:jsoup:1.18.3'
-    api 'org.jxls:jxls:2.14.0'
-    api 'org.jxls:jxls-poi:2.14.0'
-    api 'org.jxls:jxls-reader:2.1.0'
-    api 'org.apache.poi:poi:4.1.1'
-    api 'org.apache.poi:poi-ooxml:4.1.1'
-    api 'org.apache.pdfbox:pdfbox:3.0.2'
-    api 'io.github.furstenheim:copy_down:1.1'
-
-    // Selenium & Appium
-    api("org.seleniumhq.selenium:selenium-java:${versions.selenium}") {
-        exclude group: 'com.google.guava'
+// Common configuration for all subprojects
+subprojects {
+    // Apply common plugins
+    apply plugin: 'java-library'
+    apply plugin: 'jacoco'
+    
+    // Common group and version
+    group = 'com.github.istin'
+    version = rootProject.version
+    
+    // Java version configuration
+    java {
+        sourceCompatibility = JavaVersion.VERSION_23
+        targetCompatibility = JavaVersion.VERSION_23
     }
-    api("io.appium:java-client:${versions.appium}") {
-        exclude group: 'org.seleniumhq.selenium'
-        exclude group: 'com.google.guava'
-    }
-
-    // Guava and its dependencies
-    api "com.google.guava:guava:${versions.guava}"
-    api 'com.google.guava:failureaccess:1.0.1'
-    api 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
-
-    // Playwright
-    api 'com.microsoft.playwright:playwright:1.50.0'
-
-    // GraalVM
-    api "org.graalvm.sdk:graal-sdk:${versions.graalvm}"
-    api "org.graalvm.js:js:${versions.graalvm}"
-    api "org.graalvm.js:js-scriptengine:${versions.graalvm}"
-
-    // Other tools
-    api('io.github.bonigarcia:webdrivermanager:5.9.2') {
-        exclude group: 'com.google.guava'
-    }
-    api('com.github.mpkorstanje:simmetrics-core:4.1.1') {
-        exclude group: 'com.google.guava'
-    }
-    api('com.google.dagger:dagger:2.53.1') {
-        exclude group: 'com.google.guava'
-    }
-    api('com.google.auth:google-auth-library-oauth2-http:1.19.0') {
-        exclude group: 'com.google.guava'
-    }
-    api 'net.sourceforge.tess4j:tess4j:5.8.0'
-    api 'org.bytedeco:javacpp:1.5.11'
-    api 'com.github.eirslett:frontend-maven-plugin:1.12.1'
-
-    // Annotation processors
-    annotationProcessor 'com.google.dagger:dagger-compiler:2.53.1'
-    compileOnly 'org.projectlombok:lombok:1.18.36'
-    annotationProcessor 'org.projectlombok:lombok:1.18.36'
-
-    // Basic dependencies (Spring Boot dependencies moved to dmtools-server)
-    api 'com.google.code.gson:gson:2.10.1'
-    api 'org.apache.logging.log4j:log4j-api:2.17.1'
-    api 'org.apache.logging.log4j:log4j-core:2.17.1'
-    api 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
-    api 'com.google.firebase:firebase-admin:9.1.1'
-
-    // Basic test dependencies
-    testImplementation platform('org.junit:junit-bom:5.9.1')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-}
-
-configurations.all {
-    resolutionStrategy {
-        // Force specific versions for key dependencies
-        force "org.seleniumhq.selenium:selenium-java:${versions.selenium}"
-        force "io.appium:java-client:${versions.appium}"
-        force "com.google.guava:guava:${versions.guava}"
-        force "com.google.guava:failureaccess:1.0.1"
-        force "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
-        force "org.slf4j:slf4j-api:${versions.slf4j}"
-        force "org.apache.logging.log4j:log4j-api:${versions.log4j}"
-        force "org.apache.logging.log4j:log4j-core:${versions.log4j}"
-        force "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
-        // Force consistent POI versions to avoid IncompatibleClassChangeError
-        force 'org.apache.poi:poi:4.1.1'
-        force 'org.apache.poi:poi-ooxml:4.1.1'
-        force 'org.apache.poi:poi-ooxml-schemas:4.1.1'
-
-        // Handle transitive dependencies
-        eachDependency { DependencyResolveDetails details ->
-            if (details.requested.group == 'com.google.guava') {
-                if (details.requested.name == 'guava') {
-                    details.useVersion versions.guava
-                } else if (details.requested.name == 'failureaccess') {
-                    details.useVersion '1.0.1'
-                }
-            }
-            if (details.requested.group == 'org.seleniumhq.selenium') {
-                details.useVersion versions.selenium
-            }
-            if (details.requested.group == 'org.slf4j') {
-                details.useVersion versions.slf4j
-            }
-            if (details.requested.group == 'org.apache.logging.log4j') {
-                if (details.requested.name in ['log4j-api', 'log4j-core', 'log4j-slf4j-impl']) {
-                    details.useVersion versions.log4j
-                }
-            }
-        }
-    }
-}
-
-test {
-    useJUnitPlatform()
-    jvmArgs '-Dnet.bytebuddy.experimental=true'
-    jvmArgs '-XX:+EnableDynamicAgentLoading'
-    jvmArgs '-javaagent:' + configurations.testRuntimeClasspath.find { it.name.contains('mockito-core') }
-    testLogging {
-        events "passed", "skipped", "failed", "standardOut", "standardError"
-        exceptionFormat "full"
-    }
-    finalizedBy jacocoTestReport
-}
-
-jacocoTestReport {
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-    }
-}
-
-sourceSets {
-    integrationTest {
-        java.srcDir file('src/integrationTest/java')
-        resources.srcDir file('src/integrationTest/resources')
-        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-}
-
-// Configure the processIntegrationTestResources task specifically
-processIntegrationTestResources {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-task integrationTest(type: Test) {
-    description = 'Runs integration tests.'
-    group = 'verification'
-    useJUnitPlatform()
-    jvmArgs '-Dnet.bytebuddy.experimental=true'
-    jvmArgs '-XX:+EnableDynamicAgentLoading'
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-    shouldRunAfter test
-}
-
-// Removed check.dependsOn integrationTest to prevent integration tests from running during fat jar build
-// Integration tests can still be run explicitly with: ./gradlew integrationTest
-
-publishing {
-    publications {
-        maven(MavenPublication) {
-            groupId = 'com.github.istin'
-            artifactId = 'dmtools'
-            version = "v${version}"
-            from components.java
-
-            pom {
-                name = 'DM Tools'
-                description = 'DM Tools Library'
-                url = 'https://github.com/IstiN/dmtools'
-                licenses {
-                    license {
-                        name = 'MIT License'
-                        url = 'https://opensource.org/licenses/MIT'
-                    }
-                }
-                developers {
-                    developer {
-                        id = 'istin'
-                        name = 'Uladzimir Klyshevich'
-                        email = 'uladzimir.klyshevich@gmail.com'
-                    }
-                }
-                scm {
-                    connection = 'scm:git:git://github.com/IstiN/dmtools.git'
-                    developerConnection = 'scm:git:ssh://github.com:IstiN/dmtools.git'
-                    url = 'https://github.com/IstiN/dmtools'
-                }
-            }
-        }
-    }
+    
+    // Common repositories
     repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/IstiN/dmtools")
-            credentials {
-                username = System.getenv("GITHUB_USERNAME")
-                password = System.getenv("GITHUB_TOKEN")
-            }
+        mavenCentral()
+        maven { url = uri("https://maven.pkg.github.com/IstiN/dmtools") }
+    }
+    
+    // Common encoding
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+
+    // Common test configuration
+    test {
+        useJUnitPlatform()
+        testLogging {
+            events "passed", "skipped", "failed", "standardOut", "standardError"
+            exceptionFormat "full"
+        }
+        finalizedBy jacocoTestReport
+    }
+    
+    // Common JaCoCo configuration
+    jacocoTestReport {
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
         }
     }
 }
 
-tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
+// Root project tasks
+tasks.register('cleanAll') {
+    description = 'Cleans all subprojects'
+    group = 'build'
+    dependsOn subprojects.collect { it.tasks.named('clean') }
 }
 
-// Removed problematic production build configuration
-// Using Spring Boot profiles instead (application-*.properties files)
+tasks.register('buildAll') {
+    description = 'Builds all subprojects'
+    group = 'build'
+    dependsOn subprojects.collect { it.tasks.named('build') }
+}
 
-// bootJar configuration moved to dmtools-server subproject
+tasks.register('testAll') {
+    description = 'Runs tests for all subprojects'
+    group = 'verification'
+    dependsOn subprojects.collect { it.tasks.named('test') }
+}

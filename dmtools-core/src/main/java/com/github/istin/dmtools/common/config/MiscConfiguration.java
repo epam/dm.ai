@@ -8,7 +8,6 @@ public interface MiscConfiguration extends
         RallyConfiguration, 
         AppCenterConfiguration, 
         FigmaConfiguration, 
-        FirebaseConfiguration, 
         MetricsConfiguration {
     
     /**

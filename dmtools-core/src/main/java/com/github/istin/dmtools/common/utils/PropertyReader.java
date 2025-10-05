@@ -352,14 +352,6 @@ public class PropertyReader {
 		return Boolean.parseBoolean(value);
 	}
 
-	public String getFirebaseProjectId() {
-		return getValue("FIREBASE_PROJECT_ID");
-	}
-
-	public String getFirebaseServiceAccountJsonAuth() {
-		return getValue("FIREBASE_SERVICE_ACCOUNT_JSON_AUTH");
-	}
-
 	/**
 	 * Gets the number of retry attempts for AI operations
 	 * @return number of retries, default is 3

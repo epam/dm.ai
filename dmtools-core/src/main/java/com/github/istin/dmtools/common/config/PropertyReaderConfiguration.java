@@ -371,13 +371,4 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
         return propertyReader.getTicketFieldsChangedDivider(fieldName);
     }
     
-    @Override
-    public String getFirebaseProjectId() {
-        return propertyReader.getFirebaseProjectId();
-    }
-    
-    @Override
-    public String getFirebaseServiceAccountJsonAuth() {
-        return propertyReader.getFirebaseServiceAccountJsonAuth();
-    }
 } 
