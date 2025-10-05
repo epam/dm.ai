@@ -5,7 +5,81 @@ Delivery Management Tools
 
 ---
 
-## Simple Run
+## 📚 Documentation
+
+**Complete documentation is available in the [docs/](docs/) folder:**
+
+### Quick Links
+- 🚀 **[Getting Started](docs/getting-started/)** - Install, configure, and run your first commands
+  - [Installation Guide](docs/getting-started/installation.md)
+  - [Configuration Guide](docs/getting-started/configuration.md)
+  - [First Steps](docs/getting-started/first-steps.md)
+
+- 💻 **[CLI Usage](docs/cli-usage/)** - Command-line interface guide
+  - [MCP Tools Reference](docs/cli-usage/mcp-tools.md) - 67 built-in tools
+
+- ⚙️ **[Jobs (JobRunner)](docs/jobs/)** - 20 automation jobs
+  - [Business Analysis Jobs](docs/jobs/business-analysis/)
+  - [Development Jobs](docs/jobs/development/)
+  - [QA Jobs](docs/jobs/qa/)
+  - [Reporting Jobs](docs/jobs/reports/)
+
+- 🤖 **[AI Teammate Workflows](docs/ai-teammate/)** - GitHub Actions automation
+  - [Overview](docs/ai-teammate/README.md)
+  - [JavaScript Actions](docs/ai-teammate/javascript-actions.md)
+  - [Agent Configuration](docs/ai-teammate/agent-configuration.md)
+
+- 🔌 **[Integrations](docs/integrations/)** - Connect to Jira, Confluence, Figma, GitHub, etc.
+
+- 📖 **[Complete Documentation Index](docs/README.md)**
+
+---
+
+## Quick Start
+
+### Installation
+
+```bash
+# One-line installation
+curl https://github.com/IstiN/dmtools/releases/latest/download/install.sh -fsS | bash
+
+# Verify installation
+dmtools --version
+```
+
+### Configuration
+
+```bash
+# Create configuration file
+cat > dmtools.env << EOF
+JIRA_BASE_PATH=https://your-company.atlassian.net
+JIRA_EMAIL=your-email@company.com
+JIRA_API_TOKEN=your-jira-api-token
+GEMINI_API_KEY=your-gemini-api-key
+EOF
+
+# Secure the file
+chmod 600 dmtools.env
+```
+
+### Your First Command
+
+```bash
+# Get a Jira ticket
+dmtools jira_get_ticket YOUR-123
+
+# Search tickets
+dmtools jira_search_by_jql "project = PROJ AND status = Open" "summary,status"
+
+# List all available tools
+dmtools list
+```
+
+See **[First Steps Guide](docs/getting-started/first-steps.md)** for more examples.
+
+---
+
+## Simple Run (Legacy)
 1. Download the release from: [DMTools Releases](https://github.com/IstiN/dmtools/releases)
 2. Set environment variables.
 3. Run the command:
