@@ -227,7 +227,7 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
                 .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Expert context
                 .withJobContext(expertParams, ticket, null) // response is null in pre-action
                 .with(TrackerParams.INITIATOR, initiator)
-                .with("systemRequest", systemRequestCommentAlias)
+                .with("systemRequest", finalSystemRequest)
                 .with("request", request)
                 .execute();
 

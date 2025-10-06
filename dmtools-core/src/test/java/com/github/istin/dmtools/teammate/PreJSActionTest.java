@@ -1,4 +1,4 @@
-package com.github.istin.dmtools.job;
+package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.agent.GenericRequestAgent;
@@ -9,7 +9,9 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.ContextOrchestrator;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.context.UriToObjectFactory;
-import com.github.istin.dmtools.teammate.Teammate;
+import com.github.istin.dmtools.job.TrackerParams;
+import com.github.istin.dmtools.job.ResultItem;
+import com.github.istin.dmtools.job.Params;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
