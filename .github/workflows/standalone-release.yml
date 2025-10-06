@@ -13,6 +13,11 @@ on:
         required: true
         default: 'v1.0.0-standalone'
         type: string
+      fatjar_release_tag:
+        description: 'FatJar release tag to use for CLI (optional, auto-detects from release_tag)'
+        required: false
+        default: ''
+        type: string
       prerelease:
         description: 'Mark as pre-release'
         required: false
@@ -136,6 +141,93 @@ jobs:
         run: |
           echo "ERROR: Gradle build failed. Cannot proceed with standalone release."
           exit 1
+
+      - name: Download CLI Artifacts from FatJar Release
+        id: download_cli
+        run: |
+          echo "Downloading CLI artifacts from FatJar release..."
+          
+          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          FATJAR_TAG="${{ github.event.inputs.fatjar_release_tag }}"
+          
+          # Determine which fatjar release to use
+          if [ -n "${FATJAR_TAG}" ]; then
+            BASE_TAG="${FATJAR_TAG}"
+            echo "Using specified FatJar release tag: ${BASE_TAG}"
+          else
+            # Auto-detect: remove -standalone suffix from release tag
+            BASE_TAG="${RELEASE_TAG%-standalone}"
+            echo "Auto-detecting FatJar release tag: ${BASE_TAG}"
+          fi
+          
+          # Get release information
+          RELEASE_INFO=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/${BASE_TAG}")
+          
+          if [ "$(echo "${RELEASE_INFO}" | jq -r '.message')" = "Not Found" ]; then
+            echo "⚠️ FatJar release ${BASE_TAG} not found. Will build CLI locally instead."
+            echo "Building CLI JAR..."
+            ./gradlew :dmtools-core:shadowJar --no-daemon
+            
+            CLI_JAR_PATH="dmtools-core/build/libs/dmtools-core-*-all.jar"
+            ACTUAL_JAR=$(ls ${CLI_JAR_PATH} 2>/dev/null | head -1)
+            
+            if [ -z "${ACTUAL_JAR}" ]; then
+              echo "ERROR: CLI JAR not found at ${CLI_JAR_PATH}"
+              exit 1
+            fi
+            
+            CLI_JAR_RELEASE="build/libs/dmtools-${RELEASE_TAG}-all.jar"
+            mkdir -p build/libs
+            cp "${ACTUAL_JAR}" "${CLI_JAR_RELEASE}"
+            cp install.sh build/libs/
+            cp dmtools.sh build/libs/
+          else
+            echo "✅ Found FatJar release: ${BASE_TAG}"
+            mkdir -p build/libs
+            
+            # Download CLI JAR
+            CLI_JAR_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name | test("dmtools-.*-all\\.jar$")) | .browser_download_url')
+            if [ -z "${CLI_JAR_URL}" ] || [ "${CLI_JAR_URL}" = "null" ]; then
+              echo "ERROR: Could not find CLI JAR in release ${BASE_TAG}"
+              exit 1
+            fi
+            
+            CLI_JAR_RELEASE="build/libs/dmtools-${RELEASE_TAG}-all.jar"
+            echo "Downloading CLI JAR from: ${CLI_JAR_URL}"
+            curl -L -o "${CLI_JAR_RELEASE}" "${CLI_JAR_URL}"
+            
+            # Download install.sh
+            INSTALL_SH_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name == "install.sh") | .browser_download_url')
+            if [ -n "${INSTALL_SH_URL}" ] && [ "${INSTALL_SH_URL}" != "null" ]; then
+              curl -L -o "build/libs/install.sh" "${INSTALL_SH_URL}"
+            else
+              cp install.sh build/libs/
+            fi
+            
+            # Download dmtools.sh
+            DMTOOLS_SH_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name == "dmtools.sh") | .browser_download_url')
+            if [ -n "${DMTOOLS_SH_URL}" ] && [ "${DMTOOLS_SH_URL}" != "null" ]; then
+              curl -L -o "build/libs/dmtools.sh" "${DMTOOLS_SH_URL}"
+            else
+              cp dmtools.sh build/libs/
+            fi
+          fi
+          
+          chmod +x build/libs/install.sh
+          chmod +x build/libs/dmtools.sh
+          
+          # Get CLI JAR size
+          CLI_JAR_SIZE=$(du -h "${CLI_JAR_RELEASE}" | cut -f1)
+          
+          echo "CLI artifacts prepared:"
+          echo "  JAR: ${CLI_JAR_SIZE}"
+          ls -la build/libs/
+          
+          echo "cli_jar_path=${CLI_JAR_RELEASE}" >> $GITHUB_OUTPUT
+          echo "cli_jar_size=${CLI_JAR_SIZE}" >> $GITHUB_OUTPUT
+          echo "install_sh_path=build/libs/install.sh" >> $GITHUB_OUTPUT
+          echo "dmtools_sh_path=build/libs/dmtools.sh" >> $GITHUB_OUTPUT
+          echo "fatjar_source_tag=${BASE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Create Standalone Artifacts
         id: create_standalone
@@ -377,6 +469,8 @@ jobs:
         id: release_notes
         run: |
           FLUTTER_TAG="${{ steps.flutter_tag.outputs.flutter_tag }}"
+          FATJAR_SOURCE="${{ steps.download_cli.outputs.fatjar_source_tag }}"
+          CLI_JAR_SIZE="${{ steps.download_cli.outputs.cli_jar_size }}"
           JAR_SIZE="${{ steps.create_standalone.outputs.jar_size }}"
           WAR_SIZE="${{ steps.create_standalone.outputs.war_size }}"
           MACOS_ARM_SIZE="${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}"
@@ -384,12 +478,19 @@ jobs:
           WINDOWS_X64_SIZE="${{ steps.create_portable_bundles.outputs.windows_x64_size }}"
           
           cat > release_notes.md << EOF
-          # 🚀 DMTools Standalone Release
+          # 🚀 DMTools Complete Release
           
-          This is a standalone release of DMTools that includes the Flutter SPA and can run without external dependencies.
+          This release includes both the **DMTools CLI** and **Standalone Server** with Flutter SPA.
           
           ## 📦 What's Included
           
+          ### 🖥️ DMTools CLI
+          - **Command-line interface** for DMTools operations
+          - **Java-based** automation and integration tools
+          - **Install script** for easy setup (\`install.sh\`)
+          - **Wrapper script** (\`dmtools.sh\`)
+          
+          ### 🌐 Standalone Server
           - **Complete DMTools Server** with embedded Flutter SPA
           - **Self-contained** - no external database or OAuth setup required
           - **Local authentication** with admin/admin credentials
@@ -398,7 +499,20 @@ jobs:
           
           ## 🎯 Quick Start
           
-          ### Option 1: Portable Bundles (No Java Required) ⭐ NEW!
+          ### DMTools CLI Installation
+          
+          Install the DMTools CLI using the provided script:
+          
+          \`\`\`bash
+          # Download and run install script
+          curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash
+          
+          # Or download dmtools-${{ github.event.inputs.release_tag }}-all.jar manually and use dmtools.sh
+          \`\`\`
+          
+          ### Standalone Server Options
+          
+          #### Option 1: Portable Bundles (No Java Required) ⭐ NEW!
           
           Download the bundle for your platform and run directly:
           
@@ -435,7 +549,7 @@ jobs:
           - Click "More info" → "Run anyway"
           - Or add folder to Windows Defender exclusions
           
-          ### Option 2: JAR (Requires Java 23+)
+          #### Option 2: JAR (Requires Java 23+)
           \`\`\`bash
           # Download and run
           java -jar dmtools-standalone.jar
@@ -444,7 +558,7 @@ jobs:
           # Login: admin / admin
           \`\`\`
           
-          ### Option 3: WAR (for application servers)
+          #### Option 3: WAR (for application servers)
           Deploy \`dmtools-standalone.war\` to your favorite servlet container (Tomcat, Jetty, etc.)
           
           ## 📋 System Requirements
@@ -479,9 +593,11 @@ jobs:
           ## 📊 Build Information
           
           - **Flutter SPA Version:** ${FLUTTER_TAG}
+          - **CLI Source:** FatJar Release [\`${FATJAR_SOURCE}\`](https://github.com/${{ github.repository }}/releases/tag/${FATJAR_SOURCE})
           - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-          - **JAR Size:** ${JAR_SIZE}
-          - **WAR Size:** ${WAR_SIZE}
+          - **CLI JAR Size:** ${CLI_JAR_SIZE}
+          - **Standalone JAR Size:** ${JAR_SIZE}
+          - **Standalone WAR Size:** ${WAR_SIZE}
           - **macOS Apple Silicon Bundle:** ${MACOS_ARM_SIZE}
           - **macOS Intel Bundle:** ${MACOS_X64_SIZE}
           - **Windows x64 Bundle:** ${WINDOWS_X64_SIZE}
@@ -561,11 +677,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
-          name: "DMTools Standalone ${{ github.event.inputs.release_tag }}"
+          name: "DMTools Complete ${{ github.event.inputs.release_tag }}"
           body_path: release_notes.md
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
           files: |
+            ${{ steps.download_cli.outputs.cli_jar_path }}
+            ${{ steps.download_cli.outputs.install_sh_path }}
+            ${{ steps.download_cli.outputs.dmtools_sh_path }}
             ${{ steps.create_standalone.outputs.jar_path }}
             ${{ steps.create_standalone.outputs.war_path }}
             ${{ steps.create_portable_bundles.outputs.macos_aarch64_bundle }}
@@ -589,12 +708,20 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## 🎉 Standalone Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎉 Complete Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Release:** [${{ github.event.inputs.release_tag }}](${{ steps.create_release.outputs.url }})" >> $GITHUB_STEP_SUMMARY
           echo "**Flutter SPA:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI Source:** FatJar Release [\`${{ steps.download_cli.outputs.fatjar_source_tag }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.download_cli.outputs.fatjar_source_tag }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Artifacts Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI Tools:**" >> $GITHUB_STEP_SUMMARY
+          echo "- **CLI JAR:** ${{ steps.download_cli.outputs.cli_jar_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **install.sh** (included)" >> $GITHUB_STEP_SUMMARY
+          echo "- **dmtools.sh** (included)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Standalone Server:**" >> $GITHUB_STEP_SUMMARY
           echo "- **JAR:** ${{ steps.create_standalone.outputs.jar_size }}" >> $GITHUB_STEP_SUMMARY
           echo "- **WAR:** ${{ steps.create_standalone.outputs.war_size }}" >> $GITHUB_STEP_SUMMARY
           echo "- **macOS Apple Silicon Bundle:** ${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}" >> $GITHUB_STEP_SUMMARY
@@ -603,7 +730,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 Quick Start Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Option 1: Portable Bundle (No Java Required) ⭐**" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI Installation:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Standalone Server - Option 1: Portable Bundle (No Java Required) ⭐**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "# Download the appropriate bundle for your platform, then:" >> $GITHUB_STEP_SUMMARY
           echo "unzip dmtools-standalone-<platform>.zip" >> $GITHUB_STEP_SUMMARY
@@ -613,9 +745,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "⚠️ **Security Note:** If you see warnings, check the release notes for bypass instructions" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Option 2: JAR (Requires Java 23+)**" >> $GITHUB_STEP_SUMMARY
+          echo "**Standalone Server - Option 2: JAR (Requires Java 23+)**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# Download the JAR from the release page, then:" >> $GITHUB_STEP_SUMMARY
           echo "java -jar dmtools-standalone.jar" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
