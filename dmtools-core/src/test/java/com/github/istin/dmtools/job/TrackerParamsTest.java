@@ -35,6 +35,7 @@ class TrackerParamsTest {
             "user@example.com",
             metadata,
             true,
+            "preAction.js",
             "postAction.js",
             "customField",
             TrackerParams.OutputType.field,
@@ -47,6 +48,7 @@ class TrackerParamsTest {
         assertEquals("user@example.com", params.getInitiator());
         assertEquals(metadata, params.getMetadata());
         assertTrue(params.isAttachResponseAsFile());
+        assertEquals("preAction.js", params.getPreJSAction());
         assertEquals("postAction.js", params.getPostJSAction());
         assertEquals("customField", params.getFieldName());
         assertEquals(TrackerParams.OutputType.field, params.getOutputType());
@@ -69,6 +71,9 @@ class TrackerParamsTest {
 
         trackerParams.setAttachResponseAsFile(true);
         assertTrue(trackerParams.isAttachResponseAsFile());
+
+        trackerParams.setPreJSAction("preAction.js");
+        assertEquals("preAction.js", trackerParams.getPreJSAction());
 
         trackerParams.setPostJSAction("action.js");
         assertEquals("action.js", trackerParams.getPostJSAction());
@@ -114,6 +119,7 @@ class TrackerParamsTest {
         assertEquals("attachResponseAsFile", TrackerParams.ATTACH_RESPONSE_AS_FILE);
         assertEquals("ticketContextDepth", TrackerParams.TICKET_CONTEXT_DEPTH);
         assertEquals("chunksProcessingTimeout", TrackerParams.CHUNKS_PROCESSING_TIMEOUT_IN_MINUTES);
+        assertEquals("preJSAction", TrackerParams.PRE_ACTION);
     }
 
     @Test

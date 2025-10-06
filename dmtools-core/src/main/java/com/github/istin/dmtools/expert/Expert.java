@@ -222,6 +222,22 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
         String finalSystemRequest = systemRequest;
         List<ResultItem> results = new ArrayList<>();
         trackerClient.searchAndPerform(ticket -> {
+            // Execute pre-action before AI processing
+            Object preActionResult = js(expertParams.getPreJSAction())
+                .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Expert context
+                .withJobContext(expertParams, ticket, null) // response is null in pre-action
+                .with(TrackerParams.INITIATOR, initiator)
+                .with("systemRequest", finalSystemRequest)
+                .with("request", request)
+                .execute();
+
+            // Check return value to determine if processing should continue
+            if (preActionResult != null && preActionResult.equals(false)) {
+                logger.info("Pre-action returned false, skipping AI processing for ticket: {}", ticket.getKey());
+                results.add(new ResultItem(ticket.getTicketKey(), "Skipped by pre-action"));
+                return false; // Skip this ticket
+            }
+            
             TicketContext ticketContext = new TicketContext(trackerClient, ticket);
             ticketContext.prepareContext(true);
             List<? extends IAttachment> attachments = ticket.getAttachments();

@@ -219,6 +219,20 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             long overallStart = System.currentTimeMillis();
             logger.info("Processing ticket: {}", ticket.getKey());
             
+            // Execute pre-action before AI processing
+            Object preActionResult = js(expertParams.getPreJSAction())
+                .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                .withJobContext(expertParams, ticket, null) // response is null in pre-action
+                .with(TrackerParams.INITIATOR, initiator)
+                .execute();
+
+            // Check return value to determine if processing should continue
+            if (preActionResult != null && preActionResult.equals(false)) {
+                logger.info("Pre-action returned false, skipping AI processing for ticket: {}", ticket.getKey());
+                results.add(new ResultItem(ticket.getTicketKey(), "Skipped by pre-action"));
+                return false; // Skip this ticket
+            }
+            
             // Create and prepare ticket context
             TicketContext ticketContext = new TicketContext(trackerClient, ticket);
             ticketContext.prepareContext(true, false);

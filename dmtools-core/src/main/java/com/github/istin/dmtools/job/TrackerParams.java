@@ -37,6 +37,11 @@ public class TrackerParams {
     public static final String TICKET_CONTEXT_DEPTH = "ticketContextDepth";
     public static final String CHUNKS_PROCESSING_TIMEOUT_IN_MINUTES = "chunksProcessingTimeout";
 
+    public static final String PRE_ACTION = "preJSAction";
+
+    @SerializedName(PRE_ACTION)
+    private String preJSAction;
+
     @SerializedName(POST_ACTION)
     private String postJSAction;
 
