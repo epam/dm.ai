@@ -4,6 +4,7 @@ import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.agent.GenericRequestAgent;
 import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.ContextOrchestrator;
@@ -154,7 +155,7 @@ public class PreJSActionTest {
         params.setPreJSAction(null);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -176,7 +177,7 @@ public class PreJSActionTest {
         params.setPreJSAction("");
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -203,7 +204,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -231,7 +232,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -263,7 +264,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -291,7 +292,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -318,7 +319,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -344,7 +345,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -372,7 +373,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -398,7 +399,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -445,7 +446,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -474,7 +475,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -502,7 +503,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
@@ -551,7 +552,7 @@ public class PreJSActionTest {
         params.setPreJSAction(jsCode);
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket1);
             performer.perform(ticket2);
             return null;
@@ -577,7 +578,7 @@ public class PreJSActionTest {
         params.setPreJSAction("function action(params) { return true; }");
         
         doAnswer(invocation -> {
-            var performer = invocation.getArgument(0, TrackerClient.Performer.class);
+            var performer = invocation.getArgument(0, JiraClient.Performer.class);
             performer.perform(ticket);
             return null;
         }).when(trackerClient).searchAndPerform(any(), anyString(), any());
