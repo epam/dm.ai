@@ -160,7 +160,14 @@ public class ChatMessage extends JSONModel {
         public String getEmail() {
             JSONObject user = getJSONObject().optJSONObject("user");
             if (user != null) {
-                return user.optString("userIdentityType", "");
+                String email = user.optString("userPrincipalName", "");
+                if (!email.isEmpty()) {
+                    return email;
+                }
+                email = user.optString("mail", "");
+                if (!email.isEmpty()) {
+                    return email;
+                }
             }
             return "";
         }

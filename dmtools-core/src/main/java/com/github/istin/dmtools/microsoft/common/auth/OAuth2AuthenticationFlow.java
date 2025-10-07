@@ -64,7 +64,13 @@ public class OAuth2AuthenticationFlow {
         
         // Start local HTTP server to receive callback
         CompletableFuture<String> authCodeFuture = new CompletableFuture<>();
-        HttpServer server = HttpServer.create(new InetSocketAddress(redirectPort), 0);
+        HttpServer server;
+        try {
+            server = HttpServer.create(new InetSocketAddress(redirectPort), 0);
+        } catch (java.net.BindException e) {
+            throw new IOException("Failed to start local server on port " + redirectPort + 
+                    ". Port is already in use. Please close the application using this port or configure a different port using TEAMS_AUTH_PORT environment variable.", e);
+        }
         
         server.createContext("/", exchange -> {
             handleAuthCallback(exchange, authCodeFuture, state);
@@ -179,12 +185,13 @@ public class OAuth2AuthenticationFlow {
             int expiresIn = json.getInt("expires_in");
             int interval = json.optInt("interval", 5);
             
-            logger.info("=".repeat(60));
+            String separator = "============================================================";
+            logger.info(separator);
             logger.info("Device Code Authentication");
-            logger.info("=".repeat(60));
+            logger.info(separator);
             logger.info("Please visit: {}", verificationUri);
             logger.info("Enter code: {}", userCode);
-            logger.info("=".repeat(60));
+            logger.info(separator);
             
             // Poll for token
             return pollForDeviceToken(clientId, tenantId, deviceCode, interval, expiresIn);

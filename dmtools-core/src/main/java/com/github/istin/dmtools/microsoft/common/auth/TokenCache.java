@@ -18,6 +18,7 @@ import java.util.Set;
  */
 public class TokenCache {
     private static final Logger logger = LogManager.getLogger(TokenCache.class);
+    private static final int EXPIRATION_BUFFER_SECONDS = 300; // 5 minutes buffer before token expiration
     
     private final File cacheFile;
     private String accessToken;
@@ -112,8 +113,8 @@ public class TokenCache {
         if (refreshToken != null) {
             this.refreshToken = refreshToken;
         }
-        // Subtract 5 minutes as buffer to refresh before actual expiration
-        this.expiresAt = System.currentTimeMillis() + ((expiresInSeconds - 300) * 1000L);
+        // Subtract buffer to refresh before actual expiration
+        this.expiresAt = System.currentTimeMillis() + ((expiresInSeconds - EXPIRATION_BUFFER_SECONDS) * 1000L);
         save();
     }
     

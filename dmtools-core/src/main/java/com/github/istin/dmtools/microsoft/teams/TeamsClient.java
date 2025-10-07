@@ -116,8 +116,10 @@ public class TeamsClient extends MicrosoftGraphRestClient {
             @MCPParam(name = "chatId", description = "The chat ID", required = true) String chatId,
             @MCPParam(name = "limit", description = "Maximum number of messages (0 for all, default: 100)", required = false, example = "100") Integer limit) throws IOException {
         
-        int maxMessages = (limit != null && limit > 0) ? limit : DEFAULT_MAX_MESSAGES;
-        boolean getAllMessages = (limit != null && limit == 0);
+        // Assign default value to limit if null
+        limit = (limit == null) ? DEFAULT_MAX_MESSAGES : limit;
+        boolean getAllMessages = (limit == 0);
+        int maxMessages = getAllMessages ? Integer.MAX_VALUE : limit;
         
         List<ChatMessage> allMessages = new ArrayList<>();
         String url = path(String.format("/me/chats/%s/messages", chatId));
@@ -174,6 +176,41 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     public Chat findChatByName(
             @MCPParam(name = "chatName", description = "The chat name to search for", required = true) String chatName) throws IOException {
         
+        // Try server-side filtering first (more efficient)
+        List<Chat> filteredChats = new ArrayList<>();
+        String url = path("/me/chats");
+        
+        while (url != null) {
+            GenericRequest request = new GenericRequest(this, url);
+            // Use $filter with startswith for server-side filtering
+            request.param("$filter", String.format("startswith(topic, '%s')", chatName.replace("'", "''")));
+            
+            String response = execute(request);
+            JSONObject json = new JSONObject(response);
+            
+            JSONArray chats = json.optJSONArray("value");
+            if (chats != null) {
+                for (int i = 0; i < chats.length(); i++) {
+                    filteredChats.add(new Chat(chats.getJSONObject(i)));
+                }
+            }
+            
+            // Check for next page
+            url = json.optString("@odata.nextLink", null);
+        }
+        
+        // If server-side filtering returns results, use them
+        if (!filteredChats.isEmpty()) {
+            if (filteredChats.size() > 1) {
+                logger.warn("Multiple chats found matching '{}', returning first match", chatName);
+            }
+            Chat result = filteredChats.get(0);
+            logger.info("Found chat: {} (ID: {})", result.getTopic(), result.getId());
+            return result;
+        }
+        
+        // Fallback to client-side filtering (case-insensitive partial match)
+        logger.debug("Server-side filtering returned no results, falling back to client-side filtering");
         List<Chat> allChats = getChats();
         List<Chat> matches = new ArrayList<>();
         
@@ -391,6 +428,41 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     public Team findTeamByName(
             @MCPParam(name = "teamName", description = "The team name to search for", required = true) String teamName) throws IOException {
         
+        // Try server-side filtering first (more efficient)
+        List<Team> filteredTeams = new ArrayList<>();
+        String url = path("/me/joinedTeams");
+        
+        while (url != null) {
+            GenericRequest request = new GenericRequest(this, url);
+            // Use $filter with startswith for server-side filtering
+            request.param("$filter", String.format("startswith(displayName, '%s')", teamName.replace("'", "''")));
+            
+            String response = execute(request);
+            JSONObject json = new JSONObject(response);
+            
+            JSONArray teams = json.optJSONArray("value");
+            if (teams != null) {
+                for (int i = 0; i < teams.length(); i++) {
+                    filteredTeams.add(new Team(teams.getJSONObject(i)));
+                }
+            }
+            
+            // Check for next page
+            url = json.optString("@odata.nextLink", null);
+        }
+        
+        // If server-side filtering returns results, use them
+        if (!filteredTeams.isEmpty()) {
+            if (filteredTeams.size() > 1) {
+                logger.warn("Multiple teams found matching '{}', returning first match", teamName);
+            }
+            Team result = filteredTeams.get(0);
+            logger.info("Found team: {} (ID: {})", result.getDisplayName(), result.getId());
+            return result;
+        }
+        
+        // Fallback to client-side filtering (case-insensitive partial match)
+        logger.debug("Server-side filtering returned no results, falling back to client-side filtering");
         List<Team> allTeams = getJoinedTeams();
         List<Team> matches = new ArrayList<>();
         
@@ -501,8 +573,10 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * Retrieves messages from a channel.
      */
     private List<ChatMessage> getChannelMessages(String teamId, String channelId, Integer limit) throws IOException {
-        int maxMessages = (limit != null && limit > 0) ? limit : DEFAULT_MAX_MESSAGES;
-        boolean getAllMessages = (limit != null && limit == 0);
+        // Assign default value to limit if null
+        limit = (limit == null) ? DEFAULT_MAX_MESSAGES : limit;
+        boolean getAllMessages = (limit == 0);
+        int maxMessages = getAllMessages ? Integer.MAX_VALUE : limit;
         
         List<ChatMessage> allMessages = new ArrayList<>();
         String url = path(String.format("/teams/%s/channels/%s/messages", teamId, channelId));
