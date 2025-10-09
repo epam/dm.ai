@@ -69,8 +69,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_get_chats",
-        description = "List all chats for the current user with topic, type, and participant information",
+        name = "teams_get_chats_raw",
+        description = "List all chats for the current user with topic, type, and participant information (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -123,8 +123,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_get_messages",
-        description = "Get messages from a chat by ID with sender info, content, timestamps, and attachments",
+        name = "teams_get_messages_raw",
+        description = "Get messages from a chat by ID with sender info, content, timestamps, and attachments (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -190,8 +190,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_find_chat_by_name",
-        description = "Find a chat by topic/name or participant name (case-insensitive partial match). Works for group chats and 1-on-1 chats.",
+        name = "teams_find_chat_by_name_raw",
+        description = "Find a chat by topic/name or participant name (case-insensitive partial match). Works for group chats and 1-on-1 chats. (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -270,8 +270,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_get_messages_by_name",
-        description = "Get messages from a chat by name (combines find + get messages)",
+        name = "teams_get_messages_by_name_raw",
+        description = "Get messages from a chat by name (combines find + get messages) (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -576,8 +576,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_send_message",
-        description = "Send a message to a chat by ID",
+        name = "teams_send_message_raw",
+        description = "Send a message to a chat by ID (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -659,8 +659,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_get_joined_teams",
-        description = "List teams the user is a member of",
+        name = "teams_get_joined_teams_raw",
+        description = "List teams the user is a member of (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -696,8 +696,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_get_team_channels",
-        description = "Get channels in a specific team",
+        name = "teams_get_team_channels_raw",
+        description = "Get channels in a specific team (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -735,8 +735,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_find_team_by_name",
-        description = "Find a team by display name (case-insensitive partial match)",
+        name = "teams_find_team_by_name_raw",
+        description = "Find a team by display name (case-insensitive partial match) (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -816,8 +816,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_find_channel_by_name",
-        description = "Find a channel by name within a team (case-insensitive partial match)",
+        name = "teams_find_channel_by_name_raw",
+        description = "Find a channel by name within a team (case-insensitive partial match) (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
@@ -860,8 +860,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     @MCPTool(
-        name = "teams_get_channel_messages_by_name",
-        description = "Get messages from a channel by team and channel names",
+        name = "teams_get_channel_messages_by_name_raw",
+        description = "Get messages from a channel by team and channel names (returns raw JSON)",
         integration = "teams",
         category = "communication"
     )
