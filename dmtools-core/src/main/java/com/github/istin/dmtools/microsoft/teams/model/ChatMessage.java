@@ -200,5 +200,118 @@ public class ChatMessage extends JSONModel {
         public String getContentUrl() {
             return getString("contentUrl");
         }
+        
+        public String getContent() {
+            return getString("content");
+        }
+    }
+    
+    /**
+     * Gets the event detail for system event messages.
+     * This contains information about call events, transcripts, recordings, etc.
+     */
+    public JSONObject getEventDetail() {
+        return getJSONObject().optJSONObject("eventDetail");
+    }
+    
+    /**
+     * Gets the list of reactions to this message.
+     */
+    public List<Reaction> getReactions() {
+        JSONArray reactionsArray = getJSONObject().optJSONArray("reactions");
+        List<Reaction> reactions = new ArrayList<>();
+        if (reactionsArray != null) {
+            for (int i = 0; i < reactionsArray.length(); i++) {
+                reactions.add(new Reaction(reactionsArray.getJSONObject(i)));
+            }
+        }
+        return reactions;
+    }
+    
+    /**
+     * Gets the list of mentions in this message.
+     */
+    public List<Mention> getMentions() {
+        JSONArray mentionsArray = getJSONObject().optJSONArray("mentions");
+        List<Mention> mentions = new ArrayList<>();
+        if (mentionsArray != null) {
+            for (int i = 0; i < mentionsArray.length(); i++) {
+                mentions.add(new Mention(mentionsArray.getJSONObject(i)));
+            }
+        }
+        return mentions;
+    }
+    
+    /**
+     * Represents a message reaction.
+     */
+    public static class Reaction extends JSONModel {
+        public Reaction(JSONObject json) {
+            super(json);
+        }
+        
+        public String getReactionType() {
+            return getString("reactionType");
+        }
+        
+        public String getCreatedDateTime() {
+            return getString("createdDateTime");
+        }
+        
+        public Sender getUser() {
+            JSONObject user = getJSONObject().optJSONObject("user");
+            if (user != null) {
+                // Wrap in a from-style object for Sender
+                JSONObject fromStyle = new JSONObject();
+                fromStyle.put("user", user);
+                return new Sender(fromStyle);
+            }
+            return null;
+        }
+    }
+    
+    /**
+     * Represents a mention in a message.
+     */
+    public static class Mention extends JSONModel {
+        public Mention(JSONObject json) {
+            super(json);
+        }
+        
+        public String getId() {
+            return getString("id");
+        }
+        
+        public String getMentionText() {
+            return getString("mentionText");
+        }
+        
+        public Mentioned getMentioned() {
+            JSONObject mentioned = getJSONObject().optJSONObject("mentioned");
+            if (mentioned != null) {
+                return new Mentioned(mentioned);
+            }
+            return null;
+        }
+        
+        /**
+         * Represents the mentioned entity.
+         */
+        public static class Mentioned extends JSONModel {
+            public Mentioned(JSONObject json) {
+                super(json);
+            }
+            
+            public Sender getUser() {
+                JSONObject user = getJSONObject().optJSONObject("user");
+                if (user != null) {
+                    // Wrap in a from-style object for Sender
+                    JSONObject fromStyle = new JSONObject();
+                    fromStyle.put("user", user);
+                    return new Sender(fromStyle);
+                }
+                return null;
+            }
+        }
     }
 }

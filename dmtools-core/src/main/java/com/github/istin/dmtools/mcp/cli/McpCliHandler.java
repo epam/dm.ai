@@ -8,6 +8,9 @@ import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.file.FileTools;
+import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
+import com.github.istin.dmtools.microsoft.teams.TeamsAuthTools;
+import com.github.istin.dmtools.microsoft.sharepoint.BasicSharePointClient;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import org.apache.logging.log4j.LogManager;
@@ -100,7 +103,7 @@ public class McpCliHandler {
                 return "Tool executed successfully but returned no result.";
             }
 
-            return result.toString();
+            return serializeResult(result);
 
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tool or arguments", e);
@@ -108,6 +111,47 @@ public class McpCliHandler {
         } catch (Exception e) {
             logger.error("Error executing tool", e);
             return createErrorResponse("Tool execution failed: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Serializes tool execution result to JSON string.
+     * Handles various result types: JSONModel, List, primitives, etc.
+     */
+    private String serializeResult(Object result) {
+        if (result == null) {
+            return "null";
+        }
+        
+        // Handle JSONModel objects
+        if (result instanceof com.github.istin.dmtools.common.model.JSONModel) {
+            return result.toString();
+        }
+        
+        // Handle Lists (e.g., List<Chat>)
+        if (result instanceof List) {
+            org.json.JSONArray jsonArray = new org.json.JSONArray();
+            for (Object item : (List<?>) result) {
+                if (item instanceof com.github.istin.dmtools.common.model.JSONModel) {
+                    jsonArray.put(new JSONObject(item.toString()));
+                } else {
+                    jsonArray.put(item);
+                }
+            }
+            return jsonArray.toString(2); // Pretty print with 2-space indent
+        }
+        
+        // Handle primitives and other types
+        if (result instanceof String || result instanceof Number || result instanceof Boolean) {
+            return result.toString();
+        }
+        
+        // Try to convert to JSON object
+        try {
+            return new JSONObject(result.toString()).toString(2);
+        } catch (Exception e) {
+            // Fall back to plain toString
+            return result.toString();
         }
     }
 
@@ -173,19 +217,54 @@ public class McpCliHandler {
 
     /**
      * Maps positional arguments to named parameters based on the tool's schema.
+     * Now handles both required and optional parameters.
      */
     private void mapPositionalArguments(String toolName, List<String> positionalArgs, Map<String, Object> arguments) {
         try {
-            List<String> paramNames = MCPSchemaGenerator.getRequiredParameterNames(toolName);
+            // First try to get required parameters
+            List<String> paramNames = new ArrayList<>(MCPSchemaGenerator.getRequiredParameterNames(toolName));
             
-            // If there's a 1-to-1 match of positional args to required params, map them
-            if (positionalArgs.size() == paramNames.size()) {
-                for (int i = 0; i < positionalArgs.size(); i++) {
-                    arguments.put(paramNames.get(i), positionalArgs.get(i));
+            // Add common optional parameters that are often provided positionally
+            // This allows commands like: dmtools teams_get_messages_by_name "Chat Name" 0
+            if (positionalArgs.size() > paramNames.size()) {
+                // Common patterns for optional positional parameters
+                if (toolName.equals("teams_get_recent_chats")) {
+                    if (paramNames.size() < positionalArgs.size()) paramNames.add("limit");
+                    if (paramNames.size() < positionalArgs.size()) paramNames.add("chatType");
+                } else if (toolName.contains("_since")) {
+                    // For _since commands: no extra optional params (smart pagination handles it)
+                    // Do nothing - sinceDate is already required
+                } else if (toolName.contains("_get_messages")) {
+                    // Add "limit" as next expected parameter for message retrieval commands (but not for _since)
+                    if (paramNames.size() < positionalArgs.size()) paramNames.add("limit");
+                } else if (toolName.contains("_get_chats") || toolName.contains("_get_recent")) {
+                    // Add "limit" for list commands
+                    if (paramNames.size() < positionalArgs.size()) paramNames.add("limit");
                 }
-            } else {
-                // Fallback for ambiguity or mismatch
-                for (int i = 0; i < positionalArgs.size(); i++) {
+            }
+            
+            // Special handling for tools with only optional params (no required params)
+            if (paramNames.isEmpty() && !positionalArgs.isEmpty()) {
+                if (toolName.equals("teams_get_recent_chats")) {
+                    paramNames.add("limit");
+                    paramNames.add("chatType");
+                } else if (toolName.contains("_get_recent") || toolName.contains("_get_messages") || toolName.contains("_get_chats")) {
+                    paramNames.add("limit");  // Most get/list commands have limit as first optional param
+                }
+            }
+            
+            // Map positional args to parameter names in order
+            int numToMap = Math.min(positionalArgs.size(), paramNames.size());
+            for (int i = 0; i < numToMap; i++) {
+                String paramValue = positionalArgs.get(i);
+                // Try to convert to appropriate type (Integer for "limit" parameter)
+                Object convertedValue = convertParameterValue(paramNames.get(i), paramValue);
+                arguments.put(paramNames.get(i), convertedValue);
+            }
+            
+            // If there are still leftover positional args, use indexed fallback
+            if (positionalArgs.size() > paramNames.size()) {
+                for (int i = paramNames.size(); i < positionalArgs.size(); i++) {
                     arguments.put("arg" + i, positionalArgs.get(i));
                 }
             }
@@ -198,6 +277,23 @@ public class McpCliHandler {
         }
     }
 
+    /**
+     * Converts parameter value from String to appropriate type based on parameter name.
+     */
+    private Object convertParameterValue(String paramName, String value) {
+        // Common parameter types
+        if (paramName.equals("limit") || paramName.endsWith("Count") || paramName.endsWith("Size")) {
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                logger.warn("Failed to convert '{}' to Integer for parameter '{}'", value, paramName);
+                return value;  // Return as string if conversion fails
+            }
+        }
+        // Add more type conversions as needed
+        return value;
+    }
+    
     /**
      * Creates client instances for MCP tool execution.
      * Uses environment variables with Basic client fallback.
@@ -251,6 +347,30 @@ public class McpCliHandler {
             logger.debug("Created FileTools instance");
         } catch (Exception e) {
             logger.warn("Failed to create FileTools: {}", e.getMessage());
+        }
+
+        try {
+            // Create Teams Auth tools (separate from main client, always available)
+            clients.put("teams_auth", new TeamsAuthTools());
+            logger.debug("Created TeamsAuthTools instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create TeamsAuthTools: {}", e.getMessage());
+        }
+
+        try {
+            // Create Teams client (only if authentication is configured)
+            clients.put("teams", BasicTeamsClient.getInstance());
+            logger.debug("Created BasicTeamsClient instance");
+        } catch (Exception e) {
+            logger.debug("BasicTeamsClient not initialized: {}. Use teams_auth_start to authenticate.", e.getMessage());
+        }
+
+        try {
+            // Create SharePoint client (uses same auth as Teams)
+            clients.put("sharepoint", BasicSharePointClient.getInstance());
+            logger.debug("Created BasicSharePointClient instance");
+        } catch (Exception e) {
+            logger.debug("BasicSharePointClient not initialized: {}. SharePoint uses same auth as Teams.", e.getMessage());
         }
 
         logger.info("Created {} client instances for MCP CLI", clients.size());

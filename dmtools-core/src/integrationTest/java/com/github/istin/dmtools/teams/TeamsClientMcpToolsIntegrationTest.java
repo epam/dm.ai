@@ -47,7 +47,9 @@ public class TeamsClientMcpToolsIntegrationTest {
         String tenantId = System.getenv("TEAMS_TENANT_ID");
         String refreshToken = System.getenv("TEAMS_REFRESH_TOKEN");
         
-        if (clientId == null || clientId.isEmpty() || refreshToken == null || refreshToken.isEmpty()) {
+        if (clientId == null || clientId.isEmpty()
+        //        || refreshToken == null || refreshToken.isEmpty()
+        ) {
             logger.warn("Microsoft Teams credentials not configured. Skipping integration tests.");
             logger.warn("To run these tests, configure environment variables:");
             logger.warn("  - TEAMS_CLIENT_ID");
@@ -59,9 +61,11 @@ public class TeamsClientMcpToolsIntegrationTest {
         
         try {
             // Initialize Teams client
+            // Scopes as specified by user (includes admin-required permissions)
             String scopes = System.getenv().getOrDefault("TEAMS_SCOPES", 
-                    "User.Read Chat.Read ChatMessage.Read Chat.ReadWrite ChatMessage.Send " +
-                    "Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Read.All");
+                    "User.Read Chat.Read ChatMessage.Read Mail.Read " +
+                    "Team.ReadBasic.All Channel.ReadBasic.All " +
+                    "openid profile email offline_access");
             String authMethod = System.getenv().getOrDefault("TEAMS_AUTH_METHOD", "refresh_token");
             int authPort = Integer.parseInt(System.getenv().getOrDefault("TEAMS_AUTH_PORT", "8080"));
             String tokenCachePath = System.getenv().getOrDefault("TEAMS_TOKEN_CACHE_PATH", "./teams-test.token");

@@ -49,7 +49,7 @@ public abstract class MicrosoftGraphRestClient extends AbstractRestClient {
             String tokenCachePath,
             String preConfiguredRefreshToken) throws IOException {
         super(basePath, null); // authorization will be set via token
-        
+        setClearCache(true);
         this.clientId = clientId;
         this.tenantId = tenantId;
         this.scopes = scopes;
