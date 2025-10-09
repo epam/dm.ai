@@ -23,10 +23,22 @@ public class TeamsMessageSimplifier {
      * @return JSONArray with simplified message objects
      */
     public static JSONArray simplifyMessages(List<ChatMessage> messages) {
+        return simplifyMessages(messages, null);
+    }
+    
+    /**
+     * Simplifies a list of chat messages to JSON array format with chat context.
+     * Filters out system messages and returns only regular messages with essential information.
+     * 
+     * @param messages List of ChatMessage objects to simplify
+     * @param chatId Optional chat ID for constructing download URLs (needed for transcripts)
+     * @return JSONArray with simplified message objects
+     */
+    public static JSONArray simplifyMessages(List<ChatMessage> messages, String chatId) {
         JSONArray simplified = new JSONArray();
         
         for (ChatMessage message : messages) {
-            JSONObject simpleMsg = simplifyMessage(message);
+            JSONObject simpleMsg = simplifyMessage(message, chatId);
             if (simpleMsg != null) {
                 simplified.put(simpleMsg);
             }
@@ -39,15 +51,81 @@ public class TeamsMessageSimplifier {
      * Simplifies a single chat message to JSON format.
      * 
      * @param message ChatMessage object to simplify
-     * @return JSONObject with simplified message data, or null if message should be skipped (system messages)
+     * @return JSONObject with simplified message data, or null if message should be skipped (empty system messages)
      */
     public static JSONObject simplifyMessage(ChatMessage message) {
-        // Skip system messages (only keep "message" type)
+        return simplifyMessage(message, null);
+    }
+    
+    /**
+     * Simplifies a single chat message to JSON format with chat context.
+     * 
+     * @param message ChatMessage object to simplify
+     * @param chatId Optional chat ID for constructing download URLs (needed for transcripts)
+     * @return JSONObject with simplified message data, or null if message should be skipped (empty system messages)
+     */
+    public static JSONObject simplifyMessage(ChatMessage message, String chatId) {
+        JSONObject simpleMsg = new JSONObject();
+        
+        // Check if this is a system event message with recording/transcript info
         if (!"message".equals(message.getMessageType())) {
+            JSONObject eventDetail = message.getEventDetail();
+            if (eventDetail != null) {
+                String eventType = eventDetail.optString("@odata.type", "");
+                
+                // Handle call recording events
+                if (eventType.equals("#microsoft.graph.callRecordingEventMessageDetail")) {
+                    String recordingUrl = eventDetail.optString("callRecordingUrl", null);
+                    if (recordingUrl != null && !recordingUrl.isEmpty()) {
+                        simpleMsg.put("date", message.getCreatedDateTime());
+                        simpleMsg.put("type", "recording");
+                        simpleMsg.put("title", eventDetail.optString("callRecordingDisplayName", "Meeting Recording"));
+                        simpleMsg.put("url", recordingUrl);
+                        String duration = eventDetail.optString("callRecordingDuration", null);
+                        if (duration != null) {
+                            simpleMsg.put("duration", duration);
+                        }
+                        return simpleMsg;
+                    }
+                }
+                
+                // Handle call transcript events
+                if (eventType.equals("#microsoft.graph.callTranscriptEventMessageDetail")) {
+                    simpleMsg.put("date", message.getCreatedDateTime());
+                    simpleMsg.put("type", "transcript");
+                    simpleMsg.put("title", "Meeting Transcript");
+                    
+                    // Include IDs for reference
+                    String transcriptICalUid = eventDetail.optString("callTranscriptICalUid", null);
+                    if (transcriptICalUid != null) {
+                        simpleMsg.put("transcriptICalUid", transcriptICalUid);
+                    }
+                    
+                    String messageId = message.getId();
+                    if (messageId != null) {
+                        simpleMsg.put("messageId", messageId);
+                    }
+                    
+                    // Construct download URL if chatId is available
+                    if (chatId != null && messageId != null) {
+                        simpleMsg.put("chatId", chatId);
+                        // URL to get hosted contents (transcript file)
+                        String hostedContentsUrl = String.format(
+                            "https://graph.microsoft.com/v1.0/chats/%s/messages/%s/hostedContents",
+                            chatId, messageId
+                        );
+                        simpleMsg.put("hostedContentsUrl", hostedContentsUrl);
+                    }
+                    
+                    return simpleMsg;
+                }
+            }
+            
+            // Skip other system messages
             return null;
         }
         
-        JSONObject simpleMsg = new JSONObject();
+        // Process regular messages
         
         // Author
         ChatMessage.Sender from = message.getFrom();

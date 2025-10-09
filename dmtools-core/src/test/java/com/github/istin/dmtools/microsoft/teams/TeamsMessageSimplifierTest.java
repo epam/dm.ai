@@ -137,8 +137,68 @@ public class TeamsMessageSimplifierTest {
     public void testSimplifyMessage_SystemMessage() {
         JSONObject result = TeamsMessageSimplifier.simplifyMessage(systemMessage);
         
-        // System messages should be filtered out (return null)
+        // Empty system messages should be filtered out (return null)
         assertNull(result);
+    }
+    
+    @Test
+    public void testSimplifyMessage_RecordingEvent() {
+        // Create a recording event message
+        JSONObject recordingJson = new JSONObject();
+        recordingJson.put("id", "6");
+        recordingJson.put("messageType", "systemEventMessage");
+        recordingJson.put("createdDateTime", "2025-10-08T14:00:00Z");
+        recordingJson.put("eventDetail", new JSONObject()
+            .put("@odata.type", "#microsoft.graph.callRecordingEventMessageDetail")
+            .put("callRecordingUrl", "https://example.com/recording.mp4")
+            .put("callRecordingDisplayName", "AI Champions Meeting")
+            .put("callRecordingDuration", "PT45M30S"));
+        ChatMessage recordingMessage = new ChatMessage(recordingJson.toString());
+        
+        JSONObject result = TeamsMessageSimplifier.simplifyMessage(recordingMessage);
+        
+        assertNotNull(result);
+        assertEquals("recording", result.getString("type"));
+        assertEquals("AI Champions Meeting", result.getString("title"));
+        assertEquals("https://example.com/recording.mp4", result.getString("url"));
+        assertEquals("PT45M30S", result.getString("duration"));
+        assertEquals("2025-10-08T14:00:00Z", result.getString("date"));
+    }
+    
+    @Test
+    public void testSimplifyMessage_TranscriptEvent() {
+        // Create a transcript event message
+        JSONObject transcriptJson = new JSONObject();
+        transcriptJson.put("id", "7");
+        transcriptJson.put("messageType", "systemEventMessage");
+        transcriptJson.put("createdDateTime", "2025-10-08T14:00:00Z");
+        transcriptJson.put("eventDetail", new JSONObject()
+            .put("@odata.type", "#microsoft.graph.callTranscriptEventMessageDetail")
+            .put("callTranscriptICalUid", "transcript-123-456"));
+        ChatMessage transcriptMessage = new ChatMessage(transcriptJson.toString());
+        
+        // Test without chatId
+        JSONObject resultWithoutChatId = TeamsMessageSimplifier.simplifyMessage(transcriptMessage);
+        
+        assertNotNull(resultWithoutChatId);
+        assertEquals("transcript", resultWithoutChatId.getString("type"));
+        assertEquals("Meeting Transcript", resultWithoutChatId.getString("title"));
+        assertEquals("transcript-123-456", resultWithoutChatId.getString("transcriptICalUid"));
+        assertEquals("7", resultWithoutChatId.getString("messageId"));
+        assertEquals("2025-10-08T14:00:00Z", resultWithoutChatId.getString("date"));
+        assertFalse(resultWithoutChatId.has("chatId"));
+        assertFalse(resultWithoutChatId.has("hostedContentsUrl"));
+        
+        // Test with chatId - should include download URL
+        String chatId = "19:meeting_test123@thread.v2";
+        JSONObject resultWithChatId = TeamsMessageSimplifier.simplifyMessage(transcriptMessage, chatId);
+        
+        assertNotNull(resultWithChatId);
+        assertEquals("transcript", resultWithChatId.getString("type"));
+        assertEquals(chatId, resultWithChatId.getString("chatId"));
+        assertEquals("7", resultWithChatId.getString("messageId"));
+        String expectedUrl = "https://graph.microsoft.com/v1.0/chats/" + chatId + "/messages/7/hostedContents";
+        assertEquals(expectedUrl, resultWithChatId.getString("hostedContentsUrl"));
     }
     
     @Test

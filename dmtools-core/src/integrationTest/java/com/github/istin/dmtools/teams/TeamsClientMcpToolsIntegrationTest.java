@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.teams;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.microsoft.teams.TeamsClient;
 import com.github.istin.dmtools.microsoft.teams.model.Chat;
 import com.github.istin.dmtools.microsoft.teams.model.ChatMessage;
@@ -31,6 +32,7 @@ public class TeamsClientMcpToolsIntegrationTest {
     
     private static final Logger logger = LogManager.getLogger(TeamsClientMcpToolsIntegrationTest.class);
     
+    private static PropertyReader propertyReader = new PropertyReader();
     private static TeamsClient teamsClient;
     private static boolean credentialsAvailable = false;
     
@@ -42,37 +44,29 @@ public class TeamsClientMcpToolsIntegrationTest {
     
     @BeforeAll
     static void setUp() {
-        // Check if credentials are available
-        String clientId = System.getenv("TEAMS_CLIENT_ID");
-        String tenantId = System.getenv("TEAMS_TENANT_ID");
-        String refreshToken = System.getenv("TEAMS_REFRESH_TOKEN");
+        // Check if credentials are available using PropertyReader
+        String clientId = propertyReader.getTeamsClientId();
+        String tenantId = propertyReader.getTeamsTenantId();
+        String refreshToken = propertyReader.getTeamsRefreshToken();
         
         if (clientId == null || clientId.isEmpty()
         //        || refreshToken == null || refreshToken.isEmpty()
         ) {
             logger.warn("Microsoft Teams credentials not configured. Skipping integration tests.");
-            logger.warn("To run these tests, configure environment variables:");
+            logger.warn("To run these tests, configure environment variables or properties:");
             logger.warn("  - TEAMS_CLIENT_ID");
             logger.warn("  - TEAMS_TENANT_ID (optional, defaults to 'common')");
-            logger.warn("  - TEAMS_REFRESH_TOKEN");
+            logger.warn("  - TEAMS_REFRESH_TOKEN (optional for device auth)");
             credentialsAvailable = false;
             return;
         }
         
         try {
-            // Initialize Teams client
-            // Scopes as specified by user (includes admin-required permissions)
-            String scopes = System.getenv().getOrDefault("TEAMS_SCOPES", 
-                    "User.Read Chat.Read ChatMessage.Read Mail.Read " +
-                    "Team.ReadBasic.All Channel.ReadBasic.All " +
-                    "openid profile email offline_access");
-            String authMethod = System.getenv().getOrDefault("TEAMS_AUTH_METHOD", "refresh_token");
-            int authPort = Integer.parseInt(System.getenv().getOrDefault("TEAMS_AUTH_PORT", "8080"));
-            String tokenCachePath = System.getenv().getOrDefault("TEAMS_TOKEN_CACHE_PATH", "./teams-test.token");
-            
-            if (tenantId == null || tenantId.isEmpty()) {
-                tenantId = "common";
-            }
+            // Initialize Teams client using PropertyReader for all configuration
+            String scopes = propertyReader.getTeamsScopes();
+            String authMethod = propertyReader.getTeamsAuthMethod();
+            int authPort = propertyReader.getTeamsAuthPort();
+            String tokenCachePath = propertyReader.getTeamsTokenCachePath();
             
             teamsClient = new TeamsClient(
                     clientId,
@@ -85,7 +79,8 @@ public class TeamsClientMcpToolsIntegrationTest {
             );
             
             credentialsAvailable = true;
-            logger.info("TeamsClient initialized successfully");
+            logger.info("TeamsClient initialized successfully using PropertyReader configuration");
+            logger.info("Auth method: {}, Tenant: {}", authMethod, tenantId);
         } catch (Exception e) {
             logger.error("Failed to initialize TeamsClient", e);
             credentialsAvailable = false;
@@ -297,7 +292,7 @@ public class TeamsClientMcpToolsIntegrationTest {
         }
         
         // Only run this test if explicitly enabled
-        String enableWriteTests = System.getenv("TEAMS_ENABLE_WRITE_TESTS");
+        String enableWriteTests = propertyReader.getValue("TEAMS_ENABLE_WRITE_TESTS");
         if (!"true".equalsIgnoreCase(enableWriteTests)) {
             logger.info("Skipping write test - set TEAMS_ENABLE_WRITE_TESTS=true to enable");
             return;
@@ -324,7 +319,7 @@ public class TeamsClientMcpToolsIntegrationTest {
         }
         
         // Only run this test if explicitly enabled
-        String enableWriteTests = System.getenv("TEAMS_ENABLE_WRITE_TESTS");
+        String enableWriteTests = propertyReader.getValue("TEAMS_ENABLE_WRITE_TESTS");
         if (!"true".equalsIgnoreCase(enableWriteTests)) {
             logger.info("Skipping write test - set TEAMS_ENABLE_WRITE_TESTS=true to enable");
             return;
@@ -332,12 +327,11 @@ public class TeamsClientMcpToolsIntegrationTest {
         
         String testMessage = "Test message by name from TeamsClient integration test - " + System.currentTimeMillis();
         
-        ChatMessage sentMessage = teamsClient.sendChatMessageByName(testChatName, testMessage);
+        String sentMessage = teamsClient.sendChatMessageByName(testChatName, testMessage);
         
         assertNotNull(sentMessage);
-        assertNotNull(sentMessage.getId());
-        
-        logger.info("Successfully sent test message by name: {}", sentMessage.getId());
+
+        logger.info("Successfully sent test message by name: {}", sentMessage);
     }
     
     @Test

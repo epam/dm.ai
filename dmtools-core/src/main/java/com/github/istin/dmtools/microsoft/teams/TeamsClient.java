@@ -83,6 +83,7 @@ public class TeamsClient extends MicrosoftGraphRestClient {
         
         while (url != null) {
             GenericRequest request = new GenericRequest(this, url);
+            request.param("$orderby", "lastMessagePreview/createdDateTime desc");
             if (isFirstRequest) {
                 // Expand members to get contact names, lastMessagePreview for last message
                 request.param("$expand", "members,lastMessagePreview");
@@ -425,10 +426,11 @@ public class TeamsClient extends MicrosoftGraphRestClient {
         }
         
         // Get messages
-        List<ChatMessage> messages = getChatMessages(chat.getId(), limit);
+        String chatId = chat.getId();
+        List<ChatMessage> messages = getChatMessages(chatId, limit);
         
-        // Convert to simplified format using TeamsMessageSimplifier
-        JSONArray simplified = TeamsMessageSimplifier.simplifyMessages(messages);
+        // Convert to simplified format using TeamsMessageSimplifier (pass chatId for transcript download URLs)
+        JSONArray simplified = TeamsMessageSimplifier.simplifyMessages(messages, chatId);
         
         logger.info("Retrieved {} messages from chat '{}' (simplified)", simplified.length(), chatName);
         return simplified.toString(2); // Pretty print with 2-space indent
@@ -530,8 +532,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
         logger.info("Retrieved {} new messages from chat {} since {} (scanned {} messages in {} pages)", 
             filteredMessages.size(), chatId, sinceDate, totalFetched, pageCount);
         
-        // Convert to simplified format using TeamsMessageSimplifier
-        JSONArray simplified = TeamsMessageSimplifier.simplifyMessages(filteredMessages);
+        // Convert to simplified format using TeamsMessageSimplifier (pass chatId for transcript download URLs)
+        JSONArray simplified = TeamsMessageSimplifier.simplifyMessages(filteredMessages, chatId);
         
         return simplified.toString(2); // Pretty print with 2-space indent
     }
@@ -650,6 +652,92 @@ public class TeamsClient extends MicrosoftGraphRestClient {
         
         logger.info("Message sent to chat {}: {} chars", chatId, content.length());
         return message;
+    }
+    
+    // ========== Self Chat Operations (Personal Notes) ==========
+    
+    /**
+     * Special chat ID for self chat (personal notes).
+     * This is a fixed ID that represents your personal chat with yourself.
+     */
+    private static final String SELF_CHAT_ID = "48:notes";
+    
+    /**
+     * Gets messages from your self chat (personal notes) in raw format.
+     * The self chat is a special chat with ID "48:notes" where you can send messages to yourself.
+     * 
+     * @param limit Maximum number of messages to retrieve (0 for all, default: 100)
+     * @return List of messages from self chat
+     * @throws IOException if request fails
+     */
+    @MCPTool(
+        name = "teams_get_myself_messages_raw",
+        description = "Get messages from your personal self chat (notes to yourself) with full raw data",
+        integration = "teams",
+        category = "communication"
+    )
+    public List<ChatMessage> getSelfChatMessages(
+            @MCPParam(name = "limit", description = "Maximum number of messages (0 for all, default: 100)", required = false, example = "100") Integer limit) throws IOException {
+        
+        logger.info("Retrieving messages from self chat (personal notes)");
+        return getChatMessages(SELF_CHAT_ID, limit);
+    }
+    
+    /**
+     * Gets messages from your self chat (personal notes) in simplified format.
+     * The self chat is a special chat with ID "48:notes" where you can send messages to yourself.
+     * 
+     * @param limit Maximum number of messages to retrieve (0 for all, default: 100)
+     * @return JSON string with simplified message list
+     * @throws IOException if request fails
+     */
+    @MCPTool(
+        name = "teams_get_myself_messages_simple",
+        description = "Get messages from your personal self chat (notes to yourself) with simplified output",
+        integration = "teams",
+        category = "communication"
+    )
+    public String getSelfChatMessagesSimple(
+            @MCPParam(name = "limit", description = "Maximum number of messages (0 for all, default: 100)", required = false, example = "100") Integer limit) throws IOException {
+        
+        // Get messages
+        List<ChatMessage> messages = getChatMessages(SELF_CHAT_ID, limit);
+        
+        // Convert to simplified format using TeamsMessageSimplifier (pass chatId for transcript download URLs)
+        JSONArray simplified = TeamsMessageSimplifier.simplifyMessages(messages, SELF_CHAT_ID);
+        
+        logger.info("Retrieved {} messages from self chat (simplified)", simplified.length());
+        return simplified.toString(2); // Pretty print with 2-space indent
+    }
+    
+    /**
+     * Sends a message to your self chat (personal notes).
+     * The self chat is a special chat with ID "48:notes" where you can send messages to yourself.
+     * 
+     * @param content Message content (plain text or HTML)
+     * @return JSON string with result (success/error) and message details
+     * @throws IOException if request fails
+     */
+    @MCPTool(
+        name = "teams_send_myself_message",
+        description = "Send a message to your personal self chat (notes to yourself)",
+        integration = "teams",
+        category = "communication"
+    )
+    public String sendSelfChatMessage(
+            @MCPParam(name = "content", description = "Message content (plain text or HTML)", required = true) String content) throws IOException {
+        
+        ChatMessage message = sendChatMessage(SELF_CHAT_ID, content);
+        
+        JSONObject result = new JSONObject();
+        result.put("success", true);
+        result.put("chatName", "Self Chat (Personal Notes)");
+        result.put("chatId", SELF_CHAT_ID);
+        result.put("messageId", message.getId());
+        result.put("createdDateTime", message.getCreatedDateTime());
+        
+        logger.info("Sent message to self chat (personal notes)");
+        return result.toString(2);
     }
     
     // ========== Teams and Channels Operations ==========
