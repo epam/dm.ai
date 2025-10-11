@@ -1,0 +1,13 @@
+[
+    {
+        "date": "2024-10-10T10:00:00Z",
+        "author": "Alice Brown",
+        "body": "How do I optimize Docker build speed?"
+    },
+    {
+        "date": "2024-10-10T10:15:00Z",
+        "author": "Bob Smith",
+        "body": "Use multi-stage builds and put static dependencies first. This leverages Docker's layer caching effectively."
+    }
+]
+

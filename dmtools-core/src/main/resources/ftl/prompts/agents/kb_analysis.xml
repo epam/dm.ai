@@ -1,0 +1,253 @@
+<prompt>
+    <role>
+        You are an AI assistant specialized in analyzing chat conversations, messages, and documentation to extract structured knowledge.
+        Your task is to identify themes, questions, answers, notes, and expertise signals from the provided text.
+    </role>
+    <input_data>
+        <source_name>${global.sourceName!'unknown'}</source_name>
+        <raw_input>
+${global.inputText!''}
+        </raw_input>
+        <existing_context>
+            <existing_people>
+<#if global.context?? && global.context.existingPeople?? && (global.context.existingPeople?size > 0)>
+<#list global.context.existingPeople as person>
+- ${person}
+</#list>
+<#else>
+(No existing people yet)
+</#if>
+            </existing_people>
+            <existing_topics>
+<#if global.context?? && global.context.existingTopics?? && (global.context.existingTopics?size > 0)>
+<#list global.context.existingTopics as topic>
+- ${topic}
+</#list>
+<#else>
+(No existing topics yet)
+</#if>
+            </existing_topics>
+        </existing_context>
+    </input_data>
+    <formatting>
+        <output_format>JSON</output_format>
+        <rules>
+Return ONLY valid JSON without any markdown code blocks or explanatory text.
+Follow the exact JSON schema specified below.
+Ensure all date fields use ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ).
+TEMPORARY IDs: Assign temporary IDs in format "q_1", "q_2", "a_1", "a_2", "n_1", "n_2" etc. The system will later auto-increment these to "q_0001", "q_0002", "a_0001", "a_0002" etc.
+MAPPING Q→A: Use these temporary IDs to establish links. For example: question with id="q_1" can be answered by answer with id="a_1". Set answeredBy="a_1" in question and answersQuestion="q_1" in answer.
+AREA: ONE top-level category representing the broadest knowledge domain (e.g., "docker", "python", "kubernetes", "ai", "devops"). This is the PRIMARY classification.
+TOPICS: Array of 1(preferable)-3 specific themes or detailed subjects within the area (e.g., ["dockerfile", "best-practices"], ["caching", "optimization"], ["configuration", "setup"]). These are SECONDARY classifications that provide more granular categorization. **IMPORTANT** avoid to use similar topics, synonims.
+TAGS: Array of related techniques, tools, specific concepts, or keywords mentioned (e.g., ["buildkit", "multi-stage", "layer-caching"]). These are TERTIARY metadata for search and cross-referencing.
+Hierarchy: area (broadest) > topics (specific themes) > tags (granular keywords).
+Quality scores for answers range from 0.0 to 1.0.
+Extract actual author names from messages, normalize them consistently.
+        </rules>
+        <json_schema>
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["questions", "answers", "notes"],
+  "properties": {
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "author", "text", "date", "area", "topics", "tags", "answeredBy", "links"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^q_[0-9]+$", "description": "Temporary ID in format q_1, q_2, q_3 etc. System will auto-increment to q_0001, q_0002"},
+          "author": {"type": "string"},
+          "text": {"type": "string"},
+          "date": {"type": "string", "format": "date-time"},
+          "area": {"type": "string", "description": "Top-level domain (e.g. docker, python, kubernetes)"},
+          "topics": {"type": "array", "items": {"type": "string"}, "description": "1-3 detailed subjects"},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Specific keywords"},
+          "answeredBy": {"type": "string", "description": "Temporary answer ID (e.g. a_1) if question is answered, empty string otherwise"},
+          "links": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "title": {"type": "string"}}}}
+        }
+      }
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "author", "text", "date", "area", "topics", "tags", "answersQuestion", "quality", "links"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^a_[0-9]+$", "description": "Temporary ID in format a_1, a_2, a_3 etc. System will auto-increment to a_0001, a_0002"},
+          "author": {"type": "string"},
+          "text": {"type": "string"},
+          "date": {"type": "string", "format": "date-time"},
+          "area": {"type": "string", "description": "Top-level domain (e.g. docker, python, kubernetes)"},
+          "topics": {"type": "array", "items": {"type": "string"}, "description": "1-3 detailed subjects"},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Specific keywords"},
+          "answersQuestion": {"type": "string", "description": "Temporary question ID (e.g. q_1) that this answer addresses, empty string if standalone"},
+          "quality": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+          "links": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "title": {"type": "string"}}}}
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "area", "topics", "tags", "author", "date", "links"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^n_[0-9]+$", "description": "Temporary ID in format n_1, n_2, n_3 etc. System will auto-increment to n_0001, n_0002"},
+          "text": {"type": "string"},
+          "area": {"type": "string", "description": "Top-level domain (e.g. docker, python, kubernetes)"},
+          "topics": {"type": "array", "items": {"type": "string"}, "description": "1-3 detailed subjects"},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Specific keywords"},
+          "author": {"type": "string"},
+          "date": {"type": "string", "format": "date-time"},
+          "links": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "title": {"type": "string"}}}}
+        }
+      }
+    }
+  }
+}
+        </json_schema>
+    </formatting>
+    <instructions>
+Analyze the provided messages and extract all relevant knowledge structures.
+
+IDENTIFY QUESTIONS: Direct questions asked by users. For each question:
+  - Assign temporary ID: q_1, q_2, q_3 etc.
+  - Set area: ONE top-level domain (e.g., "docker", "python", "ai")
+  - Set topics: 1-3 detailed subjects (e.g., ["dockerfile", "best-practices"])
+  - Set tags: specific keywords (e.g., ["buildkit", "multi-stage"])
+  - Set answeredBy: temporary answer ID (e.g., "a_1") if answered, empty string otherwise
+
+IDENTIFY ANSWERS: Solutions or responses. For each answer:
+  - Assign temporary ID: a_1, a_2, a_3 etc.
+  - Set area: ONE top-level domain (same as related question)
+  - Set topics: 1-3 detailed subjects (can differ from question)
+  - Set tags: specific keywords mentioned in the answer
+  - Set answersQuestion: temporary question ID (e.g., "q_1") if it answers a question, empty string otherwise
+  - Set quality: 0.0-1.0 based on completeness
+
+IDENTIFY NOTES: Standalone facts or observations (not Q&A pairs):
+  - Assign temporary ID: n_1, n_2, n_3 etc.
+  - Set area/topics/tags same way as questions
+
+Extract LINKS: URLs mentioned in messages with meaningful titles.
+
+Extract author names consistently throughout the analysis.
+
+USE EXISTING CONTEXT: If existing people or topics are provided:
+  - For author names: Use existing names when they match (normalize variations like "John" → "John Doe" if "John Doe" exists)
+  - For topics: Reuse existing topic names when the subject is the same (avoid synonyms like "docker-optimization" if "build-optimization" exists)
+  - This prevents duplicates and maintains consistency across incremental updates
+
+CRITICAL FOR Q→A MAPPING: When a message thread shows a question followed by a solution, establish the link using temporary IDs:
+  - Question: id="q_1", answeredBy="a_1"
+  - Answer: id="a_1", answersQuestion="q_1"
+The system will later auto-increment these to q_0001, q_0002, a_0001, a_0002 and preserve the relationships.
+
+HIERARCHY:
+  - AREA: Top-level domain (e.g., "docker", "kubernetes", "python")
+  - TOPICS: Detailed subjects within area (e.g., ["dockerfile", "best-practices"])
+  - TAGS: Specific keywords (e.g., ["buildkit", "multi-stage", "caching"])
+
+For expertise signals: high-quality answers should have quality scores closer to 1.0.
+    </instructions>
+    <examples>
+        <example name="question_with_answer">
+            <human>
+Messages:
+[2024-10-10T10:00:00Z] Alice Brown: "How do I optimize Docker build speed?"
+[2024-10-10T10:15:00Z] Bob Smith: "Use multi-stage builds and put static dependencies first. This leverages Docker's layer caching effectively."
+            </human>
+            <ai>
+{
+  "questions": [
+    {
+      "id": "q_1",
+      "author": "Alice Brown",
+      "text": "How do I optimize Docker build speed?",
+      "date": "2024-10-10T10:00:00Z",
+      "area": "docker",
+      "topics": ["build-optimization", "performance"],
+      "tags": ["build-speed"],
+      "answeredBy": "a_1",
+      "links": []
+    }
+  ],
+  "answers": [
+    {
+      "id": "a_1",
+      "author": "Bob Smith",
+      "text": "Use multi-stage builds and put static dependencies first. This leverages Docker's layer caching effectively.",
+      "date": "2024-10-10T10:15:00Z",
+      "area": "docker",
+      "topics": ["build-optimization", "best-practices"],
+      "tags": ["multi-stage", "layer-caching", "dependencies"],
+      "answersQuestion": "q_1",
+      "quality": 0.85,
+      "links": []
+    }
+  ],
+  "notes": []
+}
+            </ai>
+        </example>
+        <example name="question_without_answer">
+            <human>
+Messages:
+[2024-10-10T11:00:00Z] Charlie White: "Does anyone know how to configure Kubernetes ingress with TLS?"
+[2024-10-10T11:05:00Z] David Green: "I'm also interested in this!"
+            </human>
+            <ai>
+{
+  "questions": [
+    {
+      "id": "q_1",
+      "author": "Charlie White",
+      "text": "Does anyone know how to configure Kubernetes ingress with TLS?",
+      "date": "2024-10-10T11:00:00Z",
+      "area": "kubernetes",
+      "topics": ["ingress", "tls-configuration"],
+      "tags": ["tls", "ssl", "certificates"],
+      "answeredBy": "",
+      "links": []
+    }
+  ],
+  "answers": [],
+  "notes": []
+}
+            </ai>
+        </example>
+        <example name="standalone_note">
+            <human>
+Messages:
+[2024-10-10T12:00:00Z] Eve Black: "Important: Always use .dockerignore to exclude node_modules and .git directories from build context. This significantly reduces build time."
+            </human>
+            <ai>
+{
+  "questions": [],
+  "answers": [],
+  "notes": [
+    {
+      "id": "n_1",
+      "text": "Always use .dockerignore to exclude node_modules and .git directories from build context. This significantly reduces build time.",
+      "area": "docker",
+      "topics": ["best-practices", "build-optimization"],
+      "tags": [".dockerignore", "build-context", "performance"],
+      "author": "Eve Black",
+      "date": "2024-10-10T12:00:00Z",
+      "links": []
+    }
+  ]
+}
+            </ai>
+        </example>
+    </examples>
+    <output_requirements>
+Output MUST be valid JSON that can be parsed without errors.
+Do NOT include markdown code blocks (```json) or explanatory text.
+Return the raw JSON object directly.
+Author names: Use the name as provided in the message. If it's a full name (e.g., "John Doe"), keep it. If it's a single name (e.g., "Alice"), keep it. Only use "Unknown" if no author information is available at all.
+All arrays can be empty but must be present.
+All string fields must use proper escaping for special characters.
+    </output_requirements>
+</prompt>

@@ -1,0 +1,28 @@
+[
+    {
+        "date": "2024-10-10T10:00:00Z",
+        "author": "John Doe",
+        "body": "How do I configure Cursor AI agents? I'm trying to set up custom agent configurations but can't find the right directory."
+    },
+    {
+        "date": "2024-10-10T10:15:00Z",
+        "author": "Sarah Smith",
+        "body": "You need to create an agent config JSON file. Here's an example: {\"agent\": \"cursor\", \"model\": \"claude-3.5-sonnet\"}. Put it in the .cursor/agents/ directory in your project root."
+    },
+    {
+        "date": "2024-10-10T10:20:00Z",
+        "author": "Mike Johnson",
+        "body": "Important note: Make sure to restart Cursor after adding the config! The agent won't be recognized until you restart."
+    },
+    {
+        "date": "2024-10-10T10:25:00Z",
+        "author": "John Doe",
+        "body": "Thanks! That worked. Another question - what are the best practices for prompt engineering with AI agents?"
+    },
+    {
+        "date": "2024-10-10T10:30:00Z",
+        "author": "Sarah Smith",
+        "body": "For prompt engineering: 1) Be specific and clear, 2) Use XML tags to structure your prompts, 3) Provide examples when possible, 4) Include context about the task. For Cursor agents specifically, use the system role to define behavior and user role for actual queries."
+    }
+]
+
