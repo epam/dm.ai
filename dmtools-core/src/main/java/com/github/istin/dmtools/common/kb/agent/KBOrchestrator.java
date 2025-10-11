@@ -45,6 +45,9 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
     protected KBAggregationAgent aggregationAgent;
     
     @Inject
+    protected KBQuestionAnswerMappingAgent qaMappingAgent;
+    
+    @Inject
     protected KBStatistics statistics;
     
     @Inject
@@ -115,6 +118,9 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
                 analysisResult.getAnswers().size(),
                 analysisResult.getNotes().size());
         
+        // Step 6.5: Map new answers/notes to existing unanswered questions
+        applyQuestionAnswerMapping(analysisResult, context);
+        
         // Step 7: Build Structure (mechanical)
         buildStructure(analysisResult, outputPath, params.getSourceName(), context);
         
@@ -173,12 +179,204 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
             }
         }
         
+        // Load existing questions (for helping AI identify answers to old questions)
+        Path questionsDir = outputPath.resolve("questions");
+        if (Files.exists(questionsDir)) {
+            try (Stream<Path> questions = Files.list(questionsDir)) {
+                questions.filter(Files::isRegularFile)
+                        .filter(p -> p.getFileName().toString().endsWith(".md"))
+                        .forEach(p -> {
+                            try {
+                                String content = Files.readString(p);
+                                String id = p.getFileName().toString().replace(".md", "");
+                                String author = extractAuthorFromContent(content);
+                                String area = extractAreaFromContent(content);
+                                boolean answered = content.contains("answered: true");
+                                
+                                // Extract question text (after "# Question: id" line)
+                                String text = extractQuestionText(content);
+                                
+                                if (author != null && text != null) {
+                                    context.getExistingQuestions().add(
+                                        new KBContext.QuestionSummary(id, author, text, area, answered)
+                                    );
+                                }
+                            } catch (IOException e) {
+                                logger.warn("Failed to read question file: {}", p, e);
+                            }
+                        });
+            }
+        }
+        
+        logger.info("Loaded KB context: {} people, {} topics, {} unanswered questions", 
+                   context.getExistingPeople().size(),
+                   context.getExistingTopics().size(),
+                   context.getExistingQuestions().size());
+        
         // Find max IDs
         context.setMaxQuestionId(findMaxId(outputPath, "q_"));
         context.setMaxAnswerId(findMaxId(outputPath, "a_"));
         context.setMaxNoteId(findMaxId(outputPath, "n_"));
         
         return context;
+    }
+    
+    /**
+     * Extract question text from question file content
+     */
+    private String extractQuestionText(String content) {
+        // Question text is after "# Question: id" line and before next section
+        int questionHeaderIndex = content.indexOf("# Question:");
+        if (questionHeaderIndex == -1) {
+            return null;
+        }
+        
+        int nextLineIndex = content.indexOf('\n', questionHeaderIndex);
+        if (nextLineIndex == -1) {
+            return null;
+        }
+        
+        // Skip the empty line after header
+        nextLineIndex = content.indexOf('\n', nextLineIndex + 1);
+        if (nextLineIndex == -1) {
+            return null;
+        }
+        
+        // Find the end of question text (before "**Asked by:**" or next ##)
+        int endIndex = content.indexOf("**Asked by:**", nextLineIndex);
+        if (endIndex == -1) {
+            endIndex = content.indexOf("\n##", nextLineIndex);
+        }
+        if (endIndex == -1) {
+            return null;
+        }
+        
+        String text = content.substring(nextLineIndex + 1, endIndex).trim();
+        return text.isEmpty() ? null : text;
+    }
+    
+    /**
+     * Apply Q→A mapping from AI agent to link new answers/notes to existing questions
+     */
+    private void applyQuestionAnswerMapping(AnalysisResult analysisResult, KBContext context) throws Exception {
+        if (context.getExistingQuestions().isEmpty()) {
+            logger.info("No existing questions for Q→A mapping, skipping");
+            return;
+        }
+        
+        // Collect new answers and notes that could answer questions
+        List<com.github.istin.dmtools.common.kb.params.QAMappingParams.AnswerLike> newAnswers = new ArrayList<>();
+        
+        // Add answers that don't have answersQuestion set
+        for (Answer answer : analysisResult.getAnswers()) {
+            if (answer.getAnswersQuestion() == null || answer.getAnswersQuestion().isEmpty()) {
+                newAnswers.add(com.github.istin.dmtools.common.kb.params.QAMappingParams.AnswerLike.fromAnswer(answer));
+            }
+        }
+        
+        // Add notes (notes can also answer questions)
+        for (Note note : analysisResult.getNotes()) {
+            newAnswers.add(com.github.istin.dmtools.common.kb.params.QAMappingParams.AnswerLike.fromNote(note));
+        }
+        
+        if (newAnswers.isEmpty()) {
+            logger.info("No new unmapped answers/notes for Q→A mapping");
+            return;
+        }
+        
+        // Filter existing questions by area/topics to reduce context size
+        Set<String> relevantAreas = newAnswers.stream()
+                .map(com.github.istin.dmtools.common.kb.params.QAMappingParams.AnswerLike::getArea)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        
+        Set<String> relevantTopics = newAnswers.stream()
+                .flatMap(a -> a.getTopics() != null ? a.getTopics().stream() : Stream.empty())
+                .collect(Collectors.toSet());
+        
+        // Filter questions by relevance (area/topics)
+        // Include ALL relevant questions (both answered and unanswered) 
+        // because one question can have multiple answers
+        List<KBContext.QuestionSummary> relevantQuestions = context.getExistingQuestions().stream()
+                .filter(q -> relevantAreas.contains(q.getArea()) || 
+                            (q.getArea() != null && relevantTopics.stream().anyMatch(t -> q.getArea().contains(t))))
+                .sorted(Comparator.comparing(KBContext.QuestionSummary::isAnswered)) // Unanswered first (but include answered too)
+                .collect(Collectors.toList());
+        
+        if (relevantQuestions.isEmpty()) {
+            logger.info("No relevant questions found for Q→A mapping");
+            return;
+        }
+        
+        long unansweredCount = relevantQuestions.stream().filter(q -> !q.isAnswered()).count();
+        logger.info("Running Q→A mapping: {} new answers/notes × {} relevant questions ({} unanswered)", 
+                   newAnswers.size(), relevantQuestions.size(), unansweredCount);
+        
+        // Run mapping agent
+        com.github.istin.dmtools.common.kb.params.QAMappingParams mappingParams = new com.github.istin.dmtools.common.kb.params.QAMappingParams();
+        mappingParams.setNewAnswers(newAnswers);
+        mappingParams.setExistingQuestions(relevantQuestions);
+        
+        com.github.istin.dmtools.common.kb.model.QAMappingResult mappingResult = qaMappingAgent.run(mappingParams);
+        
+        // Apply mappings to AnalysisResult
+        for (com.github.istin.dmtools.common.kb.model.QAMappingResult.Mapping mapping : mappingResult.getMappings()) {
+            if (mapping.getConfidence() < 0.6) {
+                logger.debug("Skipping low-confidence mapping: {} → {} ({})", 
+                           mapping.getAnswerId(), mapping.getQuestionId(), mapping.getConfidence());
+                continue;
+            }
+            
+            String answerId = mapping.getAnswerId();
+            String questionId = mapping.getQuestionId();
+            
+            // Check if it's an answer or note
+            if (answerId.startsWith("a_")) {
+                // Find the answer and set answersQuestion
+                for (Answer answer : analysisResult.getAnswers()) {
+                    if (answer.getId().equals(answerId)) {
+                        answer.setAnswersQuestion(questionId);
+                        logger.info("Mapped answer {} to question {} (confidence: {})", 
+                                   answerId, questionId, mapping.getConfidence());
+                        break;
+                    }
+                }
+            } else if (answerId.startsWith("n_")) {
+                // Convert note to answer
+                Note note = null;
+                int noteIndex = -1;
+                for (int i = 0; i < analysisResult.getNotes().size(); i++) {
+                    if (analysisResult.getNotes().get(i).getId().equals(answerId)) {
+                        note = analysisResult.getNotes().get(i);
+                        noteIndex = i;
+                        break;
+                    }
+                }
+                
+                if (note != null) {
+                    // Remove from notes
+                    analysisResult.getNotes().remove(noteIndex);
+                    
+                    // Create answer from note
+                    Answer newAnswer = new Answer();
+                    newAnswer.setId(answerId.replace("n_", "a_")); // Convert n_X to a_X
+                    newAnswer.setAuthor(note.getAuthor());
+                    newAnswer.setText(note.getText());
+                    newAnswer.setDate(note.getDate());
+                    newAnswer.setArea(note.getArea());
+                    newAnswer.setTopics(note.getTopics());
+                    newAnswer.setTags(note.getTags());
+                    newAnswer.setAnswersQuestion(questionId);
+                    newAnswer.setQuality(mapping.getConfidence()); // Use confidence as quality
+                    newAnswer.setLinks(note.getLinks());
+                    
+                    analysisResult.getAnswers().add(newAnswer);
+                    
+                    logger.info("Converted note {} to answer and mapped to question {} (confidence: {})",
+                               answerId, questionId, mapping.getConfidence());
+                }
+            }
+        }
     }
     
     private int findMaxId(Path outputPath, String prefix) throws IOException {
@@ -313,8 +511,9 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         structureBuilder.buildAreaStructure(analysisResult, outputPath, sourceName);
         
         // Build person profiles with detailed contributions
-        Map<String, PersonStats> personStats = collectPersonStats(analysisResult);
-        Map<String, PersonContributions> personContributions = collectPersonContributions(analysisResult);
+        // Scan ALL files in KB, not just current AnalysisResult (for incremental updates)
+        Map<String, PersonStats> personStats = collectPersonStatsFromFiles(outputPath);
+        Map<String, PersonContributions> personContributions = collectPersonContributionsFromFiles(outputPath);
         
         for (Map.Entry<String, PersonStats> entry : personStats.entrySet()) {
             PersonStats stats = entry.getValue();
@@ -335,6 +534,255 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         updateTopicStatistics(analysisResult, outputPath, sourceName);
     }
     
+    /**
+     * Scan ALL Q/A/N files in KB and collect person stats (for incremental updates)
+     */
+    private Map<String, PersonStats> collectPersonStatsFromFiles(Path outputPath) throws IOException {
+        Map<String, PersonStats> stats = new HashMap<>();
+        
+        // Scan questions directory
+        Path questionsDir = outputPath.resolve("questions");
+        if (Files.exists(questionsDir)) {
+            try (Stream<Path> files = Files.list(questionsDir)) {
+                files.filter(Files::isRegularFile)
+                     .filter(p -> p.getFileName().toString().endsWith(".md"))
+                     .forEach(file -> {
+                         try {
+                             String content = Files.readString(file);
+                             String author = extractAuthorFromContent(content);
+                             if (author != null) {
+                                 stats.computeIfAbsent(author, k -> new PersonStats()).questions++;
+                             }
+                         } catch (IOException e) {
+                             logger.warn("Failed to read question file: {}", file, e);
+                         }
+                     });
+            }
+        }
+        
+        // Scan answers directory
+        Path answersDir = outputPath.resolve("answers");
+        if (Files.exists(answersDir)) {
+            try (Stream<Path> files = Files.list(answersDir)) {
+                files.filter(Files::isRegularFile)
+                     .filter(p -> p.getFileName().toString().endsWith(".md"))
+                     .forEach(file -> {
+                         try {
+                             String content = Files.readString(file);
+                             String author = extractAuthorFromContent(content);
+                             if (author != null) {
+                                 stats.computeIfAbsent(author, k -> new PersonStats()).answers++;
+                             }
+                         } catch (IOException e) {
+                             logger.warn("Failed to read answer file: {}", file, e);
+                         }
+                     });
+            }
+        }
+        
+        // Scan notes directory
+        Path notesDir = outputPath.resolve("notes");
+        if (Files.exists(notesDir)) {
+            try (Stream<Path> files = Files.list(notesDir)) {
+                files.filter(Files::isRegularFile)
+                     .filter(p -> p.getFileName().toString().endsWith(".md"))
+                     .forEach(file -> {
+                         try {
+                             String content = Files.readString(file);
+                             String author = extractAuthorFromContent(content);
+                             if (author != null) {
+                                 stats.computeIfAbsent(author, k -> new PersonStats()).notes++;
+                             }
+                         } catch (IOException e) {
+                             logger.warn("Failed to read note file: {}", file, e);
+                         }
+                     });
+            }
+        }
+        
+        logger.info("Collected stats for {} people from all KB files", stats.size());
+        for (Map.Entry<String, PersonStats> entry : stats.entrySet()) {
+            logger.info("  {}: {} questions, {} answers, {} notes", 
+                       entry.getKey(), 
+                       entry.getValue().questions,
+                       entry.getValue().answers,
+                       entry.getValue().notes);
+        }
+        return stats;
+    }
+    
+    /**
+     * Extract author name from frontmatter
+     */
+    private String extractAuthorFromContent(String content) {
+        // Extract author from frontmatter: author: "Name"
+        int authorIndex = content.indexOf("author:");
+        if (authorIndex != -1) {
+            int lineEnd = content.indexOf('\n', authorIndex);
+            if (lineEnd != -1) {
+                String authorLine = content.substring(authorIndex + 7, lineEnd).trim();
+                return authorLine.replace("\"", "").trim();
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Scan ALL Q/A/N files in KB and collect person contributions (for incremental updates)
+     */
+    private Map<String, PersonContributions> collectPersonContributionsFromFiles(Path outputPath) throws IOException {
+        Map<String, PersonContributions> contributions = new HashMap<>();
+        
+        // Scan questions directory
+        Path questionsDir = outputPath.resolve("questions");
+        if (Files.exists(questionsDir)) {
+            try (Stream<Path> files = Files.list(questionsDir)) {
+                files.filter(Files::isRegularFile)
+                     .filter(p -> p.getFileName().toString().endsWith(".md"))
+                     .forEach(file -> {
+                         try {
+                             String content = Files.readString(file);
+                             String author = extractAuthorFromContent(content);
+                             String area = extractAreaFromContent(content);
+                             String date = extractDateFromContent(content);
+                             String id = file.getFileName().toString().replace(".md", "");
+                             
+                             if (author != null) {
+                                 PersonContributions pc = contributions.computeIfAbsent(author, k -> new PersonContributions());
+                                 if (area != null && !area.isEmpty()) {
+                                     String areaSlug = structureBuilder.slugify(area);
+                                     pc.getQuestions().add(new PersonContributions.ContributionItem(id, areaSlug, date));
+                                 }
+                             }
+                         } catch (IOException e) {
+                             logger.warn("Failed to read question file: {}", file, e);
+                         }
+                     });
+            }
+        }
+        
+        // Scan answers directory
+        Path answersDir = outputPath.resolve("answers");
+        if (Files.exists(answersDir)) {
+            try (Stream<Path> files = Files.list(answersDir)) {
+                files.filter(Files::isRegularFile)
+                     .filter(p -> p.getFileName().toString().endsWith(".md"))
+                     .forEach(file -> {
+                         try {
+                             String content = Files.readString(file);
+                             String author = extractAuthorFromContent(content);
+                             String area = extractAreaFromContent(content);
+                             String date = extractDateFromContent(content);
+                             String id = file.getFileName().toString().replace(".md", "");
+                             
+                             if (author != null) {
+                                 PersonContributions pc = contributions.computeIfAbsent(author, k -> new PersonContributions());
+                                 if (area != null && !area.isEmpty()) {
+                                     String areaSlug = structureBuilder.slugify(area);
+                                     pc.getAnswers().add(new PersonContributions.ContributionItem(id, areaSlug, date));
+                                 }
+                             }
+                         } catch (IOException e) {
+                             logger.warn("Failed to read answer file: {}", file, e);
+                         }
+                     });
+            }
+        }
+        
+        // Scan notes directory
+        Path notesDir = outputPath.resolve("notes");
+        if (Files.exists(notesDir)) {
+            try (Stream<Path> files = Files.list(notesDir)) {
+                files.filter(Files::isRegularFile)
+                     .filter(p -> p.getFileName().toString().endsWith(".md"))
+                     .forEach(file -> {
+                         try {
+                             String content = Files.readString(file);
+                             String author = extractAuthorFromContent(content);
+                             String area = extractAreaFromContent(content);
+                             String date = extractDateFromContent(content);
+                             String id = file.getFileName().toString().replace(".md", "");
+                             
+                             if (author != null) {
+                                 PersonContributions pc = contributions.computeIfAbsent(author, k -> new PersonContributions());
+                                 if (area != null && !area.isEmpty()) {
+                                     String areaSlug = structureBuilder.slugify(area);
+                                     pc.getNotes().add(new PersonContributions.ContributionItem(id, areaSlug, date));
+                                 }
+                             }
+                         } catch (IOException e) {
+                             logger.warn("Failed to read note file: {}", file, e);
+                         }
+                     });
+            }
+        }
+        
+        // Calculate topic contributions
+        for (PersonContributions pc : contributions.values()) {
+            Map<String, Integer> topicCounts = new HashMap<>();
+            
+            // Count contributions per topic (area)
+            for (PersonContributions.ContributionItem item : pc.getQuestions()) {
+                topicCounts.merge(item.getTopic(), 1, Integer::sum);
+            }
+            for (PersonContributions.ContributionItem item : pc.getAnswers()) {
+                topicCounts.merge(item.getTopic(), 1, Integer::sum);
+            }
+            for (PersonContributions.ContributionItem item : pc.getNotes()) {
+                topicCounts.merge(item.getTopic(), 1, Integer::sum);
+            }
+            
+            // Convert Map to List<TopicContribution>
+            List<PersonContributions.TopicContribution> topicList = topicCounts.entrySet().stream()
+                    .map(e -> new PersonContributions.TopicContribution(e.getKey(), e.getValue()))
+                    .collect(java.util.stream.Collectors.toList());
+            pc.setTopics(topicList);
+        }
+        
+        logger.info("Collected contributions for {} people from all KB files", contributions.size());
+        for (Map.Entry<String, PersonContributions> entry : contributions.entrySet()) {
+            PersonContributions pc = entry.getValue();
+            logger.info("  {}: {} questions, {} answers, {} notes", 
+                       entry.getKey(), 
+                       pc.getQuestions().size(),
+                       pc.getAnswers().size(),
+                       pc.getNotes().size());
+        }
+        return contributions;
+    }
+    
+    /**
+     * Extract area from frontmatter
+     */
+    private String extractAreaFromContent(String content) {
+        int areaIndex = content.indexOf("area:");
+        if (areaIndex != -1) {
+            int lineEnd = content.indexOf('\n', areaIndex);
+            if (lineEnd != -1) {
+                String areaLine = content.substring(areaIndex + 5, lineEnd).trim();
+                return areaLine.replace("\"", "").trim();
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Extract date from frontmatter
+     */
+    private String extractDateFromContent(String content) {
+        int dateIndex = content.indexOf("date:");
+        if (dateIndex != -1) {
+            int lineEnd = content.indexOf('\n', dateIndex);
+            if (lineEnd != -1) {
+                String dateLine = content.substring(dateIndex + 5, lineEnd).trim();
+                String date = dateLine.replace("\"", "").trim();
+                return date.length() >= 10 ? date.substring(0, 10) : date;
+            }
+        }
+        return "";
+    }
+    
+    @Deprecated
     private Map<String, PersonStats> collectPersonStats(AnalysisResult analysisResult) {
         Map<String, PersonStats> stats = new HashMap<>();
         
@@ -372,7 +820,7 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
             aggregatePerson(person, outputPath);
         }
         
-        // Aggregate topics
+        // Aggregate topics from current batch (detailed themes)
         Set<String> topics = new HashSet<>();
         analysisResult.getQuestions().forEach(q -> {
             if (q.getTopics() != null) topics.addAll(q.getTopics());
@@ -380,10 +828,32 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         analysisResult.getAnswers().forEach(a -> {
             if (a.getTopics() != null) topics.addAll(a.getTopics());
         });
+        analysisResult.getNotes().forEach(n -> {
+            if (n.getTopics() != null) topics.addAll(n.getTopics());
+        });
         
+        // Aggregate areas from current batch (top-level domains)
+        Set<String> areas = new HashSet<>();
+        analysisResult.getQuestions().forEach(q -> {
+            if (q.getArea() != null) areas.add(q.getArea());
+        });
+        analysisResult.getAnswers().forEach(a -> {
+            if (a.getArea() != null) areas.add(a.getArea());
+        });
+        analysisResult.getNotes().forEach(n -> {
+            if (n.getArea() != null) areas.add(n.getArea());
+        });
+        
+        logger.info("Aggregating {} topics, {} areas, and {} people from current batch", 
+                    topics.size(), areas.size(), people.size());
+        
+        // Aggregate topics (detailed themes)
         for (String topic : topics) {
             aggregateTopic(topic, outputPath);
         }
+        
+        // Note: Areas are aggregated through topic aggregation
+        // as area files include links to topics
     }
     
     private void aggregatePerson(String personName, Path outputPath) throws Exception {

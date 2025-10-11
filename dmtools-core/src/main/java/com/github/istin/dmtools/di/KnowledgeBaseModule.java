@@ -10,6 +10,7 @@ import com.github.istin.dmtools.common.kb.SourceConfigManager;
 import com.github.istin.dmtools.common.kb.agent.KBAggregationAgent;
 import com.github.istin.dmtools.common.kb.agent.KBAnalysisAgent;
 import com.github.istin.dmtools.common.kb.agent.KBOrchestrator;
+import com.github.istin.dmtools.common.kb.agent.KBQuestionAnswerMappingAgent;
 import com.github.istin.dmtools.common.kb.tool.KBTools;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import com.github.istin.dmtools.common.utils.PropertyReader;
@@ -35,6 +36,12 @@ public class KnowledgeBaseModule {
     @Singleton
     public KBAggregationAgent provideKBAggregationAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
         return new KBAggregationAgent(ai, promptTemplateReader);
+    }
+    
+    @Provides
+    @Singleton
+    public KBQuestionAnswerMappingAgent provideKBQuestionAnswerMappingAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
+        return new KBQuestionAnswerMappingAgent(ai, promptTemplateReader);
     }
     
     @Provides
@@ -73,6 +80,7 @@ public class KnowledgeBaseModule {
             KBAnalysisAgent analysisAgent,
             KBStructureBuilder structureBuilder,
             KBAggregationAgent aggregationAgent,
+            KBQuestionAnswerMappingAgent qaMappingAgent,
             KBStatistics statistics,
             KBAnalysisResultMerger resultMerger,
             SourceConfigManager sourceConfigManager,

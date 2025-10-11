@@ -1,6 +1,6 @@
 package com.github.istin.dmtools.common.kb;
 
-import com.github.istin.dmtools.common.kb.model.*;
+import com.github.istin.dmtools.common.kb.model.PersonContributions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -8,412 +8,161 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for KBStructureBuilder standalone answer logic
+ * Unit tests for KBStructureBuilder
  */
-public class KBStructureBuilderTest {
-
-    @TempDir
-    Path tempDir;
+class KBStructureBuilderTest {
 
     private KBStructureBuilder builder;
-
+    
+    @TempDir
+    Path tempDir;
+    
     @BeforeEach
     void setUp() {
         builder = new KBStructureBuilder();
     }
-
-    /**
-     * Test: Answer and Question in SAME topic → Answer should NOT appear as standalone
-     */
+    
     @Test
-    void testAnswerAndQuestionInSameTopic_NotStandalone() throws IOException {
-        // Arrange: Create Q and A in same topic "docker"
-        AnalysisResult analysis = new AnalysisResult();
+    void testBuildPersonProfile_InitialCreation() throws IOException {
+        // Given: A person with 2 questions, 1 answer, 0 notes
+        String personName = "Alice Brown";
+        String sourceName = "test_source";
+        int questions = 2;
+        int answers = 1;
+        int notes = 0;
         
-        Question q1 = new Question();
-        q1.setId("q_0001");
-        q1.setAuthor("Alice");
-        q1.setText("How to optimize Docker?");
-        q1.setDate("2024-10-10T10:00:00Z");
-        q1.setArea("docker");
-        q1.setTopics(Arrays.asList("docker", "optimization"));
-        q1.setTags(Arrays.asList("docker"));
-        q1.setAnsweredBy("a_0001");
-        q1.setLinks(Collections.emptyList());
+        PersonContributions contributions = new PersonContributions();
+        contributions.getQuestions().add(new PersonContributions.ContributionItem("q_0001", "docker", "2024-10-10"));
+        contributions.getQuestions().add(new PersonContributions.ContributionItem("q_0002", "kubernetes", "2024-10-11"));
+        contributions.getAnswers().add(new PersonContributions.ContributionItem("a_0001", "docker", "2024-10-12"));
         
-        Answer a1 = new Answer();
-        a1.setId("a_0001");
-        a1.setAuthor("Bob");
-        a1.setText("Use multi-stage builds");
-        a1.setDate("2024-10-10T10:05:00Z");
-        a1.setArea("docker");
-        a1.setTopics(Arrays.asList("docker", "optimization"));
-        a1.setTags(Arrays.asList("multi-stage"));
-        a1.setAnswersQuestion("q_0001");
-        a1.setQuality(0.9);
-        a1.setLinks(Collections.emptyList());
+        // When: Building person profile
+        builder.buildPersonProfile(personName, tempDir, sourceName, questions, answers, notes, contributions);
         
-        analysis.setQuestions(Arrays.asList(q1));
-        analysis.setAnswers(Arrays.asList(a1));
-        analysis.setNotes(Collections.emptyList());
-
-        // Act: Build topics
-        builder.buildTopicFiles(analysis, tempDir, "test");
-
-        // Assert: Check "docker" topic file
-        Path dockerTopicFile = tempDir.resolve("topics/docker.md");
-        assertTrue(Files.exists(dockerTopicFile), "Docker topic file should exist");
+        // Then: File should be created with correct counts in frontmatter
+        Path personFile = tempDir.resolve("people/Alice_Brown/Alice_Brown.md");
+        assertTrue(Files.exists(personFile), "Person file should be created");
         
-        String content = Files.readString(dockerTopicFile);
+        String content = Files.readString(personFile);
         
-        // Should have "Questions with Answers" section
-        assertTrue(content.contains("## Questions with Answers"), "Should have Questions with Answers section");
-        assertTrue(content.contains("![[q_0001]]"), "Should embed question");
+        // Verify frontmatter contains correct counts
+        assertTrue(content.contains("questionsAsked: 2"), "Should have questionsAsked: 2");
+        assertTrue(content.contains("answersProvided: 1"), "Should have answersProvided: 1");
+        assertTrue(content.contains("notesContributed: 0"), "Should have notesContributed: 0");
         
-        // Should NOT have "Additional Answers" section (answer is embedded in question)
-        assertFalse(content.contains("## Additional Answers"), "Should NOT have Additional Answers section");
-        assertFalse(content.contains("![[a_0001]]") && content.contains("Additional Answers"), 
-                "Answer should not appear as standalone in Additional Answers");
+        // Verify detailed contributions are present
+        assertTrue(content.contains("[[../../questions/q_0001|q_0001]]"), "Should contain q_0001 link");
+        assertTrue(content.contains("[[../../questions/q_0002|q_0002]]"), "Should contain q_0002 link");
+        assertTrue(content.contains("[[../../answers/a_0001|a_0001]]"), "Should contain a_0001 link");
     }
-
-    /**
-     * Test: Answer in topic X, Question in topic Y → Answer SHOULD appear as standalone in topic X
-     */
+    
     @Test
-    void testAnswerInTopicX_QuestionInTopicY_IsStandalone() throws IOException {
-        // Arrange: Q in "performance", A in "docker"
-        AnalysisResult analysis = new AnalysisResult();
+    void testBuildPersonProfile_IncrementalUpdate() throws IOException {
+        // Given: A person profile already exists with 1 question
+        String personName = "Alice Brown";
+        String sourceName = "test_source";
         
-        Question q1 = new Question();
-        q1.setId("q_0001");
-        q1.setAuthor("Alice");
-        q1.setText("How to improve performance?");
-        q1.setDate("2024-10-10T10:00:00Z");
-        q1.setArea("performance");
-        q1.setTopics(Arrays.asList("performance", "optimization"));
-        q1.setTags(Arrays.asList("performance"));
-        q1.setAnsweredBy("a_0001");
-        q1.setLinks(Collections.emptyList());
+        // Step 1: Create initial profile with 1 question
+        PersonContributions initialContributions = new PersonContributions();
+        initialContributions.getQuestions().add(new PersonContributions.ContributionItem("q_0001", "docker", "2024-10-10"));
         
-        Answer a1 = new Answer();
-        a1.setId("a_0001");
-        a1.setAuthor("Bob");
-        a1.setText("Use Docker multi-stage builds");
-        a1.setDate("2024-10-10T10:05:00Z");
-        a1.setArea("docker");
-        a1.setTopics(Arrays.asList("docker", "best-practices")); // Different topics!
-        a1.setTags(Arrays.asList("multi-stage"));
-        a1.setAnswersQuestion("q_0001");
-        a1.setQuality(0.9);
-        a1.setLinks(Collections.emptyList());
+        builder.buildPersonProfile(personName, tempDir, sourceName, 1, 0, 0, initialContributions);
         
-        analysis.setQuestions(Arrays.asList(q1));
-        analysis.setAnswers(Arrays.asList(a1));
-        analysis.setNotes(Collections.emptyList());
-
-        // Act: Build topics
-        builder.buildTopicFiles(analysis, tempDir, "test");
-
-        // Assert: Check "docker" topic file - should have answer as standalone
-        Path dockerTopicFile = tempDir.resolve("topics/docker.md");
-        assertTrue(Files.exists(dockerTopicFile), "Docker topic file should exist");
+        Path personFile = tempDir.resolve("people/Alice_Brown/Alice_Brown.md");
+        String initialContent = Files.readString(personFile);
+        assertTrue(initialContent.contains("questionsAsked: 1"), "Initial profile should have 1 question");
         
-        String dockerContent = Files.readString(dockerTopicFile);
+        // Step 2: Update profile with 2 questions (incremental update)
+        PersonContributions updatedContributions = new PersonContributions();
+        updatedContributions.getQuestions().add(new PersonContributions.ContributionItem("q_0001", "docker", "2024-10-10"));
+        updatedContributions.getQuestions().add(new PersonContributions.ContributionItem("q_0002", "kubernetes", "2024-10-11"));
         
-        // Should have "Additional Answers" section
-        assertTrue(dockerContent.contains("## Additional Answers"), 
-                "Docker topic should have Additional Answers section");
-        assertTrue(dockerContent.contains("![[a_0001]]"), 
-                "Answer should appear as standalone in docker topic");
+        // When: Building person profile again with updated counts
+        builder.buildPersonProfile(personName, tempDir, sourceName, 2, 0, 0, updatedContributions);
         
-        // Assert: Check "performance" topic file - should have question
-        Path perfTopicFile = tempDir.resolve("topics/performance.md");
-        assertTrue(Files.exists(perfTopicFile), "Performance topic file should exist");
+        // Then: File should be updated with new counts
+        String updatedContent = Files.readString(personFile);
         
-        String perfContent = Files.readString(perfTopicFile);
+        // Verify frontmatter was updated
+        assertTrue(updatedContent.contains("questionsAsked: 2"), 
+                   "After incremental update, should have questionsAsked: 2");
+        assertFalse(updatedContent.contains("questionsAsked: 1"), 
+                    "Old count should be replaced");
         
-        // Should have question with embedded answer
-        assertTrue(perfContent.contains("## Questions with Answers"), 
-                "Performance topic should have Questions with Answers section");
-        assertTrue(perfContent.contains("![[q_0001]]"), 
-                "Question should be in performance topic");
+        // Verify both questions are present in contributions
+        assertTrue(updatedContent.contains("[[../../questions/q_0001|q_0001]]"), 
+                   "Should contain q_0001 link");
+        assertTrue(updatedContent.contains("[[../../questions/q_0002|q_0002]]"), 
+                   "Should contain q_0002 link");
     }
-
-    /**
-     * Test: Answer without Question → Should appear as standalone
-     */
+    
     @Test
-    void testAnswerWithoutQuestion_IsStandalone() throws IOException {
-        // Arrange: A without Q
-        AnalysisResult analysis = new AnalysisResult();
+    void testBuildPersonProfile_MultipleIncrementalUpdates() throws IOException {
+        // Given: A person profile that will be updated multiple times
+        String personName = "Bob Smith";
+        String sourceName = "test_source";
+        Path personFile = tempDir.resolve("people/Bob_Smith/Bob_Smith.md");
         
-        Answer a1 = new Answer();
-        a1.setId("a_0001");
-        a1.setAuthor("Bob");
-        a1.setText("Best practice: use .dockerignore");
-        a1.setDate("2024-10-10T10:05:00Z");
-        a1.setArea("docker");
-        a1.setTopics(Arrays.asList("docker", "best-practices"));
-        a1.setTags(Arrays.asList("dockerignore"));
-        a1.setAnswersQuestion(""); // No question!
-        a1.setQuality(0.9);
-        a1.setLinks(Collections.emptyList());
+        // Step 1: Create initial profile with 1 answer
+        PersonContributions batch1 = new PersonContributions();
+        batch1.getAnswers().add(new PersonContributions.ContributionItem("a_0001", "docker", "2024-10-10"));
+        builder.buildPersonProfile(personName, tempDir, sourceName, 0, 1, 0, batch1);
         
-        analysis.setQuestions(Collections.emptyList());
-        analysis.setAnswers(Arrays.asList(a1));
-        analysis.setNotes(Collections.emptyList());
-
-        // Act: Build topics
-        builder.buildTopicFiles(analysis, tempDir, "test");
-
-        // Assert: Check "docker" topic file
-        Path dockerTopicFile = tempDir.resolve("topics/docker.md");
-        assertTrue(Files.exists(dockerTopicFile), "Docker topic file should exist");
+        String content1 = Files.readString(personFile);
+        assertTrue(content1.contains("answersProvided: 1"), "Batch 1: Should have 1 answer");
         
-        String content = Files.readString(dockerTopicFile);
+        // Step 2: Add 1 more answer (total 2)
+        PersonContributions batch2 = new PersonContributions();
+        batch2.getAnswers().add(new PersonContributions.ContributionItem("a_0001", "docker", "2024-10-10"));
+        batch2.getAnswers().add(new PersonContributions.ContributionItem("a_0002", "kubernetes", "2024-10-11"));
+        builder.buildPersonProfile(personName, tempDir, sourceName, 0, 2, 0, batch2);
         
-        // Should have "Additional Answers" section
-        assertTrue(content.contains("## Additional Answers"), 
-                "Should have Additional Answers section for standalone answer");
-        assertTrue(content.contains("![[a_0001]]"), 
-                "Standalone answer should appear in Additional Answers");
+        String content2 = Files.readString(personFile);
+        assertTrue(content2.contains("answersProvided: 2"), "Batch 2: Should have 2 answers");
+        
+        // Step 3: Add 1 more answer and 1 note (total 3 answers, 1 note)
+        PersonContributions batch3 = new PersonContributions();
+        batch3.getAnswers().add(new PersonContributions.ContributionItem("a_0001", "docker", "2024-10-10"));
+        batch3.getAnswers().add(new PersonContributions.ContributionItem("a_0002", "kubernetes", "2024-10-11"));
+        batch3.getAnswers().add(new PersonContributions.ContributionItem("a_0003", "python", "2024-10-12"));
+        batch3.getNotes().add(new PersonContributions.ContributionItem("n_0001", "docker", "2024-10-13"));
+        builder.buildPersonProfile(personName, tempDir, sourceName, 0, 3, 1, batch3);
+        
+        String content3 = Files.readString(personFile);
+        assertTrue(content3.contains("answersProvided: 3"), "Batch 3: Should have 3 answers");
+        assertTrue(content3.contains("notesContributed: 1"), "Batch 3: Should have 1 note");
+        
+        // Verify all contributions are present
+        assertTrue(content3.contains("[[../../answers/a_0001|a_0001]]"), "Should contain a_0001");
+        assertTrue(content3.contains("[[../../answers/a_0002|a_0002]]"), "Should contain a_0002");
+        assertTrue(content3.contains("[[../../answers/a_0003|a_0003]]"), "Should contain a_0003");
+        assertTrue(content3.contains("[[../../notes/n_0001|n_0001]]"), "Should contain n_0001");
     }
-
-    /**
-     * Test: Incremental update - existing answer file should be read correctly
-     */
+    
     @Test
-    void testIncrementalUpdate_ExistingAnswerFile() throws IOException {
-        // Arrange: Create existing answer file in "docker" topic
-        Path answersDir = tempDir.resolve("answers");
-        Files.createDirectories(answersDir);
+    void testBuildPersonProfile_UpdateWithoutContributions() throws IOException {
+        // Given: A person profile exists
+        String personName = "Charlie White";
+        String sourceName = "test_source";
         
-        String existingAnswer = """
-                ---
-                id: "a_0001"
-                type: "answer"
-                author: "Bob"
-                date: "2024-10-10T10:05:00Z"
-                area: "docker"
-                topics: ["docker", "base-image"]
-                quality: 0.9
-                answersQuestion: "q_0001"
-                source: "test"
-                tags: ["#answer", "#test"]
-                ---
-                
-                # Answer: a_0001
-                
-                Use FROM python:3.11-slim
-                """;
+        // Step 1: Create initial profile
+        builder.buildPersonProfile(personName, tempDir, sourceName, 1, 0, 0);
         
-        Files.writeString(answersDir.resolve("a_0001.md"), existingAnswer);
+        Path personFile = tempDir.resolve("people/Charlie_White/Charlie_White.md");
+        String initialContent = Files.readString(personFile);
+        assertTrue(initialContent.contains("questionsAsked: 1"), "Should have 1 question");
         
-        // Create new analysis WITHOUT q_0001 (it's in different topic)
-        AnalysisResult analysis = new AnalysisResult();
+        // Step 2: Update with different counts
+        builder.buildPersonProfile(personName, tempDir, sourceName, 2, 1, 1);
         
-        Question q2 = new Question();
-        q2.setId("q_0002");
-        q2.setAuthor("Charlie");
-        q2.setText("How to optimize builds?");
-        q2.setDate("2024-10-11T10:00:00Z");
-        q2.setArea("performance");
-        q2.setTopics(Arrays.asList("performance", "builds")); // Different topic!
-        q2.setTags(Arrays.asList("optimization"));
-        q2.setAnsweredBy("");
-        q2.setLinks(Collections.emptyList());
-        
-        analysis.setQuestions(Arrays.asList(q2));
-        analysis.setAnswers(Collections.emptyList());
-        analysis.setNotes(Collections.emptyList());
-
-        // Act: Build topics (incremental - will read existing files)
-        builder.buildTopicFiles(analysis, tempDir, "test");
-
-        // Assert: Check "docker" topic file
-        Path dockerTopicFile = tempDir.resolve("topics/docker.md");
-        assertTrue(Files.exists(dockerTopicFile), "Docker topic file should exist");
-        
-        String dockerContent = Files.readString(dockerTopicFile);
-        
-        // Should have "Additional Answers" section because q_0001 is NOT in docker topic
-        assertTrue(dockerContent.contains("## Additional Answers"), 
-                "Docker topic should have Additional Answers section");
-        assertTrue(dockerContent.contains("![[a_0001]]"), 
-                "Existing answer should appear as standalone in docker topic");
-    }
-
-    /**
-     * Test: Multiple answers to same question in same topic → None should be standalone
-     */
-    @Test
-    void testMultipleAnswersToSameQuestion_NoneStandalone() throws IOException {
-        // Arrange: Q with 2 answers in same topic
-        AnalysisResult analysis = new AnalysisResult();
-        
-        Question q1 = new Question();
-        q1.setId("q_0001");
-        q1.setAuthor("Alice");
-        q1.setText("How to optimize Docker?");
-        q1.setDate("2024-10-10T10:00:00Z");
-        q1.setArea("docker");
-        q1.setTopics(Arrays.asList("docker", "optimization"));
-        q1.setTags(Arrays.asList("docker"));
-        q1.setAnsweredBy("a_0001");
-        q1.setLinks(Collections.emptyList());
-        
-        Answer a1 = new Answer();
-        a1.setId("a_0001");
-        a1.setAuthor("Bob");
-        a1.setText("Use multi-stage builds");
-        a1.setDate("2024-10-10T10:05:00Z");
-        a1.setArea("docker");
-        a1.setTopics(Arrays.asList("docker", "optimization"));
-        a1.setTags(Arrays.asList("multi-stage"));
-        a1.setAnswersQuestion("q_0001");
-        a1.setQuality(0.9);
-        a1.setLinks(Collections.emptyList());
-        
-        Answer a2 = new Answer();
-        a2.setId("a_0002");
-        a2.setAuthor("Charlie");
-        a2.setText("Use layer caching");
-        a2.setDate("2024-10-10T10:10:00Z");
-        a2.setArea("docker");
-        a2.setTopics(Arrays.asList("docker", "optimization"));
-        a2.setTags(Arrays.asList("caching"));
-        a2.setAnswersQuestion("q_0001");
-        a2.setQuality(0.85);
-        a2.setLinks(Collections.emptyList());
-        
-        analysis.setQuestions(Arrays.asList(q1));
-        analysis.setAnswers(Arrays.asList(a1, a2));
-        analysis.setNotes(Collections.emptyList());
-
-        // Act: Build topics
-        builder.buildTopicFiles(analysis, tempDir, "test");
-
-        // Assert: Check "docker" topic file
-        Path dockerTopicFile = tempDir.resolve("topics/docker.md");
-        assertTrue(Files.exists(dockerTopicFile), "Docker topic file should exist");
-        
-        String content = Files.readString(dockerTopicFile);
-        
-        // Should have "Questions with Answers" section
-        assertTrue(content.contains("## Questions with Answers"), "Should have Questions with Answers section");
-        assertTrue(content.contains("![[q_0001]]"), "Should embed question");
-        
-        // Should NOT have "Additional Answers" section (both answers are embedded in question)
-        assertFalse(content.contains("## Additional Answers"), "Should NOT have Additional Answers section");
-    }
-
-    /**
-     * Test: Mixed scenario - some answers standalone, some not
-     */
-    @Test
-    void testMixedScenario_SomeStandaloneSomeNot() throws IOException {
-        // Arrange: Complex scenario
-        AnalysisResult analysis = new AnalysisResult();
-        
-        // Q1 in "docker" topic
-        Question q1 = new Question();
-        q1.setId("q_0001");
-        q1.setAuthor("Alice");
-        q1.setText("Docker question");
-        q1.setDate("2024-10-10T10:00:00Z");
-        q1.setArea("docker");
-        q1.setTopics(Arrays.asList("docker"));
-        q1.setTags(Arrays.asList("docker"));
-        q1.setAnsweredBy("a_0001");
-        q1.setLinks(Collections.emptyList());
-        
-        // A1 in "docker" topic, answers Q1 → NOT standalone
-        Answer a1 = new Answer();
-        a1.setId("a_0001");
-        a1.setAuthor("Bob");
-        a1.setText("Docker answer");
-        a1.setDate("2024-10-10T10:05:00Z");
-        a1.setArea("docker");
-        a1.setTopics(Arrays.asList("docker"));
-        a1.setTags(Arrays.asList("docker"));
-        a1.setAnswersQuestion("q_0001");
-        a1.setQuality(0.9);
-        a1.setLinks(Collections.emptyList());
-        
-        // A2 in "docker" topic, no question → standalone
-        Answer a2 = new Answer();
-        a2.setId("a_0002");
-        a2.setAuthor("Charlie");
-        a2.setText("Docker tip");
-        a2.setDate("2024-10-10T10:10:00Z");
-        a2.setArea("docker");
-        a2.setTopics(Arrays.asList("docker", "best-practices"));
-        a2.setTags(Arrays.asList("tip"));
-        a2.setAnswersQuestion(""); // No question
-        a2.setQuality(0.85);
-        a2.setLinks(Collections.emptyList());
-        
-        // A3 in "docker" topic, answers Q2 (in different topic) → standalone in docker
-        Answer a3 = new Answer();
-        a3.setId("a_0003");
-        a3.setAuthor("Dave");
-        a3.setText("Performance answer with Docker context");
-        a3.setDate("2024-10-10T10:15:00Z");
-        a3.setArea("docker");
-        a3.setTopics(Arrays.asList("docker", "performance"));
-        a3.setTags(Arrays.asList("performance"));
-        a3.setAnswersQuestion("q_0002"); // Question is NOT in docker topic
-        a3.setQuality(0.8);
-        a3.setLinks(Collections.emptyList());
-        
-        // Q2 in "performance" topic (not docker)
-        Question q2 = new Question();
-        q2.setId("q_0002");
-        q2.setAuthor("Eve");
-        q2.setText("Performance question");
-        q2.setDate("2024-10-10T10:12:00Z");
-        q2.setArea("performance");
-        q2.setTopics(Arrays.asList("performance"));
-        q2.setTags(Arrays.asList("performance"));
-        q2.setAnsweredBy("a_0003");
-        q2.setLinks(Collections.emptyList());
-        
-        analysis.setQuestions(Arrays.asList(q1, q2));
-        analysis.setAnswers(Arrays.asList(a1, a2, a3));
-        analysis.setNotes(Collections.emptyList());
-
-        // Act: Build topics
-        builder.buildTopicFiles(analysis, tempDir, "test");
-
-        // Assert: Check "docker" topic file
-        Path dockerTopicFile = tempDir.resolve("topics/docker.md");
-        assertTrue(Files.exists(dockerTopicFile), "Docker topic file should exist");
-        
-        String dockerContent = Files.readString(dockerTopicFile);
-        
-        // Should have "Questions with Answers" with q_0001 (a_0001 is embedded)
-        assertTrue(dockerContent.contains("## Questions with Answers"), 
-                "Should have Questions with Answers section");
-        assertTrue(dockerContent.contains("![[q_0001]]"), "Should have q_0001");
-        
-        // Should have "Additional Answers" with a_0002 and a_0003
-        assertTrue(dockerContent.contains("## Additional Answers"), 
-                "Should have Additional Answers section");
-        assertTrue(dockerContent.contains("![[a_0002]]"), 
-                "a_0002 (no question) should be standalone");
-        assertTrue(dockerContent.contains("![[a_0003]]"), 
-                "a_0003 (question in different topic) should be standalone in docker");
-        
-        // a_0001 should NOT be in Additional Answers
-        int additionalAnswersIndex = dockerContent.indexOf("## Additional Answers");
-        int a0001Index = dockerContent.indexOf("![[a_0001]]");
-        assertTrue(a0001Index < additionalAnswersIndex || a0001Index == -1, 
-                "a_0001 should NOT be in Additional Answers section");
+        String updatedContent = Files.readString(personFile);
+        assertTrue(updatedContent.contains("questionsAsked: 2"), "Should update to 2 questions");
+        assertTrue(updatedContent.contains("answersProvided: 1"), "Should update to 1 answer");
+        assertTrue(updatedContent.contains("notesContributed: 1"), "Should update to 1 note");
     }
 }

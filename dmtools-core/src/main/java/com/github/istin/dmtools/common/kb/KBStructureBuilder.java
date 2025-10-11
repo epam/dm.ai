@@ -378,7 +378,7 @@ public class KBStructureBuilder {
         frontmatter.put("questionsAsked", questions);
         frontmatter.put("answersProvided", answers);
         frontmatter.put("notesContributed", notes);
-        frontmatter.put("tags", Arrays.asList("#person", "#" + source));
+        frontmatter.put("tags", Arrays.asList("#person", "#source_" + source));
         
         String content = "---\n" + toYaml(frontmatter) + "---\n\n"
                 + "# " + name + "\n\n"
@@ -452,12 +452,26 @@ public class KBStructureBuilder {
         }
     }
     
+    /**
+     * Update a single field in frontmatter
+     */
+    private String updateFrontmatterField(String content, String fieldName, String newValue) {
+        // Pattern to match field in frontmatter
+        String pattern = "(" + fieldName + ":\\s*)([^\\n]+)";
+        return content.replaceFirst(pattern, "$1" + newValue);
+    }
+    
     private void updatePersonFile(Path file, int questions, int answers, int notes) throws IOException {
         updatePersonFile(file, questions, answers, notes, null);
     }
     
     private void updatePersonFile(Path file, int questions, int answers, int notes, PersonContributions contributions) throws IOException {
         String content = Files.readString(file);
+        
+        // Update frontmatter counts
+        content = updateFrontmatterField(content, "questionsAsked", String.valueOf(questions));
+        content = updateFrontmatterField(content, "answersProvided", String.valueOf(answers));
+        content = updateFrontmatterField(content, "notesContributed", String.valueOf(notes));
         
         // Build the replacement content
         String replacement = "<!-- AUTO_GENERATED_START -->\n\n";
@@ -516,7 +530,8 @@ public class KBStructureBuilder {
         replacement += "<!-- AUTO_GENERATED_END -->";
         
         // Update contribution section in AUTO_GENERATED
-        String pattern = "<!-- AUTO_GENERATED_START -->.*?<!-- AUTO_GENERATED_END -->";
+        // Use (?s) flag to make . match newlines
+        String pattern = "(?s)<!-- AUTO_GENERATED_START -->.*?<!-- AUTO_GENERATED_END -->";
         content = content.replaceAll(pattern, replacement.replace("\\", "\\\\").replace("$", "\\$"));
         Files.writeString(file, content);
     }

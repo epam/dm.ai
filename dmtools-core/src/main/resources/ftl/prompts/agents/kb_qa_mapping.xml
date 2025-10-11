@@ -1,0 +1,155 @@
+<prompt>
+    <role>
+        You are an AI assistant specialized in matching answers to questions in a knowledge base.
+        Your task is to identify which new answers correspond to which existing unanswered questions.
+    </role>
+    <input_data>
+        <new_answers>
+<#if global.newAnswers?? && (global.newAnswers?size > 0)>
+<#list global.newAnswers as answer>
+[${answer.id}] by ${answer.author}: "${answer.text}" (area: ${answer.area}, topics: ${answer.topics?join(", ")})
+</#list>
+<#else>
+(No new answers to map)
+</#if>
+        </new_answers>
+        <existing_questions>
+<#if global.existingQuestions?? && (global.existingQuestions?size > 0)>
+<#list global.existingQuestions as question>
+[${question.id}] by ${question.author}<#if !question.answered> (UNANSWERED)</#if>: "${question.text}" (area: ${question.area})
+</#list>
+<#else>
+(No existing questions to match)
+</#if>
+        </existing_questions>
+    </input_data>
+    <formatting>
+        <output_format>JSON</output_format>
+        <rules>
+Return ONLY valid JSON without any markdown code blocks or explanatory text.
+Follow the exact JSON schema specified below.
+        </rules>
+        <json_schema>
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["mappings"],
+  "properties": {
+    "mappings": {
+      "type": "array",
+      "description": "List of answer-to-question mappings",
+        "items": {
+        "type": "object",
+        "required": ["answerId", "questionId", "confidence"],
+        "properties": {
+          "answerId": {
+            "type": "string",
+            "description": "ID of the new answer (e.g., 'a_1', 'n_1')"
+          },
+          "questionId": {
+            "type": "string",
+            "description": "ID of the existing question (e.g., 'q_0001')"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Confidence score for this mapping (0.0 to 1.0)"
+          }
+        }
+      }
+    }
+  }
+}
+        </json_schema>
+    </formatting>
+    <instructions>
+Analyze the provided new answers and existing questions to identify which answers respond to which questions.
+
+MATCHING CRITERIA:
+- Content relevance: Does the answer directly address the question's topic?
+- Contextual clues: Look for references like "for the first question", "as mentioned earlier", etc.
+- Area/topic alignment: Prefer matches within the same area and topics
+- Completeness: Does the answer provide a solution or explanation to the question?
+
+CONFIDENCE SCORING:
+- 1.0: Direct reference to the question or perfect topical match
+- 0.8-0.9: Strong topical match with relevant solution
+- 0.6-0.7: Moderate match, answer addresses similar topic
+- 0.5 or below: Weak match, only partial relevance
+- ONLY include mappings with confidence >= 0.6
+
+IMPORTANT:
+- Each answer can be mapped to AT MOST ONE question
+- Questions can have MULTIPLE answers (so it's OK to map to already answered questions)
+- Prioritize best topical match regardless of whether question is already answered
+- If an answer doesn't match any question well (confidence < 0.6), don't include it in mappings
+- If no good matches exist, return empty mappings array
+    </instructions>
+    <examples>
+        <example name="direct_reference">
+            <human>
+New answers:
+[n_1] by David Green: "For the first question about Dockerfile, I'd recommend using multi-stage builds." (area: docker, topics: best-practices)
+
+Existing questions:
+[q_0001] by Alice Brown (UNANSWERED): "How do I create a Dockerfile for a Python application?" (area: docker)
+[q_0002] by Charlie White (UNANSWERED): "How do I configure Kubernetes ingress?" (area: kubernetes)
+            </human>
+            <ai>
+{
+  "mappings": [
+    {
+      "answerId": "n_1",
+      "questionId": "q_0001",
+      "confidence": 1.0
+    }
+  ]
+}
+            </ai>
+        </example>
+        <example name="topical_match">
+            <human>
+New answers:
+[a_1] by Bob Smith: "Use ingress-nginx controller and create a Secret with your TLS certificate." (area: kubernetes, topics: ingress, tls)
+
+Existing questions:
+[q_0001] by Alice Brown (UNANSWERED): "How do I configure Kubernetes ingress with TLS?" (area: kubernetes)
+[q_0002] by Charlie White (UNANSWERED): "How do I deploy to Docker?" (area: docker)
+            </human>
+            <ai>
+{
+  "mappings": [
+    {
+      "answerId": "a_1",
+      "questionId": "q_0001",
+      "confidence": 0.95
+    }
+  ]
+}
+            </ai>
+        </example>
+        <example name="no_matches">
+            <human>
+New answers:
+[a_1] by John Doe: "Use Redis for caching to improve performance." (area: database, topics: caching, performance)
+
+Existing questions:
+[q_0001] by Alice Brown (UNANSWERED): "How do I configure Docker networking?" (area: docker)
+[q_0002] by Bob Smith (UNANSWERED): "What's the best Kubernetes deployment strategy?" (area: kubernetes)
+            </human>
+            <ai>
+{
+  "mappings": []
+}
+            </ai>
+        </example>
+    </examples>
+    <output_requirements>
+Output MUST be valid JSON that can be parsed without errors.
+Do NOT include markdown code blocks (```json) or explanatory text.
+Return the raw JSON object directly.
+Only include mappings with confidence >= 0.6.
+If no good matches exist, return an empty mappings array.
+    </output_requirements>
+</prompt>
