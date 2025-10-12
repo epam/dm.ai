@@ -1,7 +1,7 @@
 <prompt>
     <role>
         You are an AI assistant specialized in analyzing chat conversations, messages, and documentation to extract structured knowledge.
-        Your task is to identify themes, questions, answers, notes, and expertise signals from the provided text.
+        Your task is to identify themes, questions, answers, notes, links and expertise signals from the provided text.
     </role>
     <input_data>
         <source_name>${global.sourceName!'unknown'}</source_name>
@@ -37,11 +37,22 @@ Follow the exact JSON schema specified below.
 Ensure all date fields use ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ).
 TEMPORARY IDs: Assign temporary IDs in format "q_1", "q_2", "a_1", "a_2", "n_1", "n_2" etc. The system will later auto-increment these to "q_0001", "q_0002", "a_0001", "a_0002" etc.
 MAPPING Q→A: Use these temporary IDs to establish links. For example: question with id="q_1" can be answered by answer with id="a_1". Set answeredBy="a_1" in question and answersQuestion="q_1" in answer.
-AREA: ONE top-level category representing the broadest knowledge domain (e.g., "docker", "python", "kubernetes", "ai", "devops"). This is the PRIMARY classification.
-TOPICS: Array of 1(preferable)-3 specific themes or detailed subjects within the area (e.g., ["dockerfile", "best-practices"], ["caching", "optimization"], ["configuration", "setup"]). These are SECONDARY classifications that provide more granular categorization. **IMPORTANT** avoid to use similar topics, synonims.
+AREA: Required, ONE top-level category representing the broadest knowledge domain. This is the PRIMARY classification.
+  BE SPECIFIC - choose the MOST RELEVANT domain based on what is ACTUALLY discussed, not the context:
+  • "ai" or "machine-learning" - ONLY when discussing AI/ML technologies themselves (models, prompts, RAG, embeddings, training)
+  • "platform" - platform features, APIs, integrations, system functionality
+  • "collaboration" - meetings, chat features, team communication, channels
+  • "infrastructure" - cloud, deployment, scalability, networking
+  • "business" - billing, sales, licensing, pricing
+  • "development" - coding, debugging, tools, frameworks
+  • Other domains: "docker", "kubernetes", "python", "java", "security", "database", etc.
+  
+  IMPORTANT: Don't classify everything as "ai" just because it's an AI-related platform. Focus on WHAT is discussed, not WHERE.
+TOPICS: Required at least 1. Array of 1(preferable)-3 specific themes or detailed subjects within the area. Use MAXIMUM SPECIFICITY with service/technology name (e.g., ["docker-build-optimization"], ["gemini-api-rate-limiting", "openai-api-error-handling"], ["kubernetes-ingress-configuration"]). Always include specific service/technology name when discussing APIs, databases, tools. These are SECONDARY classifications that provide more granular categorization. **IMPORTANT** avoid generic topics like "api-rate-limiting" (which API?), "database-optimization" (which DB?) - always be specific: "github-api-rate-limiting", "postgres-optimization".
 TAGS: Array of related techniques, tools, specific concepts, or keywords mentioned (e.g., ["buildkit", "multi-stage", "layer-caching"]). These are TERTIARY metadata for search and cross-referencing.
 Hierarchy: area (broadest) > topics (specific themes) > tags (granular keywords).
 Quality scores for answers range from 0.0 to 1.0.
+Links: **IMPORTANT** to find all links in the messages.
 Extract actual author names from messages, normalize them consistently.
         </rules>
         <json_schema>
@@ -60,7 +71,7 @@ Extract actual author names from messages, normalize them consistently.
           "author": {"type": "string"},
           "text": {"type": "string"},
           "date": {"type": "string", "format": "date-time"},
-          "area": {"type": "string", "description": "Top-level domain (e.g. docker, python, kubernetes)"},
+          "area": {"type": "string", "description": "Top-level domain based on what is discussed: ai (AI/ML tech), platform (APIs, integrations), collaboration (meetings, chats), infrastructure (cloud, deployment), business (billing), development (coding), or specific tech (docker, kubernetes, python)"},
           "topics": {"type": "array", "items": {"type": "string"}, "description": "1-3 detailed subjects"},
           "tags": {"type": "array", "items": {"type": "string"}, "description": "Specific keywords"},
           "answeredBy": {"type": "string", "description": "Temporary answer ID (e.g. a_1) if question is answered, empty string otherwise"},
@@ -78,7 +89,7 @@ Extract actual author names from messages, normalize them consistently.
           "author": {"type": "string"},
           "text": {"type": "string"},
           "date": {"type": "string", "format": "date-time"},
-          "area": {"type": "string", "description": "Top-level domain (e.g. docker, python, kubernetes)"},
+          "area": {"type": "string", "description": "Top-level domain based on what is discussed: ai (AI/ML tech), platform (APIs, integrations), collaboration (meetings, chats), infrastructure (cloud, deployment), business (billing), development (coding), or specific tech (docker, kubernetes, python)"},
           "topics": {"type": "array", "items": {"type": "string"}, "description": "1-3 detailed subjects"},
           "tags": {"type": "array", "items": {"type": "string"}, "description": "Specific keywords"},
           "answersQuestion": {"type": "string", "description": "Temporary question ID (e.g. q_1) that this answer addresses, empty string if standalone"},
@@ -95,7 +106,7 @@ Extract actual author names from messages, normalize them consistently.
         "properties": {
           "id": {"type": "string", "pattern": "^n_[0-9]+$", "description": "Temporary ID in format n_1, n_2, n_3 etc. System will auto-increment to n_0001, n_0002"},
           "text": {"type": "string"},
-          "area": {"type": "string", "description": "Top-level domain (e.g. docker, python, kubernetes)"},
+          "area": {"type": "string", "description": "Top-level domain based on what is discussed: ai (AI/ML tech), platform (APIs, integrations), collaboration (meetings, chats), infrastructure (cloud, deployment), business (billing), development (coding), or specific tech (docker, kubernetes, python)"},
           "topics": {"type": "array", "items": {"type": "string"}, "description": "1-3 detailed subjects"},
           "tags": {"type": "array", "items": {"type": "string"}, "description": "Specific keywords"},
           "author": {"type": "string"},
@@ -113,30 +124,56 @@ Analyze the provided messages and extract all relevant knowledge structures.
 
 IDENTIFY QUESTIONS: Direct questions asked by users. For each question:
   - Assign temporary ID: q_1, q_2, q_3 etc.
-  - Set area: ONE top-level domain (e.g., "docker", "python", "ai")
-  - Set topics: 1-3 detailed subjects (e.g., ["dockerfile", "best-practices"])
+  - Set area: ONE top-level domain. Required. Choose based on WHAT is discussed:
+    * "ai" - discussing AI/ML models, prompts, RAG, embeddings (e.g., "How to tune Claude-3 prompts?")
+    * "platform" - platform APIs, integrations (e.g., "How to use DIAL API?")
+    * "collaboration" - meetings, chats (e.g., "How to schedule team meetings?")
+    * "infrastructure" - cloud, scalability (e.g., "How to deploy on Google Cloud?")
+    * "business" - billing, pricing (e.g., "How does billing work?")
+    * Other: "docker", "kubernetes", "python", etc.
+  - Set topics: 1-2 detailed subjects (e.g., ["dockerfile-best-practices"]) - BE CONSERVATIVE, prefer 1 topic. Required at least 1.
+    * Use MAXIMUM specificity: include service/technology name + domain + concept
+    * Examples: "gemini-api-rate-limiting", "github-api-authentication", "docker-build-optimization", "postgres-connection-pooling"
+    * NOT generic: avoid "api-rate-limiting" (which API?), "database-optimization" (which DB?), "error-handling" (where?)
+    * BE SPECIFIC: "openai-api-error-handling", "kubernetes-ingress-configuration", "redis-cache-invalidation"
+    * If discussing general concept without specific tech, use broader context: "rest-api-design", "microservices-architecture"
   - Set tags: specific keywords (e.g., ["buildkit", "multi-stage"])
   - Set answeredBy: temporary answer ID (e.g., "a_1") if answered, empty string otherwise
 
 IDENTIFY ANSWERS: Solutions or responses. For each answer:
   - Assign temporary ID: a_1, a_2, a_3 etc.
   - Set area: ONE top-level domain (same as related question)
-  - Set topics: 1-3 detailed subjects (can differ from question)
+  - Set topics: 1-2 detailed subjects (can differ from question) - BE CONSERVATIVE, prefer 1 topic
+    * Use MAXIMUM specificity (same as questions): "gemini-api-rate-limiting", "postgres-connection-pooling"
   - Set tags: specific keywords mentioned in the answer
   - Set answersQuestion: temporary question ID (e.g., "q_1") if it answers a question, empty string otherwise
   - Set quality: 0.0-1.0 based on completeness
+  - **IMPORTANT**: If message has [Reply: ...] marker pointing to a question, treat it as an answer even if body is empty
+  - For empty/brief replies, create descriptive text like "Response to [question topic]" and set quality: 0.3-0.5
 
 IDENTIFY NOTES: Standalone facts or observations (not Q&A pairs):
   - Assign temporary ID: n_1, n_2, n_3 etc.
-  - Set area/topics/tags same way as questions
+  - Set area/topics/tags same way as questions - BE CONSERVATIVE with topics count
+    * Use MAXIMUM specificity (same as questions): "gemini-api-rate-limiting", "postgres-connection-pooling"
 
-Extract LINKS: URLs mentioned in messages with meaningful titles.
+**IMPORTANT** **CRITICAL** Extract ALL LINKS from messages:
+  - Links can appear inline in message text OR as standalone URLs on separate lines
+  - Extract URLs even if they appear without surrounding text
+  - Create meaningful titles from context: use card titles, nearby text, or URL content
+  - If a message contains ONLY a URL with no context, extract it with a generic but descriptive title
+  - DO NOT skip standalone URLs - they are just as important as inline links
+  - Example formats to recognize:
+    * Inline: "Check this article https://example.com about Docker"
+    * Standalone: A message with just "https://example.com" on its own line
+    * With card: A card title followed by a URL
+  - You MUST extract every URL you see, regardless of format
 
 Extract author names consistently throughout the analysis.
 
 USE EXISTING CONTEXT: If existing people or topics are provided:
   - For author names: Use existing names when they match (normalize variations like "John" → "John Doe" if "John Doe" exists)
-  - For topics: Reuse existing topic names when the subject is the same (avoid synonyms like "docker-optimization" if "build-optimization" exists)
+  - For topics: ALWAYS PREFER existing topic names when subject is similar or related (avoid synonyms like "docker-optimization" if "build-optimization" exists, avoid "performance-tuning" if "optimization" exists)
+  - Create NEW topics ONLY if the subject is clearly different and doesn't fit existing ones
   - This prevents duplicates and maintains consistency across incremental updates
 
 CRITICAL FOR Q→A MAPPING: When a message thread shows a question followed by a solution, establish the link using temporary IDs:
@@ -144,9 +181,21 @@ CRITICAL FOR Q→A MAPPING: When a message thread shows a question followed by a
   - Answer: id="a_1", answersQuestion="q_1"
 The system will later auto-increment these to q_0001, q_0002, a_0001, a_0002 and preserve the relationships.
 
+**IMPORTANT** RECOGNIZE REPLY INDICATORS:
+  - Messages with "[Reply: ...]" in attachments or body are responses to previous messages
+  - If a message has "Reply:" marker referencing a question, treat it as an answer even if body is empty or brief
+  - Pattern: "[Reply: question text...]" followed by response = this is an answer to that question
+  - Even short responses ("yes", "agree", "+1") with Reply marker can be answers if they provide value
+
 HIERARCHY:
-  - AREA: Top-level domain (e.g., "docker", "kubernetes", "python")
-  - TOPICS: Detailed subjects within area (e.g., ["dockerfile", "best-practices"])
+  - AREA: Top-level domain - what is ACTUALLY discussed:
+    * "ai" - AI/ML tech (models, prompts, RAG)
+    * "platform" - platform features, APIs
+    * "collaboration" - meetings, chats
+    * "infrastructure" - cloud, deployment
+    * "business" - billing, sales
+    * Others: "docker", "kubernetes", "python", etc.
+  - TOPICS: MAXIMUM SPECIFICITY with service/tech name (e.g., ["docker-build-optimization"], ["gemini-api-rate-limiting"], ["teams-meeting-scheduling"])
   - TAGS: Specific keywords (e.g., ["buildkit", "multi-stage", "caching"])
 
 For expertise signals: high-quality answers should have quality scores closer to 1.0.
@@ -167,8 +216,8 @@ Messages:
       "text": "How do I optimize Docker build speed?",
       "date": "2024-10-10T10:00:00Z",
       "area": "docker",
-      "topics": ["build-optimization", "performance"],
-      "tags": ["build-speed"],
+      "topics": ["docker-build-optimization"],
+      "tags": ["build-speed", "performance"],
       "answeredBy": "a_1",
       "links": []
     }
@@ -180,8 +229,8 @@ Messages:
       "text": "Use multi-stage builds and put static dependencies first. This leverages Docker's layer caching effectively.",
       "date": "2024-10-10T10:15:00Z",
       "area": "docker",
-      "topics": ["build-optimization", "best-practices"],
-      "tags": ["multi-stage", "layer-caching", "dependencies"],
+      "topics": ["docker-build-optimization"],
+      "tags": ["multi-stage", "layer-caching", "dependencies", "best-practices"],
       "answersQuestion": "q_1",
       "quality": 0.85,
       "links": []
@@ -206,7 +255,7 @@ Messages:
       "text": "Does anyone know how to configure Kubernetes ingress with TLS?",
       "date": "2024-10-10T11:00:00Z",
       "area": "kubernetes",
-      "topics": ["ingress", "tls-configuration"],
+      "topics": ["kubernetes-ingress-configuration"],
       "tags": ["tls", "ssl", "certificates"],
       "answeredBy": "",
       "links": []
@@ -231,13 +280,131 @@ Messages:
       "id": "n_1",
       "text": "Always use .dockerignore to exclude node_modules and .git directories from build context. This significantly reduces build time.",
       "area": "docker",
-      "topics": ["best-practices", "build-optimization"],
-      "tags": [".dockerignore", "build-context", "performance"],
+      "topics": ["docker-build-optimization"],
+      "tags": [".dockerignore", "build-context", "performance", "best-practices"],
       "author": "Eve Black",
       "date": "2024-10-10T12:00:00Z",
       "links": []
     }
   ]
+}
+            </ai>
+        </example>
+        <example name="note_with_standalone_link">
+            <human>
+Messages:
+[2024-10-10T13:00:00Z] Mike Johnson: "[Card: New AI framework released - breakthrough in performance optimization]
+https://techblog.example.com/ai-framework-release"
+            </human>
+            <ai>
+{
+  "questions": [],
+  "answers": [],
+  "notes": [
+    {
+      "id": "n_1",
+      "text": "New AI framework released - breakthrough in performance optimization",
+      "area": "artificial-intelligence",
+      "topics": ["ai-frameworks"],
+      "tags": ["optimization", "release", "performance"],
+      "author": "Mike Johnson",
+      "date": "2024-10-10T13:00:00Z",
+      "links": [
+        {
+          "url": "https://techblog.example.com/ai-framework-release",
+          "title": "New AI framework released - breakthrough in performance optimization"
+        }
+      ]
+    }
+  ]
+}
+            </ai>
+        </example>
+        <example name="question_with_reply_marker">
+            <human>
+Messages:
+[2024-10-10T14:00:00Z] Sarah Wilson: "Does anyone work with speech synthesis? Looking to share experience and best practices."
+[2024-10-10T14:05:00Z] [Reply: Does anyone work with speech synthesis...] Tom Anderson: "John Black"
+            </human>
+            <ai>
+{
+  "questions": [
+    {
+      "id": "q_1",
+      "author": "Sarah Wilson",
+      "text": "Does anyone work with speech synthesis? Looking to share experience and best practices.",
+      "date": "2024-10-10T14:00:00Z",
+      "area": "ai",
+      "topics": ["speech-synthesis"],
+      "tags": ["voice-generation", "tts", "experience-sharing"],
+      "answeredBy": "a_1",
+      "links": []
+    }
+  ],
+  "answers": [
+    {
+      "id": "a_1",
+      "author": "Tom Anderson",
+      "text": "[Reply: Does anyone work with speech synthesis...] John Black has experience with speech synthesis",
+      "date": "2024-10-10T14:05:00Z",
+      "area": "ai",
+      "topics": ["speech-synthesis"],
+      "tags": ["voice-generation"],
+      "answersQuestion": "q_1",
+      "quality": 0.5,
+      "links": []
+    }
+  ],
+  "notes": []
+}
+            </ai>
+        </example>
+        <example name="platform_vs_ai_classification">
+            <human>
+Messages:
+[2024-10-11T10:00:00Z] Alex Smith: "How do we configure DIAL API rate limits?"
+[2024-10-11T10:15:00Z] Maria Garcia: "What's the best way to optimize Claude-3 prompts for summarization?"
+[2024-10-11T10:30:00Z] John Lee: "Can we schedule recurring team meetings in the platform?"
+            </human>
+            <ai>
+{
+  "questions": [
+    {
+      "id": "q_1",
+      "author": "Alex Smith",
+      "text": "How do we configure DIAL API rate limits?",
+      "date": "2024-10-11T10:00:00Z",
+      "area": "platform",
+      "topics": ["dial-api-configuration"],
+      "tags": ["rate-limits", "api", "configuration"],
+      "answeredBy": "",
+      "links": []
+    },
+    {
+      "id": "q_2",
+      "author": "Maria Garcia",
+      "text": "What's the best way to optimize Claude-3 prompts for summarization?",
+      "date": "2024-10-11T10:15:00Z",
+      "area": "ai",
+      "topics": ["claude-3-prompt-optimization"],
+      "tags": ["prompts", "summarization", "optimization"],
+      "answeredBy": "",
+      "links": []
+    },
+    {
+      "id": "q_3",
+      "author": "John Lee",
+      "text": "Can we schedule recurring team meetings in the platform?",
+      "date": "2024-10-11T10:30:00Z",
+      "area": "collaboration",
+      "topics": ["meeting-scheduling"],
+      "tags": ["recurring-meetings", "team", "calendar"],
+      "answeredBy": "",
+      "links": []
+    }
+  ],
+  "answers": [],
+  "notes": []
 }
             </ai>
         </example>

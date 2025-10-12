@@ -28,14 +28,21 @@ public class KBTools {
     
     private static final Logger logger = LogManager.getLogger(KBTools.class);
     
-    @Inject
-    protected KBOrchestrator orchestrator;
+    protected final KBOrchestrator orchestrator;
+    protected final PropertyReader propertyReader;
+    protected final SourceConfigManager sourceConfigManager;
     
     @Inject
-    protected PropertyReader propertyReader;
-    
-    @Inject
-    protected SourceConfigManager sourceConfigManager;
+    public KBTools(
+            KBOrchestrator orchestrator,
+            PropertyReader propertyReader,
+            SourceConfigManager sourceConfigManager
+    ) {
+        this.orchestrator = orchestrator;
+        this.propertyReader = propertyReader;
+        this.sourceConfigManager = sourceConfigManager;
+        logger.info("KBTools initialized");
+    }
     
     /**
      * Get last sync date for a knowledge base source.

@@ -76,6 +76,12 @@ public class KnowledgeBaseModule {
     
     @Provides
     @Singleton
+    public ChunkPreparation provideChunkPreparation() {
+        return new ChunkPreparation();
+    }
+    
+    @Provides
+    @Singleton
     public KBOrchestrator provideKBOrchestrator(
             KBAnalysisAgent analysisAgent,
             KBStructureBuilder structureBuilder,
@@ -86,9 +92,16 @@ public class KnowledgeBaseModule {
             SourceConfigManager sourceConfigManager,
             ChunkPreparation chunkPreparation
     ) {
-        KBOrchestrator orchestrator = new KBOrchestrator();
-        // Dependencies are injected by Dagger via @Inject fields
-        return orchestrator;
+        return new KBOrchestrator(
+                analysisAgent,
+                structureBuilder,
+                aggregationAgent,
+                qaMappingAgent,
+                statistics,
+                resultMerger,
+                sourceConfigManager,
+                chunkPreparation
+        );
     }
     
     @Provides
@@ -98,8 +111,7 @@ public class KnowledgeBaseModule {
             PropertyReader propertyReader,
             SourceConfigManager sourceConfigManager
     ) {
-        // KBTools dependencies are injected by Dagger via @Inject fields
-        return new KBTools();
+        return new KBTools(orchestrator, propertyReader, sourceConfigManager);
     }
 }
 

@@ -62,15 +62,16 @@ public class KBIncrementalTest {
         SourceConfigManager sourceConfigManager = new SourceConfigManager();
         ChunkPreparation chunkPreparation = new ChunkPreparation();
         
-        orchestrator = new KBOrchestrator();
-        orchestrator.analysisAgent = analysisAgent;
-        orchestrator.structureBuilder = structureBuilder;
-        orchestrator.aggregationAgent = aggregationAgent;
-        orchestrator.qaMappingAgent = qaMappingAgent;
-        orchestrator.statistics = statistics;
-        orchestrator.resultMerger = resultMerger;
-        orchestrator.sourceConfigManager = sourceConfigManager;
-        orchestrator.chunkPreparation = chunkPreparation;
+        orchestrator = new KBOrchestrator(
+                analysisAgent,
+                structureBuilder,
+                aggregationAgent,
+                qaMappingAgent,
+                statistics,
+                resultMerger,
+                sourceConfigManager,
+                chunkPreparation
+        );
         
         // Use static directory in project's temp folder
         Path projectRoot = Paths.get(System.getProperty("user.dir")).getParent();

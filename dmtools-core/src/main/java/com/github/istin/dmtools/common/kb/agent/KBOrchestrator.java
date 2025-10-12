@@ -10,6 +10,7 @@ import com.github.istin.dmtools.common.kb.model.*;
 import com.github.istin.dmtools.common.kb.params.AggregationParams;
 import com.github.istin.dmtools.common.kb.params.AnalysisParams;
 import com.github.istin.dmtools.common.kb.params.KBOrchestratorParams;
+import com.github.istin.dmtools.common.utils.LLMOptimizedJson;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -35,33 +36,35 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
     private static final Logger logger = LogManager.getLogger(KBOrchestrator.class);
     private static final Gson GSON = new Gson();
     
-    @Inject
-    protected KBAnalysisAgent analysisAgent;
+    protected final KBAnalysisAgent analysisAgent;
+    protected final KBStructureBuilder structureBuilder;
+    protected final KBAggregationAgent aggregationAgent;
+    protected final KBQuestionAnswerMappingAgent qaMappingAgent;
+    protected final KBStatistics statistics;
+    protected final KBAnalysisResultMerger resultMerger;
+    protected final SourceConfigManager sourceConfigManager;
+    protected final ChunkPreparation chunkPreparation;
     
     @Inject
-    protected KBStructureBuilder structureBuilder;
-    
-    @Inject
-    protected KBAggregationAgent aggregationAgent;
-    
-    @Inject
-    protected KBQuestionAnswerMappingAgent qaMappingAgent;
-    
-    @Inject
-    protected KBStatistics statistics;
-    
-    @Inject
-    protected KBAnalysisResultMerger resultMerger;
-    
-    @Inject
-    protected SourceConfigManager sourceConfigManager;
-    
-    @Inject
-    protected ChunkPreparation chunkPreparation;
-    
-    @Inject
-    public KBOrchestrator() {
+    public KBOrchestrator(
+            KBAnalysisAgent analysisAgent,
+            KBStructureBuilder structureBuilder,
+            KBAggregationAgent aggregationAgent,
+            KBQuestionAnswerMappingAgent qaMappingAgent,
+            KBStatistics statistics,
+            KBAnalysisResultMerger resultMerger,
+            SourceConfigManager sourceConfigManager,
+            ChunkPreparation chunkPreparation
+    ) {
         super("kb_orchestrator");  // XML prompt template name
+        this.analysisAgent = analysisAgent;
+        this.structureBuilder = structureBuilder;
+        this.aggregationAgent = aggregationAgent;
+        this.qaMappingAgent = qaMappingAgent;
+        this.statistics = statistics;
+        this.resultMerger = resultMerger;
+        this.sourceConfigManager = sourceConfigManager;
+        this.chunkPreparation = chunkPreparation;
         logger.info("KBOrchestrator initialized");
     }
     
@@ -108,13 +111,19 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         Files.createDirectories(analyzedInboxPath);
         
         AnalysisResult analysisResult;
+        long analysisStartTime = System.currentTimeMillis();
         if (chunks.size() == 1) {
-            logger.info("Processing single chunk");
+            logger.info("Processing single chunk (size: {} chars)", chunks.get(0).getText().length());
             analysisResult = analyzeChunk(chunks.get(0).getText(), params.getSourceName(), context);
         } else {
-            logger.info("Processing {} chunks", chunks.size());
+            int totalSize = chunks.stream().mapToInt(c -> c.getText().length()).sum();
+            logger.info("Processing {} chunks (total size: {} chars)", chunks.size(), totalSize);
             analysisResult = analyzeAndMergeChunks(chunks, params.getSourceName(), context);
         }
+        long analysisEndTime = System.currentTimeMillis();
+        logger.info("✓ AI analysis completed in {}.{} seconds", 
+                   (analysisEndTime - analysisStartTime) / 1000,
+                   (analysisEndTime - analysisStartTime) % 1000);
         
         // Save analyzed JSON
         Path analyzedJsonPath = analyzedInboxPath.resolve(timestamp + "_analyzed.json");
@@ -532,16 +541,17 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
     private String normalizeInputContent(String content) {
         // Try to detect if JSON and convert to more friendly format if needed
         try {
-            JsonElement element = JsonParser.parseString(content);
-            if (element.isJsonArray()) {
-                JsonArray array = element.getAsJsonArray();
-                // Convert JSON array to text format for better chunking
-                StringBuilder sb = new StringBuilder();
-                for (JsonElement item : array) {
-                    sb.append(item.toString()).append("\n\n");
-                }
-                return sb.toString();
-            }
+//            JsonElement element = JsonParser.parseString(content);
+//            if (element.isJsonArray()) {
+//                JsonArray array = element.getAsJsonArray();
+//                // Convert JSON array to text format for better chunking
+//                StringBuilder sb = new StringBuilder();
+//                for (JsonElement item : array) {
+//                    sb.append(item.toString()).append("\n\n");
+//                }
+//                return sb.toString();
+//            }
+            return LLMOptimizedJson.format(content);
         } catch (Exception e) {
             // Not JSON, return as is
         }

@@ -66,6 +66,7 @@ public class KBOrchestratorIntegrationTest {
         KBAnalysisAgent analysisAgent = new KBAnalysisAgent(ai, promptManager);
         KBStructureBuilder structureBuilder = new KBStructureBuilder();
         KBAggregationAgent aggregationAgent = new KBAggregationAgent(ai, promptManager);
+        KBQuestionAnswerMappingAgent qaMappingAgent = new KBQuestionAnswerMappingAgent(ai, promptManager);
         KBStatistics statistics = new KBStatistics();
         
         ContentMergeAgent contentMergeAgent = new ContentMergeAgent(ai, promptManager);
@@ -74,15 +75,17 @@ public class KBOrchestratorIntegrationTest {
         SourceConfigManager sourceConfigManager = new SourceConfigManager();
         ChunkPreparation chunkPreparation = new ChunkPreparation();
         
-        // Create orchestrator and inject dependencies using reflection
-        orchestrator = new KBOrchestrator();
-        injectField(orchestrator, "analysisAgent", analysisAgent);
-        injectField(orchestrator, "structureBuilder", structureBuilder);
-        injectField(orchestrator, "aggregationAgent", aggregationAgent);
-        injectField(orchestrator, "statistics", statistics);
-        injectField(orchestrator, "resultMerger", resultMerger);
-        injectField(orchestrator, "sourceConfigManager", sourceConfigManager);
-        injectField(orchestrator, "chunkPreparation", chunkPreparation);
+        // Create orchestrator with constructor injection
+        orchestrator = new KBOrchestrator(
+                analysisAgent,
+                structureBuilder,
+                aggregationAgent,
+                qaMappingAgent,
+                statistics,
+                resultMerger,
+                sourceConfigManager,
+                chunkPreparation
+        );
         
         // Use static directory in project's temp folder
         Path projectRoot = Paths.get(System.getProperty("user.dir")).getParent();

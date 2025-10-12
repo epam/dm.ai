@@ -419,7 +419,7 @@ public class LLMOptimizedJson {
         
         if (filteredKeys.isEmpty()) {
             if (!parentKey.isEmpty()) {
-                result.append(indent).append(parentKey).append(" ").append(NEXT).append(SPACE).append(LINE_BREAK);
+                result.append(indent).append(parentKey).append(SPACE).append(NEXT).append(SPACE).append(LINE_BREAK);
             } else {
                 result.append(indent).append(NEXT).append(SPACE).append(LINE_BREAK);
             }
@@ -510,7 +510,7 @@ public class LLMOptimizedJson {
                                 formatJsonObjectWellFormed(result, value.getAsJsonObject(), key, newKeyPrefix, indentLevel + 2);
                             }
                         } else {
-                            result.append(valueIndent).append("null").append(LINE_BREAK);
+                            result.append(valueIndent).append(" ").append(LINE_BREAK);
                         }
                     }
                 }
@@ -588,7 +588,7 @@ public class LLMOptimizedJson {
                                 formatJsonObjectRegular(result, value.getAsJsonObject(), key, newKeyPrefix, indentLevel + 2);
                             }
                         } else {
-                            result.append(valueIndent).append("null").append(LINE_BREAK);
+                            result.append(valueIndent).append(" ").append(LINE_BREAK);
                         }
                     }
                 }
