@@ -41,6 +41,57 @@ public class AIComponentsModule {
     @Provides
     @Singleton
     AI provideAI(ConversationObserver observer, ApplicationConfiguration configuration) {
+        // Check if a specific default LLM is configured
+        String defaultLLM = configuration.getDefaultLLM();
+        
+        // If DEFAULT_LLM is set, try to initialize that specific provider first
+        if (defaultLLM != null && !defaultLLM.trim().isEmpty()) {
+            logger.debug("DEFAULT_LLM is set to: {}", defaultLLM);
+            
+            if ("ollama".equalsIgnoreCase(defaultLLM.trim())) {
+                try {
+                    logger.debug("Attempting to initialize AI via BasicOllamaAI as DEFAULT_LLM=ollama...");
+                    AI ollama = new com.github.istin.dmtools.ai.ollama.BasicOllamaAI(observer, configuration);
+                    logger.debug("BasicOllamaAI initialized successfully.");
+                    return ollama;
+                } catch (Exception e) {
+                    logger.error("Failed to initialize BasicOllamaAI (DEFAULT_LLM=ollama): " + e.getMessage());
+                }
+            } else if ("dial".equalsIgnoreCase(defaultLLM.trim())) {
+                try {
+                    logger.debug("Attempting to initialize AI via BasicDIAL as DEFAULT_LLM=dial...");
+                    AI dial = new BasicDialAI(observer, configuration);
+                    logger.debug("BasicDIAL initialized successfully.");
+                    return dial;
+                } catch (Exception e) {
+                    logger.error("Failed to initialize BasicDIAL (DEFAULT_LLM=dial): " + e.getMessage());
+                }
+            } else if ("gemini".equalsIgnoreCase(defaultLLM.trim())) {
+                try {
+                    logger.debug("Attempting to initialize AI via BasicGeminiAI as DEFAULT_LLM=gemini...");
+                    AI geminiAI = BasicGeminiAI.create(observer, configuration);
+                    logger.debug("BasicGeminiAI initialized successfully.");
+                    return geminiAI;
+                } catch (Exception e) {
+                    logger.error("Failed to initialize BasicGeminiAI (DEFAULT_LLM=gemini): " + e.getMessage());
+                }
+            }
+        }
+        
+        // If DEFAULT_LLM is not set or initialization failed, use auto-detection based on available configuration
+        // Check for Ollama configuration
+        String ollamaModel = configuration.getOllamaModel();
+        if (ollamaModel != null && !ollamaModel.trim().isEmpty() && !ollamaModel.startsWith("$")) {
+            try {
+                logger.debug("Attempting to initialize AI via BasicOllamaAI as OLLAMA_MODEL is set...");
+                AI ollama = new com.github.istin.dmtools.ai.ollama.BasicOllamaAI(observer, configuration);
+                logger.debug("BasicOllamaAI initialized successfully.");
+                return ollama;
+            } catch (Exception e) {
+                logger.error("Failed to initialize BasicOllamaAI, trying fallback options. Error: " + e.getMessage());
+            }
+        }
+        
         // 1. Attempt to initialize AI via BasicGeminiAI if GEMINI_API_KEY is configured
         // Skip Gemini if DialAI is explicitly preferred or if Gemini has known issues
         String geminiApiKey = configuration.getGeminiApiKey();
