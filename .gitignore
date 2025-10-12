@@ -121,3 +121,4 @@ cacheGeminiJSAIClient
 cacheBasicTeamsClient
 *.token
 dmtools-core/cacheTeamsClient
+/dmtools-core/cacheBasicOllamaAI/*

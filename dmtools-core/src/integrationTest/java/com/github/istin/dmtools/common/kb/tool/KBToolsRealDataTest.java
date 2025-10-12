@@ -1,10 +1,7 @@
 package com.github.istin.dmtools.common.kb.tool;
 
-import com.github.istin.dmtools.ai.ConversationObserver;
-import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.common.kb.model.KBResult;
 import com.github.istin.dmtools.common.kb.params.KBOrchestratorParams;
-import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
 import com.github.istin.dmtools.di.KnowledgeBaseComponent;
 import org.apache.logging.log4j.LogManager;
@@ -36,10 +33,11 @@ public class KBToolsRealDataTest {
     @BeforeEach
     void setUp() throws Exception {
         logger.info("=".repeat(80));
-        logger.info("Setting up KBToolsRealDataTest");
+        logger.info("Setting up KBToolsRealDataTest with Ollama AI");
         logger.info("=".repeat(80));
         
         // Initialize KBTools and Orchestrator using Dagger
+        // AI client (Ollama) is automatically injected based on dmtools.env configuration
         KnowledgeBaseComponent component = DaggerKnowledgeBaseComponent.create();
         kbTools = component.kbTools();
         orchestrator = component.kbOrchestrator();
