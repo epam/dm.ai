@@ -6,7 +6,8 @@ package com.github.istin.dmtools.common.config;
  */
 public interface AIConfiguration extends
         DialConfiguration,
-        GeminiConfiguration, 
+        GeminiConfiguration,
+        OllamaConfiguration,
         PromptConfiguration,
         AIRetryConfiguration,
         AIModelConfiguration {

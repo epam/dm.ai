@@ -15,4 +15,10 @@ public interface AIModelConfiguration {
      * @return The AI model for test-related tasks
      */
     String getTestAIModel();
+
+    /**
+     * Gets the default LLM provider to use (e.g., "ollama", "dial", "gemini")
+     * @return The default LLM provider name
+     */
+    String getDefaultLLM();
 } 

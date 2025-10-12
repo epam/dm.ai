@@ -361,4 +361,29 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
         return propertyReader.getTicketFieldsChangedDivider(fieldName);
     }
     
+    @Override
+    public String getOllamaBasePath() {
+        return propertyReader.getOllamaBasePath();
+    }
+    
+    @Override
+    public String getOllamaModel() {
+        return propertyReader.getOllamaModel();
+    }
+    
+    @Override
+    public int getOllamaNumCtx() {
+        return propertyReader.getOllamaNumCtx();
+    }
+    
+    @Override
+    public int getOllamaNumPredict() {
+        return propertyReader.getOllamaNumPredict();
+    }
+    
+    @Override
+    public String getDefaultLLM() {
+        return propertyReader.getDefaultLLM();
+    }
+    
 }
