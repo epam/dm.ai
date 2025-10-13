@@ -12,9 +12,6 @@ import com.github.istin.dmtools.common.kb.params.AnalysisParams;
 import com.github.istin.dmtools.common.kb.params.KBOrchestratorParams;
 import com.github.istin.dmtools.common.utils.LLMOptimizedJson;
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -80,86 +77,234 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
             return runAggregateOnly(outputPath);
         }
         
-        // Step 1: Initialize output directories
-        initializeOutputDirectories(outputPath);
+        // Track created files for potential rollback
+        List<Path> createdFiles = new ArrayList<>();
+        Path analyzedJsonPath = null;
         
-        // Step 2: Copy input file to inbox/raw/
-        Path inputFilePath = Paths.get(params.getInputFile());
-        Path rawInboxPath = outputPath.resolve("inbox/raw");
-        Files.createDirectories(rawInboxPath);
-        
-        String timestamp = String.valueOf(System.currentTimeMillis());
-        String inputFileName = inputFilePath.getFileName().toString();
-        Path rawCopyPath = rawInboxPath.resolve(timestamp + "_" + inputFileName);
-        Files.copy(inputFilePath, rawCopyPath);
-        logger.info("Copied input file to: {}", rawCopyPath);
-        
-        // Step 3: Load existing KB context
-        KBContext context = loadKBContext(outputPath);
-        
-        // Step 4: Read and prepare input
-        String inputContent = Files.readString(inputFilePath);
-        
-        // Try to parse as JSON and convert if needed
-        inputContent = normalizeInputContent(inputContent);
-        
-        // Step 5: Chunk input if large
-        List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(Arrays.asList(inputContent));
-        
-        // Step 6: AI Analysis (process each chunk separately) and save analyzed JSON
-        Path analyzedInboxPath = outputPath.resolve("inbox/analyzed");
-        Files.createDirectories(analyzedInboxPath);
-        
-        AnalysisResult analysisResult;
-        long analysisStartTime = System.currentTimeMillis();
-        if (chunks.size() == 1) {
-            logger.info("Processing single chunk (size: {} chars)", chunks.get(0).getText().length());
-            analysisResult = analyzeChunk(chunks.get(0).getText(), params.getSourceName(), context);
-        } else {
-            int totalSize = chunks.stream().mapToInt(c -> c.getText().length()).sum();
-            logger.info("Processing {} chunks (total size: {} chars)", chunks.size(), totalSize);
-            analysisResult = analyzeAndMergeChunks(chunks, params.getSourceName(), context);
+        try {
+            // Step 1: Initialize output directories
+            initializeOutputDirectories(outputPath);
+            
+            // Step 2: Copy input file to inbox/raw/
+            Path inputFilePath = Paths.get(params.getInputFile());
+            Path rawInboxPath = outputPath.resolve("inbox/raw");
+            Files.createDirectories(rawInboxPath);
+            
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            String inputFileName = inputFilePath.getFileName().toString();
+            Path rawCopyPath = rawInboxPath.resolve(timestamp + "_" + inputFileName);
+            Files.copy(inputFilePath, rawCopyPath);
+            createdFiles.add(rawCopyPath);
+            logger.info("Copied input file to: {}", rawCopyPath);
+            
+            // Step 3: Load existing KB context
+            KBContext context = loadKBContext(outputPath);
+            
+            // Step 4: Read and prepare input
+            String inputContent = Files.readString(inputFilePath);
+            
+            // Try to parse as JSON and convert if needed
+            inputContent = normalizeInputContent(inputContent);
+            
+            // Step 5: Chunk input if large
+            List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(Arrays.asList(inputContent));
+            
+            // Step 6: AI Analysis (process each chunk separately)
+            AnalysisResult analysisResult;
+            long analysisStartTime = System.currentTimeMillis();
+            if (chunks.size() == 1) {
+                logger.info("Processing single chunk (size: {} chars)", chunks.get(0).getText().length());
+                analysisResult = analyzeChunk(chunks.get(0).getText(), params.getSourceName(), context);
+            } else {
+                int totalSize = chunks.stream().mapToInt(c -> c.getText().length()).sum();
+                logger.info("Processing {} chunks (total size: {} chars)", chunks.size(), totalSize);
+                analysisResult = analyzeAndMergeChunks(chunks, params.getSourceName(), context);
+            }
+            long analysisEndTime = System.currentTimeMillis();
+            logger.info("✓ AI analysis completed in {}.{} seconds", 
+                       (analysisEndTime - analysisStartTime) / 1000,
+                       (analysisEndTime - analysisStartTime) % 1000);
+            
+            // Save analyzed JSON
+            Path analyzedInboxPath = outputPath.resolve("inbox/analyzed");
+            Files.createDirectories(analyzedInboxPath);
+            analyzedJsonPath = analyzedInboxPath.resolve(timestamp + "_analyzed.json");
+            String analyzedJson = GSON.toJson(analysisResult);
+            Files.writeString(analyzedJsonPath, analyzedJson);
+            createdFiles.add(analyzedJsonPath);
+            logger.info("Saved analyzed JSON to: {}", analyzedJsonPath);
+            logger.info("Analyzed JSON preview: questions={}, answers={}, notes={}", 
+                    analysisResult.getQuestions().size(),
+                    analysisResult.getAnswers().size(),
+                    analysisResult.getNotes().size());
+            
+            // Step 6.5: Map new answers/notes to existing unanswered questions
+            applyQuestionAnswerMapping(analysisResult, context);
+            
+            // Step 7: Build Structure (mechanical) - track created files
+            List<Path> newFiles = buildStructureWithTracking(analysisResult, outputPath, params.getSourceName(), context);
+            createdFiles.addAll(newFiles);
+            logger.debug("Tracked {} new Q/A/N files for potential rollback", newFiles.size());
+            
+            // Step 8: AI Aggregation (conditional based on mode)
+            if (params.getProcessingMode() == KBProcessingMode.FULL) {
+                logger.info("Running AI aggregation (FULL mode)");
+                performAggregation(analysisResult, outputPath, context);
+            } else {
+                logger.info("Skipping AI aggregation (PROCESS_ONLY mode)");
+            }
+            
+            // Step 9: Generate Statistics (mechanical)
+            statistics.generateStatistics(outputPath);
+            
+            // Step 9.5: Generate People Index
+            structureBuilder.generatePeopleIndex(outputPath);
+            
+            // Step 10: Update source config
+            sourceConfigManager.updateLastSyncDate(params.getSourceName(), params.getDateTime(), outputPath);
+            
+            // Step 11: Build and return result
+            return buildResult(analysisResult, outputPath);
+            
+        } catch (Exception e) {
+            logger.error("❌ KB processing failed: {}", e.getMessage(), e);
+            logger.warn("Rolling back created files...");
+            
+            // Rollback: delete all created files
+            rollbackCreatedFiles(createdFiles);
+            
+            // Re-throw exception
+            throw new Exception("KB processing failed and rolled back: " + e.getMessage(), e);
         }
-        long analysisEndTime = System.currentTimeMillis();
-        logger.info("✓ AI analysis completed in {}.{} seconds", 
-                   (analysisEndTime - analysisStartTime) / 1000,
-                   (analysisEndTime - analysisStartTime) % 1000);
+    }
+    
+    /**
+     * Regenerate KB structure from existing Q/A/N files without AI processing.
+     * Useful after cleanup operations to rebuild topics, areas, and people profiles.
+     * 
+     * @param outputPath Path to the KB output directory
+     * @param sourceName Source name for tagging
+     * @return KBResult with regeneration statistics
+     */
+    public KBResult regenerateStructureFromExistingFiles(Path outputPath, String sourceName) throws Exception {
+        logger.info("=".repeat(80));
+        logger.info("REGENERATING KB STRUCTURE FROM EXISTING FILES");
+        logger.info("=".repeat(80));
         
-        // Save analyzed JSON
-        Path analyzedJsonPath = analyzedInboxPath.resolve(timestamp + "_analyzed.json");
-        String analyzedJson = GSON.toJson(analysisResult);
-        Files.writeString(analyzedJsonPath, analyzedJson);
-        logger.info("Saved analyzed JSON to: {}", analyzedJsonPath);
-        logger.info("Analyzed JSON preview: questions={}, answers={}, notes={}", 
-                analysisResult.getQuestions().size(),
-                analysisResult.getAnswers().size(),
-                analysisResult.getNotes().size());
+        // Step 1: Read all existing Q/A/N files and build AnalysisResult
+        AnalysisResult combinedResult = new AnalysisResult();
+        combinedResult.setQuestions(new ArrayList<>());
+        combinedResult.setAnswers(new ArrayList<>());
+        combinedResult.setNotes(new ArrayList<>());
         
-        // Step 6.5: Map new answers/notes to existing unanswered questions
-        applyQuestionAnswerMapping(analysisResult, context);
+        // Read questions
+        Path questionsDir = outputPath.resolve("questions");
+        if (Files.exists(questionsDir)) {
+            try (Stream<Path> files = Files.list(questionsDir)) {
+                for (Path file : files.filter(p -> p.toString().endsWith(".md")).toList()) {
+                    Question question = parseQuestionFromFile(file);
+                    if (question != null) {
+                        combinedResult.getQuestions().add(question);
+                    }
+                }
+            }
+        }
+        logger.info("Read {} existing questions", combinedResult.getQuestions().size());
         
-        // Step 7: Build Structure (mechanical)
-        buildStructure(analysisResult, outputPath, params.getSourceName(), context);
+        // Read answers
+        Path answersDir = outputPath.resolve("answers");
+        if (Files.exists(answersDir)) {
+            try (Stream<Path> files = Files.list(answersDir)) {
+                for (Path file : files.filter(p -> p.toString().endsWith(".md")).toList()) {
+                    Answer answer = parseAnswerFromFile(file);
+                    if (answer != null) {
+                        combinedResult.getAnswers().add(answer);
+                    }
+                }
+            }
+        }
+        logger.info("Read {} existing answers", combinedResult.getAnswers().size());
         
-        // Step 8: AI Aggregation (conditional based on mode)
-        if (params.getProcessingMode() == KBProcessingMode.FULL) {
-            logger.info("Running AI aggregation (FULL mode)");
-            performAggregation(analysisResult, outputPath, context);
-        } else {
-            logger.info("Skipping AI aggregation (PROCESS_ONLY mode)");
+        // Read notes
+        Path notesDir = outputPath.resolve("notes");
+        if (Files.exists(notesDir)) {
+            try (Stream<Path> files = Files.list(notesDir)) {
+                for (Path file : files.filter(p -> p.toString().endsWith(".md")).toList()) {
+                    Note note = parseNoteFromFile(file);
+                    if (note != null) {
+                        combinedResult.getNotes().add(note);
+                    }
+                }
+            }
+        }
+        logger.info("Read {} existing notes", combinedResult.getNotes().size());
+        
+        // Step 2: Rebuild structure (topics, areas, people)
+        logger.info("Rebuilding KB structure (topics, areas, people)...");
+        
+        // Clear existing topics and areas directories
+        clearDirectory(outputPath.resolve("topics"));
+        clearDirectory(outputPath.resolve("areas"));
+        
+        // Rebuild topics
+        structureBuilder.buildTopicFiles(combinedResult, outputPath, sourceName);
+        
+        // Rebuild areas
+        structureBuilder.buildAreaStructure(combinedResult, outputPath, sourceName);
+        
+        // Rebuild people profiles
+        Map<String, PersonStats> personStats = collectPersonStatsFromFiles(outputPath);
+        Map<String, PersonContributions> personContributions = collectPersonContributionsFromFiles(outputPath);
+        
+        for (Map.Entry<String, PersonStats> entry : personStats.entrySet()) {
+            PersonStats stats = entry.getValue();
+            PersonContributions contributions = personContributions.get(entry.getKey());
+            
+            structureBuilder.buildPersonProfile(
+                    entry.getKey(), 
+                    outputPath, 
+                    sourceName, 
+                    stats.questions, 
+                    stats.answers, 
+                    stats.notes,
+                    contributions
+            );
         }
         
-        // Step 9: Generate Statistics (mechanical)
+        // Step 3: Generate statistics
         statistics.generateStatistics(outputPath);
-        
-        // Step 9.5: Generate People Index
         structureBuilder.generatePeopleIndex(outputPath);
         
-        // Step 10: Update source config
-        sourceConfigManager.updateLastSyncDate(params.getSourceName(), params.getDateTime(), outputPath);
+        logger.info("=".repeat(80));
+        logger.info("KB STRUCTURE REGENERATION COMPLETE");
+        logger.info("=".repeat(80));
         
-        // Step 11: Build and return result
-        return buildResult(analysisResult, outputPath);
+        // Build and return result
+        return buildResult(combinedResult, outputPath);
+    }
+    
+    /**
+     * Clear all files in a directory without deleting the directory itself
+     */
+    private void clearDirectory(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+        
+        try (Stream<Path> files = Files.list(directory)) {
+            files.forEach(path -> {
+                try {
+                    if (Files.isDirectory(path)) {
+                        clearDirectory(path);
+                        Files.delete(path);
+                    } else {
+                        Files.delete(path);
+                    }
+                } catch (IOException e) {
+                    logger.warn("Failed to delete: {}", path, e);
+                }
+            });
+        }
     }
     
     /**
@@ -168,27 +313,26 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
     private KBResult runAggregateOnly(Path outputPath) throws Exception {
         logger.info("Running AGGREGATE_ONLY mode: generating AI descriptions for existing KB");
         
-        // Load existing KB context
-        KBContext context = loadKBContext(outputPath);
-        
-        // Collect all people from existing KB
-        Set<String> people = new HashSet<>();
+        // Collect all people from existing KB (sorted for stable order)
+        Set<String> people = new LinkedHashSet<>();
         Path peopleDir = outputPath.resolve("people");
         if (Files.exists(peopleDir)) {
             try (Stream<Path> dirs = Files.list(peopleDir)) {
                 dirs.filter(Files::isDirectory)
+                    .sorted() // Sort for stable order
                     .forEach(dir -> people.add(dir.getFileName().toString()));
             }
         }
         
-        // Collect all topics from existing KB (flat structure)
-        Set<String> topics = new HashSet<>();
+        // Collect all topics from existing KB (flat structure, sorted for stable order)
+        Set<String> topics = new LinkedHashSet<>();
         Path topicsDir = outputPath.resolve("topics");
         if (Files.exists(topicsDir)) {
             try (Stream<Path> files = Files.list(topicsDir)) {
                 files.filter(Files::isRegularFile)
                      .filter(p -> !p.getFileName().toString().endsWith("-desc.md"))
                      .filter(p -> p.getFileName().toString().endsWith(".md"))
+                     .sorted() // Sort for stable order
                      .forEach(file -> {
                          String topicId = file.getFileName().toString().replace(".md", "");
                          topics.add(topicId);
@@ -276,22 +420,24 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
     private KBContext loadKBContext(Path outputPath) throws IOException {
         KBContext context = new KBContext();
         
-        // Load existing people
+        // Load existing people (sorted for stable order)
         Path peopleDir = outputPath.resolve("people");
         if (Files.exists(peopleDir)) {
             try (Stream<Path> people = Files.list(peopleDir)) {
                 people.filter(Files::isDirectory)
+                        .sorted() // Sort for stable order in AI prompts
                         .forEach(p -> context.getExistingPeople().add(p.getFileName().toString()));
             }
         }
         
-        // Load existing topics (from *.md files, exclude *-desc.md)
+        // Load existing topics (from *.md files, exclude *-desc.md, sorted for stable order)
         Path topicsDir = outputPath.resolve("topics");
         if (Files.exists(topicsDir)) {
             try (Stream<Path> topics = Files.list(topicsDir)) {
                 topics.filter(Files::isRegularFile)
                         .filter(p -> p.getFileName().toString().endsWith(".md"))
                         .filter(p -> !p.getFileName().toString().endsWith("-desc.md"))
+                        .sorted() // Sort for stable order in AI prompts
                         .forEach(p -> {
                             String filename = p.getFileName().toString();
                             String topicId = filename.substring(0, filename.lastIndexOf(".md"));
@@ -557,6 +703,63 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         }
         
         return content;
+    }
+    
+    /**
+     * Build structure and return list of created Q/A/N files for tracking
+     */
+    private List<Path> buildStructureWithTracking(AnalysisResult analysisResult, Path outputPath, 
+                                                   String sourceName, KBContext context) throws IOException {
+        // Build structure as usual
+        buildStructure(analysisResult, outputPath, sourceName, context);
+        
+        // Return paths to NEW Q/A/N files created in this processing
+        // (topics/areas/people are not included as they may update existing files)
+        List<Path> createdFiles = new ArrayList<>();
+        
+        // Add question files
+        for (Question q : analysisResult.getQuestions()) {
+            Path questionFile = outputPath.resolve("questions").resolve(q.getId() + ".md");
+            createdFiles.add(questionFile);
+        }
+        
+        // Add answer files
+        for (Answer a : analysisResult.getAnswers()) {
+            Path answerFile = outputPath.resolve("answers").resolve(a.getId() + ".md");
+            createdFiles.add(answerFile);
+        }
+        
+        // Add note files
+        for (Note n : analysisResult.getNotes()) {
+            Path noteFile = outputPath.resolve("notes").resolve(n.getId() + ".md");
+            createdFiles.add(noteFile);
+        }
+        
+        return createdFiles;
+    }
+    
+    /**
+     * Rollback: delete created files on failure
+     */
+    private void rollbackCreatedFiles(List<Path> createdFiles) {
+        int deletedCount = 0;
+        int failedCount = 0;
+        
+        for (Path file : createdFiles) {
+            try {
+                if (Files.exists(file)) {
+                    Files.delete(file);
+                    deletedCount++;
+                    logger.debug("Rolled back: {}", file.getFileName());
+                }
+            } catch (IOException e) {
+                failedCount++;
+                logger.warn("Failed to rollback file: {}", file, e);
+            }
+        }
+        
+        logger.info("Rollback complete: deleted {}, failed {} (out of {} total)", 
+                   deletedCount, failedCount, createdFiles.size());
     }
     
     private void buildStructure(AnalysisResult analysisResult, Path outputPath, 
@@ -956,8 +1159,8 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
     
     private void performAggregation(AnalysisResult analysisResult, Path outputPath, 
                                     KBContext context) throws Exception {
-        // Aggregate people profiles
-        Set<String> people = new HashSet<>();
+        // Aggregate people profiles (LinkedHashSet preserves insertion order)
+        Set<String> people = new LinkedHashSet<>();
         analysisResult.getQuestions().forEach(q -> people.add(q.getAuthor()));
         analysisResult.getAnswers().forEach(a -> people.add(a.getAuthor()));
         analysisResult.getNotes().forEach(n -> {
@@ -968,8 +1171,8 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
             aggregatePerson(person, outputPath);
         }
         
-        // Aggregate topics from current batch (detailed themes)
-        Set<String> topics = new HashSet<>();
+        // Aggregate topics from current batch (detailed themes, LinkedHashSet preserves insertion order)
+        Set<String> topics = new LinkedHashSet<>();
         analysisResult.getQuestions().forEach(q -> {
             if (q.getTopics() != null) topics.addAll(q.getTopics());
         });
@@ -980,8 +1183,8 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
             if (n.getTopics() != null) topics.addAll(n.getTopics());
         });
         
-        // Aggregate areas from current batch (top-level domains)
-        Set<String> areas = new HashSet<>();
+        // Aggregate areas from current batch (top-level domains, LinkedHashSet preserves insertion order)
+        Set<String> areas = new LinkedHashSet<>();
         analysisResult.getQuestions().forEach(q -> {
             if (q.getArea() != null) areas.add(q.getArea());
         });
@@ -1417,6 +1620,214 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         int questions = 0;
         int answers = 0;
         int notes = 0;
+    }
+    
+    /**
+     * Parse a Question object from a markdown file
+     */
+    private Question parseQuestionFromFile(Path file) {
+        try {
+            String content = Files.readString(file);
+            Question question = new Question();
+            
+            // Extract ID from filename
+            String filename = file.getFileName().toString();
+            question.setId(filename.replace(".md", ""));
+            
+            // Extract metadata from frontmatter
+            question.setAuthor(extractAuthorFromContent(content));
+            question.setArea(extractAreaFromContent(content));
+            question.setTopics(extractTopicsFromContent(content));
+            question.setTags(extractTagsFromContent(content));
+            question.setDate(extractDateFromContent(content));
+            
+            // Extract text (after frontmatter)
+            question.setText(extractTextFromContent(content));
+            
+            // Extract answeredBy link
+            String answeredBy = extractAnsweredByFromContent(content);
+            question.setAnsweredBy(answeredBy != null ? answeredBy : "");
+            
+            return question;
+        } catch (Exception e) {
+            logger.warn("Failed to parse question file: {}", file, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Parse an Answer object from a markdown file
+     */
+    private Answer parseAnswerFromFile(Path file) {
+        try {
+            String content = Files.readString(file);
+            Answer answer = new Answer();
+            
+            // Extract ID from filename
+            String filename = file.getFileName().toString();
+            answer.setId(filename.replace(".md", ""));
+            
+            // Extract metadata from frontmatter
+            answer.setAuthor(extractAuthorFromContent(content));
+            answer.setArea(extractAreaFromContent(content));
+            answer.setTopics(extractTopicsFromContent(content));
+            answer.setTags(extractTagsFromContent(content));
+            answer.setDate(extractDateFromContent(content));
+            
+            // Extract quality
+            answer.setQuality(extractQualityFromContent(content));
+            
+            // Extract text (after frontmatter)
+            answer.setText(extractTextFromContent(content));
+            
+            // Extract answersQuestion link
+            String answersQuestion = extractAnswersQuestionFromContent(content);
+            answer.setAnswersQuestion(answersQuestion != null ? answersQuestion : "");
+            
+            return answer;
+        } catch (Exception e) {
+            logger.warn("Failed to parse answer file: {}", file, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Parse a Note object from a markdown file
+     */
+    private Note parseNoteFromFile(Path file) {
+        try {
+            String content = Files.readString(file);
+            Note note = new Note();
+            
+            // Extract ID from filename
+            String filename = file.getFileName().toString();
+            note.setId(filename.replace(".md", ""));
+            
+            // Extract metadata from frontmatter
+            note.setAuthor(extractAuthorFromContent(content));
+            note.setArea(extractAreaFromContent(content));
+            note.setTopics(extractTopicsFromContent(content));
+            note.setTags(extractTagsFromContent(content));
+            note.setDate(extractDateFromContent(content));
+            
+            // Extract text (after frontmatter)
+            note.setText(extractTextFromContent(content));
+            
+            return note;
+        } catch (Exception e) {
+            logger.warn("Failed to parse note file: {}", file, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Extract tags from frontmatter
+     */
+    private List<String> extractTagsFromContent(String content) {
+        List<String> tags = new ArrayList<>();
+        String[] lines = content.split("\n");
+        boolean inFrontmatter = false;
+        boolean inTags = false;
+        
+        for (String line : lines) {
+            if (line.trim().equals("---")) {
+                if (!inFrontmatter) {
+                    inFrontmatter = true;
+                } else {
+                    break; // End of frontmatter
+                }
+            } else if (inFrontmatter) {
+                if (line.trim().startsWith("tags:")) {
+                    inTags = true;
+                } else if (inTags) {
+                    if (line.trim().startsWith("-")) {
+                        String tag = line.trim().substring(1).trim();
+                        if (tag.startsWith("#")) tag = tag.substring(1);
+                        tags.add(tag);
+                    } else if (!line.trim().isEmpty() && !line.startsWith(" ")) {
+                        inTags = false;
+                    }
+                }
+            }
+        }
+        
+        return tags;
+    }
+    
+    /**
+     * Extract quality score from frontmatter (for answers)
+     */
+    private double extractQualityFromContent(String content) {
+        String[] lines = content.split("\n");
+        boolean inFrontmatter = false;
+        
+        for (String line : lines) {
+            if (line.trim().equals("---")) {
+                if (!inFrontmatter) {
+                    inFrontmatter = true;
+                } else {
+                    break;
+                }
+            } else if (inFrontmatter && line.trim().startsWith("quality:")) {
+                String qualityStr = line.split(":")[1].trim();
+                try {
+                    return Double.parseDouble(qualityStr);
+                } catch (NumberFormatException e) {
+                    return 0.0;
+                }
+            }
+        }
+        
+        return 0.0;
+    }
+    
+    /**
+     * Extract text content (after frontmatter)
+     */
+    private String extractTextFromContent(String content) {
+        String[] parts = content.split("---", 3);
+        if (parts.length >= 3) {
+            String text = parts[2].trim();
+            // Remove the first line if it's a title
+            if (text.startsWith("#")) {
+                int firstNewline = text.indexOf("\n");
+                if (firstNewline > 0) {
+                    text = text.substring(firstNewline + 1).trim();
+                }
+            }
+            // Remove the "**Question:**" or "**Answer:**" or "**Note:**" line
+            text = text.replaceFirst("^\\*\\*Question:\\*\\*.*\\n?", "");
+            text = text.replaceFirst("^\\*\\*Answer:\\*\\*.*\\n?", "");
+            text = text.replaceFirst("^\\*\\*Note:\\*\\*.*\\n?", "");
+            return text.trim();
+        }
+        return "";
+    }
+    
+    /**
+     * Extract answeredBy link from content
+     */
+    private String extractAnsweredByFromContent(String content) {
+        // Look for pattern: **Answer:** [[../../answers/a_XXXX|a_XXXX]]
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\*\\*Answer:\\*\\* \\[\\[../../answers/(a_\\d+)\\|");
+        java.util.regex.Matcher matcher = pattern.matcher(content);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
+    }
+    
+    /**
+     * Extract answersQuestion link from content
+     */
+    private String extractAnswersQuestionFromContent(String content) {
+        // Look for pattern: **Question:** [[../../questions/q_XXXX|q_XXXX]]
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\*\\*Question:\\*\\* \\[\\[../../questions/(q_\\d+)\\|");
+        java.util.regex.Matcher matcher = pattern.matcher(content);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
     }
 }
 

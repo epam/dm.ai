@@ -394,6 +394,9 @@ public class KBStructureBuilder {
         
         // If we have detailed contributions, use them
         if (contributions != null) {
+            // Sort contributions by ID number for consistent ordering
+            sortContributionsByIdNumber(contributions);
+            
             // Questions Asked section
             if (!contributions.getQuestions().isEmpty()) {
                 content += "## Questions Asked\n\n";
@@ -460,6 +463,45 @@ public class KBStructureBuilder {
             return "#" + source;
         }
         return "#source_" + source;
+    }
+    
+    /**
+     * Sort contributions by ID number for consistent ordering
+     * IDs are in format: q_0001, a_0002, n_0003, etc.
+     */
+    private void sortContributionsByIdNumber(PersonContributions contributions) {
+        java.util.Comparator<PersonContributions.ContributionItem> idComparator = (a, b) -> {
+            int numA = extractIdNumber(a.getId());
+            int numB = extractIdNumber(b.getId());
+            return Integer.compare(numA, numB);
+        };
+        
+        contributions.getQuestions().sort(idComparator);
+        contributions.getAnswers().sort(idComparator);
+        contributions.getNotes().sort(idComparator);
+        
+        // Sort topics by count (descending) for more useful display
+        contributions.getTopics().sort((a, b) -> Integer.compare(b.getCount(), a.getCount()));
+    }
+    
+    /**
+     * Extract numeric part from ID (e.g., "q_0001" -> 1, "a_0042" -> 42)
+     */
+    private int extractIdNumber(String id) {
+        if (id == null || id.isEmpty()) {
+            return 0;
+        }
+        
+        // ID format: q_0001, a_0002, n_0003
+        String[] parts = id.split("_");
+        if (parts.length == 2) {
+            try {
+                return Integer.parseInt(parts[1]);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
     }
     
     /**
@@ -549,6 +591,9 @@ public class KBStructureBuilder {
         
         // If we have detailed contributions, use them
         if (contributions != null) {
+            // Sort contributions by ID number for consistent ordering
+            sortContributionsByIdNumber(contributions);
+            
             // Questions Asked section
             if (!contributions.getQuestions().isEmpty()) {
                 replacement += "## Questions Asked\n\n";

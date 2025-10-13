@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Comparator;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -68,8 +68,8 @@ public class KBToolsRealDataTest {
     @Test
     void testProcessMultipleChunks() throws Exception {
         // CONFIGURE HERE: Set your start number and amount
-        int startNumber = 20;
-        int amount = 170;
+        int startNumber = 37;
+        int amount = 156;
         
         processChunks(startNumber, amount);
     }
@@ -182,6 +182,195 @@ public class KBToolsRealDataTest {
         cleanDuplicatesFromAnalyzedJson("1760298330927_analyzed.json");
 
         logger.info("Cleanup complete! Review git diff to see what was removed.");
+    }
+    
+    /**
+     * Find duplicate Q/A/N entries by text content and author.
+     * This helps identify if cleanup operations missed some duplicates.
+     */
+    @Test
+    void testFindDuplicates() throws Exception {
+        logger.info("=".repeat(80));
+        logger.info("TEST: Find Duplicate Q/A/N Entries");
+        logger.info("=".repeat(80));
+        
+        int totalDuplicates = 0;
+        
+        // Check questions
+        logger.info("\n--- Checking Questions for Duplicates ---");
+        int questionDuplicates = findDuplicatesInDirectory(outputPath.resolve("questions"), "Question");
+        totalDuplicates += questionDuplicates;
+        
+        // Check answers
+        logger.info("\n--- Checking Answers for Duplicates ---");
+        int answerDuplicates = findDuplicatesInDirectory(outputPath.resolve("answers"), "Answer");
+        totalDuplicates += answerDuplicates;
+        
+        // Check notes
+        logger.info("\n--- Checking Notes for Duplicates ---");
+        int noteDuplicates = findDuplicatesInDirectory(outputPath.resolve("notes"), "Note");
+        totalDuplicates += noteDuplicates;
+        
+        logger.info("\n" + "=".repeat(80));
+        logger.info("DUPLICATE SUMMARY");
+        logger.info("=".repeat(80));
+        logger.info("Total duplicates found: {}", totalDuplicates);
+        
+        if (totalDuplicates == 0) {
+            logger.info("✓ No duplicates found! KB is clean.");
+        } else {
+            logger.warn("⚠ Found {} duplicates. Consider running cleanup.", totalDuplicates);
+        }
+        
+        logger.info("=".repeat(80));
+    }
+    
+    /**
+     * Find duplicates in a specific directory by text content and author
+     * @return Number of duplicate groups found
+     */
+    private int findDuplicatesInDirectory(Path directory, String type) throws IOException {
+        if (!Files.exists(directory)) {
+            logger.info("Directory doesn't exist: {}", directory);
+            return 0;
+        }
+        
+        // Map: (text + author) -> List of file IDs with that content
+        Map<String, List<String>> contentMap = new HashMap<>();
+        
+        try (Stream<Path> files = Files.list(directory)) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".md")).toList()) {
+                String content = Files.readString(file);
+                String text = extractMainText(content);
+                String author = extractAuthor(content);
+                String id = file.getFileName().toString().replace(".md", "");
+                
+                if (text != null && author != null) {
+                    String key = text.trim() + "|||" + author.trim();
+                    contentMap.computeIfAbsent(key, k -> new ArrayList<>()).add(id);
+                }
+            }
+        }
+        
+        // Find and report duplicates
+        int duplicateGroups = 0;
+        for (Map.Entry<String, List<String>> entry : contentMap.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                duplicateGroups++;
+                String[] parts = entry.getKey().split("\\|\\|\\|");
+                String text = parts[0];
+                String author = parts[1];
+                
+                logger.warn("\n{} DUPLICATE GROUP #{}", type.toUpperCase(), duplicateGroups);
+                logger.warn("Author: {}", author);
+                logger.warn("Text preview: {}...", 
+                           text.length() > 80 ? text.substring(0, 80) : text);
+                logger.warn("Duplicate IDs: {}", entry.getValue());
+                logger.warn("Count: {} duplicates", entry.getValue().size());
+            }
+        }
+        
+        if (duplicateGroups == 0) {
+            logger.info("✓ No duplicates found in {}", type);
+        } else {
+            logger.warn("⚠ Found {} duplicate groups in {}", duplicateGroups, type);
+        }
+        
+        return duplicateGroups;
+    }
+    
+    /**
+     * Extract main text from markdown file (after frontmatter)
+     */
+    private String extractMainText(String content) {
+        // Split by frontmatter (---)
+        String[] parts = content.split("---", 3);
+        if (parts.length >= 3) {
+            String text = parts[2].trim();
+            
+            // Remove title line (# Title)
+            if (text.startsWith("#")) {
+                int firstNewline = text.indexOf("\n");
+                if (firstNewline > 0) {
+                    text = text.substring(firstNewline + 1).trim();
+                }
+            }
+            
+            // Remove **Question:**, **Answer:**, **Note:** lines
+            text = text.replaceFirst("^\\*\\*Question:\\*\\*.*\\n?", "");
+            text = text.replaceFirst("^\\*\\*Answer:\\*\\*.*\\n?", "");
+            text = text.replaceFirst("^\\*\\*Note:\\*\\*.*\\n?", "");
+            
+            // Remove embedded answer content (everything after ![[a_XXXX]])
+            text = text.replaceAll("!\\[\\[a_\\d+\\]\\][\\s\\S]*$", "");
+            
+            return text.trim();
+        }
+        return null;
+    }
+    
+    /**
+     * Extract author from frontmatter
+     */
+    private String extractAuthor(String content) {
+        String[] lines = content.split("\n");
+        boolean inFrontmatter = false;
+        
+        for (String line : lines) {
+            if (line.trim().equals("---")) {
+                if (!inFrontmatter) {
+                    inFrontmatter = true;
+                } else {
+                    break;
+                }
+            } else if (inFrontmatter && line.trim().startsWith("author:")) {
+                // Extract author: "Name" or author: Name
+                String authorLine = line.split(":", 2)[1].trim();
+                return authorLine.replaceAll("^\"|\"$", ""); // Remove quotes if present
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Regenerate KB structure from existing Q/A/N files without AI processing.
+     * Useful after cleanup operations to rebuild topics, areas, and people profiles.
+     */
+    @Test
+    void testRegenerateStructure() throws Exception {
+        String sourceName = "teams_chat_llm_ru";
+        
+        logger.info("=".repeat(80));
+        logger.info("TEST: Regenerate KB Structure (no AI processing)");
+        logger.info("=".repeat(80));
+        
+        long startTime = System.currentTimeMillis();
+        
+        // Call orchestrator's regeneration method
+        KBResult result = orchestrator.regenerateStructureFromExistingFiles(outputPath, sourceName);
+        
+        long endTime = System.currentTimeMillis();
+        double totalTime = (endTime - startTime) / 1000.0;
+        
+        logger.info("=".repeat(80));
+        logger.info("REGENERATION RESULT");
+        logger.info("=".repeat(80));
+        logger.info("Success: {}", result.isSuccess());
+        logger.info("Questions: {}", result.getQuestionsCount());
+        logger.info("Answers: {}", result.getAnswersCount());
+        logger.info("Notes: {}", result.getNotesCount());
+        logger.info("Topics: {}", result.getTopicsCount());
+        logger.info("People: {}", result.getPeopleCount());
+        logger.info("⏱️  TOTAL TIME: {} seconds", String.format("%.2f", totalTime));
+        logger.info("=".repeat(80));
+        
+        // Verify success
+        assertTrue(result.isSuccess(), "Structure regeneration should succeed");
+        assertTrue(result.getQuestionsCount() > 0 || result.getAnswersCount() > 0, 
+                  "Should have at least some Q/A");
+        
+        // Verify output structure
+        verifyOutputStructure(outputPath);
     }
 
     /**

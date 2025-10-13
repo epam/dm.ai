@@ -2,7 +2,7 @@ package com.github.istin.dmtools.common.kb.model;
 
 import lombok.Data;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -11,8 +11,9 @@ import java.util.Set;
  */
 @Data
 public class KBContext {
-    private Set<String> existingPeople = new HashSet<>();
-    private Set<String> existingTopics = new HashSet<>();
+    // LinkedHashSet preserves insertion order for stable AI prompt generation
+    private Set<String> existingPeople = new LinkedHashSet<>();
+    private Set<String> existingTopics = new LinkedHashSet<>();
     private List<QuestionSummary> existingQuestions = new ArrayList<>();
     private int maxQuestionId;
     private int maxAnswerId;
