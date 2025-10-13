@@ -1,9 +1,12 @@
 package com.github.istin.dmtools.common.kb.tool;
 
+import com.github.istin.dmtools.common.kb.model.KBProcessingMode;
 import com.github.istin.dmtools.common.kb.model.KBResult;
 import com.github.istin.dmtools.common.kb.params.KBOrchestratorParams;
 import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
 import com.github.istin.dmtools.di.KnowledgeBaseComponent;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +30,7 @@ public class KBToolsRealDataTest {
     
     private KBTools kbTools;
     private com.github.istin.dmtools.common.kb.agent.KBOrchestrator orchestrator;
-    private Path testDataPath;
+    private Path teamsDataDir;
     private Path outputPath;
     
     @BeforeEach
@@ -44,86 +47,253 @@ public class KBToolsRealDataTest {
         
         // Define paths (project root is parent of dmtools-core/)
         Path projectRoot = Paths.get(System.getProperty("user.dir")).getParent();
-        testDataPath = projectRoot.resolve("temp/teams_chat/chunk_002.json");
-        outputPath = projectRoot.resolve("temp/teams_chat_output");  // Separate output directory
+        teamsDataDir = projectRoot.resolve("temp/teams_chat");
+        // Output directly to the git repository
+        outputPath = Paths.get("/Users/Uladzimir_Klyshevich/notes/ai-kb");
         
-        // Clean output directory (NOT the input directory!)
-        //cleanDirectory(outputPath);
-        //logger.info("Cleaned output directory: {}", outputPath);
-        
-        // Verify test data exists
-        if (!Files.exists(testDataPath)) {
-            throw new RuntimeException("Test data file not found: " + testDataPath);
+        // Verify teams_chat directory exists
+        if (!Files.exists(teamsDataDir)) {
+            throw new RuntimeException("Teams data directory not found: " + teamsDataDir);
         }
         
-        logger.info("Test data file: {}", testDataPath);
+        logger.info("Teams data directory: {}", teamsDataDir);
         logger.info("Output path: {}", outputPath);
-        logger.info("Test data size: {} bytes", Files.size(testDataPath));
     }
     
+    /**
+     * Process multiple chunk files in sequence
+     * @param startNumber Starting chunk number (e.g., 1 for chunk_001)
+     * @param amount Number of files to process (e.g., 10 to process 10 files)
+     */
     @Test
-    void testProcessRealTeamsData() throws Exception {
+    void testProcessMultipleChunks() throws Exception {
+        // CONFIGURE HERE: Set your start number and amount
+        int startNumber = 20;
+        int amount = 170;
+        
+        processChunks(startNumber, amount);
+    }
+    
+    /**
+     * Helper method to process chunk files
+     * @param startNumber Starting chunk number (e.g., 1 for chunk_001)
+     * @param amount Number of files to process
+     */
+    private void processChunks(int startNumber, int amount) throws Exception {
+        String sourceName = "teams_chat_llm_ru";
+        
         logger.info("=".repeat(80));
-        logger.info("TEST: Process Real Teams Data with Timing");
+        logger.info("TEST: Process Multiple Chunks (start={}, amount={})", startNumber, amount);
         logger.info("=".repeat(80));
         
         long testStartTime = System.currentTimeMillis();
         
-        // Step 1: Check initial status
-        logger.info("\n--- Step 1: Check initial status ---");
-        String statusBefore = kbTools.kbGet("teams_chat", outputPath.toString());
-        logger.info("Status before: {}", statusBefore);
-        
-        // Step 2: Process data (PROCESS_ONLY mode - without AI aggregation)
-        logger.info("\n--- Step 2: Process data (PROCESS_ONLY mode) ---");
-        long processStartTime = System.currentTimeMillis();
-        
-        // Use orchestrator directly to specify PROCESS_ONLY mode
-        com.github.istin.dmtools.common.kb.params.KBOrchestratorParams params = 
-                new com.github.istin.dmtools.common.kb.params.KBOrchestratorParams();
-        params.setSourceName("teams_chat");
-        params.setInputFile(testDataPath.toString());
-        params.setDateTime("2024-10-11T23:40:00Z");
-        params.setOutputPath(outputPath.toString());
-        params.setProcessingMode(com.github.istin.dmtools.common.kb.model.KBProcessingMode.PROCESS_ONLY);
-        
-        com.github.istin.dmtools.common.kb.model.KBResult kbResult = orchestrator.run(params);
-        
-        long processEndTime = System.currentTimeMillis();
-        double processTime = (processEndTime - processStartTime) / 1000.0;
-        
-        String result = String.format(
-                "{\"success\": %s, \"message\": \"%s\", \"topics\": %d, \"themes\": %d, \"questions\": %d, \"answers\": %d, \"notes\": %d, \"people\": %d}",
-                kbResult.isSuccess(), kbResult.getMessage(), kbResult.getTopicsCount(), kbResult.getThemesCount(),
-                kbResult.getQuestionsCount(), kbResult.getAnswersCount(), kbResult.getNotesCount(), kbResult.getPeopleCount()
-        );
-        
-        logger.info("Process result: {}", result);
-        logger.info("⏱️  PROCESS TIME: {} seconds", String.format("%.2f", processTime));
-        
-        // Step 3: Verify output structure
-        logger.info("\n--- Step 3: Verify output structure ---");
-        verifyOutputStructure(outputPath);
-        
-        // Step 4: Check final status
-        logger.info("\n--- Step 4: Check final status ---");
-        String statusAfter = kbTools.kbGet("teams_chat", outputPath.toString());
-        logger.info("Status after: {}", statusAfter);
+        // Process each chunk file
+        for (int i = 0; i < amount; i++) {
+            int chunkNumber = startNumber + i;
+            String chunkFileName = String.format("chunk_%03d.json", chunkNumber);
+            Path chunkFilePath = teamsDataDir.resolve(chunkFileName);
+            
+            if (!Files.exists(chunkFilePath)) {
+                logger.warn("Chunk file not found, skipping: {}", chunkFileName);
+                continue;
+            }
+            
+            logger.info("\n" + "=".repeat(80));
+            logger.info("Processing chunk {}/{}: {}", i + 1, amount, chunkFileName);
+            logger.info("=".repeat(80));
+            
+            // Extract datetime from JSON file
+            String dateTime = extractNewestDateTime(chunkFilePath);
+            logger.info("Extracted datetime: {}", dateTime);
+            logger.info("File size: {} bytes", Files.size(chunkFilePath));
+            
+            long chunkStartTime = System.currentTimeMillis();
+            
+            // Process chunk
+            KBOrchestratorParams params = new KBOrchestratorParams();
+            params.setSourceName(sourceName);
+            params.setInputFile(chunkFilePath.toString());
+            params.setDateTime(dateTime);
+            params.setOutputPath(outputPath.toString());
+            params.setProcessingMode(KBProcessingMode.PROCESS_ONLY);
+            
+            KBResult kbResult = orchestrator.run(params);
+            
+            long chunkEndTime = System.currentTimeMillis();
+            double chunkTime = (chunkEndTime - chunkStartTime) / 1000.0;
+            
+            logger.info("Chunk result: success={}, questions={}, answers={}, notes={}, topics={}, people={}", 
+                       kbResult.isSuccess(),
+                       kbResult.getQuestionsCount(),
+                       kbResult.getAnswersCount(),
+                       kbResult.getNotesCount(),
+                       kbResult.getTopicsCount(),
+                       kbResult.getPeopleCount());
+            logger.info("⏱️  Chunk processing time: {} seconds", String.format("%.2f", chunkTime));
+            
+            // Verify success
+            assertTrue(kbResult.isSuccess(), "Chunk processing should succeed");
+        }
         
         long testEndTime = System.currentTimeMillis();
         double totalTime = (testEndTime - testStartTime) / 1000.0;
         
         logger.info("\n" + "=".repeat(80));
-        logger.info("⏱️  TOTAL TEST TIME: {} seconds", String.format("%.2f", totalTime));
-        logger.info("⏱️  PROCESS ONLY TIME: {} seconds ({}%)", 
-                   String.format("%.2f", processTime), 
-                   String.format("%.1f", (processTime / totalTime) * 100));
+        logger.info("SUMMARY");
+        logger.info("=".repeat(80));
+        logger.info("Processed {} chunks (from {} to {})", amount, startNumber, startNumber + amount - 1);
+        logger.info("⏱️  TOTAL TIME: {} seconds", String.format("%.2f", totalTime));
+        logger.info("⏱️  AVERAGE per chunk: {} seconds", String.format("%.2f", totalTime / amount));
+        
+        // Verify final output structure
+        logger.info("\n--- Final output structure verification ---");
+        verifyOutputStructure(outputPath);
+        
+        logger.info("=".repeat(80));
+    }
+    
+    /**
+     * Extract the newest datetime from a chunk JSON file
+     * @param chunkFile Path to the chunk JSON file
+     * @return The newest datetime from date_range.newest
+     */
+    private String extractNewestDateTime(Path chunkFile) throws IOException {
+        String jsonContent = Files.readString(chunkFile);
+        JsonObject jsonObject = JsonParser.parseString(jsonContent).getAsJsonObject();
+        
+        if (jsonObject.has("date_range") && jsonObject.getAsJsonObject("date_range").has("newest")) {
+            return jsonObject.getAsJsonObject("date_range").get("newest").getAsString();
+        }
+        
+        // Fallback if date_range not found
+        logger.warn("date_range.newest not found in {}, using default", chunkFile.getFileName());
+        return "2024-10-11T23:40:00Z";
+    }
+
+    /**
+     * Clean up duplicate Q/A/N from chunk_002.json second processing
+     */
+    @Test
+    void cleanDuplicateChunk002() throws Exception {
+        logger.info("Cleaning duplicates from chunk_002 (second processing)...");
+
+        // Delete Q/A/N that match this analyzed JSON
+        cleanDuplicatesFromAnalyzedJson("1760298330927_analyzed.json");
+
+        logger.info("Cleanup complete! Review git diff to see what was removed.");
+    }
+
+    /**
+     * Clean up duplicate Q/A/N files based on an analyzed JSON file.
+     * This is useful when a chunk was processed twice and you need to remove the duplicates.
+     * 
+     * IMPORTANT: This method searches for files by text content and deletes them.
+     * Make sure you're cleaning the CORRECT analyzed JSON file (usually the second/duplicate processing).
+     * 
+     * @param analyzedJsonFileName Name of the analyzed JSON file to clean (e.g., "1760298330927_analyzed.json")
+     * @throws IOException if file operations fail
+     */
+    private void cleanDuplicatesFromAnalyzedJson(String analyzedJsonFileName) throws IOException {
+        Path analyzedJsonPath = outputPath.resolve("inbox/analyzed").resolve(analyzedJsonFileName);
+        
+        if (!Files.exists(analyzedJsonPath)) {
+            logger.error("Analyzed JSON file not found: {}", analyzedJsonPath);
+            return;
+        }
+        
+        logger.info("=".repeat(80));
+        logger.info("CLEANING DUPLICATES FROM: {}", analyzedJsonFileName);
         logger.info("=".repeat(80));
         
-        // Assertions
-        assertNotNull(result);
-        assertTrue(result.contains("success") || result.contains("questions"), 
-                  "Result should indicate success");
+        // Read analyzed JSON
+        String jsonContent = Files.readString(analyzedJsonPath);
+        JsonObject analysisResult = JsonParser.parseString(jsonContent).getAsJsonObject();
+        
+        int deletedQuestions = 0;
+        int deletedAnswers = 0;
+        int deletedNotes = 0;
+        
+        // Clean questions
+        if (analysisResult.has("questions")) {
+            for (var questionElement : analysisResult.getAsJsonArray("questions")) {
+                JsonObject question = questionElement.getAsJsonObject();
+                String text = question.get("text").getAsString();
+                String author = question.get("author").getAsString();
+                
+                Path questionsDir = outputPath.resolve("questions");
+                if (Files.exists(questionsDir)) {
+                    try (Stream<Path> files = Files.list(questionsDir)) {
+                        for (Path file : files.filter(p -> p.toString().endsWith(".md")).toList()) {
+                            String content = Files.readString(file);
+                            if (content.contains(text) && content.contains("author: \"" + author + "\"")) {
+                                Files.delete(file);
+                                logger.info("Deleted question: {}", file.getFileName());
+                                deletedQuestions++;
+                                break; // Found and deleted, move to next question
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Clean answers
+        if (analysisResult.has("answers")) {
+            for (var answerElement : analysisResult.getAsJsonArray("answers")) {
+                JsonObject answer = answerElement.getAsJsonObject();
+                String text = answer.get("text").getAsString();
+                String author = answer.get("author").getAsString();
+                
+                Path answersDir = outputPath.resolve("answers");
+                if (Files.exists(answersDir)) {
+                    try (Stream<Path> files = Files.list(answersDir)) {
+                        for (Path file : files.filter(p -> p.toString().endsWith(".md")).toList()) {
+                            String content = Files.readString(file);
+                            if (content.contains(text) && content.contains("author: \"" + author + "\"")) {
+                                Files.delete(file);
+                                logger.info("Deleted answer: {}", file.getFileName());
+                                deletedAnswers++;
+                                break; // Found and deleted, move to next answer
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Clean notes
+        if (analysisResult.has("notes")) {
+            for (var noteElement : analysisResult.getAsJsonArray("notes")) {
+                JsonObject note = noteElement.getAsJsonObject();
+                String text = note.get("text").getAsString();
+                String author = note.get("author").getAsString();
+                
+                Path notesDir = outputPath.resolve("notes");
+                if (Files.exists(notesDir)) {
+                    try (Stream<Path> files = Files.list(notesDir)) {
+                        for (Path file : files.filter(p -> p.toString().endsWith(".md")).toList()) {
+                            String content = Files.readString(file);
+                            if (content.contains(text) && content.contains("author: \"" + author + "\"")) {
+                                Files.delete(file);
+                                logger.info("Deleted note: {}", file.getFileName());
+                                deletedNotes++;
+                                break; // Found and deleted, move to next note
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        logger.info("=".repeat(80));
+        logger.info("CLEANUP SUMMARY");
+        logger.info("=".repeat(80));
+        logger.info("Deleted {} questions", deletedQuestions);
+        logger.info("Deleted {} answers", deletedAnswers);
+        logger.info("Deleted {} notes", deletedNotes);
+        logger.info("Total deleted: {}", deletedQuestions + deletedAnswers + deletedNotes);
+        logger.info("=".repeat(80));
     }
     
     private void verifyOutputStructure(Path outputPath) throws IOException {

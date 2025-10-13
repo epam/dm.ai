@@ -146,6 +146,7 @@ public class DialAIClient extends AbstractRestClient implements AI {
 
         JSONObject jsonObject = new JSONObject()
                 .put("temperature", 0.1)
+                .put("max_tokens", 65536)
                 .put("messages", messagesArray);
         if (metadata != null) {
             jsonObject.put("metadata", new JSONObject(new Gson().toJson(metadata)));

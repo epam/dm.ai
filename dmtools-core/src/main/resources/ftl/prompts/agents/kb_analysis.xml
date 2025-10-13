@@ -3,32 +3,6 @@
         You are an AI assistant specialized in analyzing chat conversations, messages, and documentation to extract structured knowledge.
         Your task is to identify themes, questions, answers, notes, links and expertise signals from the provided text.
     </role>
-    <input_data>
-        <source_name>${global.sourceName!'unknown'}</source_name>
-        <raw_input>
-${global.inputText!''}
-        </raw_input>
-        <existing_context>
-            <existing_people>
-<#if global.context?? && global.context.existingPeople?? && (global.context.existingPeople?size > 0)>
-<#list global.context.existingPeople as person>
-- ${person}
-</#list>
-<#else>
-(No existing people yet)
-</#if>
-            </existing_people>
-            <existing_topics>
-<#if global.context?? && global.context.existingTopics?? && (global.context.existingTopics?size > 0)>
-<#list global.context.existingTopics as topic>
-- ${topic}
-</#list>
-<#else>
-(No existing topics yet)
-</#if>
-            </existing_topics>
-        </existing_context>
-    </input_data>
     <formatting>
         <output_format>JSON</output_format>
         <rules>
@@ -201,6 +175,7 @@ HIERARCHY:
 For expertise signals: high-quality answers should have quality scores closer to 1.0.
     </instructions>
     <examples>
+        <!-- **IMPORTANT** don't use in results -->
         <example name="question_with_answer">
             <human>
 Messages:
@@ -285,36 +260,6 @@ Messages:
       "author": "Eve Black",
       "date": "2024-10-10T12:00:00Z",
       "links": []
-    }
-  ]
-}
-            </ai>
-        </example>
-        <example name="note_with_standalone_link">
-            <human>
-Messages:
-[2024-10-10T13:00:00Z] Mike Johnson: "[Card: New AI framework released - breakthrough in performance optimization]
-https://techblog.example.com/ai-framework-release"
-            </human>
-            <ai>
-{
-  "questions": [],
-  "answers": [],
-  "notes": [
-    {
-      "id": "n_1",
-      "text": "New AI framework released - breakthrough in performance optimization",
-      "area": "artificial-intelligence",
-      "topics": ["ai-frameworks"],
-      "tags": ["optimization", "release", "performance"],
-      "author": "Mike Johnson",
-      "date": "2024-10-10T13:00:00Z",
-      "links": [
-        {
-          "url": "https://techblog.example.com/ai-framework-release",
-          "title": "New AI framework released - breakthrough in performance optimization"
-        }
-      ]
     }
   ]
 }
@@ -408,8 +353,68 @@ Messages:
 }
             </ai>
         </example>
+        <!-- **IMPORTANT** example -->
+        <example name="note_with_standalone_link">
+            <human>
+                Messages:
+                [2024-10-10T13:00:00Z] Mike Johnson: "[Card: New AI framework released - breakthrough in performance optimization]
+                https://techblog.example.com/ai-framework-release"
+            </human>
+            <ai>
+                {
+                "questions": [],
+                "answers": [],
+                "notes": [
+                {
+                "id": "n_1",
+                "text": "New AI framework released - breakthrough in performance optimization",
+                "area": "artificial-intelligence",
+                "topics": ["ai-frameworks"],
+                "tags": ["optimization", "release", "performance"],
+                "author": "Mike Johnson",
+                "date": "2024-10-10T13:00:00Z",
+                "links": [
+                {
+                "url": "https://techblog.example.com/ai-framework-release",
+                "title": "New AI framework released - breakthrough in performance optimization"
+                }
+                ]
+                }
+                ]
+                }
+            </ai>
+        </example>
     </examples>
+    <!-- **IMPORTANT** now real data, you start processing use in results -->
+    <input_data>
+        <source_name>${global.sourceName!'unknown'}</source_name>
+        <raw_input>
+            ${global.inputText!''}
+        </raw_input>
+        <existing_context>
+            <existing_people>
+                <#if global.context?? && global.context.existingPeople?? && (global.context.existingPeople?size > 0)>
+                <#list global.context.existingPeople as person>
+                - ${person}
+            </#list>
+            <#else>
+            (No existing people yet)
+        </#if>
+    </existing_people>
+    <existing_topics>
+        <#if global.context?? && global.context.existingTopics?? && (global.context.existingTopics?size > 0)>
+        <#list global.context.existingTopics as topic>
+        - ${topic}
+    </#list>
+    <#else>
+    (No existing topics yet)
+</#if>
+        </existing_topics>
+        </existing_context>
+        </input_data>
     <output_requirements>
+**IMPORTANT** data in **examples** should not be use in output. **input_data** is data for analysis.
+**IMPORTNAT** collect links to resources.
 Output MUST be valid JSON that can be parsed without errors.
 Do NOT include markdown code blocks (```json) or explanatory text.
 Return the raw JSON object directly.
