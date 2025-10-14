@@ -144,15 +144,25 @@ public class DialAIClient extends AbstractRestClient implements AI {
         logger.info(path);
         GenericRequest postRequest = new GenericRequest(this, path);
 
-        JSONObject jsonObject = new JSONObject()
-                .put("temperature", 0.1)
-                .put("max_tokens", 65536)
-                .put("messages", messagesArray);
+        JSONObject jsonObject = buildParams(model, messagesArray);
         if (metadata != null) {
             jsonObject.put("metadata", new JSONObject(new Gson().toJson(metadata)));
         }
         postRequest.setBody(jsonObject.toString());
         return RetryUtil.executeWithRetry(() -> processResponse(model, postRequest));
+    }
+
+    private static JSONObject buildParams(String model, JSONArray messagesArray) {
+        if (model.toLowerCase().contains("gpt-5")) {
+            return new JSONObject()
+                .put("max_completion_tokens", 65536)
+                .put("messages", messagesArray);
+        } else {
+            return new JSONObject()
+                    .put("temperature", 0.1)
+                    .put("max_tokens", 65536)
+                    .put("messages", messagesArray);
+        }
     }
 
     private String processResponse(String model, GenericRequest postRequest) throws IOException {

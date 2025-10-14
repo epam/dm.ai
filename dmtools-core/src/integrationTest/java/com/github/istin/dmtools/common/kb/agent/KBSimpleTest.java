@@ -57,7 +57,9 @@ public class KBSimpleTest {
         ConversationObserver observer = new ConversationObserver();
         ai = BasicGeminiAI.create(observer, propertyReader);
 
-        KBAnalysisAgent analysisAgent = new KBAnalysisAgent(ai, new PromptManager());
+        PromptManager promptManager = new PromptManager();
+        JSONFixAgent jsonFixAgent = new JSONFixAgent(ai, promptManager);
+        KBAnalysisAgent analysisAgent = new KBAnalysisAgent(ai, promptManager, jsonFixAgent);
         KBStructureBuilder structureBuilder = new KBStructureBuilder();
         KBAggregationAgent aggregationAgent = new KBAggregationAgent(ai, new PromptManager());
         KBQuestionAnswerMappingAgent qaMappingAgent = new KBQuestionAnswerMappingAgent(ai, new PromptManager());

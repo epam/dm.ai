@@ -7,7 +7,7 @@
         <new_answers>
 <#if global.newAnswers?? && (global.newAnswers?size > 0)>
 <#list global.newAnswers as answer>
-[${answer.id}] by ${answer.author}: "${answer.text}" (area: ${answer.area}, topics: ${answer.topics?join(", ")})
+[${answer.id!'UNKNOWN_ID'}] by ${answer.author!'Unknown'}: "${answer.text!'(no text)'}" (area: ${answer.area!'unknown'}, topics: ${(answer.topics![])?join(", ")})
 </#list>
 <#else>
 (No new answers to map)
@@ -16,7 +16,7 @@
         <existing_questions>
 <#if global.existingQuestions?? && (global.existingQuestions?size > 0)>
 <#list global.existingQuestions as question>
-[${question.id}] by ${question.author}<#if !question.answered> (UNANSWERED)</#if>: "${question.text}" (area: ${question.area})
+[${question.id!'UNKNOWN_ID'}] by ${question.author!'Unknown'}<#if !question.answered> (UNANSWERED)</#if>: "${question.text!'(no text)'}" (area: ${question.area!'unknown'})
 </#list>
 <#else>
 (No existing questions to match)

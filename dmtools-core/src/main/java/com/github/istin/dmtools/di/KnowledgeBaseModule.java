@@ -7,6 +7,7 @@ import com.github.istin.dmtools.common.kb.KBAnalysisResultMerger;
 import com.github.istin.dmtools.common.kb.KBStatistics;
 import com.github.istin.dmtools.common.kb.KBStructureBuilder;
 import com.github.istin.dmtools.common.kb.SourceConfigManager;
+import com.github.istin.dmtools.common.kb.agent.JSONFixAgent;
 import com.github.istin.dmtools.common.kb.agent.KBAggregationAgent;
 import com.github.istin.dmtools.common.kb.agent.KBAnalysisAgent;
 import com.github.istin.dmtools.common.kb.agent.KBOrchestrator;
@@ -28,8 +29,14 @@ public class KnowledgeBaseModule {
     
     @Provides
     @Singleton
-    public KBAnalysisAgent provideKBAnalysisAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
-        return new KBAnalysisAgent(ai, promptTemplateReader);
+    public JSONFixAgent provideJSONFixAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
+        return new JSONFixAgent(ai, promptTemplateReader);
+    }
+    
+    @Provides
+    @Singleton
+    public KBAnalysisAgent provideKBAnalysisAgent(AI ai, IPromptTemplateReader promptTemplateReader, JSONFixAgent jsonFixAgent) {
+        return new KBAnalysisAgent(ai, promptTemplateReader, jsonFixAgent);
     }
     
     @Provides

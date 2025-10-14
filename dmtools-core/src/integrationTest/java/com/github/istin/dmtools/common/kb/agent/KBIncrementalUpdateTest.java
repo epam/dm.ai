@@ -60,7 +60,8 @@ public class KBIncrementalUpdateTest {
         // Create all required components
         PromptManager promptManager = new PromptManager();
         
-        KBAnalysisAgent analysisAgent = new KBAnalysisAgent(ai, promptManager);
+        JSONFixAgent jsonFixAgent = new JSONFixAgent(ai, promptManager);
+        KBAnalysisAgent analysisAgent = new KBAnalysisAgent(ai, promptManager, jsonFixAgent);
         KBStructureBuilder structureBuilder = new KBStructureBuilder();
         KBAggregationAgent aggregationAgent = new KBAggregationAgent(ai, promptManager);
         KBQuestionAnswerMappingAgent qaMappingAgent = new KBQuestionAnswerMappingAgent(ai, promptManager);

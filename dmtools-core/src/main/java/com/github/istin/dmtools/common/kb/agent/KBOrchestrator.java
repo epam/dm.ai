@@ -138,7 +138,10 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
                     analysisResult.getAnswers().size(),
                     analysisResult.getNotes().size());
             
-            // Step 6.5: Map new answers/notes to existing unanswered questions
+            // Step 6.5: Validate and clean up analysis result (filter out incomplete entries)
+            validateAndCleanAnalysisResult(analysisResult);
+            
+            // Step 6.6: Map new answers/notes to existing unanswered questions
             applyQuestionAnswerMapping(analysisResult, context);
             
             // Step 7: Build Structure (mechanical) - track created files
@@ -520,6 +523,87 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         
         String text = content.substring(nextLineIndex + 1, endIndex).trim();
         return text.isEmpty() ? null : text;
+    }
+    
+    /**
+     * Validate and clean analysis result by filtering out incomplete entries
+     * that are missing required fields (author, date, area)
+     * Note: text can be empty (e.g., reply markers without actual text)
+     */
+    private void validateAndCleanAnalysisResult(AnalysisResult analysisResult) {
+        int initialQuestions = analysisResult.getQuestions().size();
+        int initialAnswers = analysisResult.getAnswers().size();
+        int initialNotes = analysisResult.getNotes().size();
+        
+        // Filter questions
+        analysisResult.getQuestions().removeIf(q -> {
+            if (q.getAuthor() == null || q.getAuthor().trim().isEmpty()) {
+                logger.warn("Filtering out question with missing author: id={}", q.getId());
+                return true;
+            }
+            if (q.getDate() == null || q.getDate().trim().isEmpty()) {
+                logger.warn("Filtering out question with missing date: id={}, author={}", q.getId(), q.getAuthor());
+                return true;
+            }
+            if (q.getArea() == null || q.getArea().trim().isEmpty()) {
+                logger.warn("Filtering out question with missing area: id={}, author={}", q.getId(), q.getAuthor());
+                return true;
+            }
+            return false;
+        });
+        
+        // Filter answers
+        analysisResult.getAnswers().removeIf(a -> {
+            if (a.getAuthor() == null || a.getAuthor().trim().isEmpty()) {
+                logger.warn("Filtering out answer with missing author: id={}", a.getId());
+                return true;
+            }
+            if (a.getDate() == null || a.getDate().trim().isEmpty()) {
+                logger.warn("Filtering out answer with missing date: id={}, author={}", a.getId(), a.getAuthor());
+                return true;
+            }
+            if (a.getArea() == null || a.getArea().trim().isEmpty()) {
+                logger.warn("Filtering out answer with missing area: id={}, author={}", a.getId(), a.getAuthor());
+                return true;
+            }
+            return false;
+        });
+        
+        // Filter notes
+        analysisResult.getNotes().removeIf(n -> {
+            if (n.getAuthor() == null || n.getAuthor().trim().isEmpty()) {
+                logger.warn("Filtering out note with missing author: id={}", n.getId());
+                return true;
+            }
+            if (n.getDate() == null || n.getDate().trim().isEmpty()) {
+                logger.warn("Filtering out note with missing date: id={}, author={}", n.getId(), n.getAuthor());
+                return true;
+            }
+            if (n.getArea() == null || n.getArea().trim().isEmpty()) {
+                logger.warn("Filtering out note with missing area: id={}, author={}", n.getId(), n.getAuthor());
+                return true;
+            }
+            return false;
+        });
+        
+        int filteredQuestions = initialQuestions - analysisResult.getQuestions().size();
+        int filteredAnswers = initialAnswers - analysisResult.getAnswers().size();
+        int filteredNotes = initialNotes - analysisResult.getNotes().size();
+        
+        if (filteredQuestions > 0 || filteredAnswers > 0 || filteredNotes > 0) {
+            logger.warn("=".repeat(80));
+            logger.warn("VALIDATION: Filtered out incomplete entries:");
+            if (filteredQuestions > 0) logger.warn("  - Questions: {}/{}", filteredQuestions, initialQuestions);
+            if (filteredAnswers > 0) logger.warn("  - Answers: {}/{}", filteredAnswers, initialAnswers);
+            if (filteredNotes > 0) logger.warn("  - Notes: {}/{}", filteredNotes, initialNotes);
+            logger.warn("  After validation: questions={}, answers={}, notes={}", 
+                       analysisResult.getQuestions().size(),
+                       analysisResult.getAnswers().size(),
+                       analysisResult.getNotes().size());
+            logger.warn("=".repeat(80));
+        } else {
+            logger.info("✓ Validation passed: All entries have required fields");
+        }
     }
     
     /**

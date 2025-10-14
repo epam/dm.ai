@@ -47,7 +47,9 @@ public class KBAnalysisAgentIntegrationTest {
         ai = BasicGeminiAI.create(observer, propertyReader);
         
         // Initialize agent with real dependencies via constructor (proper DI)
-        agent = new KBAnalysisAgent(ai, new PromptManager());
+        PromptManager promptManager = new PromptManager();
+        JSONFixAgent jsonFixAgent = new JSONFixAgent(ai, promptManager);
+        agent = new KBAnalysisAgent(ai, promptManager, jsonFixAgent);
     }
     
     @Test

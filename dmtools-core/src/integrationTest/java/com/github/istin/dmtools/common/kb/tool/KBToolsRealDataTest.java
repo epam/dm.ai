@@ -68,8 +68,8 @@ public class KBToolsRealDataTest {
     @Test
     void testProcessMultipleChunks() throws Exception {
         // CONFIGURE HERE: Set your start number and amount
-        int startNumber = 37;
-        int amount = 156;
+        int startNumber = 192;
+        int amount = 3;
         
         processChunks(startNumber, amount);
     }
