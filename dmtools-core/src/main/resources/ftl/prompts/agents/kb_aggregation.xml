@@ -29,8 +29,8 @@ ${global.entityData!''}
     <instructions>
         <instruction>Analyze the provided entity data and generate a narrative description</instruction>
         <instruction>For PERSON entities: Summarize their expertise, contributions, and areas of knowledge based on their questions, answers, and notes</instruction>
-        <instruction>For TOPIC entities: Provide an overview of the topic, key themes, common questions, and main contributors</instruction>
-        <instruction>For THEME entities: Describe the theme's scope, related discussions, and important insights</instruction>
+        <instruction>For AREA entities: Provide an overview of the area, key topics, common questions, and main contributors</instruction>
+        <instruction>For TOPIC entities: Describe the topic's scope, related discussions, and important insights</instruction>
         <instruction>Extract and highlight patterns: frequently discussed areas, common problems, solution approaches</instruction>
         <instruction>Use wiki-links to connect related entities (e.g., [[John_Doe]], [[ai-agents]], [[cursor-licensing]])</instruction>
         <instruction>Be specific and data-driven: mention actual contributions, specific expertise areas, concrete insights</instruction>

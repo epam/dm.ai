@@ -31,8 +31,10 @@ public class KBToolsRealDataTest {
     private KBTools kbTools;
     private com.github.istin.dmtools.common.kb.agent.KBOrchestrator orchestrator;
     private Path teamsDataDir;
+    //set your output path  Paths.get("/path_to_kb")
     private Path outputPath;
-    
+    private String sourceName;
+
     @BeforeEach
     void setUp() throws Exception {
         logger.info("=".repeat(80));
@@ -49,8 +51,11 @@ public class KBToolsRealDataTest {
         Path projectRoot = Paths.get(System.getProperty("user.dir")).getParent();
         teamsDataDir = projectRoot.resolve("temp/teams_chat");
         // Output directly to the git repository
+        if (outputPath == null || sourceName == null) {
+            throw new RuntimeException("configure input params");
+        }
         outputPath = Paths.get("/Users/Uladzimir_Klyshevich/notes/ai-kb");
-        
+
         // Verify teams_chat directory exists
         if (!Files.exists(teamsDataDir)) {
             throw new RuntimeException("Teams data directory not found: " + teamsDataDir);
@@ -80,8 +85,7 @@ public class KBToolsRealDataTest {
      * @param amount Number of files to process
      */
     private void processChunks(int startNumber, int amount) throws Exception {
-        String sourceName = "teams_chat_llm_ru";
-        
+
         logger.info("=".repeat(80));
         logger.info("TEST: Process Multiple Chunks (start={}, amount={})", startNumber, amount);
         logger.info("=".repeat(80));
@@ -338,8 +342,7 @@ public class KBToolsRealDataTest {
      */
     @Test
     void testRegenerateStructure() throws Exception {
-        String sourceName = "teams_chat_llm_ru";
-        
+
         logger.info("=".repeat(80));
         logger.info("TEST: Regenerate KB Structure (no AI processing)");
         logger.info("=".repeat(80));

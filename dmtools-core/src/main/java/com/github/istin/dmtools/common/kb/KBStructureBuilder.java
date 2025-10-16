@@ -10,6 +10,9 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -269,8 +272,8 @@ public class KBStructureBuilder {
         Set<String> allContributors = new HashSet<>(newContributors);
         if (content.contains("## Key Contributors")) {
             String pattern = "## Key Contributors\\s+<!-- AUTO_GENERATED_START -->\\s+(.*?)\\s+<!-- AUTO_GENERATED_END -->";
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.DOTALL);
-            java.util.regex.Matcher m = p.matcher(content);
+            Pattern p = Pattern.compile(pattern, java.util.regex.Pattern.DOTALL);
+            Matcher m = p.matcher(content);
             if (m.find()) {
                 String existingSection = m.group(1);
                 for (String line : existingSection.split("\n")) {
@@ -470,7 +473,7 @@ public class KBStructureBuilder {
      * IDs are in format: q_0001, a_0002, n_0003, etc.
      */
     private void sortContributionsByIdNumber(PersonContributions contributions) {
-        java.util.Comparator<PersonContributions.ContributionItem> idComparator = (a, b) -> {
+        Comparator<PersonContributions.ContributionItem> idComparator = (a, b) -> {
             int numA = extractIdNumber(a.getId());
             int numB = extractIdNumber(b.getId());
             return Integer.compare(numA, numB);
@@ -519,8 +522,8 @@ public class KBStructureBuilder {
     private List<String> extractSourcesFromFrontmatter(String content) {
         List<String> sources = new ArrayList<>();
         // Match sources: [source1, source2] or sources: source1
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("sources?:\\s*\\[([^\\]]+)\\]");
-        java.util.regex.Matcher matcher = pattern.matcher(content);
+        Pattern pattern = Pattern.compile("sources?:\\s*\\[([^\\]]+)\\]");
+        Matcher matcher = pattern.matcher(content);
         if (matcher.find()) {
             String sourcesStr = matcher.group(1);
             for (String source : sourcesStr.split(",")) {
@@ -531,7 +534,7 @@ public class KBStructureBuilder {
             }
         } else {
             // Try single source: sources: "source1"
-            pattern = java.util.regex.Pattern.compile("sources?:\\s*\"?([^\\n\"]+)\"?");
+            pattern = Pattern.compile("sources?:\\s*\"?([^\\n\"]+)\"?");
             matcher = pattern.matcher(content);
             if (matcher.find()) {
                 sources.add(matcher.group(1).trim());
@@ -546,7 +549,7 @@ public class KBStructureBuilder {
     private String updateFrontmatterSources(String content, List<String> sources) {
         String sourcesYaml = sources.stream()
                 .map(s -> "\"" + s + "\"")
-                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+                .collect(Collectors.joining(", ", "[", "]"));
         
         // Try to replace sources: [...] or sources: "..."
         String pattern = "(sources?:\\s*)(?:\\[[^\\]]+\\]|\"[^\"]+\"|[^\\n]+)";
@@ -560,7 +563,7 @@ public class KBStructureBuilder {
         }
         String tagsYaml = tags.stream()
                 .map(t -> "\"" + t + "\"")
-                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+                .collect(Collectors.joining(", ", "[", "]"));
         pattern = "(tags:\\s*)\\[[^\\]]+\\]";
         content = content.replaceFirst(pattern, "$1" + tagsYaml);
         
@@ -1196,8 +1199,8 @@ public class KBStructureBuilder {
      */
     private String extractFromFrontmatter(String content, String key) {
         String pattern = key + ":\\s*(.+)";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-        java.util.regex.Matcher m = p.matcher(content);
+        Pattern p = Pattern.compile(pattern);
+        Matcher m = p.matcher(content);
         if (m.find()) {
             return m.group(1).trim();
         }

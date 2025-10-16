@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -71,7 +73,7 @@ public class KBStatistics {
                         .map(this::collectTopicStats)
                         .filter(Objects::nonNull)
                         .sorted(Comparator.comparingInt(TopicStats::getTotalContributions).reversed())
-                        .collect(Collectors.toList());
+                        .toList();
                 
                 content.append("| Topic | Questions | Answers | Notes | Total |\n");
                 content.append("|-------|-----------|---------|-------|-------|\n");
@@ -189,8 +191,8 @@ public class KBStatistics {
         // Count embeds like ![[q_0001]], ![[a_0001]], ![[n_0001]]
         int count = 0;
         String pattern = "!\\[\\[" + prefix + "\\d+\\]\\]";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-        java.util.regex.Matcher m = p.matcher(content);
+        Pattern p = Pattern.compile(pattern);
+        Matcher m = p.matcher(content);
         while (m.find()) {
             count++;
         }

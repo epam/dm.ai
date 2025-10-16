@@ -48,13 +48,14 @@ public class KBAnalysisResultMerger {
         // Convert results to JSON strings
         List<String> jsonResults = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {
-            String json = GSON.toJson(results.get(i));
+            AnalysisResult analysisResult = results.get(i);
+            String json = GSON.toJson(analysisResult);
             jsonResults.add(json);
             logger.debug("Result {} - Questions: {}, Answers: {}, Notes: {}", 
                     i + 1, 
-                    results.get(i).getQuestions().size(),
-                    results.get(i).getAnswers().size(),
-                    results.get(i).getNotes().size());
+                    analysisResult.getQuestions().size(),
+                    analysisResult.getAnswers().size(),
+                    analysisResult.getNotes().size());
         }
         
         // Build combined JSON input for merge
