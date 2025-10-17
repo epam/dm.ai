@@ -12,6 +12,7 @@ public class AnalysisParams {
     private String inputText;  // Raw text to analyze (single chunk)
     private String sourceName;
     private KBContext context;  // Existing KB structure
+    private String extraInstructions;  // Optional extra instructions for AI
 }
 
 

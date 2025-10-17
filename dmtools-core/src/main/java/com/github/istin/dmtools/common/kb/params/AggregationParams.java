@@ -14,6 +14,7 @@ public class AggregationParams {
     private String entityId;
     private Path kbPath;
     private Map<String, Object> entityData;
+    private String extraInstructions;  // Optional extra instructions for AI
 }
 
 

@@ -118,11 +118,11 @@ public class KBOrchestrator {
             long analysisStartTime = System.currentTimeMillis();
             if (chunks.size() == 1) {
                 logger.info("Processing single chunk (size: {} chars)", chunks.get(0).getText().length());
-                analysisResult = analyzeChunk(chunks.get(0).getText(), params.getSourceName(), context);
+                analysisResult = analyzeChunk(chunks.get(0).getText(), params.getSourceName(), context, params.getAnalysisExtraInstructions());
             } else {
                 int totalSize = chunks.stream().mapToInt(c -> c.getText().length()).sum();
                 logger.info("Processing {} chunks (total size: {} chars)", chunks.size(), totalSize);
-                analysisResult = analyzeAndMergeChunks(chunks, params.getSourceName(), context);
+                analysisResult = analyzeAndMergeChunks(chunks, params.getSourceName(), context, params.getAnalysisExtraInstructions());
             }
             long analysisEndTime = System.currentTimeMillis();
             logger.info("✓ AI analysis completed in {}.{} seconds", 
@@ -146,7 +146,7 @@ public class KBOrchestrator {
             validateAndCleanAnalysisResult(analysisResult);
             
             // Step 6.6: Map new answers/notes to existing unanswered questions
-            applyQuestionAnswerMapping(analysisResult, context);
+            applyQuestionAnswerMapping(analysisResult, context, params.getQaMappingExtraInstructions());
             
             // Step 7: Build Structure (mechanical) - track created files
             List<Path> newFiles = buildStructureWithTracking(analysisResult, outputPath, params.getSourceName(), context);
@@ -156,7 +156,7 @@ public class KBOrchestrator {
             // Step 8: AI Aggregation (conditional based on mode)
             if (params.getProcessingMode() == KBProcessingMode.FULL) {
                 logger.info("Running AI aggregation (FULL mode)");
-                performAggregation(analysisResult, outputPath, context);
+                performAggregation(analysisResult, outputPath, context, params.getAggregationExtraInstructions());
             } else {
                 logger.info("Skipping AI aggregation (PROCESS_ONLY mode)");
             }
@@ -349,14 +349,14 @@ public class KBOrchestrator {
         
         logger.info("Found {} people and {} topics in existing KB", people.size(), topics.size());
         
-        // Aggregate people profiles
+        // Aggregate people profiles (no extra instructions in AGGREGATE_ONLY mode)
         for (String personId : people) {
-            aggregatePerson(personId, outputPath);
+            aggregatePerson(personId, outputPath, null);
         }
         
-        // Aggregate topics
+        // Aggregate topics (no extra instructions in AGGREGATE_ONLY mode)
         for (String topicId : topics) {
-            aggregateTopicById(topicId, outputPath);
+            aggregateTopicById(topicId, outputPath, null);
         }
         
         // Generate statistics
@@ -372,7 +372,7 @@ public class KBOrchestrator {
     /**
      * Aggregate topic by ID (for AGGREGATE_ONLY mode)
      */
-    private void aggregateTopicById(String topicId, Path outputPath) throws Exception {
+    private void aggregateTopicById(String topicId, Path outputPath, String extraInstructions) throws Exception {
         Path topicFile = outputPath.resolve("topics").resolve(topicId + ".md");
         
         if (!Files.exists(topicFile)) {
@@ -387,7 +387,7 @@ public class KBOrchestrator {
         String topicName = extractTopicTitle(topicContent, topicId);
         
         // Delegate to existing aggregateTopic method
-        aggregateTopic(topicName, outputPath);
+        aggregateTopic(topicName, outputPath, extraInstructions);
     }
     
     /**
@@ -606,7 +606,7 @@ public class KBOrchestrator {
     /**
      * Apply Q→A mapping from AI agent to link new answers/notes to existing questions
      */
-    private void applyQuestionAnswerMapping(AnalysisResult analysisResult, KBContext context) throws Exception {
+    private void applyQuestionAnswerMapping(AnalysisResult analysisResult, KBContext context, String extraInstructions) throws Exception {
         if (context.getExistingQuestions().isEmpty()) {
             logger.info("No existing questions for Q→A mapping, skipping");
             return;
@@ -664,6 +664,7 @@ public class KBOrchestrator {
         com.github.istin.dmtools.common.kb.params.QAMappingParams mappingParams = new com.github.istin.dmtools.common.kb.params.QAMappingParams();
         mappingParams.setNewAnswers(newAnswers);
         mappingParams.setExistingQuestions(relevantQuestions);
+        mappingParams.setExtraInstructions(extraInstructions);
         
         com.github.istin.dmtools.common.kb.model.QAMappingResult mappingResult = qaMappingAgent.run(mappingParams);
         
@@ -1278,7 +1279,7 @@ public class KBOrchestrator {
     }
     
     private void performAggregation(AnalysisResult analysisResult, Path outputPath, 
-                                    KBContext context) throws Exception {
+                                    KBContext context, String extraInstructions) throws Exception {
         // Aggregate people profiles (LinkedHashSet preserves insertion order)
         Set<String> people = new LinkedHashSet<>();
         analysisResult.getQuestions().forEach(q -> people.add(q.getAuthor()));
@@ -1288,7 +1289,7 @@ public class KBOrchestrator {
         });
         
         for (String person : people) {
-            aggregatePerson(person, outputPath);
+            aggregatePerson(person, outputPath, extraInstructions);
         }
         
         // Aggregate topics from current batch (detailed themes, LinkedHashSet preserves insertion order)
@@ -1320,14 +1321,14 @@ public class KBOrchestrator {
         
         // Aggregate topics (detailed themes)
         for (String topic : topics) {
-            aggregateTopic(topic, outputPath);
+            aggregateTopic(topic, outputPath, extraInstructions);
         }
         
         // Note: Areas are aggregated through topic aggregation
         // as area files include links to topics
     }
     
-    private void aggregatePerson(String personName, Path outputPath) throws Exception {
+    private void aggregatePerson(String personName, Path outputPath, String extraInstructions) throws Exception {
         String personId = structureBuilder.normalizePersonName(personName);
         Path personFile = outputPath.resolve("people").resolve(personId).resolve(personId + ".md");
         
@@ -1371,6 +1372,7 @@ public class KBOrchestrator {
         params.setEntityType("person");
         params.setEntityId(personId);
         params.setKbPath(outputPath);
+        params.setExtraInstructions(extraInstructions);
         
         Map<String, Object> entityData = new HashMap<>();
         entityData.put("name", personName);
@@ -1388,7 +1390,7 @@ public class KBOrchestrator {
         Files.writeString(descFile, descContent);
     }
     
-    private void aggregateTopic(String topicName, Path outputPath) throws Exception {
+    private void aggregateTopic(String topicName, Path outputPath, String extraInstructions) throws Exception {
         String topicId = structureBuilder.slugify(topicName);
         // NEW: flat structure - topics/topicId.md instead of topics/topicId/topicId.md
         Path topicFile = outputPath.resolve("topics").resolve(topicId + ".md");
@@ -1434,6 +1436,7 @@ public class KBOrchestrator {
         params.setEntityType("topic");
         params.setEntityId(topicId);
         params.setKbPath(outputPath);
+        params.setExtraInstructions(extraInstructions);
         
         Map<String, Object> entityData = new HashMap<>();
         entityData.put("title", topicName);
@@ -1570,11 +1573,12 @@ public class KBOrchestrator {
     /**
      * Analyze a single chunk
      */
-    private AnalysisResult analyzeChunk(String text, String sourceName, KBContext context) throws Exception {
+    private AnalysisResult analyzeChunk(String text, String sourceName, KBContext context, String extraInstructions) throws Exception {
         AnalysisParams params = new AnalysisParams();
         params.setInputText(text);
         params.setSourceName(sourceName);
         params.setContext(context);
+        params.setExtraInstructions(extraInstructions);
         
         return analysisAgent.run(params);
     }
@@ -1583,13 +1587,13 @@ public class KBOrchestrator {
      * Analyze multiple chunks and merge results using KBAnalysisResultMerger
      */
     private AnalysisResult analyzeAndMergeChunks(List<ChunkPreparation.Chunk> chunks, 
-                                                  String sourceName, KBContext context) throws Exception {
+                                                  String sourceName, KBContext context, String extraInstructions) throws Exception {
         List<AnalysisResult> chunkResults = new ArrayList<>();
         
         // Process each chunk separately
         for (int i = 0; i < chunks.size(); i++) {
             logger.info("Processing chunk {} of {}", i + 1, chunks.size());
-            AnalysisResult chunkResult = analyzeChunk(chunks.get(i).getText(), sourceName, context);
+            AnalysisResult chunkResult = analyzeChunk(chunks.get(i).getText(), sourceName, context, extraInstructions);
             chunkResults.add(chunkResult);
         }
         

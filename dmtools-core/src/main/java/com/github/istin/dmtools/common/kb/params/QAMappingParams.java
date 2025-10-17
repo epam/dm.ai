@@ -15,6 +15,7 @@ import java.util.List;
 public class QAMappingParams {
     private List<AnswerLike> newAnswers = new ArrayList<>();
     private List<KBContext.QuestionSummary> existingQuestions = new ArrayList<>();
+    private String extraInstructions;  // Optional extra instructions for AI
     
     /**
      * Unified interface for answers and notes that can answer questions

@@ -17,6 +17,24 @@ public class KBOrchestratorParams {
      * Processing mode: FULL (default), PROCESS_ONLY, or AGGREGATE_ONLY
      */
     private KBProcessingMode processingMode = KBProcessingMode.FULL;
+    
+    /**
+     * Optional extra instructions for KBAnalysisAgent
+     * Will be injected into the analysis prompt
+     */
+    private String analysisExtraInstructions;
+    
+    /**
+     * Optional extra instructions for KBAggregationAgent
+     * Will be injected into the aggregation prompt
+     */
+    private String aggregationExtraInstructions;
+    
+    /**
+     * Optional extra instructions for KBQuestionAnswerMappingAgent
+     * Will be injected into the Q&A mapping prompt
+     */
+    private String qaMappingExtraInstructions;
 }
 
 
