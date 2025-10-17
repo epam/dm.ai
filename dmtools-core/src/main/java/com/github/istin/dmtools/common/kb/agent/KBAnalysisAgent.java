@@ -2,10 +2,11 @@ package com.github.istin.dmtools.common.kb.agent;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.agent.AbstractSimpleAgent;
+import com.github.istin.dmtools.ai.agent.JSONFixAgent;
+import com.github.istin.dmtools.ai.params.JSONFixParams;
 import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import com.github.istin.dmtools.common.kb.model.AnalysisResult;
 import com.github.istin.dmtools.common.kb.params.AnalysisParams;
-import com.github.istin.dmtools.common.kb.params.JSONFixParams;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;

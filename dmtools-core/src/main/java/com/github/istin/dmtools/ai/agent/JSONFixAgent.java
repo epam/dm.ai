@@ -1,9 +1,8 @@
-package com.github.istin.dmtools.common.kb.agent;
+package com.github.istin.dmtools.ai.agent;
 
 import com.github.istin.dmtools.ai.AI;
-import com.github.istin.dmtools.ai.agent.AbstractSimpleAgent;
 import com.github.istin.dmtools.ai.utils.AIResponseParser;
-import com.github.istin.dmtools.common.kb.params.JSONFixParams;
+import com.github.istin.dmtools.ai.params.JSONFixParams;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 
 import javax.inject.Inject;
@@ -27,5 +26,4 @@ public class JSONFixAgent extends AbstractSimpleAgent<JSONFixParams, String> {
         return AIResponseParser.parseCodeResponse(response);
     }
 }
-
 

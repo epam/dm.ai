@@ -2,6 +2,7 @@ package com.github.istin.dmtools.common.kb.agent;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
+import com.github.istin.dmtools.ai.agent.JSONFixAgent;
 import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.common.kb.model.AnalysisResult;
 import com.github.istin.dmtools.common.kb.model.KBContext;

@@ -1,4 +1,4 @@
-package com.github.istin.dmtools.common.kb.params;
+package com.github.istin.dmtools.ai.params;
 
 import lombok.Data;
 
@@ -11,5 +11,4 @@ public class JSONFixParams {
     private String errorMessage;      // The parsing error message
     private String expectedSchema;    // Description of expected JSON schema
 }
-
 

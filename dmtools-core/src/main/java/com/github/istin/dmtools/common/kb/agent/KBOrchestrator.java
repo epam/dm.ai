@@ -1,7 +1,6 @@
 package com.github.istin.dmtools.common.kb.agent;
 
 import com.github.istin.dmtools.ai.ChunkPreparation;
-import com.github.istin.dmtools.ai.agent.AbstractSimpleAgent;
 import com.github.istin.dmtools.common.kb.KBAnalysisResultMerger;
 import com.github.istin.dmtools.common.kb.KBStatistics;
 import com.github.istin.dmtools.common.kb.KBStructureBuilder;
@@ -25,10 +24,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Main orchestration agent for Knowledge Base building
+ * Main orchestration service for Knowledge Base building
  * Coordinates all stages: Analysis → Structure → Aggregation → Statistics
+ * This is NOT an agent - it's a coordinator that uses agents internally
  */
-public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KBResult> {
+public class KBOrchestrator {
     
     private static final Logger logger = LogManager.getLogger(KBOrchestrator.class);
     private static final Gson GSON = new Gson();
@@ -53,7 +53,6 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
             SourceConfigManager sourceConfigManager,
             ChunkPreparation chunkPreparation
     ) {
-        super("kb_orchestrator");  // XML prompt template name
         this.analysisAgent = analysisAgent;
         this.structureBuilder = structureBuilder;
         this.aggregationAgent = aggregationAgent;
@@ -65,7 +64,9 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
         logger.info("KBOrchestrator initialized");
     }
     
-    @Override
+    /**
+     * Main execution method for KB processing
+     */
     public KBResult run(KBOrchestratorParams params) throws Exception {
         logger.info("Starting KB orchestration for source: {} (mode: {})", 
                    params.getSourceName(), params.getProcessingMode());
@@ -406,13 +407,6 @@ public class KBOrchestrator extends AbstractSimpleAgent<KBOrchestratorParams, KB
             logger.warn("Failed to extract topic title, using ID: {}", defaultTitle);
         }
         return defaultTitle;
-    }
-    
-    @Override
-    public KBResult transformAIResponse(KBOrchestratorParams params, String response) throws Exception {
-        // This orchestrator doesn't directly use AI responses
-        // Delegated to sub-agents
-        throw new UnsupportedOperationException("KBOrchestrator uses sub-agents for AI interactions");
     }
     
     private void initializeOutputDirectories(Path outputPath) throws IOException {

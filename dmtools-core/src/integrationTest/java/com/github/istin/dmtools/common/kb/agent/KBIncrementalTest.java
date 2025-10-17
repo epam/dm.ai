@@ -4,6 +4,7 @@ import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.agent.ContentMergeAgent;
+import com.github.istin.dmtools.ai.agent.JSONFixAgent;
 import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.common.kb.KBAnalysisResultMerger;
 import com.github.istin.dmtools.common.kb.KBStatistics;
