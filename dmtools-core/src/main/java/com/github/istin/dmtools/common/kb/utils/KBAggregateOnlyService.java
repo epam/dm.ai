@@ -1,6 +1,5 @@
 package com.github.istin.dmtools.common.kb.utils;
 
-import com.github.istin.dmtools.common.kb.KBStructureBuilder;
 import com.github.istin.dmtools.common.kb.model.KBResult;
 import org.apache.logging.log4j.Logger;
 
@@ -16,14 +15,11 @@ import java.util.stream.Stream;
 public class KBAggregateOnlyService {
 
     private final KBAggregationHelper aggregationHelper;
-    private final KBStructureBuilder structureBuilder;
     private final KBStructureManager structureManager;
 
     public KBAggregateOnlyService(KBAggregationHelper aggregationHelper,
-                                  KBStructureBuilder structureBuilder,
                                   KBStructureManager structureManager) {
         this.aggregationHelper = aggregationHelper;
-        this.structureBuilder = structureBuilder;
         this.structureManager = structureManager;
     }
 

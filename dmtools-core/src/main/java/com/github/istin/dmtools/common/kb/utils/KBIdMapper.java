@@ -88,12 +88,6 @@ public class KBIdMapper {
             }
         }
     }
-    
-    /**
-     * Get the real ID for a temporary ID, or return the original if not in mapping
-     */
-    public String getRealId(String tempId, Map<String, String> idMapping) {
-        return idMapping.getOrDefault(tempId, tempId);
-    }
+
 }
 

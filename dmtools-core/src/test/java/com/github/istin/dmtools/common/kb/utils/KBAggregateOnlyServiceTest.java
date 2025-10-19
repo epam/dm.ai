@@ -27,7 +27,7 @@ class KBAggregateOnlyServiceTest {
         aggregationHelper = mock(KBAggregationHelper.class);
         structureBuilder = mock(KBStructureBuilder.class);
         structureManager = mock(KBStructureManager.class);
-        aggregateOnlyService = new KBAggregateOnlyService(aggregationHelper, structureBuilder, structureManager);
+        aggregateOnlyService = new KBAggregateOnlyService(aggregationHelper, structureManager);
         fileUtils = mock(KBFileUtils.class);
         logger = LogManager.getLogger(KBAggregateOnlyServiceTest.class);
     }

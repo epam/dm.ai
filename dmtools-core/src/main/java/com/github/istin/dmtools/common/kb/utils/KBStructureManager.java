@@ -5,8 +5,10 @@ import com.github.istin.dmtools.common.kb.KBStructureBuilder;
 import com.github.istin.dmtools.common.kb.model.*;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * Encapsulates structure building steps previously handled in KBOrchestrator.
@@ -63,18 +65,18 @@ public class KBStructureManager {
         if (personContributions != null && !personContributions.isEmpty()) {
             // Reload context after creating files to get updated question/answer/note lists
             KBContext context = contextLoader.loadKBContext(outputPath);
-            personStats = new java.util.HashMap<>();
+            personStats = new HashMap<>();
             for (String person : context.getExistingPeople()) {
                 personStats.putIfAbsent(person, new PersonStatsCollector.PersonStats());
             }
 
-            Map<String, List<KBContext.QuestionSummary>> questionsByPerson = new java.util.HashMap<>();
+            Map<String, List<KBContext.QuestionSummary>> questionsByPerson = new HashMap<>();
             for (KBContext.QuestionSummary summary : context.getExistingQuestions()) {
                 String author = summary.getAuthor();
                 if (author != null) {
                     // Normalize author name to match directory format (replace spaces with underscores)
                     String normalizedAuthor = author.replace(" ", "_");
-                    questionsByPerson.computeIfAbsent(normalizedAuthor, key -> new java.util.ArrayList<>()).add(summary);
+                    questionsByPerson.computeIfAbsent(normalizedAuthor, key -> new ArrayList<>()).add(summary);
                 }
             }
 
@@ -84,22 +86,22 @@ public class KBStructureManager {
                 if (authoredQuestions != null) {
                     stats.questions = (int) authoredQuestions.stream()
                             .map(KBContext.QuestionSummary::getId)
-                            .filter(id -> java.nio.file.Files.exists(outputPath.resolve("questions").resolve(id + ".md")))
+                            .filter(id -> Files.exists(outputPath.resolve("questions").resolve(id + ".md")))
                             .count();
                 }
             }
 
             contributions = personContributions;
 
-            java.nio.file.Path answersDir = outputPath.resolve("answers");
-            java.nio.file.Path notesDir = outputPath.resolve("notes");
+            Path answersDir = outputPath.resolve("answers");
+            Path notesDir = outputPath.resolve("notes");
 
-            if (java.nio.file.Files.exists(answersDir)) {
-                try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(answersDir)) {
-                    files.filter(java.nio.file.Files::isRegularFile)
+            if (Files.exists(answersDir)) {
+                try (Stream<Path> files = Files.list(answersDir)) {
+                    files.filter(Files::isRegularFile)
                             .forEach(path -> {
                                 try {
-                                    String content = java.nio.file.Files.readString(path);
+                                    String content = Files.readString(path);
                                     String author = statsCollector.extractAuthor(content);
                                     if (author != null) {
                                         // Normalize author name to match directory format
@@ -113,12 +115,12 @@ public class KBStructureManager {
                 }
             }
 
-            if (java.nio.file.Files.exists(notesDir)) {
-                try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(notesDir)) {
-                    files.filter(java.nio.file.Files::isRegularFile)
+            if (Files.exists(notesDir)) {
+                try (Stream<Path> files = Files.list(notesDir)) {
+                    files.filter(Files::isRegularFile)
                             .forEach(path -> {
                                 try {
-                                    String content = java.nio.file.Files.readString(path);
+                                    String content = Files.readString(path);
                                     String author = statsCollector.extractAuthor(content);
                                     if (author != null) {
                                         // Normalize author name to match directory format
@@ -154,7 +156,7 @@ public class KBStructureManager {
             logger.info("Built {} person profiles.", personStats.size());
         }
 
-        updateTopicStatistics(analysisResult, outputPath, sourceName, logger);
+        updateTopicStatistics(analysisResult, outputPath, logger);
     }
 
     public void rebuildPeopleProfiles(Path outputPath,
@@ -220,7 +222,6 @@ public class KBStructureManager {
 
     private void updateTopicStatistics(AnalysisResult analysisResult,
                                        Path outputPath,
-                                       String sourceName,
                                        Logger logger) throws Exception {
         Map<String, TopicStatistics> topicStats = new HashMap<>();
 

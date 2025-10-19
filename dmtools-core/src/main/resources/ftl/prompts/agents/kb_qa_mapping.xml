@@ -86,11 +86,6 @@ IMPORTANT:
 - If an answer doesn't match any question well (confidence < 0.6), don't include it in mappings
 - If no good matches exist, return empty mappings array
     </instructions>
-<#if global.extraInstructions?? && global.extraInstructions?has_content>
-    <extra_instructions>
-${global.extraInstructions}
-    </extra_instructions>
-</#if>
     <examples>
         <example name="direct_reference">
             <human>

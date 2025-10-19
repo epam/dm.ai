@@ -2,6 +2,7 @@ package com.github.istin.dmtools.common.kb.utils;
 
 import com.github.istin.dmtools.common.kb.KBStructureBuilder;
 import com.github.istin.dmtools.common.kb.model.PersonContributions;
+import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -21,6 +22,7 @@ public class PersonStatsCollector {
     
     private static final Logger logger = LogManager.getLogger(PersonStatsCollector.class);
     
+    @Getter
     private final KBFileParser parser;
     private final KBStructureBuilder structureBuilder;
     
@@ -28,11 +30,7 @@ public class PersonStatsCollector {
         this.parser = parser;
         this.structureBuilder = structureBuilder;
     }
-    
-    public KBFileParser getParser() {
-        return parser;
-    }
-    
+
     public String extractAuthor(String content) {
         return parser.extractAuthor(content);
     }

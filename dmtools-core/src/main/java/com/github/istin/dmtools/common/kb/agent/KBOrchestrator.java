@@ -95,7 +95,7 @@ public class KBOrchestrator {
         this.chunkAnalyzer = new KBChunkAnalyzer(analysisAgent, resultMerger);
         this.regenerationManager = new KBRegenerationManager(fileParser, structureBuilder, structureManager, contextLoader);
         this.aggregationBatchHelper = new KBAggregationBatchHelper(aggregationHelper);
-        this.aggregateOnlyService = new KBAggregateOnlyService(aggregationHelper, structureBuilder, structureManager);
+        this.aggregateOnlyService = new KBAggregateOnlyService(aggregationHelper, structureManager);
         this.metricsCollector = new KBAggregationMetricsCollector();
         
         logger.info("KBOrchestrator initialized with utilities");
