@@ -127,7 +127,13 @@ public class KBTools {
                 description = "Optional path to KB directory. Defaults to DMTOOLS_KB_OUTPUT_PATH env var or current directory",
                 required = false,
                 example = "/path/to/knowledge-base"
-            ) String outputPath
+            ) String outputPath,
+            @MCPParam(
+                name = "clean_source",
+                description = "Optional. If true, removes all existing Q/A/N from this source before processing. Use for content refresh (e.g., Confluence pages).",
+                required = false,
+                example = "true"
+            ) String cleanSource
     ) {
         try {
             // Validate input file exists
@@ -148,6 +154,12 @@ public class KBTools {
             params.setDateTime(dateTime);
             params.setOutputPath(kbPath.toString());
             params.setProcessingMode(KBProcessingMode.FULL);
+            
+            // Set clean source flag if provided
+            if (cleanSource != null && cleanSource.equalsIgnoreCase("true")) {
+                params.setCleanSourceBeforeProcessing(true);
+                logger.info("Clean source mode enabled - will remove existing Q/A/N from source '{}'", sourceName);
+            }
             
             // Run orchestrator
             KBResult result = orchestrator.run(params);
@@ -199,7 +211,13 @@ public class KBTools {
                 description = "Optional path to KB directory. Defaults to DMTOOLS_KB_OUTPUT_PATH env var or current directory",
                 required = false,
                 example = "/path/to/knowledge-base"
-            ) String outputPath
+            ) String outputPath,
+            @MCPParam(
+                name = "clean_source",
+                description = "Optional. If true, removes all existing Q/A/N from this source before processing. Use for content refresh (e.g., Confluence pages).",
+                required = false,
+                example = "true"
+            ) String cleanSource
     ) {
         try {
             // Validate input file exists
@@ -220,6 +238,12 @@ public class KBTools {
             params.setDateTime(dateTime);
             params.setOutputPath(kbPath.toString());
             params.setProcessingMode(KBProcessingMode.PROCESS_ONLY);
+            
+            // Set clean source flag if provided
+            if (cleanSource != null && cleanSource.equalsIgnoreCase("true")) {
+                params.setCleanSourceBeforeProcessing(true);
+                logger.info("Clean source mode enabled - will remove existing Q/A/N from source '{}'", sourceName);
+            }
             
             // Run orchestrator
             KBResult result = orchestrator.run(params);

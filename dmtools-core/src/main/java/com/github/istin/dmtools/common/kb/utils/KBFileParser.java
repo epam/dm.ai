@@ -25,6 +25,7 @@ public class KBFileParser {
     private static final Pattern DATE_PATTERN = Pattern.compile("date:\\s*\"?([^\"\\n]+)\"?");
     private static final Pattern AREA_PATTERN = Pattern.compile("area:\\s*\"?([^\"\\n]+)\"?");
     private static final Pattern QUALITY_PATTERN = Pattern.compile("quality:\\s*([\\d.]+)");
+    private static final Pattern SOURCE_PATTERN = Pattern.compile("source:\\s*\"?([^\"\\n]+)\"?");
     private static final Pattern ANSWERED_BY_PATTERN = Pattern.compile("\\*\\*Answer:\\*\\* \\[\\[../../answers/(a_\\d+)\\|");
     private static final Pattern ANSWERS_QUESTION_PATTERN = Pattern.compile("\\*\\*Question:\\*\\* \\[\\[../../questions/(q_\\d+)\\|");
     
@@ -147,6 +148,17 @@ public class KBFileParser {
      */
     public String extractArea(String content) {
         Matcher matcher = AREA_PATTERN.matcher(content);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return null;
+    }
+    
+    /**
+     * Extract source from frontmatter
+     */
+    public String extractSource(String content) {
+        Matcher matcher = SOURCE_PATTERN.matcher(content);
         if (matcher.find()) {
             return matcher.group(1).trim();
         }

@@ -42,6 +42,14 @@ public class KBOrchestratorParams {
      * Default: false (incremental mode)
      */
     private boolean cleanOutput = false;
+    
+    /**
+     * When true, removes all Q/A/N files from this specific source before processing.
+     * Useful for refreshing content (e.g., Confluence pages) where old content should be replaced.
+     * After deletion, automatically regenerates person profiles, topics, and statistics.
+     * Default: false (incremental mode)
+     */
+    private boolean cleanSourceBeforeProcessing = false;
 }
 
 

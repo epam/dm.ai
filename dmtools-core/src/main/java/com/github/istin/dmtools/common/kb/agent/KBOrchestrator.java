@@ -123,7 +123,20 @@ public class KBOrchestrator {
             // Step 1: Initialize output directories
             contextLoader.initializeOutputDirectories(outputPath, params.isCleanOutput());
             
-            // Step 2: Copy input file to inbox/raw/
+            // Step 2: Clean source-specific files if requested
+            if (params.isCleanSourceBeforeProcessing()) {
+                logger.info("Cleaning existing files for source: {}", params.getSourceName());
+                KBSourceCleaner sourceCleaner = new KBSourceCleaner(fileParser, structureManager);
+                List<String> deletedIds = sourceCleaner.cleanSourceFiles(
+                    outputPath, 
+                    params.getSourceName(), 
+                    logger
+                );
+                logger.info("Cleaned {} Q/A/N files from source '{}'", 
+                    deletedIds.size(), params.getSourceName());
+            }
+            
+            // Step 3: Copy input file to inbox/raw/
             Path inputFilePath = Paths.get(params.getInputFile());
             Path rawInboxPath = outputPath.resolve("inbox/raw");
             Files.createDirectories(rawInboxPath);
@@ -135,10 +148,10 @@ public class KBOrchestrator {
             createdFiles.add(rawCopyPath);
             logger.info("Copied input file to: {}", rawCopyPath);
             
-            // Step 3: Load existing KB context
+            // Step 4: Load existing KB context
             KBContext context = contextLoader.loadKBContext(outputPath);
             
-            // Step 4: Read and prepare input
+            // Step 5: Read and prepare input
             String inputContent = fileReader.readAndNormalize(inputFilePath);
             logger.info("Read input file, content length: {} chars", inputContent.length());
             
@@ -146,11 +159,11 @@ public class KBOrchestrator {
             inputContent = normalizeInputContent(inputContent);
             logger.info("After normalization, content length: {} chars", inputContent.length());
             
-            // Step 5: Chunk input if large
+            // Step 6: Chunk input if large
             List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(Arrays.asList(inputContent));
             logger.info("Created {} chunks from input", chunks.size());
             
-            // Step 6: AI Analysis (process each chunk separately)
+            // Step 7: AI Analysis (process each chunk separately)
             AnalysisResult analysisResult;
             long analysisStartTime = System.currentTimeMillis();
             if (chunks.size() == 1) {
@@ -179,28 +192,33 @@ public class KBOrchestrator {
                     analysisResult.getAnswers().size(),
                     analysisResult.getNotes().size());
             
-            // Step 6.5: Validate and clean up analysis result (filter out incomplete entries)
-        analysisValidator.validateAndClean(analysisResult, logger);
+            // Step 7.5: Validate and clean up analysis result (filter out incomplete entries)
+            analysisValidator.validateAndClean(analysisResult, logger);
             
-            // Step 6.6: Map new answers/notes to existing unanswered questions
+            // Step 7.6: Map new answers/notes to existing unanswered questions
             qaMappingService.applyMapping(analysisResult, context, params.getQaMappingExtraInstructions(), logger);
             
-            // Step 7: Build Structure (mechanical) - track created files
+            // Step 8: Build Structure (mechanical) - track created files
             structureManager.buildStructure(analysisResult, outputPath, params.getSourceName(), null, logger);
 
-        long start = System.nanoTime();
-        if (params.getProcessingMode() == KBProcessingMode.FULL) {
-            logger.info("Running AI aggregation (FULL mode)");
-            aggregationBatchHelper.aggregateBatch(analysisResult, outputPath, params.getAggregationExtraInstructions(), logger);
-        } else {
-            logger.info("Skipping AI aggregation (PROCESS_ONLY mode)");
-        }
-        long durationMs = (System.nanoTime() - start) / 1_000_000;
-        metricsCollector.recordAggregation(durationMs);
+            // Step 9: AI Aggregation (conditional based on mode)
+            long start = System.nanoTime();
+            if (params.getProcessingMode() == KBProcessingMode.FULL) {
+                logger.info("Running AI aggregation (FULL mode)");
+                aggregationBatchHelper.aggregateBatch(analysisResult, outputPath, params.getAggregationExtraInstructions(), logger);
+            } else {
+                logger.info("Skipping AI aggregation (PROCESS_ONLY mode)");
+            }
+            long durationMs = (System.nanoTime() - start) / 1_000_000;
+            metricsCollector.recordAggregation(durationMs);
 
+            // Step 10: Generate Statistics and Indexes (mechanical)
             structureManager.generateIndexes(outputPath);
+            
+            // Step 11: Update source config
             sourceConfigManager.updateLastSyncDate(params.getSourceName(), params.getDateTime(), outputPath);
 
+            // Step 12: Build and return result
             return structureManager.buildResult(analysisResult, outputPath, fileUtils);
             
         } catch (Exception e) {
