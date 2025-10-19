@@ -122,5 +122,5 @@ cacheBasicTeamsClient
 *.token
 dmtools-core/cacheTeamsClient
 /dmtools-core/cacheBasicOllamaAI/*
-dmtools-core/cacheBasicDialAI
-cacheBasicDialAI
+cache**/
+dmtools-core/cache**/
