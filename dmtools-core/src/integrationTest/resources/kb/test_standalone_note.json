@@ -1,0 +1,8 @@
+[
+    {
+        "date": "2024-10-10T12:00:00Z",
+        "author": "Eve Black",
+        "body": "Important: Always use .dockerignore to exclude node_modules and .git directories from build context. This significantly reduces build time."
+    }
+]
+

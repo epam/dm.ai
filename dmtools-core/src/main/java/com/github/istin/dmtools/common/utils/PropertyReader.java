@@ -1,5 +1,8 @@
 package com.github.istin.dmtools.common.utils;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;
@@ -8,6 +11,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 public class PropertyReader {
+
+	private static final Logger logger = LogManager.getLogger(PropertyReader.class);
 
 	private static String PATH_TO_CONFIG_FILE = "/config.properties";
 
@@ -513,6 +518,11 @@ public class PropertyReader {
 	public static final String GEMINI_API_KEY = "GEMINI_API_KEY";
 	public static final String GEMINI_DEFAULT_MODEL_KEY = "GEMINI_DEFAULT_MODEL";
 	public static final String GEMINI_BASE_PATH_KEY = "GEMINI_BASE_PATH";
+	public static final String OLLAMA_BASE_PATH = "OLLAMA_BASE_PATH";
+	public static final String OLLAMA_MODEL = "OLLAMA_MODEL";
+	public static final String OLLAMA_NUM_CTX = "OLLAMA_NUM_CTX";
+	public static final String OLLAMA_NUM_PREDICT = "OLLAMA_NUM_PREDICT";
+	public static final String DEFAULT_LLM = "DEFAULT_LLM";
 
 	public String getGeminiApiKey() {
 		return getValue(GEMINI_API_KEY);
@@ -574,6 +584,45 @@ public class PropertyReader {
 			"Team.ReadBasic.All Channel.ReadBasic.All " +
 			"Files.Read.All Sites.Read.All " +
 			"openid profile email offline_access");
+	}
+
+	// Ollama configuration
+	public String getOllamaBasePath() {
+		return getValue(OLLAMA_BASE_PATH, "http://localhost:11434");
+	}
+
+	public String getOllamaModel() {
+		return getValue(OLLAMA_MODEL);
+	}
+
+	public int getOllamaNumCtx() {
+		String value = getValue(OLLAMA_NUM_CTX);
+		if (value == null || value.trim().isEmpty()) {
+			return 16384;
+		}
+		try {
+			return Integer.parseInt(value.trim());
+		} catch (NumberFormatException e) {
+			logger.warn("Invalid OLLAMA_NUM_CTX value: {}, using default 16384", value);
+			return 16384;
+		}
+	}
+
+	public int getOllamaNumPredict() {
+		String value = getValue(OLLAMA_NUM_PREDICT);
+		if (value == null || value.trim().isEmpty()) {
+			return -1;
+		}
+		try {
+			return Integer.parseInt(value.trim());
+		} catch (NumberFormatException e) {
+			logger.warn("Invalid OLLAMA_NUM_PREDICT value: {}, using default -1", value);
+			return -1;
+		}
+	}
+
+	public String getDefaultLLM() {
+		return getValue(DEFAULT_LLM);
 	}
 
 }

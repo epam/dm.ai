@@ -6,6 +6,8 @@ import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.utils.PropertyReader;
+import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
+import com.github.istin.dmtools.di.KnowledgeBaseComponent;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
@@ -371,6 +373,15 @@ public class McpCliHandler {
             logger.debug("Created BasicSharePointClient instance");
         } catch (Exception e) {
             logger.debug("BasicSharePointClient not initialized: {}. SharePoint uses same auth as Teams.", e.getMessage());
+        }
+
+        try {
+            // Create KB Tools using Dagger
+            KnowledgeBaseComponent kbComponent = DaggerKnowledgeBaseComponent.create();
+            clients.put("kb", kbComponent.kbTools());
+            logger.debug("Created KBTools instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create KBTools: {}", e.getMessage());
         }
 
         logger.info("Created {} client instances for MCP CLI", clients.size());

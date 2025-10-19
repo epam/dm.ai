@@ -1,8 +1,12 @@
 package com.github.istin.dmtools.ai.agent;
 
+import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.di.DaggerContentMergeAgentComponent;
+import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+
+import javax.inject.Inject;
 
 public class ContentMergeAgent extends AbstractSimpleAgent<ContentMergeAgent.Params, String> {
 
@@ -18,6 +22,13 @@ public class ContentMergeAgent extends AbstractSimpleAgent<ContentMergeAgent.Par
     public ContentMergeAgent() {
         super("agents/content_merge");
         DaggerContentMergeAgentComponent.create().inject(this);
+    }
+
+    @Inject
+    public ContentMergeAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
+        super("agents/content_merge");
+        this.ai = ai;
+        this.promptTemplateReader = promptTemplateReader;
     }
 
     @Override
