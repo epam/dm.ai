@@ -127,7 +127,8 @@ public class TeamsMessageSimplifierTest {
         assertNotNull(result);
         assertEquals("John Doe", result.getString("author"));
         assertEquals("2025-10-09T10:00:00Z", result.getString("date"));
-        assertEquals("Hello world!", result.getString("body"));
+        // CopyDown converts <strong> to **bold** (Markdown)
+        assertEquals("Hello **world**!", result.getString("body"));
         assertFalse(result.has("reactions"));
         assertFalse(result.has("mentions"));
         assertFalse(result.has("attachments"));
@@ -283,7 +284,8 @@ public class TeamsMessageSimplifierTest {
     public void testCleanHtml_BasicTags() {
         String html = "<p>Hello <strong>world</strong>!</p>";
         String cleaned = TeamsMessageSimplifier.cleanHtml(html);
-        assertEquals("Hello world!", cleaned);
+        // CopyDown converts HTML to Markdown
+        assertEquals("Hello **world**!", cleaned);
     }
     
     @Test
@@ -297,7 +299,8 @@ public class TeamsMessageSimplifierTest {
     public void testCleanHtml_ComplexTags() {
         String html = "<div class='test'><span style='color:red'>Hello</span>&nbsp;<br/>World</div>";
         String cleaned = TeamsMessageSimplifier.cleanHtml(html);
-        assertEquals("Hello World", cleaned);
+        // CopyDown converts HTML to Markdown, preserving line breaks and converting nbsp to space
+        assertEquals("Hello  \nWorld", cleaned);
     }
     
     @Test
@@ -461,8 +464,8 @@ public class TeamsMessageSimplifierTest {
         
         JSONArray result = TeamsMessageSimplifier.extractAttachments(attachments);
         
-        assertEquals(1, result.length());
-        assertEquals("Card: YouTube Video Title", result.getString(0));
+        // Adaptive cards are now skipped in attachments - content is extracted to message body
+        assertEquals(0, result.length());
     }
     
     @Test
@@ -479,8 +482,8 @@ public class TeamsMessageSimplifierTest {
         
         JSONArray result = TeamsMessageSimplifier.extractAttachments(attachments);
         
-        assertEquals(1, result.length());
-        assertEquals("Adaptive Card", result.getString(0));
+        // Adaptive cards are now skipped in attachments - content is extracted to message body
+        assertEquals(0, result.length());
     }
     
     @Test

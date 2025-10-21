@@ -111,7 +111,7 @@ public class TeamsChatsSimplifierTest {
     
     @Test
     public void testSimplifyChat_GroupChat() {
-        JSONObject result = TeamsChatsSimplifier.simplifyChat(groupChat, false);
+        JSONObject result = TeamsChatsSimplifier.simplifyChat(groupChat, false, "Bob");
         
         assertNotNull(result);
         assertEquals("Project Team", result.getString("chatName"));
@@ -122,7 +122,7 @@ public class TeamsChatsSimplifierTest {
     
     @Test
     public void testSimplifyChat_OneOnOne() {
-        JSONObject result = TeamsChatsSimplifier.simplifyChat(oneOnOneChat, false);
+        JSONObject result = TeamsChatsSimplifier.simplifyChat(oneOnOneChat, false, "Bob");
         
         assertNotNull(result);
         // For 1-on-1, should show only the OTHER person (not the one who sent last message)
@@ -135,7 +135,7 @@ public class TeamsChatsSimplifierTest {
     
     @Test
     public void testSimplifyChat_WithAuthor() {
-        JSONObject result = TeamsChatsSimplifier.simplifyChat(groupChat, true);
+        JSONObject result = TeamsChatsSimplifier.simplifyChat(groupChat, true, "Bob");
         
         assertNotNull(result);
         assertEquals("Project Team", result.getString("chatName"));
@@ -148,7 +148,7 @@ public class TeamsChatsSimplifierTest {
     
     @Test
     public void testSimplifyChat_Unread() {
-        JSONObject result = TeamsChatsSimplifier.simplifyChat(unreadChat, false);
+        JSONObject result = TeamsChatsSimplifier.simplifyChat(unreadChat, false, "Bob");
         
         assertNotNull(result);
         assertEquals("Urgent Discussion", result.getString("chatName"));
@@ -171,7 +171,7 @@ public class TeamsChatsSimplifierTest {
                 .put("content", longMessage)));
         Chat longChat = new Chat(chatJson.toString());
         
-        JSONObject result = TeamsChatsSimplifier.simplifyChat(longChat, false);
+        JSONObject result = TeamsChatsSimplifier.simplifyChat(longChat, false, "Bob");
         
         assertNotNull(result);
         assertEquals("Long Message Chat", result.getString("chatName"));
@@ -187,7 +187,7 @@ public class TeamsChatsSimplifierTest {
         chats.add(oneOnOneChat);
         chats.add(unreadChat);
         
-        JSONArray result = TeamsChatsSimplifier.simplifyChats(chats);
+        JSONArray result = TeamsChatsSimplifier.simplifyChats(chats, "Bob");
         
         assertEquals(3, result.length());
         assertEquals("Project Team", result.getJSONObject(0).getString("chatName"));
@@ -203,7 +203,7 @@ public class TeamsChatsSimplifierTest {
         chats.add(oneOnOneChat); // 2025-10-09T11:00:00Z
         chats.add(unreadChat);   // 2025-10-09T12:00:00Z
         
-        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90);
+        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90, "Bob");
         
         assertEquals(3, result.length());
         // Should be sorted by most recent first
@@ -220,7 +220,7 @@ public class TeamsChatsSimplifierTest {
         chats.add(oneOnOneChat);
         chats.add(unreadChat);
         
-        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 2, "all", 90);
+        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 2, "all", 90, "Bob");
         
         assertEquals(2, result.length());
         assertEquals("Urgent Discussion", result.getJSONObject(0).getString("chatName"));
@@ -234,7 +234,7 @@ public class TeamsChatsSimplifierTest {
         chats.add(oneOnOneChat); // oneOnOne
         chats.add(unreadChat);   // group
         
-        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "group", 90);
+        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "group", 90, "Bob");
         
         assertEquals(2, result.length());
         assertEquals("Urgent Discussion", result.getJSONObject(0).getString("chatName"));
@@ -248,7 +248,7 @@ public class TeamsChatsSimplifierTest {
         chats.add(oneOnOneChat); // oneOnOne
         chats.add(unreadChat);   // group
         
-        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "oneOnOne", 90);
+        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "oneOnOne", 90, "Bob");
         
         assertEquals(1, result.length());
         assertEquals("Charlie", result.getJSONObject(0).getString("chatName"));
@@ -261,7 +261,7 @@ public class TeamsChatsSimplifierTest {
         chats.add(oneOnOneChat); // Recent
         chats.add(oldChat);      // 91 days ago
         
-        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90);
+        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90, "Bob");
         
         // Old chat should be filtered out
         assertEquals(2, result.length());
@@ -289,7 +289,7 @@ public class TeamsChatsSimplifierTest {
         chats.add(systemEventChat); // System event with empty content
         chats.add(systemEventChat2); // System event with placeholder content
         
-        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90);
+        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90, "Bob");
         
         // Both system event chats should be filtered out
         assertEquals(1, result.length());
@@ -301,7 +301,7 @@ public class TeamsChatsSimplifierTest {
         List<Chat> chats = new ArrayList<>();
         chats.add(groupChat);
         
-        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90);
+        JSONArray result = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90, "Bob");
         
         assertEquals(1, result.length());
         JSONObject chat = result.getJSONObject(0);
@@ -335,11 +335,11 @@ public class TeamsChatsSimplifierTest {
         chats.add(chat50Days); // 50 days ago
         
         // With 90-day cutoff: should include both
-        JSONArray result90 = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90);
+        JSONArray result90 = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 90, "Bob");
         assertEquals(2, result90.length());
         
         // With 30-day cutoff: should exclude 50-day-old chat
-        JSONArray result30 = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 30);
+        JSONArray result30 = TeamsChatsSimplifier.getRecentChatsSimplified(chats, 10, "all", 30, "Bob");
         assertEquals(1, result30.length());
         assertEquals("Project Team", result30.getJSONObject(0).getString("chatName"));
     }
