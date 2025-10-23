@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <!-- Console appender for debug output -->
+        <Console name="ConsoleAppender" target="SYSTEM_ERR">
+            <PatternLayout pattern="[%level] %logger{1} - %msg%n"/>
+        </Console>
+    </Appenders>
+    
+    <Loggers>
+        <!-- Debug level for dmtools code -->
+        <Logger name="com.github.istin.dmtools" level="DEBUG" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </Logger>
+        
+        <!-- Debug level for Microsoft Graph API client (Teams, SharePoint, etc.) -->
+        <Logger name="com.github.istin.dmtools.microsoft" level="DEBUG" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </Logger>
+        
+        <!-- Suppress verbose third-party logging -->
+        <Logger name="org.apache" level="WARN" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </Logger>
+        
+        <Logger name="okhttp3" level="WARN" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </Logger>
+        
+        <Logger name="okio" level="WARN" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </Logger>
+        
+        <!-- Root logger -->
+        <Root level="INFO">
+            <AppenderRef ref="ConsoleAppender"/>
+        </Root>
+    </Loggers>
+</Configuration>

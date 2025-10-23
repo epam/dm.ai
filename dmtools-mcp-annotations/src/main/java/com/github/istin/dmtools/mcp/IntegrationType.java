@@ -19,7 +19,12 @@ public enum IntegrationType {
     /**
      * Figma integration for design file access and collaboration.
      */
-    FIGMA("figma");
+    FIGMA("figma"),
+    
+    /**
+     * Microsoft Teams integration for chat and messaging.
+     */
+    TEAMS("teams");
     
     private final String value;
     

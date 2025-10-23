@@ -120,6 +120,7 @@ cacheGeminiJSAIClient
 /dmtools-automation/screenshots
 cacheBasicTeamsClient
 *.token
+/dmtools-core/cacheTeamsClient
 dmtools-core/cacheTeamsClient
 /dmtools-core/cacheBasicOllamaAI/*
 cache**/

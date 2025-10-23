@@ -536,6 +536,57 @@ public class PropertyReader {
 		return getValue(GEMINI_BASE_PATH_KEY, DEFAULT_GEMINI_BASE_PATH);
 	}
 
+	// Microsoft Teams configuration
+	public String getTeamsClientId() {
+		return getValue("TEAMS_CLIENT_ID");
+	}
+
+	public String getTeamsTenantId() {
+		return getValue("TEAMS_TENANT_ID", "common");
+	}
+
+	public String getTeamsScopes() {
+		return getValue("TEAMS_SCOPES", 
+			"User.Read Chat.Read ChatMessage.Read Mail.Read " +
+			"Team.ReadBasic.All Channel.ReadBasic.All " +
+			"openid profile email offline_access");
+	}
+
+	public String getTeamsAuthMethod() {
+		return getValue("TEAMS_AUTH_METHOD", "device");
+	}
+
+	public int getTeamsAuthPort() {
+		String value = getValue("TEAMS_AUTH_PORT");
+		if (value == null || value.trim().isEmpty()) {
+			return 8080;
+		}
+		try {
+			return Integer.parseInt(value);
+		} catch (NumberFormatException e) {
+			return 8080;
+		}
+	}
+
+	public String getTeamsTokenCachePath() {
+		return getValue("TEAMS_TOKEN_CACHE_PATH", "./teams.token");
+	}
+
+	public String getTeamsRefreshToken() {
+		return getValue("TEAMS_REFRESH_TOKEN");
+	}
+
+	// Microsoft SharePoint configuration (reuses Teams auth, adds Files.Read)
+	public String getSharePointScopes() {
+		// SharePoint needs Files.Read.All or Files.ReadWrite.All in addition to Teams scopes
+		return getValue("SHAREPOINT_SCOPES", 
+			"User.Read Chat.Read ChatMessage.Read Mail.Read " +
+			"Team.ReadBasic.All Channel.ReadBasic.All " +
+			"Files.Read.All Sites.Read.All " +
+			"openid profile email offline_access");
+	}
+
+	// Ollama configuration
 	public String getOllamaBasePath() {
 		return getValue(OLLAMA_BASE_PATH, "http://localhost:11434");
 	}

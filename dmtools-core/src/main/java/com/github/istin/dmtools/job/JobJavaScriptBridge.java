@@ -203,7 +203,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = Set.of("jira", "ai", "confluence", "figma", "file", "cli");
+        Set<String> integrations = Set.of("jira", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb");
         
         // Generate tool schemas using MCP infrastructure
         Map<String, Object> toolsResponse = MCPSchemaGenerator.generateToolsListResponse(integrations);

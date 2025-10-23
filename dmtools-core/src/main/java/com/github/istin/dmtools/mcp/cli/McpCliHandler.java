@@ -10,6 +10,9 @@ import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
 import com.github.istin.dmtools.di.KnowledgeBaseComponent;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.file.FileTools;
+import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
+import com.github.istin.dmtools.microsoft.teams.TeamsAuthTools;
+import com.github.istin.dmtools.microsoft.sharepoint.BasicSharePointClient;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import org.apache.logging.log4j.LogManager;
@@ -102,7 +105,7 @@ public class McpCliHandler {
                 return "Tool executed successfully but returned no result.";
             }
 
-            return result.toString();
+            return serializeResult(result);
 
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tool or arguments", e);
@@ -110,6 +113,47 @@ public class McpCliHandler {
         } catch (Exception e) {
             logger.error("Error executing tool", e);
             return createErrorResponse("Tool execution failed: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Serializes tool execution result to JSON string.
+     * Handles various result types: JSONModel, List, primitives, etc.
+     */
+    private String serializeResult(Object result) {
+        if (result == null) {
+            return "null";
+        }
+        
+        // Handle JSONModel objects
+        if (result instanceof com.github.istin.dmtools.common.model.JSONModel) {
+            return result.toString();
+        }
+        
+        // Handle Lists (e.g., List<Chat>)
+        if (result instanceof List) {
+            org.json.JSONArray jsonArray = new org.json.JSONArray();
+            for (Object item : (List<?>) result) {
+                if (item instanceof com.github.istin.dmtools.common.model.JSONModel) {
+                    jsonArray.put(new JSONObject(item.toString()));
+                } else {
+                    jsonArray.put(item);
+                }
+            }
+            return jsonArray.toString(2); // Pretty print with 2-space indent
+        }
+        
+        // Handle primitives and other types
+        if (result instanceof String || result instanceof Number || result instanceof Boolean) {
+            return result.toString();
+        }
+        
+        // Try to convert to JSON object
+        try {
+            return new JSONObject(result.toString()).toString(2);
+        } catch (Exception e) {
+            // Fall back to plain toString
+            return result.toString();
         }
     }
 
@@ -175,31 +219,63 @@ public class McpCliHandler {
 
     /**
      * Maps positional arguments to named parameters based on the tool's schema.
+     * Uses parameter order from method declaration (via annotation processor).
      */
     private void mapPositionalArguments(String toolName, List<String> positionalArgs, Map<String, Object> arguments) {
         try {
-            List<String> paramNames = MCPSchemaGenerator.getRequiredParameterNames(toolName);
+            // Get all parameter names in declaration order from generated schema
+            List<String> paramNames = MCPSchemaGenerator.getAllParameterNames(toolName);
             
-            // If there's a 1-to-1 match of positional args to required params, map them
-            if (positionalArgs.size() == paramNames.size()) {
-                for (int i = 0; i < positionalArgs.size(); i++) {
-                    arguments.put(paramNames.get(i), positionalArgs.get(i));
-                }
-            } else {
-                // Fallback for ambiguity or mismatch
+            if (paramNames.isEmpty()) {
+                logger.warn("No parameters found for tool '{}'. Using indexed fallback.", toolName);
+                // Fallback for when schema cannot be retrieved
                 for (int i = 0; i < positionalArgs.size(); i++) {
                     arguments.put("arg" + i, positionalArgs.get(i));
                 }
+                return;
+            }
+            
+            // Map positional args to parameter names in declaration order
+            int numToMap = Math.min(positionalArgs.size(), paramNames.size());
+            for (int i = 0; i < numToMap; i++) {
+                String paramValue = positionalArgs.get(i);
+                // Try to convert to appropriate type (Integer for "limit" parameter, etc.)
+                Object convertedValue = convertParameterValue(paramNames.get(i), paramValue);
+                arguments.put(paramNames.get(i), convertedValue);
+            }
+            
+            // If there are more positional args than parameters, log warning
+            if (positionalArgs.size() > paramNames.size()) {
+                logger.warn("Tool '{}' has {} parameters but {} positional arguments provided. Extra arguments ignored.", 
+                    toolName, paramNames.size(), positionalArgs.size());
             }
         } catch (Exception e) {
-            logger.warn("Could not retrieve schema for tool '{}'. Falling back to indexed arguments.", toolName);
-            // Fallback for when schema cannot be retrieved
+            logger.warn("Error mapping parameters for tool '{}': {}. Using indexed fallback.", 
+                toolName, e.getMessage());
+            // Fallback for any errors
             for (int i = 0; i < positionalArgs.size(); i++) {
                 arguments.put("arg" + i, positionalArgs.get(i));
             }
         }
     }
 
+    /**
+     * Converts parameter value from String to appropriate type based on parameter name.
+     */
+    private Object convertParameterValue(String paramName, String value) {
+        // Common parameter types
+        if (paramName.equals("limit") || paramName.endsWith("Count") || paramName.endsWith("Size")) {
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                logger.warn("Failed to convert '{}' to Integer for parameter '{}'", value, paramName);
+                return value;  // Return as string if conversion fails
+            }
+        }
+        // Add more type conversions as needed
+        return value;
+    }
+    
     /**
      * Creates client instances for MCP tool execution.
      * Uses environment variables with Basic client fallback.
@@ -256,6 +332,30 @@ public class McpCliHandler {
         }
 
         try {
+            // Create Teams Auth tools (separate from main client, always available)
+            clients.put("teams_auth", new TeamsAuthTools());
+            logger.debug("Created TeamsAuthTools instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create TeamsAuthTools: {}", e.getMessage());
+        }
+
+        try {
+            // Create Teams client (only if authentication is configured)
+            clients.put("teams", BasicTeamsClient.getInstance());
+            logger.debug("Created BasicTeamsClient instance");
+        } catch (Exception e) {
+            logger.debug("BasicTeamsClient not initialized: {}. Use teams_auth_start to authenticate.", e.getMessage());
+        }
+
+        try {
+            // Create SharePoint client (uses same auth as Teams)
+            clients.put("sharepoint", BasicSharePointClient.getInstance());
+            logger.debug("Created BasicSharePointClient instance");
+        } catch (Exception e) {
+            logger.debug("BasicSharePointClient not initialized: {}. SharePoint uses same auth as Teams.", e.getMessage());
+        }
+
+        try {
             // Create KB Tools using Dagger
             KnowledgeBaseComponent kbComponent = DaggerKnowledgeBaseComponent.create();
             clients.put("kb", kbComponent.kbTools());
@@ -306,9 +406,18 @@ public class McpCliHandler {
 
     /**
      * Configures logging for CLI usage - suppresses debug/info logs.
+     * Skips configuration if debug mode is enabled (log4j2-debug.xml).
      */
     private void configureCLILogging() {
         try {
+            // Check if we're in debug mode (--debug flag)
+            String configFile = System.getProperty("log4j2.configurationFile");
+            if (configFile != null && configFile.contains("debug")) {
+                // Debug mode enabled - don't override log configuration
+                System.err.println("[DEBUG] Debug mode enabled, preserving log configuration");
+                return;
+            }
+            
             // Set all loggers to OFF level to completely suppress output
             Configurator.setAllLevels("com.github.istin.dmtools", org.apache.logging.log4j.Level.OFF);
             Configurator.setAllLevels("org.apache", org.apache.logging.log4j.Level.OFF);

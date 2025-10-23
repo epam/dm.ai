@@ -368,6 +368,28 @@ public class MCPToolProcessor extends AbstractProcessor {
             out.println("    }");
             out.println();
 
+            // Generate static map of ALL parameters (in order)
+            out.println("    private static final Map<String, List<String>> ALL_PARAMS_MAP = createAllParamsMap();");
+            out.println();
+            out.println("    private static Map<String, List<String>> createAllParamsMap() {");
+            out.println("        Map<String, List<String>> map = new HashMap<>();");
+            for (MCPToolDefinition tool : tools) {
+                List<String> allParams = new ArrayList<>();
+                for (MCPParameterDefinition param : tool.getParameters()) {
+                    allParams.add(param.getName());
+                }
+                String paramsString = allParams.isEmpty() ? "" : "\"" + String.join("\", \"", allParams) + "\"";
+                out.println("        map.put(\"" + tool.getName() + "\", Arrays.asList(" + paramsString + "));");
+            }
+            out.println("        return Collections.unmodifiableMap(map);");
+            out.println("    }");
+            out.println();
+
+            out.println("    public static List<String> getAllParameterNames(String toolName) {");
+            out.println("        return ALL_PARAMS_MAP.getOrDefault(toolName, Collections.emptyList());");
+            out.println("    }");
+            out.println();
+
             out.println("    public static List<String> getRequiredParameterNames(String toolName) {");
             out.println("        return REQUIRED_PARAMS_MAP.getOrDefault(toolName, Collections.emptyList());");
             out.println("    }");
