@@ -134,6 +134,72 @@ class PersonStatsCollectorTest {
         assertTrue(contributions.isEmpty());
     }
     
+    @Test
+    void testCollectPersonStatsFromFiles_NormalizesPersonNames() throws IOException {
+        // REGRESSION TEST: Ensure person names with spaces are normalized to underscores
+        // This prevents mismatch between peopleFromCurrentAnalysis and personStats keys
+        
+        // Create directories
+        Path questionsDir = tempDir.resolve("questions");
+        Path answersDir = tempDir.resolve("answers");
+        Path notesDir = tempDir.resolve("notes");
+        Files.createDirectories(questionsDir);
+        Files.createDirectories(answersDir);
+        Files.createDirectories(notesDir);
+        
+        // Create files with person names containing spaces
+        createQuestionFile(questionsDir, "q_0001.md", "John Smith");
+        createAnswerFile(answersDir, "a_0001.md", "Jane Doe");
+        createNoteFile(notesDir, "n_0001.md", "Bob Johnson");
+        
+        Map<String, PersonStatsCollector.PersonStats> stats = 
+            collector.collectPersonStatsFromFiles(tempDir);
+        
+        // Keys should be normalized (spaces replaced with underscores)
+        assertEquals(3, stats.size());
+        assertTrue(stats.containsKey("John_Smith"), "Should contain normalized key 'John_Smith'");
+        assertTrue(stats.containsKey("Jane_Doe"), "Should contain normalized key 'Jane_Doe'");
+        assertTrue(stats.containsKey("Bob_Johnson"), "Should contain normalized key 'Bob_Johnson'");
+        
+        // Should NOT contain keys with spaces
+        assertFalse(stats.containsKey("John Smith"), "Should NOT contain unnormalized key 'John Smith'");
+        assertFalse(stats.containsKey("Jane Doe"), "Should NOT contain unnormalized key 'Jane Doe'");
+        assertFalse(stats.containsKey("Bob Johnson"), "Should NOT contain unnormalized key 'Bob Johnson'");
+        
+        // Stats should be correct
+        assertEquals(1, stats.get("John_Smith").questions);
+        assertEquals(1, stats.get("Jane_Doe").answers);
+        assertEquals(1, stats.get("Bob_Johnson").notes);
+    }
+    
+    @Test
+    void testCollectPersonStatsFromFiles_MixedNormalizationConsistency() throws IOException {
+        // REGRESSION TEST: Same person with different name formats should be counted as one person
+        
+        // Create directories
+        Path questionsDir = tempDir.resolve("questions");
+        Path answersDir = tempDir.resolve("answers");
+        Files.createDirectories(questionsDir);
+        Files.createDirectories(answersDir);
+        
+        // "Aliaksandr Tarasevich" (with space in source file)
+        createQuestionFile(questionsDir, "q_0001.md", "Aliaksandr Tarasevich");
+        createAnswerFile(answersDir, "a_0001.md", "Aliaksandr Tarasevich");
+        
+        Map<String, PersonStatsCollector.PersonStats> stats = 
+            collector.collectPersonStatsFromFiles(tempDir);
+        
+        // Should have exactly 1 person with normalized name
+        assertEquals(1, stats.size());
+        assertTrue(stats.containsKey("Aliaksandr_Tarasevich"));
+        
+        // Both question and answer should be attributed to the same normalized person
+        PersonStatsCollector.PersonStats aliaksandrStats = stats.get("Aliaksandr_Tarasevich");
+        assertEquals(1, aliaksandrStats.questions, "Should have 1 question");
+        assertEquals(1, aliaksandrStats.answers, "Should have 1 answer");
+        assertEquals(0, aliaksandrStats.notes, "Should have 0 notes");
+    }
+    
     // Helper methods to create test files
     
     private void createQuestionFile(Path dir, String filename, String author) throws IOException {

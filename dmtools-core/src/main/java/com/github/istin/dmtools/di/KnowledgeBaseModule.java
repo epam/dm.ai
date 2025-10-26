@@ -71,12 +71,6 @@ public class KnowledgeBaseModule {
     
     @Provides
     @Singleton
-    public ContentMergeAgent provideContentMergeAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
-        return new ContentMergeAgent(ai, promptTemplateReader);
-    }
-    
-    @Provides
-    @Singleton
     public KBAnalysisResultMerger provideKBAnalysisResultMerger(ContentMergeAgent contentMergeAgent) {
         return new KBAnalysisResultMerger(contentMergeAgent);
     }

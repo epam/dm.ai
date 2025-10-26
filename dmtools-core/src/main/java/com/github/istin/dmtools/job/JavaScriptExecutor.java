@@ -30,6 +30,7 @@ public class JavaScriptExecutor {
     private AI ai;
     private Confluence confluence;
     private SourceCode sourceCode;
+    private com.github.istin.dmtools.common.kb.tool.KBTools kbTools;
     
     public JavaScriptExecutor(String jsCode) {
         this.jsCode = jsCode;
@@ -43,6 +44,18 @@ public class JavaScriptExecutor {
         this.ai = ai;
         this.confluence = confluence;
         this.sourceCode = sourceCode;
+        return this;
+    }
+    
+    /**
+     * Configure MCP clients including KB tools for JavaScript execution
+     */
+    public JavaScriptExecutor mcpWithKB(TrackerClient<?> trackerClient, AI ai, Confluence confluence, SourceCode sourceCode, com.github.istin.dmtools.common.kb.tool.KBTools kbTools) {
+        this.trackerClient = trackerClient;
+        this.ai = ai;
+        this.confluence = confluence;
+        this.sourceCode = sourceCode;
+        this.kbTools = kbTools;
         return this;
     }
     
@@ -77,7 +90,7 @@ public class JavaScriptExecutor {
             logger.info("Executing JavaScript post-processing");
             
             // Create JobJavaScriptBridge instance
-            JobJavaScriptBridge jsBridge = new JobJavaScriptBridge(trackerClient, ai, confluence, sourceCode);
+            JobJavaScriptBridge jsBridge = new JobJavaScriptBridge(trackerClient, ai, confluence, sourceCode, kbTools);
             
             // Convert parameters for JavaScript execution
             Map<String, Object> jsParams = convertParametersForJS();

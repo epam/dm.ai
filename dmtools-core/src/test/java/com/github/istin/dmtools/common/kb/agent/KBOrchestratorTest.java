@@ -305,14 +305,14 @@ class KBOrchestratorTest {
         // Execute
         orchestrator.run(params);
 
-        // Verify analyzed JSON was saved to inbox/analyzed/
-        Path inboxAnalyzed = tempDir.resolve("inbox/analyzed");
-        assertTrue(Files.exists(inboxAnalyzed), "inbox/analyzed directory should exist");
+        // Verify analyzed JSON was saved to inbox/analyzed/[source]/
+        Path inboxAnalyzed = tempDir.resolve("inbox/analyzed/test_source");
+        assertTrue(Files.exists(inboxAnalyzed), "inbox/analyzed/test_source directory should exist");
         
         long fileCount = Files.list(inboxAnalyzed)
                 .filter(p -> p.getFileName().toString().endsWith("_analyzed.json"))
                 .count();
-        assertTrue(fileCount > 0, "Analyzed JSON should be saved to inbox/analyzed");
+        assertTrue(fileCount > 0, "Analyzed JSON should be saved to inbox/analyzed/test_source");
     }
 
     @Test

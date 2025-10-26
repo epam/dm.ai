@@ -42,7 +42,7 @@ class JobJavaScriptBridgeTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        bridge = new JobJavaScriptBridge(mockTrackerClient, mockAI, mockConfluence, mockSourceCode);
+        bridge = new JobJavaScriptBridge(mockTrackerClient, mockAI, mockConfluence, mockSourceCode, null);
     }
 
     @Test

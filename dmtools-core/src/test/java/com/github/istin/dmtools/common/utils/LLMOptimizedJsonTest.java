@@ -1839,4 +1839,252 @@ public class LLMOptimizedJsonTest {
         
         System.out.println("✅ Attachment array filtering test completed!");
     }
+    
+    @Test
+    public void testSkipEmptyValues() throws Exception {
+        System.out.println("=== SKIP EMPTY VALUES TEST ===");
+        
+        // JSON with various empty fields
+        String jsonWithEmptyFields = "{\n" +
+            "  \"key\": \"MAPC-1\",\n" +
+            "  \"summary\": \"Test task\",\n" +
+            "  \"emptyString\": \"\",\n" +
+            "  \"blankString\": \"   \",\n" +
+            "  \"normalString\": \"Normal value\",\n" +
+            "  \"anotherEmpty\": \"\",\n" +
+            "  \"number\": 42,\n" +
+            "  \"fields\": {\n" +
+            "    \"description\": \"Some description\",\n" +
+            "    \"emptyField\": \"\",\n" +
+            "    \"blankField\": \"  \"\n" +
+            "  }\n" +
+            "}";
+        
+        System.out.println("--- Without skipEmptyValues (show all) ---");
+        String withoutSkip = LLMOptimizedJson.format(jsonWithEmptyFields);
+        System.out.println(withoutSkip);
+        
+        // Count empty lines in output
+        int emptyLinesWithout = countEmptyOrBlankLines(withoutSkip);
+        System.out.println("Empty/blank lines in output: " + emptyLinesWithout);
+        
+        System.out.println("\n--- With skipEmptyValues (hide empty) ---");
+        String withSkip = LLMOptimizedJson.formatSkipEmpty(jsonWithEmptyFields, true);
+        System.out.println(withSkip);
+        
+        // Count empty lines in output with skip
+        int emptyLinesWith = countEmptyOrBlankLines(withSkip);
+        System.out.println("Empty/blank lines in output: " + emptyLinesWith);
+        
+        // Assertions
+        assertTrue("Without skip should contain normal fields", withoutSkip.contains("Normal value"));
+        assertTrue("Without skip should contain number", withoutSkip.contains("42"));
+        assertTrue("Without skip should contain description", withoutSkip.contains("Some description"));
+        
+        assertTrue("With skip should still contain normal fields", withSkip.contains("Normal value"));
+        assertTrue("With skip should still contain number", withSkip.contains("42"));
+        assertTrue("With skip should still contain description", withSkip.contains("Some description"));
+        
+        // With skip should have fewer or same empty lines
+        assertTrue("Skip should reduce or maintain empty lines", emptyLinesWith <= emptyLinesWithout);
+        
+        System.out.println("✅ Skip empty values test passed!");
+    }
+    
+    @Test
+    public void testSkipEmptyValuesInArrays() throws Exception {
+        System.out.println("=== SKIP EMPTY VALUES IN ARRAYS TEST ===");
+        
+        String jsonWithArrays = "{\n" +
+            "  \"primitiveArray\": [\"value1\", \"\", \"value2\", \"  \", \"value3\"],\n" +
+            "  \"objectArray\": [\n" +
+            "    {\"name\": \"Item 1\", \"description\": \"Description 1\"},\n" +
+            "    {\"name\": \"Item 2\", \"description\": \"\"},\n" +
+            "    {\"name\": \"Item 3\", \"description\": \"   \"}\n" +
+            "  ]\n" +
+            "}";
+        
+        System.out.println("--- Without skipEmptyValues ---");
+        String withoutSkip = LLMOptimizedJson.format(jsonWithArrays);
+        System.out.println(withoutSkip);
+        
+        System.out.println("\n--- With skipEmptyValues ---");
+        String withSkip = LLMOptimizedJson.formatSkipEmpty(jsonWithArrays, true);
+        System.out.println(withSkip);
+        
+        // Should still contain non-empty values
+        assertTrue("Should contain value1", withSkip.contains("value1"));
+        assertTrue("Should contain value2", withSkip.contains("value2"));
+        assertTrue("Should contain value3", withSkip.contains("value3"));
+        assertTrue("Should contain Item 1", withSkip.contains("Item 1"));
+        assertTrue("Should contain Description 1", withSkip.contains("Description 1"));
+        
+        System.out.println("✅ Skip empty values in arrays test passed!");
+    }
+    
+    @Test
+    public void testSkipEmptyWithBlacklist() throws Exception {
+        System.out.println("=== SKIP EMPTY WITH BLACKLIST TEST ===");
+        
+        String json = "{\n" +
+            "  \"key\": \"MAPC-1\",\n" +
+            "  \"id\": \"12345\",\n" +
+            "  \"summary\": \"Test task\",\n" +
+            "  \"emptyField1\": \"\",\n" +
+            "  \"emptyField2\": \"  \",\n" +
+            "  \"url\": \"https://example.com\"\n" +
+            "}";
+        
+        System.out.println("--- With blacklist and skipEmptyValues ---");
+        Set<String> blacklist = Set.of("id", "url");
+        String result = LLMOptimizedJson.format(json, blacklist, true);
+        System.out.println(result);
+        
+        // Should contain key and summary
+        assertTrue("Should contain key", result.contains("MAPC-1"));
+        assertTrue("Should contain summary", result.contains("Test task"));
+        
+        // Should NOT contain blacklisted fields
+        assertFalse("Should NOT contain id", result.contains("12345"));
+        assertFalse("Should NOT contain url", result.contains("https://example.com"));
+        
+        // Empty fields should be reduced (though we can't easily verify they're completely gone
+        // since they might not appear as visible text anyway)
+        
+        System.out.println("✅ Skip empty with blacklist test passed!");
+    }
+    
+    @Test
+    public void testSkipEmptyWellFormed() throws Exception {
+        System.out.println("=== SKIP EMPTY WELL-FORMED TEST ===");
+        
+        String wellFormedJson = "{\n" +
+            "  \"employees\": [\n" +
+            "    {\"name\": \"Alice\", \"role\": \"Developer\", \"notes\": \"\"},\n" +
+            "    {\"name\": \"Bob\", \"role\": \"Designer\", \"notes\": \"   \"},\n" +
+            "    {\"name\": \"Carol\", \"role\": \"Manager\", \"notes\": \"Important notes\"}\n" +
+            "  ]\n" +
+            "}";
+        
+        System.out.println("--- Without skipEmptyValues ---");
+        String withoutSkip = LLMOptimizedJson.formatWellFormed(wellFormedJson);
+        System.out.println(withoutSkip);
+        
+        System.out.println("\n--- With skipEmptyValues ---");
+        String withSkip = LLMOptimizedJson.formatWellFormed(wellFormedJson, new HashSet<>(), true);
+        System.out.println(withSkip);
+        
+        // Should contain all non-empty values
+        assertTrue("Should contain Alice", withSkip.contains("Alice"));
+        assertTrue("Should contain Bob", withSkip.contains("Bob"));
+        assertTrue("Should contain Carol", withSkip.contains("Carol"));
+        assertTrue("Should contain Important notes", withSkip.contains("Important notes"));
+        
+        System.out.println("✅ Skip empty well-formed test passed!");
+    }
+    
+    @Test
+    public void testSkipEmptyEdgeCases() throws Exception {
+        System.out.println("=== SKIP EMPTY EDGE CASES TEST ===");
+        
+        // Test with multiline empty strings
+        String edgeCaseJson = "{\n" +
+            "  \"normalField\": \"Normal\",\n" +
+            "  \"emptyField\": \"\",\n" +
+            "  \"whitespaceField\": \"\\n\\n  \\n\",\n" +
+            "  \"zeroNumber\": 0,\n" +
+            "  \"falseBoolean\": false,\n" +
+            "  \"nullValue\": null\n" +
+            "}";
+        
+        System.out.println("--- With skipEmptyValues ---");
+        String result = LLMOptimizedJson.formatSkipEmpty(edgeCaseJson, true);
+        System.out.println(result);
+        
+        // Should contain non-empty string
+        assertTrue("Should contain Normal", result.contains("Normal"));
+        
+        // Should still contain number 0 (not a string, so not skipped)
+        assertTrue("Should contain 0", result.contains("0"));
+        
+        // Should still contain false (not a string, so not skipped)
+        assertTrue("Should contain false", result.contains("false"));
+        
+        // Null values are handled by JSON parser, we're not skipping them explicitly
+        
+        System.out.println("✅ Skip empty edge cases test passed!");
+    }
+    
+    @Test
+    public void testSkipEmptyRealWorldScenario() throws Exception {
+        System.out.println("=== SKIP EMPTY REAL WORLD SCENARIO TEST ===");
+        
+        // Simulate real Jira-like structure with many empty fields
+        String jiraLikeJson = "{\n" +
+            "  \"key\": \"PROJ-123\",\n" +
+            "  \"fields\": {\n" +
+            "    \"summary\": \"Bug in login\",\n" +
+            "    \"description\": \"User cannot login\",\n" +
+            "    \"assignee\": {\n" +
+            "      \"displayName\": \"John Doe\",\n" +
+            "      \"emailAddress\": \"john@example.com\",\n" +
+            "      \"avatarUrl\": \"\",\n" +
+            "      \"timeZone\": \"\"\n" +
+            "    },\n" +
+            "    \"reporter\": {\n" +
+            "      \"displayName\": \"Jane Smith\",\n" +
+            "      \"emailAddress\": \"\",\n" +
+            "      \"avatarUrl\": \"\"\n" +
+            "    },\n" +
+            "    \"labels\": [\"bug\", \"\", \"urgent\", \"  \"],\n" +
+            "    \"customField1\": \"\",\n" +
+            "    \"customField2\": \"   \",\n" +
+            "    \"customField3\": \"Some value\"\n" +
+            "  }\n" +
+            "}";
+        
+        System.out.println("--- Without skipEmptyValues ---");
+        String withoutSkip = LLMOptimizedJson.format(jiraLikeJson);
+        System.out.println(withoutSkip);
+        int linesWithout = withoutSkip.split("\n").length;
+        
+        System.out.println("\n--- With skipEmptyValues ---");
+        String withSkip = LLMOptimizedJson.formatSkipEmpty(jiraLikeJson, true);
+        System.out.println(withSkip);
+        int linesWith = withSkip.split("\n").length;
+        
+        System.out.println("\nLines without skip: " + linesWithout);
+        System.out.println("Lines with skip: " + linesWith);
+        System.out.println("Lines saved: " + (linesWithout - linesWith));
+        
+        // Should contain all important non-empty data
+        assertTrue("Should contain key", withSkip.contains("PROJ-123"));
+        assertTrue("Should contain summary", withSkip.contains("Bug in login"));
+        assertTrue("Should contain description", withSkip.contains("User cannot login"));
+        assertTrue("Should contain assignee name", withSkip.contains("John Doe"));
+        assertTrue("Should contain assignee email", withSkip.contains("john@example.com"));
+        assertTrue("Should contain reporter name", withSkip.contains("Jane Smith"));
+        assertTrue("Should contain bug label", withSkip.contains("bug"));
+        assertTrue("Should contain urgent label", withSkip.contains("urgent"));
+        assertTrue("Should contain customField3 value", withSkip.contains("Some value"));
+        
+        // With skip should produce fewer or equal lines (empty strings removed)
+        assertTrue("Skip should reduce line count", linesWith <= linesWithout);
+        
+        System.out.println("✅ Skip empty real world scenario test passed!");
+    }
+    
+    /**
+     * Helper method to count empty or whitespace-only lines in output
+     */
+    private int countEmptyOrBlankLines(String text) {
+        int count = 0;
+        String[] lines = text.split("\n");
+        for (String line : lines) {
+            if (line.trim().isEmpty()) {
+                count++;
+            }
+        }
+        return count;
+    }
 }

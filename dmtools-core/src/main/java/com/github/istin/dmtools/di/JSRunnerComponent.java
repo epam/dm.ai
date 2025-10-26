@@ -16,7 +16,8 @@ import javax.inject.Singleton;
         AIComponentsModule.class,
         SourceCodeModule.class,
         AIAgentsModule.class,
-        ConfigurationModule.class
+        ConfigurationModule.class,
+        KnowledgeBaseModule.class
 })
 public interface JSRunnerComponent {
     

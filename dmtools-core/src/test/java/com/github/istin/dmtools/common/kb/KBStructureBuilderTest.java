@@ -1,6 +1,6 @@
 package com.github.istin.dmtools.common.kb;
 
-import com.github.istin.dmtools.common.kb.model.PersonContributions;
+import com.github.istin.dmtools.common.kb.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -164,5 +165,180 @@ class KBStructureBuilderTest {
         assertTrue(updatedContent.contains("questionsAsked: 2"), "Should update to 2 questions");
         assertTrue(updatedContent.contains("answersProvided: 1"), "Should update to 1 answer");
         assertTrue(updatedContent.contains("notesContributed: 1"), "Should update to 1 note");
+    }
+    
+    @Test
+    void testBuildPersonProfile_SourceOnlyAddedWhenHasContributions() throws IOException {
+        // Given: Initial profile from source1
+        String personName = "David Jones";
+        builder.buildPersonProfile(personName, tempDir, "source1", 1, 0, 0);
+        
+        Path personFile = tempDir.resolve("people/David_Jones/David_Jones.md");
+        String content1 = Files.readString(personFile);
+        assertTrue(content1.contains("source1"), "Should contain source1");
+        
+        // When: Update with source2 passing null (no contributions)
+        builder.buildPersonProfile(personName, tempDir, null, 1, 0, 0);
+        
+        // Then: source2 should NOT be added
+        String content2 = Files.readString(personFile);
+        assertTrue(content2.contains("source1"), "Should still contain source1");
+        assertFalse(content2.contains("source2"), "Should NOT contain source2");
+        
+        // When: Update with source3 (has contributions)
+        builder.buildPersonProfile(personName, tempDir, "source3", 2, 1, 0);
+        
+        // Then: source3 should be added
+        String content3 = Files.readString(personFile);
+        assertTrue(content3.contains("source1"), "Should still contain source1");
+        assertTrue(content3.contains("source3"), "Should contain source3");
+    }
+    
+    @Test
+    void testBuildTopicFiles_SourceOnlyAddedWhenHasContributions() throws IOException {
+        // Given: Analysis with topics
+        AnalysisResult analysis1 = new AnalysisResult();
+        Question q1 = new Question();
+        q1.setId("q_0001");
+        q1.setTopics(Arrays.asList("docker", "kubernetes"));
+        q1.setAuthor("Alice");
+        q1.setArea("DevOps");
+        analysis1.setQuestions(Arrays.asList(q1));
+        
+        // When: Build topics with source1
+        builder.buildTopicFiles(analysis1, tempDir, "source1");
+        
+        // Then: Topics should contain source1
+        Path dockerTopic = tempDir.resolve("topics/docker.md");
+        assertTrue(Files.exists(dockerTopic), "Docker topic should exist");
+        String dockerContent1 = Files.readString(dockerTopic);
+        assertTrue(dockerContent1.contains("source1"), "Docker topic should contain source1");
+        
+        // When: Build topics with analysis that doesn't have "docker" topic (only kubernetes)
+        AnalysisResult analysis2 = new AnalysisResult();
+        Question q2 = new Question();
+        q2.setId("q_0002");
+        q2.setTopics(Arrays.asList("kubernetes")); // Only kubernetes, not docker
+        q2.setAuthor("Bob");
+        q2.setArea("DevOps");
+        analysis2.setQuestions(Arrays.asList(q2));
+        
+        builder.buildTopicFiles(analysis2, tempDir, "source2");
+        
+        // Then: docker topic should NOT contain source2 (no contributions)
+        String dockerContent2 = Files.readString(dockerTopic);
+        assertTrue(dockerContent2.contains("source1"), "Docker topic should still contain source1");
+        assertFalse(dockerContent2.contains("source2"), "Docker topic should NOT contain source2");
+        
+        // But kubernetes topic should contain both sources
+        Path k8sTopic = tempDir.resolve("topics/kubernetes.md");
+        String k8sContent = Files.readString(k8sTopic);
+        assertTrue(k8sContent.contains("source1"), "Kubernetes topic should contain source1");
+        assertTrue(k8sContent.contains("source2"), "Kubernetes topic should contain source2");
+    }
+    
+    @Test
+    void testBuildAreaStructure_SourceOnlyAddedWhenHasContributions() throws IOException {
+        // Given: Analysis with area "DevOps"
+        AnalysisResult analysis1 = new AnalysisResult();
+        Question q1 = new Question();
+        q1.setId("q_0001");
+        q1.setArea("DevOps");
+        q1.setAuthor("Alice");
+        analysis1.setQuestions(Arrays.asList(q1));
+        
+        // When: Build area with source1
+        builder.buildAreaStructure(analysis1, tempDir, "source1");
+        
+        // Then: Area should contain source1
+        Path devopsArea = tempDir.resolve("areas/devops/devops.md");
+        assertTrue(Files.exists(devopsArea), "DevOps area should exist");
+        String areaContent1 = Files.readString(devopsArea);
+        assertTrue(areaContent1.contains("source1"), "DevOps area should contain source1");
+        
+        // When: Build area with analysis that has different area (not DevOps)
+        AnalysisResult analysis2 = new AnalysisResult();
+        Question q2 = new Question();
+        q2.setId("q_0002");
+        q2.setArea("Frontend"); // Different area
+        q2.setAuthor("Bob");
+        analysis2.setQuestions(Arrays.asList(q2));
+        
+        builder.buildAreaStructure(analysis2, tempDir, "source2");
+        
+        // Then: DevOps area should NOT contain source2 (no contributions)
+        String areaContent2 = Files.readString(devopsArea);
+        assertTrue(areaContent2.contains("source1"), "DevOps area should still contain source1");
+        assertFalse(areaContent2.contains("source2"), "DevOps area should NOT contain source2");
+        
+        // But Frontend area should exist with source2
+        Path frontendArea = tempDir.resolve("areas/frontend/frontend.md");
+        assertTrue(Files.exists(frontendArea), "Frontend area should exist");
+        String frontendContent = Files.readString(frontendArea);
+        assertTrue(frontendContent.contains("source2"), "Frontend area should contain source2");
+    }
+    
+    @Test
+    void testMultipleSourcesAccumulation() throws IOException {
+        // Test that sources accumulate correctly over multiple processing runs
+        AnalysisResult analysis1 = new AnalysisResult();
+        Question q1 = new Question();
+        q1.setId("q_0001");
+        q1.setTopics(Arrays.asList("testing"));
+        q1.setArea("QA");
+        q1.setAuthor("Alice");
+        analysis1.setQuestions(Arrays.asList(q1));
+        
+        // Process with source1
+        builder.buildTopicFiles(analysis1, tempDir, "source1");
+        builder.buildAreaStructure(analysis1, tempDir, "source1");
+        builder.buildPersonProfile("Alice", tempDir, "source1", 1, 0, 0);
+        
+        // Process with source2 (same entities)
+        AnalysisResult analysis2 = new AnalysisResult();
+        Answer a1 = new Answer();
+        a1.setId("a_0001");
+        a1.setTopics(Arrays.asList("testing"));
+        a1.setArea("QA");
+        a1.setAuthor("Alice");
+        analysis2.setAnswers(Arrays.asList(a1));
+        
+        builder.buildTopicFiles(analysis2, tempDir, "source2");
+        builder.buildAreaStructure(analysis2, tempDir, "source2");
+        builder.buildPersonProfile("Alice", tempDir, "source2", 1, 1, 0);
+        
+        // Process with source3 (same entities)
+        AnalysisResult analysis3 = new AnalysisResult();
+        Note n1 = new Note();
+        n1.setId("n_0001");
+        n1.setTopics(Arrays.asList("testing"));
+        n1.setArea("QA");
+        n1.setAuthor("Alice");
+        analysis3.setNotes(Arrays.asList(n1));
+        
+        builder.buildTopicFiles(analysis3, tempDir, "source3");
+        builder.buildAreaStructure(analysis3, tempDir, "source3");
+        builder.buildPersonProfile("Alice", tempDir, "source3", 1, 1, 1);
+        
+        // Verify all sources are present in topic
+        Path topicFile = tempDir.resolve("topics/testing.md");
+        String topicContent = Files.readString(topicFile);
+        assertTrue(topicContent.contains("source1"), "Topic should contain source1");
+        assertTrue(topicContent.contains("source2"), "Topic should contain source2");
+        assertTrue(topicContent.contains("source3"), "Topic should contain source3");
+        
+        // Verify all sources are present in area
+        Path areaFile = tempDir.resolve("areas/qa/qa.md");
+        String areaContent = Files.readString(areaFile);
+        assertTrue(areaContent.contains("source1"), "Area should contain source1");
+        assertTrue(areaContent.contains("source2"), "Area should contain source2");
+        assertTrue(areaContent.contains("source3"), "Area should contain source3");
+        
+        // Verify all sources are present in person
+        Path personFile = tempDir.resolve("people/Alice/Alice.md");
+        String personContent = Files.readString(personFile);
+        assertTrue(personContent.contains("source1"), "Person should contain source1");
+        assertTrue(personContent.contains("source2"), "Person should contain source2");
+        assertTrue(personContent.contains("source3"), "Person should contain source3");
     }
 }

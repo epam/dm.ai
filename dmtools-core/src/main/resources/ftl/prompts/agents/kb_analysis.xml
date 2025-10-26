@@ -10,6 +10,7 @@
             Return ONLY valid JSON without any markdown code blocks or explanatory text.
             Follow the exact JSON schema specified below.
             Ensure all date fields use ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ).
+            You must properly find date: sometimes it can be written at the beginning of file (for instance transcripts) and you need to properly write date in output taking to account the date in file.
             TEMPORARY IDs: Assign temporary IDs in format "q_1", "q_2", "a_1", "a_2", "n_1", "n_2" etc. The system will later auto-increment these to "q_0001", "q_0002", "a_0001", "a_0002" etc.
             MAPPING Q→A: Use these temporary IDs to establish links. For example: question with id="q_1" can be answered by answer with id="a_1". Set answeredBy="a_1" in question and answersQuestion="q_1" in answer.
             AREA: Required, ONE top-level category representing the broadest knowledge domain. This is the PRIMARY classification.
@@ -171,11 +172,24 @@
         - Important warnings or gotchas
         - Feature discoveries
         - Comparison of tools/approaches
+        - Task lists, homework assignments, or step-by-step instructions
 
         For each note:
-        - Create descriptive text overview the key information
+        - **PRESERVE ALL DETAILS** from the original message content
+        - Keep bullet points, numbered lists, and step-by-step instructions intact
+        - Include ALL specific items, tasks, or instructions mentioned
+        - You MAY: improve formatting, fix typos, clarify wording
+        - You MUST NOT: summarize, condense, or remove any information
+        - If the message has a list with 10 items, the note must include ALL 10 items
         - Extract ALL links and create meaningful titles
         - Set appropriate area/topics/tags
+        
+        **CRITICAL FOR NOTES**: The goal is PRESERVATION, not summarization.
+        Example of BAD note (loses details):
+        "Detailed homework summary including creating a project and advanced tasks"
+        
+        Example of GOOD note (preserves all details):
+        "HW summary:\n- create cloud jira project (or use existing if allowed)\n- configure it: issue types, fields, workflows\n- create ai teammate email, invite to project\n- create confluence pages with DoR for BA, SA Dev, QA\n- clone repo: https://github.com/IstiN/dmtools-ai-teammate\n- configure workflow with your keys\n- create jira automation to run workflow\n- get first story described with AI\n- **advanced:** remove dmtools, write custom logic for ticket/DoR/attachments, wrap via CLI, prepare cursor scripts\n- **advanced:** use other dmtools CLI tools for documentation workflows"
 
         LINK EXTRACTION - CRITICAL:
         - Extract EVERY URL you see in messages

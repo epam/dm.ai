@@ -15,9 +15,16 @@ import org.apache.logging.log4j.Logger;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * MCP Tools for Knowledge Base operations.
@@ -260,8 +267,9 @@ public class KBTools {
     /**
      * Generate AI descriptions for existing KB structure (without processing new data).
      * 
-     * @param sourceName Name of the data source (required for proper tagging)
+     * @param sourceName Optional: Filter to only regenerate for specific source. If null/empty, regenerates for ALL sources.
      * @param outputPath Optional path to KB directory. If not provided, uses DMTOOLS_KB_OUTPUT_PATH env var or current directory
+     * @param smartMode Optional: Only regenerate descriptions if Q/A/N files have changed. Default: true.
      * @return JSON string with build results including counts and status
      */
     @MCPTool(
@@ -272,8 +280,8 @@ public class KBTools {
     public String kbAggregate(
             @MCPParam(
                 name = "source_name",
-                description = "Name of the data source (required for proper tagging)",
-                required = true,
+                description = "Optional: Filter to only regenerate for specific source. If null/empty, regenerates for ALL sources (recommended for description regeneration).",
+                required = false,
                 example = "teams_chat"
             ) String sourceName,
             @MCPParam(
@@ -281,17 +289,25 @@ public class KBTools {
                 description = "Optional path to KB directory. Defaults to DMTOOLS_KB_OUTPUT_PATH env var or current directory",
                 required = false,
                 example = "/path/to/knowledge-base"
-            ) String outputPath
+            ) String outputPath,
+            @MCPParam(
+                name = "smart_mode",
+                description = "Only regenerate descriptions if Q/A/N files have changed. Default: true",
+                required = false,
+                example = "true"
+            ) String smartMode
     ) {
         try {
             Path kbPath = resolveOutputPath(outputPath);
-            logger.info("Generating AI descriptions (AGGREGATE_ONLY mode) for KB at: {}", kbPath);
+            boolean smart = smartMode == null || smartMode.trim().isEmpty() || smartMode.equalsIgnoreCase("true");
+            logger.info("Generating AI descriptions (AGGREGATE_ONLY mode, smart: {}) for KB at: {}", smart, kbPath);
             
             // Create orchestrator params
             KBOrchestratorParams params = new KBOrchestratorParams();
             params.setSourceName(sourceName);  // Can be null for all sources
             params.setOutputPath(kbPath.toString());
             params.setProcessingMode(KBProcessingMode.AGGREGATE_ONLY);
+            params.setSmartAggregation(smart);
             
             // Run orchestrator
             KBResult result = orchestrator.run(params);
@@ -340,6 +356,248 @@ public class KBTools {
                 result.getNotesCount(),
                 result.getPeopleCount()
         );
+    }
+    
+    /**
+     * Scan inbox and process all unprocessed files automatically.
+     * 
+     * Scans inbox/raw/[source]/ subdirectories for files and processes any that haven't been processed yet.
+     * Files are processed in place (no copy) - only analyzed tracking files are created.
+     * 
+     * @param outputPath Optional path to KB directory. If not provided, uses DMTOOLS_KB_OUTPUT_PATH env var or current directory
+     * @param generateDescriptions Whether to generate AI descriptions after processing. Default: true
+     * @param smartAggregation Only regenerate descriptions if Q/A/N changed. Default: true
+     * @return JSON string with processing results including processed and skipped files
+     */
+    @MCPTool(
+        name = "kb_process_inbox",
+        description = "Scan inbox/raw/ folders and process all unprocessed files automatically. Files are processed in place. Returns JSON with processed and skipped file details.",
+        integration = "kb"
+    )
+    public String kbProcessInbox(
+            @MCPParam(
+                name = "output_path",
+                description = "Optional path to KB directory. Defaults to DMTOOLS_KB_OUTPUT_PATH env var or current directory",
+                required = false,
+                example = "/path/to/knowledge-base"
+            ) String outputPath,
+            @MCPParam(
+                name = "generate_descriptions",
+                description = "Generate AI descriptions after processing. Default: true",
+                required = false,
+                example = "true"
+            ) String generateDescriptions,
+            @MCPParam(
+                name = "smart_aggregation",
+                description = "Only regenerate descriptions if Q/A/N changed. Default: true",
+                required = false,
+                example = "true"
+            ) String smartAggregation
+    ) {
+        try {
+            Path kbPath = resolveOutputPath(outputPath);
+            Path inboxRawPath = kbPath.resolve("inbox/raw");
+            Path inboxAnalyzedPath = kbPath.resolve("inbox/analyzed");
+            
+            logger.info("Processing inbox at: {}", kbPath);
+            logger.info("Scanning inbox/raw path: {}", inboxRawPath);
+            
+            // Check if inbox/raw exists
+            if (!Files.exists(inboxRawPath)) {
+                logger.warn("Inbox raw path does not exist: {}", inboxRawPath);
+                return "{\"success\": true, \"message\": \"No inbox/raw directory found\", \"processed\": [], \"skipped\": []}";
+            }
+            
+            List<ProcessedFile> processedFiles = new ArrayList<>();
+            List<SkippedFile> skippedFiles = new ArrayList<>();
+            Set<String> processedSources = new HashSet<>();
+            
+            // Phase 1: Scan and process all files with PROCESS_ONLY mode
+            logger.info("Phase 1: Processing files with PROCESS_ONLY mode");
+            try (DirectoryStream<Path> sourceFolders = Files.newDirectoryStream(inboxRawPath, Files::isDirectory)) {
+                for (Path sourceFolder : sourceFolders) {
+                    String sourceName = sourceFolder.getFileName().toString();
+                    logger.info("Scanning source folder: {}", sourceName);
+                    
+                    Path analyzedSourcePath = inboxAnalyzedPath.resolve(sourceName);
+                    
+                    // Scan files in source folder and sort by name to ensure correct order (e.g., batch-1, batch-2, etc.)
+                    List<Path> filesToProcess = new ArrayList<>();
+                    try (DirectoryStream<Path> files = Files.newDirectoryStream(sourceFolder, Files::isRegularFile)) {
+                        for (Path file : files) {
+                            filesToProcess.add(file);
+                        }
+                    }
+                    
+                    // Sort files by name to ensure batch-1, batch-2, batch-3... are processed in order
+                    filesToProcess.sort(Comparator.comparing(path -> path.getFileName().toString()));
+                    logger.debug("Found {} files in source folder '{}', processing in sorted order", filesToProcess.size(), sourceName);
+                    
+                    // Process files in sorted order
+                    for (Path file : filesToProcess) {
+                        String fileName = file.getFileName().toString();
+                        String baseFileName = fileName.replaceAll("\\.[^.]+$", ""); // Remove extension
+                        
+                        // Check if file has been analyzed
+                        Path analyzedFile = analyzedSourcePath.resolve(baseFileName + "_analyzed.json");
+                        
+                        if (Files.exists(analyzedFile)) {
+                            logger.debug("Skipping already processed file: {}/{}", sourceName, fileName);
+                            skippedFiles.add(new SkippedFile(sourceName, fileName, "Already processed"));
+                            continue;
+                        }
+                        
+                        // Process the file in place with PROCESS_ONLY mode
+                        logger.info("Processing file (PROCESS_ONLY): {}/{}", sourceName, fileName);
+                        
+                        try {
+                            // Create orchestrator params - process file in place
+                            KBOrchestratorParams params = new KBOrchestratorParams();
+                            params.setSourceName(sourceName);
+                            params.setInputFile(file.toString()); // Use file in place
+                            params.setDateTime(Instant.now().toString()); // Current timestamp
+                            params.setOutputPath(kbPath.toString());
+                            params.setProcessingMode(KBProcessingMode.PROCESS_ONLY);
+                            
+                            // Run orchestrator
+                            KBResult result = orchestrator.run(params);
+                            
+                            if (result.isSuccess()) {
+                                processedFiles.add(new ProcessedFile(
+                                    sourceName,
+                                    fileName,
+                                    result.getQuestionsCount(),
+                                    result.getAnswersCount(),
+                                    result.getNotesCount()
+                                ));
+                                processedSources.add(sourceName);
+                                logger.info("✓ Successfully processed (PROCESS_ONLY): {}/{} (Q:{}, A:{}, N:{})", 
+                                    sourceName, fileName, 
+                                    result.getQuestionsCount(), 
+                                    result.getAnswersCount(), 
+                                    result.getNotesCount());
+                            } else {
+                                skippedFiles.add(new SkippedFile(sourceName, fileName, result.getMessage()));
+                                logger.warn("✗ Processing failed: {}/{} - {}", sourceName, fileName, result.getMessage());
+                            }
+                            
+                        } catch (Exception e) {
+                            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                            skippedFiles.add(new SkippedFile(sourceName, fileName, "Error: " + errorMsg));
+                            logger.error("Error processing file {}/{}: {}", sourceName, fileName, errorMsg, e);
+                        }
+                    }
+                }
+            }
+            
+            // Parse parameters
+            boolean shouldGenerateDescriptions = generateDescriptions == null || generateDescriptions.trim().isEmpty() || generateDescriptions.equalsIgnoreCase("true");
+            boolean useSmartAggregation = smartAggregation == null || smartAggregation.trim().isEmpty() || smartAggregation.equalsIgnoreCase("true");
+            
+            // Phase 2: Run AGGREGATE_ONLY if any files were processed and descriptions are enabled
+            if (!processedFiles.isEmpty()) {
+                if (shouldGenerateDescriptions) {
+                    logger.info("Phase 2: Running AGGREGATE_ONLY for all sources (smart mode: {})", useSmartAggregation);
+                    try {
+                        KBOrchestratorParams aggregateParams = new KBOrchestratorParams();
+                        aggregateParams.setSourceName(null); // null means all sources
+                        aggregateParams.setOutputPath(kbPath.toString());
+                        aggregateParams.setProcessingMode(KBProcessingMode.AGGREGATE_ONLY);
+                        aggregateParams.setSmartAggregation(useSmartAggregation);
+                        
+                        KBResult aggregateResult = orchestrator.run(aggregateParams);
+                        
+                        if (aggregateResult.isSuccess()) {
+                            logger.info("✓ Successfully completed AGGREGATE_ONLY phase");
+                        } else {
+                            logger.warn("✗ AGGREGATE_ONLY phase completed with warnings: {}", aggregateResult.getMessage());
+                        }
+                    } catch (Exception e) {
+                        logger.error("Error during AGGREGATE_ONLY phase: {}", e.getMessage(), e);
+                        // Don't fail the entire operation - files were already processed
+                    }
+                } else {
+                    logger.info("Skipping description generation (generate_descriptions=false)");
+                }
+            }
+            
+            // Build result JSON
+            StringBuilder jsonResult = new StringBuilder();
+            jsonResult.append("{\"success\": true, \"message\": \"Processed ")
+                     .append(processedFiles.size())
+                     .append(" files, skipped ")
+                     .append(skippedFiles.size())
+                     .append(" files\", ");
+            
+            // Add processed files
+            jsonResult.append("\"processed\": [");
+            for (int i = 0; i < processedFiles.size(); i++) {
+                if (i > 0) jsonResult.append(", ");
+                ProcessedFile pf = processedFiles.get(i);
+                jsonResult.append("{\"source\": \"").append(escapeJson(pf.source))
+                         .append("\", \"file\": \"").append(escapeJson(pf.file))
+                         .append("\", \"questions\": ").append(pf.questions)
+                         .append(", \"answers\": ").append(pf.answers)
+                         .append(", \"notes\": ").append(pf.notes)
+                         .append("}");
+            }
+            jsonResult.append("], ");
+            
+            // Add skipped files
+            jsonResult.append("\"skipped\": [");
+            for (int i = 0; i < skippedFiles.size(); i++) {
+                if (i > 0) jsonResult.append(", ");
+                SkippedFile sf = skippedFiles.get(i);
+                jsonResult.append("{\"source\": \"").append(escapeJson(sf.source))
+                         .append("\", \"file\": \"").append(escapeJson(sf.file))
+                         .append("\", \"reason\": \"").append(escapeJson(sf.reason))
+                         .append("\"}");
+            }
+            jsonResult.append("]}");
+            
+            logger.info("Inbox processing completed: {} processed, {} skipped", 
+                       processedFiles.size(), skippedFiles.size());
+            
+            return jsonResult.toString();
+            
+        } catch (Exception e) {
+            logger.error("Error processing inbox: {}", e.getMessage(), e);
+            return "{\"success\": false, \"message\": \"Error: " + escapeJson(e.getMessage()) + "\"}";
+        }
+    }
+    
+    /**
+     * Helper class for tracking processed files
+     */
+    private static class ProcessedFile {
+        final String source;
+        final String file;
+        final int questions;
+        final int answers;
+        final int notes;
+        
+        ProcessedFile(String source, String file, int questions, int answers, int notes) {
+            this.source = source;
+            this.file = file;
+            this.questions = questions;
+            this.answers = answers;
+            this.notes = notes;
+        }
+    }
+    
+    /**
+     * Helper class for tracking skipped files
+     */
+    private static class SkippedFile {
+        final String source;
+        final String file;
+        final String reason;
+        
+        SkippedFile(String source, String file, String reason) {
+            this.source = source;
+            this.file = file;
+            this.reason = reason;
+        }
     }
     
     /**

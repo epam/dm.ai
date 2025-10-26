@@ -109,6 +109,7 @@ public class LLMOptimizedJson {
     private final FormattingMode formattingMode;
     private final boolean wellFormed;
     private final Set<String> blacklistedFields;
+    private final boolean skipEmptyValues;
     private final Gson gson = new Gson();
     
     // Cache indent strings to avoid repeated string creation
@@ -119,124 +120,156 @@ public class LLMOptimizedJson {
      * Create from JSONObject (org.json) with default MINIMIZED mode
      */
     public LLMOptimizedJson(JSONObject jsonObject) {
-        this(jsonObject, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST);
+        this(jsonObject, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from JSONObject (org.json) with specified formatting mode
      */
     public LLMOptimizedJson(JSONObject jsonObject, FormattingMode mode) {
-        this(jsonObject, mode, false, EMPTY_BLACKLIST);
+        this(jsonObject, mode, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from JSONObject (org.json) with specified formatting mode and well-formed optimization
      */
     public LLMOptimizedJson(JSONObject jsonObject, FormattingMode mode, boolean wellFormed) {
-        this(jsonObject, mode, wellFormed, EMPTY_BLACKLIST);
+        this(jsonObject, mode, wellFormed, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from JSONObject (org.json) with specified formatting mode, well-formed optimization, and custom blacklist
      */
     public LLMOptimizedJson(JSONObject jsonObject, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields) {
+        this(jsonObject, mode, wellFormed, blacklistedFields, false);
+    }
+    
+    /**
+     * Create from JSONObject (org.json) with specified formatting mode, well-formed optimization, custom blacklist, and skipEmptyValues
+     */
+    public LLMOptimizedJson(JSONObject jsonObject, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields, boolean skipEmptyValues) {
         this.rootElement = JsonParser.parseString(jsonObject.toString());
         this.formattingMode = mode;
         this.wellFormed = wellFormed;
         this.blacklistedFields = blacklistedFields != null ? new HashSet<>(blacklistedFields) : new HashSet<>();
+        this.skipEmptyValues = skipEmptyValues;
     }
     
     /**
      * Create from JSON string with default MINIMIZED mode
      */
     public LLMOptimizedJson(String jsonString) {
-        this(jsonString, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST);
+        this(jsonString, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from JSON string with specified formatting mode
      */
     public LLMOptimizedJson(String jsonString, FormattingMode mode) {
-        this(jsonString, mode, false, EMPTY_BLACKLIST);
+        this(jsonString, mode, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from JSON string with specified formatting mode and well-formed optimization
      */
     public LLMOptimizedJson(String jsonString, FormattingMode mode, boolean wellFormed) {
-        this(jsonString, mode, wellFormed, EMPTY_BLACKLIST);
+        this(jsonString, mode, wellFormed, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from JSON string with specified formatting mode, well-formed optimization, and custom blacklist
      */
     public LLMOptimizedJson(String jsonString, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields) {
+        this(jsonString, mode, wellFormed, blacklistedFields, false);
+    }
+    
+    /**
+     * Create from JSON string with specified formatting mode, well-formed optimization, custom blacklist, and skipEmptyValues
+     */
+    public LLMOptimizedJson(String jsonString, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields, boolean skipEmptyValues) {
         this.rootElement = JsonParser.parseString(jsonString);
         this.formattingMode = mode;
         this.wellFormed = wellFormed;
         this.blacklistedFields = blacklistedFields != null ? new HashSet<>(blacklistedFields) : new HashSet<>();
+        this.skipEmptyValues = skipEmptyValues;
     }
     
     /**
      * Create from InputStream with default MINIMIZED mode
      */
     public LLMOptimizedJson(InputStream inputStream) {
-        this(inputStream, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST);
+        this(inputStream, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from InputStream with specified formatting mode
      */
     public LLMOptimizedJson(InputStream inputStream, FormattingMode mode) {
-        this(inputStream, mode, false, EMPTY_BLACKLIST);
+        this(inputStream, mode, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from InputStream with specified formatting mode and well-formed optimization
      */
     public LLMOptimizedJson(InputStream inputStream, FormattingMode mode, boolean wellFormed) {
-        this(inputStream, mode, wellFormed, EMPTY_BLACKLIST);
+        this(inputStream, mode, wellFormed, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from InputStream with specified formatting mode, well-formed optimization, and custom blacklist
      */
     public LLMOptimizedJson(InputStream inputStream, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields) {
+        this(inputStream, mode, wellFormed, blacklistedFields, false);
+    }
+    
+    /**
+     * Create from InputStream with specified formatting mode, well-formed optimization, custom blacklist, and skipEmptyValues
+     */
+    public LLMOptimizedJson(InputStream inputStream, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields, boolean skipEmptyValues) {
         this.rootElement = JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
         this.formattingMode = mode;
         this.wellFormed = wellFormed;
         this.blacklistedFields = blacklistedFields != null ? new HashSet<>(blacklistedFields) : new HashSet<>();
+        this.skipEmptyValues = skipEmptyValues;
     }
     
     /**
      * Create from Gson JsonElement directly with default MINIMIZED mode
      */
     public LLMOptimizedJson(JsonElement jsonElement) {
-        this(jsonElement, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST);
+        this(jsonElement, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from Gson JsonElement directly with specified formatting mode
      */
     public LLMOptimizedJson(JsonElement jsonElement, FormattingMode mode) {
-        this(jsonElement, mode, false, EMPTY_BLACKLIST);
+        this(jsonElement, mode, false, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from Gson JsonElement directly with specified formatting mode and well-formed optimization
      */
     public LLMOptimizedJson(JsonElement jsonElement, FormattingMode mode, boolean wellFormed) {
-        this(jsonElement, mode, wellFormed, EMPTY_BLACKLIST);
+        this(jsonElement, mode, wellFormed, EMPTY_BLACKLIST, false);
     }
     
     /**
      * Create from Gson JsonElement directly with specified formatting mode, well-formed optimization, and custom blacklist
      */
     public LLMOptimizedJson(JsonElement jsonElement, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields) {
+        this(jsonElement, mode, wellFormed, blacklistedFields, false);
+    }
+    
+    /**
+     * Create from Gson JsonElement directly with specified formatting mode, well-formed optimization, custom blacklist, and skipEmptyValues
+     */
+    public LLMOptimizedJson(JsonElement jsonElement, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields, boolean skipEmptyValues) {
         this.rootElement = jsonElement;
         this.formattingMode = mode;
         this.wellFormed = wellFormed;
         this.blacklistedFields = blacklistedFields != null ? new HashSet<>(blacklistedFields) : new HashSet<>();
+        this.skipEmptyValues = skipEmptyValues;
     }
     
     /**
@@ -309,7 +342,9 @@ public class LLMOptimizedJson {
             formatJsonArrayWellFormed(result, element.getAsJsonArray(), parentKey, keyPrefix, indentLevel);
         } else if (element.isJsonPrimitive()) {
             String indent = getIndent(indentLevel);
-            formatPrimitive(result, element.getAsJsonPrimitive(), indent);
+            if (formatPrimitive(result, element.getAsJsonPrimitive(), indent)) {
+                result.append(LINE_BREAK);
+            }
         }
     }
     
@@ -323,7 +358,9 @@ public class LLMOptimizedJson {
             formatJsonArrayRegular(result, element.getAsJsonArray(), parentKey, keyPrefix, indentLevel);
         } else if (element.isJsonPrimitive()) {
             String indent = getIndent(indentLevel);
-            formatPrimitive(result, element.getAsJsonPrimitive(), indent);
+            if (formatPrimitive(result, element.getAsJsonPrimitive(), indent)) {
+                result.append(LINE_BREAK);
+            }
         }
     }
     
@@ -390,8 +427,9 @@ public class LLMOptimizedJson {
             JsonElement value = entry.getValue();
             if (value.isJsonPrimitive()) {
                 result.append(indent);
-                formatPrimitive(result, value.getAsJsonPrimitive(), emptyString);
-                result.append(LINE_BREAK);
+                if (formatPrimitive(result, value.getAsJsonPrimitive(), emptyString)) {
+                    result.append(LINE_BREAK);
+                }
             } else if (value.isJsonArray()) {
                 String newKeyPrefix = keyPrefix.isEmpty() ? key : keyPrefix + "." + key;
                 formatJsonArrayWellFormed(result, value.getAsJsonArray(), key, newKeyPrefix, indentLevel);
@@ -435,8 +473,9 @@ public class LLMOptimizedJson {
             
             if (value.isJsonPrimitive()) {
                 result.append(indent);
-                formatPrimitive(result, value.getAsJsonPrimitive(), emptyString);
-                result.append(LINE_BREAK);
+                if (formatPrimitive(result, value.getAsJsonPrimitive(), emptyString)) {
+                    result.append(LINE_BREAK);
+                }
             } else if (value.isJsonArray()) {
                 String newKeyPrefix = keyPrefix.isEmpty() ? key : keyPrefix + "." + key;
                 formatJsonArrayRegular(result, value.getAsJsonArray(), key, newKeyPrefix, indentLevel);
@@ -467,8 +506,9 @@ public class LLMOptimizedJson {
             // For arrays of primitives - use [ ] brackets
             result.append(indent).append("[").append(LINE_BREAK);
             for (int i = 0; i < jsonArraySize; i++) {
-                formatPrimitive(result, jsonArray.get(i).getAsJsonPrimitive(), indent);
-                result.append(LINE_BREAK);
+                if (formatPrimitive(result, jsonArray.get(i).getAsJsonPrimitive(), indent)) {
+                    result.append(LINE_BREAK);
+                }
             }
             result.append(indent).append("]").append(LINE_BREAK);
         } else {
@@ -500,8 +540,9 @@ public class LLMOptimizedJson {
                         if (obj.has(key)) {
                             JsonElement value = obj.get(key);
                             if (value.isJsonPrimitive()) {
-                                formatPrimitive(result, value.getAsJsonPrimitive(), valueIndent);
-                                result.append(LINE_BREAK);
+                                if (formatPrimitive(result, value.getAsJsonPrimitive(), valueIndent)) {
+                                    result.append(LINE_BREAK);
+                                }
                             } else if (value.isJsonArray()) {
                                 String newKeyPrefix = keyPrefix.isEmpty() ? key : keyPrefix + "." + key;
                                 formatJsonArrayWellFormed(result, value.getAsJsonArray(), key, newKeyPrefix, indentLevel + 2);
@@ -510,7 +551,10 @@ public class LLMOptimizedJson {
                                 formatJsonObjectWellFormed(result, value.getAsJsonObject(), key, newKeyPrefix, indentLevel + 2);
                             }
                         } else {
-                            result.append(valueIndent).append(" ").append(LINE_BREAK);
+                            // Only write placeholder if not skipping empty values
+                            if (!skipEmptyValues) {
+                                result.append(valueIndent).append(" ").append(LINE_BREAK);
+                            }
                         }
                     }
                 }
@@ -543,8 +587,9 @@ public class LLMOptimizedJson {
             // For arrays of primitives - use [ ] brackets
             result.append(indent).append("[").append(LINE_BREAK);
             for (int i = 0; i < jsonArray.size(); i++) {
-                formatPrimitive(result, jsonArray.get(i).getAsJsonPrimitive(), indent);
-                result.append(LINE_BREAK);
+                if (formatPrimitive(result, jsonArray.get(i).getAsJsonPrimitive(), indent)) {
+                    result.append(LINE_BREAK);
+                }
             }
             result.append(indent).append("]").append(LINE_BREAK);
         } else {
@@ -578,8 +623,9 @@ public class LLMOptimizedJson {
                         if (obj.has(key)) {
                             JsonElement value = obj.get(key);
                             if (value.isJsonPrimitive()) {
-                                formatPrimitive(result, value.getAsJsonPrimitive(), valueIndent);
-                                result.append(LINE_BREAK);
+                                if (formatPrimitive(result, value.getAsJsonPrimitive(), valueIndent)) {
+                                    result.append(LINE_BREAK);
+                                }
                             } else if (value.isJsonArray()) {
                                 String newKeyPrefix = keyPrefix.isEmpty() ? key : keyPrefix + "." + key;
                                 formatJsonArrayRegular(result, value.getAsJsonArray(), key, newKeyPrefix, indentLevel + 2);
@@ -588,7 +634,10 @@ public class LLMOptimizedJson {
                                 formatJsonObjectRegular(result, value.getAsJsonObject(), key, newKeyPrefix, indentLevel + 2);
                             }
                         } else {
-                            result.append(valueIndent).append(" ").append(LINE_BREAK);
+                            // Only write placeholder if not skipping empty values
+                            if (!skipEmptyValues) {
+                                result.append(valueIndent).append(" ").append(LINE_BREAK);
+                            }
                         }
                     }
                 }
@@ -599,10 +648,21 @@ public class LLMOptimizedJson {
 
     /**
      * Format a primitive value, handling multiline strings
+     * 
+     * @param result StringBuilder to append to
+     * @param primitive The primitive value to format
+     * @param indent Indentation string
+     * @return true if content was written, false if empty and skipped
      */
-    private void formatPrimitive(StringBuilder result, JsonPrimitive primitive, String indent) {
+    private boolean formatPrimitive(StringBuilder result, JsonPrimitive primitive, String indent) {
         if (primitive.isString()) {
             String value = primitive.getAsString();
+            
+            // Skip empty or blank values if configured
+            if (skipEmptyValues && (value == null || value.trim().isEmpty())) {
+                return false; // Nothing written
+            }
+            
             if (value.contains(LINE_BREAK) || value.contains("\r")) {
                 result.append(indent).append("_").append(LINE_BREAK);
                 result.append(indent).append(value).append(LINE_BREAK);
@@ -613,6 +673,7 @@ public class LLMOptimizedJson {
         } else {
             result.append(indent).append(primitive.getAsString());
         }
+        return true; // Content was written
     }
 
     private static void printObjectNextHeaderWellFormatted(StringBuilder result, String indent, Set<Map.Entry<String, JsonElement>> entries) {
@@ -797,5 +858,54 @@ public class LLMOptimizedJson {
      */
     public static String format(InputStream inputStream, FormattingMode mode, boolean wellFormed) {
         return new LLMOptimizedJson(inputStream, mode, wellFormed).toString();
+    }
+    
+    /**
+     * Static factory method with skipEmptyValues for quick filtering of empty strings
+     * 
+     * @param jsonString The JSON string to format
+     * @param skipEmptyValues If true, empty or blank string values will be skipped
+     * @return Formatted string with empty values optionally removed
+     */
+    public static String formatSkipEmpty(String jsonString, boolean skipEmptyValues) {
+        return new LLMOptimizedJson(jsonString, FormattingMode.MINIMIZED, false, EMPTY_BLACKLIST, skipEmptyValues).toString();
+    }
+    
+    /**
+     * Static factory method with skipEmptyValues and blacklist
+     * 
+     * @param jsonString The JSON string to format
+     * @param blacklistedFields Set of field names to filter out
+     * @param skipEmptyValues If true, empty or blank string values will be skipped
+     * @return Formatted string with specified fields and empty values removed
+     */
+    public static String format(String jsonString, Set<String> blacklistedFields, boolean skipEmptyValues) {
+        return new LLMOptimizedJson(jsonString, FormattingMode.MINIMIZED, false, blacklistedFields, skipEmptyValues).toString();
+    }
+    
+    /**
+     * Static factory method with full control including skipEmptyValues
+     * 
+     * @param jsonString The JSON string to format
+     * @param mode Formatting mode (MINIMIZED or PRETTY)
+     * @param wellFormed Use optimized path for well-formed JSON
+     * @param blacklistedFields Set of field names to filter out
+     * @param skipEmptyValues If true, empty or blank string values will be skipped
+     * @return Formatted string with all options applied
+     */
+    public static String format(String jsonString, FormattingMode mode, boolean wellFormed, Set<String> blacklistedFields, boolean skipEmptyValues) {
+        return new LLMOptimizedJson(jsonString, mode, wellFormed, blacklistedFields, skipEmptyValues).toString();
+    }
+    
+    /**
+     * Static factory method for well-formed JSON with blacklist and skipEmptyValues
+     * 
+     * @param jsonString The JSON string to format
+     * @param blacklistedFields Set of field names to filter out
+     * @param skipEmptyValues If true, empty or blank string values will be skipped
+     * @return Formatted string optimized for well-formed JSON
+     */
+    public static String formatWellFormed(String jsonString, Set<String> blacklistedFields, boolean skipEmptyValues) {
+        return new LLMOptimizedJson(jsonString, FormattingMode.MINIMIZED, true, blacklistedFields, skipEmptyValues).toString();
     }
 }

@@ -22,13 +22,16 @@ public class PersonStatsCollector {
     
     private static final Logger logger = LogManager.getLogger(PersonStatsCollector.class);
     
-    @Getter
     private final KBFileParser parser;
     private final KBStructureBuilder structureBuilder;
     
     public PersonStatsCollector(KBFileParser parser, KBStructureBuilder structureBuilder) {
         this.parser = parser;
         this.structureBuilder = structureBuilder;
+    }
+    
+    public KBFileParser getFileParser() {
+        return parser;
     }
 
     public String extractAuthor(String content) {
@@ -93,15 +96,17 @@ public class PersonStatsCollector {
                  .filter(p -> p.getFileName().toString().endsWith(".md"))
                  .forEach(file -> {
                      try {
-                         String content = Files.readString(file);
-                         String author = parser.extractAuthor(content);
-                         if (author != null) {
-                             PersonStats stat = stats.computeIfAbsent(author, k -> new PersonStats());
-                             updater.update(stat);
-                         }
-                     } catch (IOException e) {
-                         logger.warn("Failed to read file: {}", file, e);
-                     }
+                        String content = Files.readString(file);
+                        String author = parser.extractAuthor(content);
+                        if (author != null) {
+                            // Normalize author name to match peopleFromCurrentAnalysis format
+                            String normalizedAuthor = structureBuilder.normalizePersonName(author);
+                            PersonStats stat = stats.computeIfAbsent(normalizedAuthor, k -> new PersonStats());
+                            updater.update(stat);
+                        }
+                    } catch (IOException e) {
+                        logger.warn("Failed to read file: {}", file, e);
+                    }
                  });
         }
         
@@ -182,14 +187,16 @@ public class PersonStatsCollector {
                          String date = parser.extractDate(content);
                          String id = file.getFileName().toString().replace(".md", "");
                          
-                         if (author != null && topics != null && !topics.isEmpty()) {
-                             PersonContributions pc = contributions.computeIfAbsent(author, k -> new PersonContributions());
-                             // Add contribution for each topic
-                             for (String topic : topics) {
-                                 String topicSlug = structureBuilder.slugify(topic);
-                                 adder.add(pc, id, topicSlug, date);
-                             }
-                         }
+                        if (author != null && topics != null && !topics.isEmpty()) {
+                            // CRITICAL: Normalize author name to match keys from current analysis
+                            String normalizedAuthor = structureBuilder.normalizePersonName(author);
+                            PersonContributions pc = contributions.computeIfAbsent(normalizedAuthor, k -> new PersonContributions());
+                            // Add contribution for each topic
+                            for (String topic : topics) {
+                                String topicSlug = structureBuilder.slugify(topic);
+                                adder.add(pc, id, topicSlug, date);
+                            }
+                        }
                      } catch (IOException e) {
                          logger.warn("Failed to read file: {}", file, e);
                      }

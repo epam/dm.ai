@@ -91,17 +91,22 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
 
     @Inject
     List<SourceCode> sourceCodes;
+    
+    @Inject
+    @org.jetbrains.annotations.Nullable
+    com.github.istin.dmtools.common.kb.tool.KBTools kbTools;
 
     private static com.github.istin.dmtools.di.JSRunnerComponent jsRunnerComponent;
 
-    /**
-     * Server-managed Dagger component
-     */
+    // Commenting out ServerManagedJSRunnerComponent until KB module dependency is resolved
+    // This component is not currently used (initializeServerManaged throws UnsupportedOperationException)
+    /*
     @Singleton
     @Component(modules = {ServerManagedIntegrationsModule.class})
     public interface ServerManagedJSRunnerComponent {
         void inject(JSRunner jsRunner);
     }
+    */
 
     /**
      * Creates a new JSRunner instance with the default configuration
@@ -151,7 +156,7 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
         SourceCode primarySourceCode = sourceCodes != null && !sourceCodes.isEmpty() ? sourceCodes.get(0) : null;
         
         Object result = js(jsPath)
-                .mcp(trackerClient, ai, confluence, primarySourceCode)
+                .mcpWithKB(trackerClient, ai, confluence, primarySourceCode, kbTools)
                 .withJobContext(params.getJobParams(), params.getTicket(), params.getResponse())
                 .with("initiator", params.getInitiator())
                 .execute();

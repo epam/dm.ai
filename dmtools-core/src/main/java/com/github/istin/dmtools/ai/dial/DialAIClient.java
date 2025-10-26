@@ -88,7 +88,7 @@ public class DialAIClient extends AbstractRestClient implements AI {
 
     @Override
     public int getTimeout() {
-        return 700;
+        return 1400;
     }
 
     @Override

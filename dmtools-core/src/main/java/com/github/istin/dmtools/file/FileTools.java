@@ -119,5 +119,97 @@ public class FileTools {
             return null;
         }
     }
+    
+    /**
+     * Write content to file in working directory.
+     * 
+     * Creates parent directories automatically if they don't exist.
+     * Supports writing to any subdirectory within working directory.
+     * 
+     * Security Features:
+     * - Sandboxed to working directory only
+     * - Path traversal prevention (../, absolute paths outside working dir)
+     * - Automatic directory creation
+     * 
+     * @param filePath File path relative to working directory or absolute path within working directory
+     * @param content Content to write as UTF-8 string
+     * @return Success message or null if operation failed
+     */
+    @MCPTool(
+        name = "file_write",
+        description = "Write content to file in working directory. Creates parent directories automatically. Returns success message or null on failure.",
+        integration = "file"
+    )
+    public String writeFile(
+            @MCPParam(
+                name = "path",
+                description = "File path relative to working directory or absolute path within working directory",
+                required = true,
+                example = "inbox/raw/teams_messages/1729766400000-messages.json"
+            ) String filePath,
+            @MCPParam(
+                name = "content",
+                description = "Content to write to the file as UTF-8 string",
+                required = true,
+                example = "{\"messages\": []}"
+            ) String content
+    ) {
+        if (filePath == null || filePath.trim().isEmpty()) {
+            logger.warn("File path cannot be null or empty");
+            return null;
+        }
+        
+        if (content == null) {
+            logger.warn("Content cannot be null");
+            return null;
+        }
+        
+        try {
+            // Get working directory (absolute, normalized)
+            Path workingDir = Paths.get(System.getProperty("user.dir"))
+                    .toAbsolutePath()
+                    .normalize();
+            
+            // Parse requested path
+            Path requestedPath = Paths.get(filePath.trim());
+            
+            // Resolve to absolute path and normalize (handles ./ and ../ components)
+            Path resolvedPath;
+            if (requestedPath.isAbsolute()) {
+                resolvedPath = requestedPath.normalize();
+            } else {
+                resolvedPath = workingDir.resolve(requestedPath).normalize();
+            }
+            
+            // Security check: Ensure resolved path is within working directory
+            if (!resolvedPath.startsWith(workingDir)) {
+                logger.error("Security violation: Path traversal attempt blocked - requested: {}, resolved: {}, working dir: {}", 
+                        filePath, resolvedPath, workingDir);
+                return null;
+            }
+            
+            // Create parent directories if they don't exist
+            Path parentDir = resolvedPath.getParent();
+            if (parentDir != null && !Files.exists(parentDir)) {
+                Files.createDirectories(parentDir);
+                logger.debug("Created parent directories: {}", parentDir);
+            }
+            
+            // Write file content as UTF-8 string
+            Files.writeString(resolvedPath, content, StandardCharsets.UTF_8);
+            
+            logger.info("Successfully wrote {} characters to: {} (resolved to: {})", 
+                    content.length(), filePath, resolvedPath);
+            
+            return "File written successfully: " + filePath;
+            
+        } catch (IOException e) {
+            logger.error("Failed to write file: {} - {}", filePath, e.getMessage(), e);
+            return null;
+        } catch (Exception e) {
+            logger.error("Unexpected error writing file: {} - {}", filePath, e.getMessage(), e);
+            return null;
+        }
+    }
 }
 

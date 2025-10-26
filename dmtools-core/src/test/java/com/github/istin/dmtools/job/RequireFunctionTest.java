@@ -41,7 +41,7 @@ class RequireFunctionTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        bridge = new JobJavaScriptBridge(trackerClient, ai, confluence, sourceCode);
+        bridge = new JobJavaScriptBridge(trackerClient, ai, confluence, sourceCode, null);
     }
     
     /**

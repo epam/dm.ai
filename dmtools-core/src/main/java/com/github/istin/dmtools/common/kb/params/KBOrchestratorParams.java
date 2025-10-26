@@ -50,6 +50,14 @@ public class KBOrchestratorParams {
      * Default: false (incremental mode)
      */
     private boolean cleanSourceBeforeProcessing = false;
+    
+    /**
+     * When true, only regenerate descriptions for people/topics whose referenced Q/A/N files have changed.
+     * Uses file modification times to determine if regeneration is needed.
+     * When false, always regenerate all descriptions (backwards-compatible behavior).
+     * Default: false (regenerate all for backwards compatibility)
+     */
+    private boolean smartAggregation = false;
 }
 
 

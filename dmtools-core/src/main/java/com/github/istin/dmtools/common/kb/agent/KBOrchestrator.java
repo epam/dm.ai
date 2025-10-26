@@ -21,9 +21,11 @@ import javax.inject.Inject;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import com.github.istin.dmtools.common.kb.model.PersonContributions;
+import com.github.istin.dmtools.common.kb.model.Question;
+import com.github.istin.dmtools.common.kb.model.Answer;
+import com.github.istin.dmtools.common.kb.model.Note;
 
 /**
  * Main orchestration service for Knowledge Base building
@@ -112,7 +114,7 @@ public class KBOrchestrator {
         
         // Handle AGGREGATE_ONLY mode separately
         if (params.getProcessingMode() == KBProcessingMode.AGGREGATE_ONLY) {
-            return runAggregateOnly(outputPath);
+            return runAggregateOnly(outputPath, params);
         }
         
         // Track created files for potential rollback
@@ -136,17 +138,28 @@ public class KBOrchestrator {
                     deletedIds.size(), params.getSourceName());
             }
             
-            // Step 3: Copy input file to inbox/raw/
+            // Step 3: Handle input file location
             Path inputFilePath = Paths.get(params.getInputFile());
+            String inputFileName = inputFilePath.getFileName().toString();
             Path rawInboxPath = outputPath.resolve("inbox/raw");
             Files.createDirectories(rawInboxPath);
             
-            String timestamp = String.valueOf(System.currentTimeMillis());
-            String inputFileName = inputFilePath.getFileName().toString();
-            Path rawCopyPath = rawInboxPath.resolve(timestamp + "_" + inputFileName);
-            Files.copy(inputFilePath, rawCopyPath);
-            createdFiles.add(rawCopyPath);
-            logger.info("Copied input file to: {}", rawCopyPath);
+            // Check if file is already in inbox/raw - if not, copy it there
+            Path rawCopyPath;
+            boolean isAlreadyInInbox = inputFilePath.startsWith(rawInboxPath);
+            
+            if (isAlreadyInInbox) {
+                // File is already in inbox/raw - use it in place
+                rawCopyPath = inputFilePath;
+                logger.info("Input file is already in inbox/raw, processing in place: {}", rawCopyPath);
+            } else {
+                // File is external - copy it to inbox/raw
+                String timestamp = String.valueOf(System.currentTimeMillis());
+                rawCopyPath = rawInboxPath.resolve(timestamp + "_" + inputFileName);
+                Files.copy(inputFilePath, rawCopyPath);
+                createdFiles.add(rawCopyPath);
+                logger.info("Copied external input file to: {}", rawCopyPath);
+            }
             
             // Step 4: Load existing KB context
             KBContext context = contextLoader.loadKBContext(outputPath);
@@ -156,7 +169,7 @@ public class KBOrchestrator {
             logger.info("Read input file, content length: {} chars", inputContent.length());
             
             // Try to parse as JSON and convert if needed
-            inputContent = normalizeInputContent(inputContent);
+            inputContent = normalizeInputContent(inputContent, params.getDateTime());
             logger.info("After normalization, content length: {} chars", inputContent.length());
             
             // Step 6: Chunk input if large
@@ -179,10 +192,14 @@ public class KBOrchestrator {
                        (analysisEndTime - analysisStartTime) / 1000,
                        (analysisEndTime - analysisStartTime) % 1000);
             
-            // Save analyzed JSON
-            Path analyzedInboxPath = outputPath.resolve("inbox/analyzed");
+            // Save analyzed JSON to inbox/analyzed/[source]/[filename]_analyzed.json
+            Path analyzedInboxPath = outputPath.resolve("inbox/analyzed").resolve(params.getSourceName());
             Files.createDirectories(analyzedInboxPath);
-            analyzedJsonPath = analyzedInboxPath.resolve(timestamp + "_analyzed.json");
+            
+            // Remove extension from input filename and add _analyzed.json suffix
+            String baseFileName = inputFileName.replaceAll("\\.[^.]+$", "");
+            analyzedJsonPath = analyzedInboxPath.resolve(baseFileName + "_analyzed.json");
+            
             String analyzedJson = GSON.toJson(analysisResult);
             Files.writeString(analyzedJsonPath, analyzedJson);
             createdFiles.add(analyzedJsonPath);
@@ -199,6 +216,7 @@ public class KBOrchestrator {
             qaMappingService.applyMapping(analysisResult, context, params.getQaMappingExtraInstructions(), logger);
             
             // Step 8: Build Structure (mechanical) - track created files
+            // NOTE: personContributions will be collected INSIDE buildStructure AFTER ID mapping
             structureManager.buildStructure(analysisResult, outputPath, params.getSourceName(), null, logger);
 
             // Step 9: AI Aggregation (conditional based on mode)
@@ -248,26 +266,52 @@ public class KBOrchestrator {
     /**
      * Run AGGREGATE_ONLY mode: generate AI descriptions for existing KB structure
      */
-    private KBResult runAggregateOnly(Path outputPath) throws Exception {
-        logger.info("Running AGGREGATE_ONLY mode: generating AI descriptions for existing KB");
-        return aggregateOnlyService.aggregateExisting(outputPath, null, fileUtils, logger);
+    private KBResult runAggregateOnly(Path outputPath, KBOrchestratorParams params) throws Exception {
+        boolean smartMode = params != null && params.isSmartAggregation();
+        logger.info("Running AGGREGATE_ONLY mode: generating AI descriptions for existing KB (smart mode: {})", smartMode);
+        return aggregateOnlyService.aggregateExisting(outputPath, null, fileUtils, logger, smartMode);
     }
 
 
-    private String normalizeInputContent(String content) {
+    private String normalizeInputContent(String content, String dateTime) {
         // Try to detect if JSON and convert to more friendly format if needed
         try {
             // First check if content is valid JSON
             JsonParser.parseString(content);
             // If we get here, it's valid JSON - format it
-            return LLMOptimizedJson.format(content);
+            return LLMOptimizedJson.formatSkipEmpty(content, true);
         } catch (Exception e) {
-            // Not JSON or failed to parse - return as is (plain text)
-            logger.debug("Input is not JSON or failed to parse, treating as plain text: {}", e.getMessage());
+            // Not JSON or failed to parse - check for other formats
+            logger.debug("Input is not JSON or failed to parse: {}", e.getMessage());
         }
         
+        // Check if content is VTT format
+        if (VTTUtils.isVTTFormat(content)) {
+            logger.info("Detected VTT format, transforming to clean text");
+            
+            // Extract date from dateTime if available (format: 2025-10-24T11:02:38.229696Z -> 2025-10-24)
+            String date = null;
+            if (dateTime != null && !dateTime.trim().isEmpty()) {
+                try {
+                    date = dateTime.substring(0, 10); // Extract YYYY-MM-DD
+                    logger.debug("Extracted date from dateTime: {}", date);
+                } catch (Exception ex) {
+                    logger.debug("Could not extract date from dateTime: {}", ex.getMessage());
+                }
+            }
+            
+            String transformed = VTTUtils.transformVTT(content, date);
+            logger.info("VTT transformation complete, new length: {} chars", transformed.length());
+            return transformed;
+        }
+        
+        // Return as is (plain text)
         return content;
     }
 
+    /**
+     * Collect person contributions from analysis result
+     * Returns a map of normalized person names to their contributions (questions, answers, notes with IDs and dates)
+     */
 }
 

@@ -33,9 +33,14 @@ public class KBStructureBuilder {
         Map<String, Set<String>> areaContributors = new HashMap<>();
         Map<String, Set<String>> areaTopics = new HashMap<>();
         
+        // Track which areas have contributions from the current analysis
+        Set<String> areasFromCurrentAnalysis = new HashSet<>();
+        
+        // FIRST: Collect from current analysis to identify which areas are actually from this source
         if (analysis.getQuestions() != null) {
             analysis.getQuestions().forEach(q -> {
                 if (q.getArea() != null && !q.getArea().isEmpty()) {
+                    areasFromCurrentAnalysis.add(q.getArea());
                     // Track contributors per area
                     areaContributors.computeIfAbsent(q.getArea(), k -> new HashSet<>()).add(q.getAuthor());
                     // Track topics per area
@@ -48,6 +53,7 @@ public class KBStructureBuilder {
         if (analysis.getAnswers() != null) {
             analysis.getAnswers().forEach(a -> {
                 if (a.getArea() != null && !a.getArea().isEmpty()) {
+                    areasFromCurrentAnalysis.add(a.getArea());
                     // Track contributors per area
                     areaContributors.computeIfAbsent(a.getArea(), k -> new HashSet<>()).add(a.getAuthor());
                     // Track topics per area
@@ -60,6 +66,7 @@ public class KBStructureBuilder {
         if (analysis.getNotes() != null) {
             analysis.getNotes().forEach(n -> {
                 if (n.getArea() != null && !n.getArea().isEmpty()) {
+                    areasFromCurrentAnalysis.add(n.getArea());
                     // Track contributors per area
                     if (n.getAuthor() != null) {
                         areaContributors.computeIfAbsent(n.getArea(), k -> new HashSet<>()).add(n.getAuthor());
@@ -72,21 +79,68 @@ public class KBStructureBuilder {
             });
         }
         
+        // THEN: Collect contributors and topics from existing area files (for incremental updates)
+        Path areasDir = outputPath.resolve("areas");
+        if (Files.exists(areasDir)) {
+            try (java.util.stream.Stream<Path> areaDirs = Files.list(areasDir)) {
+                areaDirs.filter(Files::isDirectory).forEach(areaDir -> {
+                    try {
+                        String areaId = areaDir.getFileName().toString();
+                        Path areaFile = areaDir.resolve(areaId + ".md");
+                        if (Files.exists(areaFile)) {
+                            String content = Files.readString(areaFile);
+                            
+                            // Extract area title from frontmatter
+                            String areaTitle = extractFromFrontmatter(content, "title");
+                            if (areaTitle != null) {
+                                
+                                // Extract existing contributors
+                                List<String> existingContributors = extractListFromFrontmatter(content, "contributors");
+                                if (!existingContributors.isEmpty()) {
+                                    areaContributors.computeIfAbsent(areaTitle, k -> new HashSet<>()).addAll(existingContributors);
+                                }
+                                
+                                // Extract existing topics from content (after ## Topics)
+                                java.util.regex.Pattern topicsPattern = java.util.regex.Pattern.compile("##\\s+Topics\\s+(.+?)(?=##|<!--|$)", java.util.regex.Pattern.DOTALL);
+                                java.util.regex.Matcher topicsMatcher = topicsPattern.matcher(content);
+                                if (topicsMatcher.find()) {
+                                    String topicsSection = topicsMatcher.group(1);
+                                    // Extract topic names from links: [[topic-id|Topic Name]]
+                                    java.util.regex.Pattern linkPattern = java.util.regex.Pattern.compile("\\[\\[([^|\\]]+)\\|([^\\]]+)\\]\\]");
+                                    java.util.regex.Matcher linkMatcher = linkPattern.matcher(topicsSection);
+                                    while (linkMatcher.find()) {
+                                        String topicName = linkMatcher.group(2).trim();
+                                        areaTopics.computeIfAbsent(areaTitle, k -> new HashSet<>()).add(topicName);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (IOException e) {
+                        logger.warn("Failed to read area file: {}", areaDir, e);
+                    }
+                });
+            }
+        }
+        
         // Create directory and files for each area
+        Files.createDirectories(areasDir);
         for (String area : areaContributors.keySet()) {
             String areaId = slugify(area);
-            Path areaDir = outputPath.resolve("areas").resolve(areaId);
+            Path areaDir = areasDir.resolve(areaId);
             Files.createDirectories(areaDir);
             
             // Get contributors and topics for this area
             List<String> contributors = new ArrayList<>(areaContributors.getOrDefault(area, Collections.emptySet()));
             List<String> topics = new ArrayList<>(areaTopics.getOrDefault(area, Collections.emptySet()));
             
-            // Create main area file (always recreate to ensure all topics/contributors are included)
+            // Create main area file
             Path areaFile = areaDir.resolve(areaId + ".md");
             Path areaDescFile = areaDir.resolve(areaId + "-desc.md");
             
-            createAreaFileWithTopics(areaFile, areaDescFile, area, areaId, sourceName, contributors, topics);
+            // Only pass sourceName if this area has contributions from current analysis
+            String sourceToAdd = areasFromCurrentAnalysis.contains(area) ? sourceName : null;
+            
+            createAreaFileWithTopics(areaFile, areaDescFile, area, areaId, sourceToAdd, contributors, topics);
         }
     }
     
@@ -319,8 +373,12 @@ public class KBStructureBuilder {
     }
     
     /**
-     * Sort contributions by ID number for consistent ordering
+     * Sort contributions by ID number for consistent ordering AND deduplicate by ID.
      * IDs are in format: q_0001, a_0002, n_0003, etc.
+     * 
+     * CRITICAL: When a Q/A/N belongs to multiple topics, it appears multiple times in contributions.
+     * Example: q_0006 has 2 topics → appears twice in getQuestions()
+     * We must deduplicate to show each Q/A/N only once in person profile.
      */
     private void sortContributionsByIdNumber(PersonContributions contributions) {
         Comparator<PersonContributions.ContributionItem> idComparator = (a, b) -> {
@@ -329,12 +387,34 @@ public class KBStructureBuilder {
             return Integer.compare(numA, numB);
         };
         
-        contributions.getQuestions().sort(idComparator);
-        contributions.getAnswers().sort(idComparator);
-        contributions.getNotes().sort(idComparator);
+        // CRITICAL: Deduplicate by ID first, then sort
+        // Use LinkedHashMap to preserve insertion order during deduplication
+        contributions.setQuestions(deduplicateAndSort(contributions.getQuestions(), idComparator));
+        contributions.setAnswers(deduplicateAndSort(contributions.getAnswers(), idComparator));
+        contributions.setNotes(deduplicateAndSort(contributions.getNotes(), idComparator));
 
         // Sort topics by count (descending) for more useful display
         contributions.getTopics().sort((a, b) -> Integer.compare(b.getCount(), a.getCount()));
+    }
+    
+    /**
+     * Deduplicate contribution items by ID and sort them.
+     * If a Q/A/N appears multiple times (due to multiple topics), keep only the first occurrence.
+     */
+    private List<PersonContributions.ContributionItem> deduplicateAndSort(
+            List<PersonContributions.ContributionItem> items,
+            Comparator<PersonContributions.ContributionItem> comparator) {
+        
+        // Use LinkedHashMap to deduplicate while preserving first occurrence
+        Map<String, PersonContributions.ContributionItem> deduped = new LinkedHashMap<>();
+        for (PersonContributions.ContributionItem item : items) {
+            deduped.putIfAbsent(item.getId(), item);
+        }
+        
+        // Convert to list and sort
+        List<PersonContributions.ContributionItem> result = new ArrayList<>(deduped.values());
+        result.sort(comparator);
+        return result;
     }
     
     /**
@@ -394,6 +474,33 @@ public class KBStructureBuilder {
     }
     
     /**
+     * Extract list from frontmatter (e.g., contributors, tags)
+     */
+    private List<String> extractListFromFrontmatter(String content, String fieldName) {
+        List<String> items = new ArrayList<>();
+        // Match field: [item1, item2] or field: item1
+        Pattern pattern = Pattern.compile(fieldName + ":\\s*\\[([^\\]]+)\\]");
+        Matcher matcher = pattern.matcher(content);
+        if (matcher.find()) {
+            String itemsStr = matcher.group(1);
+            for (String item : itemsStr.split(",")) {
+                String cleaned = item.trim().replace("\"", "").replace("'", "");
+                if (!cleaned.isEmpty()) {
+                    items.add(cleaned);
+                }
+            }
+        } else {
+            // Try single item: field: "item1"
+            pattern = Pattern.compile(fieldName + ":\\s*\"?([^\\n\"]+)\"?");
+            matcher = pattern.matcher(content);
+            if (matcher.find()) {
+                items.add(matcher.group(1).trim());
+            }
+        }
+        return items;
+    }
+    
+    /**
      * Update sources in frontmatter
      */
     private String updateFrontmatterSources(String content, List<String> sources) {
@@ -425,7 +532,8 @@ public class KBStructureBuilder {
         
         // Extract existing sources from frontmatter and merge with new source
         List<String> existingSources = extractSourcesFromFrontmatter(content);
-        if (!existingSources.contains(newSource)) {
+        // Only add newSource if provided (null means no contribution from current source)
+        if (newSource != null && !existingSources.contains(newSource)) {
             existingSources.add(newSource);
         }
         
@@ -747,13 +855,32 @@ public class KBStructureBuilder {
      */
     private void createAreaFileWithTopics(Path areaFile, Path areaDescFile, String title, String id, 
                                           String source, List<String> contributors, List<String> topics) throws IOException {
+        // Extract existing sources and created timestamp if file exists
+        List<String> sources = new ArrayList<>();
+        String existingCreated = null;
+        if (Files.exists(areaFile)) {
+            String existingContent = Files.readString(areaFile);
+            sources = extractSourcesFromFrontmatter(existingContent);
+            existingCreated = extractFromFrontmatter(existingContent, "created");
+        }
+        
+        // Add new source if not already present and if source is provided (null means no contribution from current source)
+        if (source != null && !sources.contains(source)) {
+            sources.add(source);
+        }
+        
+        // Sort contributors for frontmatter to ensure consistent order
+        List<String> sortedContributorsForFrontmatter = new ArrayList<>(contributors);
+        Collections.sort(sortedContributorsForFrontmatter);
+        
         Map<String, Object> frontmatter = new LinkedHashMap<>();
         frontmatter.put("type", "area");
         frontmatter.put("title", title);
         frontmatter.put("id", id);
-        frontmatter.put("source", source);
-        frontmatter.put("contributors", contributors);
-        frontmatter.put("created", java.time.Instant.now().toString());
+        frontmatter.put("sources", sources); // Changed from "source" to "sources" (plural, array)
+        frontmatter.put("contributors", sortedContributorsForFrontmatter);
+        // Preserve existing created timestamp, or create new one if doesn't exist
+        frontmatter.put("created", existingCreated != null ? existingCreated : java.time.Instant.now().toString());
         
         StringBuilder content = new StringBuilder();
         content.append("---\n");
@@ -764,19 +891,23 @@ public class KBStructureBuilder {
         // AI description embed
         content.append("![[").append(id).append("-desc]]\n\n");
         
-        // Topics (themes within this area)
+        // Topics (themes within this area) - sorted alphabetically to reduce git diffs
         if (!topics.isEmpty()) {
             content.append("## Topics\n\n");
-            for (String topic : topics) {
+            List<String> sortedTopics = new ArrayList<>(topics);
+            Collections.sort(sortedTopics);
+            for (String topic : sortedTopics) {
                 String topicId = slugify(topic);
                 content.append("- [[").append(topicId).append("|").append(topic).append("]]\n");
             }
             content.append("\n");
         }
         
-        // Contributors
+        // Contributors - sorted alphabetically to reduce git diffs
         content.append("## Key Contributors\n\n");
-        for (String contributor : contributors) {
+        List<String> sortedContributors = new ArrayList<>(contributors);
+        Collections.sort(sortedContributors);
+        for (String contributor : sortedContributors) {
             content.append("- [[").append(normalizePersonName(contributor)).append("|").append(contributor).append("]]\n");
         }
         
@@ -806,15 +937,16 @@ public class KBStructureBuilder {
         // Collect data per topic
         Map<String, TopicData> topicDataMap = new HashMap<>();
         
-        // FIRST: Collect from existing Q/A/N files (for incremental updates)
-        collectFromExistingFiles(outputPath, topicDataMap);
+        // Track which topics have contributions from the current analysis
+        Set<String> topicsFromCurrentAnalysis = new HashSet<>();
         
-        // THEN: Collect from current analysis (will add new items)
+        // FIRST: Collect from current analysis to identify which topics are actually from this source
         // Collect from questions
         if (analysis.getQuestions() != null) {
             for (Question q : analysis.getQuestions()) {
                 if (q.getTopics() != null) {
                     for (String topic : q.getTopics()) {
+                        topicsFromCurrentAnalysis.add(topic);
                         TopicData data = topicDataMap.computeIfAbsent(topic, k -> new TopicData());
                         if (q.getId() != null) data.questions.add(q.getId());
                         if (q.getAuthor() != null) data.contributors.add(q.getAuthor());
@@ -829,6 +961,7 @@ public class KBStructureBuilder {
             for (Answer a : analysis.getAnswers()) {
                 if (a.getTopics() != null) {
                     for (String topic : a.getTopics()) {
+                        topicsFromCurrentAnalysis.add(topic);
                         TopicData data = topicDataMap.computeIfAbsent(topic, k -> new TopicData());
                         if (a.getId() != null) data.answers.add(a.getId());
                         if (a.getAuthor() != null) data.contributors.add(a.getAuthor());
@@ -843,6 +976,7 @@ public class KBStructureBuilder {
             for (Note n : analysis.getNotes()) {
                 if (n.getTopics() != null) {
                     for (String topic : n.getTopics()) {
+                        topicsFromCurrentAnalysis.add(topic);
                         TopicData data = topicDataMap.computeIfAbsent(topic, k -> new TopicData());
                         if (n.getId() != null) data.notes.add(n.getId());
                         if (n.getAuthor() != null) data.contributors.add(n.getAuthor());
@@ -852,19 +986,25 @@ public class KBStructureBuilder {
             }
         }
         
+        // THEN: Collect from existing Q/A/N files (for incremental updates) to get full picture
+        collectFromExistingFiles(outputPath, topicDataMap);
+        
         // Create topics directory
         Path topicsDir = outputPath.resolve("topics");
         Files.createDirectories(topicsDir);
         
         // Create file for each unique topic
-        // Always recreate files to ensure all Q/A/N are included (important for incremental updates)
+        // Only add current source to topics that have Q/A/N from current analysis
         for (Map.Entry<String, TopicData> entry : topicDataMap.entrySet()) {
             String topic = entry.getKey();
             String topicId = slugify(topic);
             Path topicFile = topicsDir.resolve(topicId + ".md");
             Path topicDescFile = topicsDir.resolve(topicId + "-desc.md");
             
-            createTopicFileWithAggregation(topicFile, topicDescFile, topic, topicId, sourceName, entry.getValue(), analysis);
+            // Only pass sourceName if this topic has contributions from current analysis
+            String sourceToAdd = topicsFromCurrentAnalysis.contains(topic) ? sourceName : null;
+            
+            createTopicFileWithAggregation(topicFile, topicDescFile, topic, topicId, sourceToAdd, entry.getValue(), analysis);
         }
     }
     
@@ -990,13 +1130,21 @@ public class KBStructureBuilder {
     
     /**
      * Extract value from frontmatter
+     * Removes surrounding quotes from the extracted value
      */
     private String extractFromFrontmatter(String content, String key) {
         String pattern = key + ":\\s*(.+)";
         Pattern p = Pattern.compile(pattern);
         Matcher m = p.matcher(content);
         if (m.find()) {
-            return m.group(1).trim();
+            String value = m.group(1).trim();
+            // Remove surrounding quotes (single or double)
+            if (value.startsWith("\"") && value.endsWith("\"")) {
+                value = value.substring(1, value.length() - 1);
+            } else if (value.startsWith("'") && value.endsWith("'")) {
+                value = value.substring(1, value.length() - 1);
+            }
+            return value;
         }
         return null;
     }
@@ -1021,11 +1169,25 @@ public class KBStructureBuilder {
      */
     private void createTopicFileWithAggregation(Path topicFile, Path topicDescFile, String title, String id, 
                                                  String source, TopicData data, AnalysisResult analysis) throws IOException {
+        // Extract existing sources and created timestamp if file exists
+        List<String> sources = new ArrayList<>();
+        String existingCreated = null;
+        if (Files.exists(topicFile)) {
+            String existingContent = Files.readString(topicFile);
+            sources = extractSourcesFromFrontmatter(existingContent);
+            existingCreated = extractFromFrontmatter(existingContent, "created");
+        }
+        
+        // Add new source if not already present and if source is provided (null means no contribution from current source)
+        if (source != null && !sources.contains(source)) {
+            sources.add(source);
+        }
+        
         Map<String, Object> frontmatter = new LinkedHashMap<>();
         frontmatter.put("type", "topic");
         frontmatter.put("title", title);
         frontmatter.put("id", id);
-        frontmatter.put("source", source);
+        frontmatter.put("sources", sources); // Changed from "source" to "sources" (plural, array)
         frontmatter.put("contributors", new ArrayList<>(data.contributors));
         
         // Add aggregated tags to frontmatter (sorted)
@@ -1035,7 +1197,8 @@ public class KBStructureBuilder {
             frontmatter.put("tags", sortedTags);
         }
         
-        frontmatter.put("created", java.time.Instant.now().toString());
+        // Preserve existing created timestamp, or create new one if doesn't exist
+        frontmatter.put("created", existingCreated != null ? existingCreated : java.time.Instant.now().toString());
         
         StringBuilder content = new StringBuilder();
         content.append("---\n");

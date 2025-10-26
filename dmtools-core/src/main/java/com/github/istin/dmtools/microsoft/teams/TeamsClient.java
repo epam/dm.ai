@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -337,71 +338,161 @@ public class TeamsClient extends MicrosoftGraphRestClient {
      * @throws IOException if request fails
      */
     public void getMessagesAndPerform(String chatId, Integer limit, String filter, MessagePerformer performer) throws IOException {
+        getMessagesAndPerform(chatId, limit, filter, "desc", performer);
+    }
+    
+    /**
+     * Iterates through messages with callback-based processing for efficient pagination.
+     * Supports early exit when desired message is found or condition is met.
+     * Does NOT filter messages - filtering should be done in the performer callback if needed.
+     * 
+     * NOTE: Microsoft Teams API only supports descending order. When ascending order is requested,
+     * all messages are fetched in descending order and then reversed programmatically.
+     * 
+     * @param chatId The chat ID
+     * @param limit Maximum number of messages to process (0 for all, null for default)
+     * @param filter Optional OData filter for server-side filtering
+     * @param sorting Sort order: "asc" for oldest first (reversed programmatically), "desc" for newest first (default)
+     * @param performer Callback to process each message (return true to stop iteration)
+     * @throws IOException if request fails
+     */
+    public void getMessagesAndPerform(String chatId, Integer limit, String filter, String sorting, MessagePerformer performer) throws IOException {
         // Handle limit parameter
         boolean getAllMessages = (limit == null || limit == 0);
         int maxMessages = getAllMessages ? Integer.MAX_VALUE : limit;
+        boolean isAscOrder = sorting != null && sorting.equalsIgnoreCase("asc");
         
-        String url = path(String.format("/me/chats/%s/messages", chatId));
-        boolean isFirstRequest = true;
-        int pageCount = 0;
-        int processedCount = 0;
-        boolean stopEarly = false;
-        
-        logger.info("Starting message iteration: limit={}, getAllMessages={}", limit, getAllMessages);
-        
-        while (url != null && !stopEarly) {
-            pageCount++;
-            GenericRequest request = new GenericRequest(this, url);
+        // Microsoft Teams API only supports DESC order
+        // If ASC is requested, fetch all in DESC and reverse programmatically
+        if (isAscOrder) {
+            List<ChatMessage> allMessages = new ArrayList<>();
+            String url = path(String.format("/me/chats/%s/messages", chatId));
+            boolean isFirstRequest = true;
+            int pageCount = 0;
             
-            // Only add query params on first request; nextLink already contains them
-            if (isFirstRequest) {
-                if (!getAllMessages) {
-                    request.param("$top", String.valueOf(Math.min(DEFAULT_PAGE_SIZE, maxMessages - processedCount)));
-                } else {
-                    request.param("$top", String.valueOf(DEFAULT_PAGE_SIZE));
-                }
-                request.param("$orderby", "createdDateTime desc");
-                
-                // Add filter if provided
-                if (filter != null && !filter.trim().isEmpty()) {
-                    request.param("$filter", filter.trim());
-                    logger.debug("Applying server-side filter: {}", filter);
-                }
-                
-                isFirstRequest = false;
-            }
+            logger.info("Starting message iteration with ASC order (will reverse after fetch): limit={}, getAllMessages={}", limit, getAllMessages);
             
-            String response = execute(request);
-            JSONObject json = new JSONObject(response);
-            
-            JSONArray messages = json.optJSONArray("value");
-            if (messages != null) {
-                logger.debug("Retrieved {} messages in page {}, processed so far: {}", messages.length(), pageCount, processedCount);
+            // Fetch all messages in DESC order (API only supports this)
+            while (url != null) {
+                pageCount++;
+                GenericRequest request = new GenericRequest(this, url);
                 
-                for (int i = 0; i < messages.length() && !stopEarly; i++) {
-                    ChatMessage message = new ChatMessage(messages.getJSONObject(i));
+                if (isFirstRequest) {
+                    if (!getAllMessages) {
+                        request.param("$top", String.valueOf(Math.min(DEFAULT_PAGE_SIZE, maxMessages)));
+                    } else {
+                        request.param("$top", String.valueOf(DEFAULT_PAGE_SIZE));
+                    }
+                    request.param("$orderby", "createdDateTime desc"); // API only supports desc
                     
-                    // Call performer - if it returns true, stop iteration
-                    // Performer can decide whether to filter or process the message
-                    stopEarly = performer.perform(message);
-                    processedCount++;
+                    if (filter != null && !filter.trim().isEmpty()) {
+                        request.param("$filter", filter.trim());
+                        logger.debug("Applying server-side filter: {}", filter);
+                    }
                     
-                    if (!getAllMessages && processedCount >= maxMessages) {
-                        stopEarly = true;
-                        break;
+                    isFirstRequest = false;
+                }
+                
+                String response = execute(request);
+                JSONObject json = new JSONObject(response);
+                
+                JSONArray messages = json.optJSONArray("value");
+                if (messages != null) {
+                    logger.debug("Retrieved {} messages in page {}", messages.length(), pageCount);
+                    
+                    for (int i = 0; i < messages.length(); i++) {
+                        ChatMessage message = new ChatMessage(messages.getJSONObject(i));
+                        allMessages.add(message);
+                        
+                        if (!getAllMessages && allMessages.size() >= maxMessages) {
+                            url = null; // Stop fetching
+                            break;
+                        }
                     }
                 }
+                
+                if (url != null && (getAllMessages || allMessages.size() < maxMessages)) {
+                    url = json.optString("@odata.nextLink", null);
+                } else {
+                    url = null;
+                }
             }
             
-            // Check for next page
-            if (!stopEarly && (getAllMessages || processedCount < maxMessages)) {
-                url = json.optString("@odata.nextLink", null);
-            } else {
-                url = null;
+            logger.info("Fetched {} messages, reversing for ASC order", allMessages.size());
+            
+            // Reverse to get oldest first
+            Collections.reverse(allMessages);
+            
+            // Now perform on reversed list
+            boolean stopEarly = false;
+            for (ChatMessage message : allMessages) {
+                stopEarly = performer.perform(message);
+                if (stopEarly) {
+                    break;
+                }
             }
+            
+            logger.info("Completed message iteration (ASC): processed={}, pages={}", allMessages.size(), pageCount);
+            
+        } else {
+            // DESC order - process as we fetch (efficient streaming)
+            String url = path(String.format("/me/chats/%s/messages", chatId));
+            boolean isFirstRequest = true;
+            int pageCount = 0;
+            int processedCount = 0;
+            boolean stopEarly = false;
+            
+            logger.info("Starting message iteration with DESC order: limit={}, getAllMessages={}", limit, getAllMessages);
+            
+            while (url != null && !stopEarly) {
+                pageCount++;
+                GenericRequest request = new GenericRequest(this, url);
+                
+                if (isFirstRequest) {
+                    if (!getAllMessages) {
+                        request.param("$top", String.valueOf(Math.min(DEFAULT_PAGE_SIZE, maxMessages - processedCount)));
+                    } else {
+                        request.param("$top", String.valueOf(DEFAULT_PAGE_SIZE));
+                    }
+                    request.param("$orderby", "createdDateTime desc");
+                    
+                    if (filter != null && !filter.trim().isEmpty()) {
+                        request.param("$filter", filter.trim());
+                        logger.debug("Applying server-side filter: {}", filter);
+                    }
+                    
+                    isFirstRequest = false;
+                }
+                
+                String response = execute(request);
+                JSONObject json = new JSONObject(response);
+                
+                JSONArray messages = json.optJSONArray("value");
+                if (messages != null) {
+                    logger.debug("Retrieved {} messages in page {}, processed so far: {}", messages.length(), pageCount, processedCount);
+                    
+                    for (int i = 0; i < messages.length() && !stopEarly; i++) {
+                        ChatMessage message = new ChatMessage(messages.getJSONObject(i));
+                        
+                        stopEarly = performer.perform(message);
+                        processedCount++;
+                        
+                        if (!getAllMessages && processedCount >= maxMessages) {
+                            stopEarly = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!stopEarly && (getAllMessages || processedCount < maxMessages)) {
+                    url = json.optString("@odata.nextLink", null);
+                } else {
+                    url = null;
+                }
+            }
+            
+            logger.info("Completed message iteration (DESC): processed={}, pages={}", processedCount, pageCount);
         }
-        
-        logger.info("Completed message iteration: processed={}, pages={}", processedCount, pageCount);
     }
     
     /**
@@ -537,7 +628,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     )
     public String getChatMessages(
             @MCPParam(name = "chatName", description = "The chat name to search for", required = true) String chatName,
-            @MCPParam(name = "limit", description = "Maximum number of messages (0 for all, default: 100)", required = false, example = "100") Integer limit) throws IOException {
+            @MCPParam(name = "limit", description = "Maximum number of messages (0 for all, default: 100)", required = false, example = "100") Integer limit,
+            @MCPParam(name = "sorting", description = "Sort order: 'asc' for oldest first, 'desc' for newest first (default: 'desc')", required = false, example = "desc") String sorting) throws IOException {
         
         // Find chat
         Chat chat = findChatByName(chatName);
@@ -568,7 +660,10 @@ public class TeamsClient extends MicrosoftGraphRestClient {
             getAllMessages = false;
         }
         
-        getMessagesAndPerform(chatId, 0, null, message -> {
+        // Default sorting to desc if not provided
+        String sortOrder = (sorting != null && !sorting.trim().isEmpty()) ? sorting : "desc";
+        
+        getMessagesAndPerform(chatId, 0, null, sortOrder, message -> {
             // Filter out noisy system messages in the performer
             if (!shouldSkipNoisyMessage(message)) {
                 messages.add(message);
@@ -606,7 +701,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     )
     public String getChatMessagesSince(
             @MCPParam(name = "chatId", description = "The chat ID", required = true) String chatId,
-            @MCPParam(name = "sinceDate", description = "ISO 8601 date string (e.g., '2025-10-08T00:00:00Z')", required = true, example = "2025-10-08T00:00:00Z") String sinceDate) throws IOException {
+            @MCPParam(name = "sinceDate", description = "ISO 8601 date string (e.g., '2025-10-08T00:00:00Z')", required = true, example = "2025-10-08T00:00:00Z") String sinceDate,
+            @MCPParam(name = "sorting", description = "Sort order: 'asc' for oldest first, 'desc' for newest first (default: 'desc')", required = false, example = "desc") String sorting) throws IOException {
         
         // Validate and parse date format
         Instant sinceInstant;
@@ -616,23 +712,34 @@ public class TeamsClient extends MicrosoftGraphRestClient {
             throw new IOException("Invalid date format. Expected ISO 8601 (e.g., '2025-10-08T00:00:00Z'), got: " + sinceDate);
         }
         
-        logger.info("Retrieving messages from chat {} since {} using performer with early exit", chatId, sinceDate);
+        // Default sorting to desc if not provided
+        String sortOrder = (sorting != null && !sorting.trim().isEmpty()) ? sorting : "desc";
+        
+        logger.info("Retrieving messages from chat {} since {} using performer with early exit, sorting: {}", chatId, sinceDate, sortOrder);
         
         // Use the performer pattern for efficient iteration with early exit
-        // Messages are ordered by createdDateTime desc, so we can stop when we hit the date boundary
+        // If sorting is desc: Messages are ordered newest first, so we can stop when we hit the date boundary
+        // If sorting is asc: Messages are ordered oldest first, collect all until we reach current time
         List<ChatMessage> filteredMessages = new ArrayList<>();
+        boolean isDescOrder = sortOrder.equalsIgnoreCase("desc");
         
-        getMessagesAndPerform(chatId, 0, null, message -> {
+        getMessagesAndPerform(chatId, 0, null, sortOrder, message -> {
             try {
                 String createdDateTime = message.getCreatedDateTime();
                 if (createdDateTime != null) {
                     Instant messageInstant = Instant.parse(createdDateTime);
                     
-                    // If message is before the cutoff date, stop iteration (early exit)
-                    // Messages are ordered desc, so once we hit an older message, all remaining are older
-                    if (messageInstant.isBefore(sinceInstant) || messageInstant.equals(sinceInstant)) {
-                        logger.debug("Reached date boundary at message {}, stopping iteration", createdDateTime);
-                        return true; // Stop iteration
+                    if (isDescOrder) {
+                        // DESC order: newest first, stop when we hit older messages
+                        if (messageInstant.isBefore(sinceInstant) || messageInstant.equals(sinceInstant)) {
+                            logger.debug("Reached date boundary at message {}, stopping iteration", createdDateTime);
+                            return true; // Stop iteration
+                        }
+                    } else {
+                        // ASC order: oldest first, skip messages before cutoff
+                        if (messageInstant.isBefore(sinceInstant) || messageInstant.equals(sinceInstant)) {
+                            return false; // Skip this message, continue iteration
+                        }
                     }
                     
                     // Message is after the cutoff date - filter noisy messages and include
@@ -677,7 +784,8 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     )
     public String getChatMessagesByNameSince(
             @MCPParam(name = "chatName", description = "The chat name to search for", required = true) String chatName,
-            @MCPParam(name = "sinceDate", description = "ISO 8601 date string (e.g., '2025-10-08T00:00:00Z')", required = true, example = "2025-10-08T00:00:00Z") String sinceDate) throws IOException {
+            @MCPParam(name = "sinceDate", description = "ISO 8601 date string (e.g., '2025-10-08T00:00:00Z')", required = true, example = "2025-10-08T00:00:00Z") String sinceDate,
+            @MCPParam(name = "sorting", description = "Sort order: 'asc' for oldest first, 'desc' for newest first (default: 'desc')", required = false, example = "desc") String sorting) throws IOException {
         
         Chat chat = findChatByName(chatName);
         if (chat == null) {
@@ -687,7 +795,7 @@ public class TeamsClient extends MicrosoftGraphRestClient {
             return error.toString(2);
         }
         
-        return getChatMessagesSince(chat.getId(), sinceDate);
+        return getChatMessagesSince(chat.getId(), sinceDate, sorting);
     }
     
     // ========== Write Operations ==========
