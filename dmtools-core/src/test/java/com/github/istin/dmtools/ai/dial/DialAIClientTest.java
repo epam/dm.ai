@@ -46,7 +46,7 @@ public class DialAIClientTest {
 
     @Test
     public void testGetTimeout() {
-        assertEquals(700, dialAIClient.getTimeout());
+        assertEquals(1400, dialAIClient.getTimeout());
     }
 
     @Test

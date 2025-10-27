@@ -125,3 +125,4 @@ dmtools-core/cacheTeamsClient
 /dmtools-core/cacheBasicOllamaAI/*
 cache**/
 dmtools-core/cache**/
+test-output.txt
