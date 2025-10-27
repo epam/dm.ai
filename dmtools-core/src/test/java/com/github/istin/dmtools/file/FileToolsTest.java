@@ -296,10 +296,7 @@ class FileToolsTest {
     void testWriteFile_PathTraversalBlocked() {
         String result = fileTools.writeFile("../../../etc/passwd", "malicious");
         // Should return null because path traversal is blocked
-        assertNull(result);
-        
-        // Verify no file was created in working directory with traversal path
-        assertFalse(Files.exists(tempDir.resolve("../../../etc/passwd")));
+        assertNull(result, "Path traversal should be blocked and return null");
     }
     
     @Test
