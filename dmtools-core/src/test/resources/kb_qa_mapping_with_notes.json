@@ -1,0 +1,40 @@
+{
+  "mappings": [
+    {
+      "answerId": "a_0001",
+      "questionId": "q_0001",
+      "confidence": 0.95
+    },
+    {
+      "answerId": "n_0001",
+      "questionId": "q_0002",
+      "confidence": 0.88
+    },
+    {
+      "answerId": "n_0002",
+      "questionId": "q_0003",
+      "confidence": 0.92
+    },
+    {
+      "answerId": "n_0002",
+      "questionId": "q_0004",
+      "confidence": 0.85
+    },
+    {
+      "answerId": "a_0002",
+      "questionId": "q_0005",
+      "confidence": 0.90
+    },
+    {
+      "answerId": "n_0003",
+      "questionId": "q_0001",
+      "confidence": 0.87
+    },
+    {
+      "answerId": "n_0003",
+      "questionId": "q_0002",
+      "confidence": 0.83
+    }
+  ]
+}
+

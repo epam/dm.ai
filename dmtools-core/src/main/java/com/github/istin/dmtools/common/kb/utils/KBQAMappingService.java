@@ -120,31 +120,21 @@ public class KBQAMappingService {
                             }
                         });
             } else if (answerId.startsWith("n_")) {
-                Optional<Note> noteOpt = analysisResult.getNotes().stream()
+                analysisResult.getNotes().stream()
                         .filter(n -> n.getId().equals(answerId))
-                        .findFirst();
-                if (noteOpt.isPresent()) {
-                    Note note = noteOpt.get();
-                    analysisResult.getNotes().remove(note);
-
-                    Answer newAnswer = new Answer();
-                    newAnswer.setId(answerId.replace("n_", "a_"));
-                    newAnswer.setAuthor(note.getAuthor());
-                    newAnswer.setText(note.getText());
-                    newAnswer.setDate(note.getDate());
-                    newAnswer.setArea(note.getArea());
-                    newAnswer.setTopics(note.getTopics());
-                    newAnswer.setTags(note.getTags());
-                    newAnswer.setAnswersQuestion(questionId);
-                    newAnswer.setQuality(mapping.getConfidence());
-                    newAnswer.setLinks(note.getLinks());
-                    analysisResult.getAnswers().add(newAnswer);
-
-                    if (logger != null) {
-                        logger.info("Converted note {} to answer and mapped to question {} (confidence: {})",
-                                answerId, questionId, mapping.getConfidence());
-                    }
-                }
+                        .findFirst()
+                        .ifPresent(n -> {
+                            if (n.getAnswersQuestions() == null) {
+                                n.setAnswersQuestions(new ArrayList<>());
+                            }
+                            if (!n.getAnswersQuestions().contains(questionId)) {
+                                n.getAnswersQuestions().add(questionId);
+                            }
+                            if (logger != null) {
+                                logger.info("Mapped note {} to question {} (confidence: {})",
+                                        answerId, questionId, mapping.getConfidence());
+                            }
+                        });
             }
         }
     }

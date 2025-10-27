@@ -192,12 +192,22 @@ public class KBStructureBuilder {
             }
         }
         
+        // Find all notes that reference this question
+        List<String> noteIds = new ArrayList<>();
+        if (analysisResult != null && analysisResult.getNotes() != null) {
+            for (Note note : analysisResult.getNotes()) {
+                if (note.getAnswersQuestions() != null && note.getAnswersQuestions().contains(question.getId())) {
+                    noteIds.add(note.getId());
+                }
+            }
+        }
+        
         // NEW: Save in flat questions/ folder
         Path questionDir = outputPath.resolve("questions");
         Files.createDirectories(questionDir);
         
         Path questionFile = questionDir.resolve(question.getId() + ".md");
-        createQuestionFile(questionFile, question, sourceName, answerIds);
+        createQuestionFile(questionFile, question, sourceName, answerIds, noteIds);
     }
 
     /**
@@ -609,7 +619,7 @@ public class KBStructureBuilder {
         Files.writeString(file, content);
     }
     
-    private void createQuestionFile(Path file, Question question, String source, List<String> answerIds) throws IOException {
+    private void createQuestionFile(Path file, Question question, String source, List<String> answerIds, List<String> noteIds) throws IOException {
         Map<String, Object> frontmatter = new LinkedHashMap<>();
         frontmatter.put("id", question.getId());
         frontmatter.put("type", "question");
@@ -671,6 +681,14 @@ public class KBStructureBuilder {
             content += "\n## Answers\n\n";
             for (String answerId : answerIds) {
                 content += "![[" + answerId + "]]\n\n";
+            }
+        }
+        
+        // Embed all notes that reference this question
+        if (noteIds != null && !noteIds.isEmpty()) {
+            content += "\n## Related Notes\n\n";
+            for (String noteId : noteIds) {
+                content += "![[" + noteId + "]]\n\n";
             }
         }
         
@@ -751,6 +769,9 @@ public class KBStructureBuilder {
         frontmatter.put("date", note.getDate());
         frontmatter.put("area", note.getArea());
         frontmatter.put("topics", note.getTopics());
+        if (note.getAnswersQuestions() != null && !note.getAnswersQuestions().isEmpty()) {
+            frontmatter.put("answersQuestions", note.getAnswersQuestions());
+        }
         frontmatter.put("source", source);
         
         // Combine system tags with LLM-generated tags
@@ -782,6 +803,19 @@ public class KBStructureBuilder {
                 String topicId = slugify(topic);
                 content += "[[" + topicId + "|" + topic + "]]";
                 if (i < note.getTopics().size() - 1) {
+                    content += ", ";
+                }
+            }
+            content += "\n";
+        }
+        
+        // Add answersQuestions references if available
+        if (note.getAnswersQuestions() != null && !note.getAnswersQuestions().isEmpty()) {
+            content += "\n**Answers Questions:** ";
+            for (int i = 0; i < note.getAnswersQuestions().size(); i++) {
+                String questionId = note.getAnswersQuestions().get(i);
+                content += "[[" + questionId + "]]";
+                if (i < note.getAnswersQuestions().size() - 1) {
                     content += ", ";
                 }
             }
@@ -1216,14 +1250,20 @@ public class KBStructureBuilder {
         }
         content.append("\n");
         
-        // Build Q/A mapping for this topic
+        // Build Q/A and Q/N mappings for this topic
         Set<String> questionsInTopic = data.questions;
         Set<String> answersInTopic = data.answers;
+        Set<String> notesInTopic = data.notes;
         
         // Use Q→A mapping collected from existing files + current analysis
         Map<String, String> qToA = new HashMap<>(data.qToA); // Start with mappings from existing files
         Set<String> questionsWithAnswers = new HashSet<>(qToA.keySet());
         Set<String> standaloneAnswers = new HashSet<>(answersInTopic);
+        
+        // Track Q→N mappings (notes that answer questions)
+        Map<String, Set<String>> qToN = new HashMap<>(); // One question can have multiple notes
+        Set<String> questionsWithNotes = new HashSet<>();
+        Set<String> standaloneNotes = new HashSet<>(notesInTopic);
         
         // Add Q→A mapping from current analysis
         if (analysis != null && analysis.getQuestions() != null) {
@@ -1231,6 +1271,22 @@ public class KBStructureBuilder {
                 if (questionsInTopic.contains(q.getId()) && q.getAnsweredBy() != null && !q.getAnsweredBy().isEmpty()) {
                     qToA.put(q.getId(), q.getAnsweredBy());
                     questionsWithAnswers.add(q.getId());
+                }
+            }
+        }
+        
+        // Add Q→N mapping from current analysis
+        if (analysis != null && analysis.getNotes() != null) {
+            for (Note n : analysis.getNotes()) {
+                if (notesInTopic.contains(n.getId()) && n.getAnswersQuestions() != null && !n.getAnswersQuestions().isEmpty()) {
+                    // Check each question this note answers
+                    for (String questionId : n.getAnswersQuestions()) {
+                        // If question is also in this topic
+                        if (questionsInTopic.contains(questionId)) {
+                            qToN.computeIfAbsent(questionId, k -> new HashSet<>()).add(n.getId());
+                            questionsWithNotes.add(questionId);
+                        }
+                    }
                 }
             }
         }
@@ -1271,26 +1327,53 @@ public class KBStructureBuilder {
             }
         }
         
-        // Remove answers that are embedded in questions within this same topic
+        // Determine which notes to exclude from standalone (notes that answer questions in this topic)
+        Set<String> notesToExclude = new HashSet<>();
+        for (String noteId : notesInTopic) {
+            if (analysis != null && analysis.getNotes() != null) {
+                for (Note n : analysis.getNotes()) {
+                    if (n.getId().equals(noteId) && n.getAnswersQuestions() != null && !n.getAnswersQuestions().isEmpty()) {
+                        // Check if any of the questions this note answers are in this topic
+                        for (String questionId : n.getAnswersQuestions()) {
+                            if (questionsInTopic.contains(questionId)) {
+                                notesToExclude.add(noteId);
+                                break; // Note answers at least one question in this topic, exclude it
+                            }
+                        }
+                        if (notesToExclude.contains(noteId)) {
+                            break; // Already excluded, no need to check further
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Remove answers and notes that are embedded in questions within this same topic
         standaloneAnswers.removeAll(answersToExclude);
+        standaloneNotes.removeAll(notesToExclude);
+        
+        // Track questions with both answers and notes
+        Set<String> allQuestionsWithContent = new HashSet<>();
+        allQuestionsWithContent.addAll(questionsWithAnswers);
+        allQuestionsWithContent.addAll(questionsWithNotes);
         
         Set<String> questionsWithoutAnswers = new HashSet<>(questionsInTopic);
-        questionsWithoutAnswers.removeAll(questionsWithAnswers);
+        questionsWithoutAnswers.removeAll(allQuestionsWithContent);
         
-        // 1. Notes first
-        if (!data.notes.isEmpty()) {
+        // 1. Standalone Notes (notes not answering questions)
+        if (!standaloneNotes.isEmpty()) {
             content.append("## Notes\n\n");
-            for (String nId : data.notes) {
+            for (String nId : standaloneNotes) {
                 content.append("![[").append(nId).append("]]\n\n");
             }
         }
         
-        // 2. Questions with Answers (Q + embedded A)
-        if (!questionsWithAnswers.isEmpty()) {
+        // 2. Questions with Answers/Notes (Q + embedded A/N)
+        if (!allQuestionsWithContent.isEmpty()) {
             content.append("## Questions with Answers\n\n");
-            for (String qId : questionsWithAnswers) {
+            for (String qId : allQuestionsWithContent) {
                 content.append("![[").append(qId).append("]]\n\n");
-                // Answer already embedded in question file, no need to embed again
+                // Answers and notes already embedded in question file, no need to embed again
             }
         }
         

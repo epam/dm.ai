@@ -15,6 +15,7 @@ public class Note {
     private List<String> tags;    // Techniques/tools (e.g., ["buildkit", "caching", "multi-stage"])
     private String author;
     private String date;          // ISO 8601
+    private List<String> answersQuestions; // List of q_XXXX IDs (if this note answers questions)
     private List<Link> links;
 }
 
