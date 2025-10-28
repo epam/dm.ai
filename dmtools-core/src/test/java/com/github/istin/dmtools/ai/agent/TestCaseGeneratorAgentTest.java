@@ -185,4 +185,86 @@ class TestCaseGeneratorAgentTest {
         assertTrue(toString.contains("High"));
         assertTrue(toString.contains("Summary"));
     }
+
+    @Test
+    void testParamsWithDefaultExamples() {
+        // Test default behavior when isToOverrideExamples is false
+        TestCaseGeneratorAgent.Params params = new TestCaseGeneratorAgent.Params(
+            "High, Medium",
+            "existing test cases",
+            "story description",
+            "extra rules"
+        );
+
+        assertEquals("High, Medium", params.getPriorities());
+        assertEquals("existing test cases", params.getExistingTestCases());
+        assertEquals("story description", params.getStoryDescription());
+        assertEquals("extra rules", params.getExtraRules());
+        assertFalse(params.isOverridePromptExamples());
+        assertEquals("", params.getExamples());
+    }
+
+    @Test
+    void testParamsWithCustomExamples() {
+        // Test custom examples behavior
+        String customExamples = "<example><human>Test</human><ai>[]</ai></example>";
+        TestCaseGeneratorAgent.Params params = new TestCaseGeneratorAgent.Params(
+            "P1, P2",
+            "existing",
+            "story",
+            "rules",
+            true,
+            customExamples
+        );
+
+        assertEquals("P1, P2", params.getPriorities());
+        assertEquals("existing", params.getExistingTestCases());
+        assertEquals("story", params.getStoryDescription());
+        assertEquals("rules", params.getExtraRules());
+        assertTrue(params.isOverridePromptExamples());
+        assertEquals(customExamples, params.getExamples());
+    }
+
+    @Test
+    void testPromptTemplateWithCustomExamples() throws Exception {
+        // Arrange
+        String customExamples = "<example><human>Generate test cases for API</human>" +
+            "<ai>[{\"priority\":\"P1\",\"summary\":\"API test\",\"description\":\"Test API endpoint\"}]</ai></example>";
+        
+        TestCaseGeneratorAgent.Params params = new TestCaseGeneratorAgent.Params(
+            "P1, P2",
+            "existing test cases",
+            "API feature story",
+            "focus on security",
+            true,
+            customExamples
+        );
+
+        String renderedPrompt = "Generated prompt with custom examples";
+        String mockAIResponse = "[{\"priority\":\"P1\",\"summary\":\"API security test\",\"description\":\"Test API authentication\"}]";
+
+        when(mockPromptTemplateReader.read(eq("agents/test_case_generator"), any(PromptContext.class)))
+            .thenReturn(renderedPrompt);
+        when(mockAI.chat(renderedPrompt))
+            .thenReturn(mockAIResponse);
+
+        // Act
+        List<TestCaseGeneratorAgent.TestCase> result = agent.run(params);
+
+        // Assert - verify prompt template was called with correct context
+        ArgumentCaptor<PromptContext> contextCaptor = ArgumentCaptor.forClass(PromptContext.class);
+        verify(mockPromptTemplateReader).read(eq("agents/test_case_generator"), contextCaptor.capture());
+        
+        PromptContext capturedContext = contextCaptor.getValue();
+        assertNotNull(capturedContext);
+
+        // Verify AI was called
+        verify(mockAI).chat(renderedPrompt);
+
+        // Verify result
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals("P1", result.get(0).getPriority());
+        assertEquals("API security test", result.get(0).getSummary());
+    }
 }

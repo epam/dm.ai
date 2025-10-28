@@ -1,6 +1,9 @@
 package com.github.istin.dmtools.qa;
 
-import com.github.istin.dmtools.ai.*;
+import com.github.istin.dmtools.ai.AI;
+import com.github.istin.dmtools.ai.ChunkPreparation;
+import com.github.istin.dmtools.ai.Claude35TokenCounter;
+import com.github.istin.dmtools.ai.TicketContext;
 import com.github.istin.dmtools.ai.agent.RelatedTestCaseAgent;
 import com.github.istin.dmtools.ai.agent.RelatedTestCasesAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseDeduplicationAgent;
@@ -24,6 +27,7 @@ import org.json.JSONObject;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -106,8 +110,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         trackerClient.searchAndPerform(ticket -> {
             List<? extends ITicket> listOfAllTestCases = trackerClient.searchAndPerform(params.getExistingTestCasesJql(), new String[]{Fields.SUMMARY, Fields.DESCRIPTION});
             TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-            ticketContext.prepareContext();
-            String additionalRules = new ConfluencePagesContext(params.getConfluencePages(), confluence, false).toText();
+            ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences());
+            String additionalRules = extractFromConfluence(params.getConfluencePages());
             result.add(generateTestCases(ticketContext, additionalRules, listOfAllTestCases, params));
             trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(params.getInitiator()) + ", similar test cases are linked and new test cases are generated.");
             return false;
@@ -208,14 +212,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     public String unpackExamples(String examples) throws Exception {
         String unpackedExamples;
         if (examples.startsWith("https://")) {
-            String value = confluence.contentByUrl(examples).getStorage().getValue();
-            if (StringUtils.isConfluenceYamlFormat(value)) {
-                unpackedExamples = StringUtils.extractYamlContentFromConfluence(value);
-            } else {
-                unpackedExamples = value;
-            }
+            unpackedExamples = extractFromConfluence(examples);
         } else if (examples.startsWith("ql(")) {
-            String ql = examples.substring(2, examples.length() - 1);
+            String ql = examples.substring(3, examples.length() - 1);
             List<? extends ITicket> tickets = trackerClient.searchAndPerform(ql, new String[]{Fields.SUMMARY, Fields.DESCRIPTION, Fields.PRIORITY});
 
             JSONArray examplesArray = new JSONArray();
@@ -227,6 +226,21 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             unpackedExamples = examples;
         }
         return unpackedExamples;
+    }
+
+    private String extractFromConfluence(String... urls) throws IOException {
+        StringBuilder content = new StringBuilder();
+        for (String url : urls) {
+            String value = confluence.contentByUrl(url).getStorage().getValue();
+            if (StringUtils.isConfluenceYamlFormat(value)) {
+                value = StringUtils.extractYamlContentFromConfluence(value);
+            }
+            if (!content.isEmpty()) {
+                content.append("\n");
+            }
+            content.append(value);
+        }
+        return content.toString();
     }
 
     private List<TestCaseGeneratorAgent.TestCase> deduplicateInChunks(

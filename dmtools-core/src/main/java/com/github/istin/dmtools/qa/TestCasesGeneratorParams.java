@@ -24,6 +24,7 @@ public class TestCasesGeneratorParams extends Params {
     public static final String IS_LINK_RELATED = "isLinkRelated";
     public static final String EXAMPLES = "examples";
     public static final String TEST_CASE_LINK_RELATIONSHIP = "testCaseLinkRelationship";
+    public static final String INCLUDE_OTHER_TICKET_REFERENCES = "includeOtherTicketReferences";
 
     @SerializedName(EXISTING_TEST_CASES_JQL)
     private String existingTestCasesJql;
@@ -37,6 +38,8 @@ public class TestCasesGeneratorParams extends Params {
     private String testCaseIssueType = "Test Case";
     @SerializedName(IS_CONVERT_TO_JIRA_MARKDOWN)
     private boolean isConvertToJiraMarkdown = true;
+    @SerializedName(INCLUDE_OTHER_TICKET_REFERENCES)
+    private boolean includeOtherTicketReferences = true;
     @SerializedName(IS_FIND_RELATED)
     private boolean isFindRelated = true;
     @SerializedName(IS_LINK_RELATED)

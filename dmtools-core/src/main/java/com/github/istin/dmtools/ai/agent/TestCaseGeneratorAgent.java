@@ -22,7 +22,7 @@ public class TestCaseGeneratorAgent extends AbstractSimpleAgent<TestCaseGenerato
         private String existingTestCases;
         private String storyDescription;
         private String extraRules;
-        private boolean isToOverrideExamples = false;
+        private boolean overridePromptExamples = false;
         private String examples = "";
 
         public Params(String priorities, String existingTestCases, String storyDescription, String extraRules) {
