@@ -1451,7 +1451,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         String lowerJql = jql.toLowerCase();
         
         // Pattern 1: "project = PROJECTKEY" (with or without spaces)
-        String[] patterns = {"project=", "project ="};
+        String[] patterns = {"project=", "project =", "project in ("};
         
         for (String pattern : patterns) {
             int patternIndex = lowerJql.indexOf(pattern);
@@ -2244,10 +2244,10 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         RestClient client = this;
         return cacheManager.getOrComputeSimple("getFields_" + project, () -> {
             try {
-                GenericRequest genericRequest = new GenericRequest(client, path("issue/createmeta?projectKeys=" + project + "&expand=projects.issuetypes.fields"));
+                GenericRequest genericRequest = new GenericRequest(client, path("field"));
                 return genericRequest.execute();
             } catch (Exception e) {
-                GenericRequest genericRequest = new GenericRequest(client, path("field"));
+                GenericRequest genericRequest = new GenericRequest(client, path("issue/createmeta?projectKeys=" + project + "&expand=projects.issuetypes.fields"));
                 try {
                     return  genericRequest.execute();
                 } catch (IOException ex) {

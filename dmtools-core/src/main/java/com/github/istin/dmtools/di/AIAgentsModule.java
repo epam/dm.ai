@@ -58,6 +58,11 @@ public class AIAgentsModule {
     }
 
     @Provides
+    TestCaseDeduplicationAgent provideTestCaseDeduplicationAgent() {
+        return new TestCaseDeduplicationAgent();
+    }
+
+    @Provides
     TeamAssistantAgent provideTeamAssistantAgent(AI ai, IPromptTemplateReader promptTemplateReader) {
         return new TeamAssistantAgent(ai, promptTemplateReader);
     }

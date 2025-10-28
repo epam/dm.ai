@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.ai.agent;
 
+import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.di.DaggerTestCaseGeneratorAgentComponent;
 import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import lombok.AllArgsConstructor;
@@ -21,16 +22,30 @@ public class TestCaseGeneratorAgent extends AbstractSimpleAgent<TestCaseGenerato
         private String existingTestCases;
         private String storyDescription;
         private String extraRules;
+        private boolean overridePromptExamples = false;
+        private String examples = "";
+
+        public Params(String priorities, String existingTestCases, String storyDescription, String extraRules) {
+            this.priorities = priorities;
+            this.existingTestCases = existingTestCases;
+            this.storyDescription = storyDescription;
+            this.extraRules = extraRules;
+        }
     }
 
     @AllArgsConstructor
     @Getter
     @ToString
     @Data
-    public static class TestCase {
+    public static class TestCase implements ToText {
         private String priority;
         private String summary;
         private String description;
+
+        @Override
+        public String toText() {
+            return "Priority: " + priority + "\nSummary: " + summary + "\nDescription: " + description + "\n";
+        }
     }
 
     public TestCaseGeneratorAgent() {
@@ -54,5 +69,12 @@ public class TestCaseGeneratorAgent extends AbstractSimpleAgent<TestCaseGenerato
         }
 
         return testCases;
+    }
+
+    public static JSONObject createTestCase(String priority, String summary, String description) {
+        return new JSONObject()
+                .put("priority", priority)
+                .put("summary", summary)
+                .put("description", description);
     }
 }

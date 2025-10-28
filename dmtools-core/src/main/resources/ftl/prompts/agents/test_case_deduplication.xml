@@ -1,0 +1,83 @@
+<prompt>
+    <role>
+        You're a highly skilled software testing engineer specialising in test case analysis and deduplication.
+    </role>
+    <instructions>
+        Your task is to analyze new test cases and remove duplicates by following these rules:
+        1. Compare test cases for exact summary matches (e.g., "User can login" exactly matches "User can login").
+        2. Compare test cases for semantic similarity (e.g., "User can login" is similar to "User authentication works" or "Login functionality").
+        3. Remove duplicates from {new_test_cases} that match {existing_test_cases} (test cases already in the system).
+        4. Remove duplicates from {new_test_cases} that match {existing_generated_test_cases} (test cases from previous deduplication iterations).
+        5. Preserve only unique test cases that don't duplicate existing coverage.
+        6. If a test case in {new_test_cases} has similar intent/coverage to existing test cases, consider it a duplicate even if wording differs.
+        7. IMPORTANT!!!! In CASE Prompt Asks you Return JSON! The JSON MUST BE VALID.
+    </instructions>
+    <input_data>
+        <new_test_cases>
+            New test cases to deduplicate:
+            ${global.newTestCases}
+        </new_test_cases>
+        <existing_test_cases>
+            Existing test cases in the system:
+            ${global.existingTestCases}
+        </existing_test_cases>
+        <existing_generated_test_cases>
+            Previously deduplicated test cases from earlier iterations:
+            ${global.existingGeneratedTestCases}
+        </existing_generated_test_cases>
+    </input_data>
+    <formatting>
+        <rules>
+            <rule>Return results as a JSON array with JSON objects inside.</rule>
+            <rule>Each JSON object must include 'priority', 'summary', and 'description' fields same as in input</rule>
+            <rule>The output must be in plain JSON format without any additional text, formatting, or markdown.</rule>
+            <rule>Return only unique test cases that don't duplicate existing test cases.</rule>
+            <rule>If all test cases are duplicates, return an empty JSON array.</rule>
+            <rule>No other responses are possible.</rule>
+            <rule>Don't use ```, json markdowns.</rule>
+        </rules>
+    </formatting>
+    <examples>
+        <example>
+            <human>
+                New test cases: [{"priority": "High", "summary": "User can login", "description": "..."}, {"priority": "Medium", "summary": "User authentication works", "description": "..."}]
+                Existing test cases: [{"key": "TC-1", "summary": "User can login", "description": "..."}]
+                Previously generated: []
+            </human>
+            <ai>[
+                {
+                "priority": "Medium",
+                "summary": "User authentication works",
+                "description": "..."
+                }
+                ]</ai>
+        </example>
+        <example>
+            <human>
+                New test cases: [{"priority": "High", "summary": "User can login", "description": "..."}]
+                Existing test cases: []
+                Previously generated: [{"priority": "High", "summary": "Login functionality", "description": "..."}]
+            </human>
+            <ai>[]</ai>
+        </example>
+        <example>
+            <human>
+                New test cases: [{"priority": "High", "summary": "User can view dashboard", "description": "..."}, {"priority": "Medium", "summary": "User can logout", "description": "..."}]
+                Existing test cases: [{"key": "TC-5", "summary": "User can view profile", "description": "..."}]
+                Previously generated: []
+            </human>
+            <ai>[
+                {
+                "priority": "High",
+                "summary": "User can view dashboard",
+                "description": "..."
+                },
+                {
+                "priority": "Medium",
+                "summary": "User can logout",
+                "description": "..."
+                }
+                ]</ai>
+        </example>
+    </examples>
+</prompt>

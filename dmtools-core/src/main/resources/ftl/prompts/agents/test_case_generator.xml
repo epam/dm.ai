@@ -4,14 +4,12 @@
     </role>
     <instructions>
         Your task is to write test cases and follow these rules:
-        1. Make sure Description is nice looking with html tags inside, skip html, head and body tags and don't use class attribute. Use tag for each test case.
-        2. Use only following tags in Description: <p>, <strong>, <em>, <u>, <s>, <a>, <code>, <pre>, <table>, <tr>, <th>, <td>.
-        3. Each generated Test Case must include priority from the list: {priorities}.
-        4. Don't create duplicates, check {existing_test_cases}.
-        5. If ${global.existingTestCases} block is empty you must generate new test cases.
-        6. Don't introduce additional Test Cases which are not related to {story_description} especially if it can confuse readers.
-        7. Don't create new test cases if current list of test cases cover the {story_description}
-        8. IMPORTANT!!!! In CASE Prompt Asks you Return JSON! The JSON MUST BE VALID.
+        1. Each generated Test Case must include priority from the list: {priorities}
+        2. Don't create duplicates, check {existing_test_cases}
+        3. If {existing_test_cases} block is empty you must generate new test cases
+        4. Don't introduce additional Test Cases which are not related to {story_description}
+        5. Don't create new test cases if current list of test cases already covers the {story_description}, just return empty array []
+        6. Return only valid JSON format without any additional text or formatting
     </instructions>
     <input_data>
         <story_description>
@@ -29,17 +27,29 @@
             ${global.extraRules}
         </important_rules>
     </input_data>
+    <#if !global.overridePromptExamples?? || global.overridePromptExamples == false>
+    <description_formatting>
+        <rules>
+            Use <br> tags to separate test steps within the description
+            Use only following tags in Description: <p>, <strong>, <em>, <u>, <s>, <a>, <code>, <pre>, <table>, <tr>, <th>, <td>
+            Skip html, head and body tags and don't use class attribute
+        </rules>
+    </description_formatting>
+    </#if>
     <formatting>
         <rules>
-            <rule>Return results as a JSON array with JSON objects inside.</rule>
-            <rule>Each JSON object must include 'priority', 'summary', and 'description'.</rule>
-            <rule>The output must be in plain JSON format without any additional text, formatting, or markdown.</rule>
-            <rule>If there are no new test cases, return an empty JSON array.</rule>
-            <rule>No other responses are possible.</rule>
-            <rule>Don't use ```, json markdowns.</rule>
+            Return results as a JSON array with JSON objects inside.
+            Each JSON object must include 'priority', 'summary', and 'description'.
+            The output must be in plain JSON format without any additional text, formatting, or markdown.
+            If there are no new test cases, return an empty JSON array.
+            No other responses are possible.
+            Don't use ```, json markdowns.
         </rules>
     </formatting>
     <examples>
+    <#if global.overridePromptExamples?? && global.overridePromptExamples == true>
+        ${global.examples}
+    <#else>
         <example>
             <human>Generate test cases for a login feature</human>
             <ai>[
@@ -59,5 +69,10 @@
             <human>Generate test cases for a feature that already has comprehensive test coverage</human>
             <ai>[]</ai>
         </example>
+        <#if global.examples??>
+        **IMPORTANT** approved examples
+        <important_examples>${global.examples}</important_examples>
+        </#if>
+    </#if>
     </examples>
 </prompt>

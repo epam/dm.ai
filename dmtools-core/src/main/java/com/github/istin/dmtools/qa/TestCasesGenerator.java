@@ -1,8 +1,12 @@
 package com.github.istin.dmtools.qa;
 
-import com.github.istin.dmtools.ai.*;
+import com.github.istin.dmtools.ai.AI;
+import com.github.istin.dmtools.ai.ChunkPreparation;
+import com.github.istin.dmtools.ai.Claude35TokenCounter;
+import com.github.istin.dmtools.ai.TicketContext;
 import com.github.istin.dmtools.ai.agent.RelatedTestCaseAgent;
 import com.github.istin.dmtools.ai.agent.RelatedTestCasesAgent;
+import com.github.istin.dmtools.ai.agent.TestCaseDeduplicationAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseGeneratorAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
@@ -23,9 +27,9 @@ import org.json.JSONObject;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, List<TestCasesGenerator.TestCasesResult>> {
@@ -62,6 +66,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
 
     @Inject
     RelatedTestCaseAgent relatedTestCaseAgent;
+
+    @Inject
+    TestCaseDeduplicationAgent testCaseDeduplicationAgent;
 
     /**
      * Server-managed Dagger component that uses pre-resolved integrations
@@ -103,8 +110,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         trackerClient.searchAndPerform(ticket -> {
             List<? extends ITicket> listOfAllTestCases = trackerClient.searchAndPerform(params.getExistingTestCasesJql(), new String[]{Fields.SUMMARY, Fields.DESCRIPTION});
             TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-            ticketContext.prepareContext();
-            String additionalRules = new ConfluencePagesContext(params.getConfluencePages(), confluence, false).toText();
+            ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences());
+            String additionalRules = extractFromConfluence(params.getConfluencePages());
             result.add(generateTestCases(ticketContext, additionalRules, listOfAllTestCases, params));
             trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(params.getInitiator()) + ", similar test cases are linked and new test cases are generated.");
             return false;
@@ -115,11 +122,62 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     public TestCasesResult generateTestCases(TicketContext ticketContext, String extraRules, List<? extends ITicket> listOfAllTestCases, TestCasesGeneratorParams params) throws Exception {
         ITicket mainTicket = ticketContext.getTicket();
         String key = mainTicket.getTicketKey();
+        String ticketText = ticketContext.toText();
+        List<ITicket> finaResults = params.isFindRelated()
+                ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, listOfAllTestCases, params.isLinkRelated(), params.getRelatedTestCasesRules(), params.getTestCaseLinkRelationship())
+                : Collections.emptyList();
 
-        List<ITicket> finaResults = findAndLinkSimilarTestCasesBySummary(ticketContext, listOfAllTestCases, true, params.getRelatedTestCasesRules(), params.getTestCaseLinkRelationship());
+        // Initialize accumulator for all generated test cases
+        List<TestCaseGeneratorAgent.TestCase> allGeneratedTestCases = new ArrayList<>();
 
-        List<TestCaseGeneratorAgent.TestCase> newTestCases = testCaseGeneratorAgent.run(new TestCaseGeneratorAgent.Params(params.getTestCasesPriorities(), ToText.Utils.toText(finaResults), ticketContext.toText(), extraRules));
+        // Calculate token limits (same pattern as findAndLinkSimilarTestCasesBySummary)
+        ChunkPreparation chunkPreparation = new ChunkPreparation();
+        int storyTokens = new Claude35TokenCounter().countTokens(ticketContext.toText());
+        int systemTokenLimits = chunkPreparation.getTokenLimit();
+        int tokenLimit = (systemTokenLimits - storyTokens)/2;
+        System.out.println("GENERATION TOKEN LIMIT: " + tokenLimit);
+        List<TestCaseGeneratorAgent.TestCase> newTestCases;
+        String examples = unpackExamples(params.getExamples());
 
+        if (!finaResults.isEmpty()) {
+            // Chunk existing test cases for generation
+            List<ChunkPreparation.Chunk> testCaseChunks = chunkPreparation.prepareChunks(finaResults, tokenLimit);
+            System.out.println("TEST CASE CHUNKS FOR GENERATION: " + testCaseChunks.size());
+
+            // Generate test cases per chunk
+            for (ChunkPreparation.Chunk chunk : testCaseChunks) {
+                List<TestCaseGeneratorAgent.TestCase> chunkTestCases = testCaseGeneratorAgent.run(
+                        new TestCaseGeneratorAgent.Params(
+                                params.getTestCasesPriorities(),
+                                chunk.getText(), // Chunked test cases instead of all finaResults
+                                ticketText,
+                                extraRules,
+                                params.isOverridePromptExamples(),
+                                examples
+                        )
+                );
+                allGeneratedTestCases.addAll(chunkTestCases);
+                System.out.println("Generated " + chunkTestCases.size() + " test cases from chunk");
+            }
+
+            // Deduplicate results - reuse testCaseChunks instead of converting to text again
+            newTestCases = deduplicateInChunks(
+                    allGeneratedTestCases,
+                    testCaseChunks
+            );
+            System.out.println("Final deduplicated test cases: " + newTestCases.size());
+        } else {
+            newTestCases = testCaseGeneratorAgent.run(
+                    new TestCaseGeneratorAgent.Params(
+                            params.getTestCasesPriorities(),
+                            "", // Chunked test cases instead of all finaResults
+                            ticketContext.toText(),
+                            extraRules,
+                            params.isOverridePromptExamples(),
+                            examples //TODO and apply in prompt, and ignore linking via parameter but think about checks of relationships
+                    )
+            );
+        }
         if (params.getOutputType().equals(TestCasesGeneratorParams.OutputType.comment)) {
             StringBuilder result = new StringBuilder();
             for (TestCaseGeneratorAgent.TestCase testCase : newTestCases) {
@@ -132,9 +190,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             for (TestCaseGeneratorAgent.TestCase testCase : newTestCases) {
                 String projectCode = key.split("-")[0];
                 String description = testCase.getDescription();
-                //if (trackerClient.getTextType() == TrackerClient.TextType.MARKDOWN) {
+                if (params.isConvertToJiraMarkdown()) {
                     description = StringUtils.convertToMarkdown(description);
-                //}
+                }
                 Ticket createdTestCase = new Ticket(trackerClient.createTicketInProject(projectCode, params.getTestCaseIssueType(), testCase.getSummary(), description, new TrackerClient.FieldsInitializer() {
                     @Override
                     public void init(TrackerClient.TrackerTicketFields fields) {
@@ -151,12 +209,137 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         return new TestCasesResult(ticketContext.getTicket().getKey(), finaResults, newTestCases);
     }
 
-    @NotNull
-    public List<ITicket> findAndLinkSimilarTestCasesBySummary(TicketContext ticketContext, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship) throws Exception {
-        List<ITicket> finaResults = new ArrayList<>();
-        String extraRelatedTestCaseRulesFromConfluence = new ConfluencePagesContext(new String[]{relatedTestCasesRulesLink}, confluence, false).toText();
+    public String unpackExamples(String examples) throws Exception {
+        String unpackedExamples;
+        if (examples.startsWith("https://")) {
+            unpackedExamples = extractFromConfluence(examples);
+        } else if (examples.startsWith("ql(")) {
+            String ql = examples.substring(3, examples.length() - 1);
+            List<? extends ITicket> tickets = trackerClient.searchAndPerform(ql, new String[]{Fields.SUMMARY, Fields.DESCRIPTION, Fields.PRIORITY});
+
+            JSONArray examplesArray = new JSONArray();
+            for (ITicket ticket : tickets) {
+                examplesArray.put(TestCaseGeneratorAgent.createTestCase(ticket.getPriority(), ticket.getTicketTitle(), ticket.getTicketDescription()));
+            }
+            unpackedExamples = examplesArray.toString();
+        } else {
+            unpackedExamples = examples;
+        }
+        return unpackedExamples;
+    }
+
+    private String extractFromConfluence(String... urls) throws IOException {
+        StringBuilder content = new StringBuilder();
+        for (String url : urls) {
+            String value = confluence.contentByUrl(url).getStorage().getValue();
+            if (StringUtils.isConfluenceYamlFormat(value)) {
+                value = StringUtils.extractYamlContentFromConfluence(value);
+            }
+            if (!content.isEmpty()) {
+                content.append("\n");
+            }
+            content.append(value);
+        }
+        return content.toString();
+    }
+
+    private List<TestCaseGeneratorAgent.TestCase> deduplicateInChunks(
+        List<TestCaseGeneratorAgent.TestCase> allGeneratedTestCases,
+        List<ChunkPreparation.Chunk> existingTestCaseChunks
+    ) throws Exception {
+        // Step 1: Deduplicate allGeneratedTestCases against itself to remove internal duplicates
+        System.out.println("Step 1: Deduplicating generated test cases against themselves");
+        List<TestCaseGeneratorAgent.TestCase> selfDeduplicated = deduplicateSelfInChunks(allGeneratedTestCases);
+        System.out.println("After self-deduplication: " + selfDeduplicated.size() + " unique test cases");
+        
+        // Step 2: Deduplicate against existing test cases - use already prepared chunks
+        System.out.println("Step 2: Deduplicating against existing test cases");
+        List<TestCaseGeneratorAgent.TestCase> finalDeduplicated = deduplicateAgainstExistingInChunks(selfDeduplicated, existingTestCaseChunks);
+        System.out.println("After deduplication against existing: " + finalDeduplicated.size() + " test cases");
+        
+        return finalDeduplicated;
+    }
+    
+    private List<TestCaseGeneratorAgent.TestCase> deduplicateSelfInChunks(
+        List<TestCaseGeneratorAgent.TestCase> allGeneratedTestCases
+    ) throws Exception {
         ChunkPreparation chunkPreparation = new ChunkPreparation();
-        int storyTokens = new Claude35TokenCounter().countTokens(ticketContext.toText());
+        int systemTokenLimits = chunkPreparation.getTokenLimit();
+        int tokenLimit = systemTokenLimits / 2; // Use half the system limit for self-deduplication
+        
+        String allGeneratedText = ToText.Utils.toText(allGeneratedTestCases);
+        int generatedTokens = new Claude35TokenCounter().countTokens(allGeneratedText);
+        
+        // Single deduplication call if small enough
+        if (generatedTokens <= tokenLimit) {
+            return testCaseDeduplicationAgent.run(
+                new TestCaseDeduplicationAgent.Params(
+                    allGeneratedText,
+                    "", // No existing test cases for self-deduplication
+                    "" // No previous deduplicated results
+                )
+            );
+        }
+        
+        // Split into chunks and deduplicate iteratively against accumulated unique results
+        List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(allGeneratedTestCases, tokenLimit);
+        List<TestCaseGeneratorAgent.TestCase> uniqueResults = new ArrayList<>();
+        
+        for (ChunkPreparation.Chunk chunk : chunks) {
+            // Deduplicate against accumulated unique results from previous chunks
+            List<TestCaseGeneratorAgent.TestCase> deduplicatedChunk = testCaseDeduplicationAgent.run(
+                new TestCaseDeduplicationAgent.Params(
+                    chunk.getText(), // Pass string directly
+                    "", // No existing test cases
+                    ToText.Utils.toText(uniqueResults) // Previous unique results from earlier chunks
+                )
+            );
+            
+            uniqueResults.addAll(deduplicatedChunk);
+        }
+        
+        return uniqueResults;
+    }
+    
+    private List<TestCaseGeneratorAgent.TestCase> deduplicateAgainstExistingInChunks(
+        List<TestCaseGeneratorAgent.TestCase> newTestCases,
+        List<ChunkPreparation.Chunk> existingTestCaseChunks
+    ) throws Exception {
+        // Deduplicate new test cases against each chunk of existing test cases
+        for (ChunkPreparation.Chunk existingChunk : existingTestCaseChunks) {
+            String newTestCasesText = ToText.Utils.toText(newTestCases);
+            String existingTestCasesText = existingChunk.getText();
+            
+            List<TestCaseGeneratorAgent.TestCase> deduplicatedAgainstChunk = testCaseDeduplicationAgent.run(
+                new TestCaseDeduplicationAgent.Params(
+                    newTestCasesText, // Pass string directly
+                    existingTestCasesText,
+                    "" // No previous deduplicated results
+                )
+            );
+            
+            // Update newTestCases to only include the ones that are not duplicates
+            // This way, the next chunk will check a smaller list
+            newTestCases = deduplicatedAgainstChunk;
+            System.out.println("After checking against existing chunk: " + newTestCases.size() + " test cases remain");
+        }
+        
+        return newTestCases;
+    }
+
+    @NotNull
+    public List<ITicket> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship) throws Exception {
+        List<ITicket> finaResults = new ArrayList<>();
+        String value = confluence.contentByUrl(relatedTestCasesRulesLink).getStorage().getValue();
+        String extraRelatedTestCaseRulesFromConfluence;
+        if (StringUtils.isConfluenceYamlFormat(value)) {
+            extraRelatedTestCaseRulesFromConfluence  = StringUtils.extractYamlContentFromConfluence(value);
+        } else {
+            extraRelatedTestCaseRulesFromConfluence = value;
+        }
+        ChunkPreparation chunkPreparation = new ChunkPreparation();
+
+        int storyTokens = new Claude35TokenCounter().countTokens(ticketText);
         System.out.println("STORY TOKENS: " + storyTokens);
         int systemTokenLimits = chunkPreparation.getTokenLimit();
         System.out.println("SYSTEM TOKEN LIMITS: " + systemTokenLimits);
@@ -164,17 +347,17 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         System.out.println("TESTCASES TOKEN LIMITS: " + tokenLimit);
         List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(listOfAllTestCases, tokenLimit);
         for (ChunkPreparation.Chunk chunk : chunks) {
-            JSONArray testCaseKeys = relatedTestCasesAgent.run(new RelatedTestCasesAgent.Params(ticketContext.toText(), chunk.getText(), extraRelatedTestCaseRulesFromConfluence));
+            JSONArray testCaseKeys = relatedTestCasesAgent.run(new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence));
             //find relevant test case from batch
             for (int j = 0; j < testCaseKeys.length(); j++) {
                 String testCaseKey = testCaseKeys.getString(j);
                 ITicket testCase = listOfAllTestCases.stream().filter(t -> t.getKey().equals(testCaseKey)).findFirst().orElse(null);
                 if (testCase != null) {
-                    boolean isConfirmed = relatedTestCaseAgent.run(new RelatedTestCaseAgent.Params(ticketContext.toText(), testCase.toText(), extraRelatedTestCaseRulesFromConfluence));
+                    boolean isConfirmed = relatedTestCaseAgent.run(new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence));
                     if (isConfirmed) {
                         finaResults.add(testCase);
                         if (isLink) {
-                            trackerClient.linkIssueWithRelationship(ticketContext.getTicket().getTicketKey(), testCase.getKey(), relationship);
+                            trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
                         }
                     }
                 }
