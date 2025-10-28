@@ -22,6 +22,15 @@ public class TestCaseGeneratorAgent extends AbstractSimpleAgent<TestCaseGenerato
         private String existingTestCases;
         private String storyDescription;
         private String extraRules;
+        private boolean isToOverrideExamples = false;
+        private String examples = "";
+
+        public Params(String priorities, String existingTestCases, String storyDescription, String extraRules) {
+            this.priorities = priorities;
+            this.existingTestCases = existingTestCases;
+            this.storyDescription = storyDescription;
+            this.extraRules = extraRules;
+        }
     }
 
     @AllArgsConstructor
@@ -60,5 +69,12 @@ public class TestCaseGeneratorAgent extends AbstractSimpleAgent<TestCaseGenerato
         }
 
         return testCases;
+    }
+
+    public static JSONObject createTestCase(String priority, String summary, String description) {
+        return new JSONObject()
+                .put("priority", priority)
+                .put("summary", summary)
+                .put("description", description);
     }
 }

@@ -53,6 +53,7 @@ class TestCaseGeneratorAgentTest {
             "Existing test case 1\nExisting test case 2",
             "Story: User login functionality",
             "Extra rule: Focus on edge cases"
+
         );
 
         String renderedPrompt = "Generated prompt with params";
