@@ -30,6 +30,7 @@ jobs:
       
       - name: Build All Artifacts (Single Build)
         id: gradle
+        continue-on-error: true
         run: |
           ./gradlew clean build \
             :dmtools-core:shadowJar \
@@ -37,7 +38,8 @@ jobs:
             publish \
             -x integrationTest \
             -x :dmtools-automation:test \
-            --no-daemon --info
+            --no-daemon --info 2>&1 | tee gradle-build.log
+          exit ${PIPESTATUS[0]}
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,23 +53,63 @@ jobs:
           reporter: java-junit
           fail-on-error: true
       
-      - name: Print Failed Tests
-        if: failure()
+      - name: Analyze Build Failure
+        if: steps.gradle.outcome == 'failure'
         run: |
-          echo "## :x: Test Failures or Build Issues" >> $GITHUB_STEP_SUMMARY
+          echo "## :x: Build Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check what actually failed
+          if [ -f gradle-build.log ]; then
+            echo "### Build Error Details" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Extract compilation errors
+            if grep -q "Compilation failed" gradle-build.log; then
+              echo "#### :hammer: Compilation Errors" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              grep -A 10 "Compilation failed" gradle-build.log | head -30 >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            # Extract test failures summary
+            if grep -q "BUILD FAILED" gradle-build.log; then
+              echo "#### :test_tube: Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              # Get the summary section from Gradle output
+              sed -n '/> Task.*FAILED/,/BUILD FAILED/p' gradle-build.log | head -50 >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            # Extract failed test details from log
+            if grep -q "FAILED" gradle-build.log; then
+              echo "#### :x: Failed Tasks" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              grep "Task.*FAILED" gradle-build.log | head -20 >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
           
           # Check for failed test report files
-          failed_tests_found=false
           echo "### Failed Test Cases" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
+          
+          failed_tests_found=false
           for file in $(find . -name "TEST-*.xml"); do
             if grep -qE "(<failure|<error)" "$file"; then
               failed_tests_found=true
               TEST_CLASS=$(basename "$file" .xml | sed 's/TEST-//')
-              echo "#### :test_tube: Test Class: \`$TEST_CLASS\`" >> $GITHUB_STEP_SUMMARY
+              TEST_MODULE=$(echo "$file" | sed 's|./||' | cut -d'/' -f1)
+              echo "#### :test_tube: **$TEST_MODULE** - \`$TEST_CLASS\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "<details>" >> $GITHUB_STEP_SUMMARY
+              echo "<summary>View test failures</summary>" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
               
-              # Extract only failed testcase blocks using a stateful awk script
+              # Extract failed test names and messages
               awk '
                 BEGIN { in_testcase=0; buffer="" }
                 /<testcase / { in_testcase=1; buffer=$0; next; }
@@ -80,21 +122,50 @@ jobs:
                   next;
                 }
                 { if (in_testcase) { buffer = buffer "\n" $0; } }
-              ' "$file" > temp_failures.txt
-
-              if [ -s temp_failures.txt ]; then
-                  echo '```xml' >> $GITHUB_STEP_SUMMARY
-                  # Decode HTML entities for better readability in GitHub Summary
-                  sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&quot;/"/g' -e 's/&amp;/\&/g' -e "s/&apos;/'/g" temp_failures.txt >> $GITHUB_STEP_SUMMARY
-                  echo '```' >> $GITHUB_STEP_SUMMARY
-              fi
-              rm -f temp_failures.txt
+              ' "$file" | while IFS= read -r line; do
+                if [[ $line =~ testcase.*name=\"([^\"]+)\" ]]; then
+                  echo "**Test:** \`${BASH_REMATCH[1]}\`" >> $GITHUB_STEP_SUMMARY
+                fi
+                if [[ $line =~ \<failure.*message=\"([^\"]+)\" ]] || [[ $line =~ \<error.*message=\"([^\"]+)\" ]]; then
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Error:** ${BASH_REMATCH[1]}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                fi
+              done
+              
+              echo '```xml' >> $GITHUB_STEP_SUMMARY
+              awk '
+                BEGIN { in_testcase=0; buffer="" }
+                /<testcase / { in_testcase=1; buffer=$0; next; }
+                /<\/testcase>/ {
+                  if (in_testcase) {
+                    buffer = buffer "\n" $0;
+                    if (buffer ~ /<(failure|error)/) { print buffer; }
+                    in_testcase=0; buffer="";
+                  }
+                  next;
+                }
+                { if (in_testcase) { buffer = buffer "\n" $0; } }
+              ' "$file" | sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&quot;/"/g' -e 's/&amp;/\&/g' -e "s/&apos;/'/g" | head -100 >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "</details>" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
             fi
           done
 
           if [ "$failed_tests_found" = false ]; then
-            echo "No specific test failures found in XML reports. The build might have failed for other reasons (e.g., compilation error, hung process)." >> $GITHUB_STEP_SUMMARY
+            echo "No test failures found in XML reports." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The build likely failed due to:" >> $GITHUB_STEP_SUMMARY
+            echo "- Compilation errors" >> $GITHUB_STEP_SUMMARY
+            echo "- Dependency resolution issues" >> $GITHUB_STEP_SUMMARY
+            echo "- Build configuration problems" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the build log above for details." >> $GITHUB_STEP_SUMMARY
           fi
+          
+          # Fail the workflow
+          exit 1
       
       - name: Upload Test Results
         if: always()
