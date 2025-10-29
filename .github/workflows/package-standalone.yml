@@ -1,0 +1,331 @@
+name: Package Standalone (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      flutter_release_tag:
+        required: false
+        type: string
+        default: 'latest'
+    outputs:
+      artifact_name:
+        description: 'Name of the uploaded artifact'
+        value: standalone-package
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository (for scripts)
+        uses: actions/checkout@v4
+      
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: build-artifacts/
+      
+      - name: Restore Server JAR to Expected Location
+        run: |
+          # The standalone script expects the JAR at dmtools-server/build/libs/
+          mkdir -p dmtools-server/build/libs
+          cp build-artifacts/dmtools-server-*.jar dmtools-server/build/libs/
+          
+          echo "Server JAR restored:"
+          ls -lh dmtools-server/build/libs/
+      
+      - name: Determine Flutter Release Tag
+        id: flutter_tag
+        run: |
+          if [ "${{ inputs.flutter_release_tag }}" = "latest" ]; then
+            echo "Getting latest Flutter SPA release..."
+            LATEST_TAG=$(curl -s https://api.github.com/repos/IstiN/dmtools-flutter/releases/latest | jq -r '.tag_name')
+            echo "flutter_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+            echo "Using latest Flutter SPA release: ${LATEST_TAG}"
+          else
+            echo "flutter_tag=${{ inputs.flutter_release_tag }}" >> $GITHUB_OUTPUT
+            echo "Using specified Flutter SPA release: ${{ inputs.flutter_release_tag }}"
+          fi
+      
+      - name: Download Flutter SPA Release
+        id: download_spa
+        run: |
+          FLUTTER_TAG="${{ steps.flutter_tag.outputs.flutter_tag }}"
+          echo "Downloading Flutter SPA from release: ${FLUTTER_TAG}"
+          
+          # Get release information
+          RELEASE_INFO=$(curl -s "https://api.github.com/repos/IstiN/dmtools-flutter/releases/tags/${FLUTTER_TAG}")
+          
+          # Find the main app ZIP asset
+          DOWNLOAD_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name | test("dmtools-flutter-main-app-.*\\.zip$")) | .browser_download_url')
+          
+          if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
+            echo "ERROR: Could not find dmtools-flutter-main-app-*.zip asset in release ${FLUTTER_TAG}"
+            echo "Available assets:"
+            echo "${RELEASE_INFO}" | jq -r '.assets[].name'
+            exit 1
+          fi
+          
+          echo "Found SPA asset URL: ${DOWNLOAD_URL}"
+          
+          # Create temp directory and download
+          mkdir -p temp
+          SPA_ZIP_PATH="temp/dmtools-flutter-main-app.zip"
+          
+          echo "Downloading to: ${SPA_ZIP_PATH}"
+          curl -L -o "${SPA_ZIP_PATH}" "${DOWNLOAD_URL}"
+          
+          # Verify download
+          if [ ! -f "${SPA_ZIP_PATH}" ]; then
+            echo "ERROR: Failed to download SPA ZIP"
+            exit 1
+          fi
+          
+          echo "Downloaded SPA ZIP ($(du -h "${SPA_ZIP_PATH}" | cut -f1))"
+          echo "spa_zip_path=${SPA_ZIP_PATH}" >> $GITHUB_OUTPUT
+      
+      - name: Create Standalone Artifacts
+        id: create_standalone
+        run: |
+          echo "Creating standalone artifacts with Flutter SPA..."
+          
+          # Make script executable
+          chmod +x dmtools-server/scripts/prepare-standalone-war.sh
+          
+          # Run the standalone preparation script
+          SPA_ZIP_PATH="${{ steps.download_spa.outputs.spa_zip_path }}"
+          ./dmtools-server/scripts/prepare-standalone-war.sh "${PWD}/${SPA_ZIP_PATH}"
+          
+          # Verify artifacts were created
+          STANDALONE_DIR="dmtools-server/build/standalone"
+          if [ ! -f "${STANDALONE_DIR}/dmtools-standalone.jar" ]; then
+            echo "ERROR: Standalone JAR not created"
+            exit 1
+          fi
+          
+          if [ ! -f "${STANDALONE_DIR}/dmtools-standalone.war" ]; then
+            echo "ERROR: Standalone WAR not created"
+            exit 1
+          fi
+          
+          # Get file sizes for release notes
+          JAR_SIZE=$(du -h "${STANDALONE_DIR}/dmtools-standalone.jar" | cut -f1)
+          WAR_SIZE=$(du -h "${STANDALONE_DIR}/dmtools-standalone.war" | cut -f1)
+          
+          echo "Standalone artifacts created:"
+          echo "  JAR: ${JAR_SIZE}"
+          echo "  WAR: ${WAR_SIZE}"
+          
+          echo "jar_size=${JAR_SIZE}" >> $GITHUB_OUTPUT
+          echo "war_size=${WAR_SIZE}" >> $GITHUB_OUTPUT
+      
+      - name: Create Portable Bundles with Embedded Java
+        id: create_portable_bundles
+        run: |
+          echo "Creating portable bundles with embedded Temurin Java 23..."
+          
+          STANDALONE_DIR="dmtools-server/build/standalone"
+          BUNDLES_DIR="${STANDALONE_DIR}/bundles"
+          mkdir -p "${BUNDLES_DIR}"
+          
+          # Define platforms and their JRE download URLs (process in order: macOS first, then Windows)
+          declare -A platforms=(
+            ["macos-aarch64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_mac_hotspot_23.0.1_11.tar.gz"
+            ["macos-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_mac_hotspot_23.0.1_11.tar.gz"
+            ["windows-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_windows_hotspot_23.0.1_11.zip"
+          )
+          
+          # Process platforms in specific order to ensure consistent behavior
+          platform_order=("macos-aarch64" "macos-x64" "windows-x64")
+          
+          # Create launcher scripts
+          create_unix_launcher() {
+            cat > "$1" << 'EOF'
+          #!/usr/bin/env bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          exec "$DIR/jre/bin/java" -jar "$DIR/dmtools-standalone.jar" "$@"
+          EOF
+            chmod +x "$1"
+          }
+          
+          create_windows_launcher() {
+            cat > "$1" << 'EOF'
+          @echo off
+          set DIR=%~dp0
+          "%DIR%jre\bin\java.exe" -jar "%DIR%dmtools-standalone.jar" %*
+          EOF
+          }
+          
+          # Create bundles for each platform in defined order
+          for platform in "${platform_order[@]}"; do
+            echo "Creating bundle for ${platform}..."
+            
+            BUNDLE_DIR="${BUNDLES_DIR}/dmtools-standalone-${platform}"
+            mkdir -p "${BUNDLE_DIR}"
+            
+            # Copy standalone JAR
+            cp "${STANDALONE_DIR}/dmtools-standalone.jar" "${BUNDLE_DIR}/"
+            
+            # Copy README for users
+            if [ -f "dmtools-server/src/main/resources/bundle-readme.md" ]; then
+              cp "dmtools-server/src/main/resources/bundle-readme.md" "${BUNDLE_DIR}/README.md"
+            fi
+            
+            # Download and extract JRE
+            JRE_URL="${platforms[$platform]}"
+            JRE_FILE="jre-${platform}.$(basename "${JRE_URL}" | sed 's/.*\.//')"
+            
+            echo "Downloading JRE for ${platform} from ${JRE_URL}"
+            curl -L -o "${JRE_FILE}" "${JRE_URL}"
+            
+            # Verify download
+            if [ ! -f "${JRE_FILE}" ]; then
+              echo "ERROR: Failed to download JRE for ${platform}"
+              exit 1
+            fi
+            JRE_SIZE=$(du -h "${JRE_FILE}" | cut -f1)
+            echo "Downloaded JRE (${JRE_SIZE})"
+            
+            # Extract JRE
+            if [[ "${platform}" == *"windows"* ]]; then
+              # Extract Windows ZIP
+              unzip -q "${JRE_FILE}" -d "${BUNDLE_DIR}/jre-temp"
+              
+              echo "Extracted Windows ZIP contents:"
+              ls -la "${BUNDLE_DIR}/jre-temp"
+              
+              # Find the actual JRE directory and move it to jre/
+              BIN_DIR=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1)
+              if [ -n "${BIN_DIR}" ]; then
+                JRE_ROOT=$(dirname "${BIN_DIR}")
+                echo "Found bin directory at: ${BIN_DIR}"
+                echo "Using JRE root: ${JRE_ROOT}"
+                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
+              else
+                echo "ERROR: Could not find bin directory in Windows ZIP for ${platform}"
+                echo "Directory structure:"
+                find "${BUNDLE_DIR}/jre-temp" -type d | head -20
+                echo "Looking for JRE patterns:"
+                find "${BUNDLE_DIR}/jre-temp" -type d -name "*jdk*" -o -name "*jre*" | head -10
+                exit 1
+              fi
+              rm -rf "${BUNDLE_DIR}/jre-temp"
+              
+              # Create Windows launcher
+              create_windows_launcher "${BUNDLE_DIR}/run.cmd"
+            else
+              # Extract macOS/Linux tar.gz
+              mkdir -p "${BUNDLE_DIR}/jre-temp"
+              echo "Extracting ${JRE_FILE} to ${BUNDLE_DIR}/jre-temp"
+              tar -xzf "${JRE_FILE}" -C "${BUNDLE_DIR}/jre-temp"
+              
+              echo "Extracted contents:"
+              ls -la "${BUNDLE_DIR}/jre-temp"
+              
+              # Find the actual JRE directory (usually has Contents/Home on macOS)
+              if [[ "${platform}" == *"macos"* ]]; then
+                echo "Looking for macOS JRE structure..."
+                # macOS JRE structure: jdk-*/Contents/Home/
+                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -path "*/Contents/Home" -type d | head -1)
+                echo "Found Contents/Home at: ${JRE_ROOT}"
+                
+                if [ -z "${JRE_ROOT}" ]; then
+                  echo "Contents/Home not found, looking for bin directory..."
+                  # Fallback: look for bin directory
+                  JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
+                  echo "Found bin directory parent at: ${JRE_ROOT}"
+                fi
+              else
+                echo "Looking for Linux JRE structure..."
+                # Linux JRE structure: jdk-*/
+                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
+                echo "Found bin directory parent at: ${JRE_ROOT}"
+              fi
+              
+              if [ -n "${JRE_ROOT}" ] && [ -d "${JRE_ROOT}" ]; then
+                echo "Moving JRE from ${JRE_ROOT} to ${BUNDLE_DIR}/jre"
+                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
+              else
+                echo "ERROR: Could not find JRE structure in tar.gz for ${platform}"
+                echo "Directory structure:"
+                find "${BUNDLE_DIR}/jre-temp" -type d | head -20
+                echo "Looking for specific patterns:"
+                find "${BUNDLE_DIR}/jre-temp" -type d -name "*jdk*" -o -name "*jre*" -o -name "bin" | head -10
+                exit 1
+              fi
+              rm -rf "${BUNDLE_DIR}/jre-temp"
+              
+              # Create Unix launcher
+              create_unix_launcher "${BUNDLE_DIR}/run.sh"
+            fi
+            
+            # Verify JRE was extracted correctly
+            if [[ "${platform}" == *"windows"* ]]; then
+              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java.exe"
+            else
+              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java"
+            fi
+            
+            if [ ! -f "${JAVA_EXEC}" ]; then
+              echo "ERROR: Java executable not found at ${JAVA_EXEC} for ${platform}"
+              echo "JRE directory contents:"
+              find "${BUNDLE_DIR}/jre" -type f -name "*java*" || echo "No java executables found"
+              exit 1
+            else
+              echo "✅ Java executable verified at ${JAVA_EXEC}"
+            fi
+            
+            # Clean up downloaded JRE archive
+            rm "${JRE_FILE}"
+            
+            # Show bundle directory size before zipping
+            BUNDLE_DIR_SIZE=$(du -sh "${BUNDLE_DIR}" | cut -f1)
+            JAR_SIZE_IN_BUNDLE=$(du -h "${BUNDLE_DIR}/dmtools-standalone.jar" | cut -f1)
+            JRE_SIZE_IN_BUNDLE=$(du -sh "${BUNDLE_DIR}/jre" | cut -f1)
+            echo "Bundle directory contents for ${platform}:"
+            echo "  JAR: ${JAR_SIZE_IN_BUNDLE}"
+            echo "  JRE: ${JRE_SIZE_IN_BUNDLE}"
+            echo "  Total directory: ${BUNDLE_DIR_SIZE}"
+            
+            # Create ZIP bundle
+            cd "${BUNDLES_DIR}"
+            ZIP_NAME="dmtools-standalone-${platform}.zip"
+            zip -r "${ZIP_NAME}" "dmtools-standalone-${platform}/"
+            
+            # Get bundle size
+            BUNDLE_SIZE=$(du -h "${ZIP_NAME}" | cut -f1)
+            echo "Created ${ZIP_NAME} (${BUNDLE_SIZE})"
+            
+            cd - > /dev/null
+          done
+          
+          # Get bundle sizes
+          MACOS_ARM_SIZE=$(du -h "${BUNDLES_DIR}/dmtools-standalone-macos-aarch64.zip" | cut -f1)
+          MACOS_X64_SIZE=$(du -h "${BUNDLES_DIR}/dmtools-standalone-macos-x64.zip" | cut -f1)
+          WINDOWS_X64_SIZE=$(du -h "${BUNDLES_DIR}/dmtools-standalone-windows-x64.zip" | cut -f1)
+          
+          echo "macos_aarch64_size=${MACOS_ARM_SIZE}" >> $GITHUB_OUTPUT
+          echo "macos_x64_size=${MACOS_X64_SIZE}" >> $GITHUB_OUTPUT
+          echo "windows_x64_size=${WINDOWS_X64_SIZE}" >> $GITHUB_OUTPUT
+          
+          echo "All portable bundles created successfully!"
+          echo "  macOS Apple Silicon: ${MACOS_ARM_SIZE}"
+          echo "  macOS Intel: ${MACOS_X64_SIZE}"
+          echo "  Windows x64: ${WINDOWS_X64_SIZE}"
+      
+      - name: Upload Standalone Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-package
+          path: |
+            dmtools-server/build/standalone/dmtools-standalone.jar
+            dmtools-server/build/standalone/dmtools-standalone.war
+            dmtools-server/build/standalone/bundles/*.zip
+          retention-days: 7
+

@@ -1,0 +1,50 @@
+name: Package CLI (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    outputs:
+      artifact_name:
+        description: 'Name of the uploaded artifact'
+        value: cli-package
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: build-artifacts/
+      
+      - name: Prepare CLI Package
+        run: |
+          mkdir -p cli-release
+          
+          # Copy CLI JAR with version in filename
+          cp build-artifacts/dmtools-*-all.jar cli-release/dmtools-v${{ inputs.version }}-all.jar
+          
+          # Copy scripts
+          cp build-artifacts/install.sh cli-release/
+          cp build-artifacts/dmtools.sh cli-release/
+          
+          # Make scripts executable
+          chmod +x cli-release/install.sh
+          chmod +x cli-release/dmtools.sh
+          
+          # List prepared artifacts
+          echo "CLI package prepared:"
+          ls -lh cli-release/
+      
+      - name: Upload CLI Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-package
+          path: cli-release/
+          retention-days: 7
+

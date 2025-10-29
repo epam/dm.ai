@@ -9,10 +9,13 @@ on:
         type: string
 
 jobs:
-  release:
+  version-and-tag:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.new_version.outputs.version }}
+      current_version: ${{ steps.current_version.outputs.current }}
     
     steps:
       - name: Checkout repository
@@ -80,7 +83,277 @@ jobs:
       
       - name: Summary
         run: |
-          echo "✅ Release completed successfully!"
+          echo "✅ Version and tag created successfully!"
           echo "📦 Old version: ${{ steps.current_version.outputs.current }}"
           echo "🚀 New version: ${{ steps.new_version.outputs.version }}"
           echo "🏷️  Tag: v${{ steps.new_version.outputs.version }}"
+  
+  # Single build job - compiles and tests once
+  build-and-test:
+    needs: version-and-tag
+    uses: ./.github/workflows/build-and-test.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.version-and-tag.outputs.version }}
+  
+  # Parallel packaging jobs - no compilation, just packaging
+  package-cli:
+    needs: [version-and-tag, build-and-test]
+    uses: ./.github/workflows/package-cli.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.version-and-tag.outputs.version }}
+  
+  package-standalone:
+    needs: [version-and-tag, build-and-test]
+    uses: ./.github/workflows/package-standalone.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.version-and-tag.outputs.version }}
+      flutter_release_tag: latest
+  
+  # Create unified release with all artifacts
+  create-unified-release:
+    needs: [version-and-tag, package-cli, package-standalone]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download CLI Package
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-package
+          path: cli/
+      
+      - name: Download Standalone Package
+        uses: actions/download-artifact@v4
+        with:
+          name: standalone-package
+          path: standalone/
+      
+      - name: List Downloaded Artifacts
+        run: |
+          echo "CLI artifacts:"
+          ls -lhR cli/
+          echo ""
+          echo "Standalone artifacts:"
+          ls -lhR standalone/
+      
+      - name: Generate Release Notes
+        run: |
+          VERSION="${{ needs.version-and-tag.outputs.version }}"
+          
+          # Get CLI JAR size
+          CLI_JAR_SIZE=$(du -h cli/dmtools-v${VERSION}-all.jar | cut -f1)
+          
+          # Get standalone artifact sizes
+          STANDALONE_JAR_SIZE=$(du -h standalone/dmtools-standalone.jar | cut -f1)
+          STANDALONE_WAR_SIZE=$(du -h standalone/dmtools-standalone.war | cut -f1)
+          
+          # Get bundle sizes
+          MACOS_ARM_SIZE=$(du -h standalone/bundles/dmtools-standalone-macos-aarch64.zip | cut -f1)
+          MACOS_X64_SIZE=$(du -h standalone/bundles/dmtools-standalone-macos-x64.zip | cut -f1)
+          WINDOWS_X64_SIZE=$(du -h standalone/bundles/dmtools-standalone-windows-x64.zip | cut -f1)
+          
+          cat > release_notes.md << EOF
+          # 🚀 DMTools Complete Release v${VERSION}
+          
+          This release includes both the **DMTools CLI** and **Standalone Server** with Flutter SPA.
+          
+          ## 📦 What's Included
+          
+          ### 🖥️ DMTools CLI
+          - **Command-line interface** for DMTools operations
+          - **Java-based** automation and integration tools
+          - **Install script** for easy setup (\`install.sh\`)
+          - **Wrapper script** (\`dmtools.sh\`)
+          
+          ### 🌐 Standalone Server
+          - **Complete DMTools Server** with embedded Flutter SPA
+          - **Self-contained** - no external database or OAuth setup required
+          - **Local authentication** with admin/admin credentials
+          - **H2 database** for local data storage
+          - **All AI agents and tools** available out of the box
+          
+          ## 🎯 Quick Start
+          
+          ### DMTools CLI Installation
+          
+          Install the DMTools CLI using the provided script:
+          
+          \`\`\`bash
+          # Download and run install script
+          curl -fsSL https://github.com/IstiN/dmtools/releases/download/v${VERSION}/install.sh | bash
+          
+          # Or download dmtools-v${VERSION}-all.jar manually and use dmtools.sh
+          \`\`\`
+          
+          ### Standalone Server Options
+          
+          #### Option 1: Portable Bundles (No Java Required) ⭐ RECOMMENDED
+          
+          Download the bundle for your platform and run directly:
+          
+          **macOS Apple Silicon:**
+          \`\`\`bash
+          # Download dmtools-standalone-macos-aarch64.zip
+          unzip dmtools-standalone-macos-aarch64.zip
+          cd dmtools-standalone-macos-aarch64
+          ./run.sh
+          \`\`\`
+          
+          **macOS Intel:**
+          \`\`\`bash
+          # Download dmtools-standalone-macos-x64.zip
+          unzip dmtools-standalone-macos-x64.zip
+          cd dmtools-standalone-macos-x64
+          ./run.sh
+          \`\`\`
+          
+          ⚠️ **macOS Security Note:** If you see '"java" Not Opened' security warning:
+          - **Option 1:** Click "Done", then run: \`xattr -dr com.apple.quarantine .\`
+          - **Option 2:** Go to System Preferences → Privacy & Security → Allow
+          - **Option 3:** Right-click \`run.sh\` → Open → Open (bypass Gatekeeper)
+          
+          **Windows:**
+          \`\`\`cmd
+          :: Download dmtools-standalone-windows-x64.zip
+          unzip dmtools-standalone-windows-x64.zip
+          cd dmtools-standalone-windows-x64
+          run.cmd
+          \`\`\`
+          
+          ⚠️ **Windows Security Note:** If Windows Defender blocks execution:
+          - Click "More info" → "Run anyway"
+          - Or add folder to Windows Defender exclusions
+          
+          #### Option 2: JAR (Requires Java 23+)
+          \`\`\`bash
+          # Download and run
+          java -jar dmtools-standalone.jar
+          
+          # Access at http://localhost:8080
+          # Login: admin / admin
+          \`\`\`
+          
+          #### Option 3: WAR (for application servers)
+          Deploy \`dmtools-standalone.war\` to your favorite servlet container (Tomcat, Jetty, etc.)
+          
+          ## 📋 System Requirements
+          
+          ### Portable Bundles (Recommended)
+          - **No Java installation required** ✅
+          - **2GB RAM** minimum, 4GB recommended
+          - **1GB disk space** for application and data
+          - **Port 8080** available (configurable)
+          
+          ### JAR/WAR Options
+          - **Java 23+** (required)
+          - **2GB RAM** minimum, 4GB recommended
+          - **1GB disk space** for application and data
+          - **Port 8080** available (configurable)
+          
+          ## 🔧 Configuration
+          
+          The standalone version uses embedded configuration but can be customized:
+          
+          \`\`\`bash
+          # Custom port
+          java -jar dmtools-standalone.jar --server.port=9090
+          
+          # Custom database location
+          java -jar dmtools-standalone.jar --spring.datasource.url=jdbc:h2:./my-data/dmtools-db
+          
+          # Enable debug logging
+          java -jar dmtools-standalone.jar --logging.level.com.github.istin.dmtools=DEBUG
+          \`\`\`
+          
+          ## 📊 Build Information
+          
+          - **Version:** v${VERSION}
+          - **Flutter SPA:** Latest stable release
+          - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          - **CLI JAR Size:** ${CLI_JAR_SIZE}
+          - **Standalone JAR Size:** ${STANDALONE_JAR_SIZE}
+          - **Standalone WAR Size:** ${STANDALONE_WAR_SIZE}
+          - **macOS Apple Silicon Bundle:** ${MACOS_ARM_SIZE}
+          - **macOS Intel Bundle:** ${MACOS_X64_SIZE}
+          - **Windows x64 Bundle:** ${WINDOWS_X64_SIZE}
+          - **Git Commit:** \`${GITHUB_SHA:0:8}\`
+          
+          ## 🔒 Security Notes
+          
+          - Default credentials are **admin/admin** - change them in production
+          - Uses local H2 database with file storage
+          - JWT tokens for session management
+          - No external OAuth dependencies
+          
+          ## 📚 Documentation
+          
+          - **API Documentation:** Available at \`/swagger-ui.html\` after startup
+          - **H2 Console:** Available at \`/h2-console\` (development only)
+          - **Health Check:** \`/actuator/health\`
+          
+          ## 🐛 Troubleshooting
+          
+          ### Common Issues
+          
+          1. **Port already in use:** Use \`--server.port=XXXX\` to change port
+          2. **Java version (JAR only):** Ensure Java 23+ is installed (\`java -version\`)
+          3. **Memory issues:** Increase heap size with \`-Xmx4g\`
+          4. **Database locked:** Ensure no other instances are running
+          
+          ### Getting Help
+          
+          - **Issues:** [GitHub Issues](https://github.com/IstiN/dmtools/issues)
+          - **Documentation:** [Main Repository](https://github.com/IstiN/dmtools)
+          - **Flutter SPA:** [Flutter Repository](https://github.com/IstiN/dmtools-flutter)
+          
+          ---
+          
+          **Note:** This standalone release is perfect for local development, demos, and small team deployments. For production enterprise use, consider the full OAuth2-enabled deployment.
+          EOF
+          
+          echo "Release notes generated"
+      
+      - name: Create Unified Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.version-and-tag.outputs.version }}
+          name: "DMTools v${{ needs.version-and-tag.outputs.version }}"
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            cli/dmtools-v${{ needs.version-and-tag.outputs.version }}-all.jar
+            cli/install.sh
+            cli/dmtools.sh
+            standalone/dmtools-standalone.jar
+            standalone/dmtools-standalone.war
+            standalone/bundles/dmtools-standalone-macos-aarch64.zip
+            standalone/bundles/dmtools-standalone-macos-x64.zip
+            standalone/bundles/dmtools-standalone-windows-x64.zip
+      
+      - name: Summary
+        run: |
+          echo "## 🎉 Unified Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ needs.version-and-tag.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous Version:** ${{ needs.version-and-tag.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifacts Included" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI Tools:**" >> $GITHUB_STEP_SUMMARY
+          echo "- CLI JAR (dmtools-v${{ needs.version-and-tag.outputs.version }}-all.jar)" >> $GITHUB_STEP_SUMMARY
+          echo "- install.sh" >> $GITHUB_STEP_SUMMARY
+          echo "- dmtools.sh" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Standalone Server:**" >> $GITHUB_STEP_SUMMARY
+          echo "- dmtools-standalone.jar" >> $GITHUB_STEP_SUMMARY
+          echo "- dmtools-standalone.war" >> $GITHUB_STEP_SUMMARY
+          echo "- Portable Bundles (macOS ARM/Intel, Windows x64)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All artifacts compiled once, tested once, and packaged in parallel!" >> $GITHUB_STEP_SUMMARY

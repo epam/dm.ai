@@ -1,50 +1,54 @@
-name: Build Fat JAR and Publish Package
-
-# ⚠️ DEPRECATED: This workflow is no longer triggered automatically on tag push.
-# The unified release workflow (.github/workflows/release.yml) now handles all releases.
-# This workflow is kept for manual testing purposes only.
+name: Build and Test (Reusable)
 
 on:
-  # Automatic tag trigger disabled - unified release.yml now handles all releases
-  # push:
-  #   tags:
-  #     - 'v*.*.*'
-
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    outputs:
+      artifact_name:
+        description: 'Name of the uploaded artifact'
+        value: build-artifacts
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
-      checks: write # Required for test reporting
-
+      checks: write
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+      
       - name: Setup Java Environment
         uses: ./.github/actions/setup-java-only
         with:
-          cache-key-suffix: '-release'
-
-      - name: Build with Gradle
+          cache-key-suffix: '-unified-build'
+      
+      - name: Build All Artifacts (Single Build)
         id: gradle
-        run: ./gradlew clean build :dmtools-core:shadowJar publish -x integrationTest
+        run: |
+          ./gradlew clean build \
+            :dmtools-core:shadowJar \
+            :dmtools-server:bootJar \
+            publish \
+            -x integrationTest --no-daemon --info
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      
       - name: Test Report
         uses: dorny/test-reporter@v1
         if: always()
         with:
-          name: JUnit Tests
+          name: JUnit Tests (Unified Build)
           path: '**/build/test-results/test/TEST-*.xml'
           reporter: java-junit
           fail-on-error: true
-
+      
       - name: Print Failed Tests
         if: failure()
         run: |
@@ -89,26 +93,7 @@ jobs:
           if [ "$failed_tests_found" = false ]; then
             echo "No specific test failures found in XML reports. The build might have failed for other reasons (e.g., compilation error, hung process)." >> $GITHUB_STEP_SUMMARY
           fi
-
-      - name: Print HTML Test Report
-        if: steps.gradle.outcome == 'failure'
-        run: |
-          # Check multiple possible test report directories
-          TEST_REPORT_DIRS=("build/reports/tests/test" "dmtools-core/build/reports/tests/test" "dmtools-server/build/reports/tests/test")
-          
-          for TEST_REPORT_DIR in "${TEST_REPORT_DIRS[@]}"; do
-            if [ -d "$TEST_REPORT_DIR" ]; then
-              echo "Test Report Summary for: $TEST_REPORT_DIR"
-              find "$TEST_REPORT_DIR" -name "*.html" -type f -exec grep -l "failures" {} \; | while read -r html_file; do
-                echo "Found failed tests in: $html_file"
-                echo "Failed test details:"
-                grep -A 5 "failures" "$html_file"
-              done
-            else
-              echo "Test report directory not found at: $TEST_REPORT_DIR"
-            fi
-          done
-
+      
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -122,7 +107,7 @@ jobs:
             dmtools-server/build/reports/tests/test
             dmtools-server/build/test-results/test
           retention-days: 7
-
+      
       - name: Upload coverage reports to Codecov
         if: success() || steps.gradle.outcome == 'failure'
         uses: codecov/codecov-action@v5
@@ -134,34 +119,31 @@ jobs:
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Prepare Release Assets
+      
+      - name: Prepare Build Artifacts for Upload
         if: success()
         run: |
-          # Copy scripts to build directory for consistent paths
-          cp install.sh build/libs/
-          cp dmtools.sh build/libs/
-          chmod +x build/libs/install.sh
-          chmod +x build/libs/dmtools.sh
+          mkdir -p build-artifacts
           
-          # List files to verify they exist
-          echo "Release assets prepared:"
-          ls -la build/libs/dmtools-${{ github.ref_name }}-all.jar
-          ls -la build/libs/install.sh
-          ls -la build/libs/dmtools.sh
-
-      - name: Create a Release
-        id: create_release
+          # Copy CLI JAR
+          cp dmtools-core/build/libs/dmtools-*-all.jar build-artifacts/ || echo "CLI JAR not found"
+          
+          # Copy Server JAR
+          cp dmtools-server/build/libs/dmtools-server-*.jar build-artifacts/ || echo "Server JAR not found"
+          
+          # Copy scripts
+          cp install.sh build-artifacts/
+          cp dmtools.sh build-artifacts/
+          
+          # List artifacts
+          echo "Build artifacts prepared:"
+          ls -lh build-artifacts/
+      
+      - name: Upload Build Artifacts
         if: success()
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          files: |
-            build/libs/dmtools-${{ github.ref_name }}-all.jar
-            build/libs/install.sh
-            build/libs/dmtools.sh
+          name: build-artifacts
+          path: build-artifacts/
+          retention-days: 7
+
