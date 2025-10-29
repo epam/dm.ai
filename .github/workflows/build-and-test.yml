@@ -194,17 +194,29 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
       
       - name: Prepare Build Artifacts for Upload
-        if: success()
+        if: steps.gradle.outcome == 'success'
         run: |
+          echo "Checking build outputs..."
+          echo ""
+          echo "dmtools-core/build/libs/ contents:"
+          ls -lh dmtools-core/build/libs/ || echo "Directory not found"
+          echo ""
+          echo "dmtools-server/build/libs/ contents:"
+          ls -lh dmtools-server/build/libs/ || echo "Directory not found"
+          echo ""
+          
           mkdir -p build-artifacts
           
           # Copy CLI JAR (rename for consistency)
           CLI_JAR=$(ls dmtools-core/build/libs/*-all.jar 2>/dev/null | head -1)
           if [ -n "$CLI_JAR" ]; then
             cp "$CLI_JAR" build-artifacts/dmtools-cli.jar
-            echo "CLI JAR: $CLI_JAR -> build-artifacts/dmtools-cli.jar"
+            echo "✅ CLI JAR: $CLI_JAR -> build-artifacts/dmtools-cli.jar"
           else
-            echo "ERROR: CLI JAR not found"
+            echo "❌ ERROR: CLI JAR not found"
+            echo "Looking for: dmtools-core/build/libs/*-all.jar"
+            echo "Available files in dmtools-core/build/libs/:"
+            find dmtools-core/build/libs/ -type f 2>/dev/null || echo "No files found"
             exit 1
           fi
           
@@ -212,9 +224,12 @@ jobs:
           SERVER_JAR=$(ls dmtools-server/build/libs/dmtools-server-*.jar 2>/dev/null | head -1)
           if [ -n "$SERVER_JAR" ]; then
             cp "$SERVER_JAR" build-artifacts/dmtools-server.jar
-            echo "Server JAR: $SERVER_JAR -> build-artifacts/dmtools-server.jar"
+            echo "✅ Server JAR: $SERVER_JAR -> build-artifacts/dmtools-server.jar"
           else
-            echo "ERROR: Server JAR not found"
+            echo "❌ ERROR: Server JAR not found"
+            echo "Looking for: dmtools-server/build/libs/dmtools-server-*.jar"
+            echo "Available files in dmtools-server/build/libs/:"
+            find dmtools-server/build/libs/ -type f 2>/dev/null || echo "No files found"
             exit 1
           fi
           
@@ -223,11 +238,12 @@ jobs:
           cp dmtools.sh build-artifacts/
           
           # List artifacts
-          echo "Build artifacts prepared:"
+          echo ""
+          echo "✅ Build artifacts prepared:"
           ls -lh build-artifacts/
       
       - name: Upload Build Artifacts
-        if: success()
+        if: steps.gradle.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
