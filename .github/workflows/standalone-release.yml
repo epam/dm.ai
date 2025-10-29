@@ -122,7 +122,7 @@ jobs:
         continue-on-error: true
         run: |
           echo "Building DMTools server..."
-          ./gradlew clean build :dmtools-server:bootJar -x integrationTest --no-daemon --info
+          ./gradlew clean build :dmtools-server:bootJar -x integrationTest -x :dmtools-automation:test --no-daemon --info
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

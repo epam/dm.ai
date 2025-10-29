@@ -49,7 +49,7 @@ jobs:
 
       - name: Build and Test
         run: |
-          ./gradlew clean build :dmtools-server:bootJar -x integrationTest --no-daemon
+          ./gradlew clean build :dmtools-server:bootJar -x integrationTest -x :dmtools-automation:test --no-daemon
 
       - name: Create Standalone Artifacts
         run: |

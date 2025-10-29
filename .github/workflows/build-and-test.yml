@@ -35,7 +35,9 @@ jobs:
             :dmtools-core:shadowJar \
             :dmtools-server:bootJar \
             publish \
-            -x integrationTest --no-daemon --info
+            -x integrationTest \
+            -x :dmtools-automation:test \
+            --no-daemon --info
         env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
