@@ -194,6 +194,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
       
       - name: Prepare Build Artifacts for Upload
+        id: prepare_artifacts
         if: steps.gradle.outcome == 'success'
         run: |
           echo "Checking build outputs..."
@@ -208,6 +209,7 @@ jobs:
           mkdir -p build-artifacts
           
           # Copy CLI JAR (rename for consistency)
+          # Look for shadowJar output (typically named *-all.jar)
           CLI_JAR=$(ls dmtools-core/build/libs/*-all.jar 2>/dev/null | head -1)
           if [ -n "$CLI_JAR" ]; then
             cp "$CLI_JAR" build-artifacts/dmtools-cli.jar
@@ -221,20 +223,36 @@ jobs:
           fi
           
           # Copy Server JAR (rename for consistency)
-          SERVER_JAR=$(ls dmtools-server/build/libs/dmtools-server-*.jar 2>/dev/null | head -1)
+          # Exclude -plain.jar and -javadoc.jar, get the main executable JAR
+          SERVER_JAR=$(ls dmtools-server/build/libs/dmtools-server-*.jar 2>/dev/null | grep -v '\-plain\.jar$' | grep -v '\-javadoc\.jar$' | head -1)
           if [ -n "$SERVER_JAR" ]; then
             cp "$SERVER_JAR" build-artifacts/dmtools-server.jar
             echo "✅ Server JAR: $SERVER_JAR -> build-artifacts/dmtools-server.jar"
           else
             echo "❌ ERROR: Server JAR not found"
-            echo "Looking for: dmtools-server/build/libs/dmtools-server-*.jar"
+            echo "Looking for: dmtools-server/build/libs/dmtools-server-*.jar (excluding -plain.jar)"
             echo "Available files in dmtools-server/build/libs/:"
             find dmtools-server/build/libs/ -type f 2>/dev/null || echo "No files found"
             exit 1
           fi
           
           # Copy scripts
+          if [ ! -f install.sh ]; then
+            echo "❌ ERROR: install.sh not found in current directory"
+            echo "Current directory: $(pwd)"
+            echo "Contents:"
+            ls -la | head -20
+            exit 1
+          fi
           cp install.sh build-artifacts/
+          
+          if [ ! -f dmtools.sh ]; then
+            echo "❌ ERROR: dmtools.sh not found in current directory"
+            echo "Current directory: $(pwd)"
+            echo "Contents:"
+            ls -la | head -20
+            exit 1
+          fi
           cp dmtools.sh build-artifacts/
           
           # List artifacts
@@ -243,7 +261,7 @@ jobs:
           ls -lh build-artifacts/
       
       - name: Upload Build Artifacts
-        if: steps.gradle.outcome == 'success'
+        if: steps.prepare_artifacts.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
