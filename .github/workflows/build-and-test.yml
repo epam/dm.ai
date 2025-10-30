@@ -199,8 +199,8 @@ jobs:
         run: |
           echo "Checking build outputs..."
           echo ""
-          echo "dmtools-core/build/libs/ contents:"
-          ls -lh dmtools-core/build/libs/ || echo "Directory not found"
+          echo "Root build/libs/ contents (for shadowJar):"
+          ls -lh build/libs/ || echo "Directory not found"
           echo ""
           echo "dmtools-server/build/libs/ contents:"
           ls -lh dmtools-server/build/libs/ || echo "Directory not found"
@@ -209,30 +209,29 @@ jobs:
           mkdir -p build-artifacts
           
           # Copy CLI JAR (rename for consistency)
-          # Look for shadowJar output (typically named *-all.jar)
-          CLI_JAR=$(ls dmtools-core/build/libs/*-all.jar 2>/dev/null | head -1)
+          # shadowJar outputs to root build/libs/ directory
+          CLI_JAR=$(ls build/libs/*-all.jar 2>/dev/null | head -1)
           if [ -n "$CLI_JAR" ]; then
             cp "$CLI_JAR" build-artifacts/dmtools-cli.jar
             echo "✅ CLI JAR: $CLI_JAR -> build-artifacts/dmtools-cli.jar"
           else
             echo "❌ ERROR: CLI JAR not found"
-            echo "Looking for: dmtools-core/build/libs/*-all.jar"
-            echo "Available files in dmtools-core/build/libs/:"
-            find dmtools-core/build/libs/ -type f 2>/dev/null || echo "No files found"
+            echo "Looking for: build/libs/*-all.jar"
+            echo "Available files in build/libs/:"
+            find build/libs/ -type f 2>/dev/null || echo "No files found"
             exit 1
           fi
           
           # Copy Server JAR (rename for consistency)
-          # Exclude -plain.jar and -javadoc.jar, get the main executable JAR
-          SERVER_JAR=$(ls dmtools-server/build/libs/dmtools-server-*.jar 2>/dev/null | grep -v '\-plain\.jar$' | grep -v '\-javadoc\.jar$' | head -1)
-          if [ -n "$SERVER_JAR" ]; then
-            cp "$SERVER_JAR" build-artifacts/dmtools-server.jar
-            echo "✅ Server JAR: $SERVER_JAR -> build-artifacts/dmtools-server.jar"
+          # bootJar outputs to root directory as dmtools-appengine.jar
+          if [ -f dmtools-appengine.jar ]; then
+            cp dmtools-appengine.jar build-artifacts/dmtools-server.jar
+            echo "✅ Server JAR: dmtools-appengine.jar -> build-artifacts/dmtools-server.jar"
           else
             echo "❌ ERROR: Server JAR not found"
-            echo "Looking for: dmtools-server/build/libs/dmtools-server-*.jar (excluding -plain.jar)"
-            echo "Available files in dmtools-server/build/libs/:"
-            find dmtools-server/build/libs/ -type f 2>/dev/null || echo "No files found"
+            echo "Looking for: dmtools-appengine.jar in root directory"
+            echo "Available JAR files in root:"
+            ls -lh *.jar 2>/dev/null || echo "No JAR files found"
             exit 1
           fi
           
