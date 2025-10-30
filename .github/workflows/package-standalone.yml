@@ -41,12 +41,12 @@ jobs:
             exit 1
           fi
           
-          # The standalone script expects the JAR at dmtools-server/build/libs/
-          mkdir -p dmtools-server/build/libs
-          cp build-artifacts/dmtools-server.jar dmtools-server/build/libs/dmtools-server-${{ inputs.version }}.jar
+          # The standalone script expects the JAR at root as dmtools-appengine.jar
+          # It will also look for it after running bootJar, but we skip that by providing it
+          cp build-artifacts/dmtools-server.jar dmtools-appengine.jar
           
-          echo "Server JAR restored:"
-          ls -lh dmtools-server/build/libs/
+          echo "Server JAR restored to root:"
+          ls -lh dmtools-appengine.jar
       
       - name: Determine Flutter Release Tag
         id: flutter_tag
