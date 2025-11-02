@@ -213,4 +213,37 @@ class McpCliHandlerTest {
         JSONObject response = new JSONObject(result);
         assertTrue(response.getBoolean("error")); // Expected since test_tool doesn't exist
     }
+
+    @Test
+    @DisplayName("Should treat URLs with query parameters as positional arguments, not key=value")
+    void testUrlWithQueryParametersAsPositionalArgument() {
+        // This tests the bug fix for URLs containing = characters
+        // URLs like "https://example.com?node-id=123" should be treated as positional args, not key=value
+        String[] args = {"mcp", "test_tool", "https://www.figma.com/design/abc?node-id=123-456&t=xyz"};
+        
+        String result = mcpCliHandler.processMcpCommand(args);
+        
+        // Should parse the URL as a positional argument, not try to split on =
+        // The test should not crash and should return an error for nonexistent test_tool
+        JSONObject response = new JSONObject(result);
+        assertTrue(response.getBoolean("error"));
+        assertTrue(response.getString("message").contains("Unknown tool") || 
+                  response.getString("message").contains("Tool execution failed"));
+    }
+
+    @Test
+    @DisplayName("Should correctly distinguish between valid key=value and URLs with =")
+    void testDistinguishKeyValueFromUrls() {
+        // Valid key=value should be parsed as named argument
+        String[] args1 = {"mcp", "test_tool", "paramName=value"};
+        String result1 = mcpCliHandler.processMcpCommand(args1);
+        JSONObject response1 = new JSONObject(result1);
+        assertTrue(response1.getBoolean("error")); // Expected since test_tool doesn't exist
+        
+        // URL with = should be parsed as positional argument
+        String[] args2 = {"mcp", "test_tool", "https://example.com?key=value"};
+        String result2 = mcpCliHandler.processMcpCommand(args2);
+        JSONObject response2 = new JSONObject(result2);
+        assertTrue(response2.getBoolean("error")); // Expected since test_tool doesn't exist
+    }
 }

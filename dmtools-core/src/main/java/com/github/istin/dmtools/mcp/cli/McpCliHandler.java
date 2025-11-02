@@ -200,7 +200,8 @@ public class McpCliHandler {
                 i++; // Skip next argument as it was consumed
             } else if (!arg.startsWith("--")) {
                 // Positional argument - collect for now
-                if (arg.contains("=")) {
+                // Only treat as key=value if it matches pattern: paramName=value (where paramName is valid identifier)
+                if (arg.contains("=") && arg.matches("^[a-zA-Z_][a-zA-Z0-9_]*=.*")) {
                     String[] parts = arg.split("=", 2);
                     arguments.put(parts[0], parts[1]);
                 } else {
@@ -239,9 +240,10 @@ public class McpCliHandler {
             int numToMap = Math.min(positionalArgs.size(), paramNames.size());
             for (int i = 0; i < numToMap; i++) {
                 String paramValue = positionalArgs.get(i);
+                String paramName = paramNames.get(i);
                 // Try to convert to appropriate type (Integer for "limit" parameter, etc.)
-                Object convertedValue = convertParameterValue(paramNames.get(i), paramValue);
-                arguments.put(paramNames.get(i), convertedValue);
+                Object convertedValue = convertParameterValue(paramName, paramValue);
+                arguments.put(paramName, convertedValue);
             }
             
             // If there are more positional args than parameters, log warning
@@ -251,7 +253,7 @@ public class McpCliHandler {
             }
         } catch (Exception e) {
             logger.warn("Error mapping parameters for tool '{}': {}. Using indexed fallback.", 
-                toolName, e.getMessage());
+                toolName, e.getMessage(), e);
             // Fallback for any errors
             for (int i = 0; i < positionalArgs.size(); i++) {
                 arguments.put("arg" + i, positionalArgs.get(i));
