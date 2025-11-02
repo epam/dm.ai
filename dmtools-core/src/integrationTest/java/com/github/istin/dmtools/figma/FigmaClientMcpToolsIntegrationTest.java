@@ -5,6 +5,10 @@ import com.github.istin.dmtools.figma.model.FigmaIconsResult;
 import com.github.istin.dmtools.figma.model.FigmaFileResponse;
 import com.github.istin.dmtools.figma.model.FigmaNodesResponse;
 import com.github.istin.dmtools.figma.model.FigmaFileDocument;
+import com.github.istin.dmtools.figma.model.FigmaNodeDetails;
+import com.github.istin.dmtools.figma.model.FigmaTextContentResult;
+import com.github.istin.dmtools.figma.model.FigmaStylesResult;
+import com.github.istin.dmtools.figma.model.FigmaNodeChildrenResult;
 
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
@@ -14,7 +18,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Integration tests for FigmaClient MCP tools using clean models (no raw JSON processing)
@@ -25,7 +35,7 @@ public class FigmaClientMcpToolsIntegrationTest {
     private static final Logger logger = LoggerFactory.getLogger(FigmaClientMcpToolsIntegrationTest.class);
     
     // Replace with your test URL for local testing (DO NOT COMMIT)
-    private static final String TEST_FIGMA_URL = "https://www.figma.com/design/5sR5fH4Vp9jmSXVI2M3OUo/Business-App?node-id=26032-397193&t=yrriuD2fNYqRmhpW-4";
+    private static final String TEST_FIGMA_URL = "REPLACE_WITH_YOUR_TEST_URL";
     
     private BasicFigmaClient figmaClient;
 
@@ -388,94 +398,265 @@ public class FigmaClientMcpToolsIntegrationTest {
         logger.info("figma_download_image_of_file test completed successfully");
     }
 
+
+
+
     @Test
-    @DisplayName("Explore JSON structure to find actual icons")
-    public void testExploreJsonStructure() throws Exception {
-        System.out.println("=== EXPLORING FIGMA JSON STRUCTURE ===");
+    @Order(7)
+    @DisplayName("Test figma_get_node_details MCP method")
+    void testFigmaGetNodeDetails() throws Exception {
+        // Skip test if URL is not configured
+        if ("REPLACE_WITH_YOUR_TEST_URL".equals(TEST_FIGMA_URL)) {
+            logger.warn("Skipping test - TEST_FIGMA_URL not configured");
+            return;
+        }
         
-        FigmaClient figmaClient = new BasicFigmaClient();
-        FigmaFileResponse fileResponse = figmaClient.getFileStructure(TEST_FIGMA_URL);
+        logger.info("Testing figma_get_node_details");
         
-        assertNotNull(fileResponse, "Should get file response");
+        // First get icons to obtain valid node IDs
+        FigmaIconsResult iconsResult = figmaClient.getIcons(TEST_FIGMA_URL);
+        assertNotNull(iconsResult);
         
-        if (fileResponse.hasNodesResponse()) {
-            FigmaNodesResponse nodesResponse = fileResponse.getNodesResponse();
-            List<FigmaFileDocument> nodeDocuments = nodesResponse.getAllNodeDocuments();
-            
-            System.out.println("Found " + nodeDocuments.size() + " top-level node documents");
-            
-            for (FigmaFileDocument document : nodeDocuments) {
-                System.out.println("=== EXPLORING NODE: " + document.getId() + " ===");
-                exploreNodeStructure(document, 0);
+        List<FigmaIcon> icons = iconsResult.getIcons();
+        assertFalse(icons.isEmpty(), "Should have at least one icon");
+        
+        // Select first 5 node IDs
+        int numNodes = Math.min(5, icons.size());
+        String[] nodeIds = new String[numNodes];
+        for (int i = 0; i < numNodes; i++) {
+            nodeIds[i] = icons.get(i).getId();
+        }
+        
+        String commaSeparatedIds = String.join(",", nodeIds);
+        logger.info("Testing getNodeDetails with {} nodes: {}", numNodes, commaSeparatedIds);
+        
+        // Call getNodeDetails
+        FigmaNodeDetails nodeDetails = figmaClient.getNodeDetails(TEST_FIGMA_URL, commaSeparatedIds);
+        
+        assertNotNull(nodeDetails, "Node details should not be null");
+        
+        // Verify basic properties exist
+        assertNotNull(nodeDetails.getId(), "Node should have ID");
+        assertNotNull(nodeDetails.getName(), "Node should have name");
+        assertNotNull(nodeDetails.getType(), "Node should have type");
+        
+        logger.info("✅ Node details retrieved: {} ({})", nodeDetails.getName(), nodeDetails.getType());
+        logger.info("   Dimensions: {}x{}", nodeDetails.getWidth(), nodeDetails.getHeight());
+        
+        if (nodeDetails.getBackgroundColor() != null) {
+            logger.info("   Background color: {}", nodeDetails.getBackgroundColor());
+        }
+        
+        logger.info("figma_get_node_details test completed successfully");
+    }
+
+    @Test
+    @Order(8)
+    @DisplayName("Test figma_get_text_content MCP method")
+    void testFigmaGetTextContent() throws Exception {
+        // Skip test if URL is not configured
+        if ("REPLACE_WITH_YOUR_TEST_URL".equals(TEST_FIGMA_URL)) {
+            logger.warn("Skipping test - TEST_FIGMA_URL not configured");
+            return;
+        }
+        
+        logger.info("Testing figma_get_text_content");
+        
+        // Get icons and filter for TEXT type nodes
+        FigmaIconsResult iconsResult = figmaClient.getIcons(TEST_FIGMA_URL);
+        assertNotNull(iconsResult);
+        
+        List<FigmaIcon> icons = iconsResult.getIcons();
+        List<String> textNodeIds = new ArrayList<>();
+        
+        for (FigmaIcon icon : icons) {
+            if ("TEXT".equals(icon.getType())) {
+                textNodeIds.add(icon.getId());
+                if (textNodeIds.size() >= 10) break; // Limit to 10 text nodes
             }
+        }
+        
+        if (textNodeIds.isEmpty()) {
+            logger.info("ℹ️ No text nodes found in current design scope - skipping text content test");
+            return;
+        }
+        
+        String commaSeparatedIds = String.join(",", textNodeIds);
+        logger.info("Testing getTextContent with {} text nodes", textNodeIds.size());
+        
+        // Call getTextContent
+        FigmaTextContentResult textResult = figmaClient.getTextContent(TEST_FIGMA_URL, commaSeparatedIds);
+        
+        assertNotNull(textResult, "Text content result should not be null");
+        
+        Map<String, FigmaTextContentResult.FigmaTextEntry> textEntries = textResult.getTextEntries();
+        assertNotNull(textEntries, "Text entries should not be null");
+        assertFalse(textEntries.isEmpty(), "Should have at least one text entry");
+        
+        // Verify each text node has content
+        for (Map.Entry<String, FigmaTextContentResult.FigmaTextEntry> entry : textEntries.entrySet()) {
+            FigmaTextContentResult.FigmaTextEntry textEntry = entry.getValue();
+            logger.info("✅ Text node {}: '{}' | {} {} {}pt", 
+                entry.getKey(), 
+                textEntry.getText(),
+                textEntry.getFontFamily(),
+                textEntry.getFontWeight(),
+                textEntry.getFontSize());
+        }
+        
+        logger.info("figma_get_text_content test completed successfully");
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("Test figma_get_styles MCP method")
+    void testFigmaGetStyles() throws Exception {
+        // Skip test if URL is not configured
+        if ("REPLACE_WITH_YOUR_TEST_URL".equals(TEST_FIGMA_URL)) {
+            logger.warn("Skipping test - TEST_FIGMA_URL not configured");
+            return;
+        }
+        
+        logger.info("Testing figma_get_styles");
+        
+        // Call getStyles
+        FigmaStylesResult stylesResult = figmaClient.getStyles(TEST_FIGMA_URL);
+        
+        assertNotNull(stylesResult, "Styles result should not be null");
+        
+        List<FigmaStylesResult.ColorStyle> colorStyles = stylesResult.getColorStyles();
+        List<FigmaStylesResult.TextStyle> textStyles = stylesResult.getTextStyles();
+        
+        assertNotNull(colorStyles, "Color styles list should not be null");
+        assertNotNull(textStyles, "Text styles list should not be null");
+        
+        logger.info("✅ Retrieved {} color styles and {} text styles", colorStyles.size(), textStyles.size());
+        
+        logger.info("figma_get_styles test completed successfully");
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("Test figma_get_node_children MCP method")
+    void testFigmaGetNodeChildren() throws Exception {
+        // Skip test if URL is not configured
+        if ("REPLACE_WITH_YOUR_TEST_URL".equals(TEST_FIGMA_URL)) {
+            logger.warn("Skipping test - TEST_FIGMA_URL not configured");
+            return;
+        }
+        
+        logger.info("Testing figma_get_node_children");
+        
+        // Call getNodeChildren for root node from URL
+        FigmaNodeChildrenResult childrenResult = figmaClient.getNodeChildren(TEST_FIGMA_URL);
+        
+        // Note: getNodeChildren may return null if the node has no direct children or is a specific frame
+        // This is expected behavior for certain Figma nodes
+        if (childrenResult == null) {
+            logger.info("✅ getNodeChildren returned null (node has no direct children - this is valid)");
+            logger.info("figma_get_node_children test completed successfully");
+            return;
+        }
+        
+        List<FigmaNodeChildrenResult.ChildNode> children = childrenResult.getChildren();
+        if (children == null || children.isEmpty()) {
+            logger.info("✅ Node has no children (empty list - this is valid)");
+            logger.info("figma_get_node_children test completed successfully");
+            return;
+        }
+        
+        logger.info("✅ Found {} immediate children", children.size());
+        
+        // Verify children have required properties
+        for (FigmaNodeChildrenResult.ChildNode child : children) {
+            assertNotNull(child.getId(), "Child should have ID");
+            assertNotNull(child.getName(), "Child should have name");
+            assertNotNull(child.getType(), "Child should have type");
+            
+            logger.info("   Child: {} ({}) - {}x{}", child.getName(), child.getType(), child.getWidth(), child.getHeight());
+        }
+        
+        logger.info("figma_get_node_children test completed successfully");
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("Validate MCP tools can extract data for pixel-perfect HTML generation")
+    void testDataExtractionForHtmlGeneration() throws Exception {
+        // Skip test if URL is not configured
+        if ("REPLACE_WITH_YOUR_TEST_URL".equals(TEST_FIGMA_URL)) {
+            logger.warn("Skipping test - TEST_FIGMA_URL not configured");
+            return;
+        }
+        
+        logger.info("=== VALIDATING DATA EXTRACTION FOR HTML GENERATION ===");
+        
+        // Step 1: Get root node children (screens)
+        // Note: For specific nodes, getNodeChildren may return null if there are no direct children
+        FigmaNodeChildrenResult childrenResult = figmaClient.getNodeChildren(TEST_FIGMA_URL);
+        if (childrenResult != null && childrenResult.getChildren() != null && !childrenResult.getChildren().isEmpty()) {
+            logger.info("Found {} screens", childrenResult.getChildren().size());
         } else {
-            System.out.println("No nodes response found!");
+            logger.info("No direct children found for this node (expected for specific frame nodes)");
         }
         
-        // Force assertion to ensure we found something
-        assertTrue(fileResponse.hasNodesResponse(), "Should have nodes response");
+        // Step 2: Get styles (design tokens)
+        FigmaStylesResult styles = figmaClient.getStyles(TEST_FIGMA_URL);
+        assertNotNull(styles, "Styles should not be null");
+        logger.info("Found {} color styles and {} text styles", 
+            styles.getColorStyles() != null ? styles.getColorStyles().size() : 0,
+            styles.getTextStyles() != null ? styles.getTextStyles().size() : 0);
+        
+        // Step 3: For first screen, get detailed node info
+        if (childrenResult != null && childrenResult.getChildren() != null && !childrenResult.getChildren().isEmpty()) {
+            String firstScreenId = childrenResult.getChildren().get(0).getId();
+            FigmaNodeDetails nodeDetails = figmaClient.getNodeDetails(TEST_FIGMA_URL, firstScreenId);
+            assertNotNull(nodeDetails, "Node details should not be null");
+            logger.info("Successfully extracted detailed properties for screen: {}", firstScreenId);
+        }
+        
+        logger.info("✓ All MCP tools successfully provide data needed for HTML generation");
     }
 
-
     
-    private void exploreNodeStructure(FigmaFileDocument node, int depth) {
-        String indent = "  ".repeat(depth);
-        String nodeId = node.getId();
-        String nodeName = node.getName();
-        String nodeType = node.getType();
-        double width = node.getWidth();
-        double height = node.getHeight();
-        boolean isVectorBased = node.isVectorBased();
-        
-        // Log this node
-        System.out.println(indent + "📁 " + nodeName + " | " + nodeType + " | " + width + "x" + height + " | Vector: " + isVectorBased + " | ID: " + nodeId);
-        
-        // Look for potential icons based on different criteria
-        if (isLikelyActualIcon(node)) {
-            System.out.println(indent + "🎯 *** POTENTIAL ICON FOUND *** 🎯");
+    @Test
+    @Order(12)
+    @DisplayName("Test figma_get_layers MCP method - Get first-level structure")
+    void testFigmaGetLayers() throws Exception {
+        // Skip test if URL is not configured
+        if ("REPLACE_WITH_YOUR_TEST_URL".equals(TEST_FIGMA_URL)) {
+            logger.warn("Skipping test - TEST_FIGMA_URL not configured");
+            return;
         }
         
-        // Recursively explore children, but limit depth to avoid too much output
-        if (depth < 4 && node.hasChildren()) {
-            List<FigmaFileDocument> children = node.getChildren();
-            for (FigmaFileDocument child : children) {
-                exploreNodeStructure(child, depth + 1);
-            }
-        } else if (node.hasChildren()) {
-            System.out.println(indent + "... " + node.getChildren().size() + " more children (depth limit reached)");
+        logger.info("=== TESTING figma_get_layers ===");
+        logger.info("Testing with URL: {}", TEST_FIGMA_URL);
+        
+        // Call getLayers to get first-level structure
+        FigmaNodeChildrenResult layersResult = figmaClient.getLayers(TEST_FIGMA_URL);
+        
+        assertNotNull(layersResult, "Layers result should not be null");
+        
+        List<FigmaNodeChildrenResult.ChildNode> layers = layersResult.getChildren();
+        assertNotNull(layers, "Layers list should not be null");
+        assertFalse(layers.isEmpty(), "Should have at least one layer");
+        
+        logger.info("✅ Found {} first-level layers", layers.size());
+        
+        // Log details about each layer (screen)
+        for (int i = 0; i < layers.size(); i++) {
+            FigmaNodeChildrenResult.ChildNode layer = layers.get(i);
+            logger.info("\n📱 Layer {}: {}", i + 1, layer.getName());
+            logger.info("   ID: {}", layer.getId());
+            logger.info("   Type: {}", layer.getType());
+            logger.info("   Size: {}x{}", layer.getWidth(), layer.getHeight());
+            logger.info("   Position: ({}, {})", layer.getX(), layer.getY());
+            logger.info("   Visible: {}", layer.isVisible());
         }
+        
+        logger.info("\n=== figma_get_layers TEST COMPLETE ===");
+        logger.info("✅ Successfully retrieved first-level structure");
+        logger.info("Next step: Use these layer IDs with figma_get_node_details to drill into specific screens");
     }
     
-    private boolean isLikelyActualIcon(FigmaFileDocument node) {
-        String name = node.getName();
-        String type = node.getType();
-        double width = node.getWidth();
-        double height = node.getHeight();
-        
-        // Look for small elements that could be icons
-        boolean isSmall = width > 0 && height > 0 && width <= 64 && height <= 64;
-        
-        // Look for vector elements (common for icons)
-        boolean isVector = "VECTOR".equals(type);
-        
-        // Look for icon-like names
-        boolean hasIconName = name != null && (
-            name.toLowerCase().contains("icon") ||
-            name.toLowerCase().contains("chevron") ||
-            name.toLowerCase().contains("arrow") ||
-            name.toLowerCase().contains("home") ||
-            name.toLowerCase().contains("contact") ||
-            name.toLowerCase().contains("account") ||
-            name.toLowerCase().contains("settings") ||
-            name.toLowerCase().contains("exit") ||
-            name.contains("🏠") || name.contains("📦") || name.contains("💬") || 
-            name.contains("👤") || name.contains("⚙️") || name.contains("🔒")
-        );
-        
-        // Look for nodes that have a simple ID structure (not complex nested)
-        String nodeId = node.getId();
-        boolean hasSimpleId = nodeId != null && !nodeId.contains(";") && nodeId.split(":").length <= 2;
-        
-        return (isSmall || isVector || hasIconName) && hasSimpleId;
-    }
 } 

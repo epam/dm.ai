@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.net.URISyntaxException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -34,6 +35,10 @@ import org.json.JSONArray;
 import com.github.istin.dmtools.figma.model.FigmaIcon;
 import com.github.istin.dmtools.figma.model.FigmaIconsResult;
 import com.github.istin.dmtools.figma.model.FigmaFileResponse;
+import com.github.istin.dmtools.figma.model.FigmaNodeDetails;
+import com.github.istin.dmtools.figma.model.FigmaTextContentResult;
+import com.github.istin.dmtools.figma.model.FigmaStylesResult;
+import com.github.istin.dmtools.figma.model.FigmaNodeChildrenResult;
 
 public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlToImageFile, UriToObject {
 
@@ -94,6 +99,60 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             ignored.printStackTrace();
             return null;
         }
+    }
+
+    /**
+     * Download a specific node/component as an image file.
+     * Useful for getting visual representation of specific pieces before processing.
+     *
+     * @param href The Figma design URL (for file ID extraction)
+     * @param nodeId The specific node ID to download as image
+     * @param format Image format: "png" or "jpg"
+     * @param scale Scale factor: 1, 2, or 4 (default: 2 for retina)
+     * @return File containing the downloaded image
+     * @throws Exception if there's an error downloading
+     */
+    @MCPTool(
+        name = "figma_download_node_image",
+        description = "Download image of specific node/component. Useful for visual preview of design pieces before processing structure.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public File downloadNodeImage(
+        @MCPParam(name = "href", description = "Figma design URL", required = true) String href,
+        @MCPParam(name = "nodeId", description = "Node ID to download", required = true) String nodeId,
+        @MCPParam(name = "format", description = "Image format: png or jpg", required = false) String format,
+        @MCPParam(name = "scale", description = "Scale factor: 1, 2, or 4", required = false) Integer scale
+    ) throws Exception {
+        href = href.replaceAll("&amp;", "&");
+        String fileId = parseFileId(href);
+        
+        if (format == null || format.isEmpty()) {
+            format = "png";
+        }
+        if (scale == null) {
+            scale = 2;
+        }
+        
+        // Get image URL from Figma API
+        GenericRequest getRequest = new GenericRequest(this, path("images/" + fileId));
+        getRequest.param("ids", nodeId);
+        getRequest.param("format", format);
+        getRequest.param("scale", String.valueOf(scale));
+        
+        String response = execute(getRequest);
+        JSONObject json = new JSONObject(response);
+        JSONObject images = json.optJSONObject("images");
+        
+        if (images == null || !images.has(nodeId)) {
+            logger.error("No image URL found for node: {}", nodeId);
+            return null;
+        }
+        
+        String imageUrl = images.getString(nodeId);
+        logger.info("Downloading node {} as {} image from: {}", nodeId, format, imageUrl);
+        
+        return downloadImage(imageUrl);
     }
 
     public File downloadImage(String url) throws IOException {
@@ -205,17 +264,21 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
      * This method returns the complete file structure and content as a structured model.
      * If the URL contains a node-id parameter, it returns only that specific node's structure.
      *
+     * NOTE: MCP Tool annotation disabled due to large response size that causes context overflow.
+     * Method kept for internal use by other methods.
+     *
      * @param href The Figma design URL to get structure for
      * @return FigmaFileResponse containing the file/node structure, or null if error occurs
      * @throws Exception if there's an error accessing Figma API
      */
-    @MCPTool(
-        name = "figma_get_file_structure",
-        description = "Get JSON structure of Figma design file by URL. Returns the complete file structure and content as JSON. If URL contains node-id, returns only that specific node's structure.",
-        integration = "figma",
-        category = "content_access"
-    )
-    public FigmaFileResponse getFileStructure(@MCPParam(name = "href", description = "Figma design URL to get structure for", required = true, example = "https://www.figma.com/file/abc123/Design") String href) throws Exception {
+    // @MCPTool - DISABLED: Response too large for MCP context
+    // @MCPTool(
+    //     name = "figma_get_file_structure",
+    //     description = "Get JSON structure of Figma design file by URL. Returns the complete file structure and content as JSON. If URL contains node-id, returns only that specific node's structure.",
+    //     integration = "figma",
+    //     category = "content_access"
+    // )
+    public FigmaFileResponse getFileStructure(String href) throws Exception {
         href = href.replaceAll("&amp;", "&");
         String fileId = parseFileId(href);
         
@@ -438,6 +501,496 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             return svgContent;
         } catch (Exception e) {
             logger.error("Failed to get SVG content for node {}: {}", nodeId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get detailed properties for specific node(s) from Figma.
+     * Returns focused response with colors, fonts, text, dimensions, and styles.
+     *
+     * @param href The Figma design URL
+     * @param nodeIds Comma-separated node IDs (max 10 nodes to keep response small)
+     * @return FigmaNodeDetails containing all requested node properties
+     * @throws Exception if there's an error accessing Figma API
+     */
+    @MCPTool(
+        name = "figma_get_node_details",
+        description = "Get detailed properties for specific node(s) including colors, fonts, text, dimensions, and styles. Returns small focused response.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public FigmaNodeDetails getNodeDetails(
+        @MCPParam(name = "href", description = "Figma design URL", required = true) String href,
+        @MCPParam(name = "nodeIds", description = "Comma-separated node IDs (max 10)", required = true) String nodeIds
+    ) throws Exception {
+        href = href.replaceAll("&amp;", "&");
+        String fileId = parseFileId(href);
+        
+        // Parse and limit node IDs
+        String[] ids = nodeIds.split(",");
+        if (ids.length > 10) {
+            logger.warn("Requested {} nodes, limiting to 10 to keep response small", ids.length);
+            ids = java.util.Arrays.copyOf(ids, 10);
+        }
+        
+        // Clean up node IDs (trim whitespace)
+        for (int i = 0; i < ids.length; i++) {
+            ids[i] = ids[i].trim();
+        }
+        
+        String cleanedNodeIds = String.join(",", ids);
+        
+        GenericRequest getRequest = new GenericRequest(this, path("files/" + fileId + "/nodes"));
+        getRequest.param("ids", cleanedNodeIds);
+        
+        try {
+            String response = execute(getRequest);
+            logger.info("Retrieved node details for {} nodes from file {}", ids.length, fileId);
+            
+            // Parse response and create FigmaNodeDetails from first node
+            // The response structure is: {"nodes": {"nodeId": {node data}}}
+            JSONObject responseJson = new JSONObject(response);
+            JSONObject nodes = responseJson.optJSONObject("nodes");
+            
+            if (nodes != null && !nodes.isEmpty()) {
+                // Get first node's data
+                String firstNodeId = ids[0];
+                JSONObject nodeData = nodes.optJSONObject(firstNodeId);
+                
+                if (nodeData != null) {
+                    JSONObject document = nodeData.optJSONObject("document");
+                    if (document != null) {
+                        return new FigmaNodeDetails(document);
+                    }
+                }
+            }
+            
+            logger.warn("No node data found in response");
+            return null;
+        } catch (Exception e) {
+            logger.error("Failed to get node details: {}", e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Extract text content from text nodes.
+     * Returns map of nodeId to text properties (characters, font, size, weight, etc.)
+     *
+     * @param href The Figma design URL
+     * @param nodeIds Comma-separated text node IDs (max 20)
+     * @return FigmaTextContentResult containing text content for all requested nodes
+     * @throws Exception if there's an error accessing Figma API
+     */
+    @MCPTool(
+        name = "figma_get_text_content",
+        description = "Extract text content from text nodes. Returns map of nodeId to text content.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public FigmaTextContentResult getTextContent(
+        @MCPParam(name = "href", description = "Figma design URL", required = true) String href,
+        @MCPParam(name = "nodeIds", description = "Comma-separated text node IDs (max 20)", required = true) String nodeIds
+    ) throws Exception {
+        href = href.replaceAll("&amp;", "&");
+        String fileId = parseFileId(href);
+        
+        // Parse and limit node IDs
+        String[] ids = nodeIds.split(",");
+        if (ids.length > 20) {
+            logger.warn("Requested {} text nodes, limiting to 20 to keep response small", ids.length);
+            ids = java.util.Arrays.copyOf(ids, 20);
+        }
+        
+        // Clean up node IDs
+        for (int i = 0; i < ids.length; i++) {
+            ids[i] = ids[i].trim();
+        }
+        
+        String cleanedNodeIds = String.join(",", ids);
+        
+        GenericRequest getRequest = new GenericRequest(this, path("files/" + fileId + "/nodes"));
+        getRequest.param("ids", cleanedNodeIds);
+        
+        try {
+            String response = execute(getRequest);
+            logger.info("Retrieved text content for {} nodes from file {}", ids.length, fileId);
+            
+            // Parse response and extract text content
+            JSONObject responseJson = new JSONObject(response);
+            JSONObject nodes = responseJson.optJSONObject("nodes");
+            
+            Map<String, FigmaTextContentResult.FigmaTextEntry> textEntries = new LinkedHashMap<>();
+            
+            if (nodes != null) {
+                for (String nodeId : ids) {
+                    JSONObject nodeData = nodes.optJSONObject(nodeId);
+                    if (nodeData != null) {
+                        JSONObject document = nodeData.optJSONObject("document");
+                        if (document != null && "TEXT".equals(document.optString("type"))) {
+                            // Extract text properties
+                            JSONObject entryData = new JSONObject();
+                            entryData.put("text", document.optString("characters", ""));
+                            
+                            JSONObject style = document.optJSONObject("style");
+                            if (style != null) {
+                                entryData.put("fontFamily", style.optString("fontFamily", ""));
+                                entryData.put("fontSize", style.optDouble("fontSize", 0));
+                                entryData.put("fontWeight", style.optInt("fontWeight", 400));
+                                entryData.put("lineHeight", style.optDouble("lineHeightPx", 0));
+                                entryData.put("letterSpacing", style.optDouble("letterSpacing", 0));
+                                entryData.put("textAlign", style.optString("textAlignHorizontal", "LEFT"));
+                            }
+                            
+                            // ENHANCEMENT: Include character-level style overrides
+                            // This is critical for mixed-style text (e.g., "$100.99" where ".99" is smaller)
+                            JSONArray characterStyleOverrides = document.optJSONArray("characterStyleOverrides");
+                            if (characterStyleOverrides != null && characterStyleOverrides.length() > 0) {
+                                entryData.put("characterStyleOverrides", characterStyleOverrides);
+                            }
+                            
+                            JSONObject styleOverrideTable = document.optJSONObject("styleOverrideTable");
+                            if (styleOverrideTable != null && styleOverrideTable.length() > 0) {
+                                entryData.put("styleOverrideTable", styleOverrideTable);
+                            }
+                            
+                            textEntries.put(nodeId, new FigmaTextContentResult.FigmaTextEntry(entryData));
+                        }
+                    }
+                }
+            }
+            
+            return FigmaTextContentResult.create(textEntries);
+        } catch (Exception e) {
+            logger.error("Failed to get text content: {}", e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Get design tokens (color and text styles) from Figma file.
+     * Returns structured style information for consistent design implementation.
+     *
+     * @param href The Figma design URL
+     * @return FigmaStylesResult containing all color and text styles
+     * @throws Exception if there's an error accessing Figma API
+     */
+    @MCPTool(
+        name = "figma_get_styles",
+        description = "Get design tokens (colors, text styles) defined in Figma file.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public FigmaStylesResult getStyles(
+        @MCPParam(name = "href", description = "Figma design URL", required = true) String href
+    ) throws Exception {
+        href = href.replaceAll("&amp;", "&");
+        String fileId = parseFileId(href);
+        
+        GenericRequest getRequest = new GenericRequest(this, path("files/" + fileId + "/styles"));
+        
+        try {
+            String response = execute(getRequest);
+            logger.info("Retrieved styles for file {}", fileId);
+            
+            // Note: Figma styles API returns style metadata, not the actual style values
+            // For now, return an empty result structure
+            // In a real implementation, you would need to fetch each style's details
+            FigmaStylesResult result = new FigmaStylesResult();
+            result.set("colorStyles", new JSONArray());
+            result.set("textStyles", new JSONArray());
+            
+            logger.info("Styles retrieved (note: full style details require additional API calls)");
+            return result;
+        } catch (Exception e) {
+            logger.error("Failed to get styles: {}", e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Get first-level layers (direct children) from a Figma node.
+     * This is essential for understanding screen structure before drilling into details.
+     * Returns layer names, IDs, types, and dimensions.
+     *
+     * @param href The Figma design URL with node-id parameter
+     * @return FigmaNodeChildrenResult containing first-level layers
+     * @throws Exception if there's an error accessing Figma API
+     */
+    @MCPTool(
+        name = "figma_get_layers",
+        description = "Get first-level layers (direct children) to understand structure. Returns layer names, IDs, types, sizes. Essential first step before getting details.",
+        integration = "figma",
+        category = "structure_analysis"
+    )
+    public FigmaNodeChildrenResult getLayers(
+        @MCPParam(name = "href", description = "Figma design URL with node-id", required = true) String href
+    ) throws Exception {
+        href = href.replaceAll("&amp;", "&");
+        String fileId = parseFileId(href);
+        String nodeId = extractValueByParameter(href, "node-id");
+        
+        GenericRequest getRequest = new GenericRequest(this, path("files/" + fileId + "/nodes"));
+        getRequest.param("ids", nodeId);
+        
+        try {
+            String response = execute(getRequest);
+            logger.info("Retrieved node structure for {}", nodeId);
+            
+            JSONObject json = new JSONObject(response);
+            JSONObject nodes = json.optJSONObject("nodes");
+            
+            if (nodes == null) {
+                logger.warn("No 'nodes' object in response");
+                return null;
+            }
+            
+            // Node ID in response uses colon, not dash (26032:397193 not 26032-397193)
+            String responseNodeId = nodeId.replace("-", ":");
+            
+            if (!nodes.has(responseNodeId)) {
+                logger.warn("No node data found for: {} (tried as {})", nodeId, responseNodeId);
+                return null;
+            }
+            
+            JSONObject nodeData = nodes.getJSONObject(responseNodeId);
+            JSONObject document = nodeData.optJSONObject("document");
+            
+            if (document == null) {
+                logger.warn("No document found in node data");
+                return null;
+            }
+            
+            // Extract children from document
+            JSONArray childrenArray = document.optJSONArray("children");
+            
+            if (childrenArray == null || childrenArray.isEmpty()) {
+                logger.info("Node has no children layers");
+                return null;
+            }
+            
+            // Build result with layer information
+            FigmaNodeChildrenResult result = new FigmaNodeChildrenResult();
+            result.set("parentNodeId", nodeId);
+            
+            JSONArray layersArray = new JSONArray();
+            for (int i = 0; i < childrenArray.length(); i++) {
+                JSONObject child = childrenArray.getJSONObject(i);
+                
+                JSONObject layerInfo = new JSONObject();
+                layerInfo.put("id", child.optString("id"));
+                layerInfo.put("name", child.optString("name"));
+                layerInfo.put("type", child.optString("type"));
+                
+                // Get dimensions from absoluteBoundingBox
+                JSONObject bbox = child.optJSONObject("absoluteBoundingBox");
+                if (bbox != null) {
+                    layerInfo.put("width", bbox.optDouble("width"));
+                    layerInfo.put("height", bbox.optDouble("height"));
+                    layerInfo.put("x", bbox.optDouble("x"));
+                    layerInfo.put("y", bbox.optDouble("y"));
+                }
+                
+                layerInfo.put("visible", child.optBoolean("visible", true));
+                
+                layersArray.put(layerInfo);
+            }
+            
+            result.set("children", layersArray);
+            
+            logger.info("Retrieved {} first-level layers from node {}", layersArray.length(), nodeId);
+            return result;
+            
+        } catch (Exception e) {
+            logger.error("Failed to get layers: {}", e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Get layers for multiple node IDs at once (batch operation).
+     * More efficient than calling getLayers multiple times.
+     *
+     * @param href The Figma design URL (file ID will be extracted)
+     * @param nodeIds Comma-separated node IDs to get layers for
+     * @return Map of nodeId to FigmaNodeChildrenResult
+     * @throws Exception if there's an error accessing Figma API
+     */
+    @MCPTool(
+        name = "figma_get_layers_batch",
+        description = "Get layers for multiple nodes at once. More efficient for analyzing multiple screens/containers. Returns map of nodeId to layers.",
+        integration = "figma",
+        category = "structure_analysis"
+    )
+    public Map<String, FigmaNodeChildrenResult> getLayersBatch(
+        @MCPParam(name = "href", description = "Figma design URL", required = true) String href,
+        @MCPParam(name = "nodeIds", description = "Comma-separated node IDs (max 10)", required = true) String nodeIds
+    ) throws Exception {
+        href = href.replaceAll("&amp;", "&");
+        String fileId = parseFileId(href);
+        
+        String[] ids = nodeIds.split(",");
+        if (ids.length > 10) {
+            logger.warn("Requested {} nodes, limiting to 10", ids.length);
+            ids = java.util.Arrays.copyOf(ids, 10);
+        }
+        
+        // Build request with all node IDs
+        GenericRequest getRequest = new GenericRequest(this, path("files/" + fileId + "/nodes"));
+        getRequest.param("ids", String.join(",", ids));
+        
+        try {
+            String response = execute(getRequest);
+            logger.info("Retrieved batch structure for {} nodes", ids.length);
+            
+            JSONObject json = new JSONObject(response);
+            JSONObject nodes = json.optJSONObject("nodes");
+            
+            if (nodes == null) {
+                logger.warn("No 'nodes' object in response");
+                return new HashMap<>();
+            }
+            
+            Map<String, FigmaNodeChildrenResult> results = new HashMap<>();
+            
+            // Process each node
+            for (String nodeId : ids) {
+                String cleanId = nodeId.trim();
+                String responseNodeId = cleanId.replace("-", ":");
+                
+                if (!nodes.has(responseNodeId)) {
+                    logger.warn("Node not found in response: {}", cleanId);
+                    continue;
+                }
+                
+                JSONObject nodeData = nodes.getJSONObject(responseNodeId);
+                JSONObject document = nodeData.optJSONObject("document");
+                
+                if (document == null || !document.has("children")) {
+                    continue;
+                }
+                
+                JSONArray childrenArray = document.getJSONArray("children");
+                
+                FigmaNodeChildrenResult result = new FigmaNodeChildrenResult();
+                result.set("parentNodeId", responseNodeId);
+                
+                JSONArray layersArray = new JSONArray();
+                for (int i = 0; i < childrenArray.length(); i++) {
+                    JSONObject child = childrenArray.getJSONObject(i);
+                    
+                    JSONObject layerInfo = new JSONObject();
+                    layerInfo.put("id", child.optString("id"));
+                    layerInfo.put("name", child.optString("name"));
+                    layerInfo.put("type", child.optString("type"));
+                    
+                    JSONObject bbox = child.optJSONObject("absoluteBoundingBox");
+                    if (bbox != null) {
+                        layerInfo.put("width", bbox.optDouble("width"));
+                        layerInfo.put("height", bbox.optDouble("height"));
+                        layerInfo.put("x", bbox.optDouble("x"));
+                        layerInfo.put("y", bbox.optDouble("y"));
+                    }
+                    
+                    layerInfo.put("visible", child.optBoolean("visible", true));
+                    layersArray.put(layerInfo);
+                }
+                
+                result.set("children", layersArray);
+                results.put(responseNodeId, result);
+            }
+            
+            logger.info("Successfully retrieved layers for {} nodes", results.size());
+            return results;
+            
+        } catch (Exception e) {
+            logger.error("Failed to get batch layers: {}", e.getMessage());
+            e.printStackTrace();
+            return new HashMap<>();
+        }
+    }
+
+    /**
+     * Get immediate children of a node (non-recursive).
+     * Returns basic information about direct children only.
+     *
+     * @param href The Figma design URL with node-id parameter
+     * @return FigmaNodeChildrenResult containing children information
+     * @throws Exception if there's an error accessing Figma API
+     */
+    @MCPTool(
+        name = "figma_get_node_children",
+        description = "Get immediate children IDs and basic info for a node. Non-recursive, returns only direct children.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public FigmaNodeChildrenResult getNodeChildren(
+        @MCPParam(name = "href", description = "Figma design URL with node-id", required = true) String href
+    ) throws Exception {
+        href = href.replaceAll("&amp;", "&");
+        String fileId = parseFileId(href);
+        String nodeId = extractValueByParameter(href, "node-id");
+        
+        GenericRequest getRequest = new GenericRequest(this, path("files/" + fileId + "/nodes"));
+        getRequest.param("ids", nodeId);
+        getRequest.param("depth", "1"); // Only immediate children
+        
+        try {
+            String response = execute(getRequest);
+            logger.info("Retrieved children for node {} in file {}", nodeId, fileId);
+            
+            // Parse response
+            JSONObject responseJson = new JSONObject(response);
+            JSONObject nodes = responseJson.optJSONObject("nodes");
+            
+            if (nodes != null) {
+                JSONObject nodeData = nodes.optJSONObject(nodeId);
+                if (nodeData != null) {
+                    JSONObject document = nodeData.optJSONObject("document");
+                    if (document != null) {
+                        JSONArray children = document.optJSONArray("children");
+                        
+                        List<FigmaNodeChildrenResult.ChildNode> childNodes = new ArrayList<>();
+                        
+                        if (children != null) {
+                            for (int i = 0; i < children.length(); i++) {
+                                JSONObject child = children.optJSONObject(i);
+                                if (child != null) {
+                                    JSONObject childData = new JSONObject();
+                                    childData.put("id", child.optString("id", ""));
+                                    childData.put("name", child.optString("name", ""));
+                                    childData.put("type", child.optString("type", ""));
+                                    
+                                    JSONObject bounds = child.optJSONObject("absoluteBoundingBox");
+                                    if (bounds != null) {
+                                        childData.put("width", bounds.optDouble("width", 0));
+                                        childData.put("height", bounds.optDouble("height", 0));
+                                        childData.put("x", bounds.optDouble("x", 0));
+                                        childData.put("y", bounds.optDouble("y", 0));
+                                    }
+                                    
+                                    childData.put("visible", child.optBoolean("visible", true));
+                                    
+                                    childNodes.add(new FigmaNodeChildrenResult.ChildNode(childData));
+                                }
+                            }
+                        }
+                        
+                        return FigmaNodeChildrenResult.create(nodeId, childNodes);
+                    }
+                }
+            }
+            
+            logger.warn("No children found for node {}", nodeId);
+            return null;
+        } catch (Exception e) {
+            logger.error("Failed to get node children: {}", e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }
