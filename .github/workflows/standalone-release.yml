@@ -465,6 +465,178 @@ jobs:
           echo "  macOS Intel: ${MACOS_X64_SIZE}"
           echo "  Windows x64: ${WINDOWS_X64_SIZE}"
 
+      - name: Create API-Only Portable Bundles
+        id: create_api_bundles
+        run: |
+          echo "Creating API-only portable bundles (no HTML frontend) with embedded Temurin Java 23..."
+          
+          STANDALONE_DIR="dmtools-server/build/standalone"
+          API_BUNDLES_DIR="${STANDALONE_DIR}/api-bundles"
+          mkdir -p "${API_BUNDLES_DIR}"
+          
+          # Define platforms and their JRE download URLs (same as standalone bundles)
+          declare -A platforms=(
+            ["macos-aarch64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_mac_hotspot_23.0.1_11.tar.gz"
+            ["macos-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_mac_hotspot_23.0.1_11.tar.gz"
+            ["windows-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_windows_hotspot_23.0.1_11.zip"
+          )
+          
+          # Process platforms in specific order to ensure consistent behavior
+          platform_order=("macos-aarch64" "macos-x64" "windows-x64")
+          
+          # Create launcher scripts for API-only bundles
+          create_unix_launcher_api() {
+            cat > "$1" << 'EOF'
+          #!/usr/bin/env bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          exec "$DIR/jre/bin/java" -jar "$DIR/dmtools-appengine.jar" "$@"
+          EOF
+            chmod +x "$1"
+          }
+          
+          create_windows_launcher_api() {
+            cat > "$1" << 'EOF'
+          @echo off
+          set DIR=%~dp0
+          "%DIR%jre\bin\java.exe" -jar "%DIR%dmtools-appengine.jar" %*
+          EOF
+          }
+          
+          # Create bundles for each platform in defined order
+          for platform in "${platform_order[@]}"; do
+            echo "Creating API-only bundle for ${platform}..."
+            
+            BUNDLE_DIR="${API_BUNDLES_DIR}/dmtools-server-api-${platform}"
+            mkdir -p "${BUNDLE_DIR}"
+            
+            # Copy API-only JAR (no HTML embedded)
+            cp "dmtools-appengine.jar" "${BUNDLE_DIR}/"
+            
+            # Download and extract JRE (reuse from cache if available)
+            JRE_URL="${platforms[$platform]}"
+            JRE_FILE="jre-api-${platform}.$(basename "${JRE_URL}" | sed 's/.*\.//')"
+            
+            # Check if we already downloaded this JRE for standalone bundles
+            EXISTING_JRE="jre-${platform}.$(basename "${JRE_URL}" | sed 's/.*\.//')"
+            if [ -f "${EXISTING_JRE}" ]; then
+              echo "Reusing existing JRE download for ${platform}"
+              JRE_FILE="${EXISTING_JRE}"
+            else
+              echo "Downloading JRE for ${platform} from ${JRE_URL}"
+              curl -L -o "${JRE_FILE}" "${JRE_URL}"
+              
+              # Verify download
+              if [ ! -f "${JRE_FILE}" ]; then
+                echo "ERROR: Failed to download JRE for ${platform}"
+                exit 1
+              fi
+              JRE_SIZE=$(du -h "${JRE_FILE}" | cut -f1)
+              echo "Downloaded JRE (${JRE_SIZE})"
+            fi
+            
+            # Extract JRE
+            if [[ "${platform}" == *"windows"* ]]; then
+              # Extract Windows ZIP
+              unzip -q "${JRE_FILE}" -d "${BUNDLE_DIR}/jre-temp"
+              
+              # Find the actual JRE directory and move it to jre/
+              BIN_DIR=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1)
+              if [ -n "${BIN_DIR}" ]; then
+                JRE_ROOT=$(dirname "${BIN_DIR}")
+                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
+              else
+                echo "ERROR: Could not find bin directory in Windows ZIP for ${platform}"
+                exit 1
+              fi
+              rm -rf "${BUNDLE_DIR}/jre-temp"
+              
+              # Create Windows launcher for API
+              create_windows_launcher_api "${BUNDLE_DIR}/run.cmd"
+            else
+              # Extract macOS/Linux tar.gz
+              mkdir -p "${BUNDLE_DIR}/jre-temp"
+              tar -xzf "${JRE_FILE}" -C "${BUNDLE_DIR}/jre-temp"
+              
+              # Find the actual JRE directory
+              if [[ "${platform}" == *"macos"* ]]; then
+                # macOS JRE structure: jdk-*/Contents/Home/
+                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -path "*/Contents/Home" -type d | head -1)
+                
+                if [ -z "${JRE_ROOT}" ]; then
+                  # Fallback: look for bin directory
+                  JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
+                fi
+              else
+                # Linux JRE structure: jdk-*/
+                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
+              fi
+              
+              if [ -n "${JRE_ROOT}" ] && [ -d "${JRE_ROOT}" ]; then
+                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
+              else
+                echo "ERROR: Could not find JRE structure in tar.gz for ${platform}"
+                exit 1
+              fi
+              rm -rf "${BUNDLE_DIR}/jre-temp"
+              
+              # Create Unix launcher for API
+              create_unix_launcher_api "${BUNDLE_DIR}/run.sh"
+            fi
+            
+            # Verify JRE was extracted correctly
+            if [[ "${platform}" == *"windows"* ]]; then
+              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java.exe"
+            else
+              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java"
+            fi
+            
+            if [ ! -f "${JAVA_EXEC}" ]; then
+              echo "ERROR: Java executable not found at ${JAVA_EXEC} for ${platform}"
+              exit 1
+            else
+              echo "✅ Java executable verified at ${JAVA_EXEC}"
+            fi
+            
+            # Show bundle directory size before zipping
+            BUNDLE_DIR_SIZE=$(du -sh "${BUNDLE_DIR}" | cut -f1)
+            JAR_SIZE_IN_BUNDLE=$(du -h "${BUNDLE_DIR}/dmtools-appengine.jar" | cut -f1)
+            JRE_SIZE_IN_BUNDLE=$(du -sh "${BUNDLE_DIR}/jre" | cut -f1)
+            echo "API-only bundle directory contents for ${platform}:"
+            echo "  JAR: ${JAR_SIZE_IN_BUNDLE}"
+            echo "  JRE: ${JRE_SIZE_IN_BUNDLE}"
+            echo "  Total directory: ${BUNDLE_DIR_SIZE}"
+            
+            # Create ZIP bundle
+            cd "${API_BUNDLES_DIR}"
+            ZIP_NAME="dmtools-server-api-${platform}.zip"
+            zip -r "${ZIP_NAME}" "dmtools-server-api-${platform}/"
+            
+            # Get bundle size
+            BUNDLE_SIZE=$(du -h "${ZIP_NAME}" | cut -f1)
+            echo "Created ${ZIP_NAME} (${BUNDLE_SIZE})"
+            
+            cd - > /dev/null
+          done
+          
+          # Set outputs with bundle paths and sizes
+          echo "api_macos_aarch64_bundle=${API_BUNDLES_DIR}/dmtools-server-api-macos-aarch64.zip" >> $GITHUB_OUTPUT
+          echo "api_macos_x64_bundle=${API_BUNDLES_DIR}/dmtools-server-api-macos-x64.zip" >> $GITHUB_OUTPUT
+          echo "api_windows_x64_bundle=${API_BUNDLES_DIR}/dmtools-server-api-windows-x64.zip" >> $GITHUB_OUTPUT
+          
+          # Get bundle sizes
+          API_MACOS_ARM_SIZE=$(du -h "${API_BUNDLES_DIR}/dmtools-server-api-macos-aarch64.zip" | cut -f1)
+          API_MACOS_X64_SIZE=$(du -h "${API_BUNDLES_DIR}/dmtools-server-api-macos-x64.zip" | cut -f1)
+          API_WINDOWS_X64_SIZE=$(du -h "${API_BUNDLES_DIR}/dmtools-server-api-windows-x64.zip" | cut -f1)
+          
+          echo "api_macos_aarch64_size=${API_MACOS_ARM_SIZE}" >> $GITHUB_OUTPUT
+          echo "api_macos_x64_size=${API_MACOS_X64_SIZE}" >> $GITHUB_OUTPUT
+          echo "api_windows_x64_size=${API_WINDOWS_X64_SIZE}" >> $GITHUB_OUTPUT
+          
+          echo "All API-only portable bundles created successfully!"
+          echo "  macOS Apple Silicon: ${API_MACOS_ARM_SIZE}"
+          echo "  macOS Intel: ${API_MACOS_X64_SIZE}"
+          echo "  Windows x64: ${API_WINDOWS_X64_SIZE}"
+
       - name: Generate Release Notes
         id: release_notes
         run: |
@@ -476,6 +648,9 @@ jobs:
           MACOS_ARM_SIZE="${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}"
           MACOS_X64_SIZE="${{ steps.create_portable_bundles.outputs.macos_x64_size }}"
           WINDOWS_X64_SIZE="${{ steps.create_portable_bundles.outputs.windows_x64_size }}"
+          API_MACOS_ARM_SIZE="${{ steps.create_api_bundles.outputs.api_macos_aarch64_size }}"
+          API_MACOS_X64_SIZE="${{ steps.create_api_bundles.outputs.api_macos_x64_size }}"
+          API_WINDOWS_X64_SIZE="${{ steps.create_api_bundles.outputs.api_windows_x64_size }}"
           
           cat > release_notes.md << EOF
           # 🚀 DMTools Complete Release
@@ -561,6 +736,43 @@ jobs:
           #### Option 3: WAR (for application servers)
           Deploy \`dmtools-standalone.war\` to your favorite servlet container (Tomcat, Jetty, etc.)
           
+          ### API-Only Server Bundles (No UI)
+          
+          For headless deployments, custom frontends, or API-only usage, we provide server bundles without the Flutter UI:
+          
+          **macOS Apple Silicon:**
+          \`\`\`bash
+          # Download dmtools-server-api-macos-aarch64.zip
+          unzip dmtools-server-api-macos-aarch64.zip
+          cd dmtools-server-api-macos-aarch64
+          ./run.sh
+          \`\`\`
+          
+          **macOS Intel:**
+          \`\`\`bash
+          # Download dmtools-server-api-macos-x64.zip
+          unzip dmtools-server-api-macos-x64.zip
+          cd dmtools-server-api-macos-x64
+          ./run.sh
+          \`\`\`
+          
+          **Windows:**
+          \`\`\`cmd
+          :: Download dmtools-server-api-windows-x64.zip
+          unzip dmtools-server-api-windows-x64.zip
+          cd dmtools-server-api-windows-x64
+          run.cmd
+          \`\`\`
+          
+          **Use Cases:**
+          - Custom frontend development
+          - API-only integrations
+          - Headless automation servers
+          - CI/CD environments
+          - Microservices architecture
+          
+          **Note:** API-only bundles include embedded JRE (no Java required) but no web UI. Access the API at \`http://localhost:8080/api\` and Swagger UI at \`http://localhost:8080/swagger-ui.html\`.
+          
           ## 📋 System Requirements
           
           ### Portable Bundles (Recommended)
@@ -598,9 +810,14 @@ jobs:
           - **CLI JAR Size:** ${CLI_JAR_SIZE}
           - **Standalone JAR Size:** ${JAR_SIZE}
           - **Standalone WAR Size:** ${WAR_SIZE}
-          - **macOS Apple Silicon Bundle:** ${MACOS_ARM_SIZE}
-          - **macOS Intel Bundle:** ${MACOS_X64_SIZE}
-          - **Windows x64 Bundle:** ${WINDOWS_X64_SIZE}
+          - **Standalone Bundles (with UI):**
+            - macOS Apple Silicon: ${MACOS_ARM_SIZE}
+            - macOS Intel: ${MACOS_X64_SIZE}
+            - Windows x64: ${WINDOWS_X64_SIZE}
+          - **API-Only Bundles (no UI):**
+            - macOS Apple Silicon: ${API_MACOS_ARM_SIZE}
+            - macOS Intel: ${API_MACOS_X64_SIZE}
+            - Windows x64: ${API_WINDOWS_X64_SIZE}
           - **Git Commit:** \`${GITHUB_SHA:0:8}\`
           
           ## 🔒 Security Notes
@@ -690,6 +907,9 @@ jobs:
             ${{ steps.create_portable_bundles.outputs.macos_aarch64_bundle }}
             ${{ steps.create_portable_bundles.outputs.macos_x64_bundle }}
             ${{ steps.create_portable_bundles.outputs.windows_x64_bundle }}
+            ${{ steps.create_api_bundles.outputs.api_macos_aarch64_bundle }}
+            ${{ steps.create_api_bundles.outputs.api_macos_x64_bundle }}
+            ${{ steps.create_api_bundles.outputs.api_windows_x64_bundle }}
 
 
       - name: Upload Test Results
@@ -721,12 +941,17 @@ jobs:
           echo "- **install.sh** (included)" >> $GITHUB_STEP_SUMMARY
           echo "- **dmtools.sh** (included)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Standalone Server:**" >> $GITHUB_STEP_SUMMARY
+          echo "**Standalone Server (with UI):**" >> $GITHUB_STEP_SUMMARY
           echo "- **JAR:** ${{ steps.create_standalone.outputs.jar_size }}" >> $GITHUB_STEP_SUMMARY
           echo "- **WAR:** ${{ steps.create_standalone.outputs.war_size }}" >> $GITHUB_STEP_SUMMARY
           echo "- **macOS Apple Silicon Bundle:** ${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}" >> $GITHUB_STEP_SUMMARY
           echo "- **macOS Intel Bundle:** ${{ steps.create_portable_bundles.outputs.macos_x64_size }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Windows x64 Bundle:** ${{ steps.create_portable_bundles.outputs.windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**API-Only Server (no UI):**" >> $GITHUB_STEP_SUMMARY
+          echo "- **macOS Apple Silicon Bundle:** ${{ steps.create_api_bundles.outputs.api_macos_aarch64_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **macOS Intel Bundle:** ${{ steps.create_api_bundles.outputs.api_macos_x64_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Windows x64 Bundle:** ${{ steps.create_api_bundles.outputs.api_windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 Quick Start Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
