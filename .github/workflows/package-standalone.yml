@@ -336,6 +336,26 @@ jobs:
           API_BUNDLES_DIR="${STANDALONE_DIR}/api-bundles"
           mkdir -p "${API_BUNDLES_DIR}"
           
+          # Create API-only JAR with standalone config but no HTML
+          echo "Creating dmtools-server-api.jar with standalone configuration..."
+          TMP_API_DIR="${STANDALONE_DIR}/api-tmp"
+          mkdir -p "${TMP_API_DIR}/BOOT-INF/classes"
+          
+          # Add standalone profile activation (same as standalone.jar but no HTML)
+          cat > "${TMP_API_DIR}/BOOT-INF/classes/application.properties" <<'EOF'
+          # Auto-activated by standalone distribution packaging
+          spring.profiles.active=standalone
+          EOF
+          
+          # Copy base JAR and add standalone config
+          cp -f "dmtools-appengine.jar" "${STANDALONE_DIR}/dmtools-server-api.jar"
+          pushd "${TMP_API_DIR}" >/dev/null
+          zip -qr ../dmtools-server-api.jar BOOT-INF
+          popd >/dev/null
+          rm -rf "${TMP_API_DIR}"
+          
+          echo "✅ Created dmtools-server-api.jar with standalone configuration"
+          
           # Define platforms and their JRE download URLs (same as standalone bundles)
           declare -A platforms=(
             ["macos-aarch64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_mac_hotspot_23.0.1_11.tar.gz"
@@ -351,7 +371,7 @@ jobs:
             cat > "$1" << 'EOF'
           #!/usr/bin/env bash
           DIR="$(cd "$(dirname "$0")" && pwd)"
-          exec "$DIR/jre/bin/java" -jar "$DIR/dmtools-appengine.jar" "$@"
+          exec "$DIR/jre/bin/java" -jar "$DIR/dmtools-server-api.jar" "$@"
           EOF
             chmod +x "$1"
           }
@@ -360,7 +380,7 @@ jobs:
             cat > "$1" << 'EOF'
           @echo off
           set DIR=%~dp0
-          "%DIR%jre\bin\java.exe" -jar "%DIR%dmtools-appengine.jar" %*
+          "%DIR%jre\bin\java.exe" -jar "%DIR%dmtools-server-api.jar" %*
           EOF
           }
           
@@ -371,8 +391,8 @@ jobs:
             BUNDLE_DIR="${API_BUNDLES_DIR}/dmtools-server-api-${platform}"
             mkdir -p "${BUNDLE_DIR}"
             
-            # Copy API-only JAR (no HTML embedded)
-            cp "dmtools-appengine.jar" "${BUNDLE_DIR}/"
+            # Copy API-only JAR (standalone config but no HTML)
+            cp "${STANDALONE_DIR}/dmtools-server-api.jar" "${BUNDLE_DIR}/"
             
             # Download and extract JRE (reuse from cache if available)
             JRE_URL="${platforms[$platform]}"
@@ -447,7 +467,7 @@ jobs:
             
             # Show bundle size
             BUNDLE_DIR_SIZE=$(du -sh "${BUNDLE_DIR}" | cut -f1)
-            JAR_SIZE_IN_BUNDLE=$(du -h "${BUNDLE_DIR}/dmtools-appengine.jar" | cut -f1)
+            JAR_SIZE_IN_BUNDLE=$(du -h "${BUNDLE_DIR}/dmtools-server-api.jar" | cut -f1)
             JRE_SIZE_IN_BUNDLE=$(du -sh "${BUNDLE_DIR}/jre" | cut -f1)
             echo "API-only bundle directory contents for ${platform}:"
             echo "  JAR: ${JAR_SIZE_IN_BUNDLE}"
