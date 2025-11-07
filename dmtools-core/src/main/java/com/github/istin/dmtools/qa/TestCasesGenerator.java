@@ -239,6 +239,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     }
 
     public String unpackExamples(String examples, String[] testCasesExamplesFields) throws Exception {
+        if (examples == null) {
+            return "";
+        }
         String unpackedExamples;
         if (examples.startsWith("https://")) {
             unpackedExamples = extractFromConfluence(examples);
