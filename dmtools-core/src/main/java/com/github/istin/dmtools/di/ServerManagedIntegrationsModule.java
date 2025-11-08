@@ -4,6 +4,7 @@ import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.dial.DialAIClient;
 import com.github.istin.dmtools.ai.js.JSAIClient;
+import com.github.istin.dmtools.ai.ollama.OllamaAIClient;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
@@ -32,6 +33,7 @@ import org.json.JSONObject;
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.util.*;
+import java.util.Base64;
 
 /**
  * Dagger module for server-managed job execution with pre-resolved integrations.
@@ -215,7 +217,7 @@ public class ServerManagedIntegrationsModule {
         }
         
         @Override
-        public String getTextFieldsOnly(com.github.istin.dmtools.common.model.ITicket ticket) {
+        public String getTextFieldsOnly(ITicket ticket) {
             StringBuilder ticketDescription = null;
             try {
                 ticketDescription = new StringBuilder(ticket.getTicketTitle());
@@ -294,7 +296,7 @@ public class ServerManagedIntegrationsModule {
                     } else {
                         // For Basic auth, combine email:token and base64 encode
                         String credentials = email.trim() + ":" + apiToken.trim();
-                        token = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
+                        token = Base64.getEncoder().encodeToString(credentials.getBytes());
                     }
                     System.out.println("✅ [ServerManagedIntegrationsModule] Combined CONFLUENCE_EMAIL + CONFLUENCE_API_TOKEN for authentication");
                 }
@@ -384,7 +386,7 @@ public class ServerManagedIntegrationsModule {
                 
                 if (model != null && !model.isEmpty()) {
                     System.out.println("✅ [ServerManagedIntegrationsModule] Creating OllamaAIClient with resolved credentials");
-                    return new com.github.istin.dmtools.ai.ollama.OllamaAIClient(basePath, model, numCtx, numPredict, observer);
+                    return new OllamaAIClient(basePath, model, numCtx, numPredict, observer);
                 } else {
                     System.out.println("⚠️ [ServerManagedIntegrationsModule] Ollama configuration missing OLLAMA_MODEL, skipping");
                 }

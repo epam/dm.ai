@@ -3,6 +3,7 @@ package com.github.istin.dmtools.di;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.js.JSAIClient;
+import com.github.istin.dmtools.ai.ollama.OllamaAIClient;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.common.code.SourceCode;
@@ -10,6 +11,7 @@ import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.UriToObjectFactory;
+import com.github.istin.dmtools.logging.LogCallback;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
@@ -176,7 +178,7 @@ public class ServerManagedIntegrationsModuleTest {
         // Assert
         assertNotNull(ai);
         // OllamaAIClient should be created
-        assertTrue(ai instanceof com.github.istin.dmtools.ai.ollama.OllamaAIClient);
+        assertTrue(ai instanceof OllamaAIClient);
     }
 
     @Test
@@ -196,7 +198,7 @@ public class ServerManagedIntegrationsModuleTest {
 
         // Assert
         assertNotNull(ai);
-        assertTrue(ai instanceof com.github.istin.dmtools.ai.ollama.OllamaAIClient);
+        assertTrue(ai instanceof OllamaAIClient);
     }
 
     @Test
@@ -244,7 +246,7 @@ public class ServerManagedIntegrationsModuleTest {
         // Assert
         assertNotNull(ai);
         // Ollama should have priority over Gemini
-        assertTrue(ai instanceof com.github.istin.dmtools.ai.ollama.OllamaAIClient);
+        assertTrue(ai instanceof OllamaAIClient);
     }
 
     @Test
@@ -450,7 +452,7 @@ public class ServerManagedIntegrationsModuleTest {
     /**
      * Test implementation of LogCallback for testing
      */
-    private static class TestLogCallback implements com.github.istin.dmtools.logging.LogCallback {
+    private static class TestLogCallback implements LogCallback {
         private int logCount = 0;
         
         @Override

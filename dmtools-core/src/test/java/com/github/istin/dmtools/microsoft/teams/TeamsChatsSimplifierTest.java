@@ -314,6 +314,22 @@ public class TeamsChatsSimplifierTest {
     
     @Test
     public void testGetRecentChatsSimplified_CustomCutoffDays() {
+        // Create recent chat (1 day ago) - use dynamic date instead of hardcoded groupChat
+        String dateRecent = Instant.now().minus(1, ChronoUnit.DAYS).toString();
+        JSONObject recentChatJson = new JSONObject();
+        recentChatJson.put("id", "chat-recent");
+        recentChatJson.put("chatType", "group");
+        recentChatJson.put("topic", "Project Team");
+        recentChatJson.put("lastUpdatedDateTime", dateRecent);
+        recentChatJson.put("lastMessagePreview", new JSONObject()
+            .put("createdDateTime", dateRecent)
+            .put("from", new JSONObject()
+                .put("user", new JSONObject()
+                    .put("displayName", "Alice")))
+            .put("body", new JSONObject()
+                .put("content", "Recent message")));
+        Chat recentChat = new Chat(recentChatJson.toString());
+        
         // Create chat 50 days ago
         String date50DaysAgo = Instant.now().minus(50, ChronoUnit.DAYS).toString();
         JSONObject chatJson = new JSONObject();
@@ -331,7 +347,7 @@ public class TeamsChatsSimplifierTest {
         Chat chat50Days = new Chat(chatJson.toString());
         
         List<Chat> chats = new ArrayList<>();
-        chats.add(groupChat); // Recent
+        chats.add(recentChat); // Recent (1 day ago)
         chats.add(chat50Days); // 50 days ago
         
         // With 90-day cutoff: should include both
