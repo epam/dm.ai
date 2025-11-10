@@ -17,7 +17,9 @@ public interface ApplicationConfiguration extends
     BitbucketConfiguration,
     RallyConfiguration,
     FigmaConfiguration,
-    MetricsConfiguration {
+    MetricsConfiguration,
+    OllamaConfiguration,
+    AnthropicConfiguration {
     
     /**
      * Sets the configuration file path to use

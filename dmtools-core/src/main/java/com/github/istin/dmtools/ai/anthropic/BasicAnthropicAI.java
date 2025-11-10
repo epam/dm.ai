@@ -1,4 +1,4 @@
-package com.github.istin.dmtools.ai.ollama;
+package com.github.istin.dmtools.ai.anthropic;
 
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
@@ -8,45 +8,42 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class BasicOllamaAI extends OllamaAIClient {
+public class BasicAnthropicAI extends AnthropicAIClient {
     private static String DEFAULT_BASE_PATH;
     private static String DEFAULT_MODEL;
-    private static int DEFAULT_NUM_CTX;
-    private static int DEFAULT_NUM_PREDICT;
+    private static int DEFAULT_MAX_TOKENS;
     private static Map<String, String> DEFAULT_CUSTOM_HEADERS;
 
     static {
         PropertyReader propertyReader = new PropertyReader();
-        DEFAULT_BASE_PATH = propertyReader.getOllamaBasePath();
-        DEFAULT_MODEL = propertyReader.getOllamaModel();
-        DEFAULT_NUM_CTX = propertyReader.getOllamaNumCtx();
-        DEFAULT_NUM_PREDICT = propertyReader.getOllamaNumPredict();
+        DEFAULT_BASE_PATH = propertyReader.getAnthropicBasePath();
+        DEFAULT_MODEL = propertyReader.getAnthropicModel();
+        DEFAULT_MAX_TOKENS = propertyReader.getAnthropicMaxTokens();
         DEFAULT_CUSTOM_HEADERS = parseCustomHeaders(
-            propertyReader.getOllamaCustomHeaderNames(),
-            propertyReader.getOllamaCustomHeaderValues()
+            propertyReader.getAnthropicCustomHeaderNames(),
+            propertyReader.getAnthropicCustomHeaderValues()
         );
     }
 
-    public BasicOllamaAI() throws IOException {
+    public BasicAnthropicAI() throws IOException {
         this(null);
     }
 
-    public BasicOllamaAI(ConversationObserver conversationObserver) throws IOException {
-        super(DEFAULT_BASE_PATH, DEFAULT_MODEL, DEFAULT_NUM_CTX, DEFAULT_NUM_PREDICT, conversationObserver, DEFAULT_CUSTOM_HEADERS);
+    public BasicAnthropicAI(ConversationObserver conversationObserver) throws IOException {
+        super(DEFAULT_BASE_PATH, DEFAULT_MODEL, DEFAULT_MAX_TOKENS, conversationObserver, DEFAULT_CUSTOM_HEADERS);
     }
     
     /**
-     * Creates a new BasicOllamaAI instance with the provided configuration
+     * Creates a new BasicAnthropicAI instance with the provided configuration
      * @param conversationObserver The conversation observer
      * @param configuration The application configuration
      * @throws IOException If an I/O error occurs
      */
-    public BasicOllamaAI(ConversationObserver conversationObserver, ApplicationConfiguration configuration) throws IOException {
+    public BasicAnthropicAI(ConversationObserver conversationObserver, ApplicationConfiguration configuration) throws IOException {
         super(
-            configuration.getOllamaBasePath(),
-            configuration.getOllamaModel(),
-            configuration.getOllamaNumCtx(),
-            configuration.getOllamaNumPredict(),
+            configuration.getAnthropicBasePath(),
+            configuration.getAnthropicModel(),
+            configuration.getAnthropicMaxTokens(),
             conversationObserver,
             DEFAULT_CUSTOM_HEADERS
         );
@@ -91,6 +88,4 @@ public class BasicOllamaAI extends OllamaAIClient {
         return headers.isEmpty() ? null : headers;
     }
 }
-
-
 

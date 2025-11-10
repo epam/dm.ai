@@ -307,6 +307,31 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         }
     }
     
+    // AnthropicConfiguration
+    
+    @Override
+    public String getAnthropicBasePath() {
+        return getValue("ANTHROPIC_BASE_PATH", "https://api.anthropic.com/v1/messages");
+    }
+    
+    @Override
+    public String getAnthropicModel() {
+        return getValue("ANTHROPIC_MODEL");
+    }
+    
+    @Override
+    public int getAnthropicMaxTokens() {
+        String value = getValue("ANTHROPIC_MAX_TOKENS");
+        if (value == null || value.trim().isEmpty()) {
+            return 4096;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return 4096;
+        }
+    }
+    
     // JSAIConfiguration
     
     @Override

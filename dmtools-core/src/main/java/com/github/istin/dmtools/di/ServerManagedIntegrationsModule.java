@@ -5,6 +5,7 @@ import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.dial.DialAIClient;
 import com.github.istin.dmtools.ai.js.JSAIClient;
 import com.github.istin.dmtools.ai.ollama.OllamaAIClient;
+import com.github.istin.dmtools.ai.anthropic.AnthropicAIClient;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
@@ -384,11 +385,40 @@ public class ServerManagedIntegrationsModule {
                 int numCtx = ollamaConfig.optInt("OLLAMA_NUM_CTX", 16384);
                 int numPredict = ollamaConfig.optInt("OLLAMA_NUM_PREDICT", -1);
                 
+                // Parse custom headers
+                Map<String, String> customHeaders = parseCustomHeaders(
+                    ollamaConfig.optString("OLLAMA_CUSTOM_HEADER_NAMES", null),
+                    ollamaConfig.optString("OLLAMA_CUSTOM_HEADER_VALUES", null)
+                );
+                
                 if (model != null && !model.isEmpty()) {
                     System.out.println("✅ [ServerManagedIntegrationsModule] Creating OllamaAIClient with resolved credentials");
-                    return new OllamaAIClient(basePath, model, numCtx, numPredict, observer);
+                    return new OllamaAIClient(basePath, model, numCtx, numPredict, observer, customHeaders);
                 } else {
                     System.out.println("⚠️ [ServerManagedIntegrationsModule] Ollama configuration missing OLLAMA_MODEL, skipping");
+                }
+            }
+            
+            // Then check for Anthropic
+            if (resolvedIntegrations.has("anthropic")) {
+                JSONObject anthropicConfig = resolvedIntegrations.getJSONObject("anthropic");
+                System.out.println("🔍 [ServerManagedIntegrationsModule] Found Anthropic configuration: " + anthropicConfig.length() + " parameters");
+                
+                String basePath = anthropicConfig.optString("ANTHROPIC_BASE_PATH", "https://api.anthropic.com/v1/messages");
+                String model = anthropicConfig.optString("ANTHROPIC_MODEL", null);
+                int maxTokens = anthropicConfig.optInt("ANTHROPIC_MAX_TOKENS", 4096);
+                
+                // Parse custom headers
+                Map<String, String> customHeaders = parseCustomHeaders(
+                    anthropicConfig.optString("ANTHROPIC_CUSTOM_HEADER_NAMES", null),
+                    anthropicConfig.optString("ANTHROPIC_CUSTOM_HEADER_VALUES", null)
+                );
+                
+                if (model != null && !model.isEmpty()) {
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating AnthropicAIClient with resolved credentials");
+                    return new AnthropicAIClient(basePath, model, maxTokens, observer, customHeaders);
+                } else {
+                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Anthropic configuration missing ANTHROPIC_MODEL, skipping");
                 }
             }
             
@@ -595,6 +625,46 @@ public class ServerManagedIntegrationsModule {
         }
     }
     
+    /**
+     * Parses comma-separated header names and values into a Map.
+     * If names and values count don't match, logs a warning and returns null.
+     * 
+     * @param headerNames Comma-separated header names
+     * @param headerValues Comma-separated header values (must match names by index)
+     * @return Map of header names to values, or null if parsing fails
+     */
+    private Map<String, String> parseCustomHeaders(String headerNames, String headerValues) {
+        if (headerNames == null || headerNames.trim().isEmpty() || 
+            headerValues == null || headerValues.trim().isEmpty()) {
+            return null;
+        }
+        
+        String[] names = headerNames.split(",");
+        String[] values = headerValues.split(",");
+        
+        // Trim whitespace from all elements
+        for (int i = 0; i < names.length; i++) {
+            names[i] = names[i].trim();
+        }
+        for (int i = 0; i < values.length; i++) {
+            values[i] = values[i].trim();
+        }
+        
+        if (names.length != values.length) {
+            System.err.println("⚠️ [ServerManagedIntegrationsModule] Custom header names and values count mismatch. " +
+                "Names: " + names.length + ", Values: " + values.length + ". Skipping custom headers.");
+            return null;
+        }
+        
+        Map<String, String> headers = new HashMap<>();
+        for (int i = 0; i < names.length; i++) {
+            if (!names[i].isEmpty() && !values[i].isEmpty()) {
+                headers.put(names[i], values[i]);
+            }
+        }
+        
+        return headers.isEmpty() ? null : headers;
+    }
 
     /**
      * Public method to create AI instance directly from the module.

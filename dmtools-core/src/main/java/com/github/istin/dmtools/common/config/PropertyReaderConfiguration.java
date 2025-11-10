@@ -382,6 +382,21 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
     
     @Override
+    public String getAnthropicBasePath() {
+        return propertyReader.getAnthropicBasePath();
+    }
+    
+    @Override
+    public String getAnthropicModel() {
+        return propertyReader.getAnthropicModel();
+    }
+    
+    @Override
+    public int getAnthropicMaxTokens() {
+        return propertyReader.getAnthropicMaxTokens();
+    }
+    
+    @Override
     public String getDefaultLLM() {
         return propertyReader.getDefaultLLM();
     }

@@ -197,3 +197,4 @@ public class FigmaNodeDetails extends JSONModel {
 }
 
 
+
