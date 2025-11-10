@@ -133,8 +133,7 @@ class InstructionProcessorTest {
         
         String[] result = processor.extractIfNeeded((String[]) null);
         
-        assertEquals(1, result.length);
-        assertEquals("", result[0]);
+        assertEquals(0, result.length);
     }
 
     @Test

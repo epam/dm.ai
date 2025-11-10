@@ -56,7 +56,7 @@ public class InstructionProcessor {
      */
     public String[] extractIfNeeded(String... inputArray) throws IOException {
         if (inputArray == null) {
-            return new String[] {""};
+            return new String[0];
         }
         String[] extractedArray = new String[inputArray.length];
         for (int i = 0; i < inputArray.length; i++) {

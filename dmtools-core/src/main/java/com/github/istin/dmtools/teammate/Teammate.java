@@ -110,7 +110,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     // JavaScript bridge is now inherited from AbstractJob
     
-    private InstructionProcessor instructionProcessor;
+    InstructionProcessor instructionProcessor;
 
     private static TeammateComponent teammateComponent;
 
@@ -210,10 +210,13 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         }
 
         RequestDecompositionAgent.Result inputParams = expertParams.getAgentParams();
-        inputParams.setAiRole(instructionProcessor.extractIfNeeded(inputParams.getAiRole())[0]);
+        String[] aiRoleArray = instructionProcessor.extractIfNeeded(inputParams.getAiRole());
+        inputParams.setAiRole(aiRoleArray.length > 0 ? aiRoleArray[0] : "");
         inputParams.setInstructions(instructionProcessor.extractIfNeeded(inputParams.getInstructions()));
-        inputParams.setFormattingRules(instructionProcessor.extractIfNeeded(inputParams.getFormattingRules())[0]);
-        inputParams.setFewShots(instructionProcessor.extractIfNeeded(inputParams.getFewShots())[0]);
+        String[] formattingRulesArray = instructionProcessor.extractIfNeeded(inputParams.getFormattingRules());
+        inputParams.setFormattingRules(formattingRulesArray.length > 0 ? formattingRulesArray[0] : "");
+        String[] fewShotsArray = instructionProcessor.extractIfNeeded(inputParams.getFewShots());
+        inputParams.setFewShots(fewShotsArray.length > 0 ? fewShotsArray[0] : "");
         inputParams.setQuestions(instructionProcessor.extractIfNeeded(inputParams.getQuestions()));
         inputParams.setTasks(instructionProcessor.extractIfNeeded(inputParams.getTasks()));
 
