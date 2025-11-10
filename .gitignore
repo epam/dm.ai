@@ -118,3 +118,6 @@ input
 cacheBasicFigmaClient
 cacheGeminiJSAIClient
 /dmtools-automation/screenshots
+*.token
+dmtools-core/cache**
+cache**
