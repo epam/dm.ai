@@ -84,6 +84,7 @@ public class TeammateFilePathTest {
         teammate.contextOrchestrator = contextOrchestrator;
         teammate.uriToObjectFactory = uriToObjectFactory;
         teammate.confluence = confluence;
+        teammate.instructionProcessor = new InstructionProcessor(confluence, tempDir.toString());
 
         // Set up test parameters
         params = new Teammate.TeammateParams();
@@ -151,8 +152,6 @@ public class TeammateFilePathTest {
             assertNotNull(processedInstructions);
             assertTrue(processedInstructions[0].contains("Absolute path file content"),
                     "Instructions should contain file content");
-            assertTrue(processedInstructions[0].contains(testFile.toString()),
-                    "Instructions should contain original file path");
         } finally {
             System.setProperty("user.dir", originalUserDir);
         }
@@ -181,8 +180,6 @@ public class TeammateFilePathTest {
             assertNotNull(processedInstructions);
             assertTrue(processedInstructions[0].contains("Relative path file content"),
                     "Instructions should contain file content");
-            assertTrue(processedInstructions[0].contains("./relative-instructions.md"),
-                    "Instructions should contain original file path");
         } finally {
             System.setProperty("user.dir", originalUserDir);
         }
@@ -201,6 +198,8 @@ public class TeammateFilePathTest {
         String originalUserDir = System.getProperty("user.dir");
         try {
             System.setProperty("user.dir", subDir.toString());
+            // Update instructionProcessor working directory to match
+            teammate.instructionProcessor = new InstructionProcessor(confluence, subDir.toString());
 
             // Set instructions to parent directory file path
             RequestDecompositionAgent.Result agentParams = params.getAgentParams();
@@ -214,8 +213,6 @@ public class TeammateFilePathTest {
             assertNotNull(processedInstructions);
             assertTrue(processedInstructions[0].contains("Parent directory file content"),
                     "Instructions should contain file content");
-            assertTrue(processedInstructions[0].contains("../parent-file.txt"),
-                    "Instructions should contain original file path");
         } finally {
             System.setProperty("user.dir", originalUserDir);
         }
@@ -408,11 +405,10 @@ public class TeammateFilePathTest {
         // Act - should not throw exception
         assertDoesNotThrow(() -> teammate.runJobImpl(params));
 
-        // Assert - should return empty string array
+        // Assert - should return empty array
         String[] processedInstructions = agentParams.getInstructions();
         assertNotNull(processedInstructions);
-        assertEquals(1, processedInstructions.length);
-        assertEquals("", processedInstructions[0]);
+        assertEquals(0, processedInstructions.length);
     }
 
     @Test

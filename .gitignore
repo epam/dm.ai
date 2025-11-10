@@ -50,16 +50,39 @@ application-local.properties
 /dmtools-server/data/*.mv.db
 /dmtools-server/data/*.lock.db
 
-# Cache directories
+# Cache directories - exclude all cache folders
+**/cache*/
+cache*/
+/cache*/
+/dmtools-core/cache*/
+/dmtools-server/cache*/
+/dmtools-automation/cache*/
+/dmtools-annotation-processor/cache*/
+/dmtools-mcp-annotations/cache*/
+# Specific cache directories (kept for clarity)
 /cache_nanny/
 /cacheBasicJSAIClient/
 /cacheJSAIClient/
 /cacheBasicJiraClient/
 /cacheBasicOpenAI/
 /cacheBasicGitLab/
+/cacheAnthropicAIClient/
+/cacheDialAIClient/
+/cacheOllamaAIClient/
+/cacheGeminiJSAIClient/
+/cacheBasicDialAI/
+/cacheCustomServerManagedJiraClient/
 /dmtools-core/cacheBasicGitLab/
 /dmtools-core/cacheJSAIClient/
+/dmtools-core/cacheBasicJiraClient/
+/dmtools-core/cacheTestableJiraClient/
+/dmtools-core/cacheGeminiJSAIClient/
+/dmtools-core/cacheBasicTeamsClient/
+/dmtools-core/cacheBasicOllamaAI/
+/dmtools-core/cacheBasicFigmaClient/
+/dmtools-core/cacheBasicDialAI/
 /dmtools-server/cacheJSAIClient/
+/dmtools-server/cacheCustomServerManagedJiraClient/
 /data/
 data/dmtools-db.lock.db
 data/dmtools-db.mv.db
@@ -118,11 +141,11 @@ input
 cacheBasicFigmaClient
 cacheGeminiJSAIClient
 /dmtools-automation/screenshots
-cacheBasicTeamsClient
 *.token
+test-output.txt
+cacheBasicTeamsClient
 /dmtools-core/cacheTeamsClient
 dmtools-core/cacheTeamsClient
 /dmtools-core/cacheBasicOllamaAI/*
 cache**/
 dmtools-core/cache**/
-test-output.txt
