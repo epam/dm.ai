@@ -206,12 +206,12 @@ public abstract class AbstractRestClient implements RestClient {
             }
         } else if (body.contains("rate")) {
             logger.error(body);
-            return new RateLimitException("rate limit", body, response);
+            return new RateLimitException("rate limit", body, response, code);
         }
         String sanitizedUrl = sanitizeUrl(request.url().toString());
         String responseError = "printAndCreateException error: " + sanitizedUrl + "\n" + body + "\n" + response.message() + "\n" + code;
         logger.error(responseError);
-        return new RestClient.RestClientException(responseError, body);
+        return new RestClient.RestClientException(responseError, body, code);
     }
 
     public void setClearCache(boolean clearCache) throws IOException {

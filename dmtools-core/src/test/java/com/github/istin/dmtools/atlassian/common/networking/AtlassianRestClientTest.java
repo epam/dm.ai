@@ -39,7 +39,7 @@ public class AtlassianRestClientTest {
     public void testJiraException() {
         String message = "Error message";
         String body = "Error body";
-        AtlassianRestClient.RestClientException exception = new AtlassianRestClient.RestClientException(message, body);
+        AtlassianRestClient.RestClientException exception = new AtlassianRestClient.RestClientException(message, body, -1);
 
         assertEquals(message, exception.getMessage());
         assertEquals(body, exception.getBody());

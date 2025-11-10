@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.common.utils;
 
+import com.github.istin.dmtools.common.networking.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,15 @@ public class RetryUtil {
             try {
                 return operation.get();
             } catch (Exception e) {
+                if (e instanceof RestClient.RestClientException) {
+                    String body = ((RestClient.RestClientException) e).getBody();
+                    if (body != null) {
+                        int code = ((RestClient.RestClientException) e).getCode();
+                        if (body.contains("invalid message format") || code == 400 || code == 403) {
+                            return (T) body;
+                        }
+                    }
+                }
                 e.printStackTrace();
                 lastException = e;
                 attemptCount++;

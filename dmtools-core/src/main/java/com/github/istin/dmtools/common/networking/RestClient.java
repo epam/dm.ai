@@ -97,9 +97,16 @@ public interface RestClient {
         public static final String NO_SUCH_PARENT_EPICS = "No issues have a parent epic with key or name:400";
         private final String body;
 
-        public RestClientException(String message, String body) {
+        public int getCode() {
+            return code;
+        }
+
+        private final int code;
+
+        public RestClientException(String message, String body, int code) {
             super(message);
             this.body = body;
+            this.code = code;
         }
 
         public String getBody() {
@@ -111,8 +118,8 @@ public interface RestClient {
 
         private final Response response;
 
-        public RateLimitException(String message, String body, Response response) {
-            super(message, body);
+        public RateLimitException(String message, String body, Response response, int code) {
+            super(message, body, code);
             this.response = response;
         }
 

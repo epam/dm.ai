@@ -368,13 +368,13 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             SearchResult searchResults = searchByPage(searchQueryJQL, null, resolvedFields);
             if (searchResults == null) {
                 logger.error("Received null search results for JQL: {}", searchQueryJQL);
-                throw new RestClient.RestClientException("Search returned null results", "null");
+                throw new RestClient.RestClientException("Search returned null results", "null", -1);
             }
             
             JSONArray errorMessages = searchResults.getErrorMessages();
             if (errorMessages != null && errorMessages.length() > 0) {
                 logger.error("Search failed with errors: {}", errorMessages);
-                throw new RestClient.RestClientException("Search failed: " + errorMessages.toString(), errorMessages.toString());
+                throw new RestClient.RestClientException("Search failed: " + errorMessages.toString(), errorMessages.toString(), -1);
             }
             
             boolean isBreak = false;
@@ -419,7 +419,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                     }
                 } catch (Exception e) {
                     logger.error("Error during pagination at token {}: {}", nextToken, e.getMessage());
-                    throw new RestClient.RestClientException("Pagination failed: " + e.getMessage(), e.toString());
+                    throw new RestClient.RestClientException("Pagination failed: " + e.getMessage(), e.toString(), -1);
                 }
             }
         } else {

@@ -271,7 +271,7 @@ public class TicketContextTest {
         when(mockTrackerClient.performTicket("DMC-403", new String[]{"description", "summary"}))
             .thenReturn(mockExtraTicket1);
         when(mockTrackerClient.performTicket("DMC-404", new String[]{"description", "summary"}))
-            .thenThrow(new AtlassianRestClient.RestClientException("404 Not Found", "Ticket not found"));
+            .thenThrow(new AtlassianRestClient.RestClientException("404 Not Found", "Ticket not found", 404));
 
         try (MockedStatic<IssuesIDsParser> mockedParser = mockStatic(IssuesIDsParser.class)) {
             mockedParser.when(() -> IssuesIDsParser.extractAllJiraIDs(anyString()))
