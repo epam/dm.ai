@@ -85,6 +85,7 @@ public class TeammateCliIntegrationTest {
         teammate.genericRequestAgent = genericRequestAgent;
         teammate.contextOrchestrator = contextOrchestrator;
         teammate.uriToObjectFactory = uriToObjectFactory;
+        teammate.instructionProcessor = new InstructionProcessor(null, tempDir.toString());
         
         // Set up test parameters
         params = new Teammate.TeammateParams();
