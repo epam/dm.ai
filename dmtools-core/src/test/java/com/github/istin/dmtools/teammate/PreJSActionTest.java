@@ -79,6 +79,7 @@ public class PreJSActionTest {
         teammate.contextOrchestrator = contextOrchestrator;
         teammate.uriToObjectFactory = uriToObjectFactory;
         teammate.confluence = confluence;
+        teammate.instructionProcessor = new InstructionProcessor(confluence);
 
         // Set up test parameters
         params = new Teammate.TeammateParams();
