@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class AnthropicAIClient extends AbstractRestClient implements AI {
 
@@ -118,6 +119,64 @@ public class AnthropicAIClient extends AbstractRestClient implements AI {
     )
     public String chat(@MCPParam(name = "message", description = "Text message to send to AI") String message) throws Exception {
         return chat(model, message);
+    }
+
+    /**
+     * Chat with Anthropic AI using file attachments
+     * @param message The text message to send to Anthropic
+     * @param filePaths Array of file paths to attach to the message
+     * @return AI response as string
+     */
+    @MCPTool(
+        name = "anthropic_ai_chat_with_files",
+        description = "Send a text message to Anthropic Claude AI with file attachments. Supports images, documents, and other file types for analysis and questions.",
+        integration = "ai"
+    )
+    public String chatWithFiles(
+            @MCPParam(
+                name = "message",
+                description = "Text message to send to Anthropic Claude AI",
+                example = "What is in this image? Please analyze the document content."
+            ) String message,
+            @MCPParam(
+                name = "filePaths",
+                description = "Array of file paths to attach to the message",
+                type = "array",
+                example = "['/path/to/image.png', '/path/to/document.pdf']"
+            ) String[] filePaths
+    ) throws Exception {
+        if (message == null || message.trim().isEmpty()) {
+            throw new IllegalArgumentException("Message cannot be null or empty");
+        }
+        
+        if (filePaths == null || filePaths.length == 0) {
+            throw new IllegalArgumentException("File paths array cannot be null or empty");
+        }
+
+        // Convert string paths to File objects
+        List<File> files = java.util.Arrays.stream(filePaths)
+                .map(String::trim)
+                .filter(path -> !path.isEmpty())
+                .map(File::new)
+                .peek(file -> {
+                    if (!file.exists()) {
+                        logger.warn("File does not exist: {}", file.getAbsolutePath());
+                    }
+                    if (!file.canRead()) {
+                        logger.warn("File is not readable: {}", file.getAbsolutePath());
+                    }
+                })
+                .collect(Collectors.toList());
+
+        if (files.isEmpty()) {
+            throw new IllegalArgumentException("No valid files found from provided paths");
+        }
+
+        logger.info("Anthropic AI chat with files: message='{}', files={}", 
+                message, files.stream().map(File::getName).collect(Collectors.toList()));
+
+        // Call the chat method with files
+        return chat(model, message, files);
     }
 
     @Override
