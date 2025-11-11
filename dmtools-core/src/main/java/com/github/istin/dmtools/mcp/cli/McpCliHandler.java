@@ -434,8 +434,6 @@ public class McpCliHandler {
         
         String toolLower = toolName.toLowerCase();
         String[] parts = toolLower.split("_");
-        System.out.println(toolLower);
-        System.out.println(availableAIClients);
         if (parts.length > 0) {
             String agentType = parts[0];
             
