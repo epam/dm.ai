@@ -187,7 +187,7 @@ jobs:
           
           **One-line installation (works on macOS, Linux, and Windows):**
           \`\`\`bash
-          curl https://github.com/IstiN/dmtools/releases/download/v${VERSION}/install | bash
+          curl -fsSL https://github.com/IstiN/dmtools/releases/download/v${VERSION}/install | bash
           \`\`\`
           
           **Alternative methods (backward compatible):**

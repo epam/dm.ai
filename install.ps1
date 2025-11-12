@@ -96,14 +96,41 @@ function Check-Java {
         Write-Error-Message "Java 23 is required but not installed."
     }
     
-    $javaVersion = java -version 2>&1 | Select-Object -First 1
-    $versionMatch = $javaVersion -match 'version "(\d+)'
-    if ($versionMatch) {
-        $majorVersion = [int]$matches[1]
-        if ($majorVersion -lt 23) {
-            Write-Error-Message "Java $majorVersion is too old. DMTools requires Java 23."
+    # Get Java version - suppress errors as java -version writes to stderr
+    # PowerShell treats stderr output as errors, so we need to capture it properly
+    $javaVersionOutput = $null
+    $oldErrorAction = $ErrorActionPreference
+    try {
+        # Temporarily suppress errors to capture stderr output
+        $ErrorActionPreference = 'SilentlyContinue'
+        # Capture both stdout and stderr, java -version writes to stderr
+        $allOutput = java -version 2>&1
+        if ($allOutput) {
+            # Get the first line which contains version info
+            $javaVersionOutput = $allOutput | Select-Object -First 1
+            # Convert to string if it's an ErrorRecord
+            if ($javaVersionOutput -is [System.Management.Automation.ErrorRecord]) {
+                $javaVersionOutput = $javaVersionOutput.ToString()
+            }
         }
-        Write-Info "Java version detected: $javaVersion"
+    } catch {
+        # If that fails, try alternative method
+        $javaVersionOutput = $null
+    } finally {
+        $ErrorActionPreference = $oldErrorAction
+    }
+    
+    if ($javaVersionOutput) {
+        $versionMatch = $javaVersionOutput -match 'version "(\d+)'
+        if ($versionMatch) {
+            $majorVersion = [int]$matches[1]
+            if ($majorVersion -lt 23) {
+                Write-Error-Message "Java $majorVersion is too old. DMTools requires Java 23."
+            }
+            Write-Info "Java version detected: $javaVersionOutput"
+        } else {
+            Write-Warn "Could not determine Java version, but Java is installed."
+        }
     } else {
         Write-Warn "Could not determine Java version, but Java is installed."
     }

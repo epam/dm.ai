@@ -693,7 +693,7 @@ jobs:
           
           **One-line installation (works on macOS, Linux, and Windows):**
           \`\`\`bash
-          curl https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install | bash
+          curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install | bash
           \`\`\`
           
           **Alternative methods (backward compatible):**
@@ -991,7 +991,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**CLI Installation (One-line, all platforms):**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install | bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install | bash" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Alternative (macOS/Linux):**" >> $GITHUB_STEP_SUMMARY
