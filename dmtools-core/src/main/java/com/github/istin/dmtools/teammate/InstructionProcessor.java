@@ -26,6 +26,7 @@ public class InstructionProcessor {
 
     /**
      * Creates an InstructionProcessor with Confluence support
+     * Uses current working directory for resolving relative file paths
      * 
      * @param confluence Confluence client for URL processing
      */
@@ -116,34 +117,39 @@ public class InstructionProcessor {
     }
 
     /**
-     * Processes a file path by reading its content and concatenating it to the original path.
+     * Processes a file path by reading its content.
+     * Resolves paths relative to the current working directory where dmtools is run from.
      * Implements graceful error handling:
      * - File not found: Log warning and use original value as fallback
      * - I/O errors: Log warning and use original value as fallback
      * - Invalid path: Log warning and use original value as fallback
      * 
      * @param input the file path to process
-     * @return the original path concatenated with file content, or original path if error occurs
+     * @return the file content, or original path if file not found or error occurs
      */
     private String processFilePath(String input) {
         try {
-            // Resolve relative paths from working directory
+            // Resolve relative paths from working directory (current directory where dmtools is run from)
             Path basePath = Paths.get(workingDirectory);
             Path filePath = input.startsWith("/") ? 
                     Paths.get(input) : basePath.resolve(input).normalize();
+
+            logger.debug("Resolving file path '{}' relative to working directory: {} -> {}", 
+                    input, workingDirectory, filePath);
 
             // Read file content using existing FileConfig utility
             FileConfig fileConfig = new FileConfig();
             String fileContent = fileConfig.readFile(filePath.toString());
 
             if (fileContent != null) {
-                // Concatenate content same as Confluence URL processing
+                logger.debug("Successfully loaded file content from: {}", filePath);
                 return fileContent;
-            } else {
-                // File not found - log warning and use original value
-                logger.warn("File not found, using original value as fallback: {}", input);
-                return input;
             }
+            
+            // File not found - log warning and use original value
+            logger.warn("File not found at: {} (resolved from '{}' relative to '{}'), using original value as fallback", 
+                    filePath, input, workingDirectory);
+            return input;
         } catch (RuntimeException e) {
             // Error reading file or invalid path - log warning and use original value
             logger.warn("Error processing file path '{}': {}. Using original value as fallback.", 
