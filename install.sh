@@ -42,12 +42,16 @@ detect_platform() {
     local os=""
     local arch=""
     
-    case "$(uname -s)" in
-        Darwin*) os="darwin" ;;
-        Linux*) os="linux" ;;
-        CYGWIN*|MINGW*|MSYS*) os="windows" ;;
-        *) error "Unsupported operating system: $(uname -s)" ;;
-    esac
+    # Check for Windows first (Git Bash, WSL, Cygwin, MSYS)
+    if [[ -n "$WINDIR" ]] || [[ -n "$MSYSTEM" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
+        os="windows"
+    else
+        case "$(uname -s)" in
+            Darwin*) os="darwin" ;;
+            Linux*) os="linux" ;;
+            *) error "Unsupported operating system: $(uname -s)" ;;
+        esac
+    fi
     
     case "$(uname -m)" in
         x86_64|amd64) arch="amd64" ;;
@@ -167,8 +171,14 @@ steps:
   - Via Oracle: https://www.oracle.com/java/technologies/downloads/
   - Via Eclipse Temurin: https://adoptium.net/"
             fi
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            if command -v apt-get >/dev/null 2>&1; then
+        elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$(uname -s)" == "Linux" ]]; then
+            # Check if we're on Windows (Git Bash/WSL) - don't try to install Java automatically
+            if [[ -n "$WINDIR" ]] || [[ -n "$MSYSTEM" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
+                error "Java 23 is required but not installed. Please install Java 23 manually on Windows:
+  - Download from: https://adoptium.net/
+  - Or use Chocolatey: choco install temurin23jdk
+  - Or use Windows installer: https://adoptium.net/temurin/releases/?version=23"
+            elif command -v apt-get >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via apt..."
                 progress "Installing OpenJDK 23..."
                 sudo apt-get update && sudo apt-get install -y openjdk-23-jdk || error "Failed to install Java 23 via apt. Please install manually."
@@ -188,7 +198,15 @@ steps:
   - Fedora: sudo dnf install java-23-openjdk-devel"
             fi
         else
-            error "Java 23 is required but not installed. Please install Java 23."
+            # Check if we're on Windows (Git Bash/WSL)
+            if [[ -n "$WINDIR" ]] || [[ -n "$MSYSTEM" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
+                error "Java 23 is required but not installed. Please install Java 23 manually on Windows:
+  - Download from: https://adoptium.net/
+  - Or use Chocolatey: choco install temurin23jdk
+  - Or use Windows installer: https://adoptium.net/temurin/releases/?version=23"
+            else
+                error "Java 23 is required but not installed. Please install Java 23."
+            fi
         fi
     fi
     
