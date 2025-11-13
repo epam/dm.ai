@@ -141,13 +141,48 @@ create_install_dir() {
     mkdir -p "$BIN_DIR"
 }
 
+# Check if running on Windows (Git Bash, WSL, Cygwin, MSYS)
+is_windows() {
+    # Check various Windows indicators
+    if [[ -n "$WINDIR" ]] || [[ -n "$MSYSTEM" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
+        return 0
+    fi
+    
+    # Check uname output
+    local uname_s=$(uname -s 2>/dev/null || echo "")
+    if [[ "$uname_s" == *"MINGW"* ]] || [[ "$uname_s" == *"MSYS"* ]] || [[ "$uname_s" == *"CYGWIN"* ]]; then
+        return 0
+    fi
+    
+    # Check for WSL (Windows Subsystem for Linux)
+    if [[ -f /proc/version ]] && grep -qi microsoft /proc/version 2>/dev/null; then
+        return 0
+    fi
+    
+    # Check for Windows mount point in WSL
+    if [[ -d /mnt/c/Windows ]] || [[ -d /mnt/c/windows ]]; then
+        return 0
+    fi
+    
+    return 1
+}
+
 # Check and install Java
 check_java() {
     progress "Checking Java installation..."
     
     # Check if Java is available
     if ! command -v java >/dev/null 2>&1; then
-        if [ -n "${GITHUB_ACTIONS:-}" ]; then
+        # First check if we're on Windows - don't try to install Java automatically
+        if is_windows; then
+            error "Java 23 is required but not installed. Please install Java 23 manually on Windows:
+  - Download from: https://adoptium.net/
+  - Or use Chocolatey: choco install temurin23jdk
+  - Or use Windows installer: https://adoptium.net/temurin/releases/?version=23
+  
+Note: If you're using WSL, you can install Java in WSL using:
+  sudo apt-get update && sudo apt-get install -y openjdk-23-jdk"
+        elif [ -n "${GITHUB_ACTIONS:-}" ]; then
             error "Java is not available in GitHub Actions. Please set up Java first:
             
 steps:
@@ -172,13 +207,8 @@ steps:
   - Via Eclipse Temurin: https://adoptium.net/"
             fi
         elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$(uname -s)" == "Linux" ]]; then
-            # Check if we're on Windows (Git Bash/WSL) - don't try to install Java automatically
-            if [[ -n "$WINDIR" ]] || [[ -n "$MSYSTEM" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
-                error "Java 23 is required but not installed. Please install Java 23 manually on Windows:
-  - Download from: https://adoptium.net/
-  - Or use Chocolatey: choco install temurin23jdk
-  - Or use Windows installer: https://adoptium.net/temurin/releases/?version=23"
-            elif command -v apt-get >/dev/null 2>&1; then
+            # This is real Linux (not Windows/WSL)
+            if command -v apt-get >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via apt..."
                 progress "Installing OpenJDK 23..."
                 sudo apt-get update && sudo apt-get install -y openjdk-23-jdk || error "Failed to install Java 23 via apt. Please install manually."
@@ -198,15 +228,7 @@ steps:
   - Fedora: sudo dnf install java-23-openjdk-devel"
             fi
         else
-            # Check if we're on Windows (Git Bash/WSL)
-            if [[ -n "$WINDIR" ]] || [[ -n "$MSYSTEM" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
-                error "Java 23 is required but not installed. Please install Java 23 manually on Windows:
-  - Download from: https://adoptium.net/
-  - Or use Chocolatey: choco install temurin23jdk
-  - Or use Windows installer: https://adoptium.net/temurin/releases/?version=23"
-            else
-                error "Java 23 is required but not installed. Please install Java 23."
-            fi
+            error "Java 23 is required but not installed. Please install Java 23."
         fi
     fi
     
