@@ -104,12 +104,6 @@ public class JobRunner {
 
     public static void main(String[] args) throws Exception {
         // Handle special arguments
-        if (args != null) {
-            System.out.println("dmtools are running with args:");
-            for (String arg : args) {
-                System.out.println(arg);
-            }
-        }
         if (args.length > 0) {
             String firstArg = args[0];
             if ("--version".equals(firstArg) || "-v".equals(firstArg)) {
