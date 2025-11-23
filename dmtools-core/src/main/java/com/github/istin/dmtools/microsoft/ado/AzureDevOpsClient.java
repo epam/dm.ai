@@ -568,6 +568,10 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
     /**
      * Map generic relationship types to ADO relation types.
+     * 
+     * In Azure DevOps:
+     * - Hierarchy-Forward: source is child, target is parent (child → parent)
+     * - Hierarchy-Reverse: source is parent, target is child (parent → child)
      */
     private String mapRelationshipType(String relationship) {
         if (relationship == null) {
@@ -576,7 +580,10 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
         switch (relationship.toLowerCase()) {
             case "parent":
+                // source is parent, target is child → use Hierarchy-Reverse
+                return "System.LinkTypes.Hierarchy-Reverse";
             case "child":
+                // source is child, target is parent → use Hierarchy-Forward
                 return "System.LinkTypes.Hierarchy-Forward";
             case "blocks":
                 return "System.LinkTypes.Dependency-Forward";
