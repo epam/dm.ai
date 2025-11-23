@@ -77,6 +77,14 @@ public class JobJavaScriptBridge {
             logger.debug("BasicTeamsClient not initialized: {}. Teams tools will not be available.", e.getMessage());
         }
         
+        // Initialize Azure DevOps client if configured
+        try {
+            this.clientInstances.put("ado", com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient.getInstance());
+            logger.debug("BasicAzureDevOpsClient initialized for JavaScript bridge");
+        } catch (Exception e) {
+            logger.debug("BasicAzureDevOpsClient not initialized: {}. ADO tools will not be available.", e.getMessage());
+        }
+
         initializeJavaScriptContext();
     }
 

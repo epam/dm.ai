@@ -209,6 +209,27 @@ public class PropertyReader {
 		return getValue("RALLY_PATH");
 	}
 
+	// Azure DevOps (ADO) configuration methods
+	public String getAdoOrganization() {
+		return getValue("ADO_ORGANIZATION");
+	}
+
+	public String getAdoProject() {
+		return getValue("ADO_PROJECT");
+	}
+
+	public String getAdoPatToken() {
+		return getValue("ADO_PAT_TOKEN");
+	}
+
+	public String getAdoBasePath() {
+		String value = getValue("ADO_BASE_PATH");
+		if (value == null || value.isEmpty()) {
+			return "https://dev.azure.com";
+		}
+		return value;
+	}
+
 	public String getBitbucketToken() {
 		return getValue("BITBUCKET_TOKEN");
 	}

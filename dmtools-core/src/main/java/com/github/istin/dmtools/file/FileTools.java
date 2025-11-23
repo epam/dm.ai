@@ -4,6 +4,9 @@ import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.mcp.MCPParam;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import java.io.StringReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -257,11 +260,53 @@ public class FileTools {
         }
         
         try {
-            // Use Gson to parse JSON - it provides detailed error information
-            // Try parsing as generic Object to validate any JSON structure
-            gson.fromJson(trimmed, Object.class);
-            logger.debug("JSON validation successful");
-            return createValidationResult(true, null, -1, -1, -1, null);
+            // Use JsonReader with strict mode for proper validation
+            // This ensures we catch syntax errors that Gson.fromJson might miss
+            JsonReader reader = new JsonReader(new StringReader(trimmed));
+            reader.setLenient(false); // Use strict mode
+            
+            // Read the JSON token to validate syntax
+            JsonToken firstToken = reader.peek();
+            
+            // According to JSON specification (RFC 7159), a valid JSON document
+            // must be either an object {} or an array []
+            // Primitive values (numbers, strings, booleans, null) alone are not valid JSON documents
+            if (firstToken == JsonToken.BEGIN_OBJECT || firstToken == JsonToken.BEGIN_ARRAY) {
+                // Valid: object or array - now parse it completely using reader directly
+                // to ensure strict validation (gson.fromJson might be lenient)
+                try {
+                    if (firstToken == JsonToken.BEGIN_OBJECT) {
+                        reader.beginObject();
+                        while (reader.hasNext()) {
+                            reader.nextName(); // Read key
+                            skipValue(reader); // Skip value
+                        }
+                        reader.endObject();
+                    } else {
+                        reader.beginArray();
+                        while (reader.hasNext()) {
+                            skipValue(reader); // Skip value
+                        }
+                        reader.endArray();
+                    }
+                    
+                    // If we got here, the JSON structure was successfully parsed
+                    // Close the reader - we don't need to check for EOF explicitly
+                    // as successful parsing means the document is complete and valid
+                    reader.close();
+                    logger.debug("JSON validation successful");
+                    return createValidationResult(true, null, -1, -1, -1, null);
+                } catch (java.io.IOException | IllegalStateException parseException) {
+                    reader.close();
+                    // Re-throw as JsonSyntaxException to be handled below
+                    throw new JsonSyntaxException(parseException);
+                }
+            } else {
+                // Invalid: primitive value (number, string, boolean, null)
+                reader.close();
+                String tokenName = firstToken != null ? firstToken.name() : "null";
+                return createValidationResult(false, "JSON document must be an object or array, not a primitive value (" + tokenName + ")", -1, -1, -1, null);
+            }
         } catch (JsonSyntaxException e) {
             // Gson provides detailed error information including line and column
             return handleGsonException(e, trimmed);
@@ -322,10 +367,53 @@ public class FileTools {
         }
         
         try {
-            // Use Gson to parse JSON - it provides detailed error information
-            gson.fromJson(trimmed, Object.class);
-            logger.debug("JSON validation successful for file: {}", filePath);
-            return createFileValidationResult(true, filePath, null, -1, -1, -1, null);
+            // Use JsonReader with strict mode for proper validation
+            // This ensures we catch syntax errors that Gson.fromJson might miss
+            JsonReader reader = new JsonReader(new StringReader(trimmed));
+            reader.setLenient(false); // Use strict mode
+            
+            // Read the JSON token to validate syntax
+            JsonToken firstToken = reader.peek();
+            
+            // According to JSON specification (RFC 7159), a valid JSON document
+            // must be either an object {} or an array []
+            // Primitive values (numbers, strings, booleans, null) alone are not valid JSON documents
+            if (firstToken == JsonToken.BEGIN_OBJECT || firstToken == JsonToken.BEGIN_ARRAY) {
+                // Valid: object or array - now parse it completely using reader directly
+                // to ensure strict validation (gson.fromJson might be lenient)
+                try {
+                    if (firstToken == JsonToken.BEGIN_OBJECT) {
+                        reader.beginObject();
+                        while (reader.hasNext()) {
+                            reader.nextName(); // Read key
+                            skipValue(reader); // Skip value
+                        }
+                        reader.endObject();
+                    } else {
+                        reader.beginArray();
+                        while (reader.hasNext()) {
+                            skipValue(reader); // Skip value
+                        }
+                        reader.endArray();
+                    }
+                    
+                    // If we got here, the JSON structure was successfully parsed
+                    // Close the reader - we don't need to check for EOF explicitly
+                    // as successful parsing means the document is complete and valid
+                    reader.close();
+                    logger.debug("JSON validation successful for file: {}", filePath);
+                    return createFileValidationResult(true, filePath, null, -1, -1, -1, null);
+                } catch (java.io.IOException | IllegalStateException parseException) {
+                    reader.close();
+                    // Re-throw as JsonSyntaxException to be handled below
+                    throw new JsonSyntaxException(parseException);
+                }
+            } else {
+                // Invalid: primitive value (number, string, boolean, null)
+                reader.close();
+                String tokenName = firstToken != null ? firstToken.name() : "null";
+                return createFileValidationResult(false, filePath, "JSON document must be an object or array, not a primitive value (" + tokenName + ")", -1, -1, -1, null);
+            }
         } catch (JsonSyntaxException e) {
             // Gson provides detailed error information including line and column
             return handleGsonExceptionForFile(e, trimmed, filePath);
@@ -464,6 +552,40 @@ public class FileTools {
         }
         
         return position;
+    }
+    
+    /**
+     * Skip a JSON value (recursive helper for validation).
+     * Used to fully parse JSON document for validation.
+     */
+    private void skipValue(JsonReader reader) throws java.io.IOException {
+        JsonToken token = reader.peek();
+        switch (token) {
+            case BEGIN_ARRAY:
+                reader.beginArray();
+                while (reader.hasNext()) {
+                    skipValue(reader);
+                }
+                reader.endArray();
+                break;
+            case BEGIN_OBJECT:
+                reader.beginObject();
+                while (reader.hasNext()) {
+                    reader.nextName();
+                    skipValue(reader);
+                }
+                reader.endObject();
+                break;
+            case STRING:
+            case NUMBER:
+            case BOOLEAN:
+            case NULL:
+                reader.skipValue();
+                break;
+            default:
+                reader.skipValue();
+                break;
+        }
     }
     
     /**
