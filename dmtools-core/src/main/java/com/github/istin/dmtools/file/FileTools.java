@@ -582,9 +582,6 @@ public class FileTools {
             case NULL:
                 reader.skipValue();
                 break;
-            default:
-                reader.skipValue();
-                break;
         }
     }
     

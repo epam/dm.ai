@@ -30,25 +30,28 @@ public class WorkItemHistory extends JSONModel implements IHistory {
         super(json);
     }
 
+    /**
+     * Get the list of field changes for this history entry.
+     * 
+     * <p><b>Note:</b> Due to ADO API limitations, this method currently returns an empty list.
+     * The ADO updates API doesn't directly provide old/new values in a single call.
+     * To get field-level change details, you would need to:
+     * 1. Fetch the current revision (this history entry)
+     * 2. Fetch the previous revision
+     * 3. Compare the field values between revisions
+     * 
+     * <p>This comparison logic is not currently implemented. The changelog still provides
+     * useful information (author, timestamp, revision number) even without field-level details.
+     * 
+     * @return Empty list - field-level change details are not available
+     */
     @Override
     public List<? extends IHistoryItem> getHistoryItems() {
-        List<WorkItemHistoryItem> items = new ArrayList<>();
-        
-        // ADO API returns field changes in the "fields" object
-        // Each update contains the fields that were changed
-        // We need to compare with previous revision to see what changed
-        // For now, we'll extract field information from the current revision
-        // The actual comparison would require fetching previous revision
-        
-        JSONObject fields = getJSONObject("fields");
-        if (fields == null) {
-            return items;
-        }
-        
         // ADO updates API doesn't directly provide old/new values in a single call
-        // We would need to compare revisions. For now, return empty list
-        // The caller can fetch multiple revisions and compare them
-        return items;
+        // We would need to compare revisions to determine what changed.
+        // For now, return empty list as field-level change details are not available.
+        // The changelog still provides useful metadata (author, timestamp, revision number).
+        return new ArrayList<>();
     }
     
     /**

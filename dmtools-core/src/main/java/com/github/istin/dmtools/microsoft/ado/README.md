@@ -205,7 +205,7 @@ ADO uses numeric priorities (1-4), which are mapped to friendly names:
 1. **Comments**: ADO comments cannot be deleted via API (only hidden or edited)
 2. **Server**: Only ADO Cloud is supported (not ADO Server/on-premises)
 3. **Attachments**: File attachment support is not yet implemented
-4. **Changelog**: Full changelog/history retrieval is not yet implemented
+4. **Changelog**: Basic changelog/history retrieval is implemented via `getChangeLog()`, which returns history entries with author and timestamp information. However, detailed field change information (old/new values) is not available due to ADO API limitations. The ADO updates API doesn't provide old/new values in a single call - comparing revisions would require fetching multiple revisions and comparing them, which is not currently implemented. If you encounter any edge cases or need field-level change details, please report them.
 5. **Test Cases**: Test case specific operations are not yet implemented
 
 ## Architecture

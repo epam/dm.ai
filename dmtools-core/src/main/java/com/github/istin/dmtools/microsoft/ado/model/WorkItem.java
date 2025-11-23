@@ -97,13 +97,18 @@ public class WorkItem extends JSONModel implements ITicket {
         Object priority = getField("Microsoft.VSTS.Common.Priority");
         if (priority != null) {
             // ADO uses numeric priority (1=highest, 4=lowest)
-            int priorityNum = Integer.parseInt(priority.toString());
-            switch (priorityNum) {
-                case 1: return "Critical";
-                case 2: return "High";
-                case 3: return "Medium";
-                case 4: return "Low";
-                default: return "Medium";
+            try {
+                int priorityNum = Integer.parseInt(priority.toString());
+                switch (priorityNum) {
+                    case 1: return "Critical";
+                    case 2: return "High";
+                    case 3: return "Medium";
+                    case 4: return "Low";
+                    default: return "Medium";
+                }
+            } catch (NumberFormatException e) {
+                // If parsing fails (e.g., priority is not a number), return default priority
+                return "Medium";
             }
         }
         return "Medium";

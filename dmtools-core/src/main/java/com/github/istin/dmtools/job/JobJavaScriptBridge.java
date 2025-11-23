@@ -8,6 +8,8 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
+import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
+import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -71,7 +73,7 @@ public class JobJavaScriptBridge {
         
         // Initialize Teams client if configured
         try {
-            this.clientInstances.put("teams", com.github.istin.dmtools.microsoft.teams.BasicTeamsClient.getInstance());
+            this.clientInstances.put("teams", BasicTeamsClient.getInstance());
             logger.debug("BasicTeamsClient initialized for JavaScript bridge");
         } catch (Exception e) {
             logger.debug("BasicTeamsClient not initialized: {}. Teams tools will not be available.", e.getMessage());
@@ -79,7 +81,7 @@ public class JobJavaScriptBridge {
         
         // Initialize Azure DevOps client if configured
         try {
-            this.clientInstances.put("ado", com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient.getInstance());
+            this.clientInstances.put("ado", BasicAzureDevOpsClient.getInstance());
             logger.debug("BasicAzureDevOpsClient initialized for JavaScript bridge");
         } catch (Exception e) {
             logger.debug("BasicAzureDevOpsClient not initialized: {}. ADO tools will not be available.", e.getMessage());

@@ -17,6 +17,7 @@ import com.github.istin.dmtools.microsoft.ado.model.WorkItemChangelog;
 import com.github.istin.dmtools.microsoft.ado.model.AdoUser;
 import com.github.istin.dmtools.common.model.IUser;
 import com.github.istin.dmtools.networking.AbstractRestClient;
+import okhttp3.HttpUrl;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.MediaType;
@@ -524,7 +525,20 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     // ========== Link/Relationship Operations ==========
 
     @Override
-    public String linkIssueWithRelationship(String sourceId, String targetId, String relationship) throws IOException {
+    @MCPTool(
+            name = "ado_link_work_items",
+            description = "Link two work items with a relationship (e.g., Parent-Child, Related, Tested By)",
+            integration = "ado",
+            category = "work_item_management"
+    )
+    public String linkIssueWithRelationship(
+            @MCPParam(name = "sourceId", description = "The source work item ID", required = true)
+            String sourceId,
+            @MCPParam(name = "targetId", description = "The target work item ID to link to", required = true)
+            String targetId,
+            @MCPParam(name = "relationship", description = "Relationship type (e.g., 'parent', 'child', 'related', 'tested by', 'tests')", required = true, example = "parent")
+            String relationship
+    ) throws IOException {
         // ADO uses relation types like "System.LinkTypes.Hierarchy-Forward"
         String relationType = mapRelationshipType(relationship);
 
@@ -651,7 +665,18 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     // ========== Changelog/History Operations ==========
 
     @Override
-    public IChangelog getChangeLog(String workItemId, com.github.istin.dmtools.common.model.ITicket ticket) throws IOException {
+    @MCPTool(
+            name = "ado_get_changelog",
+            description = "Get the complete history/changelog of a work item",
+            integration = "ado",
+            category = "history"
+    )
+    public IChangelog getChangeLog(
+            @MCPParam(name = "id", description = "The work item ID", required = true)
+            String workItemId,
+            @MCPParam(name = "ticket", description = "Optional work item object (can be null)", required = false)
+            com.github.istin.dmtools.common.model.ITicket ticket
+    ) throws IOException {
         // Get work item updates (revisions) from ADO API
         String path = String.format("/%s/_apis/wit/workitems/%s/updates", project, workItemId);
         GenericRequest request = new GenericRequest(this, path(path))
@@ -871,10 +896,25 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     /**
      * Execute a request to the Profile API which uses a different base URL.
      * Profile API is at app.vssps.visualstudio.com instead of dev.azure.com
+     * 
+     * @param url The base URL (must not contain query parameters)
+     * @param request The GenericRequest (not used directly, but kept for API compatibility)
+     * @return Response body as string
+     * @throws IOException if request fails
+     * @throws IllegalArgumentException if URL is invalid
      */
     private String executeProfileRequest(String url, GenericRequest request) throws IOException {
+        HttpUrl httpUrl = HttpUrl.parse(url);
+        if (httpUrl == null) {
+            throw new IllegalArgumentException("Invalid URL: " + url);
+        }
+        
+        HttpUrl urlWithApiVersion = httpUrl.newBuilder()
+                .addQueryParameter("api-version", "7.1")
+                .build();
+        
         Request.Builder requestBuilder = new Request.Builder()
-                .url(url + "?api-version=7.1")
+                .url(urlWithApiVersion)
                 .header("Authorization", authorization)
                 .header("User-Agent", "DMTools");
         
@@ -904,9 +944,24 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     /**
      * Override patch method to support JSON Patch content type required by Azure DevOps.
      * Azure DevOps requires "application/json-patch+json" for PATCH requests.
+     * 
+     * This override maintains retry logic from the base class for recoverable connection errors.
      */
     @Override
     public String patch(GenericRequest genericRequest) throws IOException {
+        return patch(genericRequest, 0);
+    }
+    
+    /**
+     * Private patch method with retry logic for recoverable connection errors.
+     * Implements exponential backoff retry mechanism like the base class.
+     * 
+     * @param genericRequest The request to execute
+     * @param retryCount Current retry attempt (0 for first attempt)
+     * @return Response body as string
+     * @throws IOException if request fails after all retries
+     */
+    private String patch(GenericRequest genericRequest, int retryCount) throws IOException {
         String url = genericRequest.url();
         
         // Check if a custom Content-Type header is set
@@ -941,6 +996,35 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
                 return response.body() != null ? response.body().string() : "";
             } else {
                 throw AbstractRestClient.printAndCreateException(request, response);
+            }
+        } catch (IOException e) {
+            logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            
+            // Check if it's a recoverable connection error
+            boolean isRecoverableError = isRecoverableConnectionError(e);
+            
+            // Maximum of 3 attempts (2 retries)
+            final int MAX_RETRIES = 2;
+            
+            if (isRecoverableError && retryCount < MAX_RETRIES) {
+                logger.info("Retrying PATCH request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
+                try {
+                    // Exponential backoff: 200ms, 400ms, 800ms
+                    long waitTime = 200L * (long) Math.pow(2, retryCount);
+                    logger.debug("Waiting {}ms before PATCH retry", waitTime);
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("PATCH request interrupted during retry", interruptedException);
+                }
+                return patch(genericRequest, retryCount + 1);
+            } else {
+                if (!isRecoverableError) {
+                    logger.error("Non-recoverable PATCH connection error for URL: {}", url, e);
+                } else if (retryCount >= MAX_RETRIES) {
+                    logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
+                }
+                throw e;
             }
         }
     }
