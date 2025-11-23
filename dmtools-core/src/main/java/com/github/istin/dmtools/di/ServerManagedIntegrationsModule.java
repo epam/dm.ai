@@ -11,6 +11,9 @@ import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
+import com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient;
+import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
+import com.github.istin.dmtools.microsoft.ado.model.WorkItem;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
@@ -153,11 +156,28 @@ public class ServerManagedIntegrationsModule {
                     System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (JIRA_BASE_PATH=" + 
                         (basePath.isEmpty() ? "empty" : basePath) + ", token=" + (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
                 }
-            } else {
-                System.err.println("❌ [ServerManagedIntegrationsModule] No Jira integration found in resolved integrations");
             }
             
-            System.err.println("❌ [ServerManagedIntegrationsModule] No valid Jira integration available - returning null TrackerClient");
+            // Create an ADO client instance using resolved credentials
+            if (resolvedIntegrations.has("ado")) {
+                JSONObject adoConfig = resolvedIntegrations.getJSONObject("ado");
+                String organization = adoConfig.optString("ADO_ORGANIZATION", "");
+                String project = adoConfig.optString("ADO_PROJECT", "");
+                String patToken = adoConfig.optString("ADO_PAT_TOKEN", "");
+                String basePath = adoConfig.optString("ADO_BASE_PATH", "https://dev.azure.com");
+                
+                if (!organization.isEmpty() && !project.isEmpty() && !patToken.isEmpty()) {
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedAzureDevOpsClient with resolved credentials");
+                    return new CustomServerManagedAzureDevOpsClient(organization, project, patToken);
+                } else {
+                    System.err.println("❌ [ServerManagedIntegrationsModule] ADO configuration missing required parameters (ADO_ORGANIZATION=" + 
+                        (organization.isEmpty() ? "empty" : organization) + ", ADO_PROJECT=" + 
+                        (project.isEmpty() ? "empty" : project) + ", ADO_PAT_TOKEN=" + 
+                        (patToken.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
+                }
+            }
+            
+            System.err.println("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO) available - returning null TrackerClient");
             return null;
         } catch (IOException e) {
             System.err.println("❌ [ServerManagedIntegrationsModule] Failed to create TrackerClient instance with resolved credentials: " + e.getMessage());
@@ -252,6 +272,32 @@ public class ServerManagedIntegrationsModule {
         @Override
         public TrackerClient.TextType getTextType() {
             return TrackerClient.TextType.MARKDOWN;
+        }
+    }
+    
+    /**
+     * Custom AzureDevOpsClient implementation that uses resolved credentials
+     * instead of static properties from PropertyReader
+     */
+    private static class CustomServerManagedAzureDevOpsClient extends AzureDevOpsClient {
+        
+        public CustomServerManagedAzureDevOpsClient(String organization, String project, String patToken) throws IOException {
+            // Note: AzureDevOpsClient constructor only takes organization, project, patToken
+            // basePath is hardcoded to https://dev.azure.com/{organization} in the constructor
+            super(organization, project, patToken);
+            
+            // Replicate BasicAzureDevOpsClient configuration with reasonable defaults
+            setLogEnabled(true);
+            
+            // Performance optimization: Clean cache folder first, then enable caching
+            setClearCache(true);  // This cleans the cache folder
+            setCacheGetRequestsEnabled(true);  // Enable caching for better performance
+            System.out.println("✅ [CustomServerManagedAzureDevOpsClient] Cache cleaned and enabled for performance optimization");
+        }
+        
+        @Override
+        public TrackerClient.TextType getTextType() {
+            return TrackerClient.TextType.HTML;
         }
     }
     
