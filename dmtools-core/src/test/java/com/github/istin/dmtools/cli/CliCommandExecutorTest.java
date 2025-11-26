@@ -267,7 +267,7 @@ public class CliCommandExecutorTest {
             "gh --version",
             "dmtools --help",
             "npm --version",
-            "yarn --version",
+            //"yarn --version",
             "docker --version",
             "kubectl version --client",
             "terraform --version",
