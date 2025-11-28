@@ -9,6 +9,7 @@ import com.github.istin.dmtools.ai.agent.RelatedTestCasesAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseDeduplicationAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseGeneratorAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.jira.model.Relationship;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -31,6 +32,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, List<TestCasesGenerator.TestCasesResult>> {
+
+    private static final String DEFAULT_EXISTING_RELATIONSHIP = Relationship.RELATES_TO;
 
     @Data
     @NoArgsConstructor
@@ -148,8 +151,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         ITicket mainTicket = ticketContext.getTicket();
         String key = mainTicket.getTicketKey();
         String ticketText = ticketContext.toText();
+        String existingRelationship = resolveRelationshipForExisting(params);
         List<ITicket> finaResults = params.isFindRelated()
-                ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, listOfAllTestCases, params.isLinkRelated(), params.getRelatedTestCasesRules(), params.getTestCaseLinkRelationship())
+                ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, listOfAllTestCases, params.isLinkRelated(), params.getRelatedTestCasesRules(), existingRelationship)
                 : Collections.emptyList();
 
         // Initialize accumulator for all generated test cases
@@ -216,6 +220,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             }
             trackerClient.postComment(key, result.toString());
         } else {
+            String newTestCaseRelationship = resolveRelationshipForNew(params);
             for (TestCaseGeneratorAgent.TestCase testCase : newTestCases) {
                 String projectCode = key.split("-")[0];
                 String description = testCase.getDescription();
@@ -232,7 +237,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                     }
                 }));
 
-                trackerClient.linkIssueWithRelationship(mainTicket.getTicketKey(), createdTestCase.getKey(), params.getTestCaseLinkRelationship());
+                trackerClient.linkIssueWithRelationship(mainTicket.getTicketKey(), createdTestCase.getKey(), newTestCaseRelationship);
             }
         }
         return new TestCasesResult(ticketContext.getTicket().getKey(), finaResults, newTestCases);
@@ -357,6 +362,28 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         }
         
         return newTestCases;
+    }
+
+    private String resolveRelationshipForNew(TestCasesGeneratorParams params) {
+        return resolveRelationship(params.getTestCaseLinkRelationshipForNew(), params.getTestCaseLinkRelationship(), Relationship.IS_TESTED_BY);
+    }
+
+    private String resolveRelationshipForExisting(TestCasesGeneratorParams params) {
+        return resolveRelationship(params.getTestCaseLinkRelationshipForExisting(), params.getTestCaseLinkRelationship(), DEFAULT_EXISTING_RELATIONSHIP);
+    }
+
+    private String resolveRelationship(String primary, String secondary, String defaultValue) {
+        if (isNotBlank(primary)) {
+            return primary.trim();
+        }
+        if (isNotBlank(secondary)) {
+            return secondary.trim();
+        }
+        return defaultValue;
+    }
+
+    private boolean isNotBlank(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     @NotNull

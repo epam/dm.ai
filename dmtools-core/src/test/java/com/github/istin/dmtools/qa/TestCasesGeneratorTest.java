@@ -3,10 +3,12 @@ package com.github.istin.dmtools.qa;
 import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.ai.Claude35TokenCounter;
 import com.github.istin.dmtools.ai.agent.TestCaseGeneratorAgent;
+import com.github.istin.dmtools.atlassian.jira.model.Relationship;
 import com.github.istin.dmtools.common.model.ToText;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,10 +17,16 @@ import static org.junit.Assert.*;
 public class TestCasesGeneratorTest {
 
     private TestCasesGenerator generator;
+    private Method resolveNewMethod;
+    private Method resolveExistingMethod;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         generator = new TestCasesGenerator();
+        resolveNewMethod = TestCasesGenerator.class.getDeclaredMethod("resolveRelationshipForNew", TestCasesGeneratorParams.class);
+        resolveNewMethod.setAccessible(true);
+        resolveExistingMethod = TestCasesGenerator.class.getDeclaredMethod("resolveRelationshipForExisting", TestCasesGeneratorParams.class);
+        resolveExistingMethod.setAccessible(true);
     }
 
     @Test
@@ -90,5 +98,37 @@ public class TestCasesGeneratorTest {
         // Should have a reasonable token count
         assertTrue(tokens > 0);
         assertTrue(tokens < 1000); // Shouldn't be excessive for a simple test case
+    }
+
+    @Test
+    public void resolveRelationshipForNewPrefersOverride() throws Exception {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setTestCaseLinkRelationship("legacy");
+        params.setTestCaseLinkRelationshipForNew("tests");
+
+        String relationship = (String) resolveNewMethod.invoke(generator, params);
+
+        assertEquals("tests", relationship);
+    }
+
+    @Test
+    public void resolveRelationshipForExistingFallsBackToLegacy() throws Exception {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setTestCaseLinkRelationship("legacy");
+
+        String relationship = (String) resolveExistingMethod.invoke(generator, params);
+
+        assertEquals("legacy", relationship);
+    }
+
+    @Test
+    public void resolveRelationshipForExistingDefaultsWhenBlank() throws Exception {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setTestCaseLinkRelationshipForExisting("   ");
+        params.setTestCaseLinkRelationship(null);
+
+        String relationship = (String) resolveExistingMethod.invoke(generator, params);
+
+        assertEquals(Relationship.RELATES_TO, relationship);
     }
 }

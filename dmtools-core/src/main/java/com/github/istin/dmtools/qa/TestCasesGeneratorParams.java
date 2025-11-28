@@ -25,6 +25,8 @@ public class TestCasesGeneratorParams extends Params {
     public static final String EXAMPLES = "examples";
     public static final String TEST_CASE_LINK_RELATIONSHIP = "testCaseLinkRelationship";
     public static final String INCLUDE_OTHER_TICKET_REFERENCES = "includeOtherTicketReferences";
+    public static final String TEST_CASE_LINK_RELATIONSHIP_FOR_NEW = "testCaseLinkRelationshipForNew";
+    public static final String TEST_CASE_LINK_RELATIONSHIP_FOR_EXISTING = "testCaseLinkRelationshipForExisting";
 
     @SerializedName(EXISTING_TEST_CASES_JQL)
     private String existingTestCasesJql;
@@ -48,5 +50,9 @@ public class TestCasesGeneratorParams extends Params {
     private boolean isOverridePromptExamples = false;
     @SerializedName(TEST_CASE_LINK_RELATIONSHIP)
     private String testCaseLinkRelationship = Relationship.IS_TESTED_BY;
+    @SerializedName(TEST_CASE_LINK_RELATIONSHIP_FOR_NEW)
+    private String testCaseLinkRelationshipForNew;
+    @SerializedName(TEST_CASE_LINK_RELATIONSHIP_FOR_EXISTING)
+    private String testCaseLinkRelationshipForExisting;
 
 }
