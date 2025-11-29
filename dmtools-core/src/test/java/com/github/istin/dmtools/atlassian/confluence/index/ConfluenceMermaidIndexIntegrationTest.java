@@ -4,7 +4,6 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.confluence.model.ContentResult;
-import com.github.istin.dmtools.atlassian.confluence.model.SearchResult;
 import com.github.istin.dmtools.atlassian.confluence.model.Storage;
 import com.github.istin.dmtools.index.mermaid.MermaidIndexIntegration;
 import org.json.JSONObject;
@@ -378,32 +377,23 @@ class ConfluenceMermaidIndexIntegrationTest {
         verify(processor, never()).process(anyString(), anyString(), anyString(), any(), any());
     }
 
-    // ==================== Legacy Pattern Fallback Tests ====================
+    // ==================== Invalid Pattern Tests ====================
 
     @Test
-    void testGetContentForIndexWithLegacySearchPattern() throws IOException {
-        // Given: pattern that doesn't match structured format, falls back to search
-        List<String> includePatterns = List.of("SomeSearchTerm");
+    void testGetContentForIndexWithInvalidPatternThrowsException() {
+        // Given: pattern that doesn't match structured format
+        List<String> includePatterns = List.of("SomeInvalidPattern");
         List<String> excludePatterns = new ArrayList<>();
         
-        SearchResult searchResult = mock(SearchResult.class);
-        when(searchResult.getId()).thenReturn("123");
-        
-        Content content = createMockContent("123", "SomeSearchTerm Page", "TEST", "<p>Content</p>");
-        
-        when(mockConfluence.searchContentByText(eq("SomeSearchTerm"), eq(100)))
-                .thenReturn(List.of(searchResult));
-        when(mockConfluence.contentById(eq("123"))).thenReturn(content);
-        when(mockConfluence.getContentAttachments(eq("123"))).thenReturn(new ArrayList<>());
-
         MermaidIndexIntegration.ContentProcessor processor = mock(MermaidIndexIntegration.ContentProcessor.class);
 
-        // When
-        integration.getContentForIndex(includePatterns, excludePatterns, processor);
-
-        // Then - should use search API as fallback
-        verify(mockConfluence).searchContentByText(eq("SomeSearchTerm"), eq(100));
-        verify(processor, times(1)).process(anyString(), anyString(), anyString(), any(), any());
+        // When/Then - should throw RuntimeException wrapping IllegalArgumentException
+        assertThrows(RuntimeException.class, () -> 
+            integration.getContentForIndex(includePatterns, excludePatterns, processor)
+        );
+        
+        // Verify no content was processed
+        verify(processor, never()).process(anyString(), anyString(), anyString(), any(), any());
     }
 
     // ==================== Helper Methods ====================

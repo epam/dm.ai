@@ -3,15 +3,19 @@ package com.github.istin.dmtools.atlassian.confluence.index;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
+import com.github.istin.dmtools.atlassian.confluence.model.ContentResult;
 import com.github.istin.dmtools.index.mermaid.MermaidIndexIntegration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -89,19 +93,16 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
      * @param pattern the path pattern to match
      * @return list of matching content
      * @throws IOException if an API error occurs
+     * @throws IllegalArgumentException if the pattern is not valid
      */
     private List<Content> getContentByPattern(String pattern) throws IOException {
-        List<Content> results = new ArrayList<>();
-        
-        // Try to parse as a structured path pattern
-        if (ConfluencePagePathParser.isValidPattern(pattern)) {
-            ConfluencePagePathParser.ParsedPath parsedPath = ConfluencePagePathParser.parse(pattern);
-            return getContentByParsedPath(parsedPath);
+        // Parse as a structured path pattern
+        if (!ConfluencePagePathParser.isValidPattern(pattern)) {
+            throw new IllegalArgumentException("Invalid path pattern: " + pattern);
         }
         
-        // Fallback: treat as a legacy simple pattern (space key or page title)
-        logger.debug("Pattern '{}' not recognized as structured path, treating as legacy pattern", pattern);
-        return getContentByLegacyPattern(pattern);
+        ConfluencePagePathParser.ParsedPath parsedPath = ConfluencePagePathParser.parse(pattern);
+        return getContentByParsedPath(parsedPath);
     }
     
     /**
@@ -161,7 +162,7 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
      * @throws IOException if an API error occurs
      */
     private void collectDescendants(String parentId, List<Content> results, Set<String> visited) throws IOException {
-        java.util.Queue<String> queue = new java.util.LinkedList<>();
+        Queue<String> queue = new LinkedList<>();
         queue.add(parentId);
         visited.add(parentId);
         
@@ -223,8 +224,7 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
     private List<Content> getSpaceRootPages(String spaceKey) throws IOException {
         // Use the content API to get pages in the space
         // The Confluence API path is: /rest/api/content?spaceKey={spaceKey}&type=page
-        com.github.istin.dmtools.atlassian.confluence.model.ContentResult contentResult = 
-                confluence.content("", spaceKey);
+        ContentResult contentResult = confluence.content("", spaceKey);
         
         List<Content> contents = contentResult.getContents();
         if (contents == null) {
@@ -246,50 +246,6 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
     private boolean isRootPage(Content content) {
         String parentId = content.getParentId();
         return parentId == null || parentId.isEmpty();
-    }
-    
-    /**
-     * Handles legacy patterns that are not structured paths.
-     * Falls back to search-based retrieval for backward compatibility.
-     *
-     * @param pattern the legacy pattern
-     * @return list of matching content
-     * @throws IOException if an API error occurs
-     */
-    private List<Content> getContentByLegacyPattern(String pattern) throws IOException {
-        List<Content> results = new ArrayList<>();
-        
-        // Try to treat as space key with /** suffix
-        if (pattern.endsWith("**")) {
-            String spaceKey = pattern.substring(0, pattern.length() - 2);
-            if (spaceKey.endsWith("/")) {
-                spaceKey = spaceKey.substring(0, spaceKey.length() - 1);
-            }
-            return getAllPagesInSpace(spaceKey);
-        }
-        
-        // For other patterns, use search as fallback
-        List<com.github.istin.dmtools.atlassian.confluence.model.SearchResult> searchResults = 
-                confluence.searchContentByText(pattern, 100);
-        
-        for (com.github.istin.dmtools.atlassian.confluence.model.SearchResult result : searchResults) {
-            try {
-                String contentId = result.getId();
-                if (contentId == null) {
-                    contentId = result.getEntityId();
-                }
-                if (contentId != null) {
-                    Content content = confluence.contentById(contentId);
-                    if (content != null) {
-                        results.add(content);
-                    }
-                }
-            } catch (Exception e) {
-                logger.warn("Failed to get content by ID {}: {}", result.getId(), e.getMessage());
-            }
-        }
-        
-        return results;
     }
     
     /**
@@ -386,7 +342,7 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
      */
     private String getSpaceKey(Content content) {
         try {
-            org.json.JSONObject expandableObj = content.getJSONObject().optJSONObject("_expandable");
+            JSONObject expandableObj = content.getJSONObject().optJSONObject("_expandable");
             if (expandableObj != null) {
                 String space = expandableObj.optString("space");
                 if (space != null && !space.isEmpty()) {
@@ -402,7 +358,7 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
         
         // Fallback: try to get from space object if available
         try {
-            org.json.JSONObject spaceObj = content.getJSONObject().optJSONObject("space");
+            JSONObject spaceObj = content.getJSONObject().optJSONObject("space");
             if (spaceObj != null) {
                 return spaceObj.optString("key", "UNKNOWN");
             }
