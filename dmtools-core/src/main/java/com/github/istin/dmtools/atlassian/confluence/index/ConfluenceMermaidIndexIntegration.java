@@ -61,10 +61,10 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
                 String contentName = content.getTitle();
                 String contentId = content.getId();
                 
-                // Check if content matches include patterns
-                if (!matchesPattern(contentName, spaceKey, includePatterns)) {
-                    continue;
-                }
+                // Content already matched include patterns during search; no need to filter again.
+                
+                
+                
                 
                 // Check if content matches exclude patterns
                 if (matchesPattern(contentName, spaceKey, excludePatterns)) {
@@ -202,11 +202,14 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
      */
     private String getSpaceKey(Content content) {
         try {
-            String space = content.getJSONObject().optJSONObject("_expandable").optString("space");
-            if (space != null && !space.isEmpty()) {
-                String[] split = space.split("/");
-                if (split.length > 0) {
-                    return split[split.length - 1];
+            org.json.JSONObject expandableObj = content.getJSONObject().optJSONObject("_expandable");
+            if (expandableObj != null) {
+                String space = expandableObj.optString("space");
+                if (space != null && !space.isEmpty()) {
+                    String[] split = space.split("/");
+                    if (split.length > 0) {
+                        return split[split.length - 1];
+                    }
                 }
             }
         } catch (Exception e) {
