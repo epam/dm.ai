@@ -329,10 +329,11 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
         try {
             Files.walk(tempDirPath)
                 .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(file -> {
-                    if (!file.delete()) {
-                        logger.debug("Failed to delete temp file: {}", file.getAbsolutePath());
+                .forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        logger.debug("Failed to delete temp file: {}", path, e);
                     }
                 });
         } catch (IOException e) {
