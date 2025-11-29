@@ -152,7 +152,8 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
     }
     
     /**
-     * Recursively collects all descendant pages.
+     * Collects all descendant pages iteratively using a queue.
+     * This approach avoids potential stack overflow issues with deeply nested page hierarchies.
      *
      * @param parentId the parent page ID
      * @param results the list to add results to
@@ -160,21 +161,25 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
      * @throws IOException if an API error occurs
      */
     private void collectDescendants(String parentId, List<Content> results, Set<String> visited) throws IOException {
-        if (visited.contains(parentId)) {
-            return;
-        }
+        java.util.Queue<String> queue = new java.util.LinkedList<>();
+        queue.add(parentId);
         visited.add(parentId);
         
-        try {
-            List<Content> children = confluence.getChildrenOfContentById(parentId);
-            for (Content child : children) {
-                if (!visited.contains(child.getId())) {
-                    results.add(child);
-                    collectDescendants(child.getId(), results, visited);
+        while (!queue.isEmpty()) {
+            String currentId = queue.poll();
+            
+            try {
+                List<Content> children = confluence.getChildrenOfContentById(currentId);
+                for (Content child : children) {
+                    if (!visited.contains(child.getId())) {
+                        visited.add(child.getId());
+                        results.add(child);
+                        queue.add(child.getId());
+                    }
                 }
+            } catch (Exception e) {
+                logger.warn("Failed to get children for page {}: {}", currentId, e.getMessage());
             }
-        } catch (Exception e) {
-            logger.warn("Failed to get children for page {}: {}", parentId, e.getMessage());
         }
     }
     
@@ -228,11 +233,19 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
         
         // Filter to get only root pages (no ancestors or empty ancestors)
         return contents.stream()
-                .filter(c -> {
-                    String parentId = c.getParentId();
-                    return parentId == null || parentId.isEmpty();
-                })
+                .filter(this::isRootPage)
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * Checks if a content page is a root page (has no parent).
+     *
+     * @param content the content to check
+     * @return true if the content is a root page
+     */
+    private boolean isRootPage(Content content) {
+        String parentId = content.getParentId();
+        return parentId == null || parentId.isEmpty();
     }
     
     /**

@@ -281,9 +281,9 @@ public class ConfluencePagePathParser {
         // Note: '+' in URLs can mean either literal '+' or space (form encoding)
         // We decode '%2B' to '+' and keep '+' as '+' (or decode to space based on context)
         try {
-            return URLDecoder.decode(pageName, StandardCharsets.UTF_8.name());
-        } catch (Exception e) {
-            // If decoding fails, return as-is
+            return URLDecoder.decode(pageName, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            // If decoding fails due to invalid escape sequences, return as-is
             return pageName;
         }
     }
