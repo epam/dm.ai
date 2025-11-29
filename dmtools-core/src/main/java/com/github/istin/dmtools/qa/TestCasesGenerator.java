@@ -17,6 +17,7 @@ import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.di.DaggerTestCasesGeneratorComponent;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import com.github.istin.dmtools.job.AbstractJob;
+import com.github.istin.dmtools.job.TrackerParams;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import dagger.Component;
 import lombok.*;
@@ -211,7 +212,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                     )
             );
         }
-        if (params.getOutputType().equals(TestCasesGeneratorParams.OutputType.comment)) {
+        TestCasesResult testCasesResult = new TestCasesResult(ticketContext.getTicket().getKey(), finaResults, newTestCases);
+
+        if (params.getOutputType().equals(TrackerParams.OutputType.comment)) {
             StringBuilder result = new StringBuilder();
             for (TestCaseGeneratorAgent.TestCase testCase : newTestCases) {
                 result.append("Summary: ").append(testCase.getSummary()).append("<br>");
@@ -240,7 +243,13 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 trackerClient.linkIssueWithRelationship(mainTicket.getTicketKey(), createdTestCase.getKey(), newTestCaseRelationship);
             }
         }
-        return new TestCasesResult(ticketContext.getTicket().getKey(), finaResults, newTestCases);
+        js(params.getPostJSAction())
+                .mcp(trackerClient, ai, confluence, null)
+                .withJobContext(params, ticketContext.getTicket(), testCasesResult)
+                .with(TrackerParams.INITIATOR, params.getInitiator())
+                .execute();
+
+        return testCasesResult;
     }
 
     public String unpackExamples(String examples, String[] testCasesExamplesFields) throws Exception {
