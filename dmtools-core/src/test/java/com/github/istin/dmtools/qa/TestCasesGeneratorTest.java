@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.qa;
 
+import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.ai.Claude35TokenCounter;
 import com.github.istin.dmtools.ai.TicketContext;
@@ -168,9 +169,11 @@ public class TestCasesGeneratorTest {
         Confluence confluence = mock(Confluence.class);
         TestCaseGeneratorAgent testCaseGeneratorAgent = mock(TestCaseGeneratorAgent.class);
 
+        AI ai = mock(AI.class);
         testableGenerator.trackerClient = trackerClient;
         testableGenerator.confluence = confluence;
         testableGenerator.testCaseGeneratorAgent = testCaseGeneratorAgent;
+        testableGenerator.ai = ai;
 
         // Params with postJSAction and initiator
         TestCasesGeneratorParams params = new TestCasesGeneratorParams();
@@ -208,7 +211,7 @@ public class TestCasesGeneratorTest {
         assertNotNull(testableGenerator.capturedExecutor);
 
         // Verify JS executor was configured with expected context
-        verify(testableGenerator.capturedExecutor).mcp(trackerClient, testableGenerator.getAi(), confluence, null);
+        verify(testableGenerator.capturedExecutor).mcp(trackerClient, ai, confluence, null);
 
         ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
         verify(testableGenerator.capturedExecutor).withJobContext(eq(params), eq(ticket), responseCaptor.capture());
