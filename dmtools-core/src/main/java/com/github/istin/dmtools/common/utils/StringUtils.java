@@ -776,18 +776,28 @@ public class StringUtils {
         if (fileName == null || fileName.isEmpty()) {
             return defaultName;
         }
-        // Remove any path separators to prevent directory traversal
-        String sanitized = fileName.replace("/", "_").replace("\\", "_");
+        
+        // First, extract the actual filename from path (handle directory traversal)
+        // Remove path traversal sequences (../ and ..\)
+        String sanitized = fileName.replaceAll("\\.\\./", "").replaceAll("\\.\\.\\\\", "");
+        // Replace all path separators with underscores (preserve path structure)
+        sanitized = sanitized.replace("/", "_").replace("\\", "_");
+        
         // Remove any other potentially dangerous characters
+        // Preserve dots, dashes, and underscores as they are valid in filenames
         sanitized = sanitized.replaceAll("[^a-zA-Z0-9._-]", "_");
         // Collapse consecutive underscores to a single underscore
         sanitized = sanitized.replaceAll("_+", "_");
-        // Remove leading/trailing underscores
-        sanitized = sanitized.replaceAll("^_+|_+$", "");
+        // Remove underscores that are immediately before dots (e.g., "file_.txt" -> "file.txt")
+        sanitized = sanitized.replaceAll("_\\.", ".");
+        // Remove leading/trailing underscores and dots (but preserve dots in the middle)
+        sanitized = sanitized.replaceAll("^[._]+|[._]+$", "");
+        
         // Apply length limit if specified
         if (maxLength > 0 && sanitized.length() > maxLength) {
             sanitized = sanitized.substring(0, maxLength);
         }
+        
         // Handle empty result
         if (sanitized.isEmpty()) {
             return defaultName;
