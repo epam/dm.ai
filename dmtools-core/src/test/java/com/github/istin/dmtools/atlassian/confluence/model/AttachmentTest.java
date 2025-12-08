@@ -53,4 +53,67 @@ class AttachmentTest {
     void testTitleConstant() {
         assertEquals("title", Attachment.TITLE);
     }
+
+    @Test
+    void testGetDownloadLink_WhenLinksAndDownloadPresent() {
+        JSONObject links = new JSONObject();
+        links.put("download", "/download/attachments/123/file.pdf");
+        
+        JSONObject json = new JSONObject();
+        json.put("title", "file.pdf");
+        json.put("_links", links);
+        
+        Attachment attachment = new Attachment(json);
+        
+        assertEquals("/download/attachments/123/file.pdf", attachment.getDownloadLink());
+    }
+
+    @Test
+    void testGetDownloadLink_WhenLinksNull() {
+        JSONObject json = new JSONObject();
+        json.put("title", "file.pdf");
+        
+        Attachment attachment = new Attachment(json);
+        
+        assertNull(attachment.getDownloadLink());
+    }
+
+    @Test
+    void testGetDownloadLink_WhenLinksExistsButDownloadMissing() {
+        JSONObject links = new JSONObject();
+        links.put("self", "/rest/api/content/123");
+        
+        JSONObject json = new JSONObject();
+        json.put("title", "file.pdf");
+        json.put("_links", links);
+        
+        Attachment attachment = new Attachment(json);
+        
+        assertNull(attachment.getDownloadLink());
+    }
+
+    @Test
+    void testGetDownloadLink_WhenDownloadIsEmptyString() {
+        JSONObject links = new JSONObject();
+        links.put("download", "");
+        
+        JSONObject json = new JSONObject();
+        json.put("title", "file.pdf");
+        json.put("_links", links);
+        
+        Attachment attachment = new Attachment(json);
+        
+        // optString returns empty string for empty value, not null
+        assertEquals("", attachment.getDownloadLink());
+    }
+
+    @Test
+    void testLinksConstant() {
+        assertEquals("_links", Attachment.LINKS);
+    }
+
+    @Test
+    void testDownloadConstant() {
+        assertEquals("download", Attachment.DOWNLOAD);
+    }
 }

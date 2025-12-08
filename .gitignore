@@ -149,3 +149,4 @@ dmtools-core/cacheTeamsClient
 /dmtools-core/cacheBasicOllamaAI/*
 cache**/
 dmtools-core/cache**/
+/dmtools-automation/bin/

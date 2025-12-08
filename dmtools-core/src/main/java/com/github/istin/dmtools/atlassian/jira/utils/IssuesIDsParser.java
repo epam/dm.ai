@@ -7,10 +7,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -80,6 +77,9 @@ public class IssuesIDsParser {
     }
 
     public static Set<String> extractAllJiraIDs(String text) {
+        if (text == null || text.isEmpty()) {
+            return Collections.emptySet();
+        }
         // Enhanced JIRA Key Pattern to match keys in text and URLs
         // It looks for word boundaries or URL prefixes before the JIRA key pattern
         String jiraKeyPattern = "(?:\\b|\\/browse\\/)[A-Z]+-\\d+\\b";
@@ -130,6 +130,9 @@ public class IssuesIDsParser {
     }
 
     public static Set<String> extractConfluenceUrls(String basePath, String text) {
+        if (text == null || text.isEmpty()) {
+            return Collections.emptySet();
+        }
         // Get the domain part (remove /wiki from basePath)
         String domain = basePath.substring(0, basePath.lastIndexOf("/wiki"));
 

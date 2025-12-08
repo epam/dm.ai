@@ -77,4 +77,99 @@ public class StringUtilsTest {
         assertNotNull("Output should not be null", output);
         assertTrue("Should contain items", output.contains("item"));
     }
+
+    // ==================== sanitizeFileName Tests ====================
+
+    @Test
+    public void testSanitizeFileName_NormalFileName() {
+        String result = StringUtils.sanitizeFileName("document.pdf");
+        assertEquals("document.pdf", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_WithSpecialCharacters() {
+        String result = StringUtils.sanitizeFileName("file@#$%^.txt");
+        assertEquals("file.txt", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_WithPathSeparators() {
+        String result = StringUtils.sanitizeFileName("../../../etc/passwd");
+        assertEquals("etc_passwd", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_WithBackslashes() {
+        String result = StringUtils.sanitizeFileName("..\\..\\..\\windows\\system32");
+        assertEquals("windows_system32", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_WithSpacesAndConsecutiveUnderscores() {
+        String result = StringUtils.sanitizeFileName("my   file   name.pdf");
+        assertEquals("my_file_name.pdf", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_NullInput() {
+        String result = StringUtils.sanitizeFileName(null);
+        assertEquals("unnamed_file", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_EmptyInput() {
+        String result = StringUtils.sanitizeFileName("");
+        assertEquals("unnamed_file", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_AllInvalidCharacters() {
+        String result = StringUtils.sanitizeFileName("@#$%^&*()");
+        assertEquals("unnamed_file", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_LeadingTrailingUnderscores() {
+        String result = StringUtils.sanitizeFileName("__test__");
+        assertEquals("test", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_VeryLongFileName() {
+        String longName = "a".repeat(300) + ".pdf";
+        String result = StringUtils.sanitizeFileName(longName);
+        assertTrue("Should be truncated to 200 characters or less", result.length() <= 200);
+    }
+
+    @Test
+    public void testSanitizeFileName_WithCustomDefaultName() {
+        String result = StringUtils.sanitizeFileName(null, "custom_default", 200);
+        assertEquals("custom_default", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_WithCustomMaxLength() {
+        String result = StringUtils.sanitizeFileName("abcdefghij.pdf", "default", 5);
+        assertEquals("abcde", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_WithZeroMaxLength() {
+        String result = StringUtils.sanitizeFileName("document.pdf", "default", 0);
+        assertEquals("document.pdf", result); // No truncation when maxLength is 0
+    }
+
+    @Test
+    public void testSanitizeFileName_PreservesValidCharacters() {
+        String result = StringUtils.sanitizeFileName("valid-file_name.test-123.pdf");
+        assertEquals("valid-file_name.test-123.pdf", result);
+    }
+
+    @Test
+    public void testSanitizeFileName_UnicodeCharacters() {
+        String result = StringUtils.sanitizeFileName("文档.pdf");
+        // Unicode characters are replaced with underscores
+        assertNotNull(result);
+        assertTrue("Should not be empty", result.length() > 0);
+    }
 }

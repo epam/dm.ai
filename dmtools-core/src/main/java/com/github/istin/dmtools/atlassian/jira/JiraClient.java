@@ -1826,7 +1826,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             if (response.isSuccessful()) {
                 return response.body() != null ? response.body().string() : null;
             } else {
-                logger.error("Error code {} {} {}", response.code(), genericRequest.getBody(), genericRequest.url());
+                String sanitizedBody = sanitizeRequestBodyForLogging(genericRequest.getBody());
+                logger.error("Error code {} {} {}", response.code(), sanitizedBody, genericRequest.url());
                 return response.body() != null ? response.body().string() : null;
             }
         } finally {
@@ -1854,12 +1855,36 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             if (response.isSuccessful()) {
                 return response.body() != null ? response.body().string() : null;
             } else {
-                logger.error("Error code {} {} {}", response.code(), genericRequest.getBody(), genericRequest.url());
+                String sanitizedBody = sanitizeRequestBodyForLogging(genericRequest.getBody());
+                logger.error("Error code {} {} {}", response.code(), sanitizedBody, genericRequest.url());
                 return response.body() != null ? response.body().string() : null;
             }
         } finally {
             closeAllConnections();
         }
+    }
+    
+    /**
+     * Sanitizes request body for logging by filtering out base64-encoded images.
+     * Prevents large base64 strings from cluttering logs.
+     * 
+     * @param body the request body to sanitize
+     * @return sanitized body with base64 images replaced with placeholders
+     */
+    private String sanitizeRequestBodyForLogging(String body) {
+        if (body == null || body.isEmpty()) {
+            return body;
+        }
+        // Filter base64 image data from JSON
+        // Pattern 1: "data": "base64string..." (Anthropic format)
+        String sanitized = body.replaceAll("\"data\"\\s*:\\s*\"[a-zA-Z0-9+/=]{100,}\"", "\"data\": \"[Base64 image data redacted]\"");
+        // Pattern 2: "url": "data:image/...;base64,..." (Ollama/Dial format)
+        sanitized = sanitized.replaceAll("\"url\"\\s*:\\s*\"data:image/[^;]+;base64,[a-zA-Z0-9+/=]+\"", "\"url\": \"data:image/[redacted];base64,[Base64 image data redacted]\"");
+        // Pattern 3: "image_url": {"url": "data:image/...;base64,..."} (OpenAI format)
+        sanitized = sanitized.replaceAll("\"image_url\"\\s*:\\s*\\{[^}]*\"url\"\\s*:\\s*\"data:image/[^;]+;base64,[a-zA-Z0-9+/=]+\"[^}]*\\}", "\"image_url\": {\"url\": \"data:image/[redacted];base64,[Base64 image data redacted]\"}");
+        // Pattern 4: Standalone data:image URLs
+        sanitized = sanitized.replaceAll("data:image/[^;]+;base64,[a-zA-Z0-9+/=]{100,}", "data:image/[redacted];base64,[Base64 image data redacted]");
+        return sanitized;
     }
 
     @Override

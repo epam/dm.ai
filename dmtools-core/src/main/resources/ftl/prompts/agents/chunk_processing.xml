@@ -2,11 +2,20 @@
 <chunk_processing>
     <description>
         Agent must process chunks according to all previously defined rules and formatting requirements. Additionally:
-        1. For text content: Analyze and execute tasks based on the text content, providing results in response
-        2. For images: Generate implementation based on visual content (e.g., HTML/CSS for UI mockups)
-        3. For code: Provide modified implementation while maintaining references to all related files
-        4. Track relationships between chunks and maintain context across processing
-        5. Focus on execution of task with specific chunk, not imagine what can be in other chunks - only retrieved chunk information can be used for execution.
+        1. For text content: **EXECUTE the requested task** based on the text content (e.g., if asked to create a diagram, generate the actual diagram code). Provide complete, concrete deliverables in the "Preserved Data" section that the final agent can directly use
+        2. For images: Generate complete implementation based on visual content (e.g., full HTML/CSS for UI mockups) - will be used by final agent
+        3. For code: Provide complete modified implementation while maintaining references to all related files, that will be used by final agent
+        4. Focus on execution of task with specific chunk only - work ONLY with current chunk content
+        5. Do NOT imagine or assume what might be in other chunks - only use the information provided in current chunk
+        
+        **CRITICAL RULES:**
+        - Chunk content will NOT be passed to final agent! Only your response will be used
+        - Do NOT create summaries or analyses as preserved data - create ACTUAL DELIVERABLES
+        - If task is to create a diagram: generate diagram code for components in this chunk (PlantUML/Mermaid/etc.)
+        - If task is to implement code: generate working code implementation based on this chunk
+        - If task is to create documentation: generate formatted documentation for content in this chunk
+        - You must not skip any important details from this chunk
+        - Your output will be collected with other chunks' outputs and sent to final agent for assembly
     </description>
 
     <chunk_input>
@@ -29,30 +38,48 @@
     </chunk_input>
     <rules>
         <primary_rules>
-            Do not generate final output until all chunks are processed
+            Execute the task on current chunk content and generate deliverable output
             Each chunk analysis must be returned in markdown format
-            Maintain consistent markdown headers and structure across chunks
-            Track dependencies between chunks
+            Maintain consistent markdown headers and structure
+            Work only with information available in current chunk
         </primary_rules>
-        When processing chunks, analyze each piece separately first
-        Keep track of key findings from each chunk. Use snapshot of chunk data if it's required.
-        Use metadata tag to indicate what is number of the chunk
-        For code chunks, maintain file context between related pieces, keep file names in responses and chunk data of file.
+        When processing a chunk, analyze the content and execute the task based solely on what's available
+        Keep track of key findings from current chunk. Use snapshot of chunk data if it's required.
+        For code chunks, maintain file context and keep file names in responses and chunk data of file.
         <output_format>
             <format>markdown</format>
             <structure>
                 ## Chunk Analysis
                 ### Metadata
+                - Content type and source information
+                - File names or references if applicable
+                
                 ### Key Findings
-                ### Required Information
+                - What was executed/implemented from the task based on current chunk
+                
                 ### Preserved Data
+                - **MUST contain actual deliverables that execute the task on current chunk**
+                - For diagram tasks: diagram code (PlantUML/Mermaid) for components in this chunk
+                - For code tasks: working implementation based on this chunk
+                - For documentation tasks: formatted documentation for content in this chunk
+                - NOT summaries, NOT yaml lists, NOT abstracts
+                - This is what the final agent will receive - make it complete and ready to merge with other chunks
             </structure>
         </output_format>
         <response_rules>
-            For chunks 1 to N-1: Return only analysis in markdown
-            For final chunk: Generate complete solution using all collected data
-            Use markdown code blocks for preserving code snippets
-            Use markdown checklists for tracking requirements
+            Processing individual chunks:
+            - Return analysis in markdown format
+            - **CRITICAL**: In "Preserved Data" section, include actual task execution results based on current chunk
+            - If task is to create diagram: generate diagram code for components found in this chunk
+            - If task is to write code: generate actual code implementation based on this chunk
+            - DO NOT just summarize - execute the task with available data
+            - Generate deliverables that can be combined with other chunks' results later
+            
+            General rules:
+            - Use markdown code blocks for all deliverables (code, diagrams, configs, etc.)
+            - Remember: your output will be collected and sent to final agent as context
+            - Make deliverables complete and ready to be merged by the final agent
+            - Focus only on current chunk content - do not reference or wait for other chunks
         </response_rules>
     </rules>
     <examples>
@@ -61,26 +88,39 @@
                 <chunk_number>1</chunk_number>
                 <total_chunks>3</total_chunks>
                 <content_type>configuration</content_type>
-                <data>[Configuration data]</data>
+                <task>Generate environment configuration file</task>
+                <data>
+                Database: PostgreSQL on db.example.com:5432
+                Redis: localhost:6379
+                API Key: stored in AWS Secrets Manager
+                </data>
             </input>
             <output>
                 ```markdown
                 ## Chunk Analysis
                 ### Metadata
-                - Chunk: 1/3
-                - Chunk References: [links from data to exact pages|exact files|etc.]
                 - Type: Configuration
+                - Task: Generate environment configuration file
 
                 ### Key Findings
-                - Configuration patterns identified which are related to user task: full description of pattern1, pattern2
-                - Variable naming conventions found which are related to user task: full description of naming convention
-                - Existing implementation references related to current task: reference1, reference2
+                - Generated database configuration properties
+                - Generated Redis cache settings
+                - Generated security configuration for AWS Secrets Manager
 
                 ### Preserved Data
-                ```javascript
-                {
-                "variables": ["example.var1", "example.var2"]
-                }
+                ```properties
+                # Database Configuration
+                db.host=db.example.com
+                db.port=5432
+                db.driver=postgresql
+
+                # Cache Configuration
+                redis.host=localhost
+                redis.port=6379
+
+                # Security
+                api.key.source=aws-secrets-manager
+                ```
                 ```
             </output>
         </example>
@@ -101,14 +141,12 @@
                 ```markdown
                 ## Chunk Analysis
                 ### Metadata
-                - Chunk: 1/3
                 - Type: Java Code
                 - File: LoginService.java
 
                 ### Key Findings
-                - Security Issues:
-                - Missing input validation
-                - No rate limiting implemented
+                - Extracted login endpoint implementation
+                - Preserved authentication service integration
 
                 ### Preserved Data
                 ```java
@@ -117,10 +155,6 @@
                 return authService.login(username, password);
                 }
                 ```
-
-                ### Dependencies
-                - [ ] Need authentication service implementation
-                - [ ] Need security configuration
                 ```
             </output>
         </example>
@@ -135,14 +169,13 @@
                 ```markdown
                 ## Chunk Analysis
                 ### Metadata
-                - Chunk: 1/1
                 - Type: UI Design
                 - File: product_card_design.png
 
                 ### Key Findings
-                - Component: Product Card
-                - Responsive design requirements identified
-                - Layout structure analyzed
+                - Implemented Product Card HTML structure
+                - Generated responsive CSS with mobile breakpoints
+                - Created complete component with image, title, price, and button
 
                 ### Preserved Data
                 ```html
@@ -192,14 +225,13 @@
                 ```markdown
                 ## Chunk Analysis
                 ### Metadata
-                - Chunk: 1/1
                 - Type: Java Code
                 - File: UserService.java
 
                 ### Key Findings
-                - Missing validation implementation
-                - Direct repository access without checks
-                - No error handling
+                - Implemented validation logic in registerUser method
+                - Added UserValidator integration with error handling
+                - Enhanced service with validation checks before repository access
 
                 ### Preserved Data
                 ```java
@@ -216,10 +248,56 @@
                 }
                 }
                 ```
+                ```
+            </output>
+        </example>
+        <example>
+            <input>
+                <chunk_number>1</chunk_number>
+                <total_chunks>2</total_chunks>
+                <content_type>architecture_documentation</content_type>
+                <task>Create C4 diagram of the system architecture</task>
+                <data>
+                    System Architecture Documentation:
+                    - Frontend: React SPA communicating via REST API
+                    - Backend: Spring Boot microservices
+                    - Database: PostgreSQL
+                    - Cache: Redis
+                    - Message Queue: RabbitMQ
+                </data>
+            </input>
+            <output>
+                ```markdown
+                ## Chunk Analysis
+                ### Metadata
+                - Type: Architecture Documentation
+                - Task: Create C4 diagram
 
-                ### Dependencies
-                - [ ] Need UserValidator implementation
-                - [ ] Need ValidationException class
+                ### Key Findings
+                - Generated C4 Context diagram with all system components
+                - Implemented Frontend-Backend relationships with REST API
+                - Added infrastructure components: PostgreSQL, Redis, RabbitMQ with connections
+
+                ### Preserved Data
+                **C4 Context Diagram:**
+                ```plantuml
+                @startuml
+                !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+                Person(user, "User", "System user")
+                System(frontend, "Frontend Application", "React SPA")
+                System(backend, "Backend Services", "Spring Boot Microservices")
+                SystemDb(database, "Database", "PostgreSQL")
+                SystemDb(cache, "Cache", "Redis")
+                SystemQueue(queue, "Message Queue", "RabbitMQ")
+
+                Rel(user, frontend, "Uses", "HTTPS")
+                Rel(frontend, backend, "Makes API calls", "REST/HTTPS")
+                Rel(backend, database, "Reads/Writes", "JDBC")
+                Rel(backend, cache, "Caches data", "Redis Protocol")
+                Rel(backend, queue, "Publishes/Consumes messages", "AMQP")
+                @enduml
+                ```
                 ```
             </output>
         </example>

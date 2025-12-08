@@ -10,6 +10,8 @@ import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
 import com.github.istin.dmtools.di.KnowledgeBaseComponent;
+import com.github.istin.dmtools.di.DaggerMermaidIndexComponent;
+import com.github.istin.dmtools.di.MermaidIndexComponent;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
@@ -375,6 +377,15 @@ public class McpCliHandler {
             logger.debug("Created KBTools instance");
         } catch (Exception e) {
             logger.warn("Failed to create KBTools: {}", e.getMessage());
+        }
+
+        try {
+            // Create Mermaid Index Tools using Dagger
+            MermaidIndexComponent mermaidComponent = DaggerMermaidIndexComponent.create();
+            clients.put("mermaid", mermaidComponent.mermaidIndexTools());
+            logger.debug("Created MermaidIndexTools instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create MermaidIndexTools: {}", e.getMessage());
         }
 
         logger.info("Created {} client instances for MCP CLI", clients.size());

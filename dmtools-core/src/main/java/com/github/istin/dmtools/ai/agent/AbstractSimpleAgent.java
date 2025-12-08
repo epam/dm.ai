@@ -96,7 +96,7 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
                 // Process the chunk
                 PromptContext chunkContext = new PromptContext(params);
                 chunkContext.set("chunk", chunk);
-                chunkContext.set("chunkIndex", i + 1);
+                chunkContext.set("chunkIndex", i);
                 chunkContext.set("totalChunks", chunks.size());
                 
                 String chunkPrompt = promptTemplateReader.read(promptName, chunkContext);
@@ -107,8 +107,13 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
                 }
                 chunkResponses.append(chunkResponse);
             }
-            
-            response = chunkResponses.toString();
+            PromptContext chunkContext = new PromptContext(params);
+            chunkContext.set("chunk", new ChunkPreparation.Chunk(chunkResponses.toString(), null, 0));
+            chunkContext.set("chunkIndex", chunks.size());
+            chunkContext.set("totalChunks", chunks.size());
+
+            String chunkPrompt = promptTemplateReader.read(promptName, chunkContext);
+            response = ai.chat(chunkPrompt);
         } else {
             context.set("chunkIndex", -1);
             String prompt = promptTemplateReader.read(promptName, context);

@@ -134,4 +134,9 @@ public class AIAgentsModule {
     ToolSelectorAgent provideToolSelectorAgent() {
         return new ToolSelectorAgent();
     }
+
+    @Provides
+    MermaidDiagramGeneratorAgent provideMermaidDiagramGeneratorAgent() {
+        return new MermaidDiagramGeneratorAgent();
+    }
 }

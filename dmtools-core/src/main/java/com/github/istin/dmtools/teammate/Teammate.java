@@ -2,6 +2,7 @@ package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
+import com.github.istin.dmtools.ai.Claude35TokenCounter;
 import com.github.istin.dmtools.ai.TicketContext;
 import com.github.istin.dmtools.ai.agent.GenericRequestAgent;
 import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
@@ -21,8 +22,11 @@ import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.context.UriToObjectFactory;
 import com.github.istin.dmtools.di.AIAgentsModule;
 import com.github.istin.dmtools.di.DaggerTeammateComponent;
+import com.github.istin.dmtools.di.MermaidIndexModule;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import com.github.istin.dmtools.di.TeammateComponent;
+import com.github.istin.dmtools.index.mermaid.tool.MermaidIndexTools;
+import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.expert.ExpertParams;
 import com.github.istin.dmtools.job.*;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
@@ -45,6 +49,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultItem>> {
@@ -64,6 +69,22 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("skipAIProcessing")
         private boolean skipAIProcessing = false;
 
+        @SerializedName("indexes")
+        private IndexConfig[] indexes;
+
+    }
+
+    /**
+     * Configuration for index tool execution.
+     */
+    @Getter
+    @Setter
+    public static class IndexConfig {
+        @SerializedName("integration")
+        private String integration;
+
+        @SerializedName("storagePath")
+        private String storagePath;
     }
 
     @Inject
@@ -108,6 +129,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     @Inject
     UriToObjectFactory uriToObjectFactory;
 
+    @Inject
+    MermaidIndexTools mermaidIndexTools;
+
     // JavaScript bridge is now inherited from AbstractJob
     
     InstructionProcessor instructionProcessor;
@@ -119,7 +143,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
      * Includes ServerManagedIntegrationsModule for integrations and AIAgentsModule for agents
      */
     @Singleton
-    @Component(modules = {ServerManagedIntegrationsModule.class, AIAgentsModule.class})
+    @Component(modules = {ServerManagedIntegrationsModule.class, AIAgentsModule.class, MermaidIndexModule.class})
     public interface ServerManagedExpertComponent {
         void inject(Teammate expert);
     }
@@ -329,6 +353,44 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 }
             }
 
+            // Process indexes if configured
+            IndexConfig[] indexes = expertParams.getIndexes();
+            List<ChunkPreparation.Chunk> indexChunks = new ArrayList<>();
+            if (indexes != null) {
+                for (IndexConfig indexConfig : indexes) {
+                    try {
+                        List<ToText> indexData = executeIndexTool(indexConfig);
+                        if (indexData != null && !indexData.isEmpty()) {
+                            String indexName = indexConfig.getIntegration() != null ? indexConfig.getIntegration() : "index";
+                            if (expertParams.isSkipAIProcessing()) {
+                                // Add to knownInfo as text and save as file
+                                String indexText = ToText.Utils.toText(indexData);
+                                inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nIndex Data (" + indexName + "):\n" + indexText);
+                                attachResponse(this, "_index_" + indexName + ".txt", indexText, ticket.getKey(), "text/plain");
+                                logger.info("Saved index data from {} as attachment for ticket {}", indexName, ticket.getKey());
+                            } else {
+                                // Prepare chunks for AI processing with reduced token limit
+                                // Account for story tokens (same pattern as TestCasesGenerator)
+                                ChunkPreparation chunkPreparation = new ChunkPreparation();
+                                String storyText = inputParams.getRequest();
+                                int storyTokens = new Claude35TokenCounter().countTokens(storyText != null ? storyText : "");
+                                int systemTokenLimits = chunkPreparation.getTokenLimit();
+                                int tokenLimit = (systemTokenLimits - storyTokens) / 2;
+                                logger.info("Index chunking for {}: story tokens={}, system limit={}, chunk limit={}", 
+                                    indexName, storyTokens, systemTokenLimits, tokenLimit);
+                                
+                                List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(indexData, tokenLimit);
+                                indexChunks.addAll(chunks);
+                                logger.info("Prepared {} chunks from index {} for ticket {}", chunks.size(), indexName, ticket.getKey());
+                            }
+                        }
+                    } catch (Exception e) {
+                        String indexName = indexConfig.getIntegration() != null ? indexConfig.getIntegration() : "index";
+                        logger.error("Failed to execute index {} for ticket {}: {}", indexName, ticket.getKey(), e.getMessage(), e);
+                    }
+                }
+            }
+
             String response;
             if (expertParams.isSkipAIProcessing()) {
                 // Skip AI processing and use CLI output response if available
@@ -343,8 +405,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     logger.info("No CLI results available for ticket {}", ticket.getKey());
                 }
             } else {
-                // Standard AI processing workflow
-                GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, null, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
+                // Standard AI processing workflow with index chunks
+                List<ChunkPreparation.Chunk> allChunks = indexChunks.isEmpty() ? null : indexChunks;
+                GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, allChunks, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
                 response = genericRequestAgent.run(genericRequesAgentParams);
             }
             js(expertParams.getPostJSAction())
@@ -407,6 +470,20 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         );
         // Clean up temp file
         FileUtils.deleteQuietly(tempFileResult);
+    }
+
+    /**
+     * Executes an index tool based on the configuration and returns the results as List<ToText>.
+     *
+     * @param config The index configuration specifying which tool to use and its parameters
+     * @return List of ToText objects from the index tool, or empty list if tool is unknown
+     * @throws IOException if an error occurs reading from the index
+     */
+    private List<ToText> executeIndexTool(IndexConfig config) throws IOException {
+        if (config == null) {
+            return Collections.emptyList();
+        }
+        return mermaidIndexTools.read(config.getIntegration(), config.getStoragePath());
     }
 
 }

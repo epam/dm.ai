@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.atlassian.confluence;
 
+import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.confluence.model.ContentResult;
 import com.github.istin.dmtools.common.networking.GenericRequest;
@@ -10,11 +11,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
@@ -166,6 +169,36 @@ public class ConfluenceTest {
         Object result = confluence.uriToObject("http://example.com/invalid");
         
         assertEquals(null, result);
+    }
+
+    @Test
+    public void testDownloadAttachment_WithNullDownloadLink() throws IOException {
+        Attachment mockAttachment = mock(Attachment.class);
+        when(mockAttachment.getDownloadLink()).thenReturn(null);
+        when(mockAttachment.getTitle()).thenReturn("test.pdf");
+        
+        File tempDir = java.nio.file.Files.createTempDirectory("test").toFile();
+        try {
+            File result = confluence.downloadAttachment(mockAttachment, tempDir);
+            assertNull(result);
+        } finally {
+            tempDir.delete();
+        }
+    }
+
+    @Test
+    public void testDownloadAttachment_WithEmptyDownloadLink() throws IOException {
+        Attachment mockAttachment = mock(Attachment.class);
+        when(mockAttachment.getDownloadLink()).thenReturn("");
+        when(mockAttachment.getTitle()).thenReturn("test.pdf");
+        
+        File tempDir = java.nio.file.Files.createTempDirectory("test").toFile();
+        try {
+            File result = confluence.downloadAttachment(mockAttachment, tempDir);
+            assertNull(result);
+        } finally {
+            tempDir.delete();
+        }
     }
 
 }

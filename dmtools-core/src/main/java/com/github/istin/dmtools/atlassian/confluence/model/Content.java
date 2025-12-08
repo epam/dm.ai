@@ -54,7 +54,15 @@ public class Content extends JSONModel implements Key, TicketLink, ToText {
     }
 
     public Date getLastModifiedDate() {
-        return DateUtils.parseIsoDate2(getJSONObject(VERSION).optString("when"));
+        JSONObject version = getJSONObject(VERSION);
+        if (version == null) {
+            return null;
+        }
+        String when = version.optString("when");
+        if (when == null || when.isEmpty()) {
+            return null;
+        }
+        return DateUtils.parseIsoDate2(when);
     }
 
     public String getViewUrl(String basePath) {

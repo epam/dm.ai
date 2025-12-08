@@ -32,9 +32,38 @@ public class PropertyReader {
 
 	static Properties prop;
 	private static Properties envFileProps;
+	private static Path projectRoot = null;
 
 	/**
-	 * Loads properties from dmtools.env file in current working directory.
+	 * Finds the project root by walking up the directory tree looking for Gradle project markers.
+	 * Caches the result to avoid repeated filesystem operations.
+	 * @return Path to the project root, or user.dir as fallback
+	 */
+	private static Path findProjectRoot() {
+		if (projectRoot != null) {
+			return projectRoot;
+		}
+		
+		Path current = Paths.get(System.getProperty("user.dir"));
+		while (current != null) {
+			if (Files.exists(current.resolve("settings.gradle")) || 
+				Files.exists(current.resolve("settings.gradle.kts"))) {
+				projectRoot = current;
+				logger.debug("Detected project root at: {}", projectRoot);
+				return projectRoot;
+			}
+			current = current.getParent();
+		}
+		
+		// Fallback to user.dir if no Gradle project markers found
+		projectRoot = Paths.get(System.getProperty("user.dir"));
+		logger.debug("No Gradle project markers found, using user.dir as project root: {}", projectRoot);
+		return projectRoot;
+	}
+
+	/**
+	 * Loads properties from dmtools.env file.
+	 * First tries project root, then falls back to current working directory.
 	 * This is called lazily on first access.
 	 */
 	private static void loadEnvFileProperties() {
@@ -44,44 +73,90 @@ public class PropertyReader {
 		
 		envFileProps = new Properties();
 		
-		// Try to load from current working directory
+		// Priority 1: Try to load from project root directory
+		Path root = findProjectRoot();
+		Path envFileAtRoot = root.resolve("dmtools.env");
+		if (Files.exists(envFileAtRoot) && Files.isRegularFile(envFileAtRoot)) {
+			try {
+				Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile(envFileAtRoot.toString());
+				if (!envVars.isEmpty()) {
+					envVars.forEach(envFileProps::setProperty);
+					logger.debug("Loaded {} properties from dmtools.env at project root: {}", envVars.size(), envFileAtRoot);
+					return;
+				}
+			} catch (Exception e) {
+				logger.warn("Failed to load dmtools.env from {}: {}", envFileAtRoot, e.getMessage());
+			}
+		}
+		
+		// Priority 2: Fall back to current working directory (if different from project root)
 		String currentDir = System.getProperty("user.dir");
-		if (currentDir != null) {
+		if (currentDir != null && !currentDir.equals(root.toString())) {
 			Path envFile = Paths.get(currentDir, "dmtools.env");
 			if (Files.exists(envFile) && Files.isRegularFile(envFile)) {
 				try {
 					Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile(envFile.toString());
 					if (!envVars.isEmpty()) {
 						envVars.forEach(envFileProps::setProperty);
-						logger.debug("Loaded {} properties from dmtools.env at: {}", envVars.size(), envFile);
+						logger.debug("Loaded {} properties from dmtools.env at working directory: {}", envVars.size(), envFile);
+						return;
 					}
 				} catch (Exception e) {
 					logger.warn("Failed to load dmtools.env from {}: {}", envFile, e.getMessage());
 				}
-			} else {
-				logger.debug("dmtools.env not found in current directory: {}", currentDir);
 			}
 		}
+		
+		logger.debug("dmtools.env not found in project root ({}) or working directory ({})", root, currentDir);
 	}
 
 	public String getValue(String propertyKey) {
 		if (prop == null) {
 			prop = new Properties();
 			InputStream input = null;
+			boolean loadedFromFile = false;
+			
+			// Priority 1: Try to load from root project's src/main/resources/config.properties
 			try {
-				input = getClass().getResourceAsStream(PATH_TO_CONFIG_FILE);
-				if (input != null) {
+				Path root = findProjectRoot();
+				Path configFile = root.resolve("src/main/resources/config.properties");
+				if (Files.exists(configFile) && Files.isRegularFile(configFile)) {
+					input = Files.newInputStream(configFile);
 					prop.load(input);
+					loadedFromFile = true;
+					logger.debug("Loaded config.properties from root project: {}", configFile);
 				}
 			} catch (IOException e) {
-				throw new IllegalStateException("Property file not found");
+				logger.debug("Could not load config.properties from root project: {}", e.getMessage());
 			} finally {
-				try {
-					if (input != null) {
+				if (input != null) {
+					try {
 						input.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					input = null;
+				}
+			}
+			
+			// Priority 2: Fall back to dmtools-core embedded resource (classpath)
+			if (!loadedFromFile) {
+				try {
+					input = getClass().getResourceAsStream(PATH_TO_CONFIG_FILE);
+					if (input != null) {
+						prop.load(input);
+						logger.debug("Loaded config.properties from classpath resource: {}", PATH_TO_CONFIG_FILE);
 					}
 				} catch (IOException e) {
-					e.printStackTrace();
+					logger.warn("Could not load config.properties from classpath: {}", e.getMessage());
+				} finally {
+					try {
+						if (input != null) {
+							input.close();
+						}
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
 				}
 			}
 		}
@@ -92,7 +167,7 @@ public class PropertyReader {
 			return property;
 		}
 		
-		// Priority 2: dmtools.env file in current directory
+		// Priority 2: dmtools.env file
 		loadEnvFileProperties();
 		property = envFileProps.getProperty(propertyKey);
 		if (property != null && !property.isEmpty()) {
@@ -593,6 +668,8 @@ public class PropertyReader {
 	public static final String ANTHROPIC_MODEL = "ANTHROPIC_MODEL";
 	public static final String ANTHROPIC_MAX_TOKENS = "ANTHROPIC_MAX_TOKENS";
 	public static final String DEFAULT_LLM = "DEFAULT_LLM";
+	public static final String IMAGE_MAX_DIMENSION = "IMAGE_MAX_DIMENSION";
+	public static final String IMAGE_JPEG_QUALITY = "IMAGE_JPEG_QUALITY";
 
 	public String getGeminiApiKey() {
 		return getValue(GEMINI_API_KEY);
@@ -731,6 +808,14 @@ public class PropertyReader {
 
 	public String getDefaultLLM() {
 		return getValue(DEFAULT_LLM);
+	}
+
+	public int getImageMaxDimension() {
+		return Integer.parseInt(getValue(IMAGE_MAX_DIMENSION, "8000"));
+	}
+
+	public float getImageJpegQuality() {
+		return Float.parseFloat(getValue(IMAGE_JPEG_QUALITY, "0.9"));
 	}
 
 }

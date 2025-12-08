@@ -71,6 +71,16 @@ public class JobJavaScriptBridge {
         this.clientInstances.put("cli", new CliCommandExecutor());  // CLI command execution for automation workflows
         this.clientInstances.put("kb", kbTools);  // Knowledge Base tools for KB management
         
+        // Initialize Mermaid Index Tools if available
+        try {
+            com.github.istin.dmtools.di.MermaidIndexComponent mermaidComponent = 
+                com.github.istin.dmtools.di.DaggerMermaidIndexComponent.create();
+            this.clientInstances.put("mermaid", mermaidComponent.mermaidIndexTools());
+            logger.debug("MermaidIndexTools initialized for JavaScript bridge");
+        } catch (Exception e) {
+            logger.debug("MermaidIndexTools not initialized: {}. Mermaid tools will not be available.", e.getMessage());
+        }
+        
         // Initialize Teams client if configured
         try {
             this.clientInstances.put("teams", BasicTeamsClient.getInstance());
@@ -191,6 +201,38 @@ public class JobJavaScriptBridge {
                                 memberValue = convertPolyglotValueToJSON(memberValue);
                             }
                         }
+                        // Convert JSONArray to List<String> for array parameters
+                        if (memberValue instanceof JSONArray) {
+                            JSONArray jsonArray = (JSONArray) memberValue;
+                            List<String> stringList = new ArrayList<>();
+                            for (int i = 0; i < jsonArray.length(); i++) {
+                                Object item = jsonArray.get(i);
+                                if (item instanceof String) {
+                                    stringList.add((String) item);
+                                } else {
+                                    stringList.add(item.toString());
+                                }
+                            }
+                            memberValue = stringList;
+                        } else if (memberValue instanceof String && ((String) memberValue).trim().startsWith("[")) {
+                            // Handle case where JavaScript passes array as JSON string
+                            try {
+                                JSONArray jsonArray = new JSONArray((String) memberValue);
+                                List<String> stringList = new ArrayList<>();
+                                for (int i = 0; i < jsonArray.length(); i++) {
+                                    Object item = jsonArray.get(i);
+                                    if (item instanceof String) {
+                                        stringList.add((String) item);
+                                    } else {
+                                        stringList.add(item.toString());
+                                    }
+                                }
+                                memberValue = stringList;
+                            } catch (Exception e) {
+                                // If parsing fails, keep original value
+                                logger.debug("Failed to parse JSON array string for {}: {}", key, e.getMessage());
+                            }
+                        }
                         argsMap.put(key, memberValue);
                         logger.debug("Converted JS arg: {} = {} (type: {})", key, memberValue, memberValue != null ? memberValue.getClass().getName() : "null");
                     }
@@ -200,6 +242,41 @@ public class JobJavaScriptBridge {
                     if (hostObject instanceof Map) {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> hostMap = (Map<String, Object>) hostObject;
+                        // Convert JSONArray values in the map to List<String>
+                        for (Map.Entry<String, Object> entry : hostMap.entrySet()) {
+                            Object value = entry.getValue();
+                            if (value instanceof JSONArray) {
+                                JSONArray jsonArray = (JSONArray) value;
+                                List<String> stringList = new ArrayList<>();
+                                for (int i = 0; i < jsonArray.length(); i++) {
+                                    Object item = jsonArray.get(i);
+                                    if (item instanceof String) {
+                                        stringList.add((String) item);
+                                    } else {
+                                        stringList.add(item.toString());
+                                    }
+                                }
+                                hostMap.put(entry.getKey(), stringList);
+                            } else if (value instanceof String && ((String) value).trim().startsWith("[")) {
+                                // Handle case where JavaScript passes array as JSON string
+                                try {
+                                    JSONArray jsonArray = new JSONArray((String) value);
+                                    List<String> stringList = new ArrayList<>();
+                                    for (int i = 0; i < jsonArray.length(); i++) {
+                                        Object item = jsonArray.get(i);
+                                        if (item instanceof String) {
+                                            stringList.add((String) item);
+                                        } else {
+                                            stringList.add(item.toString());
+                                        }
+                                    }
+                                    hostMap.put(entry.getKey(), stringList);
+                                } catch (Exception e) {
+                                    // If parsing fails, keep original value
+                                    logger.debug("Failed to parse JSON array string for {}: {}", entry.getKey(), e.getMessage());
+                                }
+                            }
+                        }
                         argsMap.putAll(hostMap);
                         logger.debug("Used host object as Map: {}", argsMap);
                     }
@@ -224,7 +301,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = Set.of("jira", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb");
+        Set<String> integrations = Set.of("jira", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid");
         
         // Generate tool schemas using MCP infrastructure
         Map<String, Object> toolsResponse = MCPSchemaGenerator.generateToolsListResponse(integrations);
@@ -238,9 +315,12 @@ public class JobJavaScriptBridge {
         for (Map<String, Object> tool : tools) {
             String toolName = (String) tool.get("name");
             exposeToolToJS(toolName, tool);
+            if (toolName.contains("mermaid")) {
+                logger.info("Exposed Mermaid tool to JavaScript: {}", toolName);
+            }
         }
         
-        logger.debug("Exposed {} MCP tools to JavaScript using generated infrastructure", tools.size());
+        logger.info("Exposed {} MCP tools to JavaScript using generated infrastructure", tools.size());
     }
 
     /**
