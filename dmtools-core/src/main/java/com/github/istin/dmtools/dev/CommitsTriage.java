@@ -8,6 +8,7 @@ import com.github.istin.dmtools.common.model.ICommit;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.DateUtils;
+import com.github.istin.dmtools.di.CommitsTriageComponent;
 import com.github.istin.dmtools.di.DaggerCommitsTriageComponent;
 import com.github.istin.dmtools.di.SourceCodeFactory;
 import com.github.istin.dmtools.job.AbstractJob;
@@ -18,12 +19,16 @@ import com.github.istin.dmtools.prompt.Prompt;
 import com.github.istin.dmtools.prompt.PromptContext;
 import kotlin.Pair;
 import lombok.Getter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
 
 public class CommitsTriage extends AbstractJob<CommitsTriageParams, List<ResultItem>> {
+
+    private static final Logger logger = LogManager.getLogger(CommitsTriage.class);
 
     @Inject
     TrackerClient<? extends ITicket> trackerClient;
@@ -38,8 +43,27 @@ public class CommitsTriage extends AbstractJob<CommitsTriageParams, List<ResultI
     @Inject
     SourceCodeFactory sourceCodeFactory;
 
+    private CommitsTriageComponent commitsTriageComponent;
+
     public CommitsTriage() {
-        DaggerCommitsTriageComponent.create().inject(this);
+        // Lazy initialization - will be initialized in initializeStandalone()
+        // This prevents Dagger initialization during static class loading (e.g., in JobRunner.JOBS)
+    }
+
+    @Override
+    protected void initializeStandalone() {
+        logger.info("Initializing CommitsTriage in STANDALONE mode");
+        
+        if (commitsTriageComponent == null) {
+            logger.info("Creating new DaggerCommitsTriageComponent for standalone mode");
+            commitsTriageComponent = DaggerCommitsTriageComponent.create();
+        }
+        
+        logger.info("Injecting dependencies using CommitsTriageComponent");
+        commitsTriageComponent.inject(this);
+        
+        logger.info("CommitsTriage standalone initialization completed - AI type: {}", 
+                   (ai != null ? ai.getClass().getSimpleName() : "null"));
     }
 
     @Override
