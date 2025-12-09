@@ -19,7 +19,8 @@ public interface ApplicationConfiguration extends
     FigmaConfiguration,
     MetricsConfiguration,
     OllamaConfiguration,
-    AnthropicConfiguration {
+    AnthropicConfiguration,
+    TrackerConfiguration {
     
     /**
      * Sets the configuration file path to use

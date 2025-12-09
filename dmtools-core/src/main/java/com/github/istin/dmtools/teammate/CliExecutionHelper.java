@@ -61,13 +61,43 @@ public class CliExecutionHelper {
             logger.info("Created request file: {} ({} bytes)", requestFilePath.toAbsolutePath(), inputParams.length());
         }
         
+        // Enrich work item with relations if it's an ADO work item
+        // This is needed because ADO API doesn't include relations when using fields parameter
+        if (trackerClient != null) {
+            try {
+                // Check if this is an AzureDevOpsClient using instanceof
+                if (trackerClient instanceof com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) {
+                    com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient adoClient = 
+                        (com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) trackerClient;
+                    com.github.istin.dmtools.microsoft.ado.model.WorkItem workItem = 
+                        (com.github.istin.dmtools.microsoft.ado.model.WorkItem) ticket;
+                    adoClient.enrichWorkItemWithRelations(workItem);
+                    logger.info("🔄 Enriched ADO work item {} with relations for attachment detection", ticketKey);
+                }
+            } catch (Exception e) {
+                logger.warn("⚠️ Could not enrich work item with relations: {}", e.getMessage());
+            }
+        }
+
         // Download all ticket attachments to the input folder
         List<? extends IAttachment> attachments = ticket.getAttachments();
+        logger.info("📎 Ticket {} has {} attachments", ticketKey, attachments != null ? attachments.size() : 0);
+        
         if (attachments != null && !attachments.isEmpty() && trackerClient != null) {
-            logger.info("Downloading {} attachments for ticket {}", attachments.size(), ticketKey);
+            logger.info("⬇️ Downloading {} attachments for ticket {}", attachments.size(), ticketKey);
+            for (IAttachment att : attachments) {
+                if (att != null) {
+                    logger.info("  - {} (URL: {})", att.getName(), att.getUrl());
+                }
+            }
             downloadAttachments(attachments, inputFolderPath, trackerClient);
         } else {
-            logger.info("No attachments found for ticket {}", ticketKey);
+            if (attachments == null || attachments.isEmpty()) {
+                logger.info("ℹ️ No attachments found for ticket {}", ticketKey);
+            }
+            if (trackerClient == null) {
+                logger.warn("⚠️ TrackerClient is null, cannot download attachments");
+            }
         }
         
         return inputFolderPath;
@@ -82,11 +112,21 @@ public class CliExecutionHelper {
      * @throws IOException if attachment download fails
      */
     private void downloadAttachments(List<? extends IAttachment> attachments, Path targetFolder, TrackerClient<?> trackerClient) throws IOException {
+        int successCount = 0;
+        int failCount = 0;
+        
         for (IAttachment attachment : attachments) {
+            if (attachment == null) {
+                logger.warn("⚠️ Skipping null attachment");
+                failCount++;
+                continue;
+            }
+            
             try {
                 String fileName = attachment.getName();
                 if (fileName == null || fileName.trim().isEmpty()) {
-                    logger.warn("Skipping attachment with empty filename");
+                    logger.warn("⚠️ Skipping attachment with empty filename");
+                    failCount++;
                     continue;
                 }
                 
@@ -98,21 +138,31 @@ public class CliExecutionHelper {
                 // Download attachment using TrackerClient
                 String attachmentUrl = attachment.getUrl();
                 if (attachmentUrl != null && !attachmentUrl.trim().isEmpty()) {
+                    logger.info("⬇️ Downloading: {} from {}", fileName, attachmentUrl);
                     File downloadedFile = trackerClient.convertUrlToFile(attachmentUrl);
                     if (downloadedFile != null && downloadedFile.exists()) {
-                        Files.copy(downloadedFile.toPath(), attachmentPath);
-                        logger.info("Downloaded attachment: {} ({} bytes)", fileName, Files.size(attachmentPath));
+                        Files.copy(downloadedFile.toPath(), attachmentPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        long size = Files.size(attachmentPath);
+                        logger.info("✅ Downloaded attachment: {} ({} bytes) to {}", fileName, size, attachmentPath.toAbsolutePath());
+                        successCount++;
                     } else {
-                        logger.warn("Failed to download attachment: {}", fileName);
+                        logger.warn("❌ Failed to download attachment: {} (convertUrlToFile returned null or non-existent file)", fileName);
+                        failCount++;
                     }
                 } else {
-                    logger.warn("Attachment {} has no URL", fileName);
+                    logger.warn("❌ Attachment {} has no URL", fileName);
+                    failCount++;
                 }
             } catch (Exception e) {
-                logger.error("Failed to download attachment {}: {}", attachment.getName(), e.getMessage());
+                String attName = attachment != null ? attachment.getName() : "unknown";
+                logger.error("❌ Failed to download attachment {}: {}", attName, e.getMessage(), e);
+                failCount++;
                 // Continue with other attachments instead of failing completely
             }
         }
+        
+        logger.info("📊 Attachment download summary: {} succeeded, {} failed out of {} total", 
+            successCount, failCount, attachments.size());
     }
     
     /**

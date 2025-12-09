@@ -6,7 +6,7 @@ import dagger.Component;
 import javax.inject.Singleton;
 
 @Singleton
-@Component(modules = {ConfigurationModule.class, JiraModule.class, SourceCodeModule.class, AIComponentsModule.class})
+@Component(modules = {ConfigurationModule.class, TrackerModule.class, SourceCodeModule.class, AIComponentsModule.class})
 public interface CommitsTriageComponent {
     void inject(CommitsTriage commitsTriage);
 }

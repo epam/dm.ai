@@ -135,6 +135,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             // Resolve field names if needed
             String[] resolvedFields = resolveFieldNames(fields);
             request.param("fields", String.join(",", resolvedFields));
+            // Note: Cannot use $expand with fields parameter in ADO API
+            // Attachments will be extracted from description HTML
+        } else {
+            // When no fields filter is used, include relations for attachments
+            request.param("$expand", "relations");
         }
 
         return request;
@@ -147,6 +152,44 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         } catch (Exception e) {
             logger.error("Failed to parse work item: " + e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Enrich a work item with relations (attachments, links, etc.) by fetching them separately.
+     * This is needed because ADO API doesn't allow $expand=relations with fields parameter.
+     * 
+     * @param workItem The work item to enrich
+     * @throws IOException if the API call fails
+     */
+    public void enrichWorkItemWithRelations(WorkItem workItem) throws IOException {
+        if (workItem == null) {
+            return;
+        }
+
+        String workItemId = workItem.getTicketKey();
+        if (workItemId == null) {
+            return;
+        }
+
+        log("Fetching relations for work item: " + workItemId);
+
+        // Fetch work item with only relations (no fields filter)
+        String path = String.format("/%s/_apis/wit/workitems/%s", project, workItemId);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION)
+                .param("$expand", "relations");
+
+        String response = request.execute();
+        JSONObject fullWorkItem = new JSONObject(response);
+
+        // Extract relations and add them to the work item
+        JSONArray relations = fullWorkItem.optJSONArray("relations");
+        if (relations != null) {
+            workItem.getJSONObject().put("relations", relations);
+            log("Added " + relations.length() + " relations to work item " + workItemId);
+        } else {
+            log("No relations found for work item " + workItemId);
         }
     }
 
@@ -172,6 +215,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         switch (fieldName.toLowerCase()) {
             case "id": return "System.Id";
             case "title": return "System.Title";
+            case "summary": return "System.Title"; // Jira field name -> ADO equivalent
             case "description": return "System.Description";
             case "state": return "System.State";
             case "assignedto": return "System.AssignedTo";
@@ -267,6 +311,10 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         if (fields != null && fields.length > 0) {
             String[] resolvedFields = resolveFieldNames(fields);
             request.param("fields", String.join(",", resolvedFields));
+            // Note: Cannot use $expand with fields parameter in ADO API
+        } else {
+            // When no fields filter is used, include relations for attachments
+            request.param("$expand", "relations");
         }
 
         String response = request.execute();
@@ -400,6 +448,23 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         });
     }
 
+    @MCPTool(
+            name = "ado_update_tags",
+            description = "Update the tags of a work item (semicolon-separated string)",
+            integration = "ado",
+            category = "work_item_management"
+    )
+    public String updateTags(
+            @MCPParam(name = "id", description = "The work item ID", required = true)
+            String workItemId,
+            @MCPParam(name = "tags", description = "Tags as semicolon-separated string (e.g., 'tag1;tag2;tag3')", required = true)
+            String tags
+    ) throws IOException {
+        return updateWorkItem(workItemId, fields -> {
+            fields.set("System.Tags", tags);
+        });
+    }
+
     @Override
     public String updateTicket(String workItemId, FieldsInitializer fieldsInitializer) throws IOException {
         return updateWorkItem(workItemId, fieldsInitializer);
@@ -442,6 +507,19 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
         log("Updated work item: " + workItemId);
         return response;
+    }
+
+    @Override
+    public String resolveFieldName(String ticketKey, String fieldName) throws IOException {
+        // ADO field names use namespace prefixes like "System.FieldName" or "Custom.FieldName"
+        // If fieldName already contains a dot (namespace prefix), use as-is
+        if (fieldName.contains(".")) {
+            return fieldName;
+        }
+        
+        // For common field names without prefix, assume System namespace
+        // Common ADO System fields: Title, Description, State, AssignedTo, CreatedBy, CreatedDate, etc.
+        return "System." + fieldName;
     }
 
     // ========== State/Status Operations ==========
@@ -572,13 +650,24 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
      * In Azure DevOps:
      * - Hierarchy-Forward: source is child, target is parent (child → parent)
      * - Hierarchy-Reverse: source is parent, target is child (parent → child)
+     * 
+     * Supports both simple names (e.g., "parent", "child") and full ADO relation types
+     * (e.g., "System.LinkTypes.Hierarchy-Reverse")
      */
     private String mapRelationshipType(String relationship) {
         if (relationship == null) {
             return "System.LinkTypes.Related";
         }
 
-        switch (relationship.toLowerCase()) {
+        String relLower = relationship.toLowerCase();
+        
+        // If already a full ADO relation type, return as-is
+        if (relLower.startsWith("system.linktypes.") || relLower.startsWith("microsoft.vsts.common.")) {
+            return relationship; // Return original case-preserved value
+        }
+
+        // Map simple names to ADO relation types
+        switch (relLower) {
             case "parent":
                 // source is parent, target is child → use Hierarchy-Reverse
                 return "System.LinkTypes.Hierarchy-Reverse";
@@ -588,12 +677,17 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             case "blocks":
                 return "System.LinkTypes.Dependency-Forward";
             case "blocked by":
+            case "blockedby":
                 return "System.LinkTypes.Dependency-Reverse";
             case "tested by":
+            case "testedby":
+            case "is tested by":
+            case "istestedby":
             case "tests":
                 // When linking from story to test case: story is tested by test case
                 return "Microsoft.VSTS.Common.TestedBy-Forward";
             case "related":
+            case "relates to":
             default:
                 return "System.LinkTypes.Related";
         }
@@ -602,13 +696,19 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     // ========== Create Operations ==========
 
     @Override
+    public String createTicketInProject(String project, String issueType, String summary, String description, FieldsInitializer fieldsInitializer) throws IOException {
+        // Delegate to the MCP tool method with fieldsJson=null
+        // Map parameters: project -> projectName, issueType -> workItemType, summary -> title
+        return createWorkItemWithFieldsJson(project, issueType, summary, description, null, fieldsInitializer);
+    }
+
     @MCPTool(
             name = "ado_create_work_item",
             description = "Create a new work item in Azure DevOps",
             integration = "ado",
             category = "work_item_management"
     )
-    public String createTicketInProject(
+    public String createWorkItemWithFieldsJson(
             @MCPParam(name = "project", description = "The project name", required = true)
             String projectName,
             @MCPParam(name = "workItemType", description = "The work item type (Bug, Task, User Story, etc.)", required = true)
@@ -617,6 +717,21 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             String title,
             @MCPParam(name = "description", description = "The work item description (HTML)", required = false)
             String description,
+            @MCPParam(name = "fieldsJson", description = "Additional fields as JSON object (e.g., {\"Microsoft.VSTS.Common.Priority\": 1})", required = false)
+            JSONObject fieldsJson
+    ) throws IOException {
+        return createWorkItemWithFieldsJson(projectName, workItemType, title, description, fieldsJson, null);
+    }
+
+    /**
+     * Internal method that supports both fieldsJson and FieldsInitializer
+     */
+    private String createWorkItemWithFieldsJson(
+            String projectName,
+            String workItemType,
+            String title,
+            String description,
+            JSONObject fieldsJson,
             FieldsInitializer fieldsInitializer
     ) throws IOException {
         // Build JSON Patch operations for creation
@@ -638,7 +753,22 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             patchOps.put(descOp);
         }
 
-        // Add custom fields
+        // Add custom fields from fieldsJson (for JavaScript compatibility)
+        if (fieldsJson != null) {
+            for (String key : fieldsJson.keySet()) {
+                // Skip System.Title and System.Description as they're already added above
+                if (!"System.Title".equals(key) && !"System.Description".equals(key) && !"System.WorkItemType".equals(key)) {
+                    Object value = fieldsJson.get(key);
+                    JSONObject op = new JSONObject();
+                    op.put("op", "add");
+                    op.put("path", "/fields/" + key);
+                    op.put("value", value);
+                    patchOps.put(op);
+                }
+            }
+        }
+
+        // Add custom fields from FieldsInitializer (for Java compatibility)
         if (fieldsInitializer != null) {
             Map<String, Object> customFields = new HashMap<>();
             fieldsInitializer.init(new TrackerTicketFields() {
@@ -649,11 +779,14 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             });
 
             for (Map.Entry<String, Object> entry : customFields.entrySet()) {
-                JSONObject op = new JSONObject();
-                op.put("op", "add");
-                op.put("path", "/fields/" + entry.getKey());
-                op.put("value", entry.getValue());
-                patchOps.put(op);
+                // Skip if already added from fieldsJson
+                if (fieldsJson == null || !fieldsJson.has(entry.getKey())) {
+                    JSONObject op = new JSONObject();
+                    op.put("op", "add");
+                    op.put("path", "/fields/" + entry.getKey());
+                    op.put("value", entry.getValue());
+                    patchOps.put(op);
+                }
             }
         }
 
@@ -735,7 +868,23 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
     @Override
     public String tag(String initiator) {
-        return "[ADO]";
+        if (initiator == null || initiator.isEmpty()) {
+            return "";
+        }
+        
+        try {
+            // Try to get user by email to create proper mention
+            AdoUser user = getUserByEmail(initiator);
+            String userId = user.getID();
+            String displayName = user.getDisplayName();
+            
+            // Format ADO mention: <a href="#" data-vss-mention="version:2.0,USER_ID">@Display Name</a>
+            return String.format("<a href=\"#\" data-vss-mention=\"version:2.0,%s\">@%s</a>", userId, displayName);
+        } catch (Exception e) {
+            // Fallback: if user lookup fails, just return email in plain text
+            logger.warn("Failed to create ADO mention for {}: {}", initiator, e.getMessage());
+            return initiator;
+        }
     }
 
     @Override
@@ -876,6 +1025,80 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         }
 
         return RestClient.Impl.downloadFile(this, new GenericRequest(this, href), targetFile);
+    }
+
+    @MCPTool(
+            name = "ado_get_user_by_email",
+            description = "Get user information by email address in Azure DevOps",
+            integration = "ado",
+            category = "user_management"
+    )
+    public AdoUser getUserByEmail(
+            @MCPParam(name = "email", description = "User email address", required = true)
+            String email
+    ) throws IOException {
+        // Use Graph API to search for user by email
+        // Graph API endpoint: https://vssps.dev.azure.com/{organization}/_apis/graph/users?api-version=7.1-preview.1
+        String graphUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users";
+        GenericRequest request = new GenericRequest(this, graphUrl)
+                .param("api-version", "7.1-preview.1");
+        
+        String response = request.execute();
+        JSONObject result = new JSONObject(response);
+        JSONArray users = result.optJSONArray("value");
+        
+        if (users != null) {
+            for (int i = 0; i < users.length(); i++) {
+                JSONObject user = users.getJSONObject(i);
+                String principalName = user.optString("principalName");
+                String mailAddress = user.optString("mailAddress");
+                
+                if (email.equalsIgnoreCase(principalName) || email.equalsIgnoreCase(mailAddress)) {
+                    return new AdoUser(user);
+                }
+            }
+        }
+        
+        // Fallback: try to get user by UPN (User Principal Name) directly
+        // This is more efficient if the email format matches UPN
+        try {
+            String userDescriptor = getUserDescriptorByEmail(email);
+            if (userDescriptor != null) {
+                String userUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users/" + userDescriptor;
+                GenericRequest userRequest = new GenericRequest(this, userUrl)
+                        .param("api-version", "7.1-preview.1");
+                String userResponse = userRequest.execute();
+                return new AdoUser(new JSONObject(userResponse));
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to get user descriptor for email: {}", email, e);
+        }
+        
+        throw new IOException("User not found with email: " + email);
+    }
+    
+    /**
+     * Get user descriptor (a unique identifier) by email.
+     * This is used for more specific user lookups.
+     */
+    private String getUserDescriptorByEmail(String email) throws IOException {
+        // Use Identities API to find user by email
+        String identitiesUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/identities";
+        GenericRequest request = new GenericRequest(this, identitiesUrl)
+                .param("searchFilter", "MailAddress")
+                .param("filterValue", email)
+                .param("api-version", "7.1-preview.1");
+        
+        String response = request.execute();
+        JSONObject result = new JSONObject(response);
+        JSONArray identities = result.optJSONArray("value");
+        
+        if (identities != null && identities.length() > 0) {
+            JSONObject identity = identities.getJSONObject(0);
+            return identity.optString("descriptor");
+        }
+        
+        return null;
     }
 
     @MCPTool(

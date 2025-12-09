@@ -9,7 +9,7 @@ import dagger.Component;
 import javax.inject.Singleton;
 
 @Singleton
-@Component(modules = {JiraModule.class, SourceCodeModule.class, AIComponentsModule.class, ConfluenceModule.class, AIAgentsModule.class, ConfigurationModule.class, MermaidIndexModule.class})
+@Component(modules = {TrackerModule.class, SourceCodeModule.class, AIComponentsModule.class, ConfluenceModule.class, AIAgentsModule.class, ConfigurationModule.class, MermaidIndexModule.class})
 public interface TeammateComponent {
     void inject(Teammate teammate);
     AI getAI();

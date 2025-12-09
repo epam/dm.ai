@@ -214,24 +214,31 @@ public class JobJavaScriptBridge {
                                 }
                             }
                             memberValue = stringList;
-                        } else if (memberValue instanceof String && ((String) memberValue).trim().startsWith("[")) {
-                            // Handle case where JavaScript passes array as JSON string
-                            try {
-                                JSONArray jsonArray = new JSONArray((String) memberValue);
-                                List<String> stringList = new ArrayList<>();
-                                for (int i = 0; i < jsonArray.length(); i++) {
-                                    Object item = jsonArray.get(i);
-                                    if (item instanceof String) {
-                                        stringList.add((String) item);
-                                    } else {
-                                        stringList.add(item.toString());
+                        } else if (memberValue instanceof String) {
+                            String strValue = ((String) memberValue).trim();
+                            // Only try to parse as JSON array if it looks like a valid JSON array
+                            // (starts with [ and ends with ])
+                            if (strValue.startsWith("[") && strValue.endsWith("]") && strValue.length() > 2) {
+                                // Handle case where JavaScript passes array as JSON string
+                                try {
+                                    JSONArray jsonArray = new JSONArray(strValue);
+                                    List<String> stringList = new ArrayList<>();
+                                    for (int i = 0; i < jsonArray.length(); i++) {
+                                        Object item = jsonArray.get(i);
+                                        if (item instanceof String) {
+                                            stringList.add((String) item);
+                                        } else {
+                                            stringList.add(item.toString());
+                                        }
                                     }
+                                    memberValue = stringList;
+                                    logger.debug("Parsed JSON array string for {}: {} elements", key, stringList.size());
+                                } catch (Exception e) {
+                                    // If parsing fails, keep original value (it's just a string starting with [)
+                                    logger.debug("Failed to parse as JSON array for {} (keeping as string): {}", key, e.getMessage());
                                 }
-                                memberValue = stringList;
-                            } catch (Exception e) {
-                                // If parsing fails, keep original value
-                                logger.debug("Failed to parse JSON array string for {}: {}", key, e.getMessage());
                             }
+                            // Otherwise, it's just a regular string - keep it as-is
                         }
                         argsMap.put(key, memberValue);
                         logger.debug("Converted JS arg: {} = {} (type: {})", key, memberValue, memberValue != null ? memberValue.getClass().getName() : "null");
@@ -257,24 +264,31 @@ public class JobJavaScriptBridge {
                                     }
                                 }
                                 hostMap.put(entry.getKey(), stringList);
-                            } else if (value instanceof String && ((String) value).trim().startsWith("[")) {
-                                // Handle case where JavaScript passes array as JSON string
-                                try {
-                                    JSONArray jsonArray = new JSONArray((String) value);
-                                    List<String> stringList = new ArrayList<>();
-                                    for (int i = 0; i < jsonArray.length(); i++) {
-                                        Object item = jsonArray.get(i);
-                                        if (item instanceof String) {
-                                            stringList.add((String) item);
-                                        } else {
-                                            stringList.add(item.toString());
+                            } else if (value instanceof String) {
+                                String strValue = ((String) value).trim();
+                                // Only try to parse as JSON array if it looks like a valid JSON array
+                                // (starts with [ and ends with ])
+                                if (strValue.startsWith("[") && strValue.endsWith("]") && strValue.length() > 2) {
+                                    // Handle case where JavaScript passes array as JSON string
+                                    try {
+                                        JSONArray jsonArray = new JSONArray(strValue);
+                                        List<String> stringList = new ArrayList<>();
+                                        for (int i = 0; i < jsonArray.length(); i++) {
+                                            Object item = jsonArray.get(i);
+                                            if (item instanceof String) {
+                                                stringList.add((String) item);
+                                            } else {
+                                                stringList.add(item.toString());
+                                            }
                                         }
+                                        hostMap.put(entry.getKey(), stringList);
+                                        logger.debug("Parsed JSON array string for {}: {} elements", entry.getKey(), stringList.size());
+                                    } catch (Exception e) {
+                                        // If parsing fails, keep original value (it's just a string starting with [)
+                                        logger.debug("Failed to parse as JSON array for {} (keeping as string): {}", entry.getKey(), e.getMessage());
                                     }
-                                    hostMap.put(entry.getKey(), stringList);
-                                } catch (Exception e) {
-                                    // If parsing fails, keep original value
-                                    logger.debug("Failed to parse JSON array string for {}: {}", entry.getKey(), e.getMessage());
                                 }
+                                // Otherwise, it's just a regular string - keep it as-is
                             }
                         }
                         argsMap.putAll(hostMap);
@@ -285,8 +299,50 @@ public class JobJavaScriptBridge {
             
             logger.debug("Final args map for tool {}: {}", toolName, argsMap);
             
+            // Get tool schema to check parameter types
+            Map<String, Object> toolSchema = getToolSchema(toolName);
+            
+            // Convert ArrayList to String[] for MCP tools that expect array parameters
+            Map<String, Object> convertedArgsMap = new HashMap<>();
+            for (Map.Entry<String, Object> entry : argsMap.entrySet()) {
+                Object value = entry.getValue();
+                if (value instanceof ArrayList) {
+                    @SuppressWarnings("unchecked")
+                    ArrayList<Object> list = (ArrayList<Object>) value;
+                    
+                    // Check if parameter is expected to be an array based on schema
+                    boolean isArrayParameter = isArrayParameter(toolSchema, entry.getKey());
+                    
+                    if (isArrayParameter) {
+                        // Convert ArrayList to String[] for array parameters
+                        String[] array = new String[list.size()];
+                        for (int i = 0; i < list.size(); i++) {
+                            Object item = list.get(i);
+                            array[i] = item != null ? item.toString() : null;
+                        }
+                        convertedArgsMap.put(entry.getKey(), array);
+                        logger.debug("Converted ArrayList to String[] for parameter {}: {} elements", entry.getKey(), array.length);
+                    } else if (list.size() == 1 && list.get(0) instanceof String) {
+                        // Single string element in ArrayList for non-array parameter - extract as string
+                        convertedArgsMap.put(entry.getKey(), list.get(0));
+                        logger.debug("Extracted single string from ArrayList for parameter {}: {}", entry.getKey(), list.get(0));
+                    } else {
+                        // Multiple elements or non-string - convert to array anyway
+                        String[] array = new String[list.size()];
+                        for (int i = 0; i < list.size(); i++) {
+                            Object item = list.get(i);
+                            array[i] = item != null ? item.toString() : null;
+                        }
+                        convertedArgsMap.put(entry.getKey(), array);
+                        logger.debug("Converted ArrayList to String[] for parameter {}: {} elements (fallback)", entry.getKey(), array.length);
+                    }
+                } else {
+                    convertedArgsMap.put(entry.getKey(), value);
+                }
+            }
+            
             // Execute using generated MCP infrastructure
-            Object result = MCPToolExecutor.executeTool(toolName, argsMap, clientInstances);
+            Object result = MCPToolExecutor.executeTool(toolName, convertedArgsMap, clientInstances);
             
             // Convert result to JavaScript-compatible format
             return convertToJSCompatible(result);
@@ -296,17 +352,27 @@ public class JobJavaScriptBridge {
         }
     }
 
+    // Cache for tool schemas
+    private Map<String, Map<String, Object>> toolSchemasCache = null;
+
     /**
      * Expose MCP tools using generated MCPToolExecutor - much better than reflection!
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = Set.of("jira", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid");
+        Set<String> integrations = Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid");
         
         // Generate tool schemas using MCP infrastructure
         Map<String, Object> toolsResponse = MCPSchemaGenerator.generateToolsListResponse(integrations);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> tools = (List<Map<String, Object>>) toolsResponse.get("tools");
+        
+        // Cache tool schemas for later use
+        toolSchemasCache = new HashMap<>();
+        for (Map<String, Object> tool : tools) {
+            String toolName = (String) tool.get("name");
+            toolSchemasCache.put(toolName, tool);
+        }
         
         // Ensure deterministic order by tool name
         tools.sort(Comparator.comparing(t -> (String) t.get("name")));
@@ -321,6 +387,49 @@ public class JobJavaScriptBridge {
         }
         
         logger.info("Exposed {} MCP tools to JavaScript using generated infrastructure", tools.size());
+    }
+
+    /**
+     * Get tool schema from cache
+     */
+    private Map<String, Object> getToolSchema(String toolName) {
+        if (toolSchemasCache == null) {
+            // Initialize cache if not already done
+            exposeMCPToolsUsingGenerated();
+        }
+        return toolSchemasCache != null ? toolSchemasCache.get(toolName) : null;
+    }
+
+    /**
+     * Check if a parameter is expected to be an array based on tool schema
+     */
+    private boolean isArrayParameter(Map<String, Object> toolSchema, String paramName) {
+        if (toolSchema == null) {
+            // If schema not available, check known array parameter names
+            return paramName.equals("fields") || paramName.endsWith("s") && 
+                   (paramName.contains("field") || paramName.contains("id") || paramName.contains("url"));
+        }
+        
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputSchema = (Map<String, Object>) toolSchema.get("inputSchema");
+        if (inputSchema == null) {
+            return false;
+        }
+        
+        @SuppressWarnings("unchecked")
+        Map<String, Object> properties = (Map<String, Object>) inputSchema.get("properties");
+        if (properties == null) {
+            return false;
+        }
+        
+        @SuppressWarnings("unchecked")
+        Map<String, Object> paramSchema = (Map<String, Object>) properties.get(paramName);
+        if (paramSchema == null) {
+            return false;
+        }
+        
+        String type = (String) paramSchema.get("type");
+        return "array".equals(type);
     }
 
     /**

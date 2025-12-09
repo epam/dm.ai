@@ -67,6 +67,21 @@ public interface TrackerClient<T extends ITicket> extends ContentUtils.UrlToImag
     String[] getExtendedQueryFields();
 
     String getDefaultStatusField();
+    
+    /**
+     * Resolves a field name to its tracker-specific field code.
+     * For Jira: converts human-friendly names to custom field IDs (e.g., "Story Points" -> "customfield_10016")
+     * For ADO: adds namespace prefix if needed (e.g., "Description" -> "System.Description")
+     * 
+     * @param ticketKey The ticket key for context (used to extract project in Jira)
+     * @param fieldName The human-friendly field name
+     * @return The resolved field code/ID for the tracker
+     * @throws IOException if field resolution fails
+     */
+    default String resolveFieldName(String ticketKey, String fieldName) throws IOException {
+        // Default implementation: return field name as-is
+        return fieldName;
+    }
 
     List<? extends ITicket> getTestCases(ITicket ticket) throws IOException;
 

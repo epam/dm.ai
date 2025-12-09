@@ -400,5 +400,10 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     public String getDefaultLLM() {
         return propertyReader.getDefaultLLM();
     }
+
+    @Override
+    public String getDefaultTracker() {
+        return propertyReader.getDefaultTracker();
+    }
     
 }

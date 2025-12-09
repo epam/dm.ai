@@ -12,6 +12,8 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Relationship;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
+import com.github.istin.dmtools.microsoft.ado.model.WorkItem;
+import com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.di.DaggerTestCasesGeneratorComponent;
@@ -225,18 +227,44 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         } else {
             String newTestCaseRelationship = resolveRelationshipForNew(params);
             for (TestCaseGeneratorAgent.TestCase testCase : newTestCases) {
-                String projectCode = key.split("-")[0];
+                // Get project code: for ADO use getProject(), for Jira use key.split("-")[0]
+                String projectCode;
+                if (mainTicket instanceof WorkItem) {
+                    projectCode = ((WorkItem) mainTicket).getProject();
+                    if (projectCode == null || projectCode.isEmpty()) {
+                        throw new IOException("Unable to determine project from ADO work item " + key);
+                    }
+                } else {
+                    // Jira format: PROJ-123 -> PROJ
+                    projectCode = key.split("-")[0];
+                }
                 String description = testCase.getDescription();
                 if (params.isConvertToJiraMarkdown()) {
                     description = StringUtils.convertToMarkdown(description);
                 }
+                
+                // Create FieldsInitializer with tracker-specific field formats
+                final boolean isAdo = trackerClient instanceof AzureDevOpsClient;
                 ITicket createdTestCase = trackerClient.createTicket(trackerClient.createTicketInProject(projectCode, params.getTestCaseIssueType(), testCase.getSummary(), description, new TrackerClient.FieldsInitializer() {
                     @Override
                     public void init(TrackerClient.TrackerTicketFields fields) {
-                        fields.set("priority",
-                                new JSONObject().put("name", testCase.getPriority())
-                        );
-                        fields.set("labels", new JSONArray().put("ai_generated"));
+                        if (isAdo) {
+                            // ADO: priority is numeric (1, 2, 3, 4), tags are semicolon-separated string
+                            try {
+                                int priority = Integer.parseInt(testCase.getPriority());
+                                fields.set("Microsoft.VSTS.Common.Priority", priority);
+                            } catch (NumberFormatException e) {
+                                // If priority is not a number, default to 2 (Medium)
+                                fields.set("Microsoft.VSTS.Common.Priority", 2);
+                            }
+                            fields.set("System.Tags", "ai_generated");
+                        } else {
+                            // Jira: priority is object with "name", labels are array
+                            fields.set("priority",
+                                    new JSONObject().put("name", testCase.getPriority())
+                            );
+                            fields.set("labels", new JSONArray().put("ai_generated"));
+                        }
                     }
                 }));
 

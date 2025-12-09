@@ -8,7 +8,6 @@ import com.github.istin.dmtools.ai.agent.GenericRequestAgent;
 import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.ai.agent.SourceImpactAssessmentAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
-import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
@@ -422,19 +421,18 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             // Handle output based on outputType, skip publishing if outputType is 'none'
             if (outputType != Params.OutputType.none) {
                 if (outputType == Params.OutputType.field) {
-                    if (trackerClient instanceof JiraClient<?>) {
-                        String fieldCustomCode = ((JiraClient<?>) trackerClient).getFieldCustomCode(ticket.getTicketKey().split("-")[0], fieldName);
-                        String currentFieldValue = ticket.getFields().getString(fieldCustomCode);
-                        if (expertParams.getOperationType() == Params.OperationType.Append) {
-                            trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCustomCode, currentFieldValue + "\n\n" + response));
-                        } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
-                            trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCustomCode, response));
-                        }
-                        if (initiator != null && !initiator.isEmpty()) {
-                            trackerClient.postComment(ticket.getTicketKey(), trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.");
-                        }
-                    } else {
-                        throw new UnsupportedOperationException("the operation to set value to field was tested only with jira client");
+                    // Use tracker-agnostic field resolution
+                    final String fieldCode = trackerClient.resolveFieldName(ticket.getTicketKey(), fieldName);
+                    String currentFieldValue = ticket.getFieldValueAsString(fieldCode);
+                    
+                    if (expertParams.getOperationType() == Params.OperationType.Append) {
+                        trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, currentFieldValue + "\n\n" + response));
+                    } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
+                        trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, response));
+                    }
+                    
+                    if (initiator != null && !initiator.isEmpty()) {
+                        trackerClient.postComment(ticket.getTicketKey(), trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.");
                     }
                 } else {
                     trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(initiator) + ", \n\nAI Response is: \n" + response);

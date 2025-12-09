@@ -668,6 +668,7 @@ public class PropertyReader {
 	public static final String ANTHROPIC_MODEL = "ANTHROPIC_MODEL";
 	public static final String ANTHROPIC_MAX_TOKENS = "ANTHROPIC_MAX_TOKENS";
 	public static final String DEFAULT_LLM = "DEFAULT_LLM";
+	public static final String DEFAULT_TRACKER = "DEFAULT_TRACKER";
 	public static final String IMAGE_MAX_DIMENSION = "IMAGE_MAX_DIMENSION";
 	public static final String IMAGE_JPEG_QUALITY = "IMAGE_JPEG_QUALITY";
 
@@ -808,6 +809,10 @@ public class PropertyReader {
 
 	public String getDefaultLLM() {
 		return getValue(DEFAULT_LLM);
+	}
+
+	public String getDefaultTracker() {
+		return getValue(DEFAULT_TRACKER);
 	}
 
 	public int getImageMaxDimension() {

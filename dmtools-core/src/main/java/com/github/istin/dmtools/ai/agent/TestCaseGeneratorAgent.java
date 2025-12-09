@@ -60,8 +60,22 @@ public class TestCaseGeneratorAgent extends AbstractSimpleAgent<TestCaseGenerato
 
         for (int i = 0; i < jsonArray.length(); i++) {
             JSONObject jsonObject = jsonArray.getJSONObject(i);
+            
+            // Handle priority as either string or number (ADO uses numeric priorities)
+            String priority;
+            if (jsonObject.has("priority")) {
+                Object priorityObj = jsonObject.get("priority");
+                if (priorityObj instanceof Number) {
+                    priority = String.valueOf(priorityObj);
+                } else {
+                    priority = jsonObject.getString("priority");
+                }
+            } else {
+                priority = "";
+            }
+            
             TestCase testCase = new TestCase(
-                    jsonObject.getString("priority"),
+                    priority,
                     jsonObject.getString("summary"),
                     jsonObject.getString("description")
             );

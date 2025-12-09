@@ -11,7 +11,7 @@ import javax.inject.Singleton;
  */
 @Singleton
 @Component(modules = {
-        JiraModule.class,
+        TrackerModule.class,
         ConfluenceModule.class,
         AIComponentsModule.class,
         SourceCodeModule.class,

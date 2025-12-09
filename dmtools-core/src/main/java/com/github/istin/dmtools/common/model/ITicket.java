@@ -54,6 +54,22 @@ public interface ITicket extends Key, TicketLink, ToText {
 
     TicketPriority getPriorityAsEnum();
 
+    /**
+     * Get field value as string in a tracker-agnostic way.
+     * For Jira: uses Fields.getString()
+     * For ADO: uses getFieldAsString()
+     * 
+     * @param fieldName The field name/code to retrieve
+     * @return The field value as string, or null if not found
+     */
+    default String getFieldValueAsString(String fieldName) {
+        Fields fields = getFields();
+        if (fields != null) {
+            return fields.getString(fieldName);
+        }
+        return null;
+    }
+
     enum TicketPriority {
         High_Attention,
         Blocker,

@@ -2477,6 +2477,16 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         }
     }
 
+    @Override
+    public String resolveFieldName(String ticketKey, String fieldName) throws IOException {
+        // Extract project key from ticket key (e.g., "PROJ-123" -> "PROJ")
+        String projectKey = parseJiraProject(ticketKey);
+        // Use existing method to resolve field name to custom field ID
+        String resolvedField = getFieldCustomCode(projectKey, fieldName);
+        // If resolution failed, return original field name as fallback
+        return resolvedField != null ? resolvedField : fieldName;
+    }
+
     public String parseServerJiraResponse(String fieldName, String jsonResponse) {
         try {
             JSONArray fields = new JSONArray(jsonResponse);

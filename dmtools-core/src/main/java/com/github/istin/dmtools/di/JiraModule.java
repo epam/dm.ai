@@ -12,6 +12,7 @@ import java.io.IOException;
 @Module
 public class JiraModule {
 
+    // Deprecated: This method is kept for backward compatibility but components should migrate to TrackerModule
     @Provides
     @Singleton
     TrackerClient<? extends ITicket> provideTrackerClient() {

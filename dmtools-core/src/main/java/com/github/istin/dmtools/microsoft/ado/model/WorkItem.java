@@ -51,6 +51,32 @@ public class WorkItem extends JSONModel implements ITicket {
     }
 
     /**
+     * Get the project name from AreaPath or TeamProject field.
+     * AreaPath format: "ProjectName\\Area\\SubArea"
+     */
+    public String getProject() {
+        // Try TeamProject field first (if available)
+        String teamProject = getFieldAsString("System.TeamProject");
+        if (teamProject != null && !teamProject.isEmpty()) {
+            return teamProject;
+        }
+        
+        // Fallback: extract from AreaPath
+        String areaPath = getFieldAsString("System.AreaPath");
+        if (areaPath != null && !areaPath.isEmpty()) {
+            // Extract project name from AreaPath (first segment before backslash)
+            int backslashIndex = areaPath.indexOf('\\');
+            if (backslashIndex > 0) {
+                return areaPath.substring(0, backslashIndex);
+            }
+            // If no backslash, the entire AreaPath is the project name
+            return areaPath;
+        }
+        
+        return null;
+    }
+
+    /**
      * Get a field value from the fields object.
      */
     private Object getField(String fieldName) {
@@ -227,6 +253,12 @@ public class WorkItem extends JSONModel implements ITicket {
     }
 
     @Override
+    public String getFieldValueAsString(String fieldName) {
+        // Use ADO's getFieldAsString instead of Fields.getString()
+        return getFieldAsString(fieldName);
+    }
+
+    @Override
     public ReportIteration getIteration() {
         String iterationPath = getFieldAsString("System.IterationPath");
         if (iterationPath != null) {
@@ -275,8 +307,138 @@ public class WorkItem extends JSONModel implements ITicket {
 
     @Override
     public List<? extends IAttachment> getAttachments() {
-        // TODO: Implement attachment support
-        return List.of();
+        List<Attachment> attachments = new ArrayList<>();
+        String ticketKey = getTicketKey();
+
+        System.out.println("🔍 [WorkItem " + ticketKey + "] Extracting attachments...");
+
+        // 1. Get attachments from relations array
+        JSONArray relations = getJSONArray("relations");
+        if (relations != null && relations.length() > 0) {
+            System.out.println("📎 [WorkItem " + ticketKey + "] Found " + relations.length() + " relations");
+            int attachmentCount = 0;
+            for (int i = 0; i < relations.length(); i++) {
+                JSONObject relation = relations.optJSONObject(i);
+                if (relation != null) {
+                    String rel = relation.optString("rel");
+                    System.out.println("  - Relation " + i + ": rel=" + rel);
+                    
+                    if ("AttachedFile".equals(rel)) {
+                        Attachment attachment = Attachment.fromRelation(relation);
+                        if (attachment != null) {
+                            attachments.add(attachment);
+                            attachmentCount++;
+                            System.out.println("    ✅ Extracted attachment: " + attachment.getName() + " (URL: " + attachment.getUrl() + ")");
+                        }
+                    }
+                }
+            }
+            System.out.println("📎 [WorkItem " + ticketKey + "] Extracted " + attachmentCount + " attachments from relations");
+        } else {
+            System.out.println("⚠️ [WorkItem " + ticketKey + "] No relations array found (may need $expand=relations in API call)");
+        }
+
+        // 2. Extract embedded images from description HTML
+        String description = getFieldAsString("System.Description");
+        if (description != null && !description.isEmpty()) {
+            System.out.println("🔍 [WorkItem " + ticketKey + "] Scanning description HTML for embedded images (" + description.length() + " chars)");
+            List<Attachment> embeddedImages = extractEmbeddedImages(description);
+            if (!embeddedImages.isEmpty()) {
+                System.out.println("🖼️ [WorkItem " + ticketKey + "] Found " + embeddedImages.size() + " embedded images in description");
+                for (Attachment img : embeddedImages) {
+                    System.out.println("  - " + img.getName() + " (URL: " + img.getUrl() + ")");
+                }
+                attachments.addAll(embeddedImages);
+            } else {
+                System.out.println("  No embedded images found in description");
+            }
+        } else {
+            System.out.println("⚠️ [WorkItem " + ticketKey + "] No description field found");
+        }
+
+        System.out.println("✅ [WorkItem " + ticketKey + "] Total attachments: " + attachments.size());
+        return attachments;
+    }
+
+    /**
+     * Extract embedded image attachments from HTML description.
+     * Looks for <img src="..." tags with ADO attachment URLs.
+     */
+    private List<Attachment> extractEmbeddedImages(String html) {
+        List<Attachment> images = new ArrayList<>();
+        if (html == null || html.isEmpty()) {
+            return images;
+        }
+
+        // Simple regex pattern to find img tags with ADO attachment URLs
+        // Pattern: <img src="https://dev.azure.com/.../attachments/...?fileName=...">
+        int index = 0;
+        while (index < html.length()) {
+            int imgStart = html.indexOf("<img", index);
+            if (imgStart == -1) {
+                break;
+            }
+
+            int imgEnd = html.indexOf(">", imgStart);
+            if (imgEnd == -1) {
+                break;
+            }
+
+            String imgTag = html.substring(imgStart, imgEnd + 1);
+
+            // Extract src attribute
+            int srcStart = imgTag.indexOf("src=\"");
+            if (srcStart != -1) {
+                srcStart += 5; // Move past 'src="'
+                int srcEnd = imgTag.indexOf("\"", srcStart);
+                if (srcEnd != -1) {
+                    String imageUrl = imgTag.substring(srcStart, srcEnd);
+
+                    // Only process ADO attachment URLs
+                    if (imageUrl.contains("/_apis/wit/attachments/")) {
+                        // Extract filename from URL or use default
+                        String fileName = extractFileNameFromUrl(imageUrl);
+                        images.add(new Attachment(imageUrl, fileName));
+                    }
+                }
+            }
+
+            index = imgEnd + 1;
+        }
+
+        return images;
+    }
+
+    /**
+     * Extract filename from ADO attachment URL.
+     */
+    private String extractFileNameFromUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return "image.png";
+        }
+
+        // Try to extract from fileName parameter
+        if (url.contains("fileName=")) {
+            int start = url.indexOf("fileName=") + 9;
+            int end = url.indexOf('&', start);
+            if (end == -1) {
+                end = url.length();
+            }
+            return url.substring(start, end);
+        }
+
+        // Fallback: generate name from attachment ID
+        if (url.contains("/attachments/")) {
+            int start = url.indexOf("/attachments/") + 13;
+            int end = url.indexOf('?', start);
+            if (end == -1) {
+                end = url.length();
+            }
+            String attachmentId = url.substring(start, end);
+            return "attachment_" + attachmentId + ".png";
+        }
+
+        return "image.png";
     }
 
     @Override

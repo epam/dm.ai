@@ -175,6 +175,13 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     public String getDefaultLLM() {
         return getValue("DEFAULT_LLM");
     }
+
+    // TrackerConfiguration
+    
+    @Override
+    public String getDefaultTracker() {
+        return getValue("DEFAULT_TRACKER");
+    }
     
     @Override
     public int getAiRetryAmount() {

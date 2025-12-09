@@ -8,12 +8,12 @@ import com.github.istin.dmtools.ai.ollama.OllamaAIClient;
 import com.github.istin.dmtools.ai.anthropic.AnthropicAIClient;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
+import com.github.istin.dmtools.broadcom.rally.RallyClient;
+import com.github.istin.dmtools.broadcom.rally.model.RallyFields;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient;
-import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
-import com.github.istin.dmtools.microsoft.ado.model.WorkItem;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
@@ -125,64 +125,132 @@ public class ServerManagedIntegrationsModule {
                 System.err.println("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null TrackerClient");
                 return null;
             }
+
+            // Check if DEFAULT_TRACKER is set
+            String defaultTracker = null;
+            if (resolvedIntegrations.has("DEFAULT_TRACKER")) {
+                defaultTracker = resolvedIntegrations.optString("DEFAULT_TRACKER", null);
+                System.out.println("🔧 [ServerManagedIntegrationsModule] DEFAULT_TRACKER set to: " + defaultTracker);
+            }
+            
+            // Helper method to create clients
+            TrackerClient<? extends ITicket> client = null;
+            
+            // If DEFAULT_TRACKER is set, try to initialize that specific provider first
+            if (defaultTracker != null && !defaultTracker.isEmpty()) {
+                if ("jira".equalsIgnoreCase(defaultTracker)) {
+                    client = createJiraClient(resolvedIntegrations);
+                } else if ("ado".equalsIgnoreCase(defaultTracker)) {
+                    client = createAdoClient(resolvedIntegrations);
+                } else if ("rally".equalsIgnoreCase(defaultTracker)) {
+                    client = createRallyClient(resolvedIntegrations);
+                }
+                
+                if (client != null) {
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Successfully created preferred tracker: " + defaultTracker);
+                    return client;
+                } else {
+                    System.err.println("⚠️ [ServerManagedIntegrationsModule] Failed to create preferred tracker: " + defaultTracker + ". Falling back to auto-detection.");
+                }
+            }
+
+            // Auto-detection fallback (original logic)
             
             // Create a custom JiraClient instance using resolved credentials with JSON parameter names
             if (resolvedIntegrations.has("jira")) {
-                JSONObject jiraConfig = resolvedIntegrations.getJSONObject("jira");
-                String basePath = jiraConfig.optString("JIRA_BASE_PATH", "");
-                String authType = jiraConfig.optString("JIRA_AUTH_TYPE", "Basic");
-                String extraFields = jiraConfig.optString("JIRA_EXTRA_FIELDS_PROJECT", "");
-                int maxSearchResults = jiraConfig.optInt("JIRA_MAX_SEARCH_RESULTS", -1);
-                
-                // Handle authentication - priority: email+token combination > legacy token
-                String token = "";
-                if (jiraConfig.has("JIRA_EMAIL") && jiraConfig.has("JIRA_API_TOKEN")) {
-                    String email = jiraConfig.optString("JIRA_EMAIL", "");
-                    String apiToken = jiraConfig.optString("JIRA_API_TOKEN", "");
-                    if (!email.isEmpty() && !apiToken.isEmpty()) {
-                        // Combine email:token and base64 encode
-                        String credentials = email.trim() + ":" + apiToken.trim();
-                        token = Base64.getEncoder().encodeToString(credentials.getBytes());
-                        System.out.println("✅ [ServerManagedIntegrationsModule] Combined JIRA_EMAIL + JIRA_API_TOKEN for authentication");
-                    }
-                } else if (jiraConfig.has("JIRA_LOGIN_PASS_TOKEN")) {
-                    token = jiraConfig.optString("JIRA_LOGIN_PASS_TOKEN", "");
-                }
-                
-                if (!basePath.isEmpty() && !token.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials (maxSearchResults=" + maxSearchResults + ")");
-                    return new CustomServerManagedJiraClient(basePath, token, authType, extraFields, maxSearchResults);
-                } else {
-                    System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (JIRA_BASE_PATH=" + 
-                        (basePath.isEmpty() ? "empty" : basePath) + ", token=" + (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
-                }
+                client = createJiraClient(resolvedIntegrations);
+                if (client != null) return client;
             }
             
             // Create an ADO client instance using resolved credentials
             if (resolvedIntegrations.has("ado")) {
-                JSONObject adoConfig = resolvedIntegrations.getJSONObject("ado");
-                String organization = adoConfig.optString("ADO_ORGANIZATION", "");
-                String project = adoConfig.optString("ADO_PROJECT", "");
-                String patToken = adoConfig.optString("ADO_PAT_TOKEN", "");
-                String basePath = adoConfig.optString("ADO_BASE_PATH", "https://dev.azure.com");
-                
-                if (!organization.isEmpty() && !project.isEmpty() && !patToken.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedAzureDevOpsClient with resolved credentials");
-                    return new CustomServerManagedAzureDevOpsClient(organization, project, patToken);
-                } else {
-                    System.err.println("❌ [ServerManagedIntegrationsModule] ADO configuration missing required parameters (ADO_ORGANIZATION=" + 
-                        (organization.isEmpty() ? "empty" : organization) + ", ADO_PROJECT=" + 
-                        (project.isEmpty() ? "empty" : project) + ", ADO_PAT_TOKEN=" + 
-                        (patToken.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
-                }
+                client = createAdoClient(resolvedIntegrations);
+                if (client != null) return client;
+            }
+
+            // Create a Rally client instance using resolved credentials
+            if (resolvedIntegrations.has("rally")) {
+                client = createRallyClient(resolvedIntegrations);
+                if (client != null) return client;
             }
             
-            System.err.println("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO) available - returning null TrackerClient");
+            System.err.println("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO or Rally) available - returning null TrackerClient");
             return null;
-        } catch (IOException e) {
+        } catch (Exception e) {
             System.err.println("❌ [ServerManagedIntegrationsModule] Failed to create TrackerClient instance with resolved credentials: " + e.getMessage());
             return null;
         }
+    }
+
+    private TrackerClient<? extends ITicket> createJiraClient(JSONObject resolvedIntegrations) throws IOException {
+        if (resolvedIntegrations.has("jira")) {
+            JSONObject jiraConfig = resolvedIntegrations.getJSONObject("jira");
+            String basePath = jiraConfig.optString("JIRA_BASE_PATH", "");
+            String authType = jiraConfig.optString("JIRA_AUTH_TYPE", "Basic");
+            String extraFields = jiraConfig.optString("JIRA_EXTRA_FIELDS_PROJECT", "");
+            int maxSearchResults = jiraConfig.optInt("JIRA_MAX_SEARCH_RESULTS", -1);
+            
+            // Handle authentication - priority: email+token combination > legacy token
+            String token = "";
+            if (jiraConfig.has("JIRA_EMAIL") && jiraConfig.has("JIRA_API_TOKEN")) {
+                String email = jiraConfig.optString("JIRA_EMAIL", "");
+                String apiToken = jiraConfig.optString("JIRA_API_TOKEN", "");
+                if (!email.isEmpty() && !apiToken.isEmpty()) {
+                    // Combine email:token and base64 encode
+                    String credentials = email.trim() + ":" + apiToken.trim();
+                    token = Base64.getEncoder().encodeToString(credentials.getBytes());
+                    System.out.println("✅ [ServerManagedIntegrationsModule] Combined JIRA_EMAIL + JIRA_API_TOKEN for authentication");
+                }
+            } else if (jiraConfig.has("JIRA_LOGIN_PASS_TOKEN")) {
+                token = jiraConfig.optString("JIRA_LOGIN_PASS_TOKEN", "");
+            }
+            
+            if (!basePath.isEmpty() && !token.isEmpty()) {
+                System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials (maxSearchResults=" + maxSearchResults + ")");
+                return new CustomServerManagedJiraClient(basePath, token, authType, extraFields, maxSearchResults);
+            } else {
+                System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (JIRA_BASE_PATH=" + 
+                    (basePath.isEmpty() ? "empty" : basePath) + ", token=" + (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
+            }
+        }
+        return null;
+    }
+
+    private TrackerClient<? extends ITicket> createAdoClient(JSONObject resolvedIntegrations) throws IOException {
+        if (resolvedIntegrations.has("ado")) {
+            JSONObject adoConfig = resolvedIntegrations.getJSONObject("ado");
+            String organization = adoConfig.optString("ADO_ORGANIZATION", "");
+            String project = adoConfig.optString("ADO_PROJECT", "");
+            String patToken = adoConfig.optString("ADO_PAT_TOKEN", "");
+            
+            if (!organization.isEmpty() && !project.isEmpty() && !patToken.isEmpty()) {
+                System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedAzureDevOpsClient with resolved credentials");
+                return new CustomServerManagedAzureDevOpsClient(organization, project, patToken);
+            } else {
+                System.err.println("❌ [ServerManagedIntegrationsModule] ADO configuration missing required parameters (ADO_ORGANIZATION=" + 
+                    (organization.isEmpty() ? "empty" : organization) + ", ADO_PROJECT=" + 
+                    (project.isEmpty() ? "empty" : project) + ", ADO_PAT_TOKEN=" + 
+                    (patToken.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
+            }
+        }
+        return null;
+    }
+
+    private TrackerClient<? extends ITicket> createRallyClient(JSONObject resolvedIntegrations) throws IOException {
+        if (resolvedIntegrations.has("rally")) {
+            JSONObject rallyConfig = resolvedIntegrations.getJSONObject("rally");
+            String basePath = rallyConfig.optString("RALLY_PATH", "https://rally1.rallydev.com");
+            String token = rallyConfig.optString("RALLY_TOKEN", "");
+
+            if (!token.isEmpty()) {
+                System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedRallyClient with resolved credentials");
+                return new CustomServerManagedRallyClient(basePath, token);
+            } else {
+                System.err.println("❌ [ServerManagedIntegrationsModule] Rally configuration missing required parameters (token=" +
+                        (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
+            }
+        }
+        return null;
     }
     
     /**
@@ -298,6 +366,65 @@ public class ServerManagedIntegrationsModule {
         @Override
         public TrackerClient.TextType getTextType() {
             return TrackerClient.TextType.HTML;
+        }
+    }
+
+    /**
+     * Custom RallyClient implementation that uses resolved credentials
+     * instead of static properties from PropertyReader
+     */
+    private static class CustomServerManagedRallyClient extends RallyClient {
+
+        public CustomServerManagedRallyClient(String basePath, String token) throws IOException {
+            super(basePath, token);
+            setLogEnabled(true);
+            setClearCache(true);
+            setCacheGetRequestsEnabled(true);
+            System.out.println("✅ [CustomServerManagedRallyClient] Cache cleaned and enabled for performance optimization");
+        }
+
+        @Override
+        public TrackerClient.TextType getTextType() {
+            return TrackerClient.TextType.HTML;
+        }
+
+        @Override
+        public void deleteCommentIfExists(String ticketKey, String comment) throws IOException {
+
+        }
+
+        @Override
+        public String[] getDefaultQueryFields() {
+            return RallyFields.DEFAULT;
+        }
+
+        @Override
+        public String getTextFieldsOnly(ITicket ticket) {
+            try {
+                return ticket.getTicketTitle() + "\n" + ticket.getTicketDescription();
+            } catch (IOException e) {
+                return "";
+            }
+        }
+
+        @Override
+        public List<? extends ITicket> getTestCases(ITicket ticket) throws IOException {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public String buildUrlToSearch(String query) {
+            return getBasePath() + "/#/?keywords=" + query;
+        }
+
+        @Override
+        public String createTicketInProject(String project, String issueType, String summary, String description, FieldsInitializer fieldsInitializer) throws IOException {
+            throw new UnsupportedOperationException("Creation not supported in server managed mode yet");
+        }
+
+        @Override
+        public String updateTicket(String key, FieldsInitializer fieldsInitializer) throws IOException {
+            throw new UnsupportedOperationException("Update not supported in server managed mode yet");
         }
     }
     

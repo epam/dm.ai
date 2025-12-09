@@ -8,7 +8,7 @@ import dagger.Component;
 import javax.inject.Singleton;
 
 @Singleton
-@Component(modules = {JiraModule.class, SourceCodeModule.class, AIComponentsModule.class, ConfluenceModule.class, AIAgentsModule.class, ConfigurationModule.class})
+@Component(modules = {TrackerModule.class, SourceCodeModule.class, AIComponentsModule.class, ConfluenceModule.class, AIAgentsModule.class, ConfigurationModule.class})
 public interface ExpertComponent {
     void inject(Expert expert);
     AI getAI();
