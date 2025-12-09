@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 /**
  * Helper class for detecting and decoding encoded parameters.
@@ -52,7 +53,7 @@ public class EncodingDetector {
     
     /**
      * Decodes a base64-encoded string.
-     * Leverages existing JobRunner.decodeBase64() method for consistency.
+     * Implemented directly to avoid dependency on JobRunner static initialization.
      * 
      * @param input The base64-encoded string
      * @return The decoded string
@@ -60,7 +61,8 @@ public class EncodingDetector {
      */
     public String decodeBase64(String input) {
         try {
-            return JobRunner.decodeBase64(input);
+            byte[] decodedBytes = Base64.getDecoder().decode(input);
+            return new String(decodedBytes);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid base64 encoding: " + e.getMessage(), e);
         }

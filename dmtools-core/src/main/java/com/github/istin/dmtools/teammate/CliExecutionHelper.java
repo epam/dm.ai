@@ -154,8 +154,7 @@ public class CliExecutionHelper {
                     failCount++;
                 }
             } catch (Exception e) {
-                String attName = attachment != null ? attachment.getName() : "unknown";
-                logger.error("❌ Failed to download attachment {}: {}", attName, e.getMessage(), e);
+                logger.error("❌ Failed to download attachment {}: {}", attachment.getName(), e.getMessage(), e);
                 failCount++;
                 // Continue with other attachments instead of failing completely
             }

@@ -187,9 +187,11 @@ public class AdoTestCaseDetailsIntegrationTest {
             logger.info("Found {} attachment(s):", attachments.size());
             for (int i = 0; i < attachments.size(); i++) {
                 IAttachment attachment = attachments.get(i);
-                logger.info("  [{}] Name: {}", i + 1, attachment.getName());
-                logger.info("       URL: {}", attachment.getUrl());
-                logger.info("       Content Type: {}", attachment.getContentType());
+                if (attachment != null) {
+                    logger.info("  [{}] Name: {}", i + 1, attachment.getName());
+                    logger.info("       URL: {}", attachment.getUrl());
+                    logger.info("       Content Type: {}", attachment.getContentType());
+                }
             }
         } else {
             logger.info("No attachments found");
@@ -202,19 +204,21 @@ public class AdoTestCaseDetailsIntegrationTest {
             logger.info("Found {} comment(s):", comments.size());
             for (int i = 0; i < comments.size(); i++) {
                 IComment comment = comments.get(i);
-                String authorName = "Unknown";
-                if (comment.getAuthor() != null) {
-                    authorName = comment.getAuthor().getFullName();
-                    if (authorName == null || authorName.isEmpty()) {
-                        authorName = comment.getAuthor().getEmailAddress();
+                if (comment != null) {
+                    String authorName = "Unknown";
+                    if (comment.getAuthor() != null) {
+                        authorName = comment.getAuthor().getFullName();
+                        if (authorName == null || authorName.isEmpty()) {
+                            authorName = comment.getAuthor().getEmailAddress();
+                        }
                     }
-                }
-                logger.info("  [{}] Author: {}", i + 1, authorName);
-                logger.info("       Created: {}", comment.getCreated());
-                logger.info("       Body length: {} characters", 
-                    comment.getBody() != null ? comment.getBody().length() : 0);
-                if (comment.getBody() != null && comment.getBody().length() < 500) {
-                    logger.info("       Body: {}", comment.getBody());
+                    logger.info("  [{}] Author: {}", i + 1, authorName);
+                    logger.info("       Created: {}", comment.getCreated());
+                    logger.info("       Body length: {} characters", 
+                        comment.getBody() != null ? comment.getBody().length() : 0);
+                    if (comment.getBody() != null && comment.getBody().length() < 500) {
+                        logger.info("       Body: {}", comment.getBody());
+                    }
                 }
             }
         } else {
@@ -224,10 +228,8 @@ public class AdoTestCaseDetailsIntegrationTest {
         // Print relations/links
         logger.info("\n=== RELATIONS/LINKS ===");
         try {
-            // Try to enrich with relations if method exists
-            if (adoClient instanceof com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) {
-                ((com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) adoClient).enrichWorkItemWithRelations(workItem);
-            }
+            // BasicAzureDevOpsClient extends AzureDevOpsClient, so we can directly call enrichWorkItemWithRelations
+            ((com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) adoClient).enrichWorkItemWithRelations(workItem);
             org.json.JSONArray relations = workItem.getJSONArray("relations");
             if (relations != null && relations.length() > 0) {
                 logger.info("Found {} relation(s):", relations.length());
