@@ -78,10 +78,10 @@ public class TrackerModule {
             } else if ("jira_xray".equalsIgnoreCase(defaultTracker.trim())) {
                 try {
                     logger.debug("Attempting to initialize TrackerClient via XrayClient as DEFAULT_TRACKER=jira_xray...");
-                    TrackerClient<? extends ITicket> xrayClient = XrayClient.getInstance();
-                    if (xrayClient != null) {
+                    TrackerClient<? extends ITicket> client = XrayClient.getInstance();
+                    if (client != null) {
                         logger.debug("XrayClient initialized successfully.");
-                        return xrayClient;
+                        return client;
                     }
                 } catch (Exception e) {
                     logger.error("Failed to initialize XrayClient (DEFAULT_TRACKER=jira_xray): " + e.getMessage());
