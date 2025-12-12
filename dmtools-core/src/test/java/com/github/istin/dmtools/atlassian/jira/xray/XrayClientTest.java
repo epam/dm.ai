@@ -1,14 +1,11 @@
 package com.github.istin.dmtools.atlassian.jira.xray;
 
-import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
-import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -45,7 +42,7 @@ public class XrayClientTest {
         } catch (Exception e) {
             // If configuration is missing, skip tests
             // This allows tests to run even without full X-ray configuration
-            org.junit.Assume.assumeTrue("XrayClient configuration not available for testing", false);
+            org.junit.Assume.assumeTrue("XrayClient configuration not available for testing: " + e.getMessage(), false);
         }
     }
     @Test

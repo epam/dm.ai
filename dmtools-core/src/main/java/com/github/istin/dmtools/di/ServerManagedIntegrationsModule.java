@@ -14,7 +14,6 @@ import com.github.istin.dmtools.broadcom.rally.RallyClient;
 import com.github.istin.dmtools.broadcom.rally.model.RallyFields;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
-import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
@@ -209,7 +208,8 @@ public class ServerManagedIntegrationsModule {
         // Get Jira configuration
         String jiraBasePath = jiraConfig.optString("JIRA_BASE_PATH", "");
         String jiraAuthType = jiraConfig.optString("JIRA_AUTH_TYPE", "Basic");
-        String jiraExtraFields = jiraConfig.optString("JIRA_EXTRA_FIELDS_PROJECT", "");
+        String jiraExtraFieldsProject = jiraConfig.optString("JIRA_EXTRA_FIELDS_PROJECT", "");
+        String jiraExtraFields = jiraConfig.optString("JIRA_EXTRA_FIELDS", "");
         int maxSearchResults = jiraConfig.optInt("JIRA_MAX_SEARCH_RESULTS", -1);
 
         // Handle Jira authentication
@@ -234,7 +234,8 @@ public class ServerManagedIntegrationsModule {
         if (!jiraBasePath.isEmpty() && !jiraToken.isEmpty() && 
             !xrayBasePath.isEmpty() && !xrayClientId.isEmpty() && !xrayClientSecret.isEmpty()) {
             System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedXrayClient with resolved credentials");
-            return new CustomServerManagedXrayClient(jiraBasePath, jiraToken, jiraAuthType, jiraExtraFields, maxSearchResults,
+            return new CustomServerManagedXrayClient(jiraBasePath, jiraToken, jiraAuthType, 
+                    jiraExtraFieldsProject, jiraExtraFields, maxSearchResults,
                     xrayBasePath, xrayClientId, xrayClientSecret);
         } else {
             System.err.println("❌ [ServerManagedIntegrationsModule] X-ray configuration missing required parameters");
@@ -413,35 +414,28 @@ public class ServerManagedIntegrationsModule {
                 String jiraBasePath,
                 String jiraToken,
                 String jiraAuthType,
+                String extraFieldsProject,
                 String extraFields,
                 int maxSearchResults,
                 String xrayBasePath,
                 String xrayClientId,
-                String xrayClientSecret,
-                boolean isLoggingEnabled,
-                boolean isClearCache,
-                boolean isWaitBeforePerform,
-                long sleepTimeRequest,
-                boolean cacheEnabled
+                String xrayClientSecret
         ) throws IOException {
-            // Use protected constructor with resolved credentials
+            // Use protected constructor with resolved credentials and reasonable defaults
+            // Following the same pattern as CustomServerManagedJiraClient
             super(jiraBasePath, jiraToken, jiraAuthType, maxSearchResults,
                     xrayBasePath, xrayClientId, xrayClientSecret,
-                    isLoggingEnabled,
-                    isClearCache,
-                    isWaitBeforePerform,
-                    sleepTimeRequest,
-                    extraFields, // extraFieldsProject
+                    true, // isLoggingEnabled - default to true
+                    true, // isClearCache - default to true to clean cache
+                    true, // isWaitBeforePerform - default to true
+                    100L, // sleepTimeRequest - default to 100ms
+                    extraFieldsProject, // extraFieldsProject
                     extraFields != null && !extraFields.trim().isEmpty() ? extraFields.split(",") : null // extraFields
             );
 
-            // Performance optimization: Enable caching if configured
-            setCacheGetRequestsEnabled(cacheEnabled);
-            if (cacheEnabled) {
-                System.out.println("✅ [CustomServerManagedXrayClient] Cache cleaned and enabled for performance optimization");
-            } else {
-                System.out.println("ℹ️ [CustomServerManagedXrayClient] Cache is disabled as per configuration");
-            }
+            // Performance optimization: Enable caching (following CustomServerManagedJiraClient pattern)
+            setCacheGetRequestsEnabled(true);
+            System.out.println("✅ [CustomServerManagedXrayClient] Cache cleaned and enabled for performance optimization");
             System.out.println("✅ [CustomServerManagedXrayClient] Max search results configured: " +
                     (maxSearchResults == -1 ? "unlimited" : String.valueOf(maxSearchResults)));
         }

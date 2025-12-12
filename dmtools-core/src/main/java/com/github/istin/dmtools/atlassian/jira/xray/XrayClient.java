@@ -15,7 +15,6 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -39,7 +38,7 @@ public class XrayClient extends JiraClient<Ticket> {
     private static final Logger logger = LogManager.getLogger(XrayClient.class);
 
     // X-ray configuration (static for property-based, instance for server-managed)
-    public static final String XRAY_BASE_PATH;
+    private static final String XRAY_BASE_PATH;
     private static final String XRAY_CLIENT_ID;
     private static final String XRAY_CLIENT_SECRET;
 
@@ -58,12 +57,12 @@ public class XrayClient extends JiraClient<Ticket> {
     private static final boolean IS_JIRA_WAIT_BEFORE_PERFORM;
     private static final Long SLEEP_TIME_REQUEST;
     private static final String[] JIRA_EXTRA_FIELDS;
-    public static final String JIRA_EXTRA_FIELDS_PROJECT;
+    private static final String JIRA_EXTRA_FIELDS_PROJECT;
     private static final int JIRA_SEARCH_MAX_RESULTS;
 
-    // X-ray OAuth2 token management
+    // X-ray bearer token management
     private volatile String xrayAccessToken;
-    private long xrayTokenExpiryTime;
+    private volatile long xrayTokenExpiryTime;
     private static final long TOKEN_REFRESH_BUFFER_MS = 60000; // Refresh 1 minute before expiry
 
     // HTTP client for X-ray API calls (separate from Jira client)
@@ -112,21 +111,26 @@ public class XrayClient extends JiraClient<Ticket> {
     }
 
     public static TrackerClient<? extends ITicket> getInstance() throws IOException {
+        // Double-checked locking for thread-safe singleton
         if (instance == null) {
-            if (JIRA_BASE_PATH == null || JIRA_BASE_PATH.isEmpty()) {
-                logger.warn("JIRA_BASE_PATH is not configured, cannot create XrayClient");
-                return null;
+            synchronized (XrayClient.class) {
+                if (instance == null) {
+                    if (JIRA_BASE_PATH == null || JIRA_BASE_PATH.isEmpty()) {
+                        logger.warn("JIRA_BASE_PATH is not configured, cannot create XrayClient");
+                        return null;
+                    }
+                    if (XRAY_BASE_PATH == null || XRAY_BASE_PATH.isEmpty()) {
+                        logger.warn("XRAY_BASE_PATH is not configured, cannot create XrayClient");
+                        return null;
+                    }
+                    if (XRAY_CLIENT_ID == null || XRAY_CLIENT_ID.isEmpty() || 
+                        XRAY_CLIENT_SECRET == null || XRAY_CLIENT_SECRET.isEmpty()) {
+                        logger.warn("XRAY_CLIENT_ID or XRAY_CLIENT_SECRET is not configured, cannot create XrayClient");
+                        return null;
+                    }
+                    instance = new XrayClient();
+                }
             }
-            if (XRAY_BASE_PATH == null || XRAY_BASE_PATH.isEmpty()) {
-                logger.warn("XRAY_BASE_PATH is not configured, cannot create XrayClient");
-                return null;
-            }
-            if (XRAY_CLIENT_ID == null || XRAY_CLIENT_ID.isEmpty() || 
-                XRAY_CLIENT_SECRET == null || XRAY_CLIENT_SECRET.isEmpty()) {
-                logger.warn("XRAY_CLIENT_ID or XRAY_CLIENT_SECRET is not configured, cannot create XrayClient");
-                return null;
-            }
-            instance = new XrayClient();
         }
         return instance;
     }
@@ -219,7 +223,9 @@ public class XrayClient extends JiraClient<Ticket> {
     }
 
     /**
-     * Obtains or refreshes X-ray OAuth2 access token using client credentials flow.
+     * Obtains or refreshes the X-ray bearer access token using Xray's proprietary authentication mechanism.
+     * <p>
+     * Sends the client ID and client secret to the Xray /authenticate endpoint to receive a bearer token.
      * 
      * @return Access token for X-ray API calls
      * @throws IOException if token acquisition fails
@@ -241,36 +247,36 @@ public class XrayClient extends JiraClient<Ticket> {
         tokenUrl += "authenticate";
 
         try {
-            // Prepare request body for OAuth2 client credentials flow
-            RequestBody requestBody = new FormBody.Builder()
-                    .add("client_id", getXrayClientId())
-                    .add("client_secret", getXrayClientSecret())
-                    .build();
+            // Prepare request body as JSON (X-ray API expects JSON, not form-encoded)
+            JSONObject json = new JSONObject();
+            json.put("client_id", getXrayClientId());
+            json.put("client_secret", getXrayClientSecret());
+            RequestBody requestBody = RequestBody.create(json.toString(), MediaType.parse("application/json"));
 
             Request request = new Request.Builder()
                     .url(tokenUrl)
                     .post(requestBody)
-                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .header("Content-Type", "application/json")
                     .build();
 
-            Response response = xrayHttpClient.newCall(request).execute();
-            
-            if (!response.isSuccessful()) {
-                String errorBody = response.body() != null ? response.body().string() : "No error body";
-                throw new IOException("Failed to obtain X-ray access token. HTTP " + response.code() + ": " + errorBody);
+            // Use try-with-resources to ensure response is closed
+            try (Response response = xrayHttpClient.newCall(request).execute()) {
+                // Store response body first - can only be consumed once
+                String responseBody = response.body() != null ? response.body().string() : "";
+                
+                if (!response.isSuccessful()) {
+                    throw new IOException("Failed to obtain X-ray access token. HTTP " + response.code() + ": " + 
+                            (responseBody.isEmpty() ? "No error body" : responseBody));
+                }
+
+                // X-ray returns the token as a plain string; expiry is assumed to be 1 hour (3600 seconds)
+                xrayAccessToken = responseBody.trim();
+                long expiresIn = 3600; // Default to 1 hour
+                xrayTokenExpiryTime = System.currentTimeMillis() + (expiresIn * 1000);
+
+                logger.debug("Successfully obtained X-ray access token, expires in {} seconds", expiresIn);
+                return xrayAccessToken;
             }
-
-            String responseBody = response.body().string();
-            JSONObject jsonResponse = new JSONObject(responseBody);
-            
-            xrayAccessToken = jsonResponse.getString("access_token");
-            
-            // Default token expiry is 3600 seconds (1 hour), but check if provided
-            long expiresIn = jsonResponse.optLong("expires_in", 3600);
-            xrayTokenExpiryTime = System.currentTimeMillis() + (expiresIn * 1000);
-
-            logger.debug("Successfully obtained X-ray access token, expires in {} seconds", expiresIn);
-            return xrayAccessToken;
 
         } catch (Exception e) {
             logger.error("Error obtaining X-ray access token", e);
@@ -415,12 +421,9 @@ public class XrayClient extends JiraClient<Ticket> {
             return;
         }
 
-        // Format steps for X-ray API
-        JSONObject requestBody = new JSONObject();
-        requestBody.put("steps", steps);
-
+        // X-ray API expects the steps array directly, not wrapped in an object
         String endpoint = "api/v2/test/" + testKey + "/steps";
-        xrayApiRequest(endpoint, "PUT", requestBody.toString());
+        xrayApiRequest(endpoint, "PUT", steps.toString());
         logger.info("Successfully set {} steps for test {}", steps.length(), testKey);
     }
 
@@ -460,11 +463,9 @@ public class XrayClient extends JiraClient<Ticket> {
             return;
         }
 
-        JSONObject requestBody = new JSONObject();
-        requestBody.put("preconditions", preconditionKeys);
-
+        // X-ray API expects the request body to be the array directly, not wrapped in an object
         String endpoint = "api/v2/test/" + testKey + "/preconditions";
-        xrayApiRequest(endpoint, "PUT", requestBody.toString());
+        xrayApiRequest(endpoint, "PUT", preconditionKeys.toString());
         logger.info("Successfully set {} preconditions for test {}", preconditionKeys.length(), testKey);
     }
 
@@ -486,27 +487,18 @@ public class XrayClient extends JiraClient<Ticket> {
             
             // Create a new FieldsInitializer that excludes steps/preconditions
             final Fields fieldsWithoutXray = tempFields;
+            // Use Sets for O(1) lookup of steps and preconditions field names
+            final Set<String> stepsFieldNamesSet = new HashSet<>(Arrays.asList(STEPS_FIELD_NAMES));
+            final Set<String> preconditionsFieldNamesSet = new HashSet<>(Arrays.asList(PRECONDITIONS_FIELD_NAMES));
             wrappedFieldsInitializer = new FieldsInitializer() {
                 @Override
                 public void init(TrackerTicketFields fields) {
                     // Copy all fields except steps/preconditions
                     JSONObject fieldsJson = fieldsWithoutXray.getJSONObject();
                     for (String key : fieldsJson.keySet()) {
-                        // Skip X-ray specific fields
-                        boolean isStepsField = false;
-                        boolean isPreconditionsField = false;
-                        for (String stepsFieldName : STEPS_FIELD_NAMES) {
-                            if (key.equals(stepsFieldName)) {
-                                isStepsField = true;
-                                break;
-                            }
-                        }
-                        for (String preconditionsFieldName : PRECONDITIONS_FIELD_NAMES) {
-                            if (key.equals(preconditionsFieldName)) {
-                                isPreconditionsField = true;
-                                break;
-                            }
-                        }
+                        // Skip X-ray specific fields using O(1) lookup
+                        boolean isStepsField = stepsFieldNamesSet.contains(key);
+                        boolean isPreconditionsField = preconditionsFieldNamesSet.contains(key);
                         if (!isStepsField && !isPreconditionsField) {
                             fields.set(key, fieldsJson.get(key));
                         }
@@ -523,17 +515,25 @@ public class XrayClient extends JiraClient<Ticket> {
         String ticketKey = responseJson.getString("key");
 
         // Set steps and preconditions via X-ray API
-        try {
-            if (steps != null) {
+        if (steps != null) {
+            try {
                 setTestSteps(ticketKey, steps);
+            } catch (IOException e) {
+                logger.error("Failed to set X-ray steps for ticket {} with {} steps: {}", 
+                        ticketKey, steps.length(), e.getMessage());
+                // Don't fail the entire operation if X-ray API calls fail
+                // The ticket was already created in Jira
             }
-            if (preconditions != null) {
+        }
+        if (preconditions != null) {
+            try {
                 setPreconditions(ticketKey, preconditions);
+            } catch (IOException e) {
+                logger.error("Failed to set X-ray preconditions for ticket {} with {} preconditions: {}", 
+                        ticketKey, preconditions.length(), e.getMessage());
+                // Don't fail the entire operation if X-ray API calls fail
+                // The ticket was already created in Jira
             }
-        } catch (IOException e) {
-            logger.error("Failed to set X-ray steps/preconditions for ticket {}, but ticket was created: {}", ticketKey, e.getMessage());
-            // Don't fail the entire operation if X-ray API calls fail
-            // The ticket was already created in Jira
         }
 
         return ticketResponse;
