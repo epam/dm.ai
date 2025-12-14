@@ -1026,8 +1026,8 @@ public class XrayRestClient extends AbstractRestClient {
 
         // GraphQL mutation to update precondition definition
         // Use updateTest mutation (works for both Test and Precondition issues)
-        // Escape quotes in definition for GraphQL
-        String escapedDefinition = definition.replace("\\", "\\\\").replace("\"", "\\\"");
+        // Escape special characters in definition for GraphQL (consistent with addTestStepGraphQL)
+        String escapedDefinition = definition.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
         String mutation = String.format(
             "mutation { " +
             "  updateTest( " +

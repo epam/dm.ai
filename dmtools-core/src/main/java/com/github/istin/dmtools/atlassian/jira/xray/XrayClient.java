@@ -9,6 +9,7 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.mcp.MCPParam;
 import com.github.istin.dmtools.mcp.MCPTool;
+import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -56,7 +57,15 @@ public class XrayClient extends JiraClient<Ticket> {
     private static final String JIRA_EXTRA_FIELDS_PROJECT;
     private static final int JIRA_SEARCH_MAX_RESULTS;
 
+    /**
+     * -- GETTER --
+     *  Gets the underlying XrayRestClient instance.
+     *  Useful for setting pagination limits in tests.
+     *
+     * @return XrayRestClient instance
+     */
     // X-ray REST client for API communication
+    @Getter
     private final XrayRestClient xrayRestClient;
 
     // Field names for steps and preconditions extraction
@@ -1056,14 +1065,5 @@ public class XrayClient extends JiraClient<Ticket> {
     public JSONArray addPreconditionsToTestGraphQL(String testIssueId, JSONArray preconditionIssueIds) throws IOException {
         return xrayRestClient.addPreconditionsToTestGraphQL(testIssueId, preconditionIssueIds);
     }
-    
-    /**
-     * Gets the underlying XrayRestClient instance.
-     * Useful for setting pagination limits in tests.
-     * 
-     * @return XrayRestClient instance
-     */
-    public XrayRestClient getXrayRestClient() {
-        return xrayRestClient;
-    }
+
 }
