@@ -339,6 +339,76 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         }
     }
     
+    // BedrockConfiguration
+    
+    @Override
+    public String getBedrockBasePath() {
+        String basePath = getValue("BEDROCK_BASE_PATH");
+        String region = getBedrockRegion();
+        if (basePath != null && !basePath.trim().isEmpty()) {
+            return basePath;
+        }
+        if (region != null && !region.trim().isEmpty()) {
+            return "https://bedrock-runtime." + region + ".amazonaws.com";
+        }
+        return null;
+    }
+    
+    @Override
+    public String getBedrockRegion() {
+        return getValue("BEDROCK_REGION");
+    }
+    
+    @Override
+    public String getBedrockModelId() {
+        return getValue("BEDROCK_MODEL_ID");
+    }
+    
+    @Override
+    public String getBedrockBearerToken() {
+        return getValue("BEDROCK_BEARER_TOKEN");
+    }
+    
+    @Override
+    public int getBedrockMaxTokens() {
+        String value = getValue("BEDROCK_MAX_TOKENS");
+        if (value == null || value.trim().isEmpty()) {
+            return 4096;
+        }
+        try {
+            int maxTokens = Integer.parseInt(value.trim());
+            if (maxTokens < 1) {
+                return 4096;
+            }
+            if (maxTokens > 4096) {
+                return 4096;
+            }
+            return maxTokens;
+        } catch (NumberFormatException e) {
+            return 4096;
+        }
+    }
+    
+    @Override
+    public double getBedrockTemperature() {
+        String value = getValue("BEDROCK_TEMPERATURE");
+        if (value == null || value.trim().isEmpty()) {
+            return 1.0;
+        }
+        try {
+            double temperature = Double.parseDouble(value.trim());
+            if (temperature < 0.0) {
+                return 1.0;
+            }
+            if (temperature > 1.0) {
+                return 1.0;
+            }
+            return temperature;
+        } catch (NumberFormatException e) {
+            return 1.0;
+        }
+    }
+    
     // JSAIConfiguration
     
     @Override

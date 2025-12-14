@@ -20,6 +20,7 @@ public interface ApplicationConfiguration extends
     MetricsConfiguration,
     OllamaConfiguration,
     AnthropicConfiguration,
+    BedrockConfiguration,
     TrackerConfiguration {
     
     /**

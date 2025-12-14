@@ -38,4 +38,40 @@ public class ImageUtils {
         return new int[] {width, height};
     }
 
+    /**
+     * Gets the MIME type for an image file based on its extension.
+     * Supports JPEG, PNG, GIF, and WebP formats.
+     * @param imageFile The image file
+     * @return The MIME type (e.g., "image/jpeg", "image/png")
+     */
+    public static String getMimeType(File imageFile) {
+        String extension = getExtension(imageFile).toLowerCase();
+        switch (extension) {
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+            case "png":
+                return "image/png";
+            case "gif":
+                return "image/gif";
+            case "webp":
+                return "image/webp";
+            default:
+                // Default to JPEG if unknown
+                return "image/jpeg";
+        }
+    }
+
+    /**
+     * Converts an image file to base64 string without any prefix (for AWS Bedrock format).
+     * This is the same as convertToBase64 but with explicit naming for clarity.
+     * @param imageFile The image file to convert
+     * @param formatName The format name (e.g., "png", "jpeg")
+     * @return Base64 encoded string without data URI prefix
+     * @throws IOException If an I/O error occurs
+     */
+    public static String convertToBase64WithoutPrefix(File imageFile, String formatName) throws IOException {
+        return convertToBase64(imageFile, formatName);
+    }
+
 }

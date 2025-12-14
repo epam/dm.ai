@@ -3,6 +3,7 @@ package com.github.istin.dmtools.di;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.anthropic.BasicAnthropicAI;
+import com.github.istin.dmtools.ai.bedrock.BasicBedrockAI;
 import com.github.istin.dmtools.ai.google.BasicGeminiAI;
 import com.github.istin.dmtools.ai.js.JSAIClient;
 import com.github.istin.dmtools.bridge.DMToolsBridge;
@@ -47,6 +48,7 @@ public class AIComponentsModule {
         boolean dialAttempted = false;
         boolean geminiAttempted = false;
         boolean anthropicAttempted = false;
+        boolean bedrockAttempted = false;
         
         // Check if a specific default LLM is configured
         String defaultLLM = configuration.getDefaultLLM();
@@ -106,6 +108,23 @@ public class AIComponentsModule {
                     logger.warn("DEFAULT_LLM is set to 'anthropic' but ANTHROPIC_MODEL is not configured. Skipping Anthropic initialization.");
                 }
                 anthropicAttempted = true;
+            } else if ("aws_bedrock".equalsIgnoreCase(defaultLLM.trim()) || "bedrock".equalsIgnoreCase(defaultLLM.trim())) {
+                String bedrockModelId = configuration.getBedrockModelId();
+                String bedrockBearerToken = configuration.getBedrockBearerToken();
+                if (bedrockModelId != null && !bedrockModelId.trim().isEmpty() && !bedrockModelId.startsWith("$") &&
+                    bedrockBearerToken != null && !bedrockBearerToken.trim().isEmpty() && !bedrockBearerToken.startsWith("$")) {
+                    try {
+                        logger.debug("Attempting to initialize AI via BasicBedrockAI as DEFAULT_LLM=aws_bedrock...");
+                        AI bedrock = new BasicBedrockAI(observer, configuration);
+                        logger.debug("BasicBedrockAI initialized successfully.");
+                        return bedrock;
+                    } catch (Exception e) {
+                        logger.error("Failed to initialize BasicBedrockAI (DEFAULT_LLM=aws_bedrock): " + e.getMessage());
+                    }
+                } else {
+                    logger.warn("DEFAULT_LLM is set to 'aws_bedrock' but BEDROCK_MODEL_ID or BEDROCK_BEARER_TOKEN is not configured. Skipping Bedrock initialization.");
+                }
+                bedrockAttempted = true;
             }
         }
         
@@ -136,6 +155,23 @@ public class AIComponentsModule {
                     return anthropic;
                 } catch (Exception e) {
                     logger.error("Failed to initialize BasicAnthropicAI, trying fallback options. Error: " + e.getMessage());
+                }
+            }
+        }
+        
+        // Check for Bedrock configuration (skip if already attempted)
+        if (!bedrockAttempted) {
+            String bedrockModelId = configuration.getBedrockModelId();
+            String bedrockBearerToken = configuration.getBedrockBearerToken();
+            if (bedrockModelId != null && !bedrockModelId.trim().isEmpty() && !bedrockModelId.startsWith("$") &&
+                bedrockBearerToken != null && !bedrockBearerToken.trim().isEmpty() && !bedrockBearerToken.startsWith("$")) {
+                try {
+                    logger.debug("Attempting to initialize AI via BasicBedrockAI as BEDROCK_MODEL_ID is set...");
+                    AI bedrock = new BasicBedrockAI(observer, configuration);
+                    logger.debug("BasicBedrockAI initialized successfully.");
+                    return bedrock;
+                } catch (Exception e) {
+                    logger.error("Failed to initialize BasicBedrockAI, trying fallback options. Error: " + e.getMessage());
                 }
             }
         }
@@ -315,6 +351,26 @@ public class AIComponentsModule {
             logger.debug("Failed to create BasicDialAI: {}", e.getMessage());
             return null;
         }
+    }
+    
+    /**
+     * Creates a Bedrock AI client if configuration is available.
+     * @param observer The conversation observer
+     * @param configuration The application configuration
+     * @return Bedrock AI instance or null if not configured
+     */
+    public static AI createBedrockAI(ConversationObserver observer, ApplicationConfiguration configuration) {
+        String bedrockModelId = configuration.getBedrockModelId();
+        String bedrockBearerToken = configuration.getBedrockBearerToken();
+        if (bedrockModelId != null && !bedrockModelId.trim().isEmpty() && !bedrockModelId.startsWith("$") &&
+            bedrockBearerToken != null && !bedrockBearerToken.trim().isEmpty() && !bedrockBearerToken.startsWith("$")) {
+            try {
+                return new BasicBedrockAI(observer, configuration);
+            } catch (Exception e) {
+                logger.debug("Failed to create BasicBedrockAI: {}", e.getMessage());
+            }
+        }
+        return null;
     }
 
 }

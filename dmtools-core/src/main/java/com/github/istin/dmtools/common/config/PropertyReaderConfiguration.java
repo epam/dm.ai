@@ -397,6 +397,36 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
     
     @Override
+    public String getBedrockBasePath() {
+        return propertyReader.getBedrockBasePath();
+    }
+    
+    @Override
+    public String getBedrockRegion() {
+        return propertyReader.getBedrockRegion();
+    }
+    
+    @Override
+    public String getBedrockModelId() {
+        return propertyReader.getBedrockModelId();
+    }
+    
+    @Override
+    public String getBedrockBearerToken() {
+        return propertyReader.getBedrockBearerToken();
+    }
+    
+    @Override
+    public int getBedrockMaxTokens() {
+        return propertyReader.getBedrockMaxTokens();
+    }
+    
+    @Override
+    public double getBedrockTemperature() {
+        return propertyReader.getBedrockTemperature();
+    }
+    
+    @Override
     public String getDefaultLLM() {
         return propertyReader.getDefaultLLM();
     }
