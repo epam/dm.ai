@@ -31,7 +31,8 @@ import static org.junit.jupiter.api.Assertions.*;
 public class XrayPreprocessingJSIntegrationTest {
 
     private static final Logger logger = LogManager.getLogger(XrayPreprocessingJSIntegrationTest.class);
-    
+    public static final String PRECONDITION_KEY = "TP-910";
+
     private static XrayClient xrayClient;
     private static String testProjectKey;
     private static JobJavaScriptBridge jsBridge;
@@ -342,7 +343,7 @@ public class XrayPreprocessingJSIntegrationTest {
         testCase3.put("description", "This test case references an existing precondition");
         JSONObject customFields3 = new JSONObject();
         JSONArray preconditions3 = new JSONArray();
-        preconditions3.put("TP-910"); // Existing precondition key
+        preconditions3.put(PRECONDITION_KEY); // Existing precondition key
         customFields3.put("preconditions", preconditions3);
         testCase3.put("customFields", customFields3);
         testCases.put(testCase3);

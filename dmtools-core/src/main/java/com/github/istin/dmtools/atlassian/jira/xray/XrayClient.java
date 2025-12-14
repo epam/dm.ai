@@ -63,7 +63,7 @@ public class XrayClient extends JiraClient<Ticket> {
     private static final String[] STEPS_FIELD_NAMES = {"steps", "testSteps", "xraySteps", "test_steps"};
     private static final String[] PRECONDITIONS_FIELD_NAMES = {"preconditions", "xrayPreconditions", "testPreconditions", "test_preconditions"};
 
-    private static XrayClient instance;
+    private static volatile XrayClient instance;
     private final String[] defaultJiraFields;
     private final String[] extendedJiraFields;
     private final String[] customCodesOfConfigFields;
