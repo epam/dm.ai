@@ -29,6 +29,24 @@ public interface BedrockConfiguration {
     String getBedrockBearerToken();
 
     /**
+     * Gets the AWS Bedrock IAM Access Key ID
+     * @return The AWS IAM Access Key ID
+     */
+    String getBedrockAccessKeyId();
+
+    /**
+     * Gets the AWS Bedrock IAM Secret Access Key
+     * @return The AWS IAM Secret Access Key
+     */
+    String getBedrockSecretAccessKey();
+
+    /**
+     * Gets the AWS Bedrock IAM Session Token (optional, for temporary credentials)
+     * @return The AWS IAM Session Token, or null if not provided
+     */
+    String getBedrockSessionToken();
+
+    /**
      * Gets the AWS Bedrock max tokens
      * @return The max tokens for responses
      */

@@ -105,6 +105,11 @@ dependencies {
     api "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
     api 'io.swagger.core.v3:swagger-annotations:2.2.27'
 
+    // AWS SDK for Bedrock IAM authentication
+    api 'software.amazon.awssdk:auth:2.28.11'
+    api 'software.amazon.awssdk:aws-core:2.28.11'
+    api 'software.amazon.awssdk:regions:2.28.11'
+
     // Test dependencies
     testImplementation platform("org.junit:junit-bom:${versions.junit}")
     testImplementation 'org.junit.jupiter:junit-jupiter'

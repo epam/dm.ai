@@ -375,6 +375,21 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     }
     
     @Override
+    public String getBedrockAccessKeyId() {
+        return getValue("BEDROCK_ACCESS_KEY_ID");
+    }
+    
+    @Override
+    public String getBedrockSecretAccessKey() {
+        return getValue("BEDROCK_SECRET_ACCESS_KEY");
+    }
+    
+    @Override
+    public String getBedrockSessionToken() {
+        return getValue("BEDROCK_SESSION_TOKEN");
+    }
+    
+    @Override
     public int getBedrockMaxTokens() {
         String value = getValue("BEDROCK_MAX_TOKENS");
         if (value == null || value.trim().isEmpty()) {

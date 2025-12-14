@@ -684,6 +684,9 @@ public class PropertyReader {
 	public static final String BEDROCK_MODEL_ID = "BEDROCK_MODEL_ID";
 	public static final String BEDROCK_BEARER_TOKEN = "BEDROCK_BEARER_TOKEN";
 	public static final String AWS_BEARER_TOKEN_BEDROCK = "AWS_BEARER_TOKEN_BEDROCK";
+	public static final String BEDROCK_ACCESS_KEY_ID = "BEDROCK_ACCESS_KEY_ID";
+	public static final String BEDROCK_SECRET_ACCESS_KEY = "BEDROCK_SECRET_ACCESS_KEY";
+	public static final String BEDROCK_SESSION_TOKEN = "BEDROCK_SESSION_TOKEN";
 	public static final String BEDROCK_MAX_TOKENS = "BEDROCK_MAX_TOKENS";
 	public static final String BEDROCK_TEMPERATURE = "BEDROCK_TEMPERATURE";
 	public static final String DEFAULT_LLM = "DEFAULT_LLM";
@@ -854,6 +857,18 @@ public class PropertyReader {
 			return token;
 		}
 		return getValue(BEDROCK_BEARER_TOKEN);
+	}
+
+	public String getBedrockAccessKeyId() {
+		return getValue(BEDROCK_ACCESS_KEY_ID);
+	}
+
+	public String getBedrockSecretAccessKey() {
+		return getValue(BEDROCK_SECRET_ACCESS_KEY);
+	}
+
+	public String getBedrockSessionToken() {
+		return getValue(BEDROCK_SESSION_TOKEN);
 	}
 
 	public int getBedrockMaxTokens() {

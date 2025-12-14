@@ -20,11 +20,18 @@ import static org.junit.Assert.*;
  * To run this test, you need to configure the following properties:
  * - BEDROCK_REGION (e.g., "eu-north-1")
  * - BEDROCK_MODEL_ID (e.g., "qwen.qwen3-coder-480b-a35b-v1:0")
- * - BEDROCK_BEARER_TOKEN or AWS_BEARER_TOKEN_BEDROCK (your AWS Bearer token)
- *   (AWS_BEARER_TOKEN_BEDROCK is checked first, then BEDROCK_BEARER_TOKEN as fallback)
  * - BEDROCK_BASE_PATH (optional, will be constructed from region if not provided)
  * - BEDROCK_MAX_TOKENS (optional, defaults to 4096)
  * - BEDROCK_TEMPERATURE (optional, defaults to 1.0)
+ * 
+ * Authentication (choose one):
+ * - Option 1: BEDROCK_BEARER_TOKEN or AWS_BEARER_TOKEN_BEDROCK (Bearer Token)
+ *   (AWS_BEARER_TOKEN_BEDROCK is checked first, then BEDROCK_BEARER_TOKEN as fallback)
+ * - Option 2: BEDROCK_ACCESS_KEY_ID and BEDROCK_SECRET_ACCESS_KEY (IAM Keys)
+ *   Optional: BEDROCK_SESSION_TOKEN (for temporary credentials)
+ * - Option 3: AWS credentials in ~/.aws/credentials (Default Credentials Provider)
+ * 
+ * Priority: Bearer Token > IAM Keys > Default Credentials
  * 
  * These can be set in:
  * - System environment variables
@@ -44,24 +51,44 @@ public class BedrockAIClientIntegrationTest {
         
         // Verify required configuration is present
         String bedrockModelId = propertyReader.getBedrockModelId();
-        String bedrockBearerToken = propertyReader.getBedrockBearerToken();
         String bedrockBasePath = propertyReader.getBedrockBasePath();
+        String bedrockRegion = propertyReader.getBedrockRegion();
         
         if (bedrockModelId == null || bedrockModelId.trim().isEmpty() || bedrockModelId.startsWith("$")) {
             fail("BEDROCK_MODEL_ID is not configured. Please set it in environment variables or dmtools.env");
-        }
-        
-        if (bedrockBearerToken == null || bedrockBearerToken.trim().isEmpty() || bedrockBearerToken.startsWith("$")) {
-            fail("BEDROCK_BEARER_TOKEN or AWS_BEARER_TOKEN_BEDROCK is not configured. Please set one of them in environment variables or dmtools.env");
         }
         
         if (bedrockBasePath == null || bedrockBasePath.trim().isEmpty()) {
             fail("BEDROCK_BASE_PATH or BEDROCK_REGION is not configured. Please set at least BEDROCK_REGION in environment variables or dmtools.env");
         }
         
+        // Check if at least one authentication method is configured
+        String bedrockBearerToken = propertyReader.getBedrockBearerToken();
+        String accessKeyId = propertyReader.getBedrockAccessKeyId();
+        String secretAccessKey = propertyReader.getBedrockSecretAccessKey();
+        
+        boolean hasBearerToken = bedrockBearerToken != null && !bedrockBearerToken.trim().isEmpty() && !bedrockBearerToken.startsWith("$");
+        boolean hasIAMKeys = accessKeyId != null && !accessKeyId.trim().isEmpty() && !accessKeyId.startsWith("$") &&
+                            secretAccessKey != null && !secretAccessKey.trim().isEmpty() && !secretAccessKey.startsWith("$");
+        boolean hasDefaultCredentials = bedrockRegion != null && !bedrockRegion.trim().isEmpty();
+        
+        if (!hasBearerToken && !hasIAMKeys && !hasDefaultCredentials) {
+            fail("No authentication method configured. Please set one of:\n" +
+                 "- BEDROCK_BEARER_TOKEN or AWS_BEARER_TOKEN_BEDROCK (for Bearer Token)\n" +
+                 "- BEDROCK_ACCESS_KEY_ID and BEDROCK_SECRET_ACCESS_KEY (for IAM Keys)\n" +
+                 "- BEDROCK_REGION with AWS credentials in ~/.aws/credentials (for Default Credentials)");
+        }
+        
         try {
             PropertyReaderConfiguration configuration = new PropertyReaderConfiguration();
             bedrockAI = new BasicBedrockAI(observer, configuration);
+            
+            // Log authentication type used
+            if (bedrockAI instanceof BedrockAIClient) {
+                BedrockAIClient client = (BedrockAIClient) bedrockAI;
+                String authType = client.getAuthenticationStrategy().getAuthenticationType();
+                System.out.println("=== BedrockAIClient Authentication Type: " + authType + " ===");
+            }
         } catch (Exception e) {
             fail("Failed to initialize BasicBedrockAI client: " + e.getMessage());
         }
@@ -69,7 +96,13 @@ public class BedrockAIClientIntegrationTest {
 
     @Test
     public void testSimpleChat() throws Exception {
-        String prompt = "Hello! How Are you?";
+        // Log authentication type before test
+        if (bedrockAI instanceof BedrockAIClient) {
+            BedrockAIClient client = (BedrockAIClient) bedrockAI;
+            System.out.println("Using authentication: " + client.getAuthenticationStrategy().getAuthenticationType());
+        }
+        
+        String prompt = "Hello! How Are you? Ping me. Yo. Давай по русски";
         String response = bedrockAI.chat(prompt);
         
         System.out.println("Bedrock response (simple): " + response);
@@ -82,7 +115,7 @@ public class BedrockAIClientIntegrationTest {
         String model = propertyReader.getBedrockModelId();
         assertNotNull("Bedrock model ID should be configured", model);
         
-        String prompt = "Say 'Hello' in one word.";
+        String prompt = "Say 'Hello' in 2 words.";
         String response = bedrockAI.chat(model, prompt);
         
         System.out.println("Bedrock response (model " + model + "): " + response);

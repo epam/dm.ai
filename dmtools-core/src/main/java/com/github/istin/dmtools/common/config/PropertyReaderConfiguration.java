@@ -417,6 +417,21 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
     
     @Override
+    public String getBedrockAccessKeyId() {
+        return propertyReader.getBedrockAccessKeyId();
+    }
+    
+    @Override
+    public String getBedrockSecretAccessKey() {
+        return propertyReader.getBedrockSecretAccessKey();
+    }
+    
+    @Override
+    public String getBedrockSessionToken() {
+        return propertyReader.getBedrockSessionToken();
+    }
+    
+    @Override
     public int getBedrockMaxTokens() {
         return propertyReader.getBedrockMaxTokens();
     }

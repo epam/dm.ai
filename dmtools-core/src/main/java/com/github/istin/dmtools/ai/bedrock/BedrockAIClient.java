@@ -4,11 +4,15 @@ import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.ai.Message;
 import com.github.istin.dmtools.ai.model.Metadata;
+import com.github.istin.dmtools.ai.bedrock.auth.BedrockAuthenticationStrategy;
+import com.github.istin.dmtools.ai.bedrock.auth.BearerTokenAuthenticationStrategy;
+import com.github.istin.dmtools.ai.bedrock.auth.DefaultCredentialsAuthenticationStrategy;
+import com.github.istin.dmtools.ai.bedrock.auth.IAMKeysAuthenticationStrategy;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.utils.ImageUtils;
 import com.github.istin.dmtools.common.utils.RetryUtil;
-import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.mcp.MCPParam;
+import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import com.google.gson.Gson;
 import lombok.Getter;
@@ -58,8 +62,11 @@ public class BedrockAIClient extends AbstractRestClient implements AI {
 
     @Getter
     private final Map<String, String> customHeaders;
+    
+    @Getter
+    private final BedrockAuthenticationStrategy authenticationStrategy;
 
-    // Constructor with all parameters
+    // Constructor with Bearer Token (existing, for backward compatibility)
     public BedrockAIClient(String basePath, String region, String modelId, String bearerToken, 
                           int maxTokens, double temperature, ConversationObserver conversationObserver, 
                           Map<String, String> customHeaders, Logger logger) throws IOException {
@@ -72,6 +79,66 @@ public class BedrockAIClient extends AbstractRestClient implements AI {
         this.conversationObserver = conversationObserver;
         this.customHeaders = customHeaders != null ? new HashMap<>(customHeaders) : null;
         this.logger = logger != null ? logger : LogManager.getLogger(BedrockAIClient.class);
+        this.authenticationStrategy = new BearerTokenAuthenticationStrategy(bearerToken);
+        this.logger.info("BedrockAIClient initialized with authentication type: BEARER_TOKEN");
+        setCachePostRequestsEnabled(true);
+    }
+    
+    // Constructor with IAM Access Keys
+    public BedrockAIClient(String basePath, String region, String modelId, 
+                          String accessKeyId, String secretAccessKey, String sessionToken,
+                          int maxTokens, double temperature, 
+                          ConversationObserver conversationObserver, 
+                          Map<String, String> customHeaders, Logger logger) throws IOException {
+        super(basePath, null);
+        this.region = region;
+        this.modelId = modelId;
+        this.bearerToken = null;  // Not used for IAM authentication
+        this.maxTokens = maxTokens;
+        this.temperature = temperature;
+        this.conversationObserver = conversationObserver;
+        this.customHeaders = customHeaders != null ? new HashMap<>(customHeaders) : null;
+        this.logger = logger != null ? logger : LogManager.getLogger(BedrockAIClient.class);
+        this.authenticationStrategy = new IAMKeysAuthenticationStrategy(accessKeyId, secretAccessKey, sessionToken);
+        this.logger.info("BedrockAIClient initialized with authentication type: IAM_KEYS (Access Key ID: {}...)", 
+                accessKeyId != null && accessKeyId.length() > 8 ? accessKeyId.substring(0, 8) : "N/A");
+        setCachePostRequestsEnabled(true);
+    }
+    
+    // Constructor with Default Credentials Provider (reads from ~/.aws/credentials)
+    public BedrockAIClient(String basePath, String region, String modelId,
+                          int maxTokens, double temperature, 
+                          ConversationObserver conversationObserver, 
+                          Map<String, String> customHeaders, Logger logger) throws IOException {
+        super(basePath, null);
+        this.region = region;
+        this.modelId = modelId;
+        this.bearerToken = null;  // Not used for default credentials
+        this.maxTokens = maxTokens;
+        this.temperature = temperature;
+        this.conversationObserver = conversationObserver;
+        this.customHeaders = customHeaders != null ? new HashMap<>(customHeaders) : null;
+        this.logger = logger != null ? logger : LogManager.getLogger(BedrockAIClient.class);
+        this.authenticationStrategy = new DefaultCredentialsAuthenticationStrategy();
+        this.logger.info("BedrockAIClient initialized with authentication type: DEFAULT_CREDENTIALS (using ~/.aws/credentials or environment variables)");
+        setCachePostRequestsEnabled(true);
+    }
+    
+    /**
+     * Protected constructor for delegation pattern.
+     * Used by BasicBedrockAI to delegate to the appropriate authentication strategy.
+     */
+    protected BedrockAIClient(BedrockAIClient delegate) throws IOException {
+        super(delegate.getBasePath(), null);
+        this.region = delegate.region;
+        this.modelId = delegate.modelId;
+        this.bearerToken = delegate.bearerToken;
+        this.maxTokens = delegate.maxTokens;
+        this.temperature = delegate.temperature;
+        this.conversationObserver = delegate.conversationObserver;
+        this.customHeaders = delegate.customHeaders;
+        this.logger = delegate.logger;
+        this.authenticationStrategy = delegate.authenticationStrategy;
         setCachePostRequestsEnabled(true);
     }
 
@@ -98,19 +165,8 @@ public class BedrockAIClient extends AbstractRestClient implements AI {
         // Don't set Content-Type here - let RequestBody's MediaType set it
         // This ensures we use "application/json" without charset for Bedrock API compatibility
         
-        // Add Bearer token authentication
-        if (bearerToken != null && !bearerToken.trim().isEmpty()) {
-            builder = builder.header("Authorization", "Bearer " + bearerToken);
-        }
-        
-        // Add custom headers if provided
-        if (customHeaders != null && !customHeaders.isEmpty()) {
-            for (Map.Entry<String, String> header : customHeaders.entrySet()) {
-                builder = builder.header(header.getKey(), header.getValue());
-            }
-        }
-        
-        return builder;
+        // Use authentication strategy to sign the request
+        return authenticationStrategy.sign(builder, customHeaders);
     }
 
     @Override
@@ -807,10 +863,10 @@ public class BedrockAIClient extends AbstractRestClient implements AI {
         // Create RequestBody with bytes to have full control over Content-Type
         byte[] bodyBytes = genericRequest.getBody().getBytes(java.nio.charset.StandardCharsets.UTF_8);
         MediaType jsonMediaType = MediaType.parse("application/json");
-        RequestBody body = RequestBody.create(jsonMediaType, bodyBytes);
+        RequestBody body = RequestBody.create(bodyBytes, jsonMediaType);
         
         // Build request with headers
-        Request.Builder requestBuilder = sign(new Request.Builder())
+        Request.Builder requestBuilder = new Request.Builder()
                 .url(url)
                 .header("User-Agent", "DMTools");
         
@@ -819,15 +875,21 @@ public class BedrockAIClient extends AbstractRestClient implements AI {
             requestBuilder.header(key, genericRequest.getHeaders().get(key));
         }
         
-        // Explicitly set Content-Type to ensure it's exactly "application/json" without charset
-        Request request = requestBuilder
-                .removeHeader("Content-Type")  // Remove any existing Content-Type
-                .header("Content-Type", "application/json")  // Set exact Content-Type
-                .post(body)
-                .build();
+        // Set Content-Type exactly as "application/json" without charset
+        requestBuilder
+                .removeHeader("Content-Type")
+                .header("Content-Type", "application/json")
+                .post(body);
+        
+        // Sign the request using authentication strategy
+        // For Bearer Token, this adds Authorization header
+        // For IAM Keys/Default Credentials, this signs with AWS Signature V4
+        String authType = authenticationStrategy.getAuthenticationType();
+        logger.info("Signing request with authentication type: {}", authType);
+        Request request = authenticationStrategy.signRequest(requestBuilder, url, genericRequest.getBody(), region, customHeaders);
         
         long startTime = System.currentTimeMillis();
-        logger.debug("POST request starting for URL: {} (attempt: {})", url, 1);
+        logger.debug("POST request starting for URL: {} (attempt: {}, auth: {})", url, 1, authType);
         
         try (Response response = getClient().newCall(request).execute()) {
             long responseTime = System.currentTimeMillis() - startTime;
