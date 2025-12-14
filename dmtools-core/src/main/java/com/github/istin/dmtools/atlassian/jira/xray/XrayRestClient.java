@@ -9,6 +9,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * REST client for X-ray Cloud API communication.
@@ -397,15 +399,15 @@ public class XrayRestClient extends AbstractRestClient {
      * @return JSONObject with results array and pageInfo, or null if error
      * @throws IOException if API call fails
      */
-    private JSONObject getTestsByJQLGraphQLWithPagination(String jqlQuery, int limit, String after) throws IOException {
+    private JSONObject getTestsByJQLGraphQLWithPagination(String jqlQuery, int limit) throws IOException {
         // GraphQL query to get all tests matching JQL with steps and preconditions
         // Escape quotes in JQL query for GraphQL
+        // Note: Xray GraphQL API doesn't support 'after' parameter for getTests
         String escapedJQL = jqlQuery.replace("\"", "\\\"");
         
-        String afterParam = after != null ? String.format(", after: \"%s\"", after.replace("\"", "\\\"")) : "";
         String query = String.format(
             "query { " +
-            "  getTests(jql: \"%s\", limit: %d%s) { " +
+            "  getTests(jql: \"%s\", limit: %d) { " +
             "    results { " +
             "      issueId " +
             "      projectId " +
@@ -440,13 +442,9 @@ public class XrayRestClient extends AbstractRestClient {
             "        } " +
             "      } " +
             "    } " +
-            "    pageInfo { " +
-            "      hasNextPage " +
-            "      endCursor " +
-            "    } " +
             "  } " +
             "}",
-            escapedJQL, limit, afterParam
+            escapedJQL, limit
         );
 
         try {
@@ -484,47 +482,81 @@ public class XrayRestClient extends AbstractRestClient {
      * Gets all test details with steps and preconditions using X-ray GraphQL API by JQL query.
      * Automatically handles pagination to fetch all results.
      * 
+     * Note: Xray GraphQL API doesn't support cursor-based pagination (after parameter) for getTests.
+     * This method uses a workaround: it makes multiple requests with modified JQL queries
+     * to exclude already fetched keys, effectively implementing pagination.
+     * 
      * @param jqlQuery JQL query string (e.g., "project = TP AND issuetype = Test")
      * @param limit Maximum number of results per page (1-100, default 100)
-     * @param after Cursor for pagination (null for first page)
+     * @param after Not used (Xray doesn't support after parameter) - kept for API compatibility
      * @return JSONArray of test details including steps and preconditions, or empty array if none found
      * @throws IOException if API call fails
      */
     public JSONArray getTestsByJQLGraphQL(String jqlQuery, int limit, String after) throws IOException {
         JSONArray allResults = new JSONArray();
-        String currentCursor = after;
         int pageLimit = Math.min(100, Math.max(1, limit)); // Ensure limit is between 1 and 100
+        Set<String> fetchedKeys = new HashSet<>();
+        int maxIterations = 1000; // Safety limit to prevent infinite loops
+        int iteration = 0;
         
-        do {
-            JSONObject pageData = getTestsByJQLGraphQLWithPagination(jqlQuery, pageLimit, currentCursor);
+        while (iteration < maxIterations) {
+            iteration++;
+            
+            // Build JQL query excluding already fetched keys
+            String currentJQL = jqlQuery;
+            if (!fetchedKeys.isEmpty()) {
+                // Add exclusion for already fetched keys (keys need to be quoted in JQL)
+                StringBuilder excludeKeysBuilder = new StringBuilder();
+                boolean first = true;
+                for (String key : fetchedKeys) {
+                    if (!first) {
+                        excludeKeysBuilder.append(", ");
+                    }
+                    excludeKeysBuilder.append("\"").append(key).append("\"");
+                    first = false;
+                }
+                currentJQL = jqlQuery + " AND key NOT IN (" + excludeKeysBuilder.toString() + ")";
+            }
+            
+            JSONObject pageData = getTestsByJQLGraphQLWithPagination(currentJQL, pageLimit);
             if (pageData == null) {
                 break;
             }
             
             // Extract results from this page
+            JSONArray pageResults = null;
             if (pageData.has("results")) {
-                JSONArray pageResults = pageData.getJSONArray("results");
+                pageResults = pageData.getJSONArray("results");
+                int newResultsCount = 0;
                 for (int i = 0; i < pageResults.length(); i++) {
-                    allResults.put(pageResults.getJSONObject(i));
+                    JSONObject result = pageResults.getJSONObject(i);
+                    if (result.has("jira")) {
+                        JSONObject jira = result.getJSONObject("jira");
+                        if (jira.has("key")) {
+                            String key = jira.getString("key");
+                            if (!fetchedKeys.contains(key)) {
+                                allResults.put(result);
+                                fetchedKeys.add(key);
+                                newResultsCount++;
+                            }
+                        }
+                    }
                 }
-                logger.debug("Fetched {} tests from Xray (total so far: {})", pageResults.length(), allResults.length());
-            }
-            
-            // Check if there are more pages
-            boolean hasNextPage = false;
-            if (pageData.has("pageInfo")) {
-                JSONObject pageInfo = pageData.getJSONObject("pageInfo");
-                hasNextPage = pageInfo.optBoolean("hasNextPage", false);
-                if (hasNextPage) {
-                    currentCursor = pageInfo.optString("endCursor", null);
+                logger.debug("Fetched {} new tests from Xray (total so far: {})", newResultsCount, allResults.length());
+                
+                // If we got fewer results than requested, or no new results, this is the last page
+                if (pageResults.length() < pageLimit || newResultsCount == 0) {
+                    break;
                 }
-            }
-            
-            if (!hasNextPage) {
+            } else {
+                // No results field, we're done
                 break;
             }
-            
-        } while (currentCursor != null && !currentCursor.isEmpty());
+        }
+        
+        if (iteration >= maxIterations) {
+            logger.warn("Reached max iterations ({}) for pagination, stopping to prevent infinite loop", maxIterations);
+        }
         
         logger.debug("GraphQL returned total {} tests for JQL query: {}", allResults.length(), jqlQuery);
         return allResults;
