@@ -112,8 +112,8 @@ For complete OAuth2 setup instructions including:
 📖 **See the comprehensive guide**: [OAUTH_SETUP.md](OAUTH_SETUP.md)
 
 ### Live Application
-- **Production**: https://dmtools-431977789017.us-central1.run.app
-- **API Documentation**: https://dmtools-431977789017.us-central1.run.app/swagger-ui/index.html
+- **Production**: https://ai-native.cloud
+- **API Documentation**: https://ai-native.cloud/swagger-ui/index.html
 
 ---
 
