@@ -422,7 +422,13 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     String currentFieldValue = ticket.getFieldValueAsString(fieldCode);
                     
                     if (expertParams.getOperationType() == Params.OperationType.Append) {
-                        trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, currentFieldValue + "\n\n" + response));
+                        String newValue;
+                        if (currentFieldValue == null || currentFieldValue.trim().isEmpty()) {
+                            newValue = response;
+                        } else {
+                            newValue = currentFieldValue + "\n\n" + response;
+                        }
+                        trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, newValue));
                     } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
                         trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, response));
                     }

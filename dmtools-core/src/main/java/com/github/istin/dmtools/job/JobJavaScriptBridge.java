@@ -307,6 +307,7 @@ public class JobJavaScriptBridge {
             Map<String, Object> toolSchema = getToolSchema(toolName);
             
             // Convert ArrayList to String[] for MCP tools that expect array parameters
+            // But keep as List<String> for parameters that require List (e.g., mermaid_index_generate patterns)
             Map<String, Object> convertedArgsMap = new HashMap<>();
             for (Map.Entry<String, Object> entry : argsMap.entrySet()) {
                 Object value = entry.getValue();
@@ -314,31 +315,45 @@ public class JobJavaScriptBridge {
                     @SuppressWarnings("unchecked")
                     ArrayList<Object> list = (ArrayList<Object>) value;
                     
-                    // Check if parameter is expected to be an array based on schema
-                    boolean isArrayParameter = isArrayParameter(toolSchema, entry.getKey());
+                    // Check if this parameter should be kept as List<String> instead of String[]
+                    // This is needed for tools like mermaid_index_generate that expect List<String>
+                    boolean shouldKeepAsList = shouldKeepAsList(toolName, entry.getKey());
                     
-                    if (isArrayParameter) {
-                        // Convert ArrayList to String[] for array parameters
-                        String[] array = new String[list.size()];
-                        for (int i = 0; i < list.size(); i++) {
-                            Object item = list.get(i);
-                            array[i] = item != null ? item.toString() : null;
+                    if (shouldKeepAsList) {
+                        // Convert to List<String> and keep as List
+                        List<String> stringList = new ArrayList<>();
+                        for (Object item : list) {
+                            stringList.add(item != null ? item.toString() : null);
                         }
-                        convertedArgsMap.put(entry.getKey(), array);
-                        logger.debug("Converted ArrayList to String[] for parameter {}: {} elements", entry.getKey(), array.length);
-                    } else if (list.size() == 1 && list.get(0) instanceof String) {
-                        // Single string element in ArrayList for non-array parameter - extract as string
-                        convertedArgsMap.put(entry.getKey(), list.get(0));
-                        logger.debug("Extracted single string from ArrayList for parameter {}: {}", entry.getKey(), list.get(0));
+                        convertedArgsMap.put(entry.getKey(), stringList);
+                        logger.debug("Kept ArrayList as List<String> for parameter {}: {} elements", entry.getKey(), stringList.size());
                     } else {
-                        // Multiple elements or non-string - convert to array anyway
-                        String[] array = new String[list.size()];
-                        for (int i = 0; i < list.size(); i++) {
-                            Object item = list.get(i);
-                            array[i] = item != null ? item.toString() : null;
+                        // Check if parameter is expected to be an array based on schema
+                        boolean isArrayParameter = isArrayParameter(toolSchema, entry.getKey());
+                        
+                        if (isArrayParameter) {
+                            // Convert ArrayList to String[] for array parameters
+                            String[] array = new String[list.size()];
+                            for (int i = 0; i < list.size(); i++) {
+                                Object item = list.get(i);
+                                array[i] = item != null ? item.toString() : null;
+                            }
+                            convertedArgsMap.put(entry.getKey(), array);
+                            logger.debug("Converted ArrayList to String[] for parameter {}: {} elements", entry.getKey(), array.length);
+                        } else if (list.size() == 1 && list.get(0) instanceof String) {
+                            // Single string element in ArrayList for non-array parameter - extract as string
+                            convertedArgsMap.put(entry.getKey(), list.get(0));
+                            logger.debug("Extracted single string from ArrayList for parameter {}: {}", entry.getKey(), list.get(0));
+                        } else {
+                            // Multiple elements or non-string - convert to array anyway
+                            String[] array = new String[list.size()];
+                            for (int i = 0; i < list.size(); i++) {
+                                Object item = list.get(i);
+                                array[i] = item != null ? item.toString() : null;
+                            }
+                            convertedArgsMap.put(entry.getKey(), array);
+                            logger.debug("Converted ArrayList to String[] for parameter {}: {} elements (fallback)", entry.getKey(), array.length);
                         }
-                        convertedArgsMap.put(entry.getKey(), array);
-                        logger.debug("Converted ArrayList to String[] for parameter {}: {} elements (fallback)", entry.getKey(), array.length);
                     }
                 } else {
                     convertedArgsMap.put(entry.getKey(), value);
@@ -438,6 +453,19 @@ public class JobJavaScriptBridge {
         
         String type = (String) paramSchema.get("type");
         return "array".equals(type);
+    }
+
+    /**
+     * Check if a parameter should be kept as List<String> instead of converted to String[]
+     * This is needed for tools that have List<String> parameters in their method signatures
+     */
+    private boolean shouldKeepAsList(String toolName, String paramName) {
+        // Mermaid index tools expect List<String> for pattern parameters
+        if (toolName != null && toolName.contains("mermaid") && 
+            (paramName.equals("include_patterns") || paramName.equals("exclude_patterns"))) {
+            return true;
+        }
+        return false;
     }
 
     /**
