@@ -53,6 +53,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     @Setter
     public static class TeammateParams extends JobTrackerParams<RequestDecompositionAgent.Result> {
 
+        public static final String SYSTEM_REQUEST_COMMENT_ALIAS = "systemRequestCommentAlias";
+
         @SerializedName("hooksAsContext")
         private String[] hooksAsContext;
 
@@ -64,6 +66,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
         @SerializedName("indexes")
         private IndexConfig[] indexes;
+
+        @SerializedName(SYSTEM_REQUEST_COMMENT_ALIAS)
+        private String systemRequestCommentAlias;
 
     }
 
@@ -217,6 +222,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         String initiator = expertParams.getInitiator();
         String inputJQL = expertParams.getInputJql();
         String fieldName = expertParams.getFieldName();
+        String systemRequestCommentAlias = expertParams.getSystemRequestCommentAlias();
 
         // Use injected UriToObjectFactory to create URI processing sources
         List<? extends UriToObject> uriProcessingSources;
@@ -409,6 +415,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
                 .withJobContext(expertParams, ticket, response)
                 .with(TrackerParams.INITIATOR, initiator)
+                .with("systemRequest", systemRequestCommentAlias)
                 .execute();
             if (expertParams.isAttachResponseAsFile()) {
                 attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
@@ -434,10 +441,19 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     }
                     
                     if (initiator != null && !initiator.isEmpty()) {
-                        trackerClient.postComment(ticket.getTicketKey(), trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.");
+                        String comment = trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.";
+                        if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                            comment = trackerClient.tag(initiator) + ", there is AI response in '"+ fieldName + "' on your request: \n"+
+                                    "System Request: " + systemRequestCommentAlias;
+                        }
+                        trackerClient.postComment(ticket.getTicketKey(), comment);
                     }
                 } else {
-                    trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(initiator) + ", \n\nAI Response is: \n" + response);
+                    String comment = trackerClient.tag(initiator) + ", \n\nAI Response is: \n" + response;
+                    if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                        comment = trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n\nAI Response is: \n" + response;
+                    }
+                    trackerClient.postCommentIfNotExists(ticket.getTicketKey(), comment);
                 }
             } else {
                 logger.info("Output type is 'none', skipping publishing results for ticket {}", ticket.getKey());
