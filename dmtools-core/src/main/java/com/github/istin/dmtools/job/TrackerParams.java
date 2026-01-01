@@ -15,12 +15,16 @@ public class TrackerParams {
 
     public static final String INPUT_JQL = "inputJql";
     public static final String INITIATOR = "initiator";
+    public static final String TARGET_PROJECT = "targetProject";
 
     @SerializedName(INPUT_JQL)
     private String inputJql;
 
     @SerializedName(INITIATOR)
     private String initiator;
+
+    @SerializedName(TARGET_PROJECT)
+    private String targetProject;
 
     public static final String METADATA = "metadata";
     public static final String OPERATION_TYPE = "operationType";

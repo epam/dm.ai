@@ -257,16 +257,18 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         } else if (outputType.equals(TrackerParams.OutputType.creation)) {
             String newTestCaseRelationship = resolveRelationshipForNew(params);
             for (TestCaseGeneratorAgent.TestCase testCase : newTestCases) {
-                // Get project code: for ADO use getProject(), for Jira use key.split("-")[0]
-                String projectCode;
-                if (mainTicket instanceof WorkItem) {
-                    projectCode = ((WorkItem) mainTicket).getProject();
-                    if (projectCode == null || projectCode.isEmpty()) {
-                        throw new IOException("Unable to determine project from ADO work item " + key);
+                // Get project code: use targetProject if provided, otherwise extract from mainTicket
+                String projectCode = params.getTargetProject();
+                if (!isNotBlank(projectCode)) {
+                    if (mainTicket instanceof WorkItem) {
+                        projectCode = ((WorkItem) mainTicket).getProject();
+                        if (projectCode == null || projectCode.isEmpty()) {
+                            throw new IOException("Unable to determine project from ADO work item " + key);
+                        }
+                    } else {
+                        // Jira format: PROJ-123 -> PROJ
+                        projectCode = key.split("-")[0];
                     }
-                } else {
-                    // Jira format: PROJ-123 -> PROJ
-                    projectCode = key.split("-")[0];
                 }
                 String description = testCase.getDescription();
                 if (params.isConvertToJiraMarkdown()) {
@@ -726,6 +728,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         try {
             paramsJson.put("testCaseIssueType", params.getTestCaseIssueType());
             paramsJson.put("testCasesPriorities", params.getTestCasesPriorities());
+            if (params.getTargetProject() != null) {
+                paramsJson.put("targetProject", params.getTargetProject());
+            }
             if (params.getInputJql() != null) {
                 paramsJson.put("inputJql", params.getInputJql());
             }
