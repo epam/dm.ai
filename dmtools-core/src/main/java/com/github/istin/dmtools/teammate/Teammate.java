@@ -218,10 +218,11 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     @Override
     protected List<ResultItem> runJobImpl(TeammateParams expertParams) throws Exception {
-        ExpertParams.OutputType outputType = expertParams.getOutputType();
-        if (outputType == null) {
-            outputType = ExpertParams.OutputType.comment;
+        ExpertParams.OutputType tempOutputType = expertParams.getOutputType();
+        if (tempOutputType == null) {
+            tempOutputType = ExpertParams.OutputType.comment;
         }
+        final ExpertParams.OutputType outputType = tempOutputType;
         String initiator = expertParams.getInitiator();
         String inputJQL = expertParams.getInputJql();
         String fieldName = expertParams.getFieldName();

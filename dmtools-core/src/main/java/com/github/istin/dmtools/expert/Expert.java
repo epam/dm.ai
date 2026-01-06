@@ -179,10 +179,11 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
         String systemRequest = expertParams.getSystemRequest();
         String systemRequestCommentAlias = expertParams.getSystemRequestCommentAlias();
         String[] confluencePages = expertParams.getConfluencePages();
-        TrackerParams.OutputType outputType = expertParams.getOutputType();
-        if (outputType == null) {
-            outputType = TrackerParams.OutputType.comment;
+        TrackerParams.OutputType tempOutputType = expertParams.getOutputType();
+        if (tempOutputType == null) {
+            tempOutputType = TrackerParams.OutputType.comment;
         }
+        final TrackerParams.OutputType outputType = tempOutputType;
         String initiator = expertParams.getInitiator();
         String inputJQL = expertParams.getInputJql();
         String fieldName = expertParams.getFieldName();
