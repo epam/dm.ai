@@ -1,6 +1,7 @@
 package com.github.istin.dmtools.atlassian.jira.xray;
 
 import com.github.istin.dmtools.common.networking.GenericRequest;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import okhttp3.*;
 import org.apache.logging.log4j.LogManager;
@@ -50,7 +51,26 @@ public class XrayRestClient extends AbstractRestClient {
         super(basePath, "");
         this.clientId = clientId;
         this.clientSecret = clientSecret;
-        setCacheGetRequestsEnabled(false); // Disable caching for X-ray API calls
+        
+        // Read cache configuration from properties (default: false for both GET and POST)
+        PropertyReader propertyReader = new PropertyReader();
+        boolean cacheGetRequestsEnabled = propertyReader.isXrayCacheGetRequestsEnabled();
+        boolean cachePostRequestsEnabled = propertyReader.isXrayCachePostRequestsEnabled();
+        
+        setCacheGetRequestsEnabled(cacheGetRequestsEnabled);
+        setCachePostRequestsEnabled(cachePostRequestsEnabled);
+        
+        if (cacheGetRequestsEnabled) {
+            logger.info("X-ray GET request caching is enabled (via XRAY_CACHE_GET_REQUESTS_ENABLED property)");
+        } else {
+            logger.debug("X-ray GET request caching is disabled (default)");
+        }
+        
+        if (cachePostRequestsEnabled) {
+            logger.info("X-ray POST/GraphQL request caching is enabled (via XRAY_CACHE_POST_REQUESTS_ENABLED property)");
+        } else {
+            logger.debug("X-ray POST/GraphQL request caching is disabled (default)");
+        }
     }
 
     @Override
@@ -206,6 +226,18 @@ public class XrayRestClient extends AbstractRestClient {
      * @throws IOException if request fails
      */
     public String executeGraphQL(String query) throws IOException {
+        return executeGraphQL(query, false);
+    }
+
+    /**
+     * Executes a GraphQL query against X-ray API.
+     * 
+     * @param query GraphQL query string
+     * @param ignoreCache If true, bypass cache for this request
+     * @return Response body as string
+     * @throws IOException if request fails
+     */
+    public String executeGraphQL(String query, boolean ignoreCache) throws IOException {
         // Ensure we have a valid token
         getAccessToken();
         
@@ -230,6 +262,7 @@ public class XrayRestClient extends AbstractRestClient {
         
         GenericRequest request = new GenericRequest(this, graphqlUrl);
         request.setBody(requestBody.toString());
+        request.setIgnoreCache(ignoreCache);
         
         // Retry logic for 503 errors
         int maxRetries = 3;
@@ -531,24 +564,64 @@ public class XrayRestClient extends AbstractRestClient {
             if (pageData.has("results")) {
                 pageResults = pageData.getJSONArray("results");
                 
+                // Xray GraphQL API returns results in DESC order despite ORDER BY key ASC
+                // Reverse the array to get ASC order for proper pagination
+                if (pageResults.length() > 1) {
+                    JSONObject firstResult = pageResults.getJSONObject(0);
+                    JSONObject lastResult = pageResults.getJSONObject(pageResults.length() - 1);
+                    String firstKeyBeforeReverse = null;
+                    String lastKeyBeforeReverse = null;
+                    if (firstResult.has("jira") && firstResult.getJSONObject("jira").has("key")) {
+                        firstKeyBeforeReverse = firstResult.getJSONObject("jira").getString("key");
+                    }
+                    if (lastResult.has("jira") && lastResult.getJSONObject("jira").has("key")) {
+                        lastKeyBeforeReverse = lastResult.getJSONObject("jira").getString("key");
+                    }
+                    
+                    // If results are in DESC order (first > last), reverse the array
+                    if (firstKeyBeforeReverse != null && lastKeyBeforeReverse != null && firstKeyBeforeReverse.compareTo(lastKeyBeforeReverse) > 0) {
+                        logger.debug("Reversing results array (Xray returns DESC order despite ORDER BY ASC). Before reverse - First: {}, Last: {}", firstKeyBeforeReverse, lastKeyBeforeReverse);
+                        JSONArray reversedResults = new JSONArray();
+                        for (int i = pageResults.length() - 1; i >= 0; i--) {
+                            reversedResults.put(pageResults.getJSONObject(i));
+                        }
+                        pageResults = reversedResults;
+                    }
+                }
+                
                 // Add all results to the collection
                 for (int i = 0; i < pageResults.length(); i++) {
                     allResults.put(pageResults.getJSONObject(i));
                 }
                 
                 int fetchedCount = pageResults.length();
-                logger.debug("Fetched {} tests from Xray (total so far: {})", fetchedCount, allResults.length());
                 
-                // Extract last key from this batch for next iteration
+                // Extract first and last keys for debugging and pagination
+                String firstKey = null;
+                String extractedLastKey = null;
                 if (fetchedCount > 0) {
+                    // Get first key (after potential reversal)
+                    JSONObject firstResult = pageResults.getJSONObject(0);
+                    if (firstResult.has("jira")) {
+                        JSONObject jira = firstResult.getJSONObject("jira");
+                        if (jira.has("key")) {
+                            firstKey = jira.getString("key");
+                        }
+                    }
+                    
+                    // Extract last key from this batch for next iteration (after potential reversal)
                     JSONObject lastResult = pageResults.getJSONObject(fetchedCount - 1);
                     if (lastResult.has("jira")) {
                         JSONObject jira = lastResult.getJSONObject("jira");
                         if (jira.has("key")) {
-                            lastKey = jira.getString("key");
+                            extractedLastKey = jira.getString("key");
+                            lastKey = extractedLastKey;
                         }
                     }
                 }
+                
+                logger.debug("Fetched {} tests from Xray (total so far: {}). First key: {}, Last key: {}, Next query will use: key > \"{}\"", 
+                        fetchedCount, allResults.length(), firstKey, extractedLastKey, lastKey);
                 
                 // If we got fewer results than requested, this is the last page
                 if (fetchedCount < pageLimit) {

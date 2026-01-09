@@ -287,6 +287,22 @@ public class PropertyReader {
 		return getValue("XRAY_BASE_PATH");
 	}
 
+	public boolean isXrayCachePostRequestsEnabled() {
+		String value = getValue("XRAY_CACHE_POST_REQUESTS_ENABLED");
+		if (value == null) {
+			return false;
+		}
+		return Boolean.parseBoolean(value);
+	}
+
+	public boolean isXrayCacheGetRequestsEnabled() {
+		String value = getValue("XRAY_CACHE_GET_REQUESTS_ENABLED");
+		if (value == null) {
+			return false;
+		}
+		return Boolean.parseBoolean(value);
+	}
+
 	public Long getSleepTimeRequest() {
 		String value = getValue("SLEEP_TIME_REQUEST");
 		if (value == null || value.isEmpty()) {

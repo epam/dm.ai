@@ -348,16 +348,19 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 if (testCasesCustomFields != null && testCasesCustomFields.length > 0) {
                     JSONObject fieldsJson = ticket.getFieldsAsJSON();
                     for (String customFieldName : testCasesCustomFields) {
-                        // Try standard field access first
-                        String fieldValue = ticket.getFieldValueAsString(customFieldName);
-                        if (fieldValue != null && !fieldValue.trim().isEmpty()) {
-                            customFields.put(customFieldName, fieldValue);
-                        } else if (fieldsJson != null && fieldsJson.has(customFieldName)) {
-                            // For complex fields like JSONArray (xrayTestSteps, xrayPreconditions)
-                            // extract directly from fields JSONObject
+                        // Check if field exists in JSON first
+                        if (fieldsJson != null && fieldsJson.has(customFieldName)) {
+                            // Extract directly from fields JSONObject to preserve type
+                            // (works for String, JSONArray, JSONObject - xrayDataset, xrayTestSteps, xrayPreconditions, xrayGherkin)
                             Object fieldObj = fieldsJson.get(customFieldName);
-                            if (fieldObj != null) {
+                            if (fieldObj != null && !JSONObject.NULL.equals(fieldObj)) {
                                 customFields.put(customFieldName, fieldObj);
+                            }
+                        } else {
+                            // Fallback: try standard field access for simple string fields
+                            String fieldValue = ticket.getFieldValueAsString(customFieldName);
+                            if (fieldValue != null && !fieldValue.trim().isEmpty()) {
+                                customFields.put(customFieldName, fieldValue);
                             }
                         }
                     }
