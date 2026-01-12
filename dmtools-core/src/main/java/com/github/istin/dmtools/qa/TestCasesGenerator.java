@@ -278,7 +278,6 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 if (params.isConvertToJiraMarkdown()) {
                     description = StringUtils.convertToMarkdown(description);
                 }
-                
                 // Create FieldsInitializer with tracker-specific field formats
                 final boolean isAdo = trackerClient instanceof AzureDevOpsClient;
                 final JSONObject customFields = testCase.getCustomFields() != null ? testCase.getCustomFields() : new JSONObject();
@@ -304,7 +303,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                         }
                         
                         // Set custom fields from customFields object
-                        if (customFields != null && customFields.length() > 0) {
+                        if (!customFields.isEmpty()) {
                             for (String fieldKey : customFields.keySet()) {
                                 Object fieldValue = customFields.get(fieldKey);
                                 if (fieldValue != null) {

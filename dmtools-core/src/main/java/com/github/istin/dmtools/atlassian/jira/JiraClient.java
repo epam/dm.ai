@@ -1013,6 +1013,14 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
         JSONObject jsonObject = new JSONObject();
         Fields fields = new Fields();
+
+        if (fieldsInitializer != null) {
+            fieldsInitializer.init(fields);
+        }
+
+        // Resolve field names to custom field IDs before creating the ticket
+        resolveFieldsForProject(fields, project);
+
         fields.set("project", new JSONObject().put("key", project));
         fields.set("summary", summary);
 
@@ -1022,22 +1030,46 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         value.set("name", issueType);
         fields.set(Fields.ISSUETYPE, value.getJSONObject());
 
-        if (fieldsInitializer != null) {
-            fieldsInitializer.init(fields);
-        }
+
 
         jsonObject.put("fields", fields.getJSONObject());
 
         jiraRequest.setBody(jsonObject.toString());
         String post = jiraRequest.post();
-        
+
         // Check for errors in the response before extracting key
         JSONObject responseJson = new JSONObject(post);
         checkJiraResponseForErrors(responseJson, "Failed to create ticket");
-        
+
         String key = responseJson.getString("key");
         log(getTicketBrowseUrl(key));
         return post;
+    }
+
+    /**
+     * Resolves field names to custom field IDs in a Fields object for a specific project.
+     * This ensures that user-friendly field names are properly converted to custom field IDs
+     * before ticket creation, similar to how updateField works.
+     *
+     * @param fields The Fields object containing the ticket fields
+     * @param projectKey The Jira project key for field resolution context
+     * @throws IOException if field resolution fails
+     */
+    private void resolveFieldsForProject(Fields fields, String projectKey) throws IOException {
+        JSONObject fieldsJson = fields.getJSONObject();
+        JSONObject resolvedFieldsJson = new JSONObject();
+        log(fieldsJson.toString());
+        // Copy all existing fields to the resolved fields object
+        for (String fieldName : fieldsJson.keySet()) {
+            String customField = resolveFieldNameToCustomFieldId(projectKey, fieldName);
+            if (customField == null) {
+                customField = fieldName;
+            }
+            log(fieldName + " -> " + customField);
+            resolvedFieldsJson.put(customField, fieldsJson.get(fieldName));
+        }
+        log(resolvedFieldsJson.toString());
+        fields.setJO(resolvedFieldsJson);
     }
 
     /**
