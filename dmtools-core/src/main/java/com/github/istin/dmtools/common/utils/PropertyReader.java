@@ -494,6 +494,14 @@ public class PropertyReader {
 		return Integer.parseInt(value);
 	}
 
+	public String[] getDefaultTicketStoryPointsFields() {
+		String value = getValue("DEFAULT_TICKET_STORY_POINTS_FIELDS");
+		if (value == null || value.isEmpty()) {
+			return null;
+		}
+		return value.split(",");
+	}
+
 	public Double getLinesOfCodeDivider() {
 		String value = getValue("LINES_OF_CODE_DIVIDER");
 		if (value == null || value.isEmpty()) {
@@ -957,4 +965,11 @@ public class PropertyReader {
 		return Float.parseFloat(getValue(IMAGE_JPEG_QUALITY, "0.9"));
 	}
 
+    public boolean isCacheManagerLoggingEnabled() {
+		String value = getValue("CACHE_MANAGER_LOGGING_ENABLED");
+		if (value == null) {
+			return false;
+		}
+		return Boolean.parseBoolean(value);
+    }
 }

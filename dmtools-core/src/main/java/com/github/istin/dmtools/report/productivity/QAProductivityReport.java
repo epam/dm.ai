@@ -2,6 +2,7 @@ package com.github.istin.dmtools.report.productivity;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
+import com.github.istin.dmtools.atlassian.jira.model.IssueType;
 import com.github.istin.dmtools.atlassian.jira.utils.ChangelogAssessment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.timeline.Release;
@@ -18,6 +19,7 @@ import org.apache.commons.io.FileUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -50,6 +52,7 @@ public class QAProductivityReport extends AbstractJob<QAProductivityReportParams
         movedToReopened(qaProductivityReportParams, listOfCustomMetrics);
         createdTests(qaProductivityReportParams, listOfCustomMetrics);
         fieldsChanged(qaProductivityReportParams, listOfCustomMetrics);
+        ticketLinksChanged(qaProductivityReportParams, listOfCustomMetrics);
         commentsWritten(qaProductivityReportParams, listOfCustomMetrics);
         ProductivityUtils.vacationDays(listOfCustomMetrics, Employees.getTesters(qaProductivityReportParams.getEmployees()));
 //        numberOfRejectedBugs(qaProductivityReportParams, listOfCustomMetrics);
@@ -57,6 +60,19 @@ public class QAProductivityReport extends AbstractJob<QAProductivityReportParams
     }
 
     //
+
+    protected void ticketLinksChanged(QAProductivityReportParams qaProductivityReportParams, List<Metric> listOfCustomMetrics) {
+        listOfCustomMetrics.add(new Metric("Test Ticket Linked", qaProductivityReportParams.isWeight(), new TicketFieldsChangesRule(Employees.getTesters(qaProductivityReportParams.getEmployees()), new String[]{"link"}, false, false) {
+            @Override
+            public List<KeyTime> check(TrackerClient trackerClient, ITicket ticket) throws Exception {
+                if (IssueType.isTestCase(ticket.getIssueType())) {
+                    return super.check(trackerClient, ticket);
+                } else {
+                    return Collections.emptyList();
+                }
+            }
+        }));
+    }
 
     protected void fieldsChanged(QAProductivityReportParams qaProductivityReportParams, List<Metric> listOfCustomMetrics) {
         listOfCustomMetrics.add(new Metric("Ticket Fields Changed", qaProductivityReportParams.isWeight(), new TicketFieldsChangesRule(Employees.getTesters(qaProductivityReportParams.getEmployees()))));

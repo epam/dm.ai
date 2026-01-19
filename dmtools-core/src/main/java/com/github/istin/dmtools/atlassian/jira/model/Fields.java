@@ -193,6 +193,16 @@ public class Fields extends JSONModel implements TrackerClient.TrackerTicketFiel
         if (IssueType.isBug(getIssueType().getName())) {
             return 1;
         }
-        return getJSONObject().optInt(Fields.STORY_POINTS, new PropertyReader().getDefaultTicketWeightIfNoSPs());
+        PropertyReader propertyReader = new PropertyReader();
+        String[] defaultTicketStoryPointsFields = propertyReader.getDefaultTicketStoryPointsFields();
+        if (defaultTicketStoryPointsFields != null) {
+            for (String field : defaultTicketStoryPointsFields) {
+                int sp = getJSONObject().optInt(field, -1);
+                if (sp != -1) {
+                    return sp;
+                }
+            }
+        }
+        return getJSONObject().optInt(Fields.STORY_POINTS, propertyReader.getDefaultTicketWeightIfNoSPs());
     }
 }

@@ -15,6 +15,15 @@ public interface IAgent<Params, Result> {
     Result run(Params params) throws Exception;
 
     /**
+     * Executes the agent with the given parameters
+     * @param model LLM Model to use
+     * @param params The parameters
+     * @return The result
+     * @throws Exception If an error occurs
+     */
+    Result run(String model, Params params) throws Exception;
+
+    /**
      * Transforms the AI response into the result type
      * @param params The parameters
      * @param response The AI response

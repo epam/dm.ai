@@ -45,7 +45,12 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
     
     @Override
     public Result run(Params params) throws Exception {
-        return executeWithDependencies(params);
+        return run(null, params);
+    }
+
+    @Override
+    public Result run(String model, Params params) throws Exception {
+        return executeWithDependencies(model, params);
     }
     
     /**
@@ -54,7 +59,7 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
      * @return The result
      * @throws Exception If an error occurs
      */
-    protected Result executeWithDependencies(Params params) throws Exception {
+    protected Result executeWithDependencies(String model, Params params) throws Exception {
         PromptContext context = new PromptContext(params);
         
         List<File> files = new ArrayList<>();
@@ -100,7 +105,7 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
                 chunkContext.set("totalChunks", chunks.size());
                 
                 String chunkPrompt = promptTemplateReader.read(promptName, chunkContext);
-                String chunkResponse = ai.chat(chunkPrompt);
+                String chunkResponse = ai.chat(model, chunkPrompt);
                 
                 if (i > 0) {
                     chunkResponses.append("\n\n");
@@ -113,15 +118,15 @@ public abstract class AbstractSimpleAgent<Params, Result> implements IAgent<Para
             chunkContext.set("totalChunks", chunks.size());
 
             String chunkPrompt = promptTemplateReader.read(promptName, chunkContext);
-            response = ai.chat(chunkPrompt);
+            response = ai.chat(model, chunkPrompt);
         } else {
             context.set("chunkIndex", -1);
             String prompt = promptTemplateReader.read(promptName, context);
             if (!files.isEmpty()) {
                 if (files.size() == 1) {
-                    response = ai.chat(null, prompt, files.getFirst());
+                    response = ai.chat(model, prompt, files.getFirst());
                 } else {
-                    response = ai.chat(null, prompt, files);
+                    response = ai.chat(model, prompt, files);
                 }
             } else {
                 response = ai.chat(prompt);

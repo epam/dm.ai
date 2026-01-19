@@ -412,7 +412,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             while (true) {
                 List<Ticket> tickets = searchResults.getIssues();
                 if (tickets == null || tickets.isEmpty()) {
-                    log("No more tickets to process");
+                    //log("No more tickets to process");
                     break;
                 }
                 
@@ -581,7 +581,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
         try {
             String body = jqlSearchRequest.execute();
-            log("Jira search API response received, length: " + body.length());
+            //log("Jira search API response received, length: " + body.length());
             // Log the response structure to debug missing fields
             try {
                 JSONObject jsonResponse = new JSONObject(body);
@@ -1620,31 +1620,31 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         String customFieldId = projectMapping.get(fieldName.toLowerCase());
         
         if (customFieldId != null) {
-            log("Resolved field '" + fieldName + "' to '" + customFieldId + "' for project " + projectKey);
+            //log("Resolved field '" + fieldName + "' to '" + customFieldId + "' for project " + projectKey);
             return customFieldId;
         }
         
         // Fallback: try using the existing getFieldCustomCode method for single field resolution
         // But only if we haven't already cached this as a negative result
         try {
-            log("Attempting fallback field resolution for '" + fieldName + "' in project " + projectKey);
+            //log("Attempting fallback field resolution for '" + fieldName + "' in project " + projectKey);
             String resolvedFieldId = getFieldCustomCode(projectKey, fieldName);
             if (resolvedFieldId != null) {
                 // Cache this mapping for future use
                 projectMapping.put(fieldName.toLowerCase(), resolvedFieldId);
-                log("Resolved and cached field '" + fieldName + "' to '" + resolvedFieldId + "' for project " + projectKey);
+                //log("Resolved and cached field '" + fieldName + "' to '" + resolvedFieldId + "' for project " + projectKey);
                 return resolvedFieldId;
             } else {
                 // Cache negative result to avoid future API calls
                 cacheFieldResolutionAsNotFound(projectKey, fieldName);
             }
         } catch (Exception e) {
-            log("Fallback field resolution failed for '" + fieldName + "': " + e.getMessage());
+            //log("Fallback field resolution failed for '" + fieldName + "': " + e.getMessage());
             // Cache negative result to avoid repeating this failed attempt
             cacheFieldResolutionAsNotFound(projectKey, fieldName);
         }
         
-        log("Could not resolve field '" + fieldName + "' for project " + projectKey);
+        //log("Could not resolve field '" + fieldName + "' for project " + projectKey);
         return null;
     }
     
@@ -1681,14 +1681,14 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 boolean alreadyExists = resolvedFields.stream()
                     .anyMatch(existing -> existing.equalsIgnoreCase(field));
                 if (alreadyExists) {
-                    log("Field '" + field + "' already exists in resolved fields (case-insensitive), skipping");
+                    //log("Field '" + field + "' already exists in resolved fields (case-insensitive), skipping");
                     continue;
                 }
 
                 // For system fields, keep them as-is AND also try to resolve to custom fields with same name
                 if (SYSTEM_FIELDS.contains(fieldName)) {
                     resolvedFields.add(field);
-                    log("Field '" + field + "' is a system field, keeping original name");
+                    //log("Field '" + field + "' is a system field, keeping original name");
 
                     // Also try to find a custom field with the same name (case-insensitive)
                     String customFieldId = resolveFieldNameToCustomFieldId(projectKey, field);
@@ -1698,12 +1698,12 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                             .anyMatch(existing -> existing.equalsIgnoreCase(customFieldId));
                         if (!customAlreadyExists) {
                             resolvedFields.add(customFieldId);
-                            log("Also found custom field '" + customFieldId + "' for system field '" + field + "'");
+                            //log("Also found custom field '" + customFieldId + "' for system field '" + field + "'");
                         }
                     }
                 } else {
                     // For non-system fields, try to resolve to custom field
-                    log("Attempting to resolve field '" + field + "' for project '" + projectKey + "'");
+                    //log("Attempting to resolve field '" + field + "' for project '" + projectKey + "'");
                     String resolvedField = resolveFieldNameToCustomFieldId(projectKey, field);
                     if (resolvedField != null) {
                         // Check if resolved field already exists (case-insensitive)
@@ -1711,23 +1711,23 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                             .anyMatch(existing -> existing.equalsIgnoreCase(resolvedField));
                         if (!resolvedAlreadyExists) {
                             resolvedFields.add(resolvedField);
-                            log("Successfully resolved field '" + field + "' to '" + resolvedField + "'");
+                            //log("Successfully resolved field '" + field + "' to '" + resolvedField + "'");
                         } else {
-                            log("Resolved field '" + resolvedField + "' already exists, skipping");
+                            //log("Resolved field '" + resolvedField + "' already exists, skipping");
                         }
                     } else {
                         resolvedFields.add(field);
-                        log("Field '" + field + "' not found in custom fields, keeping original name");
+                        //log("Field '" + field + "' not found in custom fields, keeping original name");
                     }
                 }
             } catch (Exception e) {
-                log("Error resolving field '" + field + "' for project " + projectKey + ": " + e.getMessage() + ". Using original name.");
+                //log("Error resolving field '" + field + "' for project " + projectKey + ": " + e.getMessage() + ". Using original name.");
                 // Field is already added, keep it as-is
             }
         }
 
         if (logger != null) {
-            logger.debug("Resolved {} field names for project {} -> {} total fields", fields.length, projectKey, resolvedFields.size());
+            //logger.debug("Resolved {} field names for project {} -> {} total fields", fields.length, projectKey, resolvedFields.size());
         }
 
         return resolvedFields;
@@ -1830,7 +1830,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         }
 
         if (logger != null) {
-            logger.debug("Could not extract project key from JQL: {}", jql);
+            //logger.debug("Could not extract project key from JQL: {}", jql);
         }
         return ""; // Return empty string if no project found
     }
@@ -1847,26 +1847,26 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             return Arrays.asList(fields);
         }
 
-        log("Attempting to resolve fields for search. JQL: " + searchQueryJQL);
+        //log("Attempting to resolve fields for search. JQL: " + searchQueryJQL);
 
         // Try to extract project key from JQL query
         String projectKey = extractProjectKeyFromJQL(searchQueryJQL);
 
         if (projectKey.isEmpty()) {
             // If we can't determine project, return original fields
-            log("Could not extract project key from JQL for field resolution: " + searchQueryJQL);
+            //log("Could not extract project key from JQL for field resolution: " + searchQueryJQL);
             return Arrays.asList(fields);
         }
 
-        log("Extracted project key '" + projectKey + "' from JQL. Resolving " + fields.length + " fields.");
+        //log("Extracted project key '" + projectKey + "' from JQL. Resolving " + fields.length + " fields.");
 
         // Resolve field names using the extracted project key
         List<String> resolvedFields = resolveFieldNames(fields, projectKey);
 
-        log("Field resolution completed. Original fields: " + String.join(", ", fields) +
-            " -> Resolved fields: " + String.join(", ", resolvedFields));
+        //log("Field resolution completed. Original fields: " + String.join(", ", fields) +
+        //    " -> Resolved fields: " + String.join(", ", resolvedFields));
 
-        log("Final fields being sent to Jira API: " + String.join(",", resolvedFields));
+        //log("Final fields being sent to Jira API: " + String.join(",", resolvedFields));
 
         return resolvedFields;
     }

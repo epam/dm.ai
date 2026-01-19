@@ -133,6 +133,9 @@ public class Employees implements IEmployees {
             source = fileConfig.readFile("/employees.json");
         } else {
             source = fileConfig.readFile("/" + file);
+            if (source == null) {
+                source = fileConfig.readFile(file);
+            }
         }
         if (source != null) {
             JSONArray sourceEmployees = new JSONArray(source);
@@ -156,6 +159,9 @@ public class Employees implements IEmployees {
             source = fileConfig.readFile("/aliases.json");
         } else {
             source = fileConfig.readFile("/"+ file.split("\\.")[0]+"_aliases.json");
+            if (source == null) {
+                source = fileConfig.readFile(file.split("\\.")[0]+"_aliases.json");
+            }
         }
         if (source != null) {
             aliases = new JSONObject(source);

@@ -14,7 +14,7 @@ import java.util.function.Supplier;
  */
 public class CacheManager {
     
-    private final Logger logger;
+    private Logger logger;
     
     // In-memory cache for objects with TTL
     private final Map<String, CacheEntry<Object>> memoryCache = new ConcurrentHashMap<>();
@@ -24,14 +24,16 @@ public class CacheManager {
     
     // Default TTL: 24 hours in milliseconds
     private static final long DEFAULT_TTL = 24 * 60 * 60 * 1000L;
-    
+
     /**
      * Constructor for CacheManager
      * 
      * @param logger Logger instance for debug output
      */
     public CacheManager(Logger logger) {
-        this.logger = logger;
+        if (new PropertyReader().isCacheManagerLoggingEnabled()) {
+            this.logger = logger;
+        }
     }
     
 

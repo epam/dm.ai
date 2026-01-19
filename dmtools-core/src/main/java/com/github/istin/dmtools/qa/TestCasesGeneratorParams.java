@@ -31,6 +31,10 @@ public class TestCasesGeneratorParams extends Params {
     public static final String TEST_CASES_CUSTOM_FIELDS = "testCasesCustomFields";
     public static final String CUSTOM_FIELDS_RULES = "customFieldsRules";
     public static final String PREPROCESS_JS_ACTION = "preprocessJSAction";
+    public static final String MODEL_TEST_CASES_CREATION = "modelTestCasesCreation";
+    public static final String MODEL_TEST_CASES_RELATION = "modelTestCasesRelation";
+    public static final String MODEL_TEST_CASE_RELATION = "modelTestCaseRelation";
+    public static final String MODEL_TEST_CASES_DEDUPLICATION = "modelTestCaseDeduplication";
 
     @SerializedName(EXISTING_TEST_CASES_JQL)
     private String existingTestCasesJql;
@@ -67,4 +71,12 @@ public class TestCasesGeneratorParams extends Params {
     @SerializedName(PREPROCESS_JS_ACTION)
     private String preprocessJSAction;
 
+    @SerializedName(MODEL_TEST_CASES_CREATION)
+    private String modelTestCasesCreation;
+    @SerializedName(MODEL_TEST_CASES_RELATION)
+    private String modelTestCasesRelation;
+    @SerializedName(MODEL_TEST_CASE_RELATION)
+    private String modelTestCaseRelation;
+    @SerializedName(MODEL_TEST_CASES_DEDUPLICATION)
+    private String modelTestCaseDeduplication;
 }
