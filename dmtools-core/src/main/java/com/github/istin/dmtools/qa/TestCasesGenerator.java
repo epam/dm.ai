@@ -36,6 +36,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, List<TestCasesGenerator.TestCasesResult>> {
 
@@ -577,20 +580,65 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         int tokenLimit = (systemTokenLimits - storyTokens)/2;
         System.out.println("TESTCASES TOKEN LIMITS: " + tokenLimit);
         List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(listOfAllTestCases, tokenLimit);
-        for (ChunkPreparation.Chunk chunk : chunks) {
-            JSONArray testCaseKeys = relatedTestCasesAgent.run(params.getModelTestCasesRelation(), new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence));
-            //find relevant test case from batch
-            for (int j = 0; j < testCaseKeys.length(); j++) {
-                String testCaseKey = testCaseKeys.getString(j);
-                ITicket testCase = listOfAllTestCases.stream().filter(t -> t.getKey().equals(testCaseKey)).findFirst().orElse(null);
-                if (testCase != null && !finaResults.contains(testCase)) {
-                    boolean isConfirmed = relatedTestCaseAgent.run(params.getModelTestCaseRelation(), new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence));
-                    if (isConfirmed) {
-                        finaResults.add(testCase);
-                        if (isLink) {
-                            boolean isAlreadyLinked = currentlyLinkedTestCases != null && currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
-                            if (!isAlreadyLinked) {
-                                trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
+
+        if (params.isEnableParallelTestCaseCheck()) {
+            ExecutorService executorService = Executors.newFixedThreadPool(params.getParallelTestCaseCheckThreads());
+            try {
+                List<Future<List<ITicket>>> futures = new ArrayList<>();
+
+                for (ChunkPreparation.Chunk chunk : chunks) {
+                    futures.add(executorService.submit(() -> {
+                        List<ITicket> chunkResults = new ArrayList<>();
+                        JSONArray testCaseKeys = relatedTestCasesAgent.run(params.getModelTestCasesRelation(), new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence));
+                        for (int j = 0; j < testCaseKeys.length(); j++) {
+                            String testCaseKey = testCaseKeys.getString(j);
+                            ITicket testCase = listOfAllTestCases.stream().filter(t -> t.getKey().equals(testCaseKey)).findFirst().orElse(null);
+                            if (testCase != null) {
+                                boolean isConfirmed = relatedTestCaseAgent.run(params.getModelTestCaseRelation(), new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence));
+                                if (isConfirmed) {
+                                    chunkResults.add(testCase);
+                                    if (isLink) {
+                                        boolean isAlreadyLinked = currentlyLinkedTestCases != null && currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
+                                        if (!isAlreadyLinked) {
+                                            synchronized (trackerClient) {
+                                                trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return chunkResults;
+                    }));
+                }
+
+                for (Future<List<ITicket>> future : futures) {
+                    List<ITicket> chunkResults = future.get();
+                    for (ITicket result : chunkResults) {
+                        if (!finaResults.contains(result)) {
+                            finaResults.add(result);
+                        }
+                    }
+                }
+            } finally {
+                executorService.shutdown();
+            }
+        } else {
+            for (ChunkPreparation.Chunk chunk : chunks) {
+                JSONArray testCaseKeys = relatedTestCasesAgent.run(params.getModelTestCasesRelation(), new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence));
+                //find relevant test case from batch
+                for (int j = 0; j < testCaseKeys.length(); j++) {
+                    String testCaseKey = testCaseKeys.getString(j);
+                    ITicket testCase = listOfAllTestCases.stream().filter(t -> t.getKey().equals(testCaseKey)).findFirst().orElse(null);
+                    if (testCase != null && !finaResults.contains(testCase)) {
+                        boolean isConfirmed = relatedTestCaseAgent.run(params.getModelTestCaseRelation(), new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence));
+                        if (isConfirmed) {
+                            finaResults.add(testCase);
+                            if (isLink) {
+                                boolean isAlreadyLinked = currentlyLinkedTestCases != null && currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
+                                if (!isAlreadyLinked) {
+                                    trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
+                                }
                             }
                         }
                     }

@@ -35,6 +35,8 @@ public class TestCasesGeneratorParams extends Params {
     public static final String MODEL_TEST_CASES_RELATION = "modelTestCasesRelation";
     public static final String MODEL_TEST_CASE_RELATION = "modelTestCaseRelation";
     public static final String MODEL_TEST_CASES_DEDUPLICATION = "modelTestCaseDeduplication";
+    public static final String ENABLE_PARALLEL_TEST_CASE_CHECK = "enableParallelTestCaseCheck";
+    public static final String PARALLEL_TEST_CASE_CHECK_THREADS = "parallelTestCaseCheckThreads";
 
     @SerializedName(EXISTING_TEST_CASES_JQL)
     private String existingTestCasesJql;
@@ -79,4 +81,9 @@ public class TestCasesGeneratorParams extends Params {
     private String modelTestCaseRelation;
     @SerializedName(MODEL_TEST_CASES_DEDUPLICATION)
     private String modelTestCaseDeduplication;
+
+    @SerializedName(ENABLE_PARALLEL_TEST_CASE_CHECK)
+    private boolean enableParallelTestCaseCheck = false;
+    @SerializedName(PARALLEL_TEST_CASE_CHECK_THREADS)
+    private int parallelTestCaseCheckThreads = 5;
 }

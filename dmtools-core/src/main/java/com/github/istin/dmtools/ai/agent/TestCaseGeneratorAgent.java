@@ -92,39 +92,47 @@ public class TestCaseGeneratorAgent extends AbstractSimpleAgent<TestCaseGenerato
 
         for (int i = 0; i < jsonArray.length(); i++) {
             JSONObject jsonObject = jsonArray.getJSONObject(i);
-            
-            // Handle priority as either string or number (ADO uses numeric priorities)
-            String priority;
-            if (jsonObject.has("priority")) {
-                Object priorityObj = jsonObject.get("priority");
-                if (priorityObj instanceof Number) {
-                    priority = String.valueOf(priorityObj);
-                } else {
-                    priority = jsonObject.getString("priority");
-                }
-            } else {
-                priority = "";
-            }
-            
-            // Extract customFields if present
-            JSONObject customFields = new JSONObject();
-            if (jsonObject.has("customFields") && !jsonObject.isNull("customFields")) {
-                Object customFieldsObj = jsonObject.get("customFields");
-                if (customFieldsObj instanceof JSONObject) {
-                    customFields = jsonObject.getJSONObject("customFields");
-                }
-            }
-            
-            TestCase testCase = new TestCase(
-                    priority,
-                    jsonObject.getString("summary"),
-                    jsonObject.getString("description"),
-                    customFields
-            );
+            TestCase testCase = parseTestCaseFromJson(jsonObject);
             testCases.add(testCase);
         }
 
         return testCases;
+    }
+
+    private TestCase parseTestCaseFromJson(JSONObject jsonObject) {
+        String priority = extractPriority(jsonObject);
+        JSONObject customFields = extractCustomFields(jsonObject);
+
+        return new TestCase(
+                priority,
+                jsonObject.getString("summary"),
+                jsonObject.getString("description"),
+                customFields
+        );
+    }
+
+    private String extractPriority(JSONObject jsonObject) {
+        // Handle priority as either string or number (ADO uses numeric priorities)
+        if (jsonObject.has("priority")) {
+            Object priorityObj = jsonObject.get("priority");
+            if (priorityObj instanceof Number) {
+                return String.valueOf(priorityObj);
+            } else {
+                return jsonObject.getString("priority");
+            }
+        }
+        return "";
+    }
+
+    private JSONObject extractCustomFields(JSONObject jsonObject) {
+        // Extract customFields if present
+        if (jsonObject.has("customFields") && !jsonObject.isNull("customFields")) {
+            Object customFieldsObj = jsonObject.get("customFields");
+            if (customFieldsObj instanceof JSONObject) {
+                return jsonObject.getJSONObject("customFields");
+            }
+        }
+        return new JSONObject();
     }
 
     public static JSONObject createTestCase(String priority, String summary, String description) {

@@ -270,4 +270,169 @@ class TestCaseGeneratorAgentTest {
         assertEquals("P1", result.get(0).getPriority());
         assertEquals("API security test", result.get(0).getSummary());
     }
+
+    @Test
+    void testExtractPriorityWithStringValue() throws Exception {
+        // Arrange
+        JSONObject jsonObject = new JSONObject()
+            .put("priority", "High")
+            .put("summary", "Test")
+            .put("description", "Test description");
+
+        // Act
+        String priority = extractPriorityUsingReflection(jsonObject);
+
+        // Assert
+        assertEquals("High", priority);
+    }
+
+    @Test
+    void testExtractPriorityWithNumericValue() throws Exception {
+        // Arrange
+        JSONObject jsonObject = new JSONObject()
+            .put("priority", 1)
+            .put("summary", "Test")
+            .put("description", "Test description");
+
+        // Act
+        String priority = extractPriorityUsingReflection(jsonObject);
+
+        // Assert
+        assertEquals("1", priority);
+    }
+
+    @Test
+    void testExtractPriorityWithMissingValue() throws Exception {
+        // Arrange
+        JSONObject jsonObject = new JSONObject()
+            .put("summary", "Test")
+            .put("description", "Test description");
+
+        // Act
+        String priority = extractPriorityUsingReflection(jsonObject);
+
+        // Assert
+        assertEquals("", priority);
+    }
+
+    @Test
+    void testExtractCustomFieldsWithData() throws Exception {
+        // Arrange
+        JSONObject customFieldsData = new JSONObject()
+            .put("field1", "value1")
+            .put("field2", "value2");
+
+        JSONObject jsonObject = new JSONObject()
+            .put("priority", "High")
+            .put("summary", "Test")
+            .put("description", "Test description")
+            .put("customFields", customFieldsData);
+
+        // Act
+        JSONObject customFields = extractCustomFieldsUsingReflection(jsonObject);
+
+        // Assert
+        assertNotNull(customFields);
+        assertEquals("value1", customFields.getString("field1"));
+        assertEquals("value2", customFields.getString("field2"));
+    }
+
+    @Test
+    void testExtractCustomFieldsWithoutData() throws Exception {
+        // Arrange
+        JSONObject jsonObject = new JSONObject()
+            .put("priority", "High")
+            .put("summary", "Test")
+            .put("description", "Test description");
+
+        // Act
+        JSONObject customFields = extractCustomFieldsUsingReflection(jsonObject);
+
+        // Assert
+        assertNotNull(customFields);
+        assertEquals(0, customFields.length());
+    }
+
+    @Test
+    void testExtractCustomFieldsWithNullValue() throws Exception {
+        // Arrange
+        JSONObject jsonObject = new JSONObject()
+            .put("priority", "High")
+            .put("summary", "Test")
+            .put("description", "Test description")
+            .put("customFields", JSONObject.NULL);
+
+        // Act
+        JSONObject customFields = extractCustomFieldsUsingReflection(jsonObject);
+
+        // Assert
+        assertNotNull(customFields);
+        assertEquals(0, customFields.length());
+    }
+
+    @Test
+    void testParseTestCaseFromJson() throws Exception {
+        // Arrange
+        JSONObject customFieldsData = new JSONObject()
+            .put("severity", "high")
+            .put("type", "functional");
+
+        JSONObject jsonObject = new JSONObject()
+            .put("priority", 2)
+            .put("summary", "Login functionality test")
+            .put("description", "Test user login with valid credentials")
+            .put("customFields", customFieldsData);
+
+        // Act
+        TestCaseGeneratorAgent.TestCase testCase = parseTestCaseFromJsonUsingReflection(jsonObject);
+
+        // Assert
+        assertNotNull(testCase);
+        assertEquals("2", testCase.getPriority());
+        assertEquals("Login functionality test", testCase.getSummary());
+        assertEquals("Test user login with valid credentials", testCase.getDescription());
+        assertEquals("high", testCase.getCustomFields().getString("severity"));
+        assertEquals("functional", testCase.getCustomFields().getString("type"));
+    }
+
+    @Test
+    void testParseTestCaseFromJsonWithoutCustomFields() throws Exception {
+        // Arrange
+        JSONObject jsonObject = new JSONObject()
+            .put("priority", "Medium")
+            .put("summary", "API endpoint test")
+            .put("description", "Test GET /api/users endpoint");
+
+        // Act
+        TestCaseGeneratorAgent.TestCase testCase = parseTestCaseFromJsonUsingReflection(jsonObject);
+
+        // Assert
+        assertNotNull(testCase);
+        assertEquals("Medium", testCase.getPriority());
+        assertEquals("API endpoint test", testCase.getSummary());
+        assertEquals("Test GET /api/users endpoint", testCase.getDescription());
+        assertEquals(0, testCase.getCustomFields().length());
+    }
+
+    // Helper methods using reflection to access private methods
+    private String extractPriorityUsingReflection(JSONObject jsonObject) throws Exception {
+        java.lang.reflect.Method method = agent.getClass()
+            .getDeclaredMethod("extractPriority", JSONObject.class);
+        method.setAccessible(true);
+        return (String) method.invoke(agent, jsonObject);
+    }
+
+    private JSONObject extractCustomFieldsUsingReflection(JSONObject jsonObject) throws Exception {
+        java.lang.reflect.Method method = agent.getClass()
+            .getDeclaredMethod("extractCustomFields", JSONObject.class);
+        method.setAccessible(true);
+        return (JSONObject) method.invoke(agent, jsonObject);
+    }
+
+    private TestCaseGeneratorAgent.TestCase parseTestCaseFromJsonUsingReflection(JSONObject jsonObject) throws Exception {
+        java.lang.reflect.Method method = agent.getClass()
+            .getDeclaredMethod("parseTestCaseFromJson", JSONObject.class);
+        method.setAccessible(true);
+        return (TestCaseGeneratorAgent.TestCase) method.invoke(agent, jsonObject);
+    }
 }
