@@ -36,9 +36,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 
 public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, List<TestCasesGenerator.TestCasesResult>> {
 
@@ -561,6 +559,129 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         return combinedList.toArray(new String[0]);
     }
 
+    /**
+     * Verifies if a test case is related to the story and optionally links it.
+     * @return the test case if confirmed, null otherwise
+     */
+    private ITicket verifyAndLinkTestCase(
+            ITicket testCase,
+            String ticketKey,
+            String ticketText,
+            boolean isLink,
+            String relationship,
+            List<? extends ITicket> currentlyLinkedTestCases,
+            String extraRelatedTestCaseRulesFromConfluence,
+            TestCasesGeneratorParams params,
+            boolean needSync) throws Exception {
+
+        boolean isConfirmed = relatedTestCaseAgent.run(
+            params.getModelTestCaseRelation(),
+            new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence)
+        );
+
+        if (isConfirmed) {
+            if (isLink) {
+                boolean isAlreadyLinked = currentlyLinkedTestCases != null &&
+                    currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
+                if (!isAlreadyLinked) {
+                    if (needSync) {
+                        synchronized (trackerClient) {
+                            trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
+                        }
+                    } else {
+                        trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
+                    }
+                }
+            }
+            return testCase;
+        }
+        return null;
+    }
+
+    /**
+     * Processes a single chunk to find related test cases and optionally verify them.
+     * This method eliminates code duplication between parallel and sequential processing.
+     */
+    private List<ITicket> processChunk(
+            ChunkPreparation.Chunk chunk,
+            String ticketKey,
+            String ticketText,
+            List<? extends ITicket> listOfAllTestCases,
+            boolean isLink,
+            String relationship,
+            List<? extends ITicket> currentlyLinkedTestCases,
+            String extraRelatedTestCaseRulesFromConfluence,
+            TestCasesGeneratorParams params) throws Exception {
+
+        List<ITicket> chunkResults = new ArrayList<>();
+
+        // Get potential test cases from the chunk
+        JSONArray testCaseKeys = relatedTestCasesAgent.run(
+            params.getModelTestCasesRelation(),
+            new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence)
+        );
+
+        // Prepare list of test cases to verify
+        List<ITicket> testCasesToVerify = new ArrayList<>();
+        for (int j = 0; j < testCaseKeys.length(); j++) {
+            String testCaseKey = testCaseKeys.getString(j);
+            ITicket testCase = listOfAllTestCases.stream()
+                .filter(t -> t.getKey().equals(testCaseKey))
+                .findFirst()
+                .orElse(null);
+            if (testCase != null) {
+                testCasesToVerify.add(testCase);
+            }
+        }
+
+        // Process post-verification either in parallel or sequentially
+        if (params.isEnableParallelPostVerification() && testCasesToVerify.size() > 1) {
+            ExecutorService postVerificationExecutor = Executors.newFixedThreadPool(
+                Math.min(params.getParallelPostVerificationThreads(), testCasesToVerify.size())
+            );
+            try {
+                List<Future<ITicket>> verificationFutures = new ArrayList<>();
+
+                for (ITicket testCase : testCasesToVerify) {
+                    verificationFutures.add(postVerificationExecutor.submit(() ->
+                        verifyAndLinkTestCase(testCase, ticketKey, ticketText, isLink, relationship,
+                                            currentlyLinkedTestCases, extraRelatedTestCaseRulesFromConfluence,
+                                            params, true)
+                    ));
+                }
+
+                // Collect verified results
+                for (Future<ITicket> future : verificationFutures) {
+                    ITicket verifiedTestCase = future.get();
+                    if (verifiedTestCase != null) {
+                        chunkResults.add(verifiedTestCase);
+                    }
+                }
+            } finally {
+                postVerificationExecutor.shutdown();
+                // Wait for all verifications to complete without timeout - LLM requests can take time
+                try {
+                    postVerificationExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    postVerificationExecutor.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
+            }
+        } else {
+            // Sequential post-verification
+            for (ITicket testCase : testCasesToVerify) {
+                ITicket verifiedTestCase = verifyAndLinkTestCase(testCase, ticketKey, ticketText, isLink,
+                                                                 relationship, currentlyLinkedTestCases,
+                                                                 extraRelatedTestCaseRulesFromConfluence, params, false);
+                if (verifiedTestCase != null) {
+                    chunkResults.add(verifiedTestCase);
+                }
+            }
+        }
+
+        return chunkResults;
+    }
+
     @NotNull
     public List<ITicket> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params) throws Exception {
         List<ITicket> finaResults = new ArrayList<>();
@@ -582,36 +703,19 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(listOfAllTestCases, tokenLimit);
 
         if (params.isEnableParallelTestCaseCheck()) {
+            // Parallel chunk processing
             ExecutorService executorService = Executors.newFixedThreadPool(params.getParallelTestCaseCheckThreads());
             try {
                 List<Future<List<ITicket>>> futures = new ArrayList<>();
 
                 for (ChunkPreparation.Chunk chunk : chunks) {
-                    futures.add(executorService.submit(() -> {
-                        List<ITicket> chunkResults = new ArrayList<>();
-                        JSONArray testCaseKeys = relatedTestCasesAgent.run(params.getModelTestCasesRelation(), new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence));
-                        for (int j = 0; j < testCaseKeys.length(); j++) {
-                            String testCaseKey = testCaseKeys.getString(j);
-                            ITicket testCase = listOfAllTestCases.stream().filter(t -> t.getKey().equals(testCaseKey)).findFirst().orElse(null);
-                            if (testCase != null) {
-                                boolean isConfirmed = relatedTestCaseAgent.run(params.getModelTestCaseRelation(), new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence));
-                                if (isConfirmed) {
-                                    chunkResults.add(testCase);
-                                    if (isLink) {
-                                        boolean isAlreadyLinked = currentlyLinkedTestCases != null && currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
-                                        if (!isAlreadyLinked) {
-                                            synchronized (trackerClient) {
-                                                trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        return chunkResults;
-                    }));
+                    futures.add(executorService.submit(() ->
+                        processChunk(chunk, ticketKey, ticketText, listOfAllTestCases, isLink,
+                                   relationship, currentlyLinkedTestCases, extraRelatedTestCaseRulesFromConfluence, params)
+                    ));
                 }
 
+                // Collect results from all chunks
                 for (Future<List<ITicket>> future : futures) {
                     List<ITicket> chunkResults = future.get();
                     for (ITicket result : chunkResults) {
@@ -622,25 +726,23 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 }
             } finally {
                 executorService.shutdown();
+                // Wait for all tasks to complete without timeout - LLM requests can take time
+                try {
+                    executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    executorService.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
             }
         } else {
+            // Sequential chunk processing
             for (ChunkPreparation.Chunk chunk : chunks) {
-                JSONArray testCaseKeys = relatedTestCasesAgent.run(params.getModelTestCasesRelation(), new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence));
-                //find relevant test case from batch
-                for (int j = 0; j < testCaseKeys.length(); j++) {
-                    String testCaseKey = testCaseKeys.getString(j);
-                    ITicket testCase = listOfAllTestCases.stream().filter(t -> t.getKey().equals(testCaseKey)).findFirst().orElse(null);
-                    if (testCase != null && !finaResults.contains(testCase)) {
-                        boolean isConfirmed = relatedTestCaseAgent.run(params.getModelTestCaseRelation(), new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence));
-                        if (isConfirmed) {
-                            finaResults.add(testCase);
-                            if (isLink) {
-                                boolean isAlreadyLinked = currentlyLinkedTestCases != null && currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
-                                if (!isAlreadyLinked) {
-                                    trackerClient.linkIssueWithRelationship(ticketKey, testCase.getKey(), relationship);
-                                }
-                            }
-                        }
+                List<ITicket> chunkResults = processChunk(chunk, ticketKey, ticketText, listOfAllTestCases,
+                                                          isLink, relationship, currentlyLinkedTestCases,
+                                                          extraRelatedTestCaseRulesFromConfluence, params);
+                for (ITicket result : chunkResults) {
+                    if (!finaResults.contains(result)) {
+                        finaResults.add(result);
                     }
                 }
             }
