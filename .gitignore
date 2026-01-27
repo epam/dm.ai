@@ -154,3 +154,5 @@ dmtools-core/cache**/
 # Eclipse Buildship settings
 .settings/
 .settings/**
+.codemie
+.claude
