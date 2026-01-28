@@ -7,6 +7,39 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Find Java command (bundled or system)
+find_java_command() {
+    # Check for bundled Java first (installed with dmtools)
+    local bundled_java="$HOME/.dmtools/jre/bin/java"
+    local bundled_java_exe="$HOME/.dmtools/jre/bin/java.exe"
+
+    # Windows uses .exe extension
+    if [ -x "$bundled_java_exe" ]; then
+        echo "$bundled_java_exe"
+        return 0
+    elif [ -x "$bundled_java" ]; then
+        echo "$bundled_java"
+        return 0
+    fi
+
+    # Fall back to system Java
+    if command -v java >/dev/null 2>&1; then
+        echo "java"
+        return 0
+    fi
+
+    # No Java found
+    return 1
+}
+
+# Get Java command or error
+JAVA_CMD=$(find_java_command 2>/dev/null) || {
+    echo "Error: Java 23 is required but not found." >&2
+    echo "Please install DMTools first:" >&2
+    echo "  curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash" >&2
+    exit 1
+}
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -162,7 +195,7 @@ Or if you're developing locally, build the project first:
 
 Note: Java 23 is required for DMTools to run."
     fi
-    execute_java_command "java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner"
+    execute_java_command "\"$JAVA_CMD\" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner"
     exit 0
 }
 
@@ -232,10 +265,10 @@ case "$COMMAND" in
     "list")
         if [ ${#ARGS[@]} -gt 0 ]; then
             # List with filter
-            execute_java_command "java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list \"${ARGS[0]}\""
+            execute_java_command "\"$JAVA_CMD\" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list \"${ARGS[0]}\""
         else
             # List all tools
-            execute_java_command "java -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list"
+            execute_java_command "\"$JAVA_CMD\" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list"
         fi
         exit 0
         ;;
@@ -260,10 +293,10 @@ case "$COMMAND" in
         # Execute run command with JobRunner
         if [ -n "$ENCODED_PARAM" ]; then
             info "Executing job with file: $JSON_FILE and encoded parameter"
-            execute_java_command "java -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\" \"$ENCODED_PARAM\""
+            execute_java_command "\"$JAVA_CMD\" -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\" \"$ENCODED_PARAM\""
         else
             info "Executing job with file: $JSON_FILE"
-            execute_java_command "java -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\""
+            execute_java_command "\"$JAVA_CMD\" -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\""
         fi
         exit $?
         ;;
@@ -297,9 +330,9 @@ if [[ "$COMMAND" == -* ]]; then
     
     # Execute directly without mcp prefix
     if [ "$DEBUG" = true ]; then
-        java -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}"
+        "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}"
     else
-        java -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}" 2>/dev/null
+        "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}" 2>/dev/null
     fi
     exit $?
 fi
@@ -343,7 +376,7 @@ fi
 
 # Execute command via JobRunner as MCP tool
 if [ "$DEBUG" = true ]; then
-    java -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}"
+    "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}"
 else
-    java -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}" 2>/dev/null
+    "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}" 2>/dev/null
 fi

@@ -401,11 +401,200 @@ is_windows() {
     return 1
 }
 
+# Download and install Java 23 locally
+install_local_java() {
+    local platform="$1"
+    local jre_dir="$INSTALL_DIR/jre"
+
+    progress "Downloading Java 23 JRE for local installation..."
+
+    # Determine download URL based on platform
+    local java_url=""
+    local java_filename=""
+
+    case "$platform" in
+        darwin_amd64)
+            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_mac_hotspot_23.0.1_11.tar.gz"
+            java_filename="openjdk-jre-macos-x64.tar.gz"
+            ;;
+        darwin_arm64)
+            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_mac_hotspot_23.0.1_11.tar.gz"
+            java_filename="openjdk-jre-macos-arm64.tar.gz"
+            ;;
+        linux_amd64)
+            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_linux_hotspot_23.0.1_11.tar.gz"
+            java_filename="openjdk-jre-linux-x64.tar.gz"
+            ;;
+        linux_arm64)
+            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_linux_hotspot_23.0.1_11.tar.gz"
+            java_filename="openjdk-jre-linux-arm64.tar.gz"
+            ;;
+        windows_amd64)
+            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_windows_hotspot_23.0.1_11.zip"
+            java_filename="openjdk-jre-windows-x64.zip"
+            ;;
+        windows_arm64)
+            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_windows_hotspot_23.0.1_11.zip"
+            java_filename="openjdk-jre-windows-arm64.zip"
+            ;;
+        *)
+            warn "Local Java installation not supported for platform: $platform"
+            return 1
+            ;;
+    esac
+
+    local java_archive="$INSTALL_DIR/$java_filename"
+
+    # Download JRE
+    if ! download_file "$java_url" "$java_archive" "Java 23 JRE" "false"; then
+        warn "Failed to download Java 23 JRE"
+        return 1
+    fi
+
+    # Extract JRE
+    progress "Extracting Java 23 JRE..."
+    rm -rf "$jre_dir" 2>/dev/null
+    mkdir -p "$jre_dir"
+
+    # Handle different archive formats
+    if [[ "$java_filename" == *.zip ]]; then
+        # Windows ZIP archive - try multiple extraction methods
+        local extracted=false
+
+        # Method 1: Try tar (Windows 10+ has tar with zip support)
+        if command -v tar >/dev/null 2>&1; then
+            if tar -xf "$java_archive" -C "$jre_dir" --strip-components=1 2>/dev/null; then
+                extracted=true
+            fi
+        fi
+
+        # Method 2: Try unzip
+        if [ "$extracted" = false ] && command -v unzip >/dev/null 2>&1; then
+            local temp_extract="$INSTALL_DIR/jre_temp"
+            rm -rf "$temp_extract" 2>/dev/null
+            mkdir -p "$temp_extract"
+
+            if unzip -q "$java_archive" -d "$temp_extract" 2>/dev/null; then
+                # Find the JRE directory (usually jdk-23.0.1+11-jre or similar)
+                local jre_subdir=$(find "$temp_extract" -maxdepth 1 -type d -name "*jre*" -o -name "jdk*" | head -1)
+                if [ -n "$jre_subdir" ]; then
+                    mv "$jre_subdir"/* "$jre_dir/" 2>/dev/null
+                    extracted=true
+                fi
+                rm -rf "$temp_extract" 2>/dev/null
+            fi
+        fi
+
+        # Method 3: Try PowerShell Expand-Archive (Git Bash/WSL on Windows)
+        if [ "$extracted" = false ] && command -v powershell.exe >/dev/null 2>&1; then
+            local win_archive_path=$(cygpath -w "$java_archive" 2>/dev/null || echo "$java_archive")
+            local win_jre_dir=$(cygpath -w "$jre_dir" 2>/dev/null || echo "$jre_dir")
+            local temp_extract_win="$INSTALL_DIR/jre_temp"
+            local win_temp=$(cygpath -w "$temp_extract_win" 2>/dev/null || echo "$temp_extract_win")
+
+            rm -rf "$temp_extract_win" 2>/dev/null
+            mkdir -p "$temp_extract_win"
+
+            if powershell.exe -NoProfile -Command "Expand-Archive -Path '$win_archive_path' -DestinationPath '$win_temp' -Force" 2>/dev/null; then
+                # Move extracted content to jre_dir
+                local jre_subdir=$(find "$temp_extract_win" -maxdepth 1 -type d -name "*jre*" -o -name "jdk*" | head -1)
+                if [ -n "$jre_subdir" ]; then
+                    mv "$jre_subdir"/* "$jre_dir/" 2>/dev/null
+                    extracted=true
+                fi
+                rm -rf "$temp_extract_win" 2>/dev/null
+            fi
+        fi
+
+        if [ "$extracted" = false ]; then
+            warn "Failed to extract ZIP archive. No suitable extraction tool found."
+            rm -f "$java_archive"
+            rm -rf "$jre_dir"
+            return 1
+        fi
+    else
+        # Unix tar.gz archive
+        if ! tar -xzf "$java_archive" -C "$jre_dir" --strip-components=1 2>/dev/null; then
+            warn "Failed to extract Java 23 JRE"
+            rm -f "$java_archive"
+            rm -rf "$jre_dir"
+            return 1
+        fi
+    fi
+
+    info "Java 23 JRE installed locally to $jre_dir"
+    rm -f "$java_archive"
+    return 0
+}
+
+# Get Java command (bundled or system)
+get_java_command() {
+    local bundled_java="$INSTALL_DIR/jre/bin/java"
+    local bundled_java_exe="$INSTALL_DIR/jre/bin/java.exe"
+
+    # Check if bundled Java exists (Windows uses .exe)
+    if [ -x "$bundled_java_exe" ]; then
+        echo "$bundled_java_exe"
+        return 0
+    elif [ -x "$bundled_java" ]; then
+        echo "$bundled_java"
+        return 0
+    fi
+
+    # Fall back to system Java
+    if command -v java >/dev/null 2>&1; then
+        echo "java"
+        return 0
+    fi
+
+    return 1
+}
+
 # Check and install Java
 check_java() {
     progress "Checking Java installation..."
-    
-    # Check if Java is available
+
+    local java_cmd=""
+    local needs_local_install=false
+
+    # Check if Java is available (system or bundled)
+    if java_cmd=$(get_java_command 2>/dev/null); then
+        # Java found, check version
+        local java_version
+        java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+        local java_major_version
+        java_major_version=$(echo "$java_version" | cut -d'.' -f1)
+
+        if [ "$java_major_version" -ge 23 ] 2>/dev/null; then
+            info "Java version detected: $java_version"
+            return 0
+        else
+            warn "Java $java_version is too old (need 23+). Will try to install locally..."
+            needs_local_install=true
+        fi
+    else
+        needs_local_install=true
+    fi
+
+    # Try local installation first
+    if [ "$needs_local_install" = true ]; then
+        local platform
+        platform=$(detect_platform)
+
+        progress "Attempting local Java 23 installation..."
+        if install_local_java "$platform"; then
+            # Verify the bundled Java
+            java_cmd=$(get_java_command)
+            local java_version
+            java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+            info "Using bundled Java version: $java_version"
+            return 0
+        fi
+
+        warn "Local Java installation failed. Falling back to system installation..."
+    fi
+
+    # Fall back to system package manager installation
     if ! command -v java >/dev/null 2>&1; then
         # First check if we're on Windows - don't try to install Java automatically
         if is_windows; then
@@ -465,18 +654,21 @@ steps:
             error "Java 23 is required but not installed. Please install Java 23."
         fi
     fi
-    
-    # Verify Java version
-    local java_version
-    java_version=$(java -version 2>&1 | head -n 1 | cut -d'"' -f2)
-    local java_major_version
-    java_major_version=$(echo "$java_version" | cut -d'.' -f1)
-    
-    info "Java version detected: $java_version"
-    
-    # Check if Java version is sufficient (Java 23+ required)
-    if [ "$java_major_version" -lt 23 ]; then
-        error "Java $java_version is too old. DMTools requires Java 23."
+
+    # Final verification after system installation
+    if java_cmd=$(get_java_command 2>/dev/null); then
+        local java_version
+        java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+        local java_major_version
+        java_major_version=$(echo "$java_version" | cut -d'.' -f1)
+
+        info "Java version detected: $java_version"
+
+        if [ "$java_major_version" -lt 23 ] 2>/dev/null; then
+            error "Java $java_version is too old. DMTools requires Java 23."
+        fi
+    else
+        error "Java installation failed. Please install Java 23 manually."
     fi
 }
 
