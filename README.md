@@ -39,13 +39,23 @@ Delivery Management Tools
 
 ### Installation
 
+**macOS / Linux / Git Bash:**
 ```bash
-# One-line installation
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
-
-# Verify installation
-dmtools --version
+curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install | bash
 ```
+
+**Windows (Universal - any terminal):**
+```cmd
+curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+```
+
+**Verify installation:**
+```bash
+dmtools --version
+dmtools list
+```
+
+See [INSTALL_INSTRUCTIONS.md](INSTALL_INSTRUCTIONS.md) for detailed installation guide and troubleshooting.
 
 ### Configuration
 
