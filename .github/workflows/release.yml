@@ -167,32 +167,21 @@ jobs:
           ### 🖥️ DMTools CLI
           - **Command-line interface** for DMTools operations
           - **Java-based** automation and integration tools
-          - **Cross-platform install scripts** for easy setup (\`install\`, \`install.sh\`, \`install.ps1\`)
+          - **Cross-platform install scripts** for easy setup (\`install\`, \`install.sh\`, \`install.bat\`, \`install.ps1\`)
           - **Wrapper script** (\`dmtools.sh\`)
           
           ## 🎯 Quick Start
           
           ### DMTools CLI Installation
-          
-          **One-line installation (works on macOS, Linux, and Windows):**
+
+          **macOS / Linux / Git Bash:**
           \`\`\`bash
           curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install | bash
           \`\`\`
-          
-          **Alternative methods (backward compatible):**
-          
-          **macOS/Linux:**
-          \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install.sh | bash
-          \`\`\`
-          
-          **Windows (PowerShell):**
-          \`\`\`powershell
-          # PowerShell 5.1+ (irm is an alias)
-          irm https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install.ps1 | iex
-          
-          # Or use full command (works in all PowerShell versions)
-          Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install.ps1' | Invoke-Expression
+
+          **Windows (cmd.exe, PowerShell, Windows Terminal):**
+          \`\`\`cmd
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
           \`\`\`
           
           **Manual download:**
@@ -242,6 +231,7 @@ jobs:
             cli/dmtools-v${{ needs.version-and-tag.outputs.version }}-all.jar
             cli/install.sh
             cli/install
+            cli/install.bat
             cli/install.ps1
             cli/dmtools.sh
       
@@ -258,6 +248,7 @@ jobs:
           echo "- CLI JAR (dmtools-v${{ needs.version-and-tag.outputs.version }}-all.jar)" >> $GITHUB_STEP_SUMMARY
           echo "- install (cross-platform wrapper)" >> $GITHUB_STEP_SUMMARY
           echo "- install.sh (macOS/Linux)" >> $GITHUB_STEP_SUMMARY
+          echo "- install.bat (Windows cmd.exe)" >> $GITHUB_STEP_SUMMARY
           echo "- install.ps1 (Windows PowerShell)" >> $GITHUB_STEP_SUMMARY
           echo "- dmtools.sh" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

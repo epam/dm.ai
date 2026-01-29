@@ -40,6 +40,7 @@ jobs:
           # Copy scripts
           cp build-artifacts/install.sh cli-release/
           cp build-artifacts/install cli-release/ 2>/dev/null || true
+          cp build-artifacts/install.bat cli-release/ 2>/dev/null || true
           cp build-artifacts/install.ps1 cli-release/ 2>/dev/null || true
           cp build-artifacts/dmtools.sh cli-release/
           

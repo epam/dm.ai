@@ -1,6 +1,7 @@
 # DMTools CLI Installation Script for Windows PowerShell
 # Usage: Invoke-RestMethod -Uri 'https://github.com/IstiN/dmtools/releases/latest/download/install.ps1' | Invoke-Expression
 # Or: irm https://github.com/IstiN/dmtools/releases/latest/download/install.ps1 | iex (PowerShell 5.1+)
+# For specific version: $env:DMTOOLS_VERSION="v1.7.120"; irm https://github.com/IstiN/dmtools/releases/download/v1.7.120/install.ps1 | iex
 # Requirements: Java 23 (will attempt automatic installation)
 
 $ErrorActionPreference = "Stop"
@@ -327,16 +328,33 @@ function Print-Instructions {
     Write-Host "For more information, visit: https://github.com/$REPO"
 }
 
+# Get version to install (from environment or latest)
+function Get-Version {
+    # Check for DMTOOLS_VERSION environment variable
+    if ($env:DMTOOLS_VERSION) {
+        $version = $env:DMTOOLS_VERSION
+        # Ensure version has 'v' prefix
+        if (-not $version.StartsWith('v')) {
+            $version = "v$version"
+        }
+        Write-Info "Using specified version: $version"
+        return $version
+    }
+
+    # Default to latest
+    return Get-LatestVersion
+}
+
 # Main installation function
 function Main {
     Write-Info "🚀 Installing DMTools CLI..."
-    
+
     # Check prerequisites
     Check-Java
-    
-    # Get latest version
-    $version = Get-LatestVersion
-    Write-Info "Latest version: $version"
+
+    # Get version to install
+    $version = Get-Version
+    Write-Info "Installing version: $version"
     
     # Create directories
     Create-InstallDir

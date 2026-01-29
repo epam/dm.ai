@@ -248,6 +248,7 @@ jobs:
           fi
           cp install.sh build-artifacts/
           cp install build-artifacts/ 2>/dev/null || true
+          cp install.bat build-artifacts/ 2>/dev/null || true
           cp install.ps1 build-artifacts/ 2>/dev/null || true
           
           if [ ! -f dmtools.sh ]; then
