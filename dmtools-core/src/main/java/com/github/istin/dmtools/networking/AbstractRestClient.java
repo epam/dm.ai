@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractRestClient implements RestClient {
-    private static final Logger logger = LogManager.getLogger(AbstractRestClient.class);
+    protected static final Logger logger = LogManager.getLogger(AbstractRestClient.class);
     public static final MediaType JSON
             = MediaType.parse("application/json; charset=utf-8");
     protected final OkHttpClient client;
@@ -47,6 +47,7 @@ public abstract class AbstractRestClient implements RestClient {
     private boolean isCachePostRequestsEnabled = false;
     private boolean isWaitBeforePerform = false;
     private HashMap<String, Long> timeMeasurement = new HashMap<>();
+    private RetryPolicy retryPolicy;
 
     public AbstractRestClient(String basePath, String authorization) throws IOException {
         this.client = new OkHttpClient.Builder()
@@ -61,6 +62,7 @@ public abstract class AbstractRestClient implements RestClient {
                 .build();
         this.basePath = basePath;
         this.authorization = authorization;
+        this.retryPolicy = new RetryPolicy(logger);
 
         reinitCache();
     }
@@ -345,57 +347,98 @@ public abstract class AbstractRestClient implements RestClient {
                 }
             }
 
-            try {
-                Request request = applyHeaders(sign(new Request.Builder())
-                        .header("User-Agent", "DMTools"), genericRequest)
-                        .url(url)
-                        .build();
-                try (Response response = client.newCall(request).execute()) {
-                    if (response.isSuccessful()) {
-                        String result = response.body() != null ? response.body().string() : null;
-                        if (isCacheGetRequestsEnabled) {
-                            String value = getCacheFileName(genericRequest);
-                            File cache = new File(getCacheFolderName());
-                            cache.mkdirs();
-                            File cachedFile = new File(getCacheFolderName() + "/" + value);
-                            FileUtils.writeStringToFile(cachedFile, result);
+            int attemptNumber = 1;
+            IOException lastException = null;
+            Response lastResponse = null;
+
+            while (attemptNumber <= retryPolicy.getMaxRetries()) {
+                try {
+                    Request request = applyHeaders(sign(new Request.Builder())
+                            .header("User-Agent", "DMTools"), genericRequest)
+                            .url(url)
+                            .build();
+                    try (Response response = client.newCall(request).execute()) {
+                        if (response.isSuccessful()) {
+                            String result = response.body() != null ? response.body().string() : null;
+                            if (isCacheGetRequestsEnabled) {
+                                String value = getCacheFileName(genericRequest);
+                                File cache = new File(getCacheFolderName());
+                                cache.mkdirs();
+                                File cachedFile = new File(getCacheFolderName() + "/" + value);
+                                FileUtils.writeStringToFile(cachedFile, result);
+                            }
+                            return result;
+                        } else {
+                            lastResponse = response;
+                            IOException exception = AbstractRestClient.printAndCreateException(request, response);
+
+                            // Check if it's a rate limit or retryable error
+                            if (retryPolicy.isRetryable(exception) && attemptNumber < retryPolicy.getMaxRetries()) {
+                                retryPolicy.logRetryAttempt(attemptNumber, url, exception);
+                                long delayMs = retryPolicy.calculateDelayMs(attemptNumber, response);
+                                try {
+                                    retryPolicy.executeDelay(delayMs);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new IOException("Request interrupted during retry", e);
+                                }
+                                attemptNumber++;
+                                continue;
+                            } else {
+                                throw exception;
+                            }
                         }
-                        return result;
+                    }
+                } catch (IOException e) {
+                    lastException = e;
+
+                    // Check if it's a recoverable connection error OR rate limit
+                    boolean isRecoverableError = isRecoverableConnectionError(e) || retryPolicy.isRetryable(e);
+
+                    if (isRepeatIfFails && isRecoverableError && attemptNumber < retryPolicy.getMaxRetries()) {
+                        retryPolicy.logRetryAttempt(attemptNumber, url, e);
+
+                        // For rate limits, use retry policy delay calculation
+                        if (retryPolicy.isRetryable(e)) {
+                            long delayMs = retryPolicy.calculateDelayMs(attemptNumber,
+                                (e instanceof RateLimitException) ? ((RateLimitException)e).getResponse() : null);
+                            try {
+                                retryPolicy.executeDelay(delayMs);
+                            } catch (InterruptedException interruptedException) {
+                                Thread.currentThread().interrupt();
+                                throw new IOException("Request interrupted during retry", interruptedException);
+                            }
+                        } else {
+                            // For connection errors, use existing exponential backoff
+                            try {
+                                long waitTime = 200L * (long) Math.pow(2, attemptNumber - 1);
+                                Thread.sleep(waitTime);
+                            } catch (InterruptedException interruptedException) {
+                                Thread.currentThread().interrupt();
+                                throw new IOException("Request interrupted during retry", interruptedException);
+                            }
+                        }
+                        attemptNumber++;
                     } else {
-                        throw AbstractRestClient.printAndCreateException(request, response);
-                    }
-                }
-            } catch (IOException e) {
-                logger.warn("Connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
-                
-                // Check if it's a recoverable connection error
-                boolean isRecoverableError = isRecoverableConnectionError(e);
-                
-                // Maximum of 3 attempts (2 retries)
-                final int MAX_RETRIES = 2;
-                
-                if (isRepeatIfFails && isRecoverableError && retryCount < MAX_RETRIES) {
-                    logger.info("Retrying request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
-                    if (isWaitBeforePerform) {
-                        try {
-                            // Exponential backoff: 200ms, 400ms, 800ms
-                            long waitTime = 200L * (long) Math.pow(2, retryCount);
-                            Thread.sleep(waitTime);
-                        } catch (InterruptedException interruptedException) {
-                            Thread.currentThread().interrupt();
-                            throw new IOException("Request interrupted during retry", interruptedException);
+                        if (!isRecoverableError) {
+                            logger.error("Non-recoverable error for URL: {}", url, e);
+                        } else {
+                            retryPolicy.logMaxRetriesExceeded(url, e);
                         }
+                        throw e;
                     }
-                    return execute(url, false, isIgnoreCache, genericRequest, retryCount + 1);
-                } else {
-                    if (!isRecoverableError) {
-                        logger.error("Non-recoverable connection error for URL: {}", url, e);
-                    } else if (retryCount >= MAX_RETRIES) {
-                        logger.error("Max retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
-                    }
-                    throw e;
                 }
             }
+
+            // If we've exhausted all retries
+            if (lastException != null) {
+                retryPolicy.logMaxRetriesExceeded(url, lastException);
+                throw lastException;
+            }
+
+            // This shouldn't be reached, but just in case
+            throw new IOException("Unexpected error in request execution");
+
         } finally {
             Long prevTime = timeMeasurement.get(url);
             long time = System.currentTimeMillis() - 200 - prevTime;
@@ -457,72 +500,108 @@ public abstract class AbstractRestClient implements RestClient {
             logger.info("Network Request: ");
         }
 
-        RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
-        Request request = applyHeaders(sign(
-                new Request.Builder())
-                .url(url)
-                .header("User-Agent", "DMTools")
-                , genericRequest)
-                .post(body)
-                .build();
-        
-        long startTime = System.currentTimeMillis();
-        logger.debug("POST request starting for URL: {} (attempt: {})", url, retryCount + 1);
-        
-        try (Response response = client.newCall(request).execute()) {
-            long responseTime = System.currentTimeMillis() - startTime;
-            logger.debug("POST response received for URL: {} in {}ms, status: {}", url, responseTime, response.code());
-            
-            if (response.isSuccessful()) {
-                String responseAsString = response.body() != null ? response.body().string() : "";
-                logger.debug("POST success for URL: {} ({}ms, {} chars response)", url, responseTime, responseAsString.length());
-                
-                if (isCachePostRequestsEnabled) {
-                    String value = getCacheFileName(genericRequest);
-                    File cache = new File(getCacheFolderName());
-                    cache.mkdirs();
-                    File cachedFile = new File(getCacheFolderName() + "/" + value);
-                    FileUtils.writeStringToFile(cachedFile, responseAsString);
-                }
-                return responseAsString;
-            } else {
-                logger.warn("POST failed for URL: {} ({}ms, status: {})", url, responseTime, response.code());
-                throw AbstractRestClient.printAndCreateException(request, response);
-            }
-        } catch (IOException e) {
-            logger.warn("POST connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
-            
-            // Check if it's a recoverable connection error
-            boolean isRecoverableError = isRecoverableConnectionError(e);
-            
-            // Maximum of 3 attempts (2 retries)
-            final int MAX_RETRIES = 2;
-            
-            if (isRecoverableError && retryCount < MAX_RETRIES) {
-                logger.info("Retrying POST request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
-                if (isWaitBeforePerform) {
-                    try {
-                        // Exponential backoff: 200ms, 400ms, 800ms
-                        long waitTime = 200L * (long) Math.pow(2, retryCount);
-                        logger.debug("Waiting {}ms before retry", waitTime);
-                        Thread.sleep(waitTime);
-                    } catch (InterruptedException interruptedException) {
-                        Thread.currentThread().interrupt();
-                        throw new IOException("POST request interrupted during retry", interruptedException);
+        int attemptNumber = 1;
+        IOException lastException = null;
+
+        while (attemptNumber <= retryPolicy.getMaxRetries()) {
+            RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
+            Request request = applyHeaders(sign(
+                    new Request.Builder())
+                    .url(url)
+                    .header("User-Agent", "DMTools")
+                    , genericRequest)
+                    .post(body)
+                    .build();
+
+            long startTime = System.currentTimeMillis();
+            logger.debug("POST request starting for URL: {} (attempt: {})", url, attemptNumber);
+
+            try (Response response = client.newCall(request).execute()) {
+                long responseTime = System.currentTimeMillis() - startTime;
+                logger.debug("POST response received for URL: {} in {}ms, status: {}", url, responseTime, response.code());
+
+                if (response.isSuccessful()) {
+                    String responseAsString = response.body() != null ? response.body().string() : "";
+                    logger.debug("POST success for URL: {} ({}ms, {} chars response)", url, responseTime, responseAsString.length());
+
+                    if (isCachePostRequestsEnabled) {
+                        String value = getCacheFileName(genericRequest);
+                        File cache = new File(getCacheFolderName());
+                        cache.mkdirs();
+                        File cachedFile = new File(getCacheFolderName() + "/" + value);
+                        FileUtils.writeStringToFile(cachedFile, responseAsString);
+                    }
+                    return responseAsString;
+                } else {
+                    logger.warn("POST failed for URL: {} ({}ms, status: {})", url, responseTime, response.code());
+                    IOException exception = AbstractRestClient.printAndCreateException(request, response);
+
+                    // Check if it's a rate limit or retryable error
+                    if (retryPolicy.isRetryable(exception) && attemptNumber < retryPolicy.getMaxRetries()) {
+                        retryPolicy.logRetryAttempt(attemptNumber, url, exception);
+                        long delayMs = retryPolicy.calculateDelayMs(attemptNumber, response);
+                        try {
+                            retryPolicy.executeDelay(delayMs);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException("POST request interrupted during retry", e);
+                        }
+                        attemptNumber++;
+                        continue;
+                    } else {
+                        throw exception;
                     }
                 }
-                return post(genericRequest, retryCount + 1);
-            } else {
-                if (!isRecoverableError) {
-                    logger.error("Non-recoverable POST connection error for URL: {}", url, e);
-                } else if (retryCount >= MAX_RETRIES) {
-                    logger.error("Max POST retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
+            } catch (IOException e) {
+                lastException = e;
+
+                // Check if it's a recoverable connection error OR rate limit
+                boolean isRecoverableError = isRecoverableConnectionError(e) || retryPolicy.isRetryable(e);
+
+                if (isRecoverableError && attemptNumber < retryPolicy.getMaxRetries()) {
+                    retryPolicy.logRetryAttempt(attemptNumber, url, e);
+
+                    // For rate limits, use retry policy delay calculation
+                    if (retryPolicy.isRetryable(e)) {
+                        long delayMs = retryPolicy.calculateDelayMs(attemptNumber,
+                            (e instanceof RateLimitException) ? ((RateLimitException)e).getResponse() : null);
+                        try {
+                            retryPolicy.executeDelay(delayMs);
+                        } catch (InterruptedException interruptedException) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException("POST request interrupted during retry", interruptedException);
+                        }
+                    } else {
+                        // For connection errors, use existing exponential backoff
+                        try {
+                            long waitTime = 200L * (long) Math.pow(2, attemptNumber - 1);
+                            logger.debug("Waiting {}ms before retry", waitTime);
+                            Thread.sleep(waitTime);
+                        } catch (InterruptedException interruptedException) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException("POST request interrupted during retry", interruptedException);
+                        }
+                    }
+                    attemptNumber++;
+                } else {
+                    if (!isRecoverableError) {
+                        logger.error("Non-recoverable POST error for URL: {}", url, e);
+                    } else {
+                        retryPolicy.logMaxRetriesExceeded(url, e);
+                    }
+                    throw e;
                 }
-                throw e;
             }
-        } finally {
-            // Removed aggressive connection pool eviction - let OkHttp manage connection lifecycle
         }
+
+        // If we've exhausted all retries
+        if (lastException != null) {
+            retryPolicy.logMaxRetriesExceeded(url, lastException);
+            throw lastException;
+        }
+
+        // This shouldn't be reached, but just in case
+        throw new IOException("Unexpected error in POST request execution");
     }
 
     protected @NotNull String buildHashForPostRequest(GenericRequest genericRequest, String url) {
@@ -691,6 +770,22 @@ public abstract class AbstractRestClient implements RestClient {
 
     public void setWaitBeforePerform(boolean waitBeforePerform) {
         isWaitBeforePerform = waitBeforePerform;
+    }
+
+    /**
+     * Sets a custom retry policy for handling rate limits and transient failures.
+     * @param retryPolicy The retry policy to use, or null to use default policy
+     */
+    public void setRetryPolicy(RetryPolicy retryPolicy) {
+        this.retryPolicy = retryPolicy != null ? retryPolicy : new RetryPolicy(logger);
+    }
+
+    /**
+     * Gets the current retry policy.
+     * @return The current retry policy
+     */
+    public RetryPolicy getRetryPolicy() {
+        return retryPolicy;
     }
 
     /**
