@@ -120,7 +120,14 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             try {
                 // Combine related fields with custom fields
                 String[] relatedFields = combineFieldsWithCustomFields(params.getTestCasesRelatedFields(), params.getTestCasesCustomFields());
-                List<? extends ITicket> listOfAllTestCases = trackerClient.searchAndPerform(params.getExistingTestCasesJql(), relatedFields);
+
+                // Apply JQL modifier if provided
+                String effectiveJql = params.getExistingTestCasesJql();
+                if (params.getJqlModifierJSAction() != null && !params.getJqlModifierJSAction().trim().isEmpty()) {
+                    effectiveJql = applyJqlModifier(ticket, params);
+                }
+
+                List<? extends ITicket> listOfAllTestCases = trackerClient.searchAndPerform(effectiveJql, relatedFields);
                 TicketContext ticketContext = new TicketContext(trackerClient, ticket);
                 ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences());
                 String additionalRules = extractFromConfluence(params.getConfluencePages());
@@ -872,7 +879,96 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         logger.info("Preprocessed {} test cases via JavaScript", preprocessedTestCases.size());
         return preprocessedTestCases;
     }
-    
+
+    /**
+     * Apply JavaScript-based JQL modification to filter existing test cases dynamically.
+     * Allows filtering test cases based on story ticket properties (labels, priority, etc.)
+     * Falls back to original JQL on any error (fail-safe behavior).
+     */
+    private String applyJqlModifier(ITicket ticket, TestCasesGeneratorParams params) {
+        String originalJql = params.getExistingTestCasesJql();
+
+        if (originalJql == null || originalJql.trim().isEmpty()) {
+            logger.warn("Original existingTestCasesJql is empty, skipping JQL modification");
+            return originalJql;
+        }
+
+        try {
+            logger.info("Applying JQL modifier for ticket: {}", ticket.getTicketKey());
+
+            // Execute JavaScript modifier
+            Object result = js(params.getJqlModifierJSAction())
+                    .mcp(trackerClient, ai, confluence, null)
+                    .with("ticket", createTicketContextJson(ticket))
+                    .with("jobParams", createParamsJson(params))
+                    .with("existingTestCasesJql", originalJql)
+                    .execute();
+
+            // Parse result - supports multiple return types
+            String modifiedJql = extractJqlFromResult(result, originalJql);
+
+            if (modifiedJql != null && !modifiedJql.trim().isEmpty() && !modifiedJql.equals(originalJql)) {
+                logger.info("JQL modified from '{}' to '{}'", originalJql, modifiedJql);
+                return modifiedJql.trim();
+            } else {
+                logger.info("JQL modifier did not change JQL, using original");
+                return originalJql;
+            }
+
+        } catch (Exception e) {
+            logger.error("Failed to apply JQL modifier for ticket {}: {}",
+                    ticket.getTicketKey(), e.getMessage(), e);
+            logger.warn("Falling back to original JQL due to error");
+            return originalJql;
+        }
+    }
+
+    /**
+     * Extract JQL string from JavaScript result (handles multiple return types).
+     * Supports: JSONObject with field, String, Map (PolyglotMap from GraalJS)
+     */
+    private String extractJqlFromResult(Object result, String fallback) {
+        if (result == null) {
+            return fallback;
+        }
+
+        // Handle JSONObject
+        if (result instanceof JSONObject) {
+            JSONObject resultJson = (JSONObject) result;
+            if (resultJson.has("existingTestCasesJql")) {
+                return resultJson.getString("existingTestCasesJql");
+            }
+        }
+
+        // Handle String (try parsing as JSON first, then use as-is)
+        if (result instanceof String) {
+            String resultStr = (String) result;
+            try {
+                JSONObject resultJson = new JSONObject(resultStr);
+                if (resultJson.has("existingTestCasesJql")) {
+                    return resultJson.getString("existingTestCasesJql");
+                }
+            } catch (Exception e) {
+                // Not JSON - assume string is the JQL itself
+                return resultStr;
+            }
+        }
+
+        // Handle Map (PolyglotMap from GraalJS)
+        if (result instanceof java.util.Map) {
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> resultMap = (java.util.Map<String, Object>) result;
+            if (resultMap.containsKey("existingTestCasesJql")) {
+                Object jqlValue = resultMap.get("existingTestCasesJql");
+                if (jqlValue != null) {
+                    return jqlValue.toString();
+                }
+            }
+        }
+
+        return fallback;
+    }
+
     /**
      * Create JSON representation of ticket for JavaScript context.
      */

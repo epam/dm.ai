@@ -121,7 +121,8 @@ public class TestCasesGeneratorParamsTest {
             true,                               // enableParallelTestCaseCheck
             10,                                 // parallelTestCaseCheckThreads
             true,                               // enableParallelPostVerification
-            5                                   // parallelPostVerificationThreads
+            5,                                  // parallelPostVerificationThreads
+            "jqlModifier.js"                    // jqlModifierJSAction
         );
 
         assertTrue("Constructor should set enableParallelTestCaseCheck correctly",

@@ -423,4 +423,92 @@ public class TestCasesGeneratorTest {
         assertEquals("High", testCase.getString("priority"));
         assertFalse(testCase.has("customFields")); // Should not include empty customFields
     }
+
+    @Test
+    public void testExtractJqlFromResult_JsonObject() throws Exception {
+        TestCasesGenerator generator = new TestCasesGenerator();
+        Method extractJqlMethod = TestCasesGenerator.class.getDeclaredMethod("extractJqlFromResult", Object.class, String.class);
+        extractJqlMethod.setAccessible(true);
+
+        org.json.JSONObject result = new org.json.JSONObject();
+        result.put("existingTestCasesJql", "project = TEST and labels = web");
+
+        String jql = (String) extractJqlMethod.invoke(generator, result, "fallback");
+
+        assertEquals("project = TEST and labels = web", jql);
+    }
+
+    @Test
+    public void testExtractJqlFromResult_DirectString() throws Exception {
+        TestCasesGenerator generator = new TestCasesGenerator();
+        Method extractJqlMethod = TestCasesGenerator.class.getDeclaredMethod("extractJqlFromResult", Object.class, String.class);
+        extractJqlMethod.setAccessible(true);
+
+        String result = "project = TEST and labels = mobile";
+
+        String jql = (String) extractJqlMethod.invoke(generator, result, "fallback");
+
+        assertEquals("project = TEST and labels = mobile", jql);
+    }
+
+    @Test
+    public void testExtractJqlFromResult_Null() throws Exception {
+        TestCasesGenerator generator = new TestCasesGenerator();
+        Method extractJqlMethod = TestCasesGenerator.class.getDeclaredMethod("extractJqlFromResult", Object.class, String.class);
+        extractJqlMethod.setAccessible(true);
+
+        String jql = (String) extractJqlMethod.invoke(generator, null, "fallback");
+
+        assertEquals("fallback", jql);
+    }
+
+    @Test
+    public void testExtractJqlFromResult_InvalidJsonObject() throws Exception {
+        TestCasesGenerator generator = new TestCasesGenerator();
+        Method extractJqlMethod = TestCasesGenerator.class.getDeclaredMethod("extractJqlFromResult", Object.class, String.class);
+        extractJqlMethod.setAccessible(true);
+
+        org.json.JSONObject result = new org.json.JSONObject();
+        result.put("someOtherField", "value");
+
+        String jql = (String) extractJqlMethod.invoke(generator, result, "fallback");
+
+        assertEquals("fallback", jql);
+    }
+
+    @Test
+    public void testApplyJqlModifier_WithEmptyOriginalJql() throws Exception {
+        TestCasesGenerator generator = new TestCasesGenerator();
+        Method applyJqlMethod = TestCasesGenerator.class.getDeclaredMethod("applyJqlModifier", ITicket.class, TestCasesGeneratorParams.class);
+        applyJqlMethod.setAccessible(true);
+
+        ITicket ticket = mock(ITicket.class);
+        when(ticket.getTicketKey()).thenReturn("TEST-123");
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setExistingTestCasesJql("");
+        params.setJqlModifierJSAction("test.js");
+
+        String result = (String) applyJqlMethod.invoke(generator, ticket, params);
+
+        assertEquals("", result);
+    }
+
+    @Test
+    public void testApplyJqlModifier_WithNullOriginalJql() throws Exception {
+        TestCasesGenerator generator = new TestCasesGenerator();
+        Method applyJqlMethod = TestCasesGenerator.class.getDeclaredMethod("applyJqlModifier", ITicket.class, TestCasesGeneratorParams.class);
+        applyJqlMethod.setAccessible(true);
+
+        ITicket ticket = mock(ITicket.class);
+        when(ticket.getTicketKey()).thenReturn("TEST-123");
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setExistingTestCasesJql(null);
+        params.setJqlModifierJSAction("test.js");
+
+        String result = (String) applyJqlMethod.invoke(generator, ticket, params);
+
+        assertNull(result);
+    }
 }
