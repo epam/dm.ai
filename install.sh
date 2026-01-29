@@ -392,6 +392,9 @@ install_local_java() {
     local platform="$1"
     local jre_dir="$INSTALL_DIR/jre"
 
+    # Ensure installation directory exists
+    mkdir -p "$INSTALL_DIR"
+
     progress "Downloading Java 23 JRE for local installation..."
 
     # Determine download URL based on platform
@@ -543,22 +546,33 @@ check_java() {
     local java_cmd=""
     local needs_local_install=false
 
-    # Check if Java is available (system or bundled)
-    if java_cmd=$(get_java_command 2>/dev/null); then
+    # Check for environment variable to force local Java installation (for testing)
+    if [ "${DMTOOLS_FORCE_LOCAL_JAVA:-false}" = "true" ]; then
+        progress "DMTOOLS_FORCE_LOCAL_JAVA=true - forcing local Java installation..."
+        needs_local_install=true
+    elif java_cmd=$(get_java_command 2>/dev/null); then
         # Java found, check version
         local java_version
         java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
-        local java_major_version
-        java_major_version=$(echo "$java_version" | cut -d'.' -f1)
 
-        if [ "$java_major_version" -ge 23 ] 2>/dev/null; then
-            info "Java version detected: $java_version"
-            return 0
-        else
-            warn "Java $java_version is too old (need 23+). Will try to install locally..."
+        # Validate that we got a valid version string
+        if [ -z "$java_version" ] || ! echo "$java_version" | grep -qE '^[0-9]+'; then
+            progress "Java command found but version could not be determined. Will try local installation..."
             needs_local_install=true
+        else
+            local java_major_version
+            java_major_version=$(echo "$java_version" | cut -d'.' -f1)
+
+            if [ "$java_major_version" -ge 23 ] 2>/dev/null; then
+                info "Java version detected: $java_version"
+                return 0
+            else
+                warn "Java $java_version is too old (need 23+). Will try to install locally..."
+                needs_local_install=true
+            fi
         fi
     else
+        progress "No Java found. Will try local installation..."
         needs_local_install=true
     fi
 
