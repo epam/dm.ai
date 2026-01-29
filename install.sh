@@ -518,11 +518,16 @@ install_local_java() {
 
 # Get Java command (bundled or system)
 get_java_command() {
+    # macOS has different JRE structure: Contents/Home/bin/java
+    local bundled_java_macos="$INSTALL_DIR/jre/Contents/Home/bin/java"
     local bundled_java="$INSTALL_DIR/jre/bin/java"
     local bundled_java_exe="$INSTALL_DIR/jre/bin/java.exe"
 
-    # Check if bundled Java exists (Windows uses .exe)
-    if [ -x "$bundled_java_exe" ]; then
+    # Check for bundled Java (order matters: macOS, Windows, Linux)
+    if [ -x "$bundled_java_macos" ]; then
+        echo "$bundled_java_macos"
+        return 0
+    elif [ -x "$bundled_java_exe" ]; then
         echo "$bundled_java_exe"
         return 0
     elif [ -x "$bundled_java" ]; then

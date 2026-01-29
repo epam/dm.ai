@@ -10,11 +10,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find Java command (bundled or system)
 find_java_command() {
     # Check for bundled Java first (installed with dmtools)
+    # macOS has different JRE structure: Contents/Home/bin/java
+    local bundled_java_macos="$HOME/.dmtools/jre/Contents/Home/bin/java"
     local bundled_java="$HOME/.dmtools/jre/bin/java"
     local bundled_java_exe="$HOME/.dmtools/jre/bin/java.exe"
 
-    # Windows uses .exe extension
-    if [ -x "$bundled_java_exe" ]; then
+    # Check for bundled Java (order matters: macOS, Windows, Linux)
+    if [ -x "$bundled_java_macos" ]; then
+        echo "$bundled_java_macos"
+        return 0
+    elif [ -x "$bundled_java_exe" ]; then
         echo "$bundled_java_exe"
         return 0
     elif [ -x "$bundled_java" ]; then
