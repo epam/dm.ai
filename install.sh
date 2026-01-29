@@ -2,8 +2,8 @@
 # DMTools CLI Installation Script
 # Usage:
 #   Latest version: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
-#   Specific version: DMTOOLS_VERSION=v1.7.103 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/$DMTOOLS_VERSION/install.sh | bash
-#   Or as argument: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash -s v1.7.103
+#   Specific version: DMTOOLS_VERSION=v1.7.124 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/$DMTOOLS_VERSION/install.sh | bash
+#   Or as argument: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash -s v1.7.124
 # Requirements: Java 23 (will attempt automatic installation on macOS/Linux)
 
 set -e
@@ -91,7 +91,7 @@ detect_version() {
         return 0
     fi
     
-    # Method 3: Try to detect from script filename (if saved as install-v1.7.103.sh)
+    # Method 3: Try to detect from script filename (if saved as install-v1.7.124.sh)
     if [ -f "${BASH_SOURCE[0]}" ]; then
         local script_name
         script_name=$(basename "${BASH_SOURCE[0]}")

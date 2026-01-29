@@ -188,7 +188,7 @@ jobs:
 
           **macOS / Linux / Git Bash:**
           \`\`\`bash
-          DMTOOLS_VERSION=${VERSION} curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/\$DMTOOLS_VERSION/install.sh | bash
+          DMTOOLS_VERSION=${VERSION} curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/${VERSION}/install.sh | bash
           \`\`\`
 
           **Windows (cmd.exe):**
