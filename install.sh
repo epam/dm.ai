@@ -807,11 +807,18 @@ update_shell_config() {
     [ -f "$HOME/.profile" ] && shell_configs+=("$HOME/.profile")
     
     local path_export="export PATH=\"$BIN_DIR:\$PATH\""
-    
+
     for config in "${shell_configs[@]}"; do
-        if [ -f "$config" ]; then
+        # For fish, file may not exist yet - create it
+        # For other shells, only update if file exists
+        if [ -f "$config" ] || [[ "$config" == *".fish" ]]; then
             # Check if PATH is already added
             if ! grep -q "$BIN_DIR" "$config" 2>/dev/null; then
+                # Ensure parent directory exists
+                local config_dir=$(dirname "$config")
+                mkdir -p "$config_dir"
+
+                # Add PATH configuration
                 echo "" >> "$config"
                 echo "# Added by DMTools installer" >> "$config"
                 if [[ "$config" == *".fish" ]]; then
