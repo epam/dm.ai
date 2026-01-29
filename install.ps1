@@ -46,7 +46,7 @@ function Get-LatestVersion {
     }
     
     try {
-        $response = Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        $response = Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest" -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue
         $location = $response.Headers.Location
         if ($location -match 'tag/([^/]+)') {
             return $matches[1]
