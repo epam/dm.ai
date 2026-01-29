@@ -1,8 +1,8 @@
 #!/bin/bash
 # DMTools CLI Installation Script
-# Usage: 
+# Usage:
 #   Latest version: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
-#   Specific version: VERSION=v1.7.103 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.103/install.sh | bash
+#   Specific version: DMTOOLS_VERSION=v1.7.103 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/$DMTOOLS_VERSION/install.sh | bash
 #   Or as argument: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash -s v1.7.103
 # Requirements: Java 23 (will attempt automatic installation on macOS/Linux)
 
@@ -69,9 +69,9 @@ detect_platform() {
 detect_version() {
     local version=""
     
-    # Method 1: Check for VERSION environment variable (highest priority)
-    if [ -n "${VERSION:-}" ]; then
-        version="$VERSION"
+    # Method 1: Check for DMTOOLS_VERSION environment variable (highest priority)
+    if [ -n "${DMTOOLS_VERSION:-}" ]; then
+        version="$DMTOOLS_VERSION"
         # Ensure version has 'v' prefix if it doesn't already
         if [[ ! "$version" =~ ^v ]]; then
             version="v${version}"
@@ -887,15 +887,30 @@ main() {
     local version
     local version_source="latest"
     
-    # Check if version was explicitly provided
-    if [ -n "${VERSION:-}" ] || [ $# -gt 0 ]; then
-        version=$(get_version "$@")
+    # Check if version was explicitly provided via DMTOOLS_VERSION env var
+    if [ -n "${DMTOOLS_VERSION:-}" ]; then
+        version="$DMTOOLS_VERSION"
+        # Ensure version has 'v' prefix
+        if [[ ! "$version" =~ ^v ]]; then
+            version="v${version}"
+        fi
         version_source="specified"
+        info "Using specified version from DMTOOLS_VERSION env: $version"
+    elif [ $# -gt 0 ] && [ -n "$1" ]; then
+        # Version provided as command line argument
+        version="$1"
+        # Ensure version has 'v' prefix
+        if [[ ! "$version" =~ ^v ]]; then
+            version="v${version}"
+        fi
+        version_source="specified"
+        info "Using specified version from argument: $version"
     else
-        # Try to detect from script source first
+        # Try to detect from script source
         if version=$(detect_version "$@"); then
             if [ -n "$version" ]; then
                 version_source="detected from URL"
+                info "Detected version from URL: $version"
             else
                 version=$(get_latest_version)
             fi
