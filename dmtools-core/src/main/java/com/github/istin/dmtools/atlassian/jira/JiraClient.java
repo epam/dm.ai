@@ -17,6 +17,8 @@ import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.mcp.MCPParam;
 import com.github.istin.dmtools.mcp.MCPTool;
+import com.github.istin.dmtools.networking.RetryPolicy;
+import com.github.istin.dmtools.networking.RetryPolicyConfig;
 import kotlin.Pair;
 import lombok.Getter;
 import lombok.Setter;
@@ -113,16 +115,19 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     
     // Cache manager for keys logic only (field mappings, Cloud/Server detection, etc.)
     private final CacheManager cacheManager;
-    
+
     // Field mapping cache TTL in milliseconds (24 hours)
     private static final long FIELD_MAPPING_CACHE_TTL = 24 * 60 * 60 * 1000L;
-    
+
     // Cache for negative field resolution results (fields that don't exist) - 1 hour TTL
     private static final long NEGATIVE_FIELD_CACHE_TTL = 60 * 60 * 1000L;
-    
+
     // Special marker for cached negative results
     private static final String FIELD_NOT_FOUND_MARKER = "__FIELD_NOT_FOUND__";
     private final int maxResults;
+
+    // Retry policy for handling rate limits and transient failures
+    private RetryPolicy retryPolicy;
 
     public void setClearCache(boolean clearCache) throws IOException {
         isClearCache = clearCache;
@@ -165,7 +170,16 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
         // Initialize cache manager for keys logic only (memory caching for field mappings, cloud detection, etc.)
         this.cacheManager = new CacheManager(this.logger);
-        
+
+        // Initialize retry policy - check if this is cloud Jira and use appropriate settings
+        String cloudIndicator = System.getenv("JIRA_CLOUD");
+        if ("true".equalsIgnoreCase(cloudIndicator) || (basePath != null && basePath.contains(".atlassian.net"))) {
+            this.retryPolicy = RetryPolicyConfig.forJiraCloud(this.logger);
+        } else {
+            // Use environment-based configuration or defaults
+            this.retryPolicy = RetryPolicyConfig.fromEnvironment(this.logger);
+        }
+
         // Initialize GET requests cache with original logic
         setCacheFolderNameAndReinit("cache" + getClass().getSimpleName());
     }
@@ -2069,40 +2083,100 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 }
             }
 
-            try {
-                Request request = sign(new Request.Builder())
-                        .url(url)
-                        .build();
-                try (Response response = client.newCall(request).execute()) {
-                    if (response.isSuccessful()) {
-                        String result = response.body() != null ? response.body().string() : null;
-                        if (isReadCacheGetRequestsEnabled) {
-                            String value = DigestUtils.md5Hex(url);
-                            File cache = new File(getCacheFolderName());
-                            cache.mkdirs();
-                            File cachedFile = new File(getCacheFolderName() + "/" + value);
-                            FileUtils.writeStringToFile(cachedFile, result, "UTF-8");
+            int attemptNumber = 1;
+            IOException lastException = null;
+            Response lastResponse = null;
+
+            while (attemptNumber <= retryPolicy.getMaxRetries()) {
+                try {
+                    Request request = sign(new Request.Builder())
+                            .url(url)
+                            .build();
+                    try (Response response = client.newCall(request).execute()) {
+                        if (response.isSuccessful()) {
+                            String result = response.body() != null ? response.body().string() : null;
+                            if (isReadCacheGetRequestsEnabled) {
+                                String value = DigestUtils.md5Hex(url);
+                                File cache = new File(getCacheFolderName());
+                                cache.mkdirs();
+                                File cachedFile = new File(getCacheFolderName() + "/" + value);
+                                FileUtils.writeStringToFile(cachedFile, result, "UTF-8");
+                            }
+                            return result;
+                        } else {
+                            lastResponse = response;
+                            IOException exception = AtlassianRestClient.printAndCreateException(request, response);
+
+                            // Check if it's a rate limit or retryable error
+                            if (retryPolicy.isRetryable(exception) && attemptNumber < retryPolicy.getMaxRetries()) {
+                                retryPolicy.logRetryAttempt(attemptNumber, url, exception);
+                                long delayMs = retryPolicy.calculateDelayMs(attemptNumber, response);
+                                try {
+                                    retryPolicy.executeDelay(delayMs);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new IOException("Request interrupted during retry", e);
+                                }
+                                attemptNumber++;
+                                continue;
+                            } else {
+                                throw exception;
+                            }
                         }
-                        return result;
-                    } else {
-                        throw AtlassianRestClient.printAndCreateException(request, response);
                     }
-                }
-            } catch (SocketTimeoutException | ConnectException e) {
-                log(url);
-                if (isRepeatIfFails) {
-                    if (isWaitBeforePerform) {
+                } catch (SocketTimeoutException | ConnectException e) {
+                    lastException = e;
+                    log("Connection error for URL: " + url + " - " + e.getMessage());
+
+                    if (isRepeatIfFails && attemptNumber < retryPolicy.getMaxRetries()) {
+                        retryPolicy.logRetryAttempt(attemptNumber, url, new IOException("Connection error: " + e.getMessage()));
+
+                        // For connection errors, use exponential backoff
+                        long waitTime = 200L * (long) Math.pow(2, attemptNumber - 1);
                         try {
-                            Thread.currentThread().sleep(sleepTimeRequest);
-                        } catch (InterruptedException socketException) {
-                            socketException.printStackTrace();
+                            Thread.sleep(Math.min(waitTime, 5000)); // Cap at 5 seconds for connection errors
+                        } catch (InterruptedException interruptedException) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException("Request interrupted during retry", interruptedException);
                         }
+                        attemptNumber++;
+                    } else {
+                        throw e;
                     }
-                    return execute(url, false, isIgnoreCache);
-                } else {
-                    throw e;
+                } catch (IOException e) {
+                    lastException = e;
+
+                    // Check if it's a retryable error (rate limit, service unavailable, etc.)
+                    if (retryPolicy.isRetryable(e) && isRepeatIfFails && attemptNumber < retryPolicy.getMaxRetries()) {
+                        retryPolicy.logRetryAttempt(attemptNumber, url, e);
+
+                        // For rate limits, use retry policy delay calculation
+                        Response response = (e instanceof RestClient.RateLimitException) ?
+                            ((RestClient.RateLimitException)e).getResponse() : null;
+                        long delayMs = retryPolicy.calculateDelayMs(attemptNumber, response);
+
+                        try {
+                            retryPolicy.executeDelay(delayMs);
+                        } catch (InterruptedException interruptedException) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException("Request interrupted during retry", interruptedException);
+                        }
+                        attemptNumber++;
+                    } else {
+                        throw e;
+                    }
                 }
             }
+
+            // If we've exhausted all retries
+            if (lastException != null) {
+                retryPolicy.logMaxRetriesExceeded(url, lastException);
+                throw lastException;
+            }
+
+            // This shouldn't be reached, but just in case
+            throw new IOException("Unexpected error in request execution");
+
         } finally {
             Long prevTime = timeMeasurement.get(url);
             long time = System.currentTimeMillis() - 200 - prevTime;
@@ -2128,29 +2202,94 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 e.printStackTrace();
             }
         }
-        RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
-        try (Response response = client.newCall(sign(
-                new Request.Builder())
-                .url(url)
-                .post(body)
-                .build()
-        ).execute()) {
-            if (response.isSuccessful()) {
-                logger.info("Request performed successfully!");
-                return response.body() != null ? response.body().string() : null;
-            } else {
-                int code = response.code();
-                logger.info("Error creating fix version. Response code: {}", code);
-                ResponseBody responseBody = response.body();
-                String responseBodyAsString = responseBody != null ? responseBody.string() : "";
-                if (responseBody != null) {
-                    logger.error("Response body: {}", responseBodyAsString);
+
+        int attemptNumber = 1;
+        IOException lastException = null;
+
+        while (attemptNumber <= retryPolicy.getMaxRetries()) {
+            RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
+            Request request = sign(new Request.Builder())
+                    .url(url)
+                    .post(body)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (response.isSuccessful()) {
+                    logger.info("Request performed successfully!");
+                    return response.body() != null ? response.body().string() : null;
+                } else {
+                    int code = response.code();
+
+                    // Check if it's a rate limit error
+                    if (code == 429 || code == 503) {
+                        String responseBodyAsString = response.body() != null ? response.body().string() : "";
+                        IOException exception = new RestClient.RateLimitException(
+                            "Rate limit or service unavailable: " + code,
+                            responseBodyAsString,
+                            response,
+                            code
+                        );
+
+                        if (attemptNumber < retryPolicy.getMaxRetries()) {
+                            retryPolicy.logRetryAttempt(attemptNumber, url, exception);
+                            long delayMs = retryPolicy.calculateDelayMs(attemptNumber, response);
+                            try {
+                                retryPolicy.executeDelay(delayMs);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new IOException("POST request interrupted during retry", e);
+                            }
+                            attemptNumber++;
+                            continue;
+                        } else {
+                            retryPolicy.logMaxRetriesExceeded(url, exception);
+                            throw exception;
+                        }
+                    }
+
+                    // For non-retryable errors, log and return the response
+                    logger.info("Error in POST request. Response code: {}", code);
+                    ResponseBody responseBody = response.body();
+                    String responseBodyAsString = responseBody != null ? responseBody.string() : "";
+                    if (responseBody != null) {
+                        logger.error("Response body: {}", responseBodyAsString);
+                    }
+                    return responseBodyAsString;
                 }
-                return responseBodyAsString;
+            } catch (IOException e) {
+                lastException = e;
+
+                // Check if it's a retryable error
+                if (retryPolicy.isRetryable(e) && attemptNumber < retryPolicy.getMaxRetries()) {
+                    retryPolicy.logRetryAttempt(attemptNumber, url, e);
+
+                    Response response = (e instanceof RestClient.RateLimitException) ?
+                        ((RestClient.RateLimitException)e).getResponse() : null;
+                    long delayMs = retryPolicy.calculateDelayMs(attemptNumber, response);
+
+                    try {
+                        retryPolicy.executeDelay(delayMs);
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("POST request interrupted during retry", interruptedException);
+                    }
+                    attemptNumber++;
+                } else {
+                    throw e;
+                }
+            } finally {
+                closeAllConnections();
             }
-        } finally {
-            closeAllConnections();
         }
+
+        // If we've exhausted all retries
+        if (lastException != null) {
+            retryPolicy.logMaxRetriesExceeded(url, lastException);
+            throw lastException;
+        }
+
+        // This shouldn't be reached, but just in case
+        throw new IOException("Unexpected error in POST request execution");
     }
 
     @Override
@@ -2962,5 +3101,21 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             }
         }
         return null;
+    }
+
+    /**
+     * Sets a custom retry policy for handling rate limits and transient failures.
+     * @param retryPolicy The retry policy to use, or null to use default policy
+     */
+    public void setRetryPolicy(RetryPolicy retryPolicy) {
+        this.retryPolicy = retryPolicy != null ? retryPolicy : RetryPolicyConfig.fromEnvironment(this.logger);
+    }
+
+    /**
+     * Gets the current retry policy.
+     * @return The current retry policy
+     */
+    public RetryPolicy getRetryPolicy() {
+        return retryPolicy;
     }
 }
