@@ -866,7 +866,12 @@ print_instructions() {
     echo "     export JIRA_BASE_PATH=https://your-domain.atlassian.net"
     echo ""
     echo "System Requirements:"
-    echo "  ✓ Java $(java -version 2>&1 | head -n 1 | cut -d'"' -f2) detected"
+    if java_cmd=$(get_java_command 2>/dev/null); then
+        local java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+        echo "  ✓ Java $java_version detected"
+    else
+        echo "  ⚠ Java not found (restart shell or source config file)"
+    fi
     echo ""
     echo "For more information, visit: https://github.com/${REPO}"
 }
