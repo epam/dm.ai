@@ -44,10 +44,11 @@ Delivery Management Tools
 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install | bash
 ```
 
-**Windows (Universal - any terminal):**
+**Windows (cmd.exe, PowerShell, Windows Terminal):**
 ```cmd
 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
 ```
+*Note: This command is Windows-only. macOS/Linux users should use the bash command above.*
 
 **Verify installation:**
 ```bash
