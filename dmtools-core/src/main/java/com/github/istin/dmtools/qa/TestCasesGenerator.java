@@ -22,6 +22,7 @@ import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.TrackerParams;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
+import com.github.istin.dmtools.teammate.InstructionProcessor;
 import dagger.Component;
 import lombok.*;
 import org.apache.logging.log4j.LogManager;
@@ -42,6 +43,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
 
     private static final Logger logger = LogManager.getLogger(TestCasesGenerator.class);
     private static final String DEFAULT_EXISTING_RELATIONSHIP = Relationship.RELATES_TO;
+
+    InstructionProcessor instructionProcessor;
 
     @Data
     @NoArgsConstructor
@@ -97,6 +100,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     protected void initializeStandalone() {
         // Use existing Dagger component for standalone mode
         DaggerTestCasesGeneratorComponent.create().inject(this);
+
+        // Initialize instruction processor after dependencies are injected
+        this.instructionProcessor = new InstructionProcessor(confluence);
     }
 
     @Override
@@ -108,6 +114,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 .serverManagedIntegrationsModule(module)
                 .build();
             component.inject(this);
+
+            // Initialize instruction processor after dependencies are injected
+            this.instructionProcessor = new InstructionProcessor(confluence);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize TestCasesGenerator in server-managed mode", e);
         }
@@ -130,7 +139,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 List<? extends ITicket> listOfAllTestCases = trackerClient.searchAndPerform(effectiveJql, relatedFields);
                 TicketContext ticketContext = new TicketContext(trackerClient, ticket);
                 ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences());
-                String additionalRules = extractFromConfluence(params.getConfluencePages());
+                String[] additionalRulesArray = instructionProcessor.extractIfNeeded(params.getConfluencePages());
+                String additionalRules = additionalRulesArray.length > 0 ? additionalRulesArray[0] : "";
                 result.add(generateTestCases(ticketContext, additionalRules, listOfAllTestCases, params));
                 TrackerParams.OutputType outputType = getOutputTypeSafe(params);
                 if (!outputType.equals(TrackerParams.OutputType.none)) {
@@ -192,10 +202,11 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             int tokenLimit = (systemTokenLimits - storyTokens) / 2;
             System.out.println("GENERATION TOKEN LIMIT: " + tokenLimit);
 
-            // Extract customFieldsRules (may be Confluence URL)
+            // Extract customFieldsRules (may be Confluence URL or file path)
             String customFieldsRules = params.getCustomFieldsRules();
-            if (customFieldsRules != null && customFieldsRules.startsWith("https://")) {
-                customFieldsRules = extractFromConfluence(customFieldsRules);
+            if (customFieldsRules != null && !customFieldsRules.trim().isEmpty()) {
+                String[] customFieldsRulesArray = instructionProcessor.extractIfNeeded(customFieldsRules);
+                customFieldsRules = customFieldsRulesArray.length > 0 ? customFieldsRulesArray[0] : "";
             }
 
             // Combine example fields with custom fields
@@ -340,8 +351,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             return "";
         }
         String unpackedExamples;
-        if (examples.startsWith("https://")) {
-            unpackedExamples = extractFromConfluence(examples);
+        if (examples.startsWith("https://") || examples.startsWith("/") || examples.startsWith("./") || examples.startsWith("../")) {
+            String[] unpackedExamplesArray = instructionProcessor.extractIfNeeded(examples);
+            unpackedExamples = unpackedExamplesArray.length > 0 ? unpackedExamplesArray[0] : "";
         } else if (examples.startsWith("ql(")) {
             String ql = examples.substring(3, examples.length() - 1);
             
@@ -388,22 +400,6 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             unpackedExamples = examples;
         }
         return unpackedExamples;
-    }
-    
-
-    private String extractFromConfluence(String... urls) throws IOException {
-        StringBuilder content = new StringBuilder();
-        for (String url : urls) {
-            String value = confluence.contentByUrl(url).getStorage().getValue();
-            if (StringUtils.isConfluenceYamlFormat(value)) {
-                value = StringUtils.extractYamlContentFromConfluence(value);
-            }
-            if (!content.isEmpty()) {
-                content.append("\n");
-            }
-            content.append(value);
-        }
-        return content.toString();
     }
 
     private List<TestCaseGeneratorAgent.TestCase> deduplicateInChunks(
@@ -692,13 +688,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     @NotNull
     public List<ITicket> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params) throws Exception {
         List<ITicket> finaResults = new ArrayList<>();
-        String value = confluence.contentByUrl(relatedTestCasesRulesLink).getStorage().getValue();
-        String extraRelatedTestCaseRulesFromConfluence;
-        if (StringUtils.isConfluenceYamlFormat(value)) {
-            extraRelatedTestCaseRulesFromConfluence  = StringUtils.extractYamlContentFromConfluence(value);
-        } else {
-            extraRelatedTestCaseRulesFromConfluence = value;
-        }
+        String[] extraRelatedTestCaseRulesArray = instructionProcessor.extractIfNeeded(relatedTestCasesRulesLink);
+        String extraRelatedTestCaseRulesFromConfluence = extraRelatedTestCaseRulesArray.length > 0 ? extraRelatedTestCaseRulesArray[0] : "";
         ChunkPreparation chunkPreparation = new ChunkPreparation();
 
         int storyTokens = new Claude35TokenCounter().countTokens(ticketText);

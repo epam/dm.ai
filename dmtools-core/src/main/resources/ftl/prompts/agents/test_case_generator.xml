@@ -5,7 +5,7 @@
     <instructions>
         Your task is to write test cases and follow these rules:
         1. Each generated Test Case must include priority from the list: {priorities}
-        2. Don't create duplicates, check {existing_test_cases}
+        2. ⚠️ CRITICAL: Follow ALL rules in {important_rules} for duplicate detection and AC coverage. For EACH new test, check if it covers UNCOVERED acceptance criterion (apply relaxed rules) OR calculate similarity with {existing_test_cases} (threshold 75).
         3. If {existing_test_cases} block is empty you must generate new test cases
         4. Don't introduce additional Test Cases which are not related to {story_description}
         5. Don't create new test cases if current list of test cases already covers the {story_description}, just return empty array []
@@ -21,6 +21,14 @@
             ${global.priorities}
         </priorities>
         <existing_test_cases>
+            ⚠️⚠️⚠️ CRITICAL WARNING ⚠️⚠️⚠️
+
+            Before generating ANY test case, you MUST:
+            1. Read ALL tests below completely
+            2. Follow {important_rules} for AC Coverage Priority and duplicate detection
+            3. Check if test covers UNCOVERED AC → apply relaxed rules
+            4. For COVERED AC → calculate similarity
+
             ${global.existingTestCases}
         </existing_test_cases>
         <important_rules>

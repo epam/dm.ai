@@ -109,6 +109,26 @@ public class JiraClientTest {
     }
 
     @Test
+    public void testSearchAndPerformWithNullFields() throws Exception {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doReturn(new SearchResult()).when(spyClient).search(anyString(), anyInt(), any());
+
+        // This should not throw ClassCastException
+        List<Ticket> tickets = spyClient.searchAndPerform("query", null);
+        assertNotNull(tickets);
+    }
+
+    @Test
+    public void testSearchAndPerformWithEmptyFields() throws Exception {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doReturn(new SearchResult()).when(spyClient).search(anyString(), anyInt(), any());
+
+        // This should not throw ClassCastException
+        List<Ticket> tickets = spyClient.searchAndPerform("query", new String[]{});
+        assertNotNull(tickets);
+    }
+
+    @Test
     public void testUpdateDescription() throws IOException {
         String ticketKey = "TEST-123";
         String description = "New description";

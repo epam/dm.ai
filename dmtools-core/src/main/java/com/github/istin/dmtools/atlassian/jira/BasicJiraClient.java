@@ -109,13 +109,21 @@ public class BasicJiraClient extends JiraClient<Ticket> {
         List<String> defaultFields = new ArrayList<>(Arrays.asList(DEFAULT_QUERY_FIELDS));
 
         if (JIRA_EXTRA_FIELDS_PROJECT != null && JIRA_EXTRA_FIELDS != null) {
-            customCodesOfConfigFields = new String[JIRA_EXTRA_FIELDS.length];
+            List<String> customCodes = new ArrayList<>();
             for (int i = 0; i < JIRA_EXTRA_FIELDS.length; i++) {
                 String extraField = JIRA_EXTRA_FIELDS[i];
-                String fieldCustomCode = getFieldCustomCode(JIRA_EXTRA_FIELDS_PROJECT, extraField);
-                customCodesOfConfigFields[i] = fieldCustomCode;
-                defaultFields.add(fieldCustomCode);
+                // Use getAllFieldCustomCodes to get ALL custom fields with this name
+                List<String> fieldCustomCodes = getAllFieldCustomCodes(JIRA_EXTRA_FIELDS_PROJECT, extraField);
+                if (!fieldCustomCodes.isEmpty()) {
+                    // Add ALL matching custom fields
+                    customCodes.addAll(fieldCustomCodes);
+                    defaultFields.addAll(fieldCustomCodes);
+                    log("Extra field '" + extraField + "' resolved to " + fieldCustomCodes.size() + " custom fields: " + fieldCustomCodes);
+                } else {
+                    log("Extra field '" + extraField + "' not found in custom fields");
+                }
             }
+            customCodesOfConfigFields = customCodes.toArray(new String[0]);
         } else {
             customCodesOfConfigFields = null;
         }

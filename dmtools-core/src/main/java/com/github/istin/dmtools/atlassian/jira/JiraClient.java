@@ -414,12 +414,17 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             integration = "jira",
             category = "search"
     )
-    public List<T> searchAndPerform(String searchQueryJQL, String[] fields) throws Exception {
+    public List<T> searchAndPerform(
+            @MCPParam(name = "jql", description = "JQL query string to search tickets", required = true, example = "project = DEMO AND status = Open")
+            String jql,
+            @MCPParam(name = "fields", description = "Optional array of field names to include in response", required = false, example = "[\"summary\", \"status\", \"assignee\"]")
+            String[] fields
+    ) throws Exception {
         List<T> tickets = new ArrayList<>();
         searchAndPerform(ticket -> {
             tickets.add(ticket);
             return false;
-        }, searchQueryJQL, fields);
+        }, jql, fields);
         return tickets;
     }
 
@@ -1483,15 +1488,46 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             try {
                 String response = getFields(projectKey);
                 Map<String, String> reverseMapping = new ConcurrentHashMap<>();
+                // Track field names to detect duplicates
+                Map<String, Integer> fieldNameCounts = new ConcurrentHashMap<>();
+                Map<String, List<String>> fieldNameToIds = new ConcurrentHashMap<>();
+
                 JSONArray fields = new JSONArray(response);
+
+                // First pass: collect all field IDs grouped by name
                 for (int i = 0; i < fields.length(); i++) {
                     JSONObject field = fields.getJSONObject(i);
                     String fieldId = field.optString("id");
                     String fieldName = field.optString("name");
                     if (fieldId != null && fieldId.startsWith("customfield_") && fieldName != null) {
-                        reverseMapping.put(fieldId, fieldName);
+                        fieldNameCounts.merge(fieldName, 1, Integer::sum);
+                        fieldNameToIds.computeIfAbsent(fieldName, k -> new ArrayList<>()).add(fieldId);
                     }
                 }
+
+                // Second pass: create mapping with postfix for duplicates
+                for (int i = 0; i < fields.length(); i++) {
+                    JSONObject field = fields.getJSONObject(i);
+                    String fieldId = field.optString("id");
+                    String fieldName = field.optString("name");
+                    if (fieldId != null && fieldId.startsWith("customfield_") && fieldName != null) {
+                        String mappedName = fieldName;
+                        // If there are multiple fields with the same name, add field ID postfix
+                        if (fieldNameCounts.get(fieldName) > 1) {
+                            mappedName = fieldName + " (" + fieldId + ")";
+                        }
+                        reverseMapping.put(fieldId, mappedName);
+                    }
+                }
+
+                // Log duplicate fields
+                for (Map.Entry<String, Integer> entry : fieldNameCounts.entrySet()) {
+                    if (entry.getValue() > 1) {
+                        log("Found " + entry.getValue() + " fields with name '" + entry.getKey() +
+                            "', adding field IDs as postfix: " + fieldNameToIds.get(entry.getKey()));
+                    }
+                }
+
                 return reverseMapping;
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -1694,7 +1730,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     private List<String> resolveFieldNames(String[] fields, String projectKey) {
         if (fields == null || fields.length == 0) {
-            return Arrays.asList(fields);
+            return Collections.emptyList();
         }
 
         List<String> resolvedFields = new ArrayList<>();
@@ -1715,34 +1751,54 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                     resolvedFields.add(field);
                     //log("Field '" + field + "' is a system field, keeping original name");
 
-                    // Also try to find a custom field with the same name (case-insensitive)
-                    String customFieldId = resolveFieldNameToCustomFieldId(projectKey, field);
-                    if (customFieldId != null) {
-                        // Check if custom field already exists (case-insensitive)
-                        boolean customAlreadyExists = resolvedFields.stream()
-                            .anyMatch(existing -> existing.equalsIgnoreCase(customFieldId));
-                        if (!customAlreadyExists) {
-                            resolvedFields.add(customFieldId);
-                            //log("Also found custom field '" + customFieldId + "' for system field '" + field + "'");
+                    // Also try to find ALL custom fields with the same name (case-insensitive)
+                    try {
+                        List<String> customFieldIds = getAllFieldCustomCodes(projectKey, field);
+                        for (String customFieldId : customFieldIds) {
+                            // Check if custom field already exists (case-insensitive)
+                            boolean customAlreadyExists = resolvedFields.stream()
+                                .anyMatch(existing -> existing.equalsIgnoreCase(customFieldId));
+                            if (!customAlreadyExists) {
+                                resolvedFields.add(customFieldId);
+                                //log("Also found custom field '" + customFieldId + "' for system field '" + field + "'");
+                            }
                         }
+                    } catch (Exception e) {
+                        //log("Error finding custom fields for system field '" + field + "': " + e.getMessage());
                     }
                 } else {
-                    // For non-system fields, try to resolve to custom field
-                    //log("Attempting to resolve field '" + field + "' for project '" + projectKey + "'");
-                    String resolvedField = resolveFieldNameToCustomFieldId(projectKey, field);
-                    if (resolvedField != null) {
-                        // Check if resolved field already exists (case-insensitive)
-                        boolean resolvedAlreadyExists = resolvedFields.stream()
-                            .anyMatch(existing -> existing.equalsIgnoreCase(resolvedField));
-                        if (!resolvedAlreadyExists) {
-                            resolvedFields.add(resolvedField);
-                            //log("Successfully resolved field '" + field + "' to '" + resolvedField + "'");
-                        } else {
-                            //log("Resolved field '" + resolvedField + "' already exists, skipping");
-                        }
-                    } else {
+                    // Check if field is already a custom field ID (starts with "customfield_")
+                    if (field.startsWith("customfield_")) {
+                        // This is already a custom field ID, keep it as-is
                         resolvedFields.add(field);
-                        //log("Field '" + field + "' not found in custom fields, keeping original name");
+                        log("Field '" + field + "' is already a custom field ID, keeping as-is");
+                    } else {
+                        // For non-system fields, try to resolve to ALL custom fields with this name
+                        log("Attempting to resolve field '" + field + "' for project '" + projectKey + "'");
+                        try {
+                            List<String> customFieldIds = getAllFieldCustomCodes(projectKey, field);
+                            log("Found " + customFieldIds.size() + " custom fields for '" + field + "': " + customFieldIds);
+                            if (!customFieldIds.isEmpty()) {
+                                // Add ALL matching custom fields
+                                for (String customFieldId : customFieldIds) {
+                                    // Check if resolved field already exists (case-insensitive)
+                                    boolean resolvedAlreadyExists = resolvedFields.stream()
+                                        .anyMatch(existing -> existing.equalsIgnoreCase(customFieldId));
+                                    if (!resolvedAlreadyExists) {
+                                        resolvedFields.add(customFieldId);
+                                        log("Successfully resolved field '" + field + "' to '" + customFieldId + "'");
+                                    } else {
+                                        log("Resolved field '" + customFieldId + "' already exists, skipping");
+                                    }
+                                }
+                            } else {
+                                resolvedFields.add(field);
+                                log("Field '" + field + "' not found in custom fields, keeping original name");
+                            }
+                        } catch (Exception e) {
+                            resolvedFields.add(field);
+                            log("Error resolving field '" + field + "': " + e.getMessage() + ". Using original name.");
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -1751,9 +1807,9 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             }
         }
 
-        if (logger != null) {
-            //logger.debug("Resolved {} field names for project {} -> {} total fields", fields.length, projectKey, resolvedFields.size());
-        }
+        log("Resolved " + fields.length + " field names for project " + projectKey + " -> " + resolvedFields.size() + " total fields");
+        log("Original fields: " + String.join(", ", fields));
+        log("Resolved fields: " + String.join(", ", resolvedFields));
 
         return resolvedFields;
     }
@@ -1869,7 +1925,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
      */
     private List<String> resolveFieldNamesForSearch(String searchQueryJQL, String[] fields) {
         if (fields == null || fields.length == 0) {
-            return Arrays.asList(fields);
+            return Collections.emptyList();
         }
 
         //log("Attempting to resolve fields for search. JQL: " + searchQueryJQL);
@@ -1898,59 +1954,194 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @MCPTool(
             name = "jira_update_field",
-            description = "Update a specific field of a Jira ticket. Supports both custom field IDs (e.g., description, 'customfield_10091') and user-friendly field names (e.g., 'Diagram')",
+            description = "Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field.",
             integration = "jira",
             category = "ticket_management"
     )
-    public String updateField(@MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key, 
-                            @MCPParam(name = "field", description = "The field name to update (supports both custom field IDs like 'customfield_10091' and user-friendly names like 'Diagram')", required = true) String field, 
-                            @MCPParam(name = "value", description = "The new value for the field", required = true) Object value) throws IOException {
+    public String updateField(@MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key,
+                            @MCPParam(name = "field", description = "The field to update. Use field name (e.g., 'Dependencies') to update ALL fields with that name, or custom field ID (e.g., 'customfield_10091') to update specific field", required = true) String field,
+                            @MCPParam(name = "value", description = "The new value for the field(s)", required = true) Object value) throws IOException {
         if ("".equals(value)) {
             return clearField(key, field);
         }
-        
+
+        // Check if field is a custom field ID or a field name
+        boolean isCustomFieldId = field.startsWith("customfield_");
+
         // Extract project key from ticket key for field resolution
         String projectKey = parseJiraProject(key);
 
-        // Resolve field name to custom field ID if needed
-        String resolvedFieldName = field;
+        // Skip resolution for system fields and custom field IDs
+        if (isCustomFieldId || SYSTEM_FIELDS.contains(field.toLowerCase())) {
+            // Update single field - either system field or specific custom field ID
+            GenericRequest jiraRequest = getTicket(key);
+            JSONObject body = new JSONObject();
+            body.put("update", new JSONObject()
+                    .put(field, new JSONArray()
+                            .put(new JSONObject()
+                                    .put("set", value)
+                            )));
+            jiraRequest.setBody(body.toString());
+            String updateResult = jiraRequest.put();
+            log("Updated field '" + field + "' on ticket " + key + " with value: " + value);
 
-        // Skip resolution for system fields (like labels, summary, description, etc.)
-        if (!SYSTEM_FIELDS.contains(field.toLowerCase())) {
-            try {
-                String customFieldId = resolveFieldNameToCustomFieldId(projectKey, field);
-                if (customFieldId != null) {
-                    resolvedFieldName = customFieldId;
-                    log("Field resolution: '" + field + "' resolved to '" + resolvedFieldName + "' for ticket " + key);
-                } else {
-                    log("Field resolution: Using original field name '" + field + "' for ticket " + key + " (no custom field mapping found)");
-                }
-            } catch (Exception e) {
-                log("Field resolution failed for '" + field + "', using original field name: " + e.getMessage());
-                // Continue with original field name as fallback
+            if (updateResult == null || updateResult.trim().isEmpty()) {
+                return "Field '" + field + "' updated successfully on ticket " + key;
             }
+            return updateResult;
         } else {
-            log("Field resolution: Skipping resolution for system field '" + field + "'");
-        }
-        
-        GenericRequest jiraRequest = getTicket(key);
-        JSONObject body = new JSONObject();
-        body.put("update", new JSONObject()
-                .put(resolvedFieldName, new JSONArray()
-                        .put(new JSONObject()
-                                .put("set", value)
-                        )));
-        jiraRequest.setBody(body.toString());
-        String updateResult = jiraRequest.put();
-        log("Updated field '" + resolvedFieldName + "' (originally '" + field + "') on ticket " + key + " with value: " + value);
+            // Field is a name - update ALL fields with this name
+            List<String> fieldIds = getAllFieldCustomCodes(projectKey, field);
 
-        // Jira's PUT endpoint returns empty response body on success
-        // Return a meaningful success message instead of empty string for MCP
-        if (updateResult == null || updateResult.trim().isEmpty()) {
-            return "Field '" + field + "' updated successfully on ticket " + key;
+            if (fieldIds.isEmpty()) {
+                // Try to resolve as single field for backward compatibility
+                try {
+                    String customFieldId = resolveFieldNameToCustomFieldId(projectKey, field);
+                    if (customFieldId != null) {
+                        fieldIds = java.util.Collections.singletonList(customFieldId);
+                    } else {
+                        return "No fields found with name '" + field + "'";
+                    }
+                } catch (Exception e) {
+                    return "Failed to resolve field '" + field + "': " + e.getMessage();
+                }
+            }
+
+            // Update all matching fields
+            StringBuilder results = new StringBuilder();
+            int successCount = 0;
+            int failureCount = 0;
+
+            for (String fieldId : fieldIds) {
+                try {
+                    GenericRequest jiraRequest = getTicket(key);
+                    JSONObject body = new JSONObject();
+                    body.put("update", new JSONObject()
+                            .put(fieldId, new JSONArray()
+                                    .put(new JSONObject()
+                                            .put("set", value)
+                                    )));
+                    jiraRequest.setBody(body.toString());
+                    String updateResult = jiraRequest.put();
+
+                    log("Updated field '" + fieldId + "' (name: '" + field + "') on ticket " + key);
+                    if (fieldIds.size() > 1) {
+                        results.append("✅ Updated ").append(fieldId).append("\n");
+                    }
+                    successCount++;
+                } catch (Exception e) {
+                    log("Failed to update field '" + fieldId + "': " + e.getMessage());
+                    if (fieldIds.size() > 1) {
+                        results.append("❌ Failed ").append(fieldId).append(": ").append(e.getMessage()).append("\n");
+                    }
+                    failureCount++;
+                }
+            }
+
+            // Build response message
+            if (fieldIds.size() == 1) {
+                // Single field - simple message
+                if (successCount == 1) {
+                    return "Field '" + field + "' updated successfully on ticket " + key;
+                } else {
+                    return "Failed to update field '" + field + "' on ticket " + key;
+                }
+            } else {
+                // Multiple fields - detailed message
+                results.append("\nUpdated ").append(successCount).append(" of ").append(fieldIds.size())
+                       .append(" fields with name '").append(field).append("' for ticket ").append(key);
+                if (failureCount > 0) {
+                    results.append(" (").append(failureCount).append(" failed)");
+                }
+                return results.toString();
+            }
         }
-        
-        return updateResult;
+    }
+
+    @MCPTool(
+            name = "jira_update_all_fields_with_name",
+            description = "Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name.",
+            integration = "jira",
+            category = "ticket_management"
+    )
+    public String updateAllFieldsWithName(
+            @MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key,
+            @MCPParam(name = "fieldName", description = "The user-friendly field name (e.g., 'Dependencies')", required = true) String fieldName,
+            @MCPParam(name = "value", description = "The new value for the fields", required = true) Object value) throws IOException {
+
+        // Extract project key from ticket key for field resolution
+        String projectKey = parseJiraProject(key);
+
+        // Get all fields with this name
+        List<String> fieldIds = getAllFieldCustomCodes(projectKey, fieldName);
+
+        if (fieldIds.isEmpty()) {
+            return "No fields found with name '" + fieldName + "'";
+        }
+
+        StringBuilder results = new StringBuilder();
+        int successCount = 0;
+        int failureCount = 0;
+
+        // Update each field
+        for (String fieldId : fieldIds) {
+            try {
+                GenericRequest jiraRequest = getTicket(key);
+                JSONObject body = new JSONObject();
+                body.put("update", new JSONObject()
+                        .put(fieldId, new JSONArray()
+                                .put(new JSONObject()
+                                        .put("set", value)
+                                )));
+                jiraRequest.setBody(body.toString());
+                String updateResult = jiraRequest.put();
+
+                log("Updated field '" + fieldId + "' (name: '" + fieldName + "') on ticket " + key);
+                results.append("✅ Updated ").append(fieldId).append("\n");
+                successCount++;
+            } catch (Exception e) {
+                log("Failed to update field '" + fieldId + "': " + e.getMessage());
+                results.append("❌ Failed ").append(fieldId).append(": ").append(e.getMessage()).append("\n");
+                failureCount++;
+            }
+        }
+
+        results.append("\nSummary: Updated ").append(successCount).append(" of ").append(fieldIds.size())
+               .append(" fields with name '").append(fieldName).append("'");
+
+        if (failureCount > 0) {
+            results.append(" (").append(failureCount).append(" failed)");
+        }
+
+        return results.toString();
+    }
+
+    @MCPTool(
+            name = "jira_get_all_fields_with_name",
+            description = "Get all custom field IDs that have the same display name in a Jira project",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String getAllFieldsWithName(
+            @MCPParam(name = "project", description = "The Jira project key", required = true) String project,
+            @MCPParam(name = "fieldName", description = "The user-friendly field name", required = true) String fieldName) throws IOException {
+
+        List<String> fieldIds = getAllFieldCustomCodes(project, fieldName);
+
+        if (fieldIds.isEmpty()) {
+            return "No fields found with name '" + fieldName + "'";
+        }
+
+        JSONObject result = new JSONObject();
+        result.put("fieldName", fieldName);
+        result.put("fieldIds", new JSONArray(fieldIds));
+        result.put("count", fieldIds.size());
+
+        if (fieldIds.size() > 1) {
+            result.put("warning", "Multiple fields found with the same name. Consider using jira_update_all_fields_with_name to update all of them.");
+        }
+
+        return result.toString(2);
     }
 
     @Override
@@ -2977,21 +3168,52 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     public String parseServerJiraResponse(String fieldName, String jsonResponse) {
         try {
-            JSONArray fields = new JSONArray(jsonResponse);
+            // Use the new strategy to handle multiple fields with the same name
+            List<com.github.istin.dmtools.atlassian.jira.strategy.MultiFieldUpdateStrategy.CustomField> matchingFields =
+                com.github.istin.dmtools.atlassian.jira.strategy.MultiFieldUpdateStrategy.findAllFieldsByName(fieldName, jsonResponse);
 
-            for (int i = 0; i < fields.length(); i++) {
-                JSONObject field = fields.getJSONObject(i);
-                if (field.getString("name").equalsIgnoreCase(fieldName)) {
-                    return field.getString("id");
-                }
+            if (matchingFields.isEmpty()) {
+                return null;
             }
 
-            // If not found, return null or throw exception
-            return null;
+            // Select the best field using the strategy
+            // Note: This method is kept for backward compatibility
+            // The updateField method now uses getAllFieldCustomCodes to update ALL matching fields
+            // And resolveFieldNames now uses getAllFieldCustomCodes to include ALL matching fields in JQL
+            com.github.istin.dmtools.atlassian.jira.strategy.MultiFieldUpdateStrategy.CustomField bestField =
+                com.github.istin.dmtools.atlassian.jira.strategy.MultiFieldUpdateStrategy.selectBestField(matchingFields);
 
-        } catch (JSONException e) {
+            // Don't log selection here - it's misleading since we now handle multiple fields in other places
+            // Logging happens in updateField which updates ALL fields
+
+            return bestField != null ? bestField.getId() : null;
+
+        } catch (Exception e) {
             throw new RuntimeException("Error parsing JSON response: " + e.getMessage());
         }
+    }
+
+    /**
+     * Get ALL custom field IDs that match the given field name
+     * This is useful when you need to update all instances of a field with the same name
+     *
+     * @param project The Jira project key
+     * @param fieldName The human-readable field name
+     * @return List of all matching custom field IDs
+     */
+    public List<String> getAllFieldCustomCodes(String project, String fieldName) throws IOException {
+        String response = getFields(project);
+        List<com.github.istin.dmtools.atlassian.jira.strategy.MultiFieldUpdateStrategy.CustomField> matchingFields =
+            com.github.istin.dmtools.atlassian.jira.strategy.MultiFieldUpdateStrategy.findAllFieldsByName(fieldName, response);
+
+        List<String> fieldIds = new java.util.ArrayList<>();
+        for (com.github.istin.dmtools.atlassian.jira.strategy.MultiFieldUpdateStrategy.CustomField field : matchingFields) {
+            if (field.isActive()) {
+                fieldIds.add(field.getId());
+            }
+        }
+
+        return fieldIds;
     }
 
     @Nullable

@@ -104,8 +104,9 @@ public class McpCliHandler {
      * Handles tool execution commands - executes the specified tool and returns results.
      */
     private String handleToolExecutionCommand(String[] args) {
+        String toolName = null;
         try {
-            String toolName = args[1];
+            toolName = args[1];
             Map<String, Object> arguments = parseToolArguments(args);
 
             logger.info("Executing MCP tool: {} with arguments: {}", toolName, arguments);
@@ -135,10 +136,34 @@ public class McpCliHandler {
 
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tool or arguments", e);
-            return createErrorResponse("Invalid tool or arguments: " + e.getMessage());
+            // Check if this is a parameter format error
+            if (e.getMessage() != null &&
+                (e.getMessage().contains("must be an array") ||
+                 e.getMessage().contains("cannot be converted") ||
+                 e.getMessage().contains("incorrect type"))) {
+                // Parameter format error - show tool schema
+                return createParameterFormatError(toolName, e);
+            }
+            // Check if debug mode is enabled
+            String debugFlag = System.getProperty("log4j2.configurationFile");
+            boolean isDebugMode = (debugFlag != null && debugFlag.contains("debug"));
+
+            if (isDebugMode) {
+                return createErrorResponse("Invalid tool or arguments: " + e.getMessage() + "\n" + getStackTrace(e));
+            } else {
+                return createErrorResponse(e.getMessage());
+            }
         } catch (Exception e) {
             logger.error("Error executing tool", e);
-            return createErrorResponse("Tool execution failed: " + e.getMessage());
+            // Check if debug mode is enabled
+            String debugFlag = System.getProperty("log4j2.configurationFile");
+            boolean isDebugMode = (debugFlag != null && debugFlag.contains("debug"));
+
+            if (isDebugMode) {
+                return createErrorResponse("Tool execution failed: " + e.getMessage() + "\n" + getStackTrace(e));
+            } else {
+                return createErrorResponse(e.getMessage());
+            }
         }
     }
     
@@ -573,6 +598,144 @@ public class McpCliHandler {
         error.put("error", true);
         error.put("message", message);
         return error.toString(2);
+    }
+
+    /**
+     * Converts exception stack trace to string for error reporting.
+     */
+    private String getStackTrace(Throwable e) {
+        if (e == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("Stack trace:\n");
+        for (StackTraceElement element : e.getStackTrace()) {
+            sb.append("  at ").append(element.toString()).append("\n");
+            // Limit stack trace to first 10 elements to avoid overwhelming output
+            if (sb.length() > 2000) {
+                sb.append("  ... (truncated)\n");
+                break;
+            }
+        }
+        if (e.getCause() != null) {
+            sb.append("Caused by: ").append(e.getCause().getClass().getName())
+              .append(": ").append(e.getCause().getMessage()).append("\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Creates a detailed error response for parameter format errors.
+     * Shows the tool schema and correct usage format.
+     */
+    private String createParameterFormatError(String toolName, IllegalArgumentException e) {
+        StringBuilder errorMsg = new StringBuilder();
+
+        // If toolName is null, just return the error
+        if (toolName == null) {
+            return createErrorResponse(e.getMessage());
+        }
+
+        // Extract parameter name from error message
+        String errorParamName = null;
+        String errMsg = e.getMessage();
+        if (errMsg != null && errMsg.contains("Parameter '")) {
+            int start = errMsg.indexOf("Parameter '") + 11;
+            int end = errMsg.indexOf("'", start);
+            if (end > start) {
+                errorParamName = errMsg.substring(start, end);
+            }
+        }
+
+        // Get tool schema to show correct format
+        Map<String, Object> toolSchema = getToolSchema(toolName);
+        if (toolSchema != null) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> inputSchema = (Map<String, Object>) toolSchema.get("inputSchema");
+            if (inputSchema != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> properties = (Map<String, Object>) inputSchema.get("properties");
+                @SuppressWarnings("unchecked")
+                List<String> required = (List<String>) inputSchema.get("required");
+
+                if (properties != null && !properties.isEmpty()) {
+                    // Show usage example
+                    errorMsg.append("Correct usage:\n\n");
+                    errorMsg.append("dmtools ").append(toolName).append(" <<EOF\n");
+                    errorMsg.append(generateUsageExample(toolName, properties, required, errorParamName));
+                    errorMsg.append("\nEOF\n");
+                }
+            }
+        }
+
+        return createErrorResponse(e.getMessage() + "\n\n" + errorMsg.toString());
+    }
+
+    /**
+     * Generates a usage example JSON for a tool based on its schema.
+     */
+    private String generateUsageExample(String toolName, Map<String, Object> properties, List<String> required, String errorParamName) {
+        JSONObject example = new JSONObject();
+
+        for (Map.Entry<String, Object> entry : properties.entrySet()) {
+            String paramName = entry.getKey();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> paramSchema = (Map<String, Object>) entry.getValue();
+            String type = (String) paramSchema.get("type");
+            String exampleValue = (String) paramSchema.get("example");
+
+            // Show required parameters AND the parameter that caused the error
+            boolean isRequired = (required != null && required.contains(paramName));
+            boolean isErrorParam = (errorParamName != null && errorParamName.equals(paramName));
+
+            if (isRequired || isErrorParam) {
+                if (exampleValue != null && !exampleValue.isEmpty()) {
+                    if ("array".equals(type)) {
+                        // Parse example as array if it looks like one
+                        if (exampleValue.startsWith("[")) {
+                            try {
+                                example.put(paramName, new JSONArray(exampleValue));
+                            } catch (Exception e) {
+                                // Fallback to simple array
+                                JSONArray arr = new JSONArray();
+                                arr.put(exampleValue);
+                                example.put(paramName, arr);
+                            }
+                        } else {
+                            // Create array from comma-separated values
+                            JSONArray arr = new JSONArray();
+                            for (String val : exampleValue.split(",")) {
+                                arr.put(val.trim());
+                            }
+                            example.put(paramName, arr);
+                        }
+                    } else if ("object".equals(type)) {
+                        try {
+                            example.put(paramName, new JSONObject(exampleValue));
+                        } catch (Exception e) {
+                            example.put(paramName, exampleValue);
+                        }
+                    } else {
+                        example.put(paramName, exampleValue);
+                    }
+                } else {
+                    // Generate default example based on type
+                    if ("array".equals(type)) {
+                        example.put(paramName, new JSONArray().put("value1").put("value2"));
+                    } else if ("object".equals(type)) {
+                        example.put(paramName, new JSONObject().put("key", "value"));
+                    } else if ("number".equals(type) || "integer".equals(type)) {
+                        example.put(paramName, 10);
+                    } else if ("boolean".equals(type)) {
+                        example.put(paramName, true);
+                    } else {
+                        example.put(paramName, "example_" + paramName);
+                    }
+                }
+            }
+        }
+
+        return example.toString(2);
     }
 
     /**

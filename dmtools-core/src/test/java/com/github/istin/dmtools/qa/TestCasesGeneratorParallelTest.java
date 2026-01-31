@@ -49,6 +49,9 @@ public class TestCasesGeneratorParallelTest {
         setField(generator, "relatedTestCasesAgent", relatedTestCasesAgent);
         setField(generator, "relatedTestCaseAgent", relatedTestCaseAgent);
         setField(generator, "ai", ai);
+
+        // Initialize InstructionProcessor after confluence is set
+        setField(generator, "instructionProcessor", new com.github.istin.dmtools.teammate.InstructionProcessor(confluence));
     }
 
     private void setField(Object target, String fieldName, Object value) throws Exception {

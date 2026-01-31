@@ -95,6 +95,23 @@ class McpCliHandlerTest {
     }
 
     @Test
+    @DisplayName("Error messages should include stack trace for debugging")
+    void testErrorMessagesIncludeStackTrace() {
+        // Try to execute a non-existent tool
+        String[] args = {"mcp", "nonexistent_tool"};
+
+        String result = mcpCliHandler.processMcpCommand(args);
+
+        JSONObject response = new JSONObject(result);
+        assertTrue(response.getBoolean("error"));
+        String message = response.getString("message");
+
+        // Error message should now include stack trace for better debugging
+        assertTrue(message.contains("Stack trace:") || message.contains("at "),
+                  "Error message should include stack trace information");
+    }
+
+    @Test
     @DisplayName("Should parse positional arguments correctly")
     void testParsePositionalArguments() {
         String[] args = {"mcp", "test_tool", "DMC-479", "summary,description"};
