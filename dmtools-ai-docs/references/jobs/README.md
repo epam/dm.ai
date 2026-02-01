@@ -245,7 +245,9 @@ Teammate can execute CLI commands and include their output in the context:
 6. **CLI Tool Integration** - Run tools like cursor-agent and process their output
 7. **Index-Based Analysis** - Analyze using Mermaid diagrams or other indexed data
 
-**See also**: [Teammate Configuration Guide](../agents/teammate-configs.md)
+**See also**:
+- [Teammate Configuration Guide](../agents/teammate-configs.md)
+- [GitHub Actions Workflow](../workflows/github-actions-teammate.md) - Run Teammate in CI/CD
 
 ---
 

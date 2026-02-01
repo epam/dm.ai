@@ -116,6 +116,9 @@ function action(params) {
 - [Teammate Configs](references/agents/teammate-configs.md) - JSON-based AI workflows
 - [Test Generation](references/test-generation/xray-manual.md) - Xray test case creation
 
+### CI/CD Workflows
+- [GitHub Actions: AI Teammate](references/workflows/github-actions-teammate.md) - Automated ticket processing in GitHub Actions
+
 ## Common Tasks
 
 ### Configure Jira Integration
