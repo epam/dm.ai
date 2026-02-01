@@ -1,7 +1,7 @@
 # DMTools
 Delivery Management Tools
 
-[![codecov](https://codecov.io/gh/IstiN/dmtools/branch/main/graph/badge.svg)](https://codecov.io/gh/IstiN/dmtools) [![](https://jitpack.io/v/IstiN/dmtools.svg)](https://jitpack.io/#IstiN/dmtools)
+[![Latest Release](https://img.shields.io/github/v/release/IstiN/dmtools?label=latest%20version)](https://github.com/IstiN/dmtools/releases/latest) [![codecov](https://codecov.io/gh/IstiN/dmtools/branch/main/graph/badge.svg)](https://codecov.io/gh/IstiN/dmtools) [![](https://jitpack.io/v/IstiN/dmtools.svg)](https://jitpack.io/#IstiN/dmtools)
 
 ---
 
@@ -39,7 +39,7 @@ Delivery Management Tools
 
 ### Installation
 
-**Latest Version:**
+**Latest Version:** ![Latest Release](https://img.shields.io/github/v/release/IstiN/dmtools?label=)
 
 **macOS / Linux / Git Bash:**
 ```bash
@@ -51,16 +51,16 @@ curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install | bash
 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
 ```
 
-**Specific Version (e.g., v1.7.124):**
+**Specific Version (e.g., v1.7.126):**
 
 **macOS / Linux / Git Bash:**
 ```bash
-DMTOOLS_VERSION=v1.7.124 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.124/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.126/install.sh | bash -s v1.7.126
 ```
 
 **Windows:**
 ```cmd
-set DMTOOLS_VERSION=v1.7.124 && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/%DMTOOLS_VERSION%/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+set DMTOOLS_VERSION=v1.7.126 && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.126/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
 ```
 
 **Verify installation:**

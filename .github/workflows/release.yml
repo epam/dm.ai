@@ -184,22 +184,22 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
           \`\`\`
 
-          ### Install This Specific Version (${VERSION})
+          ### Install This Specific Version (v${VERSION})
 
           **macOS / Linux / Git Bash:**
           \`\`\`bash
-          DMTOOLS_VERSION=${VERSION} curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/${VERSION}/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install.sh | bash -s v${VERSION}
           \`\`\`
 
           **Windows (cmd.exe):**
           \`\`\`cmd
-          set DMTOOLS_VERSION=${VERSION} && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/%DMTOOLS_VERSION%/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          set DMTOOLS_VERSION=v${VERSION} && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
           \`\`\`
 
           **Windows (PowerShell):**
           \`\`\`powershell
-          \$env:DMTOOLS_VERSION = "${VERSION}"
-          Invoke-RestMethod -Uri "https://github.com/IstiN/dmtools/releases/download/\$env:DMTOOLS_VERSION/install.ps1" | Invoke-Expression
+          \$env:DMTOOLS_VERSION = "v${VERSION}"
+          Invoke-RestMethod -Uri "https://raw.githubusercontent.com/IstiN/dmtools/v${VERSION}/install.ps1" | Invoke-Expression
           \`\`\`
           
           **Manual download:**

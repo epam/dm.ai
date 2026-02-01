@@ -669,52 +669,56 @@ jobs:
           
           cat > release_notes.md << EOF
           # 🚀 DMTools Complete Release
-          
+
           This release includes both the **DMTools CLI** and **Standalone Server** with Flutter SPA.
-          
+
           ## 📦 What's Included
-          
+
           ### 🖥️ DMTools CLI
           - **Command-line interface** for DMTools operations
           - **Java-based** automation and integration tools
           - **Install script** for easy setup (\`install.sh\`)
           - **Wrapper script** (\`dmtools.sh\`)
-          
+
           ### 🌐 Standalone Server
           - **Complete DMTools Server** with embedded Flutter SPA
           - **Self-contained** - no external database or OAuth setup required
           - **Local authentication** with admin/admin credentials
           - **H2 database** for local data storage
           - **All AI agents and tools** available out of the box
-          
+
           ## 🎯 Quick Start
-          
+
           ### DMTools CLI Installation
-          
-          **One-line installation (works on macOS, Linux, and Windows):**
+
+          **Latest version (recommended):**
+
+          **macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install | bash
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install | bash
           \`\`\`
-          
-          **Alternative methods (backward compatible):**
-          
-          **macOS/Linux:**
+
+          **Windows (cmd.exe, PowerShell, Windows Terminal):**
+          \`\`\`cmd
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          \`\`\`
+
+          **This specific version (${{ github.event.inputs.release_tag }}):**
+
+          **macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/${{ github.event.inputs.release_tag }}/install.sh | bash -s ${{ github.event.inputs.release_tag }}
           \`\`\`
-          
-          **Windows PowerShell:**
+
+          **Windows (cmd.exe):**
+          \`\`\`cmd
+          set DMTOOLS_VERSION=${{ github.event.inputs.release_tag }} && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/${{ github.event.inputs.release_tag }}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          \`\`\`
+
+          **Windows (PowerShell):**
           \`\`\`powershell
-          # PowerShell 5.1+ (irm is an alias)
-          irm https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install.ps1 | iex
-          
-          # Or use full command (works in all PowerShell versions)
-          Invoke-RestMethod -Uri 'https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install.ps1' | Invoke-Expression
-          \`\`\`
-          
-          **Manual download:**
-          \`\`\`bash
-          # Download dmtools-${{ github.event.inputs.release_tag }}-all.jar manually and use dmtools.sh
+          \$env:DMTOOLS_VERSION = "${{ github.event.inputs.release_tag }}"
+          Invoke-RestMethod -Uri "https://raw.githubusercontent.com/IstiN/dmtools/${{ github.event.inputs.release_tag }}/install.ps1" | Invoke-Expression
           \`\`\`
           
           ### Standalone Server Options
@@ -989,19 +993,22 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 Quick Start Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**CLI Installation (One-line, all platforms):**" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI Installation (Latest):**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install | bash" >> $GITHUB_STEP_SUMMARY
+          echo "# macOS / Linux / Git Bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install | bash" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Windows" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o \"%TEMP%\\dmtools-install.bat\" && \"%TEMP%\\dmtools-install.bat\"" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Alternative (macOS/Linux):**" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI Installation (This Version - ${{ github.event.inputs.release_tag }}):**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "# macOS / Linux / Git Bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/${{ github.event.inputs.release_tag }}/install.sh | bash -s ${{ github.event.inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Alternative (Windows PowerShell):**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`powershell" >> $GITHUB_STEP_SUMMARY
-          echo "Invoke-RestMethod -Uri 'https://github.com/IstiN/dmtools/releases/download/${{ github.event.inputs.release_tag }}/install.ps1' | Invoke-Expression" >> $GITHUB_STEP_SUMMARY
+          echo "# Windows cmd.exe" >> $GITHUB_STEP_SUMMARY
+          echo "set DMTOOLS_VERSION=${{ github.event.inputs.release_tag }} && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/${{ github.event.inputs.release_tag }}/install.bat -o \"%TEMP%\\dmtools-install.bat\" && \"%TEMP%\\dmtools-install.bat\"" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Standalone Server - Option 1: Portable Bundle (No Java Required) ⭐**" >> $GITHUB_STEP_SUMMARY
