@@ -100,10 +100,16 @@ function action(params) {
 
 ### Configuration Guides
 - [Configuration Overview](references/configuration/README.md) - Environment variables and hierarchy
-- [Jira Setup](references/configuration/integrations/jira.md) - API tokens and 35+ tools
+- [Jira Setup](references/configuration/integrations/jira.md) - API tokens and 52 tools
 - [Azure DevOps](references/configuration/integrations/ado.md) - PAT setup and 23+ tools
 - [Gemini AI](references/configuration/ai-providers/gemini.md) - Free tier configuration
 - [Other AI Providers](references/configuration/ai-providers/) - OpenAI, Claude, DIAL, Ollama
+
+### Jobs & Workflows
+- **[Jobs Reference](references/jobs/README.md)** - Complete guide to all 23 jobs
+- **[Teammate](references/jobs/README.md#teammate)** - Flexible AI assistant with custom instructions
+- **[Expert](references/jobs/README.md#expert)** - Domain expert Q&A based on project context
+- **[TestCasesGenerator](references/jobs/README.md#testcasesgenerator)** - Automated test case generation
 
 ### Development
 - [JavaScript Agents](references/agents/javascript-agents.md) - GraalJS development with MCP tools
