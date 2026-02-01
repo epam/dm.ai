@@ -2,6 +2,8 @@
 
 Complete reference for all 23 available jobs in DMtools. Jobs are specialized workflows that orchestrate MCP tools, AI agents, and data processing.
 
+**CRITICAL**: When creating job configurations, the `"name"` field must **exactly** match the Java Job class name. See [JSON Configuration Rules](../configuration/json-config-rules.md) for details.
+
 ## 📋 Job Categories
 
 ### Business Analysis (BA)
@@ -66,20 +68,31 @@ dmtools run agents/xray_test_cases_generator.json
 ```
 
 **Configuration** (`agents/xray_test_cases_generator.json`):
+
+**IMPORTANT**: The `"name"` field must exactly match the Job class name. See [JSON Configuration Rules](../configuration/json-config-rules.md).
+
 ```json
 {
   "name": "TestCasesGenerator",
   "params": {
-    "inputJql": "project = PROJ AND type = Story",
-    "existingTestCasesJql": "project = PROJ AND type = Test",
-    "testCasesPriorities": "High,Medium,Low",
-    "testCaseIssueType": "Test",
+    "inputJql": "key in (TP-1309)",
+    "testCasesPriorities": "Highest, High, Medium, Lowest, Low",
     "outputType": "creation",
-    "isConvertToJiraMarkdown": true,
+    "existingTestCasesJql": "project = TP and issueType in ('Test', 'Precondition') and status not in (archived)",
+    "testCasesRelatedFields": ["issuetype","summary", "description", "priority"],
+    "testCasesExampleFields": ["issuetype", "summary", "description", "priority"],
+    "testCasesCustomFields": ["xrayTestSteps", "xrayPreconditions"],
+    "customFieldsRules": "Test steps must be generated in Xray JSON format...",
+    "confluencePages": ["https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665495/Template+Test+Case"],
+    "relatedTestCasesRules": "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/55443457/Template+Test+Case+Related+Rules",
+    "isOverridePromptExamples": true,
     "isFindRelated": true,
-    "isLinkRelated": true,
-    "isGenerateNew": true,
-    "preprocessJSAction": "agents/js/preprocessXrayTestCases.js"
+    "isConvertToJiraMarkdown": false,
+    "includeOtherTicketReferences": true,
+    "testCaseLinkRelationship": "relates to",
+    "testCaseIssueType": "Test",
+    "preprocessJSAction": "agents/js/preprocessXrayTestCases.js",
+    "examples": "ql(project = TP and issuetype in (\"Test\") and labels = \"ai_example\")"
   }
 }
 ```
@@ -156,24 +169,47 @@ dmtools run agents/teammate_config.json
 dmtools Teammate --inputJql "key = PROJ-123"
 ```
 
-**Configuration** (`agents/teammate_config.json`):
+**Configuration** (`agents/story_description.json` - real example):
+
+**IMPORTANT**: The `"name"` field must exactly match the Job class name. See [JSON Configuration Rules](../configuration/json-config-rules.md).
+
 ```json
 {
   "name": "Teammate",
   "params": {
-    "inputJql": "project = PROJ AND status = 'To Do'",
-    "agentParams": {
-      "aiRole": "Senior Software Engineer",
-      "instructions": "Analyze each ticket and provide implementation suggestions",
-      "formattingRules": "Return JSON with {ticketKey, suggestions, estimatedHours}",
-      "fewShots": "Example: Input: 'Create login page', Output: {\"suggestions\": [\"Use React\", \"Add validation\"], \"estimatedHours\": 8}",
-      "knownInfo": "Project uses React 18 and TypeScript"
+    "metadata": {
+      "contextId": "story_description"
     },
+    "agentParams": {
+      "aiRole": "Experienced Business Analyst",
+      "instructions": [
+        "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story",
+        "./agents/instructions/common/response_output.md",
+        "./agents/instructions/common/no_development.md",
+        "./agents/instructions/common/error_handling.md",
+        "./agents/instructions/common/preserve_references.md",
+        "./agents/instructions/common/media_handling.md",
+        "./agents/instructions/common/jira_context.md",
+        "./agents/instructions/enhancement/no_ticket_reference.md",
+        "**IMPORTANT** your role just write description of the story based on the confluence page template!"
+      ],
+      "knownInfo": "",
+      "formattingRules": "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/18186241/Template+Jira+Markdown",
+      "fewShots": ""
+    },
+    "cliCommands": [
+      "./cicd/scripts/run-cursor-agent.sh \"**IMPORTANT** implementation details and development is not part of the task...\""
+    ],
     "outputType": "field",
-    "fieldName": "AI Analysis",
-    "hooksAsContext": ["build", "test"],
-    "cliCommands": ["cursor-agent --help"],
-    "skipAIProcessing": false
+    "fieldName": "Description",
+    "operationType": "Replace",
+    "ticketContextDepth": 0,
+    "attachResponseAsFile": false,
+    "skipAIProcessing": true,
+    "inputJql": "key = DMC-532",
+    "initiator": "712020:2a248756-40e8-49d6-8ddc-6852e518451f",
+    "preJSAction": "agents/js/checkWipLabel.js",
+    "postJSAction": "agents/js/assignForReview.js"
   }
 }
 ```

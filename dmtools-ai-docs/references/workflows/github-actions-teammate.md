@@ -165,14 +165,20 @@ Configure these in **Settings → Secrets and variables → Actions → Variable
 
 Create configuration in your repository (e.g., `agents/teammate_config.json`):
 
+**CRITICAL**: The `"name"` field must be exactly `"Teammate"` - this matches the Java Job class name and cannot be changed. See [JSON Configuration Rules](../configuration/json-config-rules.md).
+
 ```json
 {
   "name": "Teammate",
   "params": {
-    "inputJql": "project = PROJ AND status = 'To Do' AND labels = 'needs-analysis'",
+    "metadata": {
+      "contextId": "story_analysis"
+    },
     "agentParams": {
       "aiRole": "Senior Software Architect",
       "instructions": [
+        "./agents/instructions/analysis/requirements_analysis.md",
+        "./agents/instructions/common/error_handling.md",
         "Analyze the ticket requirements",
         "Identify technical risks",
         "Suggest implementation approach"
@@ -180,8 +186,11 @@ Create configuration in your repository (e.g., `agents/teammate_config.json`):
       "formattingRules": "Return structured analysis with sections: Requirements, Risks, Approach",
       "knownInfo": "Project uses microservices architecture with Spring Boot and React"
     },
+    "inputJql": "project = PROJ AND status = 'To Do' AND labels = 'needs-analysis'",
     "outputType": "comment",
-    "initiator": "github-actions-bot"
+    "initiator": "github-actions-bot",
+    "preJSAction": "agents/js/checkWipLabel.js",
+    "postJSAction": "agents/js/notifyAnalysisComplete.js"
   }
 }
 ```

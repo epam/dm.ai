@@ -100,6 +100,7 @@ function action(params) {
 
 ### Configuration Guides
 - [Configuration Overview](references/configuration/README.md) - Environment variables and hierarchy
+- **[JSON Configuration Rules](references/configuration/json-config-rules.md)** - Critical rules for job configurations
 - [Jira Setup](references/configuration/integrations/jira.md) - API tokens and 52 tools
 - [Azure DevOps](references/configuration/integrations/ado.md) - PAT setup and 23+ tools
 - [Gemini AI](references/configuration/ai-providers/gemini.md) - Free tier configuration
@@ -132,14 +133,20 @@ JIRA_LOGIN_PASS_TOKEN=base64_output_here
 ```
 
 ### Generate Test Cases
+
+**IMPORTANT**: `"name"` must exactly match Job class name. See [JSON Configuration Rules](references/configuration/json-config-rules.md).
+
 ```json
 {
   "name": "TestCasesGenerator",
   "params": {
     "inputJql": "project = PROJ AND type = Story",
-    "aiProvider": "gemini",
+    "testCasesPriorities": "High, Medium, Low",
     "outputType": "creation",
-    "outputJiraIssueType": "Test"
+    "testCaseIssueType": "Test",
+    "existingTestCasesJql": "project = PROJ AND type = Test",
+    "isFindRelated": true,
+    "isGenerateNew": true
   }
 }
 ```
