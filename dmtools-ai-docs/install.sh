@@ -122,7 +122,8 @@ detect_skill_dirs() {
         fi
     fi
 
-    echo "${found_dirs[@]}" >&2
+    # Return found directories via stdout (not stderr!)
+    echo "${found_dirs[@]}"
 }
 
 # Download skill package
@@ -167,11 +168,12 @@ download_skill() {
         # Debug: show what we found
         print_error "SKILL.md not found in package"
         print_info "Contents of temp dir:"
-        ls -la "$TEMP_DIR" | head -10
+        ls -la "$TEMP_DIR" >&2 | head -10
         return 1
     fi
 
-    echo "$SKILL_SOURCE" >&2
+    # Return the skill source path via stdout (not stderr!)
+    echo "$SKILL_SOURCE"
 }
 
 # Install skill to a directory
