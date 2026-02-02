@@ -51,9 +51,14 @@ application-local.properties
 /dmtools-server/data/*.lock.db
 
 # Cache directories - exclude all cache folders
+# Pattern explanation:
+# **/cache*/ - any cache folder at any depth
+# cache*/ - cache folder in current directory
+# /cache** - anything starting with cache in project root
 **/cache*/
 cache*/
-/cache*/
+/cache*
+/cache**
 /dmtools-core/cache*/
 /dmtools-server/cache*/
 /dmtools-automation/cache*/
@@ -149,8 +154,6 @@ cacheBasicTeamsClient
 /dmtools-core/cacheTeamsClient
 dmtools-core/cacheTeamsClient
 /dmtools-core/cacheBasicOllamaAI/*
-cache**/
-dmtools-core/cache**/
 /dmtools-automation/bin/
 temp
 # Eclipse Buildship settings
