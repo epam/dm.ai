@@ -1,3 +1,8 @@
+## [skill-v1.0.19] - 2026-02-02
+
+### Added
+- Comprehensive InstructionsGenerator job documentation with all parameters, use cases, and examples
+
 ## [skill-v1.0.18] - 2026-02-02
 
 ### Removed
