@@ -120,6 +120,27 @@ function action(params) {
 ### CI/CD Workflows
 - [GitHub Actions: AI Teammate](references/workflows/github-actions-teammate.md) - Automated ticket processing in GitHub Actions
 
+## ⚠️ CRITICAL: JSON Configuration "name" Field
+
+**Before using any job configuration, understand this:**
+
+The `"name"` field in JSON configs is **NOT** a user-defined name. It is a **Java class name** (technical identifier).
+
+```json
+{
+  "name": "TestCasesGenerator"  // ← Exact Java class name (immutable)
+}
+```
+
+- ✅ **DO**: Use exact name from docs: `TestCasesGenerator`, `Teammate`, `Expert`
+- ❌ **DON'T**: Change it to "My Test Generator" or "test-generator"
+
+**Why?** DMtools maps this name directly to Java code: `"TestCasesGenerator"` → `new TestCasesGenerator()`
+
+See [JSON Configuration Rules](references/configuration/json-config-rules.md) for details.
+
+---
+
 ## Common Tasks
 
 ### Configure Jira Integration

@@ -2,6 +2,35 @@
 
 This workflow demonstrates how to run DMtools Teammate job in GitHub Actions for automated ticket processing.
 
+---
+
+## ⚠️ CRITICAL: Understanding the "name" Field
+
+**Before configuring this workflow, you MUST understand:**
+
+```json
+{
+  "name": "Teammate"  // ← This is the Java class name (NOT customizable)
+}
+```
+
+The `"name"` field is a **technical identifier** that maps to Java code:
+
+```
+"name": "Teammate" → new Teammate() (Java instantiation)
+```
+
+**Rules:**
+- ✅ **MUST** be exactly `"Teammate"` (case-sensitive)
+- ❌ **CANNOT** be "AI Teammate" or "My Teammate" or "teammate"
+- ❌ **CANNOT** be changed or customized
+
+**Why?** This is how DMtools finds the correct Java class to run. Wrong name = `Error: Unknown job`
+
+**See**: [JSON Configuration Rules](../configuration/json-config-rules.md) for complete explanation.
+
+---
+
 ## Overview
 
 The AI Teammate workflow allows you to:

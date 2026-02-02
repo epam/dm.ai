@@ -2,7 +2,39 @@
 
 Complete reference for all 23 available jobs in DMtools. Jobs are specialized workflows that orchestrate MCP tools, AI agents, and data processing.
 
-**CRITICAL**: When creating job configurations, the `"name"` field must **exactly** match the Java Job class name. See [JSON Configuration Rules](../configuration/json-config-rules.md) for details.
+---
+
+## ⚠️ CRITICAL: The "name" Field is NOT User-Defined
+
+**Before reading further, understand this fundamental rule:**
+
+```json
+{
+  "name": "TestCasesGenerator"  // ← This is Java Class Name (NOT customizable)
+}
+```
+
+The `"name"` field is a **technical identifier** that maps to a Java class in DMtools:
+
+```
+"name": "TestCasesGenerator" → new TestCasesGenerator() (Java code)
+```
+
+**What you MUST do:**
+- ✅ Use **exact** class name from list below: `TestCasesGenerator`, `Teammate`, `Expert`, etc.
+- ✅ Copy name exactly as shown (case-sensitive)
+- ✅ Refer to [JSON Configuration Rules](../configuration/json-config-rules.md) when in doubt
+
+**What you MUST NOT do:**
+- ❌ Change or customize the name field
+- ❌ Use descriptive names like "My Test Generator"
+- ❌ Use different case like "testcasesgenerator"
+
+**Why?** Because DMtools uses this name to instantiate the correct Java class. If the name doesn't match exactly, you get: `Error: Unknown job: <your-name>`
+
+**See**: [JSON Configuration Rules](../configuration/json-config-rules.md) for complete explanation.
+
+---
 
 ## 📋 Job Categories
 

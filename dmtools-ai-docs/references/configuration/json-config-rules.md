@@ -1,5 +1,58 @@
 # JSON Configuration Rules for DMtools Jobs
 
+## ⚠️ CRITICAL: Understanding the "name" Field
+
+**The `"name"` field in DMtools job configuration is NOT a user-defined name or description.**
+
+```
+"name" = Java Job Class Name (Technical Identifier)
+```
+
+### What is the "name" field?
+
+The `"name"` field is a **technical identifier** that tells DMtools **which Java class to instantiate**. It must exactly match the compiled Java class name in the DMtools codebase.
+
+```java
+// DMtools code (JobRunner.java):
+if (jobName.equals("TestCasesGenerator")) {
+    return new TestCasesGenerator();  // Java class instantiation
+}
+```
+
+### What the "name" field is NOT:
+
+- ❌ NOT a display name or title
+- ❌ NOT a description of what the job does
+- ❌ NOT something you can customize
+- ❌ NOT user-defined or configurable
+
+### Analogy:
+
+```
+"name": "TestCasesGenerator"  ≈  import com.github.istin.dmtools.qa.TestCasesGenerator;
+```
+
+Just like you cannot change `import` statements in code, you cannot change the `"name"` field in configuration.
+
+### Example of Correct vs Incorrect:
+
+```json
+// ✅ CORRECT - Uses exact Java class name
+{
+  "name": "TestCasesGenerator",
+  "params": { ... }
+}
+
+// ❌ WRONG - Custom name will cause error
+{
+  "name": "My Custom Test Generator",
+  "params": { ... }
+}
+// Error: Unknown job: My Custom Test Generator
+```
+
+---
+
 ## Critical Rules
 
 ### 1. **Job Name Field is Immutable**

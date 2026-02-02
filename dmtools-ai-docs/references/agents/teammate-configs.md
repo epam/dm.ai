@@ -1,5 +1,29 @@
 # AI Teammate Configuration Guide
 
+## ⚠️ CRITICAL: The "name" Field is Java Class Name
+
+**READ THIS FIRST - The `"name"` field is NOT customizable:**
+
+```json
+{
+  "name": "TestCasesGenerator"  // ← Exact Java class name (immutable)
+}
+```
+
+This is a **technical identifier** for Java class instantiation:
+- `"TestCasesGenerator"` → `new TestCasesGenerator()`
+- `"Teammate"` → `new Teammate()`
+- `"Expert"` → `new Expert()`
+
+**Rules:**
+- ✅ Use exact class names from [Jobs Reference](../jobs/README.md)
+- ❌ Do NOT customize: "My Generator" will fail
+- ❌ Do NOT change case: "testcasesgenerator" will fail
+
+See [JSON Configuration Rules](../configuration/json-config-rules.md) for complete explanation.
+
+---
+
 ## 🎯 Overview
 
 AI Teammates are JSON-configured workflows that combine AI analysis with pre/post-processing JavaScript agents. They enable complex automation scenarios like test generation, code analysis, and documentation creation.
