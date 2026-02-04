@@ -628,10 +628,14 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     }
 
     /**
-     * Converts REST API authorization (Basic auth) to GraphQL format (Bearer token).
+     * Converts REST API authorization to GraphQL format (Bearer token).
      * GraphQL API requires Bearer token, not Basic auth.
      *
-     * @param authorization REST API authorization header (e.g., "Basic base64(email:token)")
+     * PropertyReader returns authorization WITHOUT "Basic " or "Bearer " prefix:
+     * - For Basic auth: returns base64(email:token)
+     * - For Bearer auth: returns just the token
+     *
+     * @param authorization Authorization value (may or may not have prefix)
      * @return GraphQL-compatible authorization header (e.g., "Bearer token")
      */
     private String convertAuthForGraphQL(String authorization) {
@@ -639,34 +643,45 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
             return null;
         }
 
-        // If already Bearer token, return as is
+        logger.debug("Converting auth for GraphQL. Original: {}", authorization.substring(0, Math.min(20, authorization.length())) + "...");
+
+        // If already has Bearer prefix, return as is
         if (authorization.startsWith("Bearer ")) {
+            logger.debug("Auth already has Bearer prefix, using as is");
             return authorization;
         }
 
-        // Convert Basic auth to Bearer token
+        // If has Basic prefix, strip it and process
+        String authValue = authorization;
         if (authorization.startsWith("Basic ")) {
-            try {
-                // Extract base64 encoded "email:token" part
-                String base64Credentials = authorization.substring("Basic ".length());
-
-                // Decode base64
-                byte[] decodedBytes = java.util.Base64.getDecoder().decode(base64Credentials);
-                String credentials = new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8);
-
-                // Extract token (after the colon)
-                int colonIndex = credentials.indexOf(':');
-                if (colonIndex > 0 && colonIndex < credentials.length() - 1) {
-                    String token = credentials.substring(colonIndex + 1);
-                    return "Bearer " + token;
-                }
-            } catch (Exception e) {
-                logger.warn("Failed to convert Basic auth to Bearer token for GraphQL: " + e.getMessage());
-            }
+            authValue = authorization.substring("Basic ".length());
+            logger.debug("Stripped 'Basic ' prefix from auth");
         }
 
-        // If conversion failed or unknown format, return original
-        // GraphQL will fail and fallback to REST API
+        // Try to decode as base64 (email:token format)
+        try {
+            byte[] decodedBytes = java.util.Base64.getDecoder().decode(authValue);
+            String credentials = new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8);
+
+            // Extract token (after the colon)
+            int colonIndex = credentials.indexOf(':');
+            if (colonIndex > 0 && colonIndex < credentials.length() - 1) {
+                String token = credentials.substring(colonIndex + 1);
+                logger.debug("Extracted token from base64 credentials, length: {}", token.length());
+                return "Bearer " + token;
+            } else {
+                logger.warn("Decoded credentials don't contain colon separator");
+            }
+        } catch (IllegalArgumentException e) {
+            // Not valid base64, might already be a raw token
+            logger.debug("Auth value is not base64, treating as raw token");
+            return "Bearer " + authValue;
+        } catch (Exception e) {
+            logger.warn("Failed to convert auth to Bearer token for GraphQL: " + e.getMessage());
+        }
+
+        // Fallback: use original value
+        logger.debug("Using original auth value for GraphQL (fallback will trigger)");
         return authorization;
     }
 
