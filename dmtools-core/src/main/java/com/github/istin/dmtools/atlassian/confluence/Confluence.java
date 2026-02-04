@@ -187,16 +187,24 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     ) throws IOException {
         // Use default limit of 20 if not specified
         int actualLimit = (limit != null) ? limit : 20;
+
+        // Try GraphQL API first if path is configured
         if (graphQLPath != null) {
-            JSONArray results = new ConfluenceGraphQLClient(graphQLPath, authorization).search(query, actualLimit);
-            List<SearchResult> searchResults = new ArrayList<>();
-            for (int i = 0; i < results.length(); i++) {
-                JSONObject node = results.getJSONObject(i).getJSONObject("node");
-                searchResults.add(new SearchResult(node));
+            try {
+                JSONArray results = new ConfluenceGraphQLClient(graphQLPath, authorization).search(query, actualLimit);
+                List<SearchResult> searchResults = new ArrayList<>();
+                for (int i = 0; i < results.length(); i++) {
+                    JSONObject node = results.getJSONObject(i).getJSONObject("node");
+                    searchResults.add(new SearchResult(node));
+                }
+                return searchResults;
+            } catch (Exception e) {
+                // GraphQL API failed (403, 404, auth issues, etc.) - fallback to REST API
+                System.err.println("GraphQL search failed, falling back to REST API: " + e.getMessage());
             }
-            return searchResults;
         }
-        // Use Confluence Search API with enhanced query logic
+
+        // Use Confluence REST Search API with enhanced query logic
         GenericRequest search = new GenericRequest(this, path("content/search"));
 
         // Design a more comprehensive query
