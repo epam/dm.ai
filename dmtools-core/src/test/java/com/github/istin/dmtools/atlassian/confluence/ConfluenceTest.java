@@ -285,4 +285,46 @@ public class ConfluenceTest {
         }
     }
 
+    @Test
+    public void testConvertAuthForGraphQL_BasicToBearer() throws Exception {
+        Confluence conf = new Confluence("http://example.com", "auth");
+
+        // Access private method using reflection
+        java.lang.reflect.Method method = Confluence.class.getDeclaredMethod("convertAuthForGraphQL", String.class);
+        method.setAccessible(true);
+
+        // Test Basic auth conversion
+        String basicAuth = "Basic " + java.util.Base64.getEncoder().encodeToString("user@example.com:mytoken123".getBytes());
+        String result = (String) method.invoke(conf, basicAuth);
+
+        assertEquals("Should convert Basic to Bearer with token only", "Bearer mytoken123", result);
+    }
+
+    @Test
+    public void testConvertAuthForGraphQL_BearerPassthrough() throws Exception {
+        Confluence conf = new Confluence("http://example.com", "auth");
+
+        java.lang.reflect.Method method = Confluence.class.getDeclaredMethod("convertAuthForGraphQL", String.class);
+        method.setAccessible(true);
+
+        // Test Bearer token passthrough
+        String bearerAuth = "Bearer mytoken123";
+        String result = (String) method.invoke(conf, bearerAuth);
+
+        assertEquals("Should keep Bearer token as is", "Bearer mytoken123", result);
+    }
+
+    @Test
+    public void testConvertAuthForGraphQL_NullAuth() throws Exception {
+        Confluence conf = new Confluence("http://example.com", "auth");
+
+        java.lang.reflect.Method method = Confluence.class.getDeclaredMethod("convertAuthForGraphQL", String.class);
+        method.setAccessible(true);
+
+        // Test null auth
+        String result = (String) method.invoke(conf, (String) null);
+
+        assertNull("Should return null for null input", result);
+    }
+
 }

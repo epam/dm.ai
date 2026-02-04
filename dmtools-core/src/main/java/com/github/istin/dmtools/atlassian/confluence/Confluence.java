@@ -191,7 +191,10 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         // Try GraphQL API first if path is configured
         if (graphQLPath != null) {
             try {
-                JSONArray results = new ConfluenceGraphQLClient(graphQLPath, authorization).search(query, actualLimit);
+                // GraphQL requires Bearer token, not Basic auth
+                // Convert Basic auth to Bearer if needed
+                String graphQLAuth = convertAuthForGraphQL(authorization);
+                JSONArray results = new ConfluenceGraphQLClient(graphQLPath, graphQLAuth).search(query, actualLimit);
                 List<SearchResult> searchResults = new ArrayList<>();
                 for (int i = 0; i < results.length(); i++) {
                     JSONObject node = results.getJSONObject(i).getJSONObject("node");
@@ -623,7 +626,50 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     protected void setGraphQLPath(String graphQLPath) {
         this.graphQLPath = graphQLPath;
     }
-    
+
+    /**
+     * Converts REST API authorization (Basic auth) to GraphQL format (Bearer token).
+     * GraphQL API requires Bearer token, not Basic auth.
+     *
+     * @param authorization REST API authorization header (e.g., "Basic base64(email:token)")
+     * @return GraphQL-compatible authorization header (e.g., "Bearer token")
+     */
+    private String convertAuthForGraphQL(String authorization) {
+        if (authorization == null) {
+            return null;
+        }
+
+        // If already Bearer token, return as is
+        if (authorization.startsWith("Bearer ")) {
+            return authorization;
+        }
+
+        // Convert Basic auth to Bearer token
+        if (authorization.startsWith("Basic ")) {
+            try {
+                // Extract base64 encoded "email:token" part
+                String base64Credentials = authorization.substring("Basic ".length());
+
+                // Decode base64
+                byte[] decodedBytes = java.util.Base64.getDecoder().decode(base64Credentials);
+                String credentials = new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8);
+
+                // Extract token (after the colon)
+                int colonIndex = credentials.indexOf(':');
+                if (colonIndex > 0 && colonIndex < credentials.length() - 1) {
+                    String token = credentials.substring(colonIndex + 1);
+                    return "Bearer " + token;
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to convert Basic auth to Bearer token for GraphQL: " + e.getMessage());
+            }
+        }
+
+        // If conversion failed or unknown format, return original
+        // GraphQL will fail and fallback to REST API
+        return authorization;
+    }
+
     /**
      * Converts a MIME media type to a file extension.
      * @param mediaType the MIME type (e.g., "image/jpeg", "image/png")
