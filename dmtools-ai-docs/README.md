@@ -4,48 +4,51 @@ Universal AI assistant skill for DMtools - works with Cursor, Claude, Codex, and
 
 ## 🚀 Quick Install
 
+**IMPORTANT**: This installer works with **project-level directories only**. Run it from your project root directory.
+
 ### Interactive Installation
 
 ```bash
-curl -fsSL https://github.com/IstiN/dmtools/releases/latest/download/install.sh | bash
+# Run from your project root directory
+curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash
 ```
 
 The installer will:
-1. Detect your AI assistant (Cursor, Claude, Codex)
+1. Detect project-level skill directories (.cursor/skills, .claude/skills, .codex/skills)
 2. Download the latest DMtools skill
 3. Let you choose where to install (or auto-select in non-interactive mode)
+4. Install only in your current project (no global installation)
 
 ### Non-Interactive Installation
 
 For CI/CD, automation, or scripting:
 
 ```bash
-# Auto-install to first detected location (when piped)
-curl -fsSL https://github.com/IstiN/dmtools/releases/latest/download/install.sh | bash
+# Auto-install to first detected project-level location
+curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash
 
-# Install to all detected locations
-curl -fsSL https://github.com/IstiN/dmtools/releases/latest/download/install.sh | INSTALL_LOCATION=all bash
+# Install to all detected project-level locations
+curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | INSTALL_LOCATION=all bash
 
 # With downloaded script
-INSTALL_LOCATION=all bash install.sh  # All locations
-INSTALL_LOCATION=1 bash install.sh    # First location
-bash install.sh --all                 # All locations (flag)
+INSTALL_LOCATION=all bash install.sh  # All project-level locations
+INSTALL_LOCATION=1 bash install.sh    # First project-level location
+bash install.sh --all                 # All project-level locations (flag)
 bash install.sh --help                # Show help
 ```
 
 ## 📦 Manual Installation
 
-1. Download the latest release from [Releases](https://github.com/IstiN/dmtools/releases)
-2. Extract to one of these directories:
+1. Download `dmtools-skill-v1.7.129.zip` from [Releases](https://github.com/IstiN/dmtools/releases)
+2. Extract to one of these **project-level directories** in your project root:
 
-| Location | Scope | Platform |
-|----------|-------|----------|
-| `.cursor/skills/` | Project-level | Cursor |
-| `.claude/skills/` | Project-level | Claude |
-| `.codex/skills/` | Project-level | Codex |
-| `~/.cursor/skills/` | User-level (global) | Cursor |
-| `~/.claude/skills/` | User-level (global) | Claude |
-| `~/.codex/skills/` | User-level (global) | Codex |
+| Location | Platform | Description |
+|----------|----------|-------------|
+| `.cursor/skills/` | Cursor | Project-specific skill for Cursor IDE |
+| `.claude/skills/` | Claude | Project-specific skill for Claude Desktop |
+| `.codex/skills/` | Codex | Project-specific skill for Codex |
+
+**Note**: The installer no longer supports global (user-level) installation. Each project should have its own skill installation to ensure version compatibility.
 
 ## 🎯 What's Included
 
@@ -99,11 +102,13 @@ dmtools/
 
 ## 🔄 Updating
 
-To update to the latest version:
+To update to the latest version, run from your project root directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash
 ```
+
+**Note**: This will update the skill in your current project's skill directories.
 
 ## 🤝 Compatibility
 

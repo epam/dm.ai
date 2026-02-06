@@ -2,12 +2,13 @@
 
 # DMtools Agent Skill Installer
 # Works with Cursor, Claude, Codex, and any Agent Skills compatible system
+# Installs to project-level directories only (.cursor/skills, .claude/skills, .codex/skills)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
-#   INSTALL_LOCATION=all bash install.sh        # Install to all locations
-#   INSTALL_LOCATION=1 bash install.sh          # Install to first location
-#   bash install.sh --all                       # Install to all locations
+#   curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash
+#   INSTALL_LOCATION=all bash install.sh        # Install to all detected project-level locations
+#   INSTALL_LOCATION=1 bash install.sh          # Install to first detected location
+#   bash install.sh --all                       # Install to all detected project-level locations
 
 set -e
 
@@ -26,16 +27,19 @@ for arg in "$@"; do
             echo "  $0 [options]"
             echo ""
             echo "Options:"
-            echo "  --all, -a     Install to all detected locations"
+            echo "  --all, -a     Install to all detected project-level locations"
             echo "  --help, -h    Show this help message"
             echo ""
             echo "Environment Variables:"
             echo "  INSTALL_LOCATION  Set to 'all' or number (1,2,3...) to auto-select location"
             echo ""
             echo "Examples:"
-            echo "  curl -fsSL https://github.com/IstiN/dmtools/releases/latest/download/install.sh | bash"
+            echo "  curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash"
             echo "  INSTALL_LOCATION=all bash install.sh"
             echo "  INSTALL_LOCATION=1 bash install.sh"
+            echo ""
+            echo "Note: Installs only to project-level directories (.cursor/skills, .claude/skills, .codex/skills)"
+            echo "      Run this command from your project root directory."
             exit 0
             ;;
     esac
@@ -54,14 +58,11 @@ SKILL_NAME="dmtools"
 GITHUB_REPO="IstiN/dmtools"
 TEMP_DIR=$(mktemp -d)
 
-# Skill directories to check (in order of preference)
+# Skill directories to check (project-level only)
 SKILL_DIRS=(
     ".cursor/skills"
     ".claude/skills"
     ".codex/skills"
-    "$HOME/.cursor/skills"
-    "$HOME/.claude/skills"
-    "$HOME/.codex/skills"
 )
 
 # Functions
@@ -85,11 +86,11 @@ print_info() {
     echo -e "${YELLOW}ℹ${NC} $1" >&2
 }
 
-# Detect available skill directories
+# Detect available skill directories (project-level only)
 detect_skill_dirs() {
     local found_dirs=()
 
-    # Check project-level directories
+    # Check project-level directories only
     if [ -d ".cursor/skills" ] || [ -d ".cursor" ]; then
         found_dirs+=(".cursor/skills")
     fi
@@ -100,26 +101,9 @@ detect_skill_dirs() {
         found_dirs+=(".codex/skills")
     fi
 
-    # Check user-level directories
-    if [ -d "$HOME/.cursor" ] || command -v cursor &> /dev/null; then
-        found_dirs+=("$HOME/.cursor/skills")
-    fi
-    if [ -d "$HOME/.claude" ] || command -v claude &> /dev/null; then
-        found_dirs+=("$HOME/.claude/skills")
-    fi
-    if [ -d "$HOME/.codex" ]; then
-        found_dirs+=("$HOME/.codex/skills")
-    fi
-
-    # If no specific directories found, suggest defaults
+    # If no directories found, default to .cursor/skills in current directory
     if [ ${#found_dirs[@]} -eq 0 ]; then
-        # If in a project directory (has .git), suggest project-level
-        if [ -d ".git" ]; then
-            found_dirs+=(".cursor/skills")
-        else
-            # Otherwise suggest user-level
-            found_dirs+=("$HOME/.cursor/skills")
-        fi
+        found_dirs+=(".cursor/skills")
     fi
 
     # Return found directories via stdout (not stderr!)
@@ -218,7 +202,7 @@ main() {
     fi
 
     # Detect available directories
-    print_info "Detecting skill directories..."
+    print_info "Detecting project-level skill directories..."
     local DIRS=($(detect_skill_dirs))
 
     if [ ${#DIRS[@]} -eq 0 ]; then
@@ -333,9 +317,12 @@ case "${1:-install}" in
         echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
         echo ""
         echo "The installer will:"
-        echo "  1. Detect available skill directories"
+        echo "  1. Detect project-level skill directories (.cursor, .claude, .codex)"
         echo "  2. Download the latest DMtools skill"
-        echo "  3. Install to your chosen location(s)"
+        echo "  3. Install to your chosen location(s) in the current project"
+        echo ""
+        echo "Note: This installer only works with project-level directories."
+        echo "      Run from your project root directory."
         echo ""
         echo "Learn more: https://agentskills.io"
         ;;

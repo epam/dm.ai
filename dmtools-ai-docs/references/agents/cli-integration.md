@@ -1,5 +1,7 @@
 # CLI Agent Integration with Teammate
 
+**→ See also: [Agent Best Practices](best-practices.md) for critical patterns and common mistakes to avoid**
+
 ## Overview
 
 Teammate supports integration with external CLI agents (Cursor, Claude, Copilot, Codex, Gemini CLI, etc.) for advanced code generation and analysis tasks that require full workspace context.

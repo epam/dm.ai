@@ -1,5 +1,7 @@
 # AI Teammate Configuration Guide
 
+**→ See also: [Agent Best Practices](best-practices.md) for critical patterns, common helpers, and lessons learned from real-world development**
+
 ## ⚠️ CRITICAL: The "name" Field is Java Class Name
 
 **READ THIS FIRST - The `"name"` field is NOT customizable:**

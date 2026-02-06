@@ -1,5 +1,7 @@
 # JavaScript Agents Development Guide
 
+**→ See also: [Agent Best Practices](best-practices.md) for reusable helpers, common patterns, and critical preservation rules**
+
 ## 🎯 Overview
 
 DMtools JavaScript agents run via **GraalJS** (polyglot JavaScript execution in JVM) and provide direct access to all 67+ MCP tools as native JavaScript functions. Agents are used for preprocessing data, post-processing results, and orchestrating workflows.

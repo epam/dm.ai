@@ -1,12 +1,12 @@
 ---
 name: dmtools
-description: Comprehensive documentation and assistance for DMtools - AI-powered development toolkit with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMtools, configuring integrations, developing JavaScript agents, or generating test cases.
+description: DMtools - 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams. Use for integrations, JavaScript agents, test generation.
 license: Apache-2.0
 compatibility:
   - Java 23+
   - macOS, Linux, Windows (WSL)
 metadata:
-  version: skill-v1.0.19
+  version: skill-v1.0.20
   author: DMtools Team
   repository: https://github.com/IstiN/dmtools
   documentation: https://github.com/IstiN/dmtools
@@ -252,6 +252,7 @@ function action(params) {
 - **[TestCasesGenerator](references/jobs/README.md#testcasesgenerator)** - Automated test case generation
 
 ### Development
+- **[Agent Best Practices](references/agents/best-practices.md)** - Critical patterns and lessons learned
 - [JavaScript Agents](references/agents/javascript-agents.md) - GraalJS development with MCP tools
 - [Teammate Configs](references/agents/teammate-configs.md) - JSON-based AI workflows
 - **[CLI Integration](references/agents/cli-integration.md)** - Integrate Cursor, Claude, Copilot, Gemini CLI agents
