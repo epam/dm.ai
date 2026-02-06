@@ -780,12 +780,6 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             testCasesJson.put(testCaseJson);
         }
         
-        // Prepare parameters for JavaScript execution
-        JSONObject jsParams = new JSONObject();
-        jsParams.put("newTestCases", testCasesJson);
-        jsParams.put("ticket", createTicketContextJson(ticketContext.getTicket()));
-        jsParams.put("jobParams", createParamsJson(params));
-        
         // Execute JavaScript preprocessing
         Object result = js(params.getPreprocessJSAction())
                 .mcp(trackerClient, ai, confluence, null)
@@ -890,8 +884,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             // Execute JavaScript modifier
             Object result = js(params.getJqlModifierJSAction())
                     .mcp(trackerClient, ai, confluence, null)
-                    .with("ticket", createTicketContextJson(ticket))
-                    .with("jobParams", createParamsJson(params))
+                    .with("ticket", ticket)
+                    .with("jobParams", params)
                     .with("existingTestCasesJql", originalJql)
                     .execute();
 
@@ -960,46 +954,4 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         return fallback;
     }
 
-    /**
-     * Create JSON representation of ticket for JavaScript context.
-     */
-    private JSONObject createTicketContextJson(ITicket ticket) {
-        JSONObject ticketJson = new JSONObject();
-        try {
-            ticketJson.put("key", ticket.getTicketKey());
-            ticketJson.put("title", ticket.getTicketTitle());
-            ticketJson.put("description", ticket.getTicketDescription());
-            if (ticket instanceof Ticket) {
-                Ticket jiraTicket = (Ticket) ticket;
-                if (jiraTicket.getFields() != null) {
-                    ticketJson.put("status", jiraTicket.getFields().getStatus() != null ? jiraTicket.getFields().getStatus().getName() : "");
-                    ticketJson.put("priority", jiraTicket.getFields().getPriority() != null ? jiraTicket.getFields().getPriority().getName() : "");
-                    ticketJson.put("issueType", jiraTicket.getFields().getIssueType() != null ? jiraTicket.getFields().getIssueType().getName() : "");
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Failed to create ticket context JSON: {}", e.getMessage());
-        }
-        return ticketJson;
-    }
-    
-    /**
-     * Create JSON representation of params for JavaScript context.
-     */
-    private JSONObject createParamsJson(TestCasesGeneratorParams params) {
-        JSONObject paramsJson = new JSONObject();
-        try {
-            paramsJson.put("testCaseIssueType", params.getTestCaseIssueType());
-            paramsJson.put("testCasesPriorities", params.getTestCasesPriorities());
-            if (params.getTargetProject() != null) {
-                paramsJson.put("targetProject", params.getTargetProject());
-            }
-            if (params.getInputJql() != null) {
-                paramsJson.put("inputJql", params.getInputJql());
-            }
-        } catch (Exception e) {
-            logger.warn("Failed to create params JSON: {}", e.getMessage());
-        }
-        return paramsJson;
-    }
 }
