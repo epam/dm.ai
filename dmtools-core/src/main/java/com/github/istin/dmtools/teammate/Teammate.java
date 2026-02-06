@@ -218,11 +218,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     @Override
     protected List<ResultItem> runJobImpl(TeammateParams expertParams) throws Exception {
-        ExpertParams.OutputType tempOutputType = expertParams.getOutputType();
-        if (tempOutputType == null) {
-            tempOutputType = ExpertParams.OutputType.comment;
-        }
-        final ExpertParams.OutputType outputType = tempOutputType;
+        ExpertParams.OutputType outputType = expertParams.getOutputType();
         String initiator = expertParams.getInitiator();
         String inputJQL = expertParams.getInputJql();
         String fieldName = expertParams.getFieldName();
@@ -262,7 +258,6 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
                 .withJobContext(expertParams, ticket, null) // response is null in pre-action
                 .with(TrackerParams.INITIATOR, initiator)
-                .with(TrackerParams.METADATA, expertParams.getMetadata())
                 .execute();
 
             // Check return value to determine if processing should continue
@@ -420,7 +415,6 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
                 .withJobContext(expertParams, ticket, response)
                 .with(TrackerParams.INITIATOR, initiator)
-                .with(TrackerParams.METADATA, expertParams.getMetadata())
                 .with("systemRequest", systemRequestCommentAlias)
                 .execute();
             if (expertParams.isAttachResponseAsFile()) {

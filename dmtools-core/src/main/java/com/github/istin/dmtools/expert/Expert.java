@@ -179,11 +179,7 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
         String systemRequest = expertParams.getSystemRequest();
         String systemRequestCommentAlias = expertParams.getSystemRequestCommentAlias();
         String[] confluencePages = expertParams.getConfluencePages();
-        TrackerParams.OutputType tempOutputType = expertParams.getOutputType();
-        if (tempOutputType == null) {
-            tempOutputType = TrackerParams.OutputType.comment;
-        }
-        final TrackerParams.OutputType outputType = tempOutputType;
+        TrackerParams.OutputType outputType = expertParams.getOutputType();
         String initiator = expertParams.getInitiator();
         String inputJQL = expertParams.getInputJql();
         String fieldName = expertParams.getFieldName();
@@ -281,10 +277,21 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
                 } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
                     trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCustomCode, StringUtils.convertToMarkdown(response)));
                 }
-                trackerClient.postComment(ticket.getTicketKey(), trackerClient.tag(initiator) + ", there is AI response in '"+ fieldName + "' on your request: \n"+
-                        "System Request: " + systemRequestCommentAlias + "\n" + request);
+                String comment = trackerClient.tag(initiator) + ", there is AI response in '"+ fieldName + "' on your request: \n";
+                if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                    comment += "System Request: " + systemRequestCommentAlias + "\n" + request;
+                } else {
+                    comment += request;
+                }
+                trackerClient.postComment(ticket.getTicketKey(), comment);
             } else {
-                trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n"+ request + "\n\nAI Response is: \n" + response);
+                String comment;
+                if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                    comment = trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n"+ request + "\n\nAI Response is: \n" + response;
+                } else {
+                    comment = trackerClient.tag(initiator) + ", there is response on your request: \n" + request + "\n\nAI Response is: \n" + response;
+                }
+                trackerClient.postCommentIfNotExists(ticket.getTicketKey(), comment);
             }
 
             // Execute JavaScript post-action if provided - ULTRA-CLEAN fluent API
