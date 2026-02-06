@@ -140,19 +140,23 @@ public class TrackerModule {
         // Check if we're in a test environment (Spring Boot tests, JUnit, etc.)
         // In test environments, it's acceptable to not have tracker configuration
         boolean isTestEnvironment = isTestEnvironment();
-        
+
         if (isTestEnvironment) {
-            logger.warn("No tracker configuration found in test environment. Returning null TrackerClient. " +
-                    "Tests that require TrackerClient should mock it or provide test configuration.");
+            logger.warn("No tracker configuration found in test/CI environment. Returning null TrackerClient. " +
+                    "Jobs that require TrackerClient will fail with an informative error. " +
+                    "To configure, set environment variables: " +
+                    "JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +
+                    "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN), or " +
+                    "Rally (RALLY_PATH + RALLY_TOKEN)");
             return null;
         }
-        
+
         logger.error("No tracker configuration found. Please configure one of: JIRA, ADO, Rally, or X-ray");
         throw new RuntimeException("Failed to create TrackerClient instance. " +
-                "Please configure JIRA (JIRA_BASE_PATH, JIRA_API_TOKEN), " +
-                "ADO (ADO_ORGANIZATION, ADO_PROJECT, ADO_PAT_TOKEN), " +
-                "Rally (RALLY_PATH, RALLY_TOKEN), or " +
-                "X-ray (JIRA_BASE_PATH, JIRA_API_TOKEN, XRAY_CLIENT_ID, XRAY_CLIENT_SECRET, XRAY_BASE_PATH)");
+                "Please configure JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +
+                "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN), " +
+                "Rally (RALLY_PATH + RALLY_TOKEN), or " +
+                "X-ray (JIRA_BASE_PATH + JIRA_API_TOKEN + XRAY_CLIENT_ID + XRAY_CLIENT_SECRET + XRAY_BASE_PATH)");
     }
     
     /**

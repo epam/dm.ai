@@ -218,9 +218,20 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     @Override
     protected List<ResultItem> runJobImpl(TeammateParams expertParams) throws Exception {
+        // Validate TrackerClient availability if inputJql is provided
+        String inputJQL = expertParams.getInputJql();
+        if (inputJQL != null && !inputJQL.trim().isEmpty() && trackerClient == null) {
+            throw new IllegalStateException(
+                "TrackerClient is not configured, but inputJql is provided. " +
+                "Please configure Jira (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN) or " +
+                "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN) or " +
+                "Rally (RALLY_PATH + RALLY_TOKEN). " +
+                "Alternatively, remove inputJql parameter if tracker integration is not needed."
+            );
+        }
+
         ExpertParams.OutputType outputType = expertParams.getOutputType();
         String initiator = expertParams.getInitiator();
-        String inputJQL = expertParams.getInputJql();
         String fieldName = expertParams.getFieldName();
         String systemRequestCommentAlias = expertParams.getSystemRequestCommentAlias();
 

@@ -5,11 +5,15 @@ import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.*;
 
 public class BasicJiraClient extends JiraClient<Ticket> {
+
+    private static final Logger logger = LogManager.getLogger(BasicJiraClient.class);
 
     public static final String BASE_PATH;
     public static final String TOKEN;
@@ -87,6 +91,11 @@ public class BasicJiraClient extends JiraClient<Ticket> {
     public static TrackerClient<? extends ITicket> getInstance() throws IOException {
         if (instance == null) {
             if (BASE_PATH == null || BASE_PATH.isEmpty()) {
+                logger.debug("Jira configuration not found. Set JIRA_BASE_PATH and JIRA_EMAIL+JIRA_API_TOKEN (or JIRA_LOGIN_PASS_TOKEN).");
+                return null;
+            }
+            if (TOKEN == null || TOKEN.isEmpty()) {
+                logger.warn("JIRA_BASE_PATH is set, but authentication token is missing. Set JIRA_EMAIL+JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN.");
                 return null;
             }
             instance = new BasicJiraClient();
