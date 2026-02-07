@@ -1,4 +1,6 @@
 package com.github.istin.dmtools.reporting.model;
+
+import java.util.ArrayList;
 import java.util.List;
 
 public class ReportOutput {
@@ -8,6 +10,7 @@ public class ReportOutput {
     private String endDate;
     private List<TimePeriodResult> timePeriods;
     private AggregatedResult aggregated;
+    private List<String> weightMetrics;
     
     public ReportOutput() {}
     public ReportOutput(String reportName, String generatedAt, String startDate, String endDate,
@@ -29,4 +32,6 @@ public class ReportOutput {
     public void setTimePeriods(List<TimePeriodResult> timePeriods) { this.timePeriods = timePeriods; }
     public AggregatedResult getAggregated() { return aggregated; }
     public void setAggregated(AggregatedResult aggregated) { this.aggregated = aggregated; }
+    public List<String> getWeightMetrics() { return weightMetrics; }
+    public void setWeightMetrics(List<String> weightMetrics) { this.weightMetrics = weightMetrics; }
 }

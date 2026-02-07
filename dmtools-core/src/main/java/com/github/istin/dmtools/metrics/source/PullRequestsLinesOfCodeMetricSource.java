@@ -31,7 +31,13 @@ public class PullRequestsLinesOfCodeMetricSource extends CommonSourceCollector {
         sourceCode.performCommitsFromBranch(workspace, repo, branchName, new AtlassianRestClient.Performer<ICommit>() {
             @Override
             public boolean perform(ICommit model) throws Exception {
+                if (model.getAuthor() == null) {
+                    return false;
+                }
                 String displayName = model.getAuthor().getFullName();
+                if (displayName == null) {
+                    return false;
+                }
 
                 if (isNameIgnored(displayName)) {
                     return false;

@@ -279,6 +279,9 @@
                     Metrics Timeline
                     <span class="hint">Click a bar to drill down</span>
                 </div>
+                <div id="timelineLegend" style="padding:6px 18px 2px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border)">
+                    <span style="font-size:0.72em;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Contributors:</span>
+                </div>
                 <div class="chart-body" id="timelineChart"></div>
             </div>
 
@@ -286,6 +289,9 @@
                 <div class="chart-title">
                     Contributions by Person &amp; Metric
                     <span class="hint">Grouped by contributor, split by metric</span>
+                </div>
+                <div id="stackedLegend" style="padding:6px 18px 2px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border)">
+                    <span style="font-size:0.72em;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Contributors:</span>
                 </div>
                 <div class="chart-body" id="stackedChart"></div>
             </div>
@@ -295,7 +301,21 @@
                     Contributors Radar
                     <span class="hint">Comparison across selected filters</span>
                 </div>
+                <div id="radarLegend" style="padding:6px 18px 2px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border)">
+                    <span style="font-size:0.72em;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Contributors:</span>
+                </div>
                 <div class="chart-body" id="radarChart"></div>
+            </div>
+
+            <div class="chart-card" style="grid-column: 1 / -1;">
+                <div class="chart-title">
+                    Contribution Share
+                    <span class="hint">% of work per contributor per metric (equal weight across metrics for Overall)</span>
+                </div>
+                <div id="shareLegend" style="padding:6px 18px 2px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border)">
+                    <span style="font-size:0.72em;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Contributors:</span>
+                </div>
+                <div id="shareGrid" style="display:grid;gap:8px;padding:12px 16px;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));"></div>
             </div>
         </div>
 
@@ -318,6 +338,13 @@
         let charts = {};
         let currentPeriodIdx = null;
         let isDark = false;
+        const WEIGHT_METRICS = new Set(R.weightMetrics || []);
+        function isWeightMetric(name) { return WEIGHT_METRICS.has(name); }
+        function mv(metricData, name) {
+            if (!metricData) return 0;
+            const raw = isWeightMetric(name) ? (metricData.totalWeight || 0) : (metricData.count || 0);
+            return Math.round(raw * 100) / 100;
+        }
 
         /* --- Global filter state --- */
         let gStartIdx = 0;
@@ -328,7 +355,12 @@
         function getColors() { return isDark ? DARK_COLORS : COLORS; }
 
         document.addEventListener('DOMContentLoaded', init);
-        window.addEventListener('resize', () => Object.values(charts).forEach(c => c?.resize()));
+        window.addEventListener('resize', () => {
+            Object.entries(charts).forEach(([k, c]) => {
+                if (k === '_pies') { (c || []).forEach(p => p?.resize()); }
+                else { c?.resize(); }
+            });
+        });
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
 
         function toggleTheme() {
@@ -353,6 +385,7 @@
             renderTimeline();
             renderStacked();
             renderRadar();
+            renderContributionShare();
             updateFilterSummary();
         }
 
@@ -539,7 +572,7 @@
             html += statBox(contributors.length, 'Contributors');
             metrics.forEach(m => {
                 const t = R.aggregated?.total?.metrics?.[m];
-                if (t) html += statBox(t.count || 0, m);
+                if (t) html += statBox(mv(t, m), m);
             });
             document.getElementById('statsRow').innerHTML = html;
         }
@@ -568,21 +601,41 @@
             const eContribs = enabledContributors();
             periods.forEach(p => {
                 eMetrics.forEach(mn => {
-                    const mv = p.metrics?.[mn];
-                    if (mv) { total[mn] = (total[mn] || 0) + (mv.count || 0); }
+                    const md = p.metrics?.[mn];
+                    if (md) { total[mn] = (total[mn] || 0) + mv(md, mn); }
                 });
                 eContribs.forEach(c => {
                     const cd = p.contributorBreakdown?.[c];
                     if (cd) {
                         if (!byContributor[c]) byContributor[c] = {};
                         eMetrics.forEach(mn => {
-                            const mv = cd.metrics?.[mn];
-                            if (mv) byContributor[c][mn] = (byContributor[c][mn] || 0) + (mv.count || 0);
+                            const md = cd.metrics?.[mn];
+                            if (md) byContributor[c][mn] = (byContributor[c][mn] || 0) + mv(md, mn);
                         });
                     }
                 });
             });
             return { byContributor, total };
+        }
+
+        /* --- Render contributor legend strip for a given div --- */
+        function renderContributorLegendStrip(divId, contributors) {
+            const div = document.getElementById(divId);
+            if (!div) return;
+            const colors = getColors();
+            const allC = allContributors();
+            let html = '<span style="font-size:0.72em;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Contributors:</span>';
+            contributors.forEach(c => {
+                const ci = allC.indexOf(c);
+                html += '<div style="display:flex;align-items:center;gap:4px">';
+                html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + colors[ci % colors.length] + '"></span>';
+                html += '<span style="font-size:0.78em;color:var(--text2)">' + esc(c) + '</span>';
+                html += '</div>';
+            });
+            if (contributors.length === 0) {
+                html += '<span style="font-size:0.78em;color:var(--text3)">No contributors</span>';
+            }
+            div.innerHTML = html;
         }
 
         /* --- Timeline Chart (respects global filters) --- */
@@ -598,6 +651,9 @@
             const colors = getColors();
             const allM = allMetricNames();
 
+            // Render contributor legend
+            renderContributorLegendStrip('timelineLegend', contribs);
+
             // Sum metrics only from enabled contributors
             const series = metrics.map((m, mi) => {
                 const ci = allM.indexOf(m);
@@ -606,7 +662,7 @@
                     emphasis: { focus: 'series' },
                     data: fp.map(p => {
                         let sum = 0;
-                        contribs.forEach(c => { sum += (p.contributorBreakdown?.[c]?.metrics?.[m]?.count || 0); });
+                        contribs.forEach(c => { const md = p.contributorBreakdown?.[c]?.metrics?.[m]; sum += mv(md, m); });
                         return sum;
                     }),
                     itemStyle: { color: colors[ci % colors.length], borderRadius: [4, 4, 0, 0] },
@@ -666,20 +722,41 @@
 
             const series = [];
             contributors.forEach((c, ci) => {
+                const opacity = 0.3 + 0.7 * (1 - ci / Math.max(contributors.length, 1));
                 metrics.forEach((m) => {
                     const mi = allM.indexOf(m);
                     series.push({
                         name: c + ' / ' + m, type: 'bar', stack: c,
                         emphasis: { focus: 'series' },
-                        data: fp.map(p => p.contributorBreakdown?.[c]?.metrics?.[m]?.count || 0),
+                        data: fp.map(p => mv(p.contributorBreakdown?.[c]?.metrics?.[m], m)),
                         itemStyle: {
                             color: colors[mi % colors.length],
-                            opacity: 0.3 + 0.7 * (1 - ci / Math.max(contributors.length, 1)),
+                            opacity: opacity,
                             borderRadius: 0
                         }
                     });
                 });
             });
+
+            // Build HTML contributor legend with opacity swatches
+            const stackedLegendDiv = document.getElementById('stackedLegend');
+            let lhtml = '<span style="font-size:0.72em;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Contributors:</span>';
+            contributors.forEach((c, ci) => {
+                const op = 0.3 + 0.7 * (1 - ci / Math.max(contributors.length, 1));
+                lhtml += '<div style="display:flex;align-items:center;gap:4px">';
+                lhtml += '<div style="display:flex;gap:2px">';
+                metrics.forEach(m => {
+                    const mi = allM.indexOf(m);
+                    lhtml += '<span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:' + colors[mi % colors.length] + ';opacity:' + op.toFixed(2) + '"></span>';
+                });
+                lhtml += '</div>';
+                lhtml += '<span style="font-size:0.78em;color:var(--text2)">' + esc(c) + '</span>';
+                lhtml += '</div>';
+            });
+            if (contributors.length === 0) {
+                lhtml += '<span style="font-size:0.78em;color:var(--text3)">No contributors</span>';
+            }
+            stackedLegendDiv.innerHTML = lhtml;
 
             const legendMetrics = metrics.length > 0 && contributors.length > 0
                 ? metrics.map(m => ({ name: contributors[0] + ' / ' + m, icon: 'roundRect' }))
@@ -753,6 +830,9 @@
             const allM = allMetricNames();
             const colors = getColors();
 
+            // Render contributor legend
+            renderContributorLegendStrip('radarLegend', contributors);
+
             if (metrics.length < 2 || contributors.length === 0) {
                 el.innerHTML = '<div style="text-align:center;padding:80px;color:var(--text3)">Need 2+ metrics and 1+ contributor enabled</div>';
                 return;
@@ -816,6 +896,124 @@
             });
         }
 
+        /* --- Contribution Share (pie grid: % per metric + overall) --- */
+        function renderContributionShare() {
+            const grid = document.getElementById('shareGrid');
+            if (!grid) return;
+
+            /* dispose old pie charts */
+            (charts._pies || []).forEach(c => c.dispose());
+            charts._pies = [];
+
+            const metrics = enabledMetrics();
+            const contributors = enabledContributors();
+            const allC = allContributors();
+            const colors = getColors();
+
+            // Render contributor legend
+            renderContributorLegendStrip('shareLegend', contributors);
+
+            if (metrics.length === 0 || contributors.length === 0) {
+                grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);grid-column:1/-1">No data for current filters</div>';
+                return;
+            }
+
+            const agg = aggregateFiltered();
+
+            /* Build per-metric pie data + accumulate overall (equal weight) */
+            const overallMap = {};
+            contributors.forEach(c => { overallMap[c] = 0; });
+
+            const pieDefs = [];
+            metrics.forEach(m => {
+                const total = agg.total[m] || 0;
+                if (total === 0) return;
+                const slices = [];
+                contributors.forEach(c => {
+                    const v = (agg.byContributor[c] || {})[m] || 0;
+                    if (v > 0) {
+                        slices.push({ name: c, value: v });
+                        /* equal-weight: each metric contributes fraction v/total */
+                        overallMap[c] += v / total;
+                    }
+                });
+                pieDefs.push({ title: m, total: total, slices: slices });
+            });
+
+            /* Overall pie: overallMap values are sum of (contributor_share per metric) */
+            const overallSlices = [];
+            contributors.forEach(c => {
+                if (overallMap[c] > 0) overallSlices.push({ name: c, value: overallMap[c] });
+            });
+            const overallTotal = overallSlices.reduce((s, d) => s + d.value, 0);
+
+            /* Render HTML containers */
+            grid.innerHTML = '';
+            const allDefs = [{ title: 'Overall', total: overallTotal, slices: overallSlices, isOverall: true }, ...pieDefs];
+
+            allDefs.forEach((def, idx) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 4px 2px;display:flex;flex-direction:column;align-items:center;';
+                if (def.isOverall) wrapper.style.cssText += 'border-color:var(--accent);';
+                const label = document.createElement('div');
+                label.style.cssText = 'font-size:0.8em;font-weight:600;color:var(--accent2);text-align:center;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;';
+                label.textContent = def.title;
+                label.title = def.title;
+                wrapper.appendChild(label);
+                const chartDiv = document.createElement('div');
+                chartDiv.style.cssText = 'width:100%;height:220px;';
+                wrapper.appendChild(chartDiv);
+                grid.appendChild(wrapper);
+
+                /* Render ECharts pie */
+                const chart = echarts.init(chartDiv);
+                charts._pies.push(chart);
+
+                const pieData = def.slices.map(s => ({
+                    name: s.name,
+                    value: Math.round(s.value * 1000) / 1000,
+                    itemStyle: { color: colors[allC.indexOf(s.name) % colors.length] }
+                }));
+
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    tooltip: { ...tooltipTheme(),
+                        formatter: function(params) {
+                            return '<b>' + esc(params.name) + '</b><br/>' +
+                                esc(def.title) + ': ' + params.percent + '%' +
+                                (def.isOverall ? '' : ' (' + params.value + ')');
+                        }
+                    },
+                    series: [{
+                        type: 'pie',
+                        radius: ['35%', '68%'],
+                        center: ['50%', '55%'],
+                        data: pieData,
+                        label: {
+                            show: true,
+                            formatter: function(p) {
+                                if (p.percent < 5) return '';
+                                return p.percent.toFixed(0) + '%';
+                            },
+                            fontSize: 11,
+                            color: isDark ? '#E8EAED' : '#212529'
+                        },
+                        labelLine: { show: true, length: 8, length2: 6 },
+                        emphasis: {
+                            itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.3)' },
+                            label: {
+                                show: true,
+                                fontSize: 12,
+                                fontWeight: 'bold',
+                                formatter: function(p) { return p.name + '\n' + p.percent.toFixed(1) + '%'; }
+                            }
+                        },
+                        animationDuration: 400
+                    }]
+                });
+            });
+        }
+
         /* --- Mini chart in side panel (horizontal bar for single period) --- */
         function renderMiniChart(idx) {
             const el = document.getElementById('miniChart');
@@ -826,7 +1024,7 @@
             const metrics = allMetricNames();
             const colors = getColors();
             const period = R.timePeriods[idx];
-            const values = metrics.map(m => period.metrics?.[m]?.count || 0);
+            const values = metrics.map(m => mv(period.metrics?.[m], m));
 
             charts.mini.setOption({
                 backgroundColor: 'transparent',
@@ -913,8 +1111,8 @@
                     html += '<div class="contributor-item" onclick="filterTickets(\'' + escAttr(name) + '\')" id="ci-' + escAttr(name) + '">';
                     html += '<div class="name">' + esc(name) + '</div>';
                     html += '<div class="metrics-grid">';
-                    Object.entries(cm.metrics || {}).forEach(([mn, mv]) => {
-                        html += chip(mn, mv.count || 0);
+                    Object.entries(cm.metrics || {}).forEach(([mn, md]) => {
+                        html += chip(mn, mv(md, mn));
                     });
                     html += '</div></div>';
                 });
@@ -936,7 +1134,7 @@
                 html += '<div class="filter-row" id="metricFilters">';
                 html += '<button class="filter-btn active" onclick="filterByMetric(null)">All metrics</button>';
                 periodMetricNames.forEach(mn => {
-                    const cnt = period.metrics[mn]?.count || 0;
+                    const cnt = mv(period.metrics[mn], mn);
                     html += '<button class="filter-btn" onclick="filterByMetric(\'' + escAttr(mn) + '\')">' + esc(mn) + ' (' + cnt + ')</button>';
                 });
                 html += '</div>';
@@ -975,9 +1173,9 @@
                 let metricCounts = {};
                 if (contributor) {
                     const cm = (period.contributorBreakdown || {})[contributor];
-                    Object.entries(cm?.metrics || {}).forEach(([mn, mv]) => { metricCounts[mn] = mv.count || 0; });
+                    Object.entries(cm?.metrics || {}).forEach(([mn, md]) => { metricCounts[mn] = mv(md, mn); });
                 } else {
-                    Object.entries(period.metrics || {}).forEach(([mn, mv]) => { metricCounts[mn] = mv.count || 0; });
+                    Object.entries(period.metrics || {}).forEach(([mn, md]) => { metricCounts[mn] = mv(md, mn); });
                 }
                 const metricNames = Object.keys(metricCounts);
                 if (metricNames.length > 1) {

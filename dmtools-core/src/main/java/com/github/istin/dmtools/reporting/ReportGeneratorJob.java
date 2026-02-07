@@ -61,6 +61,12 @@ public class ReportGeneratorJob extends AbstractJob<
         @SerializedName("output")
         private OutputConfig output;
 
+        @SerializedName("employees")
+        private List<String> employees;
+
+        @SerializedName("aliases")
+        private Map<String, List<String>> aliases;
+
         /**
          * Normalizes timeGrouping to a list of TimeGroupingConfig.
          * Handles both single-object and array forms from Gson deserialization.
@@ -114,6 +120,8 @@ public class ReportGeneratorJob extends AbstractJob<
         config.setTimeGroupings(params.getTimeGroupings());
         config.setAggregation(params.getAggregation());
         config.setOutput(params.getOutput());
+        config.setEmployees(params.getEmployees());
+        config.setAliases(params.getAliases());
 
         logger.info("Report config ready: {}", config.getReportName());
         logger.debug("Date range: {} to {}", config.getStartDate(), config.getEndDate());
@@ -121,13 +129,22 @@ public class ReportGeneratorJob extends AbstractJob<
         logger.debug("Time groupings: {}", config.getTimeGroupings().size());
         logger.debug("Tracker client: {}", trackerClient != null ? trackerClient.getClass().getSimpleName() : "null");
 
-        // 2. Get source code (optional, may be null)
+        // 2. Get source code - try each provider independently to avoid one failure killing all
         SourceCode sourceCode = null;
-        try {
-            List<SourceCode> sourceCodes = SourceCode.Impl.getConfiguredSourceCodes(null);
-            sourceCode = sourceCodes.isEmpty() ? null : sourceCodes.get(0);
-        } catch (Exception e) {
-            logger.debug("No source code configured: {}", e.getMessage());
+        List<SourceCode> sourceCodes = new ArrayList<>();
+        for (String provider : new String[]{"github", "bitbucket", "gitlab"}) {
+            try {
+                List<SourceCode> found = SourceCode.Impl.getConfiguredSourceCodes(new org.json.JSONArray().put(provider));
+                sourceCodes.addAll(found);
+            } catch (Exception e) {
+                logger.debug("Source code provider '{}' not available: {}", provider, e.getMessage());
+            }
+        }
+        if (!sourceCodes.isEmpty()) {
+            sourceCode = sourceCodes.get(0);
+            logger.info("Source code configured: {} ({} provider(s) available)", sourceCode.getClass().getSimpleName(), sourceCodes.size());
+        } else {
+            logger.info("No source code providers configured");
         }
 
         // 3. Generate reports using abstract TrackerClient

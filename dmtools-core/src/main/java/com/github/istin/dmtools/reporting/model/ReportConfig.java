@@ -3,15 +3,26 @@ package com.github.istin.dmtools.reporting.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class ReportConfig {
+    @Setter
+    @Getter
     private String reportName;
+    @Setter
+    @Getter
     private String startDate;
+    @Setter
+    @Getter
     private String endDate;
 
+    @Setter
+    @Getter
     @JsonProperty("dataSources")
     private List<DataSourceConfig> dataSources;
 
@@ -19,20 +30,23 @@ public class ReportConfig {
     @JsonDeserialize(using = TimeGroupingDeserializer.class)
     private List<TimeGroupingConfig> timeGroupings;
 
+    @Setter
+    @Getter
     @JsonProperty("aggregation")
     private AggregationConfig aggregation;
 
+    @Setter
+    @Getter
     @JsonProperty("output")
     private OutputConfig output;
 
-    public String getReportName() { return reportName; }
-    public void setReportName(String reportName) { this.reportName = reportName; }
-    public String getStartDate() { return startDate; }
-    public void setStartDate(String startDate) { this.startDate = startDate; }
-    public String getEndDate() { return endDate; }
-    public void setEndDate(String endDate) { this.endDate = endDate; }
-    public List<DataSourceConfig> getDataSources() { return dataSources; }
-    public void setDataSources(List<DataSourceConfig> dataSources) { this.dataSources = dataSources; }
+    @Setter
+    @Getter
+    private List<String> employees;
+
+    @Setter
+    @Getter
+    private Map<String, List<String>> aliases;
 
     /**
      * Returns the list of time groupings. For backward compatibility,
@@ -72,8 +86,4 @@ public class ReportConfig {
         return timeGroupings != null && timeGroupings.size() > 1;
     }
 
-    public AggregationConfig getAggregation() { return aggregation; }
-    public void setAggregation(AggregationConfig aggregation) { this.aggregation = aggregation; }
-    public OutputConfig getOutput() { return output; }
-    public void setOutput(OutputConfig output) { this.output = output; }
 }

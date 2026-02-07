@@ -8,6 +8,7 @@ import com.github.istin.dmtools.report.model.KeyTime;
 import com.github.istin.dmtools.reporting.datasource.*;
 import com.github.istin.dmtools.reporting.metrics.MetricFactory;
 import com.github.istin.dmtools.reporting.model.*;
+import com.github.istin.dmtools.team.IEmployees;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -29,6 +30,8 @@ public class ReportGenerator {
 
     private final TrackerClient trackerClient;
     private final SourceCode sourceCode;
+    private final Set<String> weightMetricLabels = new HashSet<>();
+    private final Map<String, Double> metricDividers = new HashMap<>();
 
     public ReportGenerator(TrackerClient trackerClient, SourceCode sourceCode) {
         this.trackerClient = trackerClient;
@@ -49,9 +52,15 @@ public class ReportGenerator {
             logger.info("No endDate specified, using today: {}", resolvedEndDate);
         }
 
+        // Build employees from config (if provided)
+        IEmployees employees = null;
+        if (config.getEmployees() != null || config.getAliases() != null) {
+            employees = new ReportEmployees(config.getEmployees(), config.getAliases());
+        }
+
         // Initialize factories
         DataSourceFactory dataSourceFactory = new DataSourceFactory();
-        MetricFactory metricFactory = new MetricFactory(trackerClient, sourceCode);
+        MetricFactory metricFactory = new MetricFactory(trackerClient, sourceCode, employees);
 
         // 1. Collect data ONCE (expensive: API calls)
         Map<String, Map<String, DataSourceResult>> dataBySourceAndMetric =
@@ -90,6 +99,9 @@ public class ReportGenerator {
                 periodResults,
                 aggregated
             );
+            if (!weightMetricLabels.isEmpty()) {
+                output.setWeightMetrics(new ArrayList<>(weightMetricLabels));
+            }
 
             // Write output with grouping suffix
             String suffix = multiGrouping ? "_" + grouping.getType() : "";
@@ -139,7 +151,8 @@ public class ReportGenerator {
                 Metric metric = metricFactory.createMetric(
                     metricConfig.getName(),
                     metricConfig.getParams(),
-                    sourceConfig.getName()
+                    sourceConfig.getName(),
+                    sourceConfig.getParams()
                 );
 
                 DataSourceResult result = new DataSourceResult();
@@ -154,12 +167,28 @@ public class ReportGenerator {
                 String metricLabel = (String) metricConfig.getParams().getOrDefault("label", metricConfig.getName());
                 logger.info("Metric '{}': collected {} items", metricLabel, result.getAllKeyTimes().size());
                 sourceResults.put(metricLabel, result);
+
+                if (metric.isWeight()) {
+                    weightMetricLabels.add(metricLabel);
+                }
+                if (metric.getDivider() != 1.0) {
+                    metricDividers.put(metricLabel, metric.getDivider());
+                }
             }
 
-            // Merge into existing results for this source type (avoid overwriting when multiple
-            // data sources share the same name like "tracker")
-            results.computeIfAbsent(sourceConfig.getName(), k -> new ConcurrentHashMap<>())
-                .putAll(sourceResults);
+            // Merge into existing results: combine KeyTimes when same metric label
+            // appears from multiple data sources (e.g. "Pull Requests Merged" from 2 repos)
+            Map<String, DataSourceResult> existingMap =
+                results.computeIfAbsent(sourceConfig.getName(), k -> new ConcurrentHashMap<>());
+            for (Map.Entry<String, DataSourceResult> entry : sourceResults.entrySet()) {
+                existingMap.merge(entry.getKey(), entry.getValue(), (existing, incoming) -> {
+                    // Merge incoming keyTimes into existing result
+                    for (Map.Entry<String, List<KeyTime>> ktEntry : incoming.getAllKeyTimes().entrySet()) {
+                        existing.mergeKeyTimes(ktEntry.getKey(), ktEntry.getValue());
+                    }
+                    return existing;
+                });
+            }
         }
 
         return results;
@@ -226,7 +255,7 @@ public class ReportGenerator {
                         }
 
                         MetricSummary summary = metrics.computeIfAbsent(metricLabel, k -> new MetricSummary(0, 0.0, new ArrayList<>()));
-                        aggregateKeyTimesIntoSummary(periodKeyTimes, summary);
+                        aggregateKeyTimesIntoSummary(periodKeyTimes, summary, metricLabel);
                     }
                 }
             }
@@ -257,10 +286,11 @@ public class ReportGenerator {
             .collect(Collectors.toList());
     }
 
-    private void aggregateKeyTimesIntoSummary(List<KeyTime> keyTimes, MetricSummary summary) {
+    private void aggregateKeyTimesIntoSummary(List<KeyTime> keyTimes, MetricSummary summary, String metricLabel) {
+        double divider = metricDividers.getOrDefault(metricLabel, 1.0);
         summary.setCount(summary.getCount() + keyTimes.size());
         summary.setTotalWeight(summary.getTotalWeight() +
-            keyTimes.stream().mapToDouble(KeyTime::getWeight).sum());
+            keyTimes.stream().mapToDouble(KeyTime::getWeight).sum() / divider);
 
         Set<String> contributors = new HashSet<>(summary.getContributors());
         keyTimes.forEach(kt -> contributors.add(kt.getWho()));
@@ -321,8 +351,11 @@ public class ReportGenerator {
                 for (Map.Entry<String, MetricKeyTimes> metricEntry : item.getMetrics().entrySet()) {
                     String metricLabel = metricEntry.getKey();
 
+                    double divider = metricDividers.getOrDefault(metricLabel, 1.0);
+
                     for (KeyTimeData keyTime : metricEntry.getValue().getKeyTimes()) {
                         String contributor = keyTime.getWho();
+                        double weight = keyTime.getWeight() / divider;
 
                         // Get or create contributor metrics
                         ContributorMetrics contributorMetrics = byContributor.computeIfAbsent(
@@ -338,7 +371,7 @@ public class ReportGenerator {
 
                         // Update summary
                         summary.setCount(summary.getCount() + 1);
-                        summary.setTotalWeight(summary.getTotalWeight() + keyTime.getWeight());
+                        summary.setTotalWeight(summary.getTotalWeight() + weight);
                         if (!summary.getContributors().contains(contributor)) {
                             summary.getContributors().add(contributor);
                         }
@@ -349,7 +382,7 @@ public class ReportGenerator {
                             k -> new MetricSummary(0, 0.0, new ArrayList<>())
                         );
                         totalSummary.setCount(totalSummary.getCount() + 1);
-                        totalSummary.setTotalWeight(totalSummary.getTotalWeight() + keyTime.getWeight());
+                        totalSummary.setTotalWeight(totalSummary.getTotalWeight() + weight);
                         if (!totalSummary.getContributors().contains(contributor)) {
                             totalSummary.getContributors().add(contributor);
                         }
@@ -389,6 +422,8 @@ public class ReportGenerator {
             for (Map.Entry<String, MetricKeyTimes> metricEntry : item.getMetrics().entrySet()) {
                 String metricLabel = metricEntry.getKey();
 
+                double divider = metricDividers.getOrDefault(metricLabel, 1.0);
+
                 for (KeyTimeData keyTime : metricEntry.getValue().getKeyTimes()) {
                     String contributor = keyTime.getWho();
 
@@ -406,7 +441,7 @@ public class ReportGenerator {
 
                     // Update summary
                     summary.setCount(summary.getCount() + 1);
-                    summary.setTotalWeight(summary.getTotalWeight() + keyTime.getWeight());
+                    summary.setTotalWeight(summary.getTotalWeight() + keyTime.getWeight() / divider);
                     if (!summary.getContributors().contains(contributor)) {
                         summary.getContributors().add(contributor);
                     }
@@ -685,6 +720,14 @@ public class ReportGenerator {
 
         public void addKeyTimes(String itemKey, List<KeyTime> keyTimes) {
             keyTimesByItem.put(itemKey, keyTimes);
+        }
+
+        public void mergeKeyTimes(String itemKey, List<KeyTime> keyTimes) {
+            keyTimesByItem.merge(itemKey, keyTimes, (existing, incoming) -> {
+                List<KeyTime> merged = new ArrayList<>(existing);
+                merged.addAll(incoming);
+                return merged;
+            });
         }
 
         public void addMetadata(String itemKey, JSONObject metadata) {

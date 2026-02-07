@@ -158,7 +158,7 @@ public class ChangelogAssessment {
         return lastAssignee;
     }
 
-    public static String whoReportedTheTicket(Ticket ticket, Employees employees) {
+    public static String whoReportedTheTicket(Ticket ticket, IEmployees employees) {
         String who = null;
         Assignee creator = ticket.getFields().getCreator();
         Assignee reporter = ticket.getFields().getReporter();
@@ -174,7 +174,7 @@ public class ChangelogAssessment {
             }
         }
         if (who == null && employees != null) {
-            who = Employees.UNKNOWN;
+            who = IEmployees.UNKNOWN;
         }
         return who;
     }

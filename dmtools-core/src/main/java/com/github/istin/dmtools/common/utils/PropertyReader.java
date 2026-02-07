@@ -429,7 +429,11 @@ public class PropertyReader {
 	}
 
 	public String getGithubBasePath() {
-		return getValue("SOURCE_GITHUB_BASE_PATH");
+		String value = getValue("SOURCE_GITHUB_BASE_PATH");
+		if (value == null || value.isEmpty()) {
+			return "https://api.github.com";
+		}
+		return value;
 	}
 
 	public String getGitLabToken() {

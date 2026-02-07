@@ -30,7 +30,14 @@ public class CommitsMetricSource extends CommonSourceCollector {
         bitbucket.performCommitsFromBranch(workspace, repo, branch, new AtlassianRestClient.Performer<ICommit>() {
             @Override
             public boolean perform(ICommit model) {
-                String displayName = transformName(model.getAuthor().getFullName());
+                if (model.getAuthor() == null) {
+                    return false;
+                }
+                String fullName = model.getAuthor().getFullName();
+                if (fullName == null) {
+                    return false;
+                }
+                String displayName = transformName(fullName);
                 if (isNameIgnored(displayName)) {
                     return false;
                 }

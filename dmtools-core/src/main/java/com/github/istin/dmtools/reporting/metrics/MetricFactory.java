@@ -9,11 +9,12 @@ import com.github.istin.dmtools.metrics.rules.BugsCreatorsRule;
 import com.github.istin.dmtools.metrics.rules.TicketMovedToStatusRule;
 import com.github.istin.dmtools.metrics.rules.TicketCreatorsRule;
 import com.github.istin.dmtools.metrics.source.PullRequestsMetricSource;
+import com.github.istin.dmtools.metrics.source.PullRequestsLOCMetricSource;
+import com.github.istin.dmtools.metrics.source.SourceCodeCommitsMetricSource;
 import com.github.istin.dmtools.team.Employees;
+import com.github.istin.dmtools.team.IEmployees;
 
-import java.util.Calendar;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Factory for creating Metric instances from configuration
@@ -21,31 +22,63 @@ import java.util.Map;
 public class MetricFactory {
     private final TrackerClient trackerClient;
     private final SourceCode sourceCode;
+    private final IEmployees employees;
 
     public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode) {
-        this.trackerClient = trackerClient;
-        this.sourceCode = sourceCode;
+        this(trackerClient, sourceCode, null);
     }
 
-    public Metric createMetric(String metricName, Map<String, Object> params, String dataSourceType) throws Exception {
+    public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode, IEmployees employees) {
+        this.trackerClient = trackerClient;
+        this.sourceCode = sourceCode;
+        this.employees = employees != null ? employees : Employees.getInstance();
+    }
+
+    public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType) throws Exception {
+        return createMetric(metricName, metricParams, dataSourceType, null);
+    }
+
+    public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType, Map<String, Object> dataSourceParams) throws Exception {
+        // Merge: data source params as defaults, metric params override
+        Map<String, Object> params = new HashMap<>();
+        if (dataSourceParams != null) {
+            params.putAll(dataSourceParams);
+        }
+        params.putAll(metricParams);
+
         String label = (String) params.getOrDefault("label", metricName);
         boolean isWeight = (boolean) params.getOrDefault("isWeight", false);
         boolean isPersonalized = (boolean) params.getOrDefault("isPersonalized", false);
+        double divider = parseDivider(params.get("divider"));
 
+        Metric metric;
         if ("tracker".equals(dataSourceType)) {
             TrackerRule rule = createTrackerRule(metricName, params);
-            return new Metric(label, isWeight, rule);
+            metric = new Metric(label, isWeight, rule);
         } else if ("pullRequests".equals(dataSourceType) || "commits".equals(dataSourceType)) {
             SourceCollector collector = createSourceCollector(metricName, params);
-            return new Metric(label, isWeight, isPersonalized, collector);
+            metric = new Metric(label, isWeight, isPersonalized, collector);
+        } else {
+            throw new IllegalArgumentException("Unknown data source type: " + dataSourceType);
         }
 
-        throw new IllegalArgumentException("Unknown data source type: " + dataSourceType);
+        if (divider != 1.0) {
+            metric.setDivider(divider);
+        }
+        return metric;
+    }
+
+    private double parseDivider(Object dividerParam) {
+        if (dividerParam == null) return 1.0;
+        if (dividerParam instanceof Number) return ((Number) dividerParam).doubleValue();
+        try {
+            return Double.parseDouble(dividerParam.toString());
+        } catch (NumberFormatException e) {
+            return 1.0;
+        }
     }
 
     private TrackerRule createTrackerRule(String metricName, Map<String, Object> params) {
-        Employees employees = Employees.getInstance();
-
         switch (metricName) {
             case "BugsCreatorsRule":
                 String project = (String) params.get("project");
@@ -74,22 +107,28 @@ public class MetricFactory {
     }
 
     private SourceCollector createSourceCollector(String metricName, Map<String, Object> params) {
-        Employees employees = Employees.getInstance();
-
         if (sourceCode == null) {
             throw new IllegalArgumentException("SourceCode is not configured");
         }
 
         String workspace = (String) params.getOrDefault("workspace", sourceCode.getDefaultWorkspace());
         String repository = (String) params.getOrDefault("repository", sourceCode.getDefaultRepository());
+        String branch = (String) params.getOrDefault("branch", sourceCode.getDefaultBranch());
+        String since = (String) params.getOrDefault("since", null);
 
         switch (metricName) {
             case "PullRequestsMetricSource":
                 Calendar prStartDate = parseDateParam(params.get("since"));
                 return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, prStartDate);
 
+            case "CommitsMetricSource":
+                return new SourceCodeCommitsMetricSource(workspace, repository, branch, since, sourceCode, employees);
+
+            case "LinesOfCodeMetricSource":
+                return new PullRequestsLOCMetricSource(workspace, repository, branch, since, sourceCode, employees);
+
             default:
-                throw new IllegalArgumentException("Unknown source collector: " + metricName + ". Note: CommitsMetricSource not yet supported.");
+                throw new IllegalArgumentException("Unknown source collector: " + metricName);
         }
     }
 
