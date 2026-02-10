@@ -175,11 +175,19 @@ public class JavaScriptExecutor {
                     ticketJson.put("rawData", ticket.toString());
                 }
                 jsParams.put(entry.getKey(), ticketJson);
+            } else if (value instanceof TrackerParams) {
+                Gson gson = new Gson();
+                String jsonString = gson.toJson(value);
+                try {
+                    jsParams.put(entry.getKey(), new JSONObject(jsonString));
+                } catch (JSONException e) {
+                    jsParams.put(entry.getKey(), value);
+                }
             } else {
                 // For other objects, try to put directly first, fallback to Gson serialization
                 try {
                     jsParams.put(entry.getKey(), value);
-                } catch (JSONException e) {
+                } catch (Exception e) {
                     // Fallback for unsupported types - use Gson to serialize and parse
                     try {
                         Gson gson = new Gson();

@@ -49,6 +49,7 @@ The `params` object contains:
   - `fields` - Raw Jira fields JSON
 
 - **`params.jobParams`** - Job execution parameters
+  - `customParams` - Custom parameters passed in JSON config (e.g. `params.jobParams.customParams.myValue`)
 - **`params.response`** - AI agent response
 - **`params.initiator`** - Job initiator information
 - Additional context via job-specific parameters

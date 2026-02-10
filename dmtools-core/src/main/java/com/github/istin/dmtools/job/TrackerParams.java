@@ -85,4 +85,9 @@ public class TrackerParams {
 
     @SerializedName(CHUNKS_PROCESSING_TIMEOUT_IN_MINUTES)
     private long chunkProcessingTimeoutInMinutes = 0;
+
+    public static final String CUSTOM_PARAMS = "customParams";
+
+    @SerializedName(CUSTOM_PARAMS)
+    private java.util.Map<String, Object> customParams;
 }
