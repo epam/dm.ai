@@ -1,6 +1,6 @@
 # FILE MCP Tools
 
-**Total Tools**: 4
+**Total Tools**: 5
 
 ## Quick Reference
 
@@ -18,6 +18,7 @@ dmtools file_read [arguments]
 // Direct function calls for file tools
 const result = file_read(...);
 const result = file_write(...);
+const result = file_delete(...);
 const result = file_validate_json(...);
 ```
 
@@ -25,12 +26,35 @@ const result = file_validate_json(...);
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
+| `file_delete` | Delete file or directory from working directory. Returns success message or null on failure. | `path` (string, **required**) |
 | `file_read` | Read file content from working directory (supports input/ and outputs/ folders). Returns file content as string or null if file doesn't exist or is inaccessible. All file formats supported as UTF-8 text. | `path` (string, **required**) |
 | `file_validate_json` | Validate JSON string and return detailed error information if invalid. Returns JSON string with validation result: {"valid": true} for valid JSON, or {"valid": false, "error": "error message", "line": line_number, "column": column_number, "position": character_position, "context": "context around error"} for invalid JSON. | `json` (string, **required**) |
 | `file_validate_json_file` | Validate JSON file and return detailed error information if invalid. Reads file from working directory and validates its JSON content. Returns JSON string with validation result including file path. | `path` (string, **required**) |
 | `file_write` | Write content to file in working directory. Creates parent directories automatically. Returns success message or null on failure. | `path` (string, **required**)<br>`content` (string, **required**) |
 
 ## Detailed Parameter Information
+
+### `file_delete`
+
+Delete file or directory from working directory. Returns success message or null on failure.
+
+**Parameters:**
+
+- **`path`** (string) 🔴 Required
+  - File path relative to working directory or absolute path within working directory
+  - Example: `temp/unused_file.txt`
+
+**Example:**
+```bash
+dmtools file_delete "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = file_delete("path");
+```
+
+---
 
 ### `file_read`
 

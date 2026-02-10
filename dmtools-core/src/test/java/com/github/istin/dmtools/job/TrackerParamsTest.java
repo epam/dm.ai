@@ -30,6 +30,8 @@ class TrackerParamsTest {
     @Test
     void testAllArgsConstructor() {
         Metadata metadata = new Metadata();
+        java.util.Map<String, Object> customParams = new java.util.HashMap<>();
+        customParams.put("key", "value");
         TrackerParams params = new TrackerParams(
             "project = TEST",
             "user@example.com",
@@ -42,7 +44,8 @@ class TrackerParamsTest {
             TrackerParams.OutputType.field,
             TrackerParams.OperationType.Replace,
             2,
-            30
+            30,
+            customParams
         );
 
         assertEquals("project = TEST", params.getInputJql());
@@ -57,6 +60,15 @@ class TrackerParamsTest {
         assertEquals(TrackerParams.OperationType.Replace, params.getOperationType());
         assertEquals(2, params.getTicketContextDepth());
         assertEquals(30, params.getChunkProcessingTimeoutInMinutes());
+        assertEquals(customParams, params.getCustomParams());
+    }
+
+    @Test
+    void testCustomParams() {
+        java.util.Map<String, Object> customParams = new java.util.HashMap<>();
+        customParams.put("test", 123);
+        trackerParams.setCustomParams(customParams);
+        assertEquals(customParams, trackerParams.getCustomParams());
     }
 
     @Test

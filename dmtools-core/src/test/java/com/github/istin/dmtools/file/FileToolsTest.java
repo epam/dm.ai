@@ -358,6 +358,63 @@ class FileToolsTest {
         assertEquals(content, readContent);
     }
     
+    // ========== deleteFile Tests ==========
+
+    @Test
+    void testDeleteFile_Success() throws IOException {
+        Path testFile = tempDir.resolve("delete_me.txt");
+        Files.writeString(testFile, "content");
+        
+        String result = fileTools.deleteFile("delete_me.txt");
+        
+        assertNotNull(result);
+        assertTrue(result.contains("successfully"));
+        assertFalse(Files.exists(testFile));
+    }
+    
+    @Test
+    void testDeleteFile_Directory_Recursive() throws IOException {
+        Path subDir = tempDir.resolve("delete_dir");
+        Files.createDirectories(subDir);
+        Files.writeString(subDir.resolve("file1.txt"), "content1");
+        Files.writeString(subDir.resolve("file2.txt"), "content2");
+        
+        Path nestedDir = subDir.resolve("nested");
+        Files.createDirectories(nestedDir);
+        Files.writeString(nestedDir.resolve("nested_file.txt"), "nested content");
+        
+        String result = fileTools.deleteFile("delete_dir");
+        
+        assertNotNull(result);
+        assertTrue(result.contains("successfully"));
+        assertFalse(Files.exists(subDir));
+        assertFalse(Files.exists(nestedDir));
+    }
+    
+    @Test
+    void testDeleteFile_NonExistent() {
+        String result = fileTools.deleteFile("non_existent.txt");
+        assertNull(result);
+    }
+    
+    @Test
+    void testDeleteFile_NullPath() {
+        String result = fileTools.deleteFile(null);
+        assertNull(result);
+    }
+    
+    @Test
+    void testDeleteFile_PathTraversalBlocked() {
+        String result = fileTools.deleteFile("../../../etc/passwd");
+        assertNull(result);
+    }
+    
+    @Test
+    void testDeleteFile_AbsolutePathOutsideWorkingDir() {
+        String result = fileTools.deleteFile("/etc/passwd");
+        assertNull(result);
+    }
+
     // ========== validateJson Tests ==========
     
     @Test

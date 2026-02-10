@@ -220,6 +220,89 @@ public class FileTools {
     }
     
     /**
+     * Delete file or directory from working directory.
+     * 
+     * Security Features:
+     * - Sandboxed to working directory only
+     * - Path traversal prevention (../, absolute paths outside working dir)
+     * 
+     * @param filePath File path relative to working directory or absolute path within working directory
+     * @return Success message or null on failure
+     */
+    @MCPTool(
+        name = "file_delete",
+        description = "Delete file or directory from working directory. Returns success message or null on failure.",
+        integration = "file"
+    )
+    public String deleteFile(
+            @MCPParam(
+                name = "path",
+                description = "File path relative to working directory or absolute path within working directory",
+                required = true,
+                example = "temp/unused_file.txt"
+            ) String filePath
+    ) {
+        if (filePath == null || filePath.trim().isEmpty()) {
+            logger.warn("File path cannot be null or empty");
+            return null;
+        }
+        
+        try {
+            // Get working directory (absolute, normalized)
+            Path workingDir = Paths.get(System.getProperty("user.dir"))
+                    .toAbsolutePath()
+                    .normalize();
+            
+            // Parse requested path
+            Path requestedPath = Paths.get(filePath.trim());
+            
+            // Resolve to absolute path and normalize (handles ./ and ../ components)
+            Path resolvedPath;
+            if (requestedPath.isAbsolute()) {
+                resolvedPath = requestedPath.normalize();
+            } else {
+                resolvedPath = workingDir.resolve(requestedPath).normalize();
+            }
+            
+            // Security check: Ensure resolved path is within working directory
+            if (!resolvedPath.startsWith(workingDir)) {
+                logger.error("Security violation: Path traversal attempt blocked - requested: {}, resolved: {}, working dir: {}", 
+                        filePath, resolvedPath, workingDir);
+                return null;
+            }
+            
+            // Check if file exists
+            if (!Files.exists(resolvedPath)) {
+                logger.warn("File not found: {} (resolved to: {})", filePath, resolvedPath);
+                return null;
+            }
+            
+            // Delete file or directory
+            if (Files.isDirectory(resolvedPath)) {
+                // Delete directory contents recursively
+                try (java.util.stream.Stream<Path> walk = Files.walk(resolvedPath)) {
+                    walk.sorted(java.util.Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(java.io.File::delete);
+                }
+                logger.info("Directory deleted successfully: {} (resolved to: {})", filePath, resolvedPath);
+                return "Directory deleted successfully: " + filePath;
+            } else {
+                Files.delete(resolvedPath);
+                logger.info("File deleted successfully: {} (resolved to: {})", filePath, resolvedPath);
+                return "File deleted successfully: " + filePath;
+            }
+            
+        } catch (IOException e) {
+            logger.error("Failed to delete file: {} - {}", filePath, e.getMessage(), e);
+            return null;
+        } catch (Exception e) {
+            logger.error("Unexpected error deleting file: {} - {}", filePath, e.getMessage(), e);
+            return null;
+        }
+    }
+    
+    /**
      * Validate JSON string and provide detailed error information if invalid.
      * 
      * Returns a JSON string with validation result:
