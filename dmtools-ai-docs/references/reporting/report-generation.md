@@ -66,9 +66,10 @@ Use `aliases` to merge multiple names into a single person and map bots.
 Supported data sources in `dmc_report.json`:
 
 - `tracker`: Jira/ADO tracker data via JQL.
-- `pullRequests`: Pull requests from GitHub.
-- `commits`: Git commits from GitHub.
+- `pullRequests`: Pull requests from GitHub, GitLab, or Bitbucket (via `sourceType`).
+- `commits`: Git commits from GitHub, GitLab, or Bitbucket (via `sourceType`).
 - `csv`: Custom CSV files.
+- `figma`: Figma comments from one or more Figma files.
 
 **Tracker Source**
 
@@ -85,6 +86,7 @@ Supported data sources in `dmc_report.json`:
 Tracker source parameter:
 
 - `jql`: Jira Query Language filter.
+- `fields` (optional): Additional tracker fields to include in the query (array or comma-separated string). These are merged with default fields. Use this to request fields like `description` so token metrics don’t trigger extra fetches.
 
 **Pull Requests Source**
 
@@ -103,10 +105,40 @@ Tracker source parameter:
 
 Pull request source parameters:
 
-- `sourceType`: `github` (currently used in examples).
+- `sourceType`: `github`, `gitlab`, or `bitbucket`.
 - `workspace`: GitHub org or user.
 - `repository`: Repository name.
 - `branch`: Branch name.
+
+Example for GitLab:
+
+```json
+{
+  "name": "pullRequests",
+  "params": {
+    "sourceType": "gitlab",
+    "workspace": "my-group",
+    "repository": "my-repo",
+    "branch": "main"
+  },
+  "metrics": [ ... ]
+}
+```
+
+Example for Bitbucket:
+
+```json
+{
+  "name": "pullRequests",
+  "params": {
+    "sourceType": "bitbucket",
+    "workspace": "my-workspace",
+    "repository": "my-repo",
+    "branch": "main"
+  },
+  "metrics": [ ... ]
+}
+```
 
 **Commits Source**
 
@@ -127,6 +159,36 @@ Commits source parameters:
 
 - `sourceType`, `workspace`, `repository`, `branch` (same as PRs).
 
+Example for GitLab:
+
+```json
+{
+  "name": "commits",
+  "params": {
+    "sourceType": "gitlab",
+    "workspace": "my-group",
+    "repository": "my-repo",
+    "branch": "main"
+  },
+  "metrics": [ ... ]
+}
+```
+
+Example for Bitbucket:
+
+```json
+{
+  "name": "commits",
+  "params": {
+    "sourceType": "bitbucket",
+    "workspace": "my-workspace",
+    "repository": "my-repo",
+    "branch": "main"
+  },
+  "metrics": [ ... ]
+}
+```
+
 **CSV Source**
 
 ```json
@@ -146,6 +208,31 @@ CSV source parameters:
 - `filePath`: Absolute or relative path.
 - `whenColumn`: Column name for date.
 - `defaultWho`: Who to attribute if CSV has no person column.
+
+**Figma Source**
+
+Figma data source does not require params at the source level. Instead, specify `files` on the metric.
+
+```json
+{
+  "name": "figma",
+  "metrics": [
+    {
+      "name": "FigmaCommentMetric",
+      "params": {
+        "label": "Figma Comments",
+        "isPersonalized": true,
+        "files": ["FIGMA_FILE_KEY_1", "FIGMA_FILE_KEY_2"]
+      }
+    }
+  ]
+}
+```
+
+Figma requirements:
+
+- Figma integration must be configured.
+- `files` is required on each Figma metric.
 
 **Metrics**
 
@@ -310,6 +397,17 @@ CSV parsing notes:
 - Dates are read from `whenColumn`.
 - Numeric values can be quoted.
 - Invalid values like `NaN`, `N/A`, empty strings are skipped.
+
+**Figma Metrics**
+
+Figma metrics use one of these names:
+
+- `FigmaCommentMetric`
+- `FigmaCommentsMetricSource`
+
+Parameters:
+
+- `files` (required): Array (or comma-separated string) of Figma file keys.
 
 **Computed Metrics**
 

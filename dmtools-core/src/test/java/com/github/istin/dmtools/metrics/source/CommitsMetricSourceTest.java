@@ -44,6 +44,7 @@ public class CommitsMetricSourceTest {
         Calendar instance = Calendar.getInstance();
         when(commit.getCommitterDate()).thenReturn(instance);
         IUser author = mock(IUser.class);
+        when(author.getFullName()).thenReturn("John Doe"); // CRITICAL: Must mock getFullName() or commit will be skipped
         when(commit.getAuthor()).thenReturn(author);
 
         doAnswer(invocation -> {
@@ -67,7 +68,11 @@ public class CommitsMetricSourceTest {
     public void testPerformSourceCollectionWithUnknownName() throws Exception {
         // Arrange
         ICommit commit = mock(ICommit.class);
+        when(commit.getId()).thenReturn("commitId2"); // Mock getId() for KeyTime creation
+        Calendar instance = Calendar.getInstance();
+        when(commit.getCommitterDate()).thenReturn(instance); // Mock getCommitterDate() for KeyTime creation
         IUser mockedUser = mock(IUser.class);
+        when(mockedUser.getFullName()).thenReturn("Unknown User"); // CRITICAL: Must mock getFullName() or commit will be skipped
         when(commit.getAuthor()).thenReturn(mockedUser);
 
         doAnswer(invocation -> {

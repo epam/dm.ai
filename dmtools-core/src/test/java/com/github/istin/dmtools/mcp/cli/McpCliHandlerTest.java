@@ -385,72 +385,8 @@ class McpCliHandlerTest {
         }
     }
 
-    @Test
-    @DisplayName("Should not throw ClassCastException when calling provider-specific AI tools")
-    void testProviderSpecificToolsNoClassCastException() {
-        // Test provider-specific tools to ensure they don't cause ClassCastException
-        // If the provider is configured, tool should work
-        // If not configured, should get clear error (not ClassCastException)
-        String[][] testCases = {
-            {"mcp", "bedrock_ai_chat", "hello"},
-            {"mcp", "ollama_ai_chat", "hello"}
-        };
-
-        for (String[] args : testCases) {
-            String toolName = args[1];
-            String result = mcpCliHandler.processMcpCommand(args);
-
-            assertNotNull(result, "Result should not be null for " + toolName);
-            assertFalse(result.isEmpty(), "Result should not be empty for " + toolName);
-
-            // Parse as JSON to verify it's well-formed
-            JSONObject response = new JSONObject(result);
-            assertNotNull(response, "Response should be valid JSON for " + toolName);
-
-            // The critical assertion: NO ClassCastException should occur
-            String responseStr = result.toLowerCase();
-            assertFalse(responseStr.contains("classcastexception"),
-                "Tool " + toolName + " should NOT throw ClassCastException. Response: " + result);
-            assertFalse(responseStr.contains("cannot be cast"),
-                "Tool " + toolName + " should NOT have casting error. Response: " + result);
-
-            // If it's an error response, it should be a proper error message
-            if (response.has("error") && response.getBoolean("error")) {
-                String message = response.getString("message");
-                // Error message should be informative, not a stack trace
-                assertTrue(message.length() > 10,
-                    "Error message should be informative for " + toolName);
-            }
-        }
-    }
-
-    @Test
-    @DisplayName("Should provide clear error messages for misconfigured AI providers")
-    void testProviderSpecificToolErrorMessages() {
-        // Test that when a provider-specific tool can't be executed,
-        // the error message is clear and helpful (not a technical exception)
-        String[] args = {"mcp", "bedrock_ai_chat", "test"};
-        String result = mcpCliHandler.processMcpCommand(args);
-
-        // Should not crash - should return a response
-        assertNotNull(result);
-        JSONObject response = new JSONObject(result);
-
-        // If it's an error (provider not configured), message should be clear
-        if (response.has("error") && response.getBoolean("error")) {
-            String message = response.getString("message");
-
-            // Should NOT contain Java exception class names
-            assertFalse(message.contains("java.lang."),
-                "Error message should not contain Java exception names. Message: " + message);
-            assertFalse(message.contains("Exception"),
-                "Error message should be user-friendly, not technical exception. Message: " + message);
-
-            // Should provide guidance
-            assertTrue(message.contains("configured") || message.contains("requires") ||
-                       message.contains("credentials") || message.contains("not available"),
-                "Error message should mention configuration/requirements. Message: " + message);
-        }
-        // If it succeeds, that's also fine (provider is configured in test environment)
-    }
+    // NOTE: Tests for provider-specific AI tools (Ollama, Bedrock, Gemini) have been moved to
+    // McpCliHandlerProviderIntegrationTest in src/integrationTest/java
+    // These tests make real network calls and should not be in unit tests.
+    // Run integration tests with: ./gradlew :dmtools-core:integrationTest
 }

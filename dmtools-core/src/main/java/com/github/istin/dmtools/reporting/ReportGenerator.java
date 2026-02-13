@@ -3,6 +3,7 @@ package com.github.istin.dmtools.reporting;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.metrics.Metric;
 import com.github.istin.dmtools.report.model.KeyTime;
 import com.github.istin.dmtools.reporting.datasource.*;
@@ -34,6 +35,7 @@ public class ReportGenerator {
 
     private final TrackerClient trackerClient;
     private final SourceCode sourceCode;
+    private final FigmaClient figmaClient;
     private final Set<String> weightMetricLabels = new HashSet<>();
     private final Map<String, Double> metricDividers = new HashMap<>();
     private final Map<String, String> metricLinkTemplates = new HashMap<>();
@@ -41,6 +43,13 @@ public class ReportGenerator {
     public ReportGenerator(TrackerClient trackerClient, SourceCode sourceCode) {
         this.trackerClient = trackerClient;
         this.sourceCode = sourceCode;
+        this.figmaClient = null;
+    }
+
+    public ReportGenerator(TrackerClient trackerClient, SourceCode sourceCode, FigmaClient figmaClient) {
+        this.trackerClient = trackerClient;
+        this.sourceCode = sourceCode;
+        this.figmaClient = figmaClient;
     }
 
     /**
@@ -72,11 +81,14 @@ public class ReportGenerator {
 
         // Initialize factories
         DataSourceFactory dataSourceFactory = new DataSourceFactory();
-        MetricFactory metricFactory = new MetricFactory(trackerClient, sourceCode, employees, config.getStartDate());
+        MetricFactory metricFactory = new MetricFactory(trackerClient, sourceCode, figmaClient, employees, config.getStartDate());
 
         // 1. Collect data ONCE (expensive: API calls)
         Map<String, Map<String, DataSourceResult>> dataBySourceAndMetric =
             collectDataFromAllSources(config, trackerClient, sourceCode, dataSourceFactory, metricFactory);
+        if (employees != null) {
+            normalizeKeyTimesByAliases(dataBySourceAndMetric, employees);
+        }
 
         List<TimeGroupingConfig> groupings = config.getTimeGroupings();
         boolean multiGrouping = config.isMultiGrouping();
@@ -135,6 +147,30 @@ public class ReportGenerator {
         }
 
         return results;
+    }
+
+    private void normalizeKeyTimesByAliases(
+        Map<String, Map<String, DataSourceResult>> dataBySourceAndMetric,
+        IEmployees employees
+    ) {
+        if (employees == null || dataBySourceAndMetric == null) {
+            return;
+        }
+        for (Map<String, DataSourceResult> metricResults : dataBySourceAndMetric.values()) {
+            if (metricResults == null) continue;
+            for (DataSourceResult result : metricResults.values()) {
+                if (result == null) continue;
+                for (List<KeyTime> keyTimes : result.getAllKeyTimes().values()) {
+                    if (keyTimes == null) continue;
+                    for (KeyTime kt : keyTimes) {
+                        if (kt == null) continue;
+                        String who = kt.getWho();
+                        if (who == null) continue;
+                        kt.setWho(employees.transformName(who));
+                    }
+                }
+            }
+        }
     }
 
     private String resolveAggregationFormula(ReportConfig config) {

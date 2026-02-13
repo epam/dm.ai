@@ -15,10 +15,18 @@ import java.util.List;
 public class TrackerDataSource extends DataSource {
     private final TrackerClient trackerClient;
     private final String jql;
+    private final List<String> extraFields;
 
     public TrackerDataSource(TrackerClient trackerClient, String jql) {
         this.trackerClient = trackerClient;
         this.jql = jql;
+        this.extraFields = null;
+    }
+
+    public TrackerDataSource(TrackerClient trackerClient, String jql, List<String> extraFields) {
+        this.trackerClient = trackerClient;
+        this.jql = jql;
+        this.extraFields = (extraFields == null || extraFields.isEmpty()) ? null : extraFields;
     }
 
     @Override
@@ -43,7 +51,24 @@ public class TrackerDataSource extends DataSource {
                 }
                 return false;
             }
-        }, jql, trackerClient.getDefaultQueryFields());
+        }, jql, resolveQueryFields());
+    }
+
+    private String[] resolveQueryFields() {
+        String[] defaults = trackerClient.getDefaultQueryFields();
+        if (extraFields == null || extraFields.isEmpty()) {
+            return defaults;
+        }
+        java.util.LinkedHashSet<String> merged = new java.util.LinkedHashSet<>();
+        if (defaults != null) {
+            java.util.Collections.addAll(merged, defaults);
+        }
+        for (String f : extraFields) {
+            if (f != null && !f.trim().isEmpty()) {
+                merged.add(f.trim());
+            }
+        }
+        return merged.toArray(new String[0]);
     }
 
     @Override

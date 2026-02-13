@@ -28,8 +28,12 @@ public class DataSourceFactory {
     ) {
         switch (name) {
             case "tracker":
-                String jql = (String) params.get("jql");
-                return new TrackerDataSource(trackerClient, jql);
+                String jql = params != null ? (String) params.get("jql") : null;
+                List<String> extraFields = parseFields(params != null ? params.get("fields") : null);
+                return new TrackerDataSource(trackerClient, jql, extraFields);
+
+            case "figma":
+                return new FigmaDataSource();
 
             case "pullRequests":
                 return new PullRequestsDataSource(resolveSourceCode(params, sourceCode), params);
@@ -66,5 +70,31 @@ public class DataSourceFactory {
             }
         }
         return fallback;
+    }
+
+    private List<String> parseFields(Object fieldsParam) {
+        if (fieldsParam == null) {
+            return null;
+        }
+        if (fieldsParam instanceof List) {
+            List<?> raw = (List<?>) fieldsParam;
+            if (raw.isEmpty()) return null;
+            List<String> out = new java.util.ArrayList<>();
+            for (Object v : raw) {
+                if (v == null) continue;
+                String s = v.toString().trim();
+                if (!s.isEmpty()) out.add(s);
+            }
+            return out.isEmpty() ? null : out;
+        }
+        String s = fieldsParam.toString().trim();
+        if (s.isEmpty()) return null;
+        String[] parts = s.split(",");
+        List<String> out = new java.util.ArrayList<>();
+        for (String p : parts) {
+            String v = p.trim();
+            if (!v.isEmpty()) out.add(v);
+        }
+        return out.isEmpty() ? null : out;
     }
 }

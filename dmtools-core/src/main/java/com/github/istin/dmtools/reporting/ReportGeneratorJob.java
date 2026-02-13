@@ -3,6 +3,8 @@ package com.github.istin.dmtools.reporting;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.figma.BasicFigmaClient;
+import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.reporting.model.*;
@@ -155,15 +157,28 @@ public class ReportGeneratorJob extends AbstractJob<
             logger.info("No source code providers configured");
         }
 
-        // 3. Generate reports using abstract TrackerClient
-        ReportGenerator generator = new ReportGenerator(trackerClient, sourceCode);
+        // 3. Get Figma client if configured
+        FigmaClient figmaClient = null;
+        try {
+            figmaClient = BasicFigmaClient.getInstance();
+            if (figmaClient != null) {
+                logger.info("Figma client configured: {}", figmaClient.getClass().getSimpleName());
+            } else {
+                logger.info("No Figma client configured");
+            }
+        } catch (Exception e) {
+            logger.debug("Figma client not available: {}", e.getMessage());
+        }
+
+        // 4. Generate reports using abstract TrackerClient
+        ReportGenerator generator = new ReportGenerator(trackerClient, sourceCode, figmaClient);
 
         logger.info("Generating reports...");
         List<ReportGenerator.ReportResult> results = generator.generateReports(config);
 
         logger.info("Report generation complete: {} grouping(s) produced", results.size());
 
-        // 4. Conditionally run visualizer
+        // 5. Conditionally run visualizer
         String visualizer = config.getOutput() != null ? config.getOutput().getVisualizer() : null;
         boolean runVisualizer = !"none".equalsIgnoreCase(visualizer);
 

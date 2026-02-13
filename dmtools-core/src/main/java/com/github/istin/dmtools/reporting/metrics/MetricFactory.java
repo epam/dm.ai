@@ -5,6 +5,7 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.metrics.Metric;
 import com.github.istin.dmtools.metrics.TrackerRule;
 import com.github.istin.dmtools.metrics.source.SourceCollector;
+import com.github.istin.dmtools.metrics.source.FigmaCommentsMetricSource;
 import com.github.istin.dmtools.metrics.rules.BugsCreatorsRule;
 import com.github.istin.dmtools.metrics.rules.CommentsWrittenRule;
 import com.github.istin.dmtools.metrics.rules.TicketFieldsChangesRule;
@@ -22,6 +23,7 @@ import com.github.istin.dmtools.metrics.source.SourceCodeCommitsMetricSource;
 import com.github.istin.dmtools.csv.CsvMetricSource;
 import com.github.istin.dmtools.team.Employees;
 import com.github.istin.dmtools.team.IEmployees;
+import com.github.istin.dmtools.figma.FigmaClient;
 
 import java.util.*;
 
@@ -31,20 +33,26 @@ import java.util.*;
 public class MetricFactory {
     private final TrackerClient trackerClient;
     private final SourceCode sourceCode;
+    private final FigmaClient figmaClient;
     private final IEmployees employees;
     private final String reportStartDate;
 
     public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode) {
-        this(trackerClient, sourceCode, null, null);
+        this(trackerClient, sourceCode, null, null, null);
     }
 
     public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode, IEmployees employees) {
-        this(trackerClient, sourceCode, employees, null);
+        this(trackerClient, sourceCode, null, employees, null);
     }
 
     public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode, IEmployees employees, String reportStartDate) {
+        this(trackerClient, sourceCode, null, employees, reportStartDate);
+    }
+
+    public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode, FigmaClient figmaClient, IEmployees employees, String reportStartDate) {
         this.trackerClient = trackerClient;
         this.sourceCode = sourceCode;
+        this.figmaClient = figmaClient;
         this.employees = employees != null ? employees : Employees.getInstance();
         this.reportStartDate = reportStartDate;
     }
@@ -72,6 +80,9 @@ public class MetricFactory {
             metric = new Metric(label, isWeight, rule);
         } else if ("pullRequests".equals(dataSourceType) || "commits".equals(dataSourceType)) {
             SourceCollector collector = createSourceCollector(metricName, params);
+            metric = new Metric(label, isWeight, isPersonalized, collector);
+        } else if ("figma".equals(dataSourceType)) {
+            SourceCollector collector = createFigmaCollector(metricName, params);
             metric = new Metric(label, isWeight, isPersonalized, collector);
         } else if ("csv".equals(dataSourceType)) {
             SourceCollector collector = createCsvCollector(params);
@@ -244,6 +255,23 @@ public class MetricFactory {
         }
     }
 
+    private SourceCollector createFigmaCollector(String metricName, Map<String, Object> params) {
+        if (figmaClient == null) {
+            throw new IllegalArgumentException("Figma client is not configured");
+        }
+        String[] files = parseFiles(params != null ? params.get("files") : null);
+        if (files == null || files.length == 0) {
+            throw new IllegalArgumentException("Figma data source requires 'files' parameter");
+        }
+        switch (metricName) {
+            case "FigmaCommentsMetricSource":
+            case "FigmaCommentMetric":
+                return new FigmaCommentsMetricSource(employees, null, figmaClient, files);
+            default:
+                throw new IllegalArgumentException("Unknown figma source collector: " + metricName);
+        }
+    }
+
     private SourceCollector createCsvCollector(Map<String, Object> params) {
         String filePath = (String) params.get("filePath");
         if (filePath == null || filePath.isEmpty()) {
@@ -280,5 +308,29 @@ public class MetricFactory {
             return null;
         }
         return cal;
+    }
+
+    private String[] parseFiles(Object filesParam) {
+        if (filesParam == null) return null;
+        if (filesParam instanceof String[]) return (String[]) filesParam;
+        if (filesParam instanceof List) {
+            List<?> raw = (List<?>) filesParam;
+            List<String> out = new ArrayList<>();
+            for (Object v : raw) {
+                if (v == null) continue;
+                String s = v.toString().trim();
+                if (!s.isEmpty()) out.add(s);
+            }
+            return out.isEmpty() ? null : out.toArray(new String[0]);
+        }
+        String s = filesParam.toString().trim();
+        if (s.isEmpty()) return null;
+        String[] parts = s.split(",");
+        List<String> out = new ArrayList<>();
+        for (String p : parts) {
+            String v = p.trim();
+            if (!v.isEmpty()) out.add(v);
+        }
+        return out.isEmpty() ? null : out.toArray(new String[0]);
     }
 }

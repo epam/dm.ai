@@ -23,6 +23,17 @@ def versions = [
         poi      : '5.4.1'
 ]
 
+// IMPORTANT: Create sourceSet BEFORE configurations to avoid Gradle 9.0 deprecation warnings
+// See: https://docs.gradle.org/8.11.1/userguide/upgrading_version_8.html#configurations_allowed_usage
+sourceSets {
+    integrationTest {
+        java.srcDir file('src/integrationTest/java')
+        resources.srcDir file('src/integrationTest/resources')
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
 configurations {
     integrationTestImplementation.extendsFrom testImplementation
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
@@ -184,12 +195,8 @@ sourceSets {
             ]
         }
     }
-    integrationTest {
-        java.srcDir file('src/integrationTest/java')
-        resources.srcDir file('src/integrationTest/resources')
-        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
-        runtimeClasspath += output + compileClasspath
-    }
+    // integrationTest sourceSet is now defined earlier (before configurations block)
+    // to avoid Gradle 9.0 deprecation warnings
 }
 
 // Configure the processIntegrationTestResources task specifically

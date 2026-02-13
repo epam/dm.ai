@@ -15,14 +15,37 @@ class PropertyReaderTest {
     @BeforeEach
     void setUp() {
         propertyReader = new PropertyReader();
-        // Reset static property to avoid test interference
+        // Reset static properties to avoid test interference
         PropertyReader.prop = null;
+        // Use reflection to reset envFileProps and projectRoot for clean state
+        try {
+            java.lang.reflect.Field envFilePropsField = PropertyReader.class.getDeclaredField("envFileProps");
+            envFilePropsField.setAccessible(true);
+            envFilePropsField.set(null, null);
+
+            java.lang.reflect.Field projectRootField = PropertyReader.class.getDeclaredField("projectRoot");
+            projectRootField.setAccessible(true);
+            projectRootField.set(null, null);
+        } catch (Exception e) {
+            // Ignore reflection errors
+        }
     }
 
     @AfterEach
     void tearDown() {
         // Clean up static state
         PropertyReader.prop = null;
+        try {
+            java.lang.reflect.Field envFilePropsField = PropertyReader.class.getDeclaredField("envFileProps");
+            envFilePropsField.setAccessible(true);
+            envFilePropsField.set(null, null);
+
+            java.lang.reflect.Field projectRootField = PropertyReader.class.getDeclaredField("projectRoot");
+            projectRootField.setAccessible(true);
+            projectRootField.set(null, null);
+        } catch (Exception e) {
+            // Ignore reflection errors
+        }
     }
 
     @Test
@@ -45,9 +68,18 @@ class PropertyReaderTest {
 
     @Test
     void testGetPromptChunkTokenLimit_DefaultValue() {
+        String envValue = System.getenv("PROMPT_CHUNK_TOKEN_LIMIT");
+        String fileValue = propertyReader.getValue("PROMPT_CHUNK_TOKEN_LIMIT");
         int result = propertyReader.getPromptChunkTokenLimit();
-        // Should be at least default (4000), but allow for env overrides (e.g. 100000)
-        assertTrue(result >= 4000, "Token limit should be at least 4000");
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value
+            assertEquals(4000, result, "Default token limit should be 4000");
+        } else {
+            // If override exists, just verify it's a valid positive number
+            assertTrue(result > 0, "Token limit should be positive");
+        }
     }
 
     @Test
@@ -76,46 +108,130 @@ class PropertyReaderTest {
 
     @Test
     void testGetGeminiDefaultModel() {
+        String envValue = System.getenv("GEMINI_DEFAULT_MODEL");
+        String fileValue = propertyReader.getValue("GEMINI_DEFAULT_MODEL");
         String result = propertyReader.getGeminiDefaultModel();
+
         assertNotNull(result);
-        assertTrue(result.contains("gemini")); // Should contain "gemini" in model name
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value
+            assertEquals("gemini-2.0-flash", result, "Default Gemini model should be gemini-2.0-flash");
+        } else {
+            // If override exists, just verify it's not empty
+            assertFalse(result.trim().isEmpty());
+        }
     }
 
     @Test
     void testGetGeminiBasePath() {
+        String envValue = System.getenv("GEMINI_BASE_PATH");
+        String fileValue = propertyReader.getValue("GEMINI_BASE_PATH");
         String result = propertyReader.getGeminiBasePath();
+
         assertNotNull(result);
-        assertTrue(result.contains("generativelanguage.googleapis.com") || result.contains("models")); // Should be Google's generative language API
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value
+            assertEquals("https://generativelanguage.googleapis.com/v1beta/models", result,
+                    "Default Gemini base path should be Google's generative language API");
+        } else {
+            // If override exists, just verify it's a valid URL-like string
+            assertFalse(result.trim().isEmpty());
+        }
     }
 
     @Test
     void testGetSleepTimeRequest_DefaultValue() {
+        String envValue = System.getenv("SLEEP_TIME_REQUEST");
+        String fileValue = propertyReader.getValue("SLEEP_TIME_REQUEST");
         Long result = propertyReader.getSleepTimeRequest();
-        assertEquals(300L, result);
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value
+            assertEquals(300L, result, "Default SLEEP_TIME_REQUEST should be 300L");
+        } else {
+            // If override exists, just verify it's valid
+            assertNotNull(result);
+            assertTrue(result > 0, "SLEEP_TIME_REQUEST should be positive");
+        }
     }
 
     @Test
     void testGetDefaultTicketWeightIfNoSPs_DefaultValue() {
+        String envValue = System.getenv("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
+        String fileValue = propertyReader.getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
         Integer result = propertyReader.getDefaultTicketWeightIfNoSPs();
-        assertEquals(-1, result);
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value
+            assertEquals(-1, result, "Default ticket weight should be -1");
+        } else {
+            // If override exists, just verify it's valid
+            assertNotNull(result);
+        }
     }
 
     @Test
     void testGetLinesOfCodeDivider_DefaultValue() {
+        String envValue = System.getenv("LINES_OF_CODE_DIVIDER");
+        String fileValue = propertyReader.getValue("LINES_OF_CODE_DIVIDER");
         Double result = propertyReader.getLinesOfCodeDivider();
-        assertEquals(1.0, result);
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value
+            assertEquals(1.0, result, "Default LINES_OF_CODE_DIVIDER should be 1.0");
+        } else {
+            // If override exists, just verify it's valid
+            assertNotNull(result);
+            assertTrue(result > 0, "LINES_OF_CODE_DIVIDER should be positive");
+        }
     }
 
     @Test
     void testGetTimeSpentOnDivider_DefaultValue() {
+        String envValue = System.getenv("TIME_SPENT_ON_DIVIDER");
+        String fileValue = propertyReader.getValue("TIME_SPENT_ON_DIVIDER");
         Double result = propertyReader.getTimeSpentOnDivider();
-        assertEquals(1.0, result);
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value
+            assertEquals(1.0, result, "Default TIME_SPENT_ON_DIVIDER should be 1.0");
+        } else {
+            // If override exists, just verify it's valid
+            assertNotNull(result);
+            assertTrue(result > 0, "TIME_SPENT_ON_DIVIDER should be positive");
+        }
     }
 
     @Test
     void testGetTicketFieldsChangedDivider_DefaultValue() {
-        Double result = propertyReader.getTicketFieldsChangedDivider("testField");
-        assertEquals(1.0, result);
+        String fieldName = "testField";
+        String envValueSpecific = System.getenv("TICKET_FIELDS_CHANGED_DIVIDER_" + fieldName.toUpperCase());
+        String fileValueSpecific = propertyReader.getValue("TICKET_FIELDS_CHANGED_DIVIDER_" + fieldName.toUpperCase());
+        String envValueDefault = System.getenv("TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT");
+        String fileValueDefault = propertyReader.getValue("TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT");
+
+        Double result = propertyReader.getTicketFieldsChangedDivider(fieldName);
+
+        // Check if there are any overrides (field-specific or default)
+        boolean hasOverride = (envValueSpecific != null && !envValueSpecific.trim().isEmpty()) ||
+                              (fileValueSpecific != null && !fileValueSpecific.trim().isEmpty()) ||
+                              (envValueDefault != null && !envValueDefault.trim().isEmpty()) ||
+                              (fileValueDefault != null && !fileValueDefault.trim().isEmpty());
+
+        if (!hasOverride) {
+            // If no env/file override, expect exact default value
+            assertEquals(1.0, result, "Default TICKET_FIELDS_CHANGED_DIVIDER should be 1.0");
+        } else {
+            // If override exists, just verify it's valid
+            assertNotNull(result);
+            assertTrue(result > 0, "TICKET_FIELDS_CHANGED_DIVIDER should be positive");
+        }
     }
 
     @Test
@@ -126,22 +242,44 @@ class PropertyReaderTest {
 
     @Test
     void testIsJiraWaitBeforePerform_DefaultValue() {
+        String envValue = System.getenv("JIRA_WAIT_BEFORE_PERFORM");
+        String fileValue = propertyReader.getValue("JIRA_WAIT_BEFORE_PERFORM");
         boolean result = propertyReader.isJiraWaitBeforePerform();
-        assertFalse(result);
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value (false)
+            assertFalse(result, "Default JIRA_WAIT_BEFORE_PERFORM should be false");
+        }
+        // If override exists, just verify it's a valid boolean (no assertion needed)
     }
 
     @Test
     void testIsJiraLoggingEnabled_DefaultValue() {
+        String envValue = System.getenv("JIRA_LOGGING_ENABLED");
+        String fileValue = propertyReader.getValue("JIRA_LOGGING_ENABLED");
         boolean result = propertyReader.isJiraLoggingEnabled();
-        assertFalse(result);
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value (false)
+            assertFalse(result, "Default JIRA_LOGGING_ENABLED should be false");
+        }
+        // If override exists, just verify it's a valid boolean (no assertion needed)
     }
 
     @Test
     void testIsJiraClearCache_DefaultValue() {
+        String envValue = System.getenv("JIRA_CLEAR_CACHE");
+        String fileValue = propertyReader.getValue("JIRA_CLEAR_CACHE");
         boolean result = propertyReader.isJiraClearCache();
-        // Result depends on environment, just ensure it returns a boolean
-        // (Default is false, env might be true)
-        // No assertion needed strictly for value, but we can log it or assume true/false are both valid
+
+        if ((envValue == null || envValue.trim().isEmpty()) &&
+            (fileValue == null || fileValue.trim().isEmpty())) {
+            // If no env/file override, expect exact default value (false)
+            assertFalse(result, "Default JIRA_CLEAR_CACHE should be false");
+        }
+        // If override exists, just verify it's a valid boolean (no assertion needed, method returns boolean)
     }
 
     @Test

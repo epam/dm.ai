@@ -131,6 +131,10 @@
             border-radius: 10px; margin-bottom: 20px; overflow: hidden;
             box-shadow: 0 1px 3px var(--shadow);
         }
+        /* Allow chart tooltips to overflow cards without affecting the filter header card */
+        .charts-area .chart-card { overflow: visible; }
+        .charts-area .chart-card .chart-body,
+        .charts-area .chart-card .chart-body-mini { overflow: visible; }
         .chart-title {
             padding: 12px 18px; font-size: 0.9em; font-weight: 600; color: var(--text);
             border-bottom: 1px solid var(--border);
@@ -139,6 +143,10 @@
         .chart-title .hint { font-size: 0.8em; color: var(--text3); font-weight: 400; }
         .chart-body { height: 420px; padding: 8px; }
         .chart-body-mini { height: 220px; padding: 4px; }
+        #radarChart { width: 66vw; height: 66vw; max-width: 66vw; max-height: 80vh; min-height: 520px; margin: 0 auto; }
+        #globalFiltersCard .chart-title { display:flex; align-items:center; justify-content:space-between; }
+        #globalFiltersCard.collapsed > .filters-body { display:none; }
+        #globalFiltersCard .filter-toggle-btn { font-size:0.72em; padding:3px 8px; }
 
         .section-label {
             font-size: 0.75em; color: var(--text3);
@@ -248,8 +256,11 @@
     <div class="main">
         <!-- Global filters - outside scroll area for sticky behavior -->
         <div class="chart-card" id="globalFiltersCard" style="flex-shrink:0;position:sticky;top:0;z-index:15;border-radius:0;margin-bottom:0;border-left:0;border-right:0;">
-            <div class="chart-title">Filters <span class="hint" id="filterSummary"></span></div>
-            <div style="padding:10px 18px">
+            <div class="chart-title">
+                <span>Filters <span class="hint" id="filterSummary"></span></span>
+                <button class="filter-btn filter-toggle-btn" id="filtersToggleBtn" onclick="toggleFilters()">Collapse</button>
+            </div>
+            <div class="filters-body" style="padding:10px 18px">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
                     <span style="font-size:0.78em;color:var(--text3);font-weight:600">Period:</span>
                     <div style="display:flex;flex-direction:column;gap:2px">
@@ -405,6 +416,8 @@
         let gEndIdx = 0;
         let gContribEnabled = {};
         let gMetricEnabled = {};
+        let filtersCollapsed = false;
+        let filtersManualOverride = false;
 
         function getColors() { return isDark ? DARK_COLORS : COLORS; }
 
@@ -431,6 +444,16 @@
             document.getElementById('reportMeta').textContent =
                 (R.startDate || '') + '  \u2192  ' + (R.endDate || '');
             initGlobalFilters();
+            const storedCollapsed = localStorage.getItem('filtersCollapsed');
+            const storedManual = localStorage.getItem('filtersManualOverride');
+            if (storedCollapsed !== null) {
+                filtersManualOverride = storedManual === 'true';
+                applyFiltersCollapsed(storedCollapsed === 'true', false);
+            }
+            const chartsArea = document.getElementById('chartsArea');
+            if (chartsArea) {
+                chartsArea.addEventListener('scroll', onChartsScroll);
+            }
             renderAllCharts();
         }
 
@@ -571,6 +594,36 @@
             gStartIdx = Math.min(s, e);
             gEndIdx = Math.max(s, e);
             renderAllCharts();
+        }
+
+        function toggleFilters() {
+            applyFiltersCollapsed(!filtersCollapsed, true);
+        }
+
+        function applyFiltersCollapsed(collapsed, persist) {
+            const card = document.getElementById('globalFiltersCard');
+            if (!card) return;
+            filtersCollapsed = collapsed;
+            card.classList.toggle('collapsed', collapsed);
+            const btn = document.getElementById('filtersToggleBtn');
+            if (btn) btn.textContent = collapsed ? 'Expand' : 'Collapse';
+            if (persist) {
+                filtersManualOverride = true;
+                localStorage.setItem('filtersCollapsed', collapsed ? 'true' : 'false');
+                localStorage.setItem('filtersManualOverride', 'true');
+            }
+        }
+
+        function onChartsScroll() {
+            if (filtersManualOverride) return;
+            const chartsArea = document.getElementById('chartsArea');
+            if (!chartsArea) return;
+            const st = chartsArea.scrollTop || 0;
+            if (st > 60 && !filtersCollapsed) {
+                applyFiltersCollapsed(true, false);
+            } else if (st < 10 && filtersCollapsed) {
+                applyFiltersCollapsed(false, false);
+            }
         }
 
         function resetGlobalPeriod() {
@@ -1065,7 +1118,7 @@
                 },
                 legend: { show: false },
                 radar: {
-                    center: ['50%', '54%'], radius: '62%',
+                    center: ['50%', '52%'], radius: '80%',
                     indicator: indicator, shape: 'polygon',
                     splitArea: { areaStyle: { color: isDark ?
                         ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.04)'] :

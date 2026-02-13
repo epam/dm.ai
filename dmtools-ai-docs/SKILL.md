@@ -1,6 +1,6 @@
 ---
 name: dmtools
-description: DMtools - 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams. Use for integrations, JavaScript agents, test generation.
+description: Comprehensive documentation and assistance for DMtools - AI-powered development toolkit with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMtools, configuring integrations, developing JavaScript agents, generating test cases, or building reports (ReportGenerator/dmc_report).
 license: Apache-2.0
 compatibility:
   - Java 23+
@@ -141,6 +141,7 @@ Use this skill when:
 - Configuring AI providers (Gemini, OpenAI, Claude, DIAL, Ollama)
 - Developing JavaScript agents with MCP tools
 - Generating test cases (Xray, Cucumber)
+- Generating analytics reports (ReportGenerator, dmc_report)
 - Troubleshooting DMtools issues
 - Working with dmtools.env configuration
 - Creating AI teammate configurations
@@ -250,6 +251,7 @@ function action(params) {
 - **[Teammate](references/jobs/README.md#teammate)** - Flexible AI assistant with custom instructions
 - **[Expert](references/jobs/README.md#expert)** - Domain expert Q&A based on project context
 - **[TestCasesGenerator](references/jobs/README.md#testcasesgenerator)** - Automated test case generation
+- **[ReportGenerator](references/reporting/report-generation.md)** - Report configuration, data sources, and metrics
 
 ### Development
 - **[Agent Best Practices](references/agents/best-practices.md)** - Critical patterns and lessons learned
