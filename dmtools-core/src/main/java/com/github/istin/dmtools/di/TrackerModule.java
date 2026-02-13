@@ -137,20 +137,7 @@ public class TrackerModule {
             }
         }
         
-        // Check if we're in a test environment (Spring Boot tests, JUnit, etc.)
-        // In test environments, it's acceptable to not have tracker configuration
-        boolean isTestEnvironment = isTestEnvironment();
-
-        if (isTestEnvironment) {
-            logger.warn("No tracker configuration found in test/CI environment. Returning null TrackerClient. " +
-                    "Jobs that require TrackerClient will fail with an informative error. " +
-                    "To configure, set environment variables: " +
-                    "JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +
-                    "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN), or " +
-                    "Rally (RALLY_PATH + RALLY_TOKEN)");
-            return null;
-        }
-
+        // No tracker configuration found - throw RuntimeException with informative message
         logger.error("No tracker configuration found. Please configure one of: JIRA, ADO, Rally, or X-ray");
         throw new RuntimeException("Failed to create TrackerClient instance. " +
                 "Please configure JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +
