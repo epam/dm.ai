@@ -38,11 +38,12 @@ public class BasicGeminiAI {
                     logger.info("GEMINI_VERTEX_ENABLED=true, initializing VertexAIGeminiClient (service account mode)");
                     return createVertexAIClient(observer, configuration);
                 } catch (Exception e) {
-                    logger.error("Failed to create VertexAIGeminiClient: {}. Falling back to API key mode.", e.getMessage());
-                    // Fall through to API key mode
+                    logger.warn("Failed to create VertexAIGeminiClient: {}. Attempting fallback to API key mode.", e.getMessage());
+                    logger.debug("Vertex AI creation error details:", e);
+                    // Fall through to API key mode if available
                 }
             } else {
-                logger.warn("GEMINI_VERTEX_ENABLED=true but project ID or location missing. Falling back to API key mode.");
+                logger.warn("GEMINI_VERTEX_ENABLED=true but project ID or location missing. Attempting fallback to API key mode.");
             }
         }
 
@@ -67,6 +68,10 @@ public class BasicGeminiAI {
         String credentialsJson = configuration.getGeminiVertexCredentialsJson();
         String model = configuration.getGeminiDefaultModel();
         String apiVersion = configuration.getGeminiVertexApiVersion();
+
+        if (model == null || model.trim().isEmpty()) {
+            throw new IllegalStateException("GEMINI_MODEL is not configured. Please set GEMINI_MODEL or GEMINI_DEFAULT_MODEL in environment variables or config file.");
+        }
 
         if (isNotEmpty(credentialsPath)) {
             logger.info("Using Vertex AI credentials from file: {}", credentialsPath);
@@ -101,7 +106,11 @@ public class BasicGeminiAI {
         configJson.put("clientName", clientName);
 
         String geminiModel = configuration.getGeminiDefaultModel();
-        // getGeminiDefaultModel has its own default, so no need for null check & manual default here usually
+        if (geminiModel == null || geminiModel.trim().isEmpty()) {
+            String errorMessage = "GEMINI_MODEL is not configured. Please set GEMINI_MODEL or GEMINI_DEFAULT_MODEL in environment variables or config file.";
+            logger.error(errorMessage);
+            throw new IllegalStateException(errorMessage);
+        }
         configJson.put("defaultModel", geminiModel);
 
         configJson.put("basePath", configuration.getGeminiBasePath());
@@ -154,7 +163,11 @@ public class BasicGeminiAI {
         configJson.put("clientName", clientName);
 
         String geminiModel = propertyReader.getGeminiDefaultModel();
-        // getGeminiDefaultModel has its own default, so no need for null check & manual default here usually
+        if (geminiModel == null || geminiModel.trim().isEmpty()) {
+            String errorMessage = "GEMINI_MODEL is not configured. Please set GEMINI_MODEL or GEMINI_DEFAULT_MODEL in environment variables or config file.";
+            logger.error(errorMessage);
+            throw new IllegalStateException(errorMessage);
+        }
         configJson.put("defaultModel", geminiModel);
 
         configJson.put("basePath", propertyReader.getGeminiBasePath());

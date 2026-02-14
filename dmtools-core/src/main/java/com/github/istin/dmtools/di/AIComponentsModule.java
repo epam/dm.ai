@@ -350,38 +350,31 @@ public class AIComponentsModule {
     /**
      * Creates a Gemini AI client if configuration is available.
      * Supports both Vertex AI (service account) and API key modes.
+     * BasicGeminiAI.create() handles the selection logic internally.
      * @param observer The conversation observer
      * @param configuration The application configuration
      * @return Gemini AI instance or null if not configured
      */
     public static AI createGeminiAI(ConversationObserver observer, ApplicationConfiguration configuration) {
-        // Check if Vertex AI is enabled
-        if (configuration.isGeminiVertexEnabled()) {
-            String projectId = configuration.getGeminiVertexProjectId();
-            String location = configuration.getGeminiVertexLocation();
-            if (projectId != null && !projectId.trim().isEmpty() &&
-                location != null && !location.trim().isEmpty()) {
-                try {
-                    logger.debug("Creating Gemini AI via Vertex AI (service account mode)");
-                    return BasicGeminiAI.create(observer, configuration);
-                } catch (Exception e) {
-                    logger.debug("Failed to create BasicGeminiAI via Vertex AI: {}", e.getMessage());
-                }
-            }
+        // Check if any Gemini configuration is available
+        boolean hasVertexConfig = configuration.isGeminiVertexEnabled() &&
+                configuration.getGeminiVertexProjectId() != null &&
+                configuration.getGeminiVertexLocation() != null;
+        boolean hasApiKeyConfig = configuration.getGeminiApiKey() != null &&
+                !configuration.getGeminiApiKey().trim().isEmpty() &&
+                !configuration.getGeminiApiKey().startsWith("$");
+
+        if (!hasVertexConfig && !hasApiKeyConfig) {
+            return null;
         }
 
-        // Fall back to API key mode
-        String geminiApiKey = configuration.getGeminiApiKey();
-        if (geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.startsWith("$")) {
-            try {
-                logger.debug("Creating Gemini AI via API key mode");
-                return BasicGeminiAI.create(observer, configuration);
-            } catch (Exception e) {
-                logger.debug("Failed to create BasicGeminiAI via API key: {}", e.getMessage());
-            }
+        try {
+            logger.debug("Creating Gemini AI (BasicGeminiAI.create() will select Vertex AI or API key mode)");
+            return BasicGeminiAI.create(observer, configuration);
+        } catch (Exception e) {
+            logger.debug("Failed to create Gemini AI: {}", e.getMessage());
+            return null;
         }
-
-        return null;
     }
     
     /**

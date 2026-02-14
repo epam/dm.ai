@@ -243,20 +243,28 @@ public class VertexAIGeminiClient extends AbstractRestClient implements AI {
             throw new IllegalArgumentException("File paths array cannot be null or empty");
         }
 
-        // Convert string paths to File objects
+        // Convert string paths to File objects, filtering out invalid files
         List<File> files = java.util.Arrays.stream(filePaths)
                 .map(String::trim)
                 .filter(path -> !path.isEmpty())
                 .map(File::new)
-                .peek(file -> {
+                .filter(file -> {
                     if (!file.exists()) {
-                        logger.warn("File does not exist: {}", file.getAbsolutePath());
+                        logger.warn("File does not exist, skipping: {}", file.getAbsolutePath());
+                        return false;
                     }
                     if (!file.canRead()) {
-                        logger.warn("File is not readable: {}", file.getAbsolutePath());
+                        logger.warn("File is not readable, skipping: {}", file.getAbsolutePath());
+                        return false;
                     }
+                    return true;
                 })
                 .collect(java.util.stream.Collectors.toList());
+
+        // Validate that at least some content exists (message or valid files)
+        if ((message == null || message.trim().isEmpty()) && files.isEmpty()) {
+            throw new IllegalArgumentException("No valid content provided: message is empty and all files were invalid or inaccessible");
+        }
 
         return chat(this.model, message, files);
     }
@@ -474,7 +482,11 @@ public class VertexAIGeminiClient extends AbstractRestClient implements AI {
             logger.error("No text content found in Vertex AI Gemini response: {}", responseBody);
             throw new IOException("No text content found in response");
 
+        } catch (IOException e) {
+            // Re-throw IOExceptions as-is (already properly formatted)
+            throw e;
         } catch (Exception e) {
+            // Wrap other exceptions (e.g., JSON parsing errors)
             logger.error("Failed to parse Vertex AI Gemini response", e);
             throw new IOException("Failed to parse response: " + e.getMessage(), e);
         }
