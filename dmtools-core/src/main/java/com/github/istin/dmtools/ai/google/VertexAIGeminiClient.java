@@ -6,15 +6,13 @@ import com.github.istin.dmtools.ai.Message;
 import com.github.istin.dmtools.ai.model.Metadata;
 import com.github.istin.dmtools.ai.google.auth.GeminiAuthenticationStrategy;
 import com.github.istin.dmtools.ai.google.auth.ServiceAccountAuthenticationStrategy;
+import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.mcp.MCPParam;
 import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import lombok.Getter;
 import lombok.Setter;
-import okhttp3.MediaType;
 import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -340,6 +338,12 @@ public class VertexAIGeminiClient extends AbstractRestClient implements AI {
             // Add file parts if present
             if (msg.getFiles() != null && !msg.getFiles().isEmpty()) {
                 for (File file : msg.getFiles()) {
+                    // Check file existence and readability before encoding
+                    if (!file.exists() || !file.canRead()) {
+                        logger.warn("Skipping file (does not exist or not readable): {}", file.getAbsolutePath());
+                        continue;
+                    }
+
                     String mimeType = determineMimeType(file);
                     String base64Data = encodeFileToBase64(file);
 
@@ -382,7 +386,8 @@ public class VertexAIGeminiClient extends AbstractRestClient implements AI {
     }
 
     /**
-     * Performs a POST request with authentication.
+     * Performs a POST request with authentication using AbstractRestClient infrastructure.
+     * This provides POST caching, retry-with-backoff, and standardized error handling.
      *
      * @param url Request URL
      * @param jsonBody JSON request body
@@ -390,26 +395,13 @@ public class VertexAIGeminiClient extends AbstractRestClient implements AI {
      * @throws IOException if request fails
      */
     private String performPost(String url, String jsonBody) throws IOException {
-        RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json; charset=utf-8"));
-        Request.Builder requestBuilder = new Request.Builder()
-                .url(url)
-                .post(body);
-
-        // Sign the request with authentication strategy
-        Request request = authenticationStrategy.signRequest(requestBuilder, url, jsonBody, customHeaders);
+        GenericRequest request = new GenericRequest(this, url);
+        request.setBody(jsonBody);
 
         logger.debug("Making POST request to: {}", sanitizeUrl(url));
 
-        try (Response response = client.newCall(request).execute()) {
-            String responseBody = response.body() != null ? response.body().string() : "";
-
-            if (!response.isSuccessful()) {
-                logger.error("Vertex AI Gemini API error. Status: {}, Body: {}", response.code(), responseBody);
-                throw new IOException("Vertex AI Gemini API error: " + response.code() + " - " + responseBody);
-            }
-
-            return responseBody;
-        }
+        // Use parent's post() method which provides caching, retry, and sign() integration
+        return post(request);
     }
 
     /**
