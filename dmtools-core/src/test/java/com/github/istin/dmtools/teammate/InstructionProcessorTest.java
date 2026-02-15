@@ -152,8 +152,8 @@ class InstructionProcessorTest {
         Path commonDir = tempDir.resolve("instructions/common");
         Files.createDirectories(commonDir);
         
-        Files.writeString(commonDir.resolve("response_output.md"), 
-            "**IMPORTANT** You must write response to the request to outputs/response.md according to formatting rules");
+        Files.writeString(commonDir.resolve("response_output.md"),
+            "**IMPORTANT** You must write response to the request to output/response.md according to formatting rules");
         Files.writeString(commonDir.resolve("no_development.md"), 
             "**IMPORTANT** Your task is not development and implementation, only assessment/analysis/enhancement of the description.");
         Files.writeString(commonDir.resolve("preserve_references.md"), 
@@ -183,7 +183,7 @@ class InstructionProcessorTest {
         // Verify expansion
         assertEquals(9, expanded.length);
         assertTrue(expanded[0].contains("https://"));
-        assertTrue(expanded[1].contains("outputs/response.md"));
+        assertTrue(expanded[1].contains("output/response.md"));
         assertEquals(instructions[2], expanded[2]); // Plain text unchanged
         assertTrue(expanded[3].contains("not development"));
         assertTrue(expanded[4].contains("keep exact syntax"));
@@ -199,8 +199,8 @@ class InstructionProcessorTest {
         Path commonDir = tempDir.resolve("instructions/common");
         Files.createDirectories(commonDir);
         
-        Files.writeString(commonDir.resolve("response_output.md"), 
-            "Write response to outputs/response.md");
+        Files.writeString(commonDir.resolve("response_output.md"),
+            "Write response to output/response.md");
         Files.writeString(commonDir.resolve("json_validation.md"), 
             "Response must be valid JSON");
         
@@ -236,7 +236,7 @@ class InstructionProcessorTest {
         
         // Verify expansion
         assertNotNull(json);
-        assertTrue(json.contains("Write response to outputs/response.md"));
+        assertTrue(json.contains("Write response to output/response.md"));
         assertTrue(json.contains("Custom instruction for this job"));
         assertTrue(json.contains("Response must be valid JSON"));
     }
@@ -280,8 +280,8 @@ class InstructionProcessorTest {
         Path devDir = tempDir.resolve("instructions/development");
         Files.createDirectories(devDir);
         
-        Files.writeString(devDir.resolve("formatting_rules.md"), 
-            "outputs/response.md must be a markdown document with sections: ## Issues/Notes (if any), ## Approach, ## Files Modified, ## Test Coverage");
+        Files.writeString(devDir.resolve("formatting_rules.md"),
+            "output/response.md must be a markdown document with sections: ## Issues/Notes (if any), ## Approach, ## Files Modified, ## Test Coverage");
         
         Files.writeString(devDir.resolve("few_shots.md"), 
             "## Issues/Notes\nAll acceptance criteria implemented successfully.\n\n## Approach\nImplemented the feature...");
@@ -297,7 +297,7 @@ class InstructionProcessorTest {
 
         // Verify expansion
         assertEquals(1, expandedFormatting.length);
-        assertTrue(expandedFormatting[0].contains("outputs/response.md must be a markdown document"));
+        assertTrue(expandedFormatting[0].contains("output/response.md must be a markdown document"));
         assertTrue(expandedFormatting[0].contains("## Issues/Notes (if any)"));
         
         assertEquals(1, expandedFewShots.length);

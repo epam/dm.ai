@@ -115,6 +115,147 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 | `skipJSAction` | String | JS file path | To determine skip logic |
 | `validateJSAction` | String | JS file path | To validate AI output |
 
+### CLI Integration (NEW in v1.7.130+)
+
+| Parameter | Type | Default | Description | Example |
+|-----------|------|---------|-------------|---------|
+| `cliPrompt` | String | - | Prompt for CLI agent (supports plain text, file paths, Confluence URLs) | `"Implement from input/"`, `"./prompts/dev.md"`, `"https://..."` |
+| `cliCommands` | Array | - | CLI commands to execute | `["./cicd/scripts/run-cursor-agent.sh"]` |
+| `skipAIProcessing` | Boolean | `false` | Skip AI processing when using CLI agents | `true` |
+| `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133**: Require `output/response.md` before updating fields (strict mode prevents data loss) | `true` (recommended) |
+| `cleanupInputFolder` | Boolean | `true` | **NEW v1.7.133**: Cleanup `input/[TICKET-KEY]/` folder after execution | `false` (for debugging) |
+
+**Example with `cliPrompt` field:**
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "cliPrompt": "Implement the ticket from input/ folder. Write results to output/.",
+    "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"],
+    "skipAIProcessing": true,
+    "postJSAction": "agents/js/developTicketAndCreatePR.js"
+  }
+}
+```
+
+**Or use file-based prompt for reusability:**
+```json
+{
+  "cliPrompt": "./agents/prompts/implementation_prompt.md",
+  "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"]
+}
+```
+
+**Or Confluence URL for centralized management:**
+```json
+{
+  "cliPrompt": "https://company.atlassian.net/wiki/spaces/DEV/pages/123/Prompt",
+  "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"]
+}
+```
+
+**How it works:**
+1. Teammate processes `cliPrompt` (fetches Confluence/file content if needed)
+2. Escapes shell special characters (`\`, `"`, `$`, `` ` ``)
+3. Appends as quoted parameter to each CLI command
+4. Example: `./script.sh` becomes `./script.sh "Your prompt content"`
+
+See [CLI Integration Guide](cli-integration.md) for complete documentation.
+
+#### CLI Output Safety (v1.7.133+)
+
+**Problem**: When CLI commands fail or don't create `output/response.md`, the system could overwrite critical fields with error messages.
+
+**Solution**: Two new safety parameters control CLI output handling:
+
+##### `requireCliOutputFile` (default: `true`)
+
+**Strict Mode** (recommended for production):
+```json
+{
+  "requireCliOutputFile": true,  // Default - safe mode
+  "outputType": "field",
+  "fieldName": "Description"
+}
+```
+
+**Behavior**:
+- ✅ If `output/response.md` exists → Process normally (update field/post comment/create ticket)
+- ❌ If `output/response.md` missing → **Skip field update**, post error comment instead
+- **Protects against data loss** - won't overwrite fields with error messages
+
+**Permissive Mode** (use with caution):
+```json
+{
+  "requireCliOutputFile": false,  // Permissive mode
+  "outputType": "field",
+  "fieldName": "Notes"
+}
+```
+
+**Behavior**:
+- Uses command stdout/stderr as fallback if `response.md` missing
+- Less safe - may update fields with error messages
+- Backwards compatible with old behavior
+
+##### `cleanupInputFolder` (default: `true`)
+
+**Cleanup Enabled** (recommended for production):
+```json
+{
+  "cleanupInputFolder": true  // Default - saves disk space
+}
+```
+
+**Behavior**:
+- Automatically deletes `input/[TICKET-KEY]/` folder after processing
+- Removes temporary `request.md` and downloaded attachments
+
+**Cleanup Disabled** (for debugging):
+```json
+{
+  "cleanupInputFolder": false  // Keep input for inspection
+}
+```
+
+**Behavior**:
+- Keeps `input/[TICKET-KEY]/` folder for manual inspection
+- Allows debugging CLI issues by checking `request.md` and attachments
+- Requires manual cleanup: `rm -rf input/[TICKET-KEY]`
+
+**Example: Production-safe CLI configuration:**
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "cliPrompt": "Generate comprehensive story description",
+    "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"],
+    "skipAIProcessing": true,
+    "requireCliOutputFile": true,   // Strict mode (default)
+    "cleanupInputFolder": true,     // Cleanup (default)
+    "outputType": "field",
+    "fieldName": "Description",
+    "operationType": "Replace",
+    "initiator": "automation"
+  }
+}
+```
+
+**Example: Debug mode (CLI not working):**
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"],
+    "skipAIProcessing": true,
+    "cleanupInputFolder": false,    // Keep for debugging
+    "outputType": "comment"
+  }
+}
+```
+
+After debugging: `cat input/PROJ-123/request.md` and `ls -la input/PROJ-123/`
+
 ### Output Configuration
 
 | Parameter | Type | Description | Options |

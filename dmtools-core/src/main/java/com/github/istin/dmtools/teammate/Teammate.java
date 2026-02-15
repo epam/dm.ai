@@ -61,8 +61,17 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("cliCommands")
         private String[] cliCommands;
 
+        @SerializedName("cliPrompt")
+        private String cliPrompt;
+
         @SerializedName("skipAIProcessing")
         private boolean skipAIProcessing = false;
+
+        @SerializedName("requireCliOutputFile")
+        private boolean requireCliOutputFile = true;  // Default: true (strict mode by default for safety)
+
+        @SerializedName("cleanupInputFolder")
+        private boolean cleanupInputFolder = true;  // Default: true (cleanup input/ folder after execution)
 
         @SerializedName("indexes")
         private IndexConfig[] indexes;
@@ -344,15 +353,31 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             CliExecutionHelper cliHelper = new CliExecutionHelper();
             CliExecutionHelper.CliExecutionResult cliResult = null;
             Path inputContextPath = null;
-            
+
             if (cliCommands != null && cliCommands.length > 0) {
                 try {
+                    // Process cliPrompt if configured (supports Confluence URLs, file paths, plain text)
+                    String processedPrompt = null;
+                    String rawCliPrompt = expertParams.getCliPrompt();
+                    if (rawCliPrompt != null && !rawCliPrompt.trim().isEmpty()) {
+                        String[] processedArray = instructionProcessor.extractIfNeeded(rawCliPrompt);
+                        processedPrompt = processedArray.length > 0 ? processedArray[0] : null;
+                        logger.info("Processed cliPrompt ({} chars)", processedPrompt != null ? processedPrompt.length() : 0);
+                    }
+
+                    // Append processed prompt to each CLI command if available
+                    String[] finalCliCommands = cliCommands;
+                    if (processedPrompt != null && !processedPrompt.trim().isEmpty()) {
+                        finalCliCommands = CliExecutionHelper.appendPromptToCommands(cliCommands, processedPrompt);
+                        logger.info("Appended prompt to {} CLI commands", finalCliCommands.length);
+                    }
+
                     // Create input context for CLI commands
                     inputContextPath = cliHelper.createInputContext(ticket, inputParams.toString(), trackerClient);
-                    
+
                     // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
                     Path projectRoot = Paths.get(System.getProperty("user.dir"));
-                    cliResult = cliHelper.executeCliCommandsWithResult(cliCommands, projectRoot, null);
+                    cliResult = cliHelper.executeCliCommandsWithResult(finalCliCommands, projectRoot, null);
                     
                     // Append CLI responses to knownInfo if not empty
                     StringBuilder cliResponses = cliResult.getCommandResponses();
@@ -373,7 +398,13 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 } finally {
                     // Clean up input context
                     if (inputContextPath != null) {
-                        cliHelper.cleanupInputContext(inputContextPath);
+                        if (expertParams.isCleanupInputFolder()) {
+                            cliHelper.cleanupInputContext(inputContextPath);
+                            logger.info("Cleaned up input folder (cleanupInputFolder=true)");
+                        } else {
+                            logger.info("Keeping input folder for inspection (cleanupInputFolder=false): {}",
+                                       inputContextPath.toAbsolutePath());
+                        }
                     }
                 }
             }
@@ -412,17 +443,41 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             }
 
             String response;
+            boolean skipFieldUpdate = false;  // NEW: Flag to skip field update
+
             if (expertParams.isSkipAIProcessing()) {
                 // Skip AI processing and use CLI output response if available
                 if (cliResult != null && cliResult.hasOutputResponse()) {
+                    // response.md file exists and has content
                     response = cliResult.getOutputResponse();
                     logger.info("Using CLI output response as final response for ticket {}", ticket.getKey());
-                } else if (cliResult != null) {
-                    response = cliResult.getCommandResponses().toString();
-                    logger.info("Using CLI execution results as final response for ticket {}", ticket.getKey());
                 } else {
-                    response = "No CLI commands executed or results available.";
-                    logger.info("No CLI results available for ticket {}", ticket.getKey());
+                    // response.md is missing or empty
+                    if (expertParams.isRequireCliOutputFile()) {
+                        // Strict mode: Don't use fallback, mark for skipping field update
+                        logger.warn("CLI output file (response.md) is missing or empty for ticket {}, " +
+                                   "but requireCliOutputFile=true. Will skip field update and post error comment.",
+                                   ticket.getKey());
+
+                        // Prepare error message for comment
+                        if (cliResult != null) {
+                            response = "CLI command executed but did not produce output file:\n" +
+                                      cliResult.getCommandResponses().toString();
+                        } else {
+                            response = "No CLI commands executed or results available.";
+                        }
+
+                        skipFieldUpdate = true;  // Mark to skip field update
+                    } else {
+                        // Permissive mode: Use fallback (backwards compatible)
+                        if (cliResult != null) {
+                            response = cliResult.getCommandResponses().toString();
+                            logger.info("Using CLI execution results as final response for ticket {}", ticket.getKey());
+                        } else {
+                            response = "No CLI commands executed or results available.";
+                            logger.info("No CLI results available for ticket {}", ticket.getKey());
+                        }
+                    }
                 }
             } else {
                 // Standard AI processing workflow with index chunks
@@ -444,37 +499,58 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             
             // Handle output based on outputType, skip publishing if outputType is 'none'
             if (outputType != Params.OutputType.none) {
-                if (outputType == Params.OutputType.field) {
-                    // Use tracker-agnostic field resolution
-                    final String fieldCode = trackerClient.resolveFieldName(ticket.getTicketKey(), fieldName);
-                    String currentFieldValue = ticket.getFieldValueAsString(fieldCode);
-                    
-                    if (expertParams.getOperationType() == Params.OperationType.Append) {
-                        String newValue;
-                        if (currentFieldValue == null || currentFieldValue.trim().isEmpty()) {
-                            newValue = response;
-                        } else {
-                            newValue = currentFieldValue + "\n\n" + response;
-                        }
-                        trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, newValue));
-                    } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
-                        trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, response));
-                    }
-                    
+                // NEW: Check if output should be skipped (when requireCliOutputFile=true and no output file)
+                if (skipFieldUpdate) {
+                    logger.warn("Skipping output processing for ticket {} due to missing CLI output file (requireCliOutputFile=true)",
+                               ticket.getKey());
+
+                    // Post error comment (when outputType is not 'none')
+                    String errorComment;
                     if (initiator != null && !initiator.isEmpty()) {
-                        String comment = trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.";
-                        if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
-                            comment = trackerClient.tag(initiator) + ", there is AI response in '"+ fieldName + "' on your request: \n"+
-                                    "System Request: " + systemRequestCommentAlias;
-                        }
-                        trackerClient.postComment(ticket.getTicketKey(), comment);
+                        errorComment = trackerClient.tag(initiator) +
+                            ", \n\n⚠️ CLI command execution issue:\n\n" + response;
+                    } else {
+                        errorComment = "⚠️ CLI command execution issue:\n\n" + response;
                     }
+                    trackerClient.postComment(ticket.getTicketKey(), errorComment);
+                    logger.info("Posted error comment to ticket {} instead of processing output (outputType={})",
+                               ticket.getKey(), outputType);
+
+                    // Skip further processing (no field update, no comment, no ticket creation)
                 } else {
-                    String comment = trackerClient.tag(initiator) + ", \n\nAI Response is: \n" + response;
-                    if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
-                        comment = trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n\nAI Response is: \n" + response;
+                    // Normal output processing flow (unchanged)
+                    if (outputType == Params.OutputType.field) {
+                        // Use tracker-agnostic field resolution
+                        final String fieldCode = trackerClient.resolveFieldName(ticket.getTicketKey(), fieldName);
+                        String currentFieldValue = ticket.getFieldValueAsString(fieldCode);
+
+                        if (expertParams.getOperationType() == Params.OperationType.Append) {
+                            String newValue;
+                            if (currentFieldValue == null || currentFieldValue.trim().isEmpty()) {
+                                newValue = response;
+                            } else {
+                                newValue = currentFieldValue + "\n\n" + response;
+                            }
+                            trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, newValue));
+                        } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
+                            trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, response));
+                        }
+
+                        if (initiator != null && !initiator.isEmpty()) {
+                            String comment = trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.";
+                            if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                                comment = trackerClient.tag(initiator) + ", there is AI response in '"+ fieldName + "' on your request: \n"+
+                                        "System Request: " + systemRequestCommentAlias;
+                            }
+                            trackerClient.postComment(ticket.getTicketKey(), comment);
+                        }
+                    } else {
+                        String comment = trackerClient.tag(initiator) + ", \n\nAI Response is: \n" + response;
+                        if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                            comment = trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n\nAI Response is: \n" + response;
+                        }
+                        trackerClient.postCommentIfNotExists(ticket.getTicketKey(), comment);
                     }
-                    trackerClient.postCommentIfNotExists(ticket.getTicketKey(), comment);
                 }
             } else {
                 logger.info("Output type is 'none', skipping publishing results for ticket {}", ticket.getKey());

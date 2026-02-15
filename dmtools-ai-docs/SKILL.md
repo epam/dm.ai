@@ -1,12 +1,12 @@
 ---
 name: dmtools
-description: Comprehensive documentation and assistance for DMtools - AI-powered development toolkit with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMtools, configuring integrations, developing JavaScript agents, generating test cases, or building reports (ReportGenerator/dmc_report).
+description: Comprehensive documentation and assistance for DMtools - AI-powered development toolkit with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMtools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/dmc_report), or creating CLI agent workflows with the new cliPrompt field for cleaner configurations.
 license: Apache-2.0
 compatibility:
   - Java 23+
   - macOS, Linux, Windows (WSL)
 metadata:
-  version: skill-v1.0.21
+  version: skill-v1.0.23
   author: DMtools Team
   repository: https://github.com/IstiN/dmtools
   documentation: https://github.com/IstiN/dmtools
@@ -140,7 +140,7 @@ Use this skill when:
 - Setting up integrations (Jira, Azure DevOps, Figma, Confluence, Teams)
 - Configuring AI providers (Gemini, OpenAI, Claude, DIAL, Ollama)
 - Developing JavaScript agents with MCP tools
-- Generating test cases (Xray, Cucumber)
+- Generating test cases (Jira, Xray, Cucumber)
 - Generating analytics reports (ReportGenerator, dmc_report)
 - Troubleshooting DMtools issues
 - Working with dmtools.env configuration
@@ -232,41 +232,35 @@ function action(params) {
 }
 ```
 
-## Detailed Documentation
+## 📚 Detailed Documentation
 
-### Installation & Setup
-- [Installation Guide](references/installation/README.md) - Complete setup for all platforms
-- [Troubleshooting](references/installation/troubleshooting.md) - Common issues and solutions
-
-### Configuration Guides
-- [Configuration Overview](references/configuration/README.md) - Environment variables and hierarchy
-- **[JSON Configuration Rules](references/configuration/json-config-rules.md)** - Critical rules for job configurations
-- [Jira Setup](references/configuration/integrations/jira.md) - API tokens and 52 tools
-- [Azure DevOps](references/configuration/integrations/ado.md) - PAT setup and 23+ tools
-- [Gemini AI](references/configuration/ai-providers/gemini.md) - Free tier configuration
-- [Other AI Providers](references/configuration/ai-providers/) - OpenAI, Claude, DIAL, Ollama
-
-### Jobs & Workflows
-- **[Jobs Reference](references/jobs/README.md)** - Complete guide to all 23 jobs
-- **[Teammate](references/jobs/README.md#teammate)** - Flexible AI assistant with custom instructions
-- **[Expert](references/jobs/README.md#expert)** - Domain expert Q&A based on project context
-- **[TestCasesGenerator](references/jobs/README.md#testcasesgenerator)** - Automated test case generation
-- **[ReportGenerator](references/reporting/report-generation.md)** - Report configuration, data sources, and metrics
-
-### Development
-- **[Agent Best Practices](references/agents/best-practices.md)** - Critical patterns and lessons learned
-- [JavaScript Agents](references/agents/javascript-agents.md) - GraalJS development with MCP tools
-- [Teammate Configs](references/agents/teammate-configs.md) - JSON-based AI workflows
-- **[CLI Integration](references/agents/cli-integration.md)** - Integrate Cursor, Claude, Copilot, Gemini CLI agents
-- [Test Generation](references/test-generation/xray-manual.md) - Xray test case creation
-
-### CI/CD Workflows
-- [GitHub Actions: AI Teammate](references/workflows/github-actions-teammate.md) - Automated ticket processing in GitHub Actions
+| Category | Document | Description |
+|----------|----------|-------------|
+| **Installation** | [Installation Guide](references/installation/README.md) | Complete setup for all platforms (macOS, Linux, Windows) |
+| | [Troubleshooting](references/installation/troubleshooting.md) | Common issues and solutions |
+| **Configuration** | [Configuration Overview](references/configuration/README.md) | Environment variables and hierarchy |
+| | [JSON Configuration Rules](references/configuration/json-config-rules.md) | **⚠️ CRITICAL**: Rules for job configurations |
+| | [Jira Setup](references/configuration/integrations/jira.md) | API tokens and 52 tools |
+| | [Azure DevOps](references/configuration/integrations/ado.md) | PAT setup and 23+ tools |
+| | [Gemini AI](references/configuration/ai-providers/gemini.md) | Free tier configuration (15 req/min) |
+| | [Other AI Providers](references/configuration/ai-providers/) | OpenAI, Claude, DIAL, Ollama |
+| **Jobs** | [Jobs Reference](references/jobs/README.md) | Complete guide to all 23 jobs |
+| | [Teammate](references/jobs/README.md#teammate) | Flexible AI assistant with custom instructions |
+| | [Expert](references/jobs/README.md#expert) | Domain expert Q&A based on project context |
+| | [TestCasesGenerator](references/jobs/README.md#testcasesgenerator) | Automated test case generation |
+| | [ReportGenerator](references/reporting/report-generation.md) | Report configuration, data sources, metrics |
+| **Agents** | [Agent Best Practices](references/agents/best-practices.md) | **⚠️ CRITICAL**: Patterns and lessons learned |
+| | [JavaScript Agents](references/agents/javascript-agents.md) | GraalJS development with 152+ MCP tools |
+| | [Teammate Configs](references/agents/teammate-configs.md) | JSON-based AI workflows (CLI safety v1.7.133+) |
+| | [CLI Integration](references/agents/cli-integration.md) | Cursor, Claude, Copilot, Gemini CLI agents |
+| **Testing** | [Test Generation](references/test-generation/xray-manual.md) | Xray test case creation |
+| **MCP Tools** | [MCP Tools Reference](references/mcp-tools/README.md) | Auto-generated list of 152+ tools (16 integrations) |
+| **CI/CD** | [GitHub Actions](references/workflows/github-actions-teammate.md) | Automated ticket processing in GitHub Actions |
 
 ## ⚠️ CRITICAL: JSON Configuration "name" Field
 
 **Before using any job configuration, understand this:**
-
+ 
 The `"name"` field in JSON configs is **NOT** a user-defined name. It is a **Java class name** (technical identifier).
 
 ```json
