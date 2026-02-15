@@ -22,7 +22,6 @@ public class PropertyReader {
 	private static final int DEFAULT_AI_RETRY_AMOUNT = 3;
 	private static final long DEFAULT_AI_RETRY_DELAY_STEP = 20000L;
 	public static final String DEFAULT_JSAI_CLIENT_NAME = "JSAIClientFromProperties";
-	private static final String DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 	private static final String DEFAULT_GEMINI_BASE_PATH = "https://generativelanguage.googleapis.com/v1beta/models";
 
 	public static void setConfigFile(String resourcePath) {
@@ -761,6 +760,7 @@ public class PropertyReader {
 	public static final String CODE_AI_MODEL = "CODE_AI_MODEL";
 	public static final String TEST_AI_MODEL = "TEST_AI_MODEL";
 	public static final String GEMINI_API_KEY = "GEMINI_API_KEY";
+	public static final String GEMINI_MODEL_KEY = "GEMINI_MODEL";
 	public static final String GEMINI_DEFAULT_MODEL_KEY = "GEMINI_DEFAULT_MODEL";
 	public static final String GEMINI_BASE_PATH_KEY = "GEMINI_BASE_PATH";
 	public static final String OLLAMA_BASE_PATH = "OLLAMA_BASE_PATH";
@@ -802,7 +802,20 @@ public class PropertyReader {
 	}
 
 	public String getGeminiDefaultModel() {
-		return getValue(GEMINI_DEFAULT_MODEL_KEY, DEFAULT_GEMINI_MODEL);
+		// Priority 1: GEMINI_MODEL (shorter, more intuitive)
+		String model = getValue(GEMINI_MODEL_KEY);
+		if (model != null && !model.trim().isEmpty() && !model.startsWith("$")) {
+			return model;
+		}
+
+		// Priority 2: GEMINI_DEFAULT_MODEL (for backward compatibility)
+		model = getValue(GEMINI_DEFAULT_MODEL_KEY);
+		if (model != null && !model.trim().isEmpty() && !model.startsWith("$")) {
+			return model;
+		}
+
+		// No hardcoded default - model must be explicitly configured
+		return null;
 	}
 
 	public String getGeminiBasePath() {

@@ -349,20 +349,32 @@ public class AIComponentsModule {
     
     /**
      * Creates a Gemini AI client if configuration is available.
+     * Supports both Vertex AI (service account) and API key modes.
+     * BasicGeminiAI.create() handles the selection logic internally.
      * @param observer The conversation observer
      * @param configuration The application configuration
      * @return Gemini AI instance or null if not configured
      */
     public static AI createGeminiAI(ConversationObserver observer, ApplicationConfiguration configuration) {
-        String geminiApiKey = configuration.getGeminiApiKey();
-        if (geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.startsWith("$")) {
-            try {
-                return BasicGeminiAI.create(observer, configuration);
-            } catch (Exception e) {
-                logger.debug("Failed to create BasicGeminiAI: {}", e.getMessage());
-            }
+        // Check if any Gemini configuration is available
+        boolean hasVertexConfig = configuration.isGeminiVertexEnabled() &&
+                configuration.getGeminiVertexProjectId() != null &&
+                configuration.getGeminiVertexLocation() != null;
+        boolean hasApiKeyConfig = configuration.getGeminiApiKey() != null &&
+                !configuration.getGeminiApiKey().trim().isEmpty() &&
+                !configuration.getGeminiApiKey().startsWith("$");
+
+        if (!hasVertexConfig && !hasApiKeyConfig) {
+            return null;
         }
-        return null;
+
+        try {
+            logger.debug("Creating Gemini AI (BasicGeminiAI.create() will select Vertex AI or API key mode)");
+            return BasicGeminiAI.create(observer, configuration);
+        } catch (Exception e) {
+            logger.debug("Failed to create Gemini AI: {}", e.getMessage());
+            return null;
+        }
     }
     
     /**

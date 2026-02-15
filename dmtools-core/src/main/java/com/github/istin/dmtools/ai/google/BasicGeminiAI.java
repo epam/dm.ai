@@ -15,7 +15,9 @@ public class BasicGeminiAI {
     private static final String DEFAULT_GEMINI_CLIENT_NAME = "GeminiJSAIClientViaBasicGeminiAI";
 
     /**
-     * Creates an AI instance using Gemini with the provided configuration
+     * Creates an AI instance using Gemini with the provided configuration.
+     * Automatically selects between Vertex AI (service account) and public API (API key) modes.
+     *
      * @param observer The conversation observer
      * @param configuration The application configuration
      * @return The AI instance
@@ -25,6 +27,71 @@ public class BasicGeminiAI {
             logger.error("ApplicationConfiguration cannot be null for BasicGeminiAI.create");
             throw new IllegalArgumentException("ApplicationConfiguration cannot be null");
         }
+
+        // Priority 1: Check if Vertex AI is enabled
+        if (configuration.isGeminiVertexEnabled()) {
+            String projectId = configuration.getGeminiVertexProjectId();
+            String location = configuration.getGeminiVertexLocation();
+
+            if (isNotEmpty(projectId) && isNotEmpty(location)) {
+                try {
+                    logger.info("GEMINI_VERTEX_ENABLED=true, initializing VertexAIGeminiClient (service account mode)");
+                    return createVertexAIClient(observer, configuration);
+                } catch (Exception e) {
+                    logger.warn("Failed to create VertexAIGeminiClient: {}. Attempting fallback to API key mode.", e.getMessage());
+                    logger.debug("Vertex AI creation error details:", e);
+                    // Fall through to API key mode if available
+                }
+            } else {
+                logger.warn("GEMINI_VERTEX_ENABLED=true but project ID or location missing. Attempting fallback to API key mode.");
+            }
+        }
+
+        // Priority 2: Fall back to API key mode (existing GeminiJSAIClient)
+        logger.info("Initializing GeminiJSAIClient (API key mode)");
+        return createJSAIClient(observer, configuration);
+    }
+
+    /**
+     * Creates a Vertex AI Gemini client with service account authentication.
+     *
+     * @param observer The conversation observer
+     * @param configuration The application configuration
+     * @return VertexAIGeminiClient instance
+     * @throws Exception if Vertex AI client cannot be created
+     */
+    private static AI createVertexAIClient(ConversationObserver observer, ApplicationConfiguration configuration)
+            throws Exception {
+        String projectId = configuration.getGeminiVertexProjectId();
+        String location = configuration.getGeminiVertexLocation();
+        String credentialsPath = configuration.getGeminiVertexCredentialsPath();
+        String credentialsJson = configuration.getGeminiVertexCredentialsJson();
+        String model = configuration.getGeminiDefaultModel();
+        String apiVersion = configuration.getGeminiVertexApiVersion();
+
+        if (model == null || model.trim().isEmpty()) {
+            throw new IllegalStateException("GEMINI_MODEL is not configured. Please set GEMINI_MODEL or GEMINI_DEFAULT_MODEL in environment variables or config file.");
+        }
+
+        if (isNotEmpty(credentialsPath)) {
+            logger.info("Using Vertex AI credentials from file: {}", credentialsPath);
+            return new VertexAIGeminiClient(projectId, location, model, credentialsPath, observer, null, apiVersion);
+        } else if (isNotEmpty(credentialsJson)) {
+            logger.info("Using Vertex AI credentials from JSON string");
+            return new VertexAIGeminiClient(projectId, location, model, observer, credentialsJson, null, apiVersion);
+        } else {
+            throw new IllegalStateException("GEMINI_VERTEX_ENABLED=true but no credentials provided (need GEMINI_VERTEX_CREDENTIALS_PATH or GEMINI_VERTEX_CREDENTIALS_JSON)");
+        }
+    }
+
+    /**
+     * Creates a GeminiJSAIClient with API key authentication (existing implementation).
+     *
+     * @param observer The conversation observer
+     * @param configuration The application configuration
+     * @return GeminiJSAIClient instance
+     */
+    private static AI createJSAIClient(ConversationObserver observer, ApplicationConfiguration configuration) {
 
         JSONObject configJson = new JSONObject();
         // This script path will be loaded from src/main/resources/js/geminiChatViaJs.js
@@ -39,7 +106,11 @@ public class BasicGeminiAI {
         configJson.put("clientName", clientName);
 
         String geminiModel = configuration.getGeminiDefaultModel();
-        // getGeminiDefaultModel has its own default, so no need for null check & manual default here usually
+        if (geminiModel == null || geminiModel.trim().isEmpty()) {
+            String errorMessage = "GEMINI_MODEL is not configured. Please set GEMINI_MODEL or GEMINI_DEFAULT_MODEL in environment variables or config file.";
+            logger.error(errorMessage);
+            throw new IllegalStateException(errorMessage);
+        }
         configJson.put("defaultModel", geminiModel);
 
         configJson.put("basePath", configuration.getGeminiBasePath());
@@ -92,7 +163,11 @@ public class BasicGeminiAI {
         configJson.put("clientName", clientName);
 
         String geminiModel = propertyReader.getGeminiDefaultModel();
-        // getGeminiDefaultModel has its own default, so no need for null check & manual default here usually
+        if (geminiModel == null || geminiModel.trim().isEmpty()) {
+            String errorMessage = "GEMINI_MODEL is not configured. Please set GEMINI_MODEL or GEMINI_DEFAULT_MODEL in environment variables or config file.";
+            logger.error(errorMessage);
+            throw new IllegalStateException(errorMessage);
+        }
         configJson.put("defaultModel", geminiModel);
 
         configJson.put("basePath", propertyReader.getGeminiBasePath());
@@ -118,5 +193,15 @@ public class BasicGeminiAI {
             // Propagate as a runtime exception that AIComponentsModule can catch
             throw new RuntimeException("Failed to create GeminiJSAIClient via BasicGeminiAI", e);
         }
+    }
+
+    /**
+     * Helper method to check if a string is not null and not empty.
+     *
+     * @param str The string to check
+     * @return true if string is not null and not empty
+     */
+    private static boolean isNotEmpty(String str) {
+        return str != null && !str.trim().isEmpty();
     }
 }

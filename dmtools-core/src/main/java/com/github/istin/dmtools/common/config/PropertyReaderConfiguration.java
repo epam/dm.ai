@@ -170,7 +170,39 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     public String getGeminiBasePath() {
         return propertyReader.getGeminiBasePath();
     }
-    
+
+    @Override
+    public boolean isGeminiVertexEnabled() {
+        String value = propertyReader.getValue("GEMINI_VERTEX_ENABLED", "false");
+        return "true".equalsIgnoreCase(value);
+    }
+
+    @Override
+    public String getGeminiVertexProjectId() {
+        return propertyReader.getValue("GEMINI_VERTEX_PROJECT_ID");
+    }
+
+    @Override
+    public String getGeminiVertexLocation() {
+        return propertyReader.getValue("GEMINI_VERTEX_LOCATION");
+    }
+
+    @Override
+    public String getGeminiVertexCredentialsPath() {
+        return propertyReader.getValue("GEMINI_VERTEX_CREDENTIALS_PATH");
+    }
+
+    @Override
+    public String getGeminiVertexCredentialsJson() {
+        return propertyReader.getValue("GEMINI_VERTEX_CREDENTIALS_JSON");
+    }
+
+    @Override
+    public String getGeminiVertexApiVersion() {
+        String version = propertyReader.getValue("GEMINI_VERTEX_API_VERSION");
+        return (version != null && !version.trim().isEmpty()) ? version : "v1";
+    }
+
     @Override
     public String getJsScriptPath() {
         return propertyReader.getJsScriptPath();

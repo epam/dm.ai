@@ -273,14 +273,58 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     
     @Override
     public String getGeminiDefaultModel() {
-        return getValue("GEMINI_DEFAULT_MODEL", "gemini-2.0-flash");
+        // Priority 1: GEMINI_MODEL (shorter, more intuitive)
+        String model = getValue("GEMINI_MODEL");
+        if (model != null && !model.trim().isEmpty() && !model.startsWith("$")) {
+            return model;
+        }
+
+        // Priority 2: GEMINI_DEFAULT_MODEL (for backward compatibility)
+        model = getValue("GEMINI_DEFAULT_MODEL");
+        if (model != null && !model.trim().isEmpty() && !model.startsWith("$")) {
+            return model;
+        }
+
+        // No hardcoded default - model must be explicitly configured
+        return null;
     }
     
     @Override
     public String getGeminiBasePath() {
         return getValue("GEMINI_BASE_PATH", "https://generativelanguage.googleapis.com/v1beta/models");
     }
-    
+
+    @Override
+    public boolean isGeminiVertexEnabled() {
+        String value = getValue("GEMINI_VERTEX_ENABLED", "false");
+        return "true".equalsIgnoreCase(value);
+    }
+
+    @Override
+    public String getGeminiVertexProjectId() {
+        return getValue("GEMINI_VERTEX_PROJECT_ID");
+    }
+
+    @Override
+    public String getGeminiVertexLocation() {
+        return getValue("GEMINI_VERTEX_LOCATION");
+    }
+
+    @Override
+    public String getGeminiVertexCredentialsPath() {
+        return getValue("GEMINI_VERTEX_CREDENTIALS_PATH");
+    }
+
+    @Override
+    public String getGeminiVertexCredentialsJson() {
+        return getValue("GEMINI_VERTEX_CREDENTIALS_JSON");
+    }
+
+    @Override
+    public String getGeminiVertexApiVersion() {
+        return getValue("GEMINI_VERTEX_API_VERSION", "v1");
+    }
+
     // OllamaConfiguration
     
     @Override

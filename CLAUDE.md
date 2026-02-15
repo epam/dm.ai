@@ -191,7 +191,19 @@ OPENAI_MAX_TOKENS_PARAM_NAME=max_completion_tokens  # Optional, default: "max_co
                                                      # Use "max_tokens" for older models (gpt-3.5-turbo)
                                                      # Use empty string to skip sending this parameter
 
+# Gemini - API Key Mode (Public API)
 GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.0-flash-exp  # Optional, can also use GEMINI_DEFAULT_MODEL
+
+# Gemini - Vertex AI Mode (Google Cloud Service Account)
+GEMINI_VERTEX_ENABLED=true
+GEMINI_VERTEX_PROJECT_ID=my-gcp-project
+GEMINI_VERTEX_LOCATION=europe-west4  # or us-central1, asia-northeast1, global, etc.
+GEMINI_VERTEX_API_VERSION=v1beta1    # Optional: "v1" (default) or "v1beta1" (required for global location)
+GEMINI_VERTEX_CREDENTIALS_PATH=/path/to/service-account.json  # OR use inline JSON
+GEMINI_VERTEX_CREDENTIALS_JSON={"type":"service_account",...}  # Alternative to file path
+GEMINI_MODEL=gemini-2.5-flash-lite  # Model to use
+
 DIAL_API_KEY=...
 DIAL_MODEL=gpt-4
 

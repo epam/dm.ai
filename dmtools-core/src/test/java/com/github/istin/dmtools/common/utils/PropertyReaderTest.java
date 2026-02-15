@@ -103,18 +103,27 @@ class PropertyReaderTest {
 
     @Test
     void testGetGeminiDefaultModel() {
-        String envValue = System.getenv("GEMINI_DEFAULT_MODEL");
-        String fileValue = propertyReader.getValue("GEMINI_DEFAULT_MODEL");
+        // Check both GEMINI_MODEL (priority 1) and GEMINI_DEFAULT_MODEL (priority 2)
+        String envValueModel = System.getenv("GEMINI_MODEL");
+        String fileValueModel = propertyReader.getValue("GEMINI_MODEL");
+        String envValueDefaultModel = System.getenv("GEMINI_DEFAULT_MODEL");
+        String fileValueDefaultModel = propertyReader.getValue("GEMINI_DEFAULT_MODEL");
         String result = propertyReader.getGeminiDefaultModel();
 
-        assertNotNull(result);
-        if ((envValue == null || envValue.trim().isEmpty()) &&
-            (fileValue == null || fileValue.trim().isEmpty())) {
-            // If no env/file override, expect exact default value
-            assertEquals("gemini-2.0-flash", result, "Default Gemini model should be gemini-2.0-flash");
+        // Check if any configuration is present
+        boolean hasModel = (envValueModel != null && !envValueModel.trim().isEmpty() && !envValueModel.startsWith("$")) ||
+                          (fileValueModel != null && !fileValueModel.trim().isEmpty() && !fileValueModel.startsWith("$"));
+        boolean hasDefaultModel = (envValueDefaultModel != null && !envValueDefaultModel.trim().isEmpty() && !envValueDefaultModel.startsWith("$")) ||
+                                 (fileValueDefaultModel != null && !fileValueDefaultModel.trim().isEmpty() && !fileValueDefaultModel.startsWith("$"));
+
+        if (hasModel || hasDefaultModel) {
+            // If configuration exists, result should not be null
+            assertNotNull(result, "Should return configured model when GEMINI_MODEL or GEMINI_DEFAULT_MODEL is set");
+            assertFalse(result.trim().isEmpty(), "Configured model should not be empty");
         } else {
-            // If override exists, just verify it's not empty
-            assertFalse(result.trim().isEmpty());
+            // If no configuration, result can be null (no hardcoded default)
+            // This is the intended behavior after removing the hardcoded default
+            // The method returns null to indicate that model must be explicitly configured
         }
     }
 

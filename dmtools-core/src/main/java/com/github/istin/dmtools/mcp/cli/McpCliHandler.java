@@ -650,6 +650,24 @@ public class McpCliHandler {
         }
 
         String toolLower = toolName.toLowerCase();
+
+        // Special case: vertex_ai_gemini tools should use gemini client
+        // which will automatically select Vertex AI or API key mode based on config
+        if (toolLower.startsWith("vertex_ai_gemini_")) {
+            AI client = getOrCreateAIClient("gemini");
+            if (client == null) {
+                String errorMsg = String.format(
+                    "Tool '%s' requires Gemini provider (Vertex AI or API key), but it's not configured. " +
+                    "For Vertex AI: set GEMINI_VERTEX_ENABLED=true and credentials. " +
+                    "For API key: set GEMINI_API_KEY.",
+                    toolName
+                );
+                logger.error(errorMsg);
+                throw new IllegalStateException(errorMsg);
+            }
+            return client;
+        }
+
         String[] parts = toolLower.split("_");
 
         // Provider-specific AI tools (e.g., bedrock_ai_chat, openai_ai_chat)

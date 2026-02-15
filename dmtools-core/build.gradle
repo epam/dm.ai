@@ -121,6 +121,10 @@ dependencies {
     api 'software.amazon.awssdk:aws-core:2.28.11'
     api 'software.amazon.awssdk:regions:2.28.11'
 
+    // Google Cloud authentication for Vertex AI
+    api 'com.google.auth:google-auth-library-oauth2-http:1.23.0'
+    api 'com.google.cloud:google-cloud-core:2.38.0'
+
     // Test dependencies
     testImplementation platform("org.junit:junit-bom:${versions.junit}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
