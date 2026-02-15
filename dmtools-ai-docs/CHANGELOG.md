@@ -1,6 +1,25 @@
 ## [skill-v1.0.23] - 2026-02-15
 
 ### Added
+
+- **Cross-platform CLI Prompt Passing via Temporary File** - Fixed Windows compatibility issue with `cliPrompt` parameter
+  - **Problem**: Previous implementation used POSIX-style shell escaping (`\"`, `\$`, `\``) which doesn't work on Windows cmd.exe
+  - **Solution**: Prompt content is written to temporary file, file path passed as parameter to CLI commands
+  - **Benefits**:
+    - ✅ Works on Windows (cmd.exe, PowerShell), Linux, macOS
+    - ✅ No escaping issues with special characters (`"`, `$`, `` ` ``, `\`)
+    - ✅ No length limits (supports 10K+ char prompts)
+    - ✅ Backward compatible (scripts can detect if parameter is file)
+  - **CLI Script Update Required**: Scripts should read prompt from file (see examples in cli-integration.md)
+    ```bash
+    # POSIX example
+    if [ -f "$1" ]; then PROMPT=$(cat "$1"); else PROMPT="$1"; fi
+    ```
+    ```batch
+    REM Windows cmd.exe example
+    if exist "%~1" (set /p PROMPT=<"%~1") else (set PROMPT=%~1)
+    ```
+  - Updated documentation with examples for POSIX shell, Windows cmd.exe, and PowerShell
 - **CLI Output Safety Parameters for Teammate** - Two new safety parameters protect against data loss when CLI commands fail
   - **`requireCliOutputFile`** (boolean, default: `true`) - Strict mode requires `outputs/response.md` before updating fields
     - ✅ If output file exists → Process normally (update field/post comment/create ticket)
@@ -74,7 +93,6 @@
 - Updated skill description to mention `cliPrompt` feature
 
 ### Documentation
-- Added comprehensive `cliPrompt` feature documentation in `docs/CLIPROMPT_FEATURE.md`
 - Updated all CLI integration examples to show new pattern
 - Added 17 unit tests for `cliPrompt` functionality (all passing)
 

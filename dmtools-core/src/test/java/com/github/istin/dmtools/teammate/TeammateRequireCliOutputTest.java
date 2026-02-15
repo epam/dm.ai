@@ -411,15 +411,16 @@ class TeammateRequireCliOutputTest {
      */
     private void deleteRecursively(Path path) throws IOException {
         if (Files.isDirectory(path)) {
-            Files.walk(path)
-                .sorted((a, b) -> -a.compareTo(b))  // Reverse order for depth-first deletion
-                .forEach(p -> {
-                    try {
-                        Files.delete(p);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+            try (var walk = Files.walk(path)) {
+                walk.sorted(java.util.Comparator.reverseOrder())  // Reverse order for depth-first deletion
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+            }
         } else {
             Files.delete(path);
         }

@@ -70,7 +70,7 @@ Teammate supports integration with external CLI agents (Cursor, Claude, Copilot,
         "./agents/instructions/development/implementation_instructions.md",
         "**IMPORTANT** Read all files from 'input' folder for context",
         "Implement the ticket requirements with code, tests, and documentation",
-        "Write comprehensive summary to outputs/response.md"
+        "Write comprehensive summary to output/response.md"
       ],
       "knownInfo": "Project uses Java 23, Spring Boot, and React",
       "formattingRules": "./agents/instructions/development/formatting_rules.md"
@@ -141,9 +141,17 @@ The `cliPrompt` field separates CLI prompts from commands for cleaner configurat
 
 **How it works:**
 1. Teammate processes `cliPrompt` (fetches Confluence content or reads file if needed)
-2. Escapes special shell characters (`\`, `"`, `$`, `` ` ``)
-3. Appends as quoted parameter to each CLI command
-4. Example: `./script.sh` becomes `./script.sh "Your prompt content here"`
+2. Creates temporary file with prompt content (UTF-8 encoded)
+3. Passes file path as quoted parameter to each CLI command
+4. Example: `./script.sh` becomes `./script.sh "/tmp/dmtools_cli_prompt_12345.txt"`
+5. CLI script reads prompt from file (see examples below)
+6. Temporary file auto-deletes on JVM exit
+
+**Benefits:**
+- ✅ **Cross-platform**: Works on Windows (cmd.exe, PowerShell), Linux, macOS
+- ✅ **No escaping issues**: Special characters (`"`, `$`, `` ` ``, `\`) handled correctly
+- ✅ **No length limits**: Long prompts (10K+ chars) work without shell limitations
+- ✅ **Backward compatible**: Scripts can check if parameter is a file
 
 ### ⚠️ CRITICAL Parameters
 
@@ -153,7 +161,7 @@ The `cliPrompt` field separates CLI prompts from commands for cleaner configurat
 | `outputType` | String | - | Usually `none` since post-action handles output, or `field`/`comment` for direct updates |
 | `cliPrompt` | String | - | **NEW v1.7.130+**: Prompt for CLI agent (plain text, file path, or Confluence URL) |
 | `cliCommands` | Array | - | Scripts that run CLI agents |
-| `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133+**: Require `outputs/response.md` before updating fields (prevents data loss) |
+| `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133+**: Require `output/response.md` before updating fields (prevents data loss) |
 | `cleanupInputFolder` | Boolean | `true` | **NEW v1.7.133+**: Cleanup `input/[TICKET-KEY]/` folder after execution |
 | `postJSAction` | String | - | JS file path - processes CLI output files |
 
@@ -165,7 +173,7 @@ The `cliPrompt` field separates CLI prompts from commands for cleaner configurat
 
 #### `requireCliOutputFile` (default: `true`)
 
-Controls whether `outputs/response.md` must exist before processing output.
+Controls whether `output/response.md` must exist before processing output.
 
 **Strict Mode** (recommended - default):
 ```json
@@ -178,8 +186,8 @@ Controls whether `outputs/response.md` must exist before processing output.
 ```
 
 **Behavior**:
-- ✅ If `outputs/response.md` exists → Process normally (update field/post comment/create ticket)
-- ❌ If `outputs/response.md` missing → **Skip field update**, post error comment instead
+- ✅ If `output/response.md` exists → Process normally (update field/post comment/create ticket)
+- ❌ If `output/response.md` missing → **Skip field update**, post error comment instead
 - **Prevents data loss** - won't overwrite fields with error messages
 
 **Permissive Mode** (use with caution):
@@ -244,7 +252,7 @@ Controls whether temporary input context folders are cleaned up.
 ```
 
 **What happens on failure**:
-- CLI command fails or doesn't create `outputs/response.md`
+- CLI command fails or doesn't create `output/response.md`
 - Field "Description" is **NOT overwritten**
 - Error comment posted: `@automation, ⚠️ CLI command execution issue: ...`
 - Original field value remains intact ✅
@@ -348,17 +356,68 @@ DO NOT create branches or push - focus on implementation only."
 
 ### Cursor Agent (cursor-agent)
 
-**Shell script** (`cicd/scripts/run-cursor-agent.sh`):
+**POSIX Shell script** (`cicd/scripts/run-cursor-agent.sh`):
 ```bash
 #!/bin/bash
-# Run cursor-agent with workspace access
+# Run cursor-agent with prompt from file
 
-PROMPT="$1"
+# Read prompt from file (passed as first argument)
+PROMPT_FILE="$1"
+
+# Check if argument is a file (backward compatibility)
+if [ -f "$PROMPT_FILE" ]; then
+    # New approach: Read from file
+    PROMPT=$(cat "$PROMPT_FILE")
+else
+    # Old approach: Use argument as prompt directly
+    PROMPT="$1"
+fi
 
 # cursor-agent has access to full workspace via .cursor/workspace.json
 cursor-agent "$PROMPT"
 
 # Output is written to output/response.md by cursor-agent
+```
+
+**Windows cmd.exe script** (`cicd\scripts\run-cursor-agent.bat`):
+```batch
+@echo off
+REM Run cursor-agent with prompt from file
+
+set PROMPT_FILE=%~1
+
+REM Check if file exists (backward compatibility)
+if exist "%PROMPT_FILE%" (
+    REM New approach: Read from file
+    set /p PROMPT=<"%PROMPT_FILE%"
+) else (
+    REM Old approach: Use argument as prompt
+    set PROMPT=%~1
+)
+
+REM Run cursor-agent
+cursor-agent "%PROMPT%"
+```
+
+**Windows PowerShell script** (`cicd/scripts/run-cursor-agent.ps1`):
+```powershell
+# Run cursor-agent with prompt from file
+
+param(
+    [string]$PromptFileOrText
+)
+
+# Check if argument is a file (backward compatibility)
+if (Test-Path $PromptFileOrText -PathType Leaf) {
+    # New approach: Read from file
+    $Prompt = Get-Content $PromptFileOrText -Raw
+} else {
+    # Old approach: Use argument as prompt
+    $Prompt = $PromptFileOrText
+}
+
+# Run cursor-agent
+cursor-agent $Prompt
 ```
 
 **Configuration (old pattern - inline prompt):**
@@ -804,13 +863,13 @@ function action(params) {
 
 ### Output Not Generated (NEW: v1.7.133+ Safety)
 
-**Problem**: No `outputs/response.md` file created, field not updated
+**Problem**: No `output/response.md` file created, field not updated
 
 **Cause**: `requireCliOutputFile: true` (strict mode - default) prevents field updates without output file
 
 **Solution 1** - Fix CLI command to create output file:
 ```bash
-# Ensure CLI creates outputs/response.md
+# Ensure CLI creates output/response.md
 "Write results to output/response.md"  # Add to CLI prompt
 ```
 
@@ -922,6 +981,4 @@ The `cliPrompt` field (introduced in v1.7.130+) separates CLI prompts from comma
 2. Escapes shell special characters
 3. Appends as quoted parameter to each CLI command
 
-**Example**: `./script.sh` becomes `./script.sh "Your prompt content"`
-
-See [Complete Documentation](../../docs/CLIPROMPT_FEATURE.md) for detailed usage and examples.
+**Example**: `./script.sh` becomes `./script.sh "/tmp/dmtools_cli_prompt_12345.txt"`

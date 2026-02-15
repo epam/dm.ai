@@ -79,22 +79,6 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName(SYSTEM_REQUEST_COMMENT_ALIAS)
         private String systemRequestCommentAlias;
 
-        public boolean isRequireCliOutputFile() {
-            return requireCliOutputFile;
-        }
-
-        public void setRequireCliOutputFile(boolean requireCliOutputFile) {
-            this.requireCliOutputFile = requireCliOutputFile;
-        }
-
-        public boolean isCleanupInputFolder() {
-            return cleanupInputFolder;
-        }
-
-        public void setCleanupInputFolder(boolean cleanupInputFolder) {
-            this.cleanupInputFolder = cleanupInputFolder;
-        }
-
     }
 
     /**
@@ -520,7 +504,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     logger.warn("Skipping output processing for ticket {} due to missing CLI output file (requireCliOutputFile=true)",
                                ticket.getKey());
 
-                    // ALWAYS post error comment (for ALL outputType)
+                    // Post error comment (when outputType is not 'none')
                     String errorComment;
                     if (initiator != null && !initiator.isEmpty()) {
                         errorComment = trackerClient.tag(initiator) +

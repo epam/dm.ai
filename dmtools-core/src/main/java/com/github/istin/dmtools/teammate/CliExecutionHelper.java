@@ -27,7 +27,8 @@ public class CliExecutionHelper {
     
     private static final String INPUT_FOLDER_PREFIX = "input";
     private static final String REQUEST_FILE_NAME = "request.md";
-    private static final String OUTPUT_FOLDER = "outputs";
+    private static final String OUTPUT_FOLDER = "output";  // Changed from "outputs" to "output"
+    private static final String OUTPUT_FOLDER_LEGACY = "outputs";  // Backward compatibility
     private static final String RESPONSE_FILE_NAME = "response.md";
     
     /**
@@ -253,38 +254,56 @@ public class CliExecutionHelper {
     }
     
     /**
-     * Processes output response from CLI commands by checking for outputs/response.md file.
-     * 
-     * @return Content of outputs/response.md file if it exists, null otherwise
+     * Processes output response from CLI commands by checking for output/response.md file.
+     * For backward compatibility, also checks outputs/response.md if output/response.md is not found.
+     *
+     * @return Content of output/response.md file if it exists, null otherwise
      */
     public String processOutputResponse() {
         return processOutputResponse(null);
     }
-    
+
     /**
-     * Processes output response from CLI commands by checking for outputs/response.md file
+     * Processes output response from CLI commands by checking for output/response.md file
      * relative to the specified working directory.
-     * 
-     * @param workingDirectory Working directory to look for outputs/response.md file (null for current directory)
-     * @return Content of outputs/response.md file if it exists, null otherwise
+     * For backward compatibility, also checks outputs/response.md if output/response.md is not found.
+     *
+     * @param workingDirectory Working directory to look for output/response.md file (null for current directory)
+     * @return Content of output/response.md file if it exists, null otherwise
      */
     public String processOutputResponse(Path workingDirectory) {
+        // Try new location: output/response.md
         Path outputFilePath;
         if (workingDirectory != null) {
             outputFilePath = workingDirectory.resolve(OUTPUT_FOLDER).resolve(RESPONSE_FILE_NAME);
         } else {
             outputFilePath = Paths.get(OUTPUT_FOLDER, RESPONSE_FILE_NAME);
         }
-        
+
         if (!Files.exists(outputFilePath)) {
             logger.info("No output response file found at: {}", outputFilePath.toAbsolutePath());
-            return null;
+
+            // Backward compatibility: Try legacy location: outputs/response.md
+            Path legacyOutputFilePath;
+            if (workingDirectory != null) {
+                legacyOutputFilePath = workingDirectory.resolve(OUTPUT_FOLDER_LEGACY).resolve(RESPONSE_FILE_NAME);
+            } else {
+                legacyOutputFilePath = Paths.get(OUTPUT_FOLDER_LEGACY, RESPONSE_FILE_NAME);
+            }
+
+            if (Files.exists(legacyOutputFilePath)) {
+                logger.info("Found output response file at legacy location: {}", legacyOutputFilePath.toAbsolutePath());
+                outputFilePath = legacyOutputFilePath;
+            } else {
+                logger.info("No output response file found at legacy location: {}", legacyOutputFilePath.toAbsolutePath());
+                return null;
+            }
         }
-        
+
         try {
             String content = Files.readString(outputFilePath, StandardCharsets.UTF_8);
             if (content != null && !content.trim().isEmpty()) {
-                logger.info("Read output response file: {} ({} bytes)", 
+                logger.info("Read output response file: {} ({} bytes)",
                            outputFilePath.toAbsolutePath(), content.length());
                 return content;
             } else {
@@ -292,7 +311,7 @@ public class CliExecutionHelper {
                 return null;
             }
         } catch (IOException e) {
-            logger.error("Failed to read output response file {}: {}", 
+            logger.error("Failed to read output response file {}: {}",
                         outputFilePath.toAbsolutePath(), e.getMessage());
             return null;
         }
@@ -318,11 +337,21 @@ public class CliExecutionHelper {
     }
     
     /**
-     * Appends processed prompt to each CLI command as a shell-escaped parameter.
+     * Appends processed prompt to each CLI command via temporary file.
+     * Creates a temporary file with prompt content and passes file path as parameter.
+     * This approach is cross-platform compatible (Windows cmd.exe, POSIX shells, PowerShell).
+     *
+     * CLI scripts can read the prompt from file:
+     * - POSIX: PROMPT=$(cat "$1")
+     * - Windows cmd: set /p PROMPT=<"%~1"
+     * - Windows PowerShell: $PROMPT = Get-Content $args[0]
+     *
+     * Or check if argument is a file and fallback to direct string (backward compatibility):
+     * - if [ -f "$1" ]; then PROMPT=$(cat "$1"); else PROMPT="$1"; fi
      *
      * @param commands Original CLI commands array
      * @param prompt Processed prompt content to append
-     * @return New array with prompt appended to each command
+     * @return New array with prompt file path appended to each command
      */
     public static String[] appendPromptToCommands(String[] commands, String prompt) {
         if (commands == null || commands.length == 0) {
@@ -333,24 +362,38 @@ public class CliExecutionHelper {
             return commands;
         }
 
-        // Escape prompt for shell: replace " with \" and wrap in quotes
-        String escapedPrompt = prompt.replace("\\", "\\\\")  // Escape backslashes first
-                                      .replace("\"", "\\\"")   // Escape double quotes
-                                      .replace("$", "\\$")     // Escape dollar signs
-                                      .replace("`", "\\`");    // Escape backticks
+        try {
+            // Create temporary file with prompt content
+            // Use system temp directory to avoid conflicts with input/ folder
+            File promptFile = File.createTempFile("dmtools_cli_prompt_", ".txt");
+            promptFile.deleteOnExit();  // Auto-cleanup on JVM exit
 
-        String[] modifiedCommands = new String[commands.length];
-        for (int i = 0; i < commands.length; i++) {
-            String command = commands[i];
-            if (command != null && !command.trim().isEmpty()) {
-                // Append escaped prompt as quoted parameter
-                modifiedCommands[i] = command + " \"" + escapedPrompt + "\"";
-            } else {
-                modifiedCommands[i] = command;
+            // Write prompt to file with UTF-8 encoding
+            Files.write(promptFile.toPath(), prompt.getBytes(StandardCharsets.UTF_8));
+
+            logger.info("Created temporary prompt file: {} ({} bytes)",
+                       promptFile.getAbsolutePath(), prompt.length());
+
+            // Append prompt file path as parameter to each command
+            String[] modifiedCommands = new String[commands.length];
+            for (int i = 0; i < commands.length; i++) {
+                String command = commands[i];
+                if (command != null && !command.trim().isEmpty()) {
+                    // Pass file path as quoted parameter (works on all platforms)
+                    modifiedCommands[i] = command + " \"" + promptFile.getAbsolutePath() + "\"";
+                } else {
+                    modifiedCommands[i] = command;
+                }
             }
-        }
 
-        return modifiedCommands;
+            return modifiedCommands;
+
+        } catch (IOException e) {
+            logger.error("Failed to create temporary prompt file: {}", e.getMessage());
+            logger.warn("Falling back to original commands without prompt appended");
+            // Fallback to original commands without prompt (safer than trying to escape)
+            return commands;
+        }
     }
 
     /**

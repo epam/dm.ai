@@ -236,40 +236,78 @@ public class CliExecutionHelperTest {
     
     @Test
     void testProcessOutputResponse_FileExists() throws IOException {
-        // Arrange
-        Path outputDir = tempDir.resolve("outputs");
+        // Arrange - use new "output" folder
+        Path outputDir = tempDir.resolve("output");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String expectedContent = "CLI response content";
         Files.write(responseFile, expectedContent.getBytes(StandardCharsets.UTF_8));
-        
+
         // Act
         String result = cliHelper.processOutputResponse(tempDir);
-        
+
         // Assert
         assertEquals(expectedContent, result);
     }
-    
+
     @Test
-    void testProcessOutputResponse_FileNotExists() {
-        // Act - test with a directory that doesn't have outputs/response.md
-        String result = cliHelper.processOutputResponse(tempDir);
-        
-        // Assert
-        assertNull(result);
-    }
-    
-    @Test
-    void testProcessOutputResponse_EmptyFile() throws IOException {
-        // Arrange
+    void testProcessOutputResponse_LegacyFolder() throws IOException {
+        // Arrange - test backward compatibility with "outputs" folder
         Path outputDir = tempDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
-        Files.write(responseFile, "".getBytes(StandardCharsets.UTF_8));
-        
+        String expectedContent = "Legacy CLI response content";
+        Files.write(responseFile, expectedContent.getBytes(StandardCharsets.UTF_8));
+
         // Act
         String result = cliHelper.processOutputResponse(tempDir);
-        
+
+        // Assert
+        assertEquals(expectedContent, result, "Should support legacy 'outputs/' folder for backward compatibility");
+    }
+
+    @Test
+    void testProcessOutputResponse_PreferNewOverLegacy() throws IOException {
+        // Arrange - both folders exist, new should take precedence
+        Path newOutputDir = tempDir.resolve("output");
+        Files.createDirectories(newOutputDir);
+        Path newResponseFile = newOutputDir.resolve("response.md");
+        String newContent = "New output folder content";
+        Files.write(newResponseFile, newContent.getBytes(StandardCharsets.UTF_8));
+
+        Path legacyOutputDir = tempDir.resolve("outputs");
+        Files.createDirectories(legacyOutputDir);
+        Path legacyResponseFile = legacyOutputDir.resolve("response.md");
+        String legacyContent = "Legacy outputs folder content";
+        Files.write(legacyResponseFile, legacyContent.getBytes(StandardCharsets.UTF_8));
+
+        // Act
+        String result = cliHelper.processOutputResponse(tempDir);
+
+        // Assert
+        assertEquals(newContent, result, "Should prefer new 'output/' folder over legacy 'outputs/' folder");
+    }
+
+    @Test
+    void testProcessOutputResponse_FileNotExists() {
+        // Act - test with a directory that doesn't have output/response.md
+        String result = cliHelper.processOutputResponse(tempDir);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    void testProcessOutputResponse_EmptyFile() throws IOException {
+        // Arrange - use new "output" folder
+        Path outputDir = tempDir.resolve("output");
+        Files.createDirectories(outputDir);
+        Path responseFile = outputDir.resolve("response.md");
+        Files.write(responseFile, "".getBytes(StandardCharsets.UTF_8));
+
+        // Act
+        String result = cliHelper.processOutputResponse(tempDir);
+
         // Assert
         assertNull(result);
     }
@@ -349,16 +387,16 @@ public class CliExecutionHelperTest {
             assertNotNull(result);
             assertTrue(result.getCommandResponses().toString().contains("hello"));
             assertTrue(result.getCommandResponses().toString().contains("world"));
-            assertFalse(result.hasOutputResponse()); // No outputs/response.md file created
+            assertFalse(result.hasOutputResponse()); // No output/response.md file created
             assertNull(result.getOutputResponse());
         }
     }
-    
+
     @Test
     void testExecuteCliCommandsWithResult_WithOutputFile() throws IOException {
         // Arrange
         Path workingDir = Files.createTempDirectory(tempDir, "working");
-        Path outputDir = workingDir.resolve("outputs");
+        Path outputDir = workingDir.resolve("output");  // Changed from "outputs" to "output"
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String outputContent = "CLI generated response content";
@@ -414,7 +452,7 @@ public class CliExecutionHelperTest {
     // ========================================================================
 
     @Test
-    void testAppendPromptToCommands_PlainText() {
+    void testAppendPromptToCommands_PlainText() throws IOException {
         String[] commands = {"echo", "./script.sh"};
         String prompt = "This is a test prompt";
 
@@ -422,8 +460,25 @@ public class CliExecutionHelperTest {
 
         assertNotNull(result);
         assertEquals(2, result.length);
-        assertEquals("echo \"This is a test prompt\"", result[0]);
-        assertEquals("./script.sh \"This is a test prompt\"", result[1]);
+
+        // Both commands should have file path appended
+        assertTrue(result[0].startsWith("echo \""));
+        assertTrue(result[0].endsWith("\""));
+        assertTrue(result[1].startsWith("./script.sh \""));
+        assertTrue(result[1].endsWith("\""));
+
+        // Extract file path from first command
+        String filePath = result[0].substring("echo \"".length(), result[0].length() - 1);
+        File promptFile = new File(filePath);
+
+        // Verify file exists and contains correct content
+        assertTrue(promptFile.exists(), "Temporary prompt file should exist");
+        String fileContent = Files.readString(promptFile.toPath(), StandardCharsets.UTF_8);
+        assertEquals(prompt, fileContent, "File should contain the prompt");
+
+        // Both commands should reference the same file
+        String filePath2 = result[1].substring("./script.sh \"".length(), result[1].length() - 1);
+        assertEquals(filePath, filePath2, "Both commands should use same prompt file");
     }
 
     @Test
@@ -481,55 +536,8 @@ public class CliExecutionHelperTest {
     }
 
     @Test
-    void testAppendPromptToCommands_EscapeDoubleQuotes() {
-        String[] commands = {"echo"};
-        String prompt = "Test \"quoted\" text";
-
-        String[] result = CliExecutionHelper.appendPromptToCommands(commands, prompt);
-
-        assertNotNull(result);
-        assertEquals(1, result.length);
-        assertEquals("echo \"Test \\\"quoted\\\" text\"", result[0]);
-    }
-
-    @Test
-    void testAppendPromptToCommands_EscapeDollarSigns() {
-        String[] commands = {"echo"};
-        String prompt = "Price is $100";
-
-        String[] result = CliExecutionHelper.appendPromptToCommands(commands, prompt);
-
-        assertNotNull(result);
-        assertEquals(1, result.length);
-        assertEquals("echo \"Price is \\$100\"", result[0]);
-    }
-
-    @Test
-    void testAppendPromptToCommands_EscapeBackticks() {
-        String[] commands = {"echo"};
-        String prompt = "Run `ls -la` here";
-
-        String[] result = CliExecutionHelper.appendPromptToCommands(commands, prompt);
-
-        assertNotNull(result);
-        assertEquals(1, result.length);
-        assertEquals("echo \"Run \\`ls -la\\` here\"", result[0]);
-    }
-
-    @Test
-    void testAppendPromptToCommands_EscapeBackslashes() {
-        String[] commands = {"echo"};
-        String prompt = "Path: C:\\Users\\test";
-
-        String[] result = CliExecutionHelper.appendPromptToCommands(commands, prompt);
-
-        assertNotNull(result);
-        assertEquals(1, result.length);
-        assertEquals("echo \"Path: C:\\\\Users\\\\test\"", result[0]);
-    }
-
-    @Test
-    void testAppendPromptToCommands_EscapeMultipleSpecialChars() {
+    void testAppendPromptToCommands_SpecialCharsInPrompt() throws IOException {
+        // Test that special characters are handled correctly via file (no escaping needed)
         String[] commands = {"./script.sh"};
         String prompt = "Text with \"quotes\", $vars, `commands`, and \\backslashes";
 
@@ -537,11 +545,40 @@ public class CliExecutionHelperTest {
 
         assertNotNull(result);
         assertEquals(1, result.length);
-        assertEquals("./script.sh \"Text with \\\"quotes\\\", \\$vars, \\`commands\\`, and \\\\backslashes\"", result[0]);
+
+        // Extract file path
+        String filePath = result[0].substring("./script.sh \"".length(), result[0].length() - 1);
+        File promptFile = new File(filePath);
+
+        // Verify file contains exact prompt (no escaping needed!)
+        assertTrue(promptFile.exists());
+        String fileContent = Files.readString(promptFile.toPath(), StandardCharsets.UTF_8);
+        assertEquals(prompt, fileContent, "File should contain prompt exactly as-is (no escaping)");
     }
 
     @Test
-    void testAppendPromptToCommands_MultipleCommands() {
+    void testAppendPromptToCommands_WindowsPathInPrompt() throws IOException {
+        // Test Windows-style paths in prompt (backslashes)
+        String[] commands = {"echo"};
+        String prompt = "Path: C:\\Users\\test\\Documents";
+
+        String[] result = CliExecutionHelper.appendPromptToCommands(commands, prompt);
+
+        assertNotNull(result);
+        assertEquals(1, result.length);
+
+        // Extract file path
+        String filePath = result[0].substring("echo \"".length(), result[0].length() - 1);
+        File promptFile = new File(filePath);
+
+        // Verify file contains exact Windows path (no escaping)
+        assertTrue(promptFile.exists());
+        String fileContent = Files.readString(promptFile.toPath(), StandardCharsets.UTF_8);
+        assertEquals(prompt, fileContent);
+    }
+
+    @Test
+    void testAppendPromptToCommands_MultipleCommands() throws IOException {
         String[] commands = {
             "./script1.sh",
             "python script2.py",
@@ -553,9 +590,25 @@ public class CliExecutionHelperTest {
 
         assertNotNull(result);
         assertEquals(3, result.length);
-        assertEquals("./script1.sh \"Execute with this prompt\"", result[0]);
-        assertEquals("python script2.py \"Execute with this prompt\"", result[1]);
-        assertEquals("node script3.js \"Execute with this prompt\"", result[2]);
+
+        // All commands should have same file path appended
+        assertTrue(result[0].startsWith("./script1.sh \""));
+        assertTrue(result[1].startsWith("python script2.py \""));
+        assertTrue(result[2].startsWith("node script3.js \""));
+
+        // Extract and verify all use same file
+        String filePath1 = result[0].substring("./script1.sh \"".length(), result[0].length() - 1);
+        String filePath2 = result[1].substring("python script2.py \"".length(), result[1].length() - 1);
+        String filePath3 = result[2].substring("node script3.js \"".length(), result[2].length() - 1);
+
+        assertEquals(filePath1, filePath2);
+        assertEquals(filePath1, filePath3);
+
+        // Verify file content
+        File promptFile = new File(filePath1);
+        assertTrue(promptFile.exists());
+        String fileContent = Files.readString(promptFile.toPath(), StandardCharsets.UTF_8);
+        assertEquals(prompt, fileContent);
     }
 
     @Test
@@ -567,9 +620,9 @@ public class CliExecutionHelperTest {
 
         assertNotNull(result);
         assertEquals(3, result.length);
-        assertEquals("echo \"Test prompt\"", result[0]);
-        assertNull(result[1]);
-        assertEquals("./script.sh \"Test prompt\"", result[2]);
+        assertTrue(result[0].startsWith("echo \""));
+        assertNull(result[1], "Null command element should remain null");
+        assertTrue(result[2].startsWith("./script.sh \""));
     }
 
     @Test
@@ -581,21 +634,21 @@ public class CliExecutionHelperTest {
 
         assertNotNull(result);
         assertEquals(3, result.length);
-        assertEquals("echo \"Test prompt\"", result[0]);
-        assertEquals("", result[1]);
-        assertEquals("./script.sh \"Test prompt\"", result[2]);
+        assertTrue(result[0].startsWith("echo \""));
+        assertEquals("", result[1], "Empty command element should remain empty");
+        assertTrue(result[2].startsWith("./script.sh \""));
     }
 
     @Test
-    void testAppendPromptToCommands_LongPrompt() {
+    void testAppendPromptToCommands_LongPrompt() throws IOException {
         String[] commands = {"echo"};
-        // Create a 5000 character prompt
+        // Create a 10000 character prompt (no problem with temp file approach!)
         StringBuilder longPrompt = new StringBuilder();
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < 1000; i++) {
             longPrompt.append("This is a long prompt text. ");
         }
         String prompt = longPrompt.toString();
-        assertTrue(prompt.length() > 5000, "Prompt should be over 5000 chars");
+        assertTrue(prompt.length() > 10000, "Prompt should be over 10000 chars");
 
         String[] result = CliExecutionHelper.appendPromptToCommands(commands, prompt);
 
@@ -603,7 +656,15 @@ public class CliExecutionHelperTest {
         assertEquals(1, result.length);
         assertTrue(result[0].startsWith("echo \""));
         assertTrue(result[0].endsWith("\""));
-        assertTrue(result[0].contains("This is a long prompt text."));
+
+        // Extract file path and verify full content is in file
+        String filePath = result[0].substring("echo \"".length(), result[0].length() - 1);
+        File promptFile = new File(filePath);
+        assertTrue(promptFile.exists());
+
+        String fileContent = Files.readString(promptFile.toPath(), StandardCharsets.UTF_8);
+        assertEquals(prompt, fileContent, "File should contain entire long prompt");
+        assertTrue(fileContent.length() > 10000, "File content should be over 10000 chars");
     }
 
     @Test

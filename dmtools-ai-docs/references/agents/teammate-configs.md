@@ -122,7 +122,7 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 | `cliPrompt` | String | - | Prompt for CLI agent (supports plain text, file paths, Confluence URLs) | `"Implement from input/"`, `"./prompts/dev.md"`, `"https://..."` |
 | `cliCommands` | Array | - | CLI commands to execute | `["./cicd/scripts/run-cursor-agent.sh"]` |
 | `skipAIProcessing` | Boolean | `false` | Skip AI processing when using CLI agents | `true` |
-| `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133**: Require `outputs/response.md` before updating fields (strict mode prevents data loss) | `true` (recommended) |
+| `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133**: Require `output/response.md` before updating fields (strict mode prevents data loss) | `true` (recommended) |
 | `cleanupInputFolder` | Boolean | `true` | **NEW v1.7.133**: Cleanup `input/[TICKET-KEY]/` folder after execution | `false` (for debugging) |
 
 **Example with `cliPrompt` field:**
@@ -164,7 +164,7 @@ See [CLI Integration Guide](cli-integration.md) for complete documentation.
 
 #### CLI Output Safety (v1.7.133+)
 
-**Problem**: When CLI commands fail or don't create `outputs/response.md`, the system could overwrite critical fields with error messages.
+**Problem**: When CLI commands fail or don't create `output/response.md`, the system could overwrite critical fields with error messages.
 
 **Solution**: Two new safety parameters control CLI output handling:
 
@@ -180,8 +180,8 @@ See [CLI Integration Guide](cli-integration.md) for complete documentation.
 ```
 
 **Behavior**:
-- ✅ If `outputs/response.md` exists → Process normally (update field/post comment/create ticket)
-- ❌ If `outputs/response.md` missing → **Skip field update**, post error comment instead
+- ✅ If `output/response.md` exists → Process normally (update field/post comment/create ticket)
+- ❌ If `output/response.md` missing → **Skip field update**, post error comment instead
 - **Protects against data loss** - won't overwrite fields with error messages
 
 **Permissive Mode** (use with caution):
