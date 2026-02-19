@@ -63,7 +63,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
     private final Map<String, Integer> projectIdCache = new HashMap<>();
     private final Map<Integer, Integer> defaultSectionCache = new HashMap<>();
 
-    public static TrackerClient<? extends ITicket> getInstance() throws IOException {
+    public static synchronized TrackerClient<? extends ITicket> getInstance() throws IOException {
         if (instance == null) {
             if (BASE_PATH == null || BASE_PATH.isEmpty()) {
                 logger.debug("TestRail configuration not found. Set TESTRAIL_BASE_PATH, TESTRAIL_USERNAME, and TESTRAIL_API_KEY.");
@@ -117,7 +117,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
 
     private void log(String message) {
         if (isLogEnabled) {
-            logger.info(message);
+            logger.info(sanitizeUrl(message));
         }
     }
 
