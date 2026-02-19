@@ -422,6 +422,115 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
     }
 
     @MCPTool(
+            name = "testrail_create_case_steps",
+            description = "Create a TestRail test case using the 'Test Case (Steps)' template (template_id=2). " +
+                    "Steps are provided as a JSON array: [{\"content\":\"step text\",\"expected\":\"expected result\"}, ...]. " +
+                    "Markdown tables in step content or expected are auto-converted to HTML tables. " +
+                    "Use testrail_get_case_types for type_id, testrail_get_labels for label_ids.",
+            integration = "testrail",
+            category = "test_cases"
+    )
+    public String createCaseSteps(
+            @MCPParam(name = "project_name", description = "Project name", required = true, example = "My Project")
+            String projectName,
+            @MCPParam(name = "title", description = "Test case title/summary", required = true, example = "Verify login functionality")
+            String title,
+            @MCPParam(name = "preconditions", description = "Preconditions text (optional)", required = false, example = "User is logged out")
+            String preconditions,
+            @MCPParam(name = "steps_json", description = "JSON array of step objects: [{\"content\":\"step\",\"expected\":\"result\"}, ...]. Markdown tables are auto-converted to HTML.", required = true, example = "[{\"content\":\"Open login page\",\"expected\":\"Login form is displayed\"},{\"content\":\"Enter credentials\",\"expected\":\"Fields populated\"}]")
+            String stepsJson,
+            @MCPParam(name = "priority_id", description = "Priority ID: 1=Low, 2=Medium, 3=High, 4=Critical (optional, default=2)", required = false, example = "3")
+            String priorityId,
+            @MCPParam(name = "type_id", description = "Case type ID (optional). Use testrail_get_case_types to get available types.", required = false, example = "1")
+            String typeId,
+            @MCPParam(name = "refs", description = "Reference to requirement (e.g., JIRA key)", required = false, example = "PROJ-123")
+            String refs,
+            @MCPParam(name = "label_ids", description = "Comma-separated label IDs (optional). Use testrail_get_labels to find IDs.", required = false, example = "7,8")
+            String labelIds
+    ) throws IOException {
+        int projectId = getProjectId(projectName);
+        int sectionId = getDefaultSectionId(projectId);
+
+        JSONObject caseData = new JSONObject();
+        caseData.put("title", title);
+        caseData.put("template_id", 2); // Test Case (Steps) template
+
+        // Set preconditions (convert Markdown tables to HTML for Steps template)
+        if (preconditions != null && !preconditions.isEmpty()) {
+            caseData.put("custom_preconds", convertMarkdownTablesToHtml(preconditions));
+        }
+
+        // Parse and set steps
+        try {
+            JSONArray inputSteps = new JSONArray(stepsJson);
+            JSONArray stepsSeparated = new JSONArray();
+            for (int i = 0; i < inputSteps.length(); i++) {
+                JSONObject inputStep = inputSteps.getJSONObject(i);
+                JSONObject step = new JSONObject();
+                step.put("content", convertMarkdownTablesToHtml(inputStep.optString("content", "")));
+                step.put("expected", convertMarkdownTablesToHtml(inputStep.optString("expected", "")));
+                step.put("additional_info", inputStep.optString("additional_info", ""));
+                step.put("refs", inputStep.optString("refs", ""));
+                step.put("markdown_editor_id", 1);
+                stepsSeparated.put(step);
+            }
+            caseData.put("custom_steps_separated", stepsSeparated);
+        } catch (Exception e) {
+            throw new IOException("Invalid steps_json format. Expected JSON array: [{\"content\":\"...\",\"expected\":\"...\"}, ...]", e);
+        }
+
+        // Set priority
+        if (priorityId != null && !priorityId.isEmpty()) {
+            try {
+                caseData.put("priority_id", Integer.parseInt(priorityId));
+            } catch (NumberFormatException e) {
+                caseData.put("priority_id", 2);
+            }
+        } else {
+            caseData.put("priority_id", 2);
+        }
+
+        // Set type
+        if (typeId != null && !typeId.isEmpty()) {
+            try {
+                caseData.put("type_id", Integer.parseInt(typeId));
+            } catch (NumberFormatException e) {
+                log("Invalid type_id: " + typeId);
+            }
+        }
+
+        // Set refs
+        if (refs != null && !refs.isEmpty()) {
+            caseData.put("refs", refs);
+        }
+
+        // Set labels
+        if (labelIds != null && !labelIds.isEmpty()) {
+            String[] ids = labelIds.split(",");
+            JSONArray labelsArray = new JSONArray();
+            for (String id : ids) {
+                try {
+                    labelsArray.put(Integer.parseInt(id.trim()));
+                } catch (NumberFormatException e) {
+                    log("Invalid label ID: " + id);
+                }
+            }
+            if (labelsArray.length() > 0) {
+                caseData.put("labels", labelsArray);
+            }
+        }
+
+        GenericRequest request = new GenericRequest(this, path("/add_case/" + sectionId));
+        request.setBody(caseData.toString());
+        String response = request.post();
+
+        JSONObject responseObj = new JSONObject(response);
+        Integer caseId = responseObj.optInt("id");
+        log("Created steps test case: C" + caseId);
+        return response;
+    }
+
+    @MCPTool(
             name = "testrail_update_case",
             description = "Update a test case in TestRail",
             integration = "testrail",
@@ -1110,5 +1219,121 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         }
 
         return result.toString();
+    }
+
+    /**
+     * Converts Markdown tables to HTML table format for use in TestRail Steps template.
+     * <p>
+     * The Steps template (template_id=2) stores content as HTML, so all content must be
+     * properly wrapped: plain text in {@code <p>} tags, tables as
+     * {@code <table><thead>...</thead><tbody>...</tbody></table>}.
+     * <p>
+     * Markdown format:
+     * <pre>
+     * Some text
+     * | Col 1 | Col 2 |
+     * |-------|-------|
+     * | val1  | val2  |
+     * </pre>
+     * <p>
+     * HTML output:
+     * <pre>
+     * &lt;p&gt;Some text&lt;/p&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Col 1&lt;/th&gt;...&lt;/tr&gt;&lt;/thead&gt;
+     * &lt;tbody&gt;&lt;tr&gt;&lt;td&gt;val1&lt;/td&gt;...&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;
+     * </pre>
+     */
+    static String convertMarkdownTablesToHtml(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        String[] lines = text.split("\n");
+        StringBuilder result = new StringBuilder();
+        List<String> pendingTextLines = new ArrayList<>();
+        int i = 0;
+
+        while (i < lines.length) {
+            String line = lines[i].trim();
+
+            if (isMarkdownTableRow(line)) {
+                // Flush pending text as <p> paragraphs before the table
+                for (String textLine : pendingTextLines) {
+                    if (!textLine.isEmpty()) {
+                        result.append("<p>").append(textLine).append("</p>");
+                    }
+                }
+                pendingTextLines.clear();
+
+                // Collect contiguous table rows
+                List<String> tableLines = new ArrayList<>();
+                while (i < lines.length && isMarkdownTableRow(lines[i].trim())) {
+                    tableLines.add(lines[i].trim());
+                    i++;
+                }
+                result.append(convertSingleMarkdownTableToHtml(tableLines));
+            } else {
+                pendingTextLines.add(line);
+                i++;
+            }
+        }
+
+        // Flush remaining text as <p> paragraphs
+        for (String textLine : pendingTextLines) {
+            if (!textLine.isEmpty()) {
+                result.append("<p>").append(textLine).append("</p>");
+            }
+        }
+
+        return result.toString();
+    }
+
+    private static String convertSingleMarkdownTableToHtml(List<String> tableLines) {
+        if (tableLines.isEmpty()) {
+            return "";
+        }
+
+        List<List<String>> parsedRows = new ArrayList<>();
+        for (String line : tableLines) {
+            // Skip separator rows
+            if (line.matches("\\|[\\s\\-:|]+\\|")) {
+                continue;
+            }
+            String[] cells = line.split("\\|");
+            List<String> cleanCells = new ArrayList<>();
+            for (String cell : cells) {
+                String trimmed = cell.trim();
+                if (!trimmed.isEmpty()) {
+                    cleanCells.add(trimmed);
+                }
+            }
+            if (!cleanCells.isEmpty()) {
+                parsedRows.add(cleanCells);
+            }
+        }
+
+        if (parsedRows.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder html = new StringBuilder("<table>");
+
+        // First row → <thead>
+        html.append("<thead><tr>");
+        for (String cell : parsedRows.get(0)) {
+            html.append("<th>").append(cell).append("</th>");
+        }
+        html.append("</tr></thead>");
+
+        // Remaining rows → <tbody>
+        html.append("<tbody>");
+        for (int i = 1; i < parsedRows.size(); i++) {
+            html.append("<tr>");
+            for (String cell : parsedRows.get(i)) {
+                html.append("<td>").append(cell).append("</td>");
+            }
+            html.append("</tr>");
+        }
+        html.append("</tbody></table>");
+        return html.toString();
     }
 }

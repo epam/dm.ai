@@ -1,6 +1,7 @@
 package com.github.istin.dmtools.testrail;
 
 import com.github.istin.dmtools.testrail.model.TestCase;
+import com.github.istin.dmtools.testrail.model.TestCaseFields;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeAll;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -225,5 +227,85 @@ public class TestRailFullFeaturedTest {
 
         assertTrue(typeId > 0, "Type ID should be positive");
         System.out.println("✓ Type ID " + typeId + " set for new case");
+    }
+
+    @Test
+    public void testCreateCaseStepsTemplate() throws IOException {
+        long timestamp = System.currentTimeMillis();
+
+        // Build steps JSON with text steps and one step containing a Markdown table
+        String stepsJson = "[\n" +
+                "  {\"content\": \"Open the login page at https://example.com/login\", " +
+                "   \"expected\": \"Login form is displayed with username, password fields and Login button\"},\n" +
+                "  {\"content\": \"Enter credentials from the table below:\\n" +
+                "| Account Type | Username | Password |\\n" +
+                "|-------------|----------|----------|\\n" +
+                "| Admin | admin@test.com | Admin123! |\\n" +
+                "| User | user@test.com | User456! |\", " +
+                "   \"expected\": \"Credentials are entered in the respective fields\"},\n" +
+                "  {\"content\": \"Click the Login button\", " +
+                "   \"expected\": \"User is redirected to dashboard. Role matches the account type used.\"}\n" +
+                "]";
+
+        String response = client.createCaseSteps(
+                PROJECT_NAME,
+                "Steps Template - Login Verification - " + timestamp,
+                "User is logged out and on the home page",
+                stepsJson,
+                "3",         // High priority
+                "7",         // Other type
+                "STEPS-TEST-" + timestamp,
+                "7,8"        // Labels: Login, Manual
+        );
+
+        assertNotNull(response);
+        JSONObject responseObj = new JSONObject(response);
+        int caseId = responseObj.getInt("id");
+        assertTrue(caseId > 0, "Case ID should be positive");
+
+        // Verify template
+        assertEquals(2, responseObj.getInt("template_id"), "Should use Steps template (template_id=2)");
+        assertEquals(3, responseObj.getInt("priority_id"), "Priority should be High");
+        assertEquals(7, responseObj.getInt("type_id"), "Type should match");
+
+        // Verify labels
+        JSONArray labels = responseObj.optJSONArray("labels");
+        assertNotNull(labels);
+        assertEquals(2, labels.length(), "Should have 2 labels");
+
+        // GET the case to verify steps were saved
+        TestCase verifyCase = client.getCase(String.valueOf(caseId));
+        assertNotNull(verifyCase);
+
+        // Verify preconditions
+        String savedPreconds = verifyCase.getString("custom_preconds");
+        assertNotNull(savedPreconds);
+        assertTrue(savedPreconds.contains("logged out"), "Preconditions should be saved");
+
+        // Verify steps_separated
+        List<TestCaseFields.TestStep> savedSteps = verifyCase.getTestCaseFields().getCustomStepsSeparated();
+        assertNotNull(savedSteps);
+        assertEquals(3, savedSteps.size(), "Should have 3 steps");
+
+        // Step 1: plain text
+        TestCaseFields.TestStep step1 = savedSteps.get(0);
+        assertTrue(step1.getContent().contains("login page"), "Step 1 content");
+        assertTrue(step1.getExpected().contains("Login form"), "Step 1 expected");
+
+        // Step 2: should contain table (converted to HTML)
+        TestCaseFields.TestStep step2 = savedSteps.get(1);
+        String step2Content = step2.getContent();
+        assertTrue(step2Content.contains("table") || step2Content.contains("admin@test.com"),
+                "Step 2 should contain table or table data: " + step2Content.substring(0, Math.min(300, step2Content.length())));
+
+        // Step 3: plain text
+        TestCaseFields.TestStep step3 = savedSteps.get(2);
+        assertTrue(step3.getContent().contains("Login button"), "Step 3 content");
+
+        System.out.println("✓ Steps template case created: C" + caseId);
+        System.out.println("✓ template_id=2, priority=3, labels=" + labels.length());
+        System.out.println("✓ Steps count: " + savedSteps.size());
+        System.out.println("✓ Step 2 (table) content: " + step2Content.substring(0, Math.min(200, step2Content.length())));
+        System.out.println("View at: " + TestRailClient.BASE_PATH + "/index.php?/cases/view/" + caseId);
     }
 }

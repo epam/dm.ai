@@ -431,6 +431,64 @@ public class TestRailClientTest {
         assertTrue(result.contains("||a|b|c"));
     }
 
+    // ========== Markdown Table to HTML Conversion Tests ==========
+
+    @Test
+    public void testConvertMarkdownTableToHtml() {
+        String markdown =
+                "| Col 1 | Col 2 | Col 3 |\n" +
+                "|-------|-------|-------|\n" +
+                "| val1  | val2  | val3  |\n" +
+                "| val4  | val5  | val6  |";
+
+        String result = TestRailClient.convertMarkdownTablesToHtml(markdown);
+
+        assertTrue(result.contains("<table>"));
+        assertTrue(result.contains("</table>"));
+        // Header row in <thead>
+        assertTrue(result.contains("<thead>"));
+        assertTrue(result.contains("<th>Col 1</th>"));
+        assertTrue(result.contains("<th>Col 2</th>"));
+        // Data rows in <tbody>
+        assertTrue(result.contains("<tbody>"));
+        assertTrue(result.contains("<td>val1</td>"));
+        assertTrue(result.contains("<td>val4</td>"));
+        // Should not contain Markdown syntax
+        assertFalse(result.contains("|----"));
+        assertFalse(result.contains("| Col 1 |"));
+    }
+
+    @Test
+    public void testConvertMarkdownTableToHtmlWithSurroundingText() {
+        String markdown =
+                "Open the page.\n\n" +
+                "| User | Role |\n" +
+                "|------|------|\n" +
+                "| admin | Admin |\n\n" +
+                "Click login.";
+
+        String result = TestRailClient.convertMarkdownTablesToHtml(markdown);
+
+        assertTrue(result.contains("Open the page."));
+        assertTrue(result.contains("Click login."));
+        assertTrue(result.contains("<table>"));
+        assertTrue(result.contains("<th>User</th>"));
+        assertTrue(result.contains("<td>admin</td>"));
+    }
+
+    @Test
+    public void testConvertMarkdownTableToHtmlNullAndEmpty() {
+        assertNull(TestRailClient.convertMarkdownTablesToHtml(null));
+        assertEquals("", TestRailClient.convertMarkdownTablesToHtml(""));
+    }
+
+    @Test
+    public void testConvertMarkdownTableToHtmlNoTable() {
+        String text = "Just plain step text\nWith multiple lines";
+        String result = TestRailClient.convertMarkdownTablesToHtml(text);
+        assertEquals("<p>Just plain step text</p><p>With multiple lines</p>", result);
+    }
+
     // ========== MCP Tools Method Existence Tests ==========
 
     @Test
@@ -451,5 +509,12 @@ public class TestRailClientTest {
     @Test
     public void testGetCaseTypesMethodExists() throws Exception {
         assertNotNull(TestRailClient.class.getMethod("getCaseTypes"));
+    }
+
+    @Test
+    public void testCreateCaseStepsMethodExists() throws Exception {
+        assertNotNull(TestRailClient.class.getMethod("createCaseSteps",
+                String.class, String.class, String.class, String.class,
+                String.class, String.class, String.class, String.class));
     }
 }

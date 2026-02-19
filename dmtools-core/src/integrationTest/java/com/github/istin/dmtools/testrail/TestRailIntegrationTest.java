@@ -1,6 +1,9 @@
 package com.github.istin.dmtools.testrail;
 
 import com.github.istin.dmtools.testrail.model.TestCase;
+import com.github.istin.dmtools.testrail.model.TestCaseFields;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -136,6 +139,41 @@ public class TestRailIntegrationTest {
         assertTrue(response.contains("custom_preconds"), "Should have preconditions");
         assertTrue(response.contains("custom_steps"), "Should have steps");
         assertTrue(response.contains("custom_expected"), "Should have expected results");
+    }
+
+    @Test
+    public void testCreateCaseSteps() throws IOException {
+        long ts = System.currentTimeMillis();
+        String stepsJson = "[" +
+                "{\"content\":\"Open the application\",\"expected\":\"App loads successfully\"}," +
+                "{\"content\":\"Navigate to settings page\",\"expected\":\"Settings page is displayed with all options\"}," +
+                "{\"content\":\"Update username to %NewName%\",\"expected\":\"Username updated and confirmation message shown\"}" +
+                "]";
+
+        String response = client.createCaseSteps(
+                PROJECT_NAME,
+                "Steps Template - Integration Test - " + ts,
+                "User is logged in",
+                stepsJson,
+                "3",    // High priority
+                null,   // type_id - use default
+                "STEPS-INTEG-" + ts,
+                null    // label_ids
+        );
+
+        assertNotNull(response);
+        JSONObject responseObj = new JSONObject(response);
+        int caseId = responseObj.getInt("id");
+        assertTrue(caseId > 0, "Case ID should be positive");
+        assertEquals(2, responseObj.getInt("template_id"), "Should use Steps template");
+        assertEquals(3, responseObj.getInt("priority_id"), "Priority should be High");
+
+        // GET and verify steps_separated
+        TestCase verifyCase = client.getCase(String.valueOf(caseId));
+        List<TestCaseFields.TestStep> steps = verifyCase.getTestCaseFields().getCustomStepsSeparated();
+        assertNotNull(steps);
+        assertEquals(3, steps.size(), "Should have 3 steps");
+        assertTrue(steps.get(0).getContent().contains("Open"), "Step 1 content");
     }
 
     @Test
