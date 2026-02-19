@@ -409,11 +409,11 @@ public class McpCliHandler {
      */
     private Map<String, Object> getToolSchema(String toolName) {
         try {
-            Set<String> integrations = Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid");
+            Set<String> integrations = Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "testrail", "kb", "mermaid");
             Map<String, Object> toolsResponse = MCPSchemaGenerator.generateToolsListResponse(integrations);
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> tools = (List<Map<String, Object>>) toolsResponse.get("tools");
-            
+
             for (Map<String, Object> tool : tools) {
                 if (toolName.equals(tool.get("name"))) {
                     return tool;
@@ -560,6 +560,14 @@ public class McpCliHandler {
             logger.debug("Created BasicSharePointClient instance");
         } catch (Exception e) {
             logger.debug("BasicSharePointClient not initialized: {}. SharePoint uses same auth as Teams.", e.getMessage());
+        }
+
+        try {
+            // Create TestRail client
+            clients.put("testrail", com.github.istin.dmtools.testrail.TestRailClient.getInstance());
+            logger.debug("Created TestRailClient instance");
+        } catch (Exception e) {
+            logger.debug("TestRailClient not initialized: {}. Configure TESTRAIL_BASE_PATH, TESTRAIL_USERNAME, and TESTRAIL_API_KEY.", e.getMessage());
         }
 
         try {
@@ -735,7 +743,7 @@ public class McpCliHandler {
             // Return all known integration types without creating clients
             integrations.addAll(Arrays.asList(
                 "jira", "jira_xray", "ado", "confluence", "figma",
-                "teams", "teams_auth", "sharepoint", "ai", "cli",
+                "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
                 "file", "kb", "mermaid"
             ));
         }

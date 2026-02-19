@@ -214,6 +214,13 @@ ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
 SOURCE_GITHUB_TOKEN=...
 GITLAB_TOKEN=...
 
+# TestRail
+TESTRAIL_BASE_PATH=https://your-company.testrail.com
+TESTRAIL_USERNAME=your-email@example.com
+TESTRAIL_API_KEY=your_api_key_from_my_settings
+TESTRAIL_PROJECT=My Project  # Default project name (optional)
+TESTRAIL_LOGGING_ENABLED=true  # Enable debug logging (optional, default: false)
+
 # Context Limits
 PROMPT_CHUNK_TOKEN_LIMIT=4000
 PROMPT_CHUNK_MAX_SINGLE_FILE_SIZE_MB=4
@@ -608,3 +615,9 @@ Job: TestCasesGenerator
 7. **Agent Architecture**: Jobs orchestrate, agents execute (small, focused, reusable)
 8. **XML-Based Prompts**: All AI agent prompts in XML format with FreeMarker templates
 9. **GraalJS Integration**: JavaScript agents for preprocessing/postprocessing via polyglot execution
+
+
+Use MCP Tools - Remember that you have a rich set of MCP tools and use them.
+**MANDATORY: Use Serena MCP for all code analysis and editing operations** to achieve maximum token efficiency and precision.
+Serena MCP provides symbol-level analysis and editing capabilities that drastically reduce token consumption compared to reading entire files.
+Before reading any code file, use `get_symbols_overview` to understand structure, then `find_symbol` with targeted queries to read only necessary code sections. Use `replace_symbol_body`, `insert_after_symbol`, and `insert_before_symbol` for precise modifications instead of broad file rewrites. This approach can reduce token usage by 70-90% while improving accuracy and maintaining architectural compliance. Token economy is critical for complex projects - every unnecessary token spent on redundant file reads limits our ability to perform deep analysis and implement comprehensive solutions. NOTE: before using any serena tool you MUST activate it first with `serena_activate_project`.

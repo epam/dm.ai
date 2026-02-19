@@ -102,6 +102,14 @@ public class JobJavaScriptBridge {
             logger.debug("BasicAzureDevOpsClient not initialized: {}. ADO tools will not be available.", e.getMessage());
         }
 
+        // Initialize TestRail client if configured
+        try {
+            this.clientInstances.put("testrail", com.github.istin.dmtools.testrail.TestRailClient.getInstance());
+            logger.debug("TestRailClient initialized for JavaScript bridge");
+        } catch (Exception e) {
+            logger.debug("TestRailClient not initialized: {}. TestRail tools will not be available.", e.getMessage());
+        }
+
         // Don't initialize JavaScript context in constructor - use lazy initialization instead
         // This significantly improves startup time for commands that don't need JS execution
         // initializeJavaScriptContext();
@@ -400,7 +408,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid"));
+        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail"));
         // Add jira_xray if XrayClient is available
         if (trackerClient instanceof com.github.istin.dmtools.atlassian.jira.xray.XrayClient) {
             integrations.add("jira_xray");

@@ -1108,4 +1108,29 @@ public class PropertyReader {
 		}
 		return Boolean.parseBoolean(value);
     }
+
+	// TestRail configuration methods
+	public String getTestRailBasePath() {
+		return getValue("TESTRAIL_BASE_PATH");
+	}
+
+	public String getTestRailUsername() {
+		return getValue("TESTRAIL_USERNAME");
+	}
+
+	public String getTestRailApiKey() {
+		return getValue("TESTRAIL_API_KEY");
+	}
+
+	public String getTestRailProject() {
+		return getValue("TESTRAIL_PROJECT");
+	}
+
+	public boolean isTestRailLoggingEnabled() {
+		String value = getValue("TESTRAIL_LOGGING_ENABLED");
+		if (value == null) {
+			return false;
+		}
+		return Boolean.parseBoolean(value);
+	}
 }

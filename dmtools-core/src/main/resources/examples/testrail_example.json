@@ -1,0 +1,12 @@
+{
+  "name": "jsrunner",
+  "params": {
+    "jsPath": "examples/testrail_example.js",
+    "jobParams": {
+      "projectName": "My Project",
+      "caseId": "123",
+      "jiraKey": "PROJ-456",
+      "createExample": false
+    }
+  }
+}
