@@ -43,7 +43,7 @@ Generate Mermaid diagrams from content sources (Confluence or Jira) based on inc
 
 - **`include_patterns`** (array) 🔴 Required
   - Array of include patterns. For Confluence: ["SPACE/pages/PAGE_ID/PAGE_NAME/**"]. For Jira: ["JQL query"]
-  - Example: `["AINA/pages/11665522/Templates/**"]`
+  - Example: `["YOUR_SPACE/pages/PAGE_ID/Templates/**"]`
 
 - **`exclude_patterns`** (array) ⚪ Optional
   - Optional array of exclude patterns to filter out specific content (not used for Jira)

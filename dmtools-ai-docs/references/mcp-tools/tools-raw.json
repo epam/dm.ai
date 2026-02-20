@@ -1520,7 +1520,7 @@
           "include_patterns": {
             "type": "array",
             "description": "Array of include patterns. For Confluence: [\"SPACE/pages/PAGE_ID/PAGE_NAME/**\"]. For Jira: [\"JQL query\"]",
-            "example": "[\"AINA/pages/11665522/Templates/**\"]"
+            "example": "[\"YOUR_SPACE/pages/PAGE_ID/Templates/**\"]"
           },
           "exclude_patterns": {
             "type": "array",

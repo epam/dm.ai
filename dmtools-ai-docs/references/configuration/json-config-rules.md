@@ -315,10 +315,10 @@ dmtools --debug run agents/my_config.json
     "agentParams": {
       "aiRole": "Experienced Business Analyst",
       "instructions": [
-        "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story",
+        "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Template+Story",
         "./agents/instructions/common/response_output.md"
       ],
-      "formattingRules": "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/18186241/Template+Jira+Markdown"
+      "formattingRules": "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Template+Jira+Markdown"
     },
     "outputType": "field",
     "fieldName": "Description",

@@ -120,8 +120,8 @@ dmtools run agents/xray_test_cases_generator.json
     "testCasesExampleFields": ["issuetype", "summary", "description", "priority"],
     "testCasesCustomFields": ["xrayTestSteps", "xrayPreconditions"],
     "customFieldsRules": "Test steps must be generated in Xray JSON format...",
-    "confluencePages": ["https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665495/Template+Test+Case"],
-    "relatedTestCasesRules": "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/55443457/Template+Test+Case+Related+Rules",
+    "confluencePages": ["https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Template+Test+Case"],
+    "relatedTestCasesRules": "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Template+Test+Case+Related+Rules",
     "isOverridePromptExamples": true,
     "isFindRelated": true,
     "isConvertToJiraMarkdown": false,
@@ -211,7 +211,7 @@ dmtools InstructionsGenerator --inputJql "project = QA AND type = Test" \
   --fields "summary,description,test_steps" \
   --instructionType "test_cases" \
   --outputDestination "confluence" \
-  --outputPath "https://company.atlassian.net/wiki/spaces/QA/pages/12345/Test+Guidelines"
+  --outputPath "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Test+Guidelines"
 
 # Use configuration file
 dmtools run agents/instructions_generator.json
@@ -355,7 +355,7 @@ dmtools Teammate --inputJql "key = PROJ-123"
     "agentParams": {
       "aiRole": "Experienced Business Analyst",
       "instructions": [
-        "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story",
+        "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Template+Story",
         "./agents/instructions/common/response_output.md",
         "./agents/instructions/common/no_development.md",
         "./agents/instructions/common/error_handling.md",
@@ -366,7 +366,7 @@ dmtools Teammate --inputJql "key = PROJ-123"
         "**IMPORTANT** your role just write description of the story based on the confluence page template!"
       ],
       "knownInfo": "",
-      "formattingRules": "https://dmtools.atlassian.net/wiki/spaces/AINA/pages/18186241/Template+Jira+Markdown",
+      "formattingRules": "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Template+Jira+Markdown",
       "fewShots": ""
     },
     "cliCommands": [
