@@ -213,6 +213,54 @@ public class TeammatePreCliJSActionTest {
         assertEquals(1, deserialized.getCliCommands().length);
     }
 
+    @Test
+    void testPreCliJSActionNotInvokedWithEmptyCliCommands() throws Exception {
+        JavaScriptExecutor mockExecutor = buildMockExecutor();
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", mockExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{});  // empty array, not null
+
+        spy.runJobImpl(params);
+
+        assertFalse(spy.jsCalls.contains("agents/js/extendFolder.js"),
+            "preCliJSAction must not be called when cliCommands is an empty array");
+    }
+
+    @Test
+    void testPreCliJSActionExceptionDoesNotStopCliExecution() throws Exception {
+        JavaScriptExecutor throwingExecutor = mock(JavaScriptExecutor.class);
+        when(throwingExecutor.mcp(any(), any(), any(), any())).thenReturn(throwingExecutor);
+        when(throwingExecutor.withJobContext(any(), any(), any())).thenReturn(throwingExecutor);
+        when(throwingExecutor.with(anyString(), any())).thenReturn(throwingExecutor);
+        when(throwingExecutor.execute()).thenThrow(new RuntimeException("JS script failed"));
+
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", throwingExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setCleanupInputFolder(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any()))
+                    .thenReturn("ok\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+                assertDoesNotThrow(() -> spy.runJobImpl(params));
+
+                // CLI command must still have been executed despite JS failure
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any()));
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
     // ---- helpers ----
 
     private JavaScriptExecutor buildMockExecutor() throws Exception {
