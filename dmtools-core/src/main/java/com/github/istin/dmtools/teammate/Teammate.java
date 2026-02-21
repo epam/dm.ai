@@ -79,6 +79,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName(SYSTEM_REQUEST_COMMENT_ALIAS)
         private String systemRequestCommentAlias;
 
+        @SerializedName("preCliJSAction")
+        private String preCliJSAction;
+
     }
 
     /**
@@ -374,6 +377,23 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
                     // Create input context for CLI commands
                     inputContextPath = cliHelper.createInputContext(ticket, inputParams.toString(), trackerClient);
+
+                    // Run preCliJSAction to allow extending input folder with extra content before CLI execution
+                    String preCliJSAction = expertParams.getPreCliJSAction();
+                    if (preCliJSAction != null && !preCliJSAction.trim().isEmpty()) {
+                        try {
+                            js(preCliJSAction)
+                                .mcp(trackerClient, ai, confluence, null)
+                                .withJobContext(expertParams, ticket, null)
+                                .with(TrackerParams.INITIATOR, initiator)
+                                .with("inputFolderPath", inputContextPath.toAbsolutePath().toString())
+                                .execute();
+                            logger.info("preCliJSAction executed for ticket: {}", ticket.getKey());
+                        } catch (Exception e) {
+                            logger.warn("preCliJSAction failed for ticket {}, continuing with CLI execution: {}",
+                                ticket.getKey(), e.getMessage());
+                        }
+                    }
 
                     // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
                     Path projectRoot = Paths.get(System.getProperty("user.dir"));

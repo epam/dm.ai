@@ -121,6 +121,7 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 |-----------|------|---------|-------------|---------|
 | `cliPrompt` | String | - | Prompt for CLI agent (supports plain text, file paths, Confluence URLs) | `"Implement from input/"`, `"./prompts/dev.md"`, `"https://..."` |
 | `cliCommands` | Array | - | CLI commands to execute | `["./cicd/scripts/run-cursor-agent.sh"]` |
+| `preCliJSAction` | String | - | JS script path executed **after** input folder is created but **before** CLI commands run. Receives `params.inputFolderPath` (absolute path). Use to write extra files into the input folder. Errors in this script are logged but do NOT stop CLI execution. | `"agents/js/extendInputFolder.js"` |
 | `skipAIProcessing` | Boolean | `false` | Skip AI processing when using CLI agents | `true` |
 | `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133**: Require `output/response.md` before updating fields (strict mode prevents data loss) | `true` (recommended) |
 | `cleanupInputFolder` | Boolean | `true` | **NEW v1.7.133**: Cleanup `input/[TICKET-KEY]/` folder after execution | `false` (for debugging) |
@@ -222,6 +223,40 @@ See [CLI Integration Guide](cli-integration.md) for complete documentation.
 - Keeps `input/[TICKET-KEY]/` folder for manual inspection
 - Allows debugging CLI issues by checking `request.md` and attachments
 - Requires manual cleanup: `rm -rf input/[TICKET-KEY]`
+
+##### `preCliJSAction`
+
+Runs after the input folder is created (containing `request.md` and ticket attachments) but before CLI commands execute. The script receives `params.inputFolderPath` — the absolute path to the folder.
+
+**Typical use cases**: inject extra reference files (architecture docs, style guides, API specs) that the CLI agent should read as context.
+
+```javascript
+// agents/js/extendInputFolder.js
+function action(params) {
+    const folder = params.inputFolderPath;
+
+    // Fetch architecture guide from Confluence and add to input folder
+    const architectureGuide = confluence_content_by_title("Architecture Guide");
+    file_write(folder + "/architecture.md", architectureGuide);
+
+    // Add a coding standards file
+    const codingStandards = file_read("./docs/coding-standards.md");
+    file_write(folder + "/coding-standards.md", codingStandards);
+}
+```
+
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"],
+    "preCliJSAction": "agents/js/extendInputFolder.js",
+    "skipAIProcessing": true
+  }
+}
+```
+
+**Error handling**: if `preCliJSAction` throws an exception, it is logged as a warning and CLI execution continues normally — the script failure never blocks the main workflow.
 
 **Example: Production-safe CLI configuration:**
 ```json
