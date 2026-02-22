@@ -156,7 +156,12 @@ public class JobJavaScriptBridge {
     }
     
     /**
-     * Convert Java objects to JavaScript-compatible format
+     * Convert Java objects to JavaScript-compatible format.
+     * Builds the full JSON string in pure Java first (via toJsonString), then
+     * evaluates it once in GraalJS.  This avoids the previous bug where
+     * intermediate GraalVM Values were placed back into a JSONArray and then
+     * serialised with JSONArray.toString(), which called Value.toString() and
+     * produced JS object-literal syntax with unquoted keys instead of valid JSON.
      */
     private Object convertToJSCompatible(Object obj) {
         ensureJavaScriptContext();
@@ -165,47 +170,18 @@ public class JobJavaScriptBridge {
             return null;
         }
 
-        if (obj instanceof Map) {
-            // Convert Map to JavaScript object that can be accessed with dot notation
-            @SuppressWarnings("unchecked")
-            Map<String, Object> map = (Map<String, Object>) obj;
-            JSONObject jsonObj = new JSONObject();
-            for (Map.Entry<String, Object> entry : map.entrySet()) {
-                jsonObj.put(entry.getKey(), convertToJSCompatible(entry.getValue()));
-            }
-            // Parse JSONObject as JavaScript object
-            try {
-                return jsContext.eval("js", "(" + jsonObj.toString() + ")");
-            } catch (Exception e) {
-                logger.warn("Failed to parse JSON to JS object: {}", e.getMessage());
-                return jsonObj;
-            }
-        } else if (obj instanceof List) {
-            // Convert List to JavaScript array
-            @SuppressWarnings("unchecked")
-            List<Object> list = (List<Object>) obj;
-            JSONArray jsonArray = new JSONArray();
-            for (Object item : list) {
-                jsonArray.put(convertToJSCompatible(item));
-            }
-            try {
-                return jsContext.eval("js", "(" + jsonArray.toString() + ")");
-            } catch (Exception e) {
-                logger.warn("Failed to parse JSON array to JS array: {}", e.getMessage());
-                return jsonArray;
-            }
-        } else if (obj instanceof String || obj instanceof Number || obj instanceof Boolean) {
-            // Primitive types are already JS-compatible
+        // Primitives need no conversion
+        if (obj instanceof String || obj instanceof Number || obj instanceof Boolean) {
             return obj;
-        } else {
-            // For other objects, try to convert via JSON
-            try {
-                JSONObject jsonObj = new JSONObject(obj.toString());
-                return jsContext.eval("js", "(" + jsonObj.toString() + ")");
-            } catch (Exception e) {
-                // Fallback to string representation
-                return obj.toString();
-            }
+        }
+
+        // Build a valid JSON string entirely in Java, then evaluate once in GraalJS
+        String jsonStr = toJsonString(obj);
+        try {
+            return jsContext.eval("js", "(" + jsonStr + ")");
+        } catch (Exception e) {
+            logger.warn("Failed to convert to JS compatible: {}", e.getMessage());
+            return jsonStr;
         }
     }
     
@@ -374,14 +350,13 @@ public class JobJavaScriptBridge {
                             convertedArgsMap.put(entry.getKey(), list.get(0));
                             logger.debug("Extracted single string from ArrayList for parameter {}: {}", entry.getKey(), list.get(0));
                         } else {
-                            // Multiple elements or non-string - convert to array anyway
-                            String[] array = new String[list.size()];
-                            for (int i = 0; i < list.size(); i++) {
-                                Object item = list.get(i);
-                                array[i] = item != null ? item.toString() : null;
-                            }
-                            convertedArgsMap.put(entry.getKey(), array);
-                            logger.debug("Converted ArrayList to String[] for parameter {}: {} elements (fallback)", entry.getKey(), array.length);
+                            // Multiple elements in ArrayList but parameter is NOT an array type in schema.
+                            // This happens when a JSON array string was auto-parsed (e.g. file_write content
+                            // that is valid JSON). Reconstruct as JSON array string to preserve original intent.
+                            JSONArray reconstructed = new JSONArray(list);
+                            String jsonStr = reconstructed.toString();
+                            convertedArgsMap.put(entry.getKey(), jsonStr);
+                            logger.debug("Reconstructed JSON string for non-array parameter {}: {} chars", entry.getKey(), jsonStr.length());
                         }
                     }
                 } else {
@@ -780,6 +755,69 @@ public class JobJavaScriptBridge {
         // This ensures proper conversion to JavaScript object
         String jsonString = jsonObject.toString();
         return jsContext.eval("js", "(" + jsonString + ")");
+    }
+
+    /**
+     * Recursively converts a Java object to a valid JSON string.
+     * All structural traversal is done at the Java level so that GraalVM Values
+     * are never placed back into org.json containers (which would serialise them
+     * via Value.toString() and produce unquoted-key JS object literals).
+     */
+    private String toJsonString(Object obj) {
+        if (obj == null) {
+            return "null";
+        }
+        if (obj instanceof Boolean || obj instanceof Number) {
+            return obj.toString();
+        }
+        if (obj instanceof String) {
+            return JSONObject.quote((String) obj);
+        }
+        if (obj instanceof JSONObject) {
+            return ((JSONObject) obj).toString();
+        }
+        if (obj instanceof JSONArray) {
+            return ((JSONArray) obj).toString();
+        }
+        if (obj instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) obj;
+            StringBuilder sb = new StringBuilder("{");
+            boolean first = true;
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                if (!first) sb.append(",");
+                first = false;
+                sb.append(JSONObject.quote(entry.getKey())).append(":").append(toJsonString(entry.getValue()));
+            }
+            sb.append("}");
+            return sb.toString();
+        }
+        if (obj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Object> list = (List<Object>) obj;
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append(toJsonString(list.get(i)));
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+        // For domain objects (e.g. Ticket extends JSONModel) whose toString() returns
+        // valid JSON, use that directly. Fall back to a quoted string if it is not JSON.
+        String str = obj.toString();
+        try {
+            if (str.startsWith("{")) {
+                new JSONObject(str);  // validate
+            } else if (str.startsWith("[")) {
+                new JSONArray(str);   // validate
+            } else {
+                return JSONObject.quote(str);
+            }
+            return str;
+        } catch (Exception e) {
+            return JSONObject.quote(str);
+        }
     }
 
     /**

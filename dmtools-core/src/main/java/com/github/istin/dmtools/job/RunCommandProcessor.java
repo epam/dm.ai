@@ -2,6 +2,7 @@ package com.github.istin.dmtools.job;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -51,9 +52,14 @@ public class RunCommandProcessor {
         
         String filePath = args[1];
         String encodedConfig = args.length > 2 ? args[2] : null;
-        
+
         logger.info("Processing run command: file={}, hasEncodedConfig={}", filePath, encodedConfig != null);
-        
+
+        if (filePath.endsWith(".js")) {
+            logger.info("Detected JS file, building JSRunner config in memory");
+            return buildJSRunnerJobParams(filePath, encodedConfig);
+        }
+
         try {
             // Load JSON from file
             String fileJson = loadJsonFromFile(filePath);
@@ -116,6 +122,29 @@ public class RunCommandProcessor {
         } catch (IOException e) {
             logger.error("Failed to read configuration file {}: {}", filePath, e.getMessage());
             throw new IllegalArgumentException("Failed to read configuration file: " + e.getMessage(), e);
+        }
+    }
+
+    private JobParams buildJSRunnerJobParams(String jsPath, String rawParams) {
+        try {
+            JSONObject jobParams = new JSONObject();
+            if (rawParams != null && !rawParams.trim().isEmpty()) {
+                try {
+                    jobParams = new JSONObject(rawParams);
+                } catch (Exception jsonEx) {
+                    String decoded = encodingDetector.autoDetectAndDecode(rawParams);
+                    jobParams = new JSONObject(decoded);
+                }
+            }
+            JSONObject params = new JSONObject();
+            params.put("jsPath", jsPath);
+            params.put("jobParams", jobParams);
+            JSONObject root = new JSONObject();
+            root.put("name", "JSRunner");
+            root.put("params", params);
+            return new JobParams(root.toString());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to build JSRunner JobParams: " + e.getMessage(), e);
         }
     }
 }

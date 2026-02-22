@@ -1952,6 +1952,49 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return resolvedFields;
     }
 
+    /**
+     * Coerces a field value received as a String (e.g. from CLI positional args) to the
+     * appropriate JSON-compatible type.  Without this, numeric fields like Story Points
+     * receive "8" (JSON string) and Jira responds with HTTP 400.
+     */
+    static Object coerceFieldValue(Object value) {
+        if (!(value instanceof String)) {
+            return value;
+        }
+        String str = ((String) value).trim();
+        if (str.isEmpty()) {
+            return value;
+        }
+        // Boolean
+        if ("true".equalsIgnoreCase(str)) return Boolean.TRUE;
+        if ("false".equalsIgnoreCase(str)) return Boolean.FALSE;
+        // Integer
+        try {
+            return Integer.parseInt(str);
+        } catch (NumberFormatException ignored) {}
+        // Long (for values that don't fit in int)
+        try {
+            return Long.parseLong(str);
+        } catch (NumberFormatException ignored) {}
+        // Double
+        try {
+            return Double.parseDouble(str);
+        } catch (NumberFormatException ignored) {}
+        // JSON object
+        if (str.startsWith("{") && str.endsWith("}")) {
+            try {
+                return new JSONObject(str);
+            } catch (Exception ignored) {}
+        }
+        // JSON array
+        if (str.startsWith("[") && str.endsWith("]")) {
+            try {
+                return new JSONArray(str);
+            } catch (Exception ignored) {}
+        }
+        return value;
+    }
+
     @MCPTool(
             name = "jira_update_field",
             description = "Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field.",
@@ -1964,6 +2007,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         if ("".equals(value)) {
             return clearField(key, field);
         }
+        value = coerceFieldValue(value);
 
         // Check if field is a custom field ID or a field name
         boolean isCustomFieldId = field.startsWith("customfield_");
@@ -2068,6 +2112,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             @MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key,
             @MCPParam(name = "fieldName", description = "The user-friendly field name (e.g., 'Dependencies')", required = true) String fieldName,
             @MCPParam(name = "value", description = "The new value for the fields", required = true) Object value) throws IOException {
+
+        value = coerceFieldValue(value);
 
         // Extract project key from ticket key for field resolution
         String projectKey = parseJiraProject(key);

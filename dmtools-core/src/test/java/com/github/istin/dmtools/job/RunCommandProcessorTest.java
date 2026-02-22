@@ -289,10 +289,89 @@ class RunCommandProcessorTest {
         Files.write(jsonFile, jsonContent.getBytes());
 
         String[] args = {"run", jsonFile.toString()};
-        
+
         JobParams result = runCommandProcessor.processRunCommand(args);
-        
+
         assertNotNull(result);
         assertEquals("expert", result.getName());
+    }
+
+    @Test
+    void testProcessRunCommand_jsFileOnly() {
+        String[] args = {"run", "agents/js/myScript.js"};
+
+        JobParams result = runCommandProcessorWithMocks.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("JSRunner", result.getName());
+        org.json.JSONObject params = result.getParams();
+        assertEquals("agents/js/myScript.js", params.getString("jsPath"));
+        assertEquals("{}", params.getJSONObject("jobParams").toString());
+        verifyNoInteractions(mockConfigurationMerger);
+    }
+
+    @Test
+    void testProcessRunCommand_jsFileWithRawJsonParams() {
+        String rawJson = "{\"key\":\"PROJ-123\"}";
+        String[] args = {"run", "agents/js/myScript.js", rawJson};
+
+        JobParams result = runCommandProcessorWithMocks.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("JSRunner", result.getName());
+        org.json.JSONObject params = result.getParams();
+        assertEquals("agents/js/myScript.js", params.getString("jsPath"));
+        assertEquals("PROJ-123", params.getJSONObject("jobParams").getString("key"));
+        verifyNoInteractions(mockEncodingDetector);
+        verifyNoInteractions(mockConfigurationMerger);
+    }
+
+    @Test
+    void testProcessRunCommand_jsFileWithBase64Params() {
+        String rawJson = "{\"key\":\"PROJ-456\"}";
+        String base64Encoded = Base64.getEncoder().encodeToString(rawJson.getBytes());
+        when(mockEncodingDetector.autoDetectAndDecode(base64Encoded)).thenReturn(rawJson);
+
+        String[] args = {"run", "agents/js/myScript.js", base64Encoded};
+
+        JobParams result = runCommandProcessorWithMocks.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("JSRunner", result.getName());
+        org.json.JSONObject params = result.getParams();
+        assertEquals("PROJ-456", params.getJSONObject("jobParams").getString("key"));
+        verify(mockEncodingDetector).autoDetectAndDecode(base64Encoded);
+        verifyNoInteractions(mockConfigurationMerger);
+    }
+
+    @Test
+    void testProcessRunCommand_jsFileDoesNotLoadFile() {
+        // Non-existent path is accepted — existence check is JSRunner's responsibility
+        String[] args = {"run", "/nonexistent/path/script.js"};
+
+        JobParams result = runCommandProcessorWithMocks.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("JSRunner", result.getName());
+        assertEquals("/nonexistent/path/script.js", result.getParams().getString("jsPath"));
+        verifyNoInteractions(mockConfigurationMerger);
+    }
+
+    @Test
+    void testProcessRunCommand_jsonFileUnaffected() throws IOException {
+        String jsonContent = "{\"name\":\"expert\",\"params\":{\"question\":\"test\"}}";
+        Path jsonFile = tempDir.resolve("job.json");
+        Files.write(jsonFile, jsonContent.getBytes());
+
+        when(mockEncodingDetector.autoDetectAndDecode(any())).thenReturn("{}");
+        when(mockConfigurationMerger.mergeConfigurations(any(), any())).thenReturn(jsonContent);
+
+        String[] args = {"run", jsonFile.toString()};
+
+        JobParams result = runCommandProcessorWithMocks.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("expert", result.getName());
+        verifyNoInteractions(mockEncodingDetector);
     }
 }

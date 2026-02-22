@@ -740,6 +740,129 @@ class JobJavaScriptBridgeTest {
             ));
         }
     }
+
+    @Test
+    void testFileWriteWithJsonArrayContent() throws Exception {
+        // Regression test: file_write content that is a valid JSON array string
+        // should NOT be auto-parsed into ArrayList/String[] - it must stay as a String.
+        // See: JobJavaScriptBridge ClassCastException when content starts with '['.
+        String jsCode = """
+            function action(params) {
+                var jsonContent = '[{"key":"JD-1","summary":"CICD"},{"key":"JD-2","summary":"Test"}]';
+                file_write('/tmp/test.json', jsonContent);
+                return { written: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("file_write"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+
+            assertNotNull(result);
+
+            // Verify file_write received a String for content, not String[]
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("file_write"),
+                argThat(args -> {
+                    Object content = args.get("content");
+                    return content instanceof String
+                        && ((String) content).startsWith("[")
+                        && ((String) content).contains("JD-1");
+                }),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testSearchResultsReturnProperJSObjectsWithDotNotation() throws Exception {
+        // Regression: jira_search_by_jql (and similar tools) used to return list items
+        // as strings with unquoted keys because GraalVM Values were put into a JSONArray
+        // and serialised via Value.toString() — producing "{key: JD-18, ...}" instead of
+        // valid JSON.  With the fix, toJsonString() builds the full JSON string in pure
+        // Java before a single GraalJS eval, so dot-notation access works without eval().
+        String jsCode = """
+            function action(params) {
+                var results = jira_search_by_jql('project = TEST', null);
+                // dot-notation access must work — no eval() needed
+                var key = results[0].key;
+                var summary = results[0].fields.summary;
+                return { key: key, summary: summary };
+            }
+            """;
+
+        JSONObject ticket = new JSONObject();
+        ticket.put("key", "JD-18");
+        JSONObject fields = new JSONObject();
+        fields.put("summary", "Intake");
+        ticket.put("fields", fields);
+        ticket.put("expand", "renderedFields");
+
+        java.util.List<JSONObject> fakeResults = java.util.List.of(ticket);
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_search_by_jql"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn(fakeResults);
+
+            Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+
+            assertNotNull(result);
+            String resultStr = result.toString();
+            assertTrue(resultStr.contains("JD-18"),
+                "Expected key JD-18 accessible via dot notation, got: " + resultStr);
+            assertTrue(resultStr.contains("Intake"),
+                "Expected summary Intake accessible via dot notation, got: " + resultStr);
+        }
+    }
+
+    @Test
+    void testNestedListsAndMapsReturnProperJSObjects() throws Exception {
+        // Verify that deeply nested structures (Map containing List containing Map)
+        // are correctly converted to JS objects without unquoted-key corruption.
+        String jsCode = """
+            function action(params) {
+                var result = jira_get_ticket('PROJ-1');
+                return {
+                    name: result.name,
+                    firstChildKey: result.children[0].key
+                };
+            }
+            """;
+
+        java.util.Map<String, Object> inner = new java.util.HashMap<>();
+        inner.put("key", "CHILD-1");
+
+        java.util.Map<String, Object> outer = new java.util.HashMap<>();
+        outer.put("name", "parent");
+        outer.put("children", java.util.List.of(inner));
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_get_ticket"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn(outer);
+
+            Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+
+            assertNotNull(result);
+            String resultStr = result.toString();
+            assertTrue(resultStr.contains("parent"),
+                "Expected 'parent' in result: " + resultStr);
+            assertTrue(resultStr.contains("CHILD-1"),
+                "Expected 'CHILD-1' accessible via dot notation: " + resultStr);
+        }
+    }
 }
 
 

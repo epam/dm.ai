@@ -865,6 +865,67 @@ When `figma_files` is provided, the report includes comments posted by BAs in Fi
 
 ---
 
+### JSRunner
+
+Run a JavaScript agent directly from the CLI without creating a JSON config file.
+
+**Purpose**: Execute a `.js` file as a `JSRunner` job. Useful for rapid testing, CI scripting, and isolating pre/post actions.
+
+**Shorthand syntax** (no config file needed):
+```bash
+# Run JS file with no parameters
+dmtools run agents/js/myScript.js
+
+# Run with raw JSON parameters
+dmtools run agents/js/myScript.js '{"key": "PROJ-123", "mode": "test"}'
+
+# Run with parameters from a file
+dmtools run agents/js/myScript.js "$(cat params.json)"
+```
+
+When `dmtools run` receives a path ending in `.js`, it automatically constructs a `JSRunner` config in memory — no JSON file is required.
+
+**Equivalent full JSON config** (`agents/jsrunner_example.json`):
+```json
+{
+  "name": "JSRunner",
+  "params": {
+    "jsPath": "agents/js/myScript.js",
+    "jobParams": {"key": "PROJ-123", "mode": "test"}
+  }
+}
+```
+
+**`JSRunner.JSParams` fields**:
+| Field | Description |
+|-------|-------------|
+| `jsPath` | Path to the JS file. Can be a file path, `classpath:` resource, GitHub URL, or inline JS code. |
+| `jobParams` | Object passed as `params.jobParams` inside the JS function. |
+| `ticket` | Optional ticket object passed as `params.ticket`. |
+| `response` | Optional AI response string passed as `params.response`. |
+
+**Accessing `jobParams` inside JS**:
+```javascript
+function action(params) {
+    var key = params.jobParams.key;      // "PROJ-123"
+    var mode = params.jobParams.mode;    // "test"
+    return { processed: key, mode: mode };
+}
+```
+
+**Parameter encoding**: The second CLI argument may be:
+- Raw JSON: `'{"key":"PROJ-123"}'` — used directly.
+- Base64 or URL-encoded JSON — decoded automatically via `EncodingDetector`.
+- Omitted or blank — `jobParams` defaults to `{}`.
+
+**Use cases**:
+- Rapid testing of a JS agent without creating a config file
+- CI/CD pipelines with dynamic parameters via shell variables
+- Running pre/post actions in isolation to debug them
+- One-off data transformations using MCP tools
+
+---
+
 ## 🚀 Quick Start
 
 ### List All Jobs
