@@ -1,3 +1,53 @@
+## [skill-v1.0.24] - 2026-02-22
+
+### Added
+
+- **GitHub URL support in InstructionProcessor** - `instructions`, `formattingRules`, `fewShots`, and `cliPrompt` fields can now reference GitHub files directly
+  - Supports standard blob URLs: `https://github.com/owner/repo/blob/branch/path/to/file.md`
+  - Supports raw URLs: `https://raw.githubusercontent.com/owner/repo/branch/path/to/file.md`
+  - Fetched via `BasicGithub` client using `SOURCE_GITHUB_TOKEN` env var
+  - Works for **public repos without a token** (anonymous GitHub API, rate-limited to 60 req/hour)
+  - Falls back to original URL string if fetch fails — no errors thrown
+  - Priority order: GitHub URL → Confluence URL → local file path → plain text
+
+  **Example — pull instructions from a shared GitHub playbook:**
+  ```json
+  {
+    "instructions": [
+      "https://github.com/your-org/playbook/blob/main/instructions/enhance-sd-api.md",
+      "./instructions/common/jira_context.md"
+    ],
+    "formattingRules": "https://github.com/your-org/playbook/blob/main/formatting/api-ticket.md"
+  }
+  ```
+
+- **`preCliJSAction` parameter for Teammate** - JS hook executed after input folder is created, before CLI commands run
+  - Receives `params.inputFolderPath` (absolute path to the created input folder)
+  - Use to inject extra context files (architecture docs, API specs, style guides) that the CLI agent should read
+  - Errors in the script are logged as warnings and do **not** stop CLI execution
+  - Only invoked when `cliCommands` is configured and non-empty
+
+  **Example — add architecture context to input folder:**
+  ```javascript
+  // agents/js/extendInputFolder.js
+  function action(params) {
+      const folder = params.inputFolderPath;
+      const guide = confluence_content_by_title("Architecture Guide");
+      file_write(folder + "/architecture.md", guide);
+  }
+  ```
+  ```json
+  {
+    "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"],
+    "preCliJSAction": "agents/js/extendInputFolder.js"
+  }
+  ```
+
+### Documentation
+- Updated `teammate-configs.md` with "Instruction Sources" reference table
+- Updated AI Configuration parameter descriptions to mention all supported source types
+- Updated CLI Integration table and examples with GitHub URL option
+
 ## [skill-v1.0.23] - 2026-02-15
 
 ### Added

@@ -99,10 +99,10 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 |-----------|------|-------------|---------|
 | `aiProvider` | String | AI provider to use | `"gemini"`, `"openai"`, `"bedrock"` |
 | `aiModel` | String | Specific model | `"gemini-2.0-flash-exp"`, `"gpt-4o"` |
-| `aiRole` | String | System prompt/role | `"You are a senior developer"` |
-| `instructions` | String | Task instructions | `"Analyze and optimize this code"` |
-| `formattingRules` | String | Output format rules | `"Return as JSON with keys: title, description"` |
-| `fewShots` | Array | Example input/outputs | See examples below |
+| `aiRole` | String | System prompt/role — also supports local file paths and GitHub/Confluence URLs (same as `instructions`) | `"You are a senior developer"`, `"./agents/roles/dev.md"` |
+| `instructions` | String/Array | Task instructions — supports plain text, local file paths (`./`, `../`, `/`), Confluence URLs (`https://...atlassian.net/...`), and GitHub URLs (`https://github.com/...`) | `"./agents/prompts/dev.md"`, `"https://github.com/org/repo/blob/main/PROMPT.md"` |
+| `formattingRules` | String | Output format rules — same source types as `instructions` | `"Return as JSON with keys: title, description"`, `"./prompts/format.md"` |
+| `fewShots` | String/Array | Example input/outputs — same source types as `instructions` | `"./prompts/few_shots.md"` |
 | `temperature` | Float | Creativity (0-1) | `0.7` |
 | `maxTokens` | Integer | Max response tokens | `2000` |
 
@@ -115,11 +115,50 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 | `skipJSAction` | String | JS file path | To determine skip logic |
 | `validateJSAction` | String | JS file path | To validate AI output |
 
+### Instruction Sources
+
+The following fields all go through **InstructionProcessor**, which resolves content from four source types:
+`instructions`, `formattingRules`, `fewShots`, `cliPrompt`, `aiRole`, `questions`, `tasks`
+
+| Source | Detection | How content is fetched |
+|--------|-----------|------------------------|
+| **Plain text** | Anything else | Used as-is |
+| **Local file** | Starts with `./`, `../`, or `/` | Read from disk relative to working directory |
+| **Confluence URL** | `https://...atlassian.net/...` | Fetched via Confluence API (requires `CONFLUENCE_*` env vars) |
+| **GitHub URL** | `https://github.com/...` or `https://raw.githubusercontent.com/...` | Fetched via GitHub API (`SOURCE_GITHUB_TOKEN` is optional for public repos, required for private) |
+
+If fetching fails for any reason, the original string is used as fallback — no error is thrown.
+
+**Examples:**
+
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "agentParams": {
+      "instructions": [
+        "https://github.com/your-org/playbook/blob/main/instructions/enhance-sd-api.md",
+        "./instructions/common/jira_context.md",
+        "https://company.atlassian.net/wiki/spaces/DEV/pages/123/Template",
+        "**IMPORTANT** Return JSON format: {\"description\": \"...\"}"
+      ],
+      "formattingRules": "https://github.com/your-org/playbook/blob/main/formatting/api-ticket.md",
+      "fewShots": "./agents/prompts/few_shots.md"
+    }
+  }
+}
+```
+
+**Private GitHub repos** require `SOURCE_GITHUB_TOKEN` environment variable:
+```bash
+SOURCE_GITHUB_TOKEN=ghp_your_token_here
+```
+
 ### CLI Integration (NEW in v1.7.130+)
 
 | Parameter | Type | Default | Description | Example |
 |-----------|------|---------|-------------|---------|
-| `cliPrompt` | String | - | Prompt for CLI agent (supports plain text, file paths, Confluence URLs) | `"Implement from input/"`, `"./prompts/dev.md"`, `"https://..."` |
+| `cliPrompt` | String | - | Prompt for CLI agent (supports plain text, local file paths, Confluence URLs, GitHub URLs) | `"Implement from input/"`, `"./prompts/dev.md"`, `"https://github.com/org/repo/blob/main/PROMPT.md"` |
 | `cliCommands` | Array | - | CLI commands to execute | `["./cicd/scripts/run-cursor-agent.sh"]` |
 | `preCliJSAction` | String | - | JS script path executed **after** input folder is created but **before** CLI commands run. Receives `params.inputFolderPath` (absolute path). Use to write extra files into the input folder. Errors in this script are logged but do NOT stop CLI execution. | `"agents/js/extendInputFolder.js"` |
 | `skipAIProcessing` | Boolean | `false` | Skip AI processing when using CLI agents | `true` |
@@ -151,6 +190,14 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 ```json
 {
   "cliPrompt": "https://company.atlassian.net/wiki/spaces/DEV/pages/123/Prompt",
+  "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"]
+}
+```
+
+**Or GitHub URL (public or private with `SOURCE_GITHUB_TOKEN`):**
+```json
+{
+  "cliPrompt": "https://github.com/your-org/your-repo/blob/main/agents/prompts/implement.md",
   "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"]
 }
 ```

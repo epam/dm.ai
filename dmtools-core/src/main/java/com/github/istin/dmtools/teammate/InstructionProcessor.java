@@ -3,6 +3,8 @@ package com.github.istin.dmtools.teammate;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.utils.FileConfig;
 import com.github.istin.dmtools.common.utils.StringUtils;
+import com.github.istin.dmtools.github.BasicGithub;
+import com.github.istin.dmtools.github.GitHub;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -13,7 +15,8 @@ import java.nio.file.Paths;
 /**
  * Utility class for processing instructions in Teammate jobs.
  * Handles extraction of content from:
- * - Confluence URLs (https://...)
+ * - GitHub URLs (https://github.com/...): fetches file content via BasicGithub using SOURCE_GITHUB_TOKEN
+ * - Confluence URLs (https://...): Fetches content from Confluence
  * - Local file paths (/, ./, ../)
  * - Plain text (used as-is)
  */
@@ -24,22 +27,10 @@ public class InstructionProcessor {
     private final Confluence confluence;
     private final String workingDirectory;
 
-    /**
-     * Creates an InstructionProcessor with Confluence support
-     * Uses current working directory for resolving relative file paths
-     * 
-     * @param confluence Confluence client for URL processing
-     */
     public InstructionProcessor(Confluence confluence) {
         this(confluence, System.getProperty("user.dir"));
     }
 
-    /**
-     * Creates an InstructionProcessor with custom working directory
-     * 
-     * @param confluence Confluence client for URL processing
-     * @param workingDirectory Base directory for resolving relative paths
-     */
     public InstructionProcessor(Confluence confluence, String workingDirectory) {
         this.confluence = confluence;
         this.workingDirectory = workingDirectory;
@@ -47,10 +38,11 @@ public class InstructionProcessor {
 
     /**
      * Extracts and processes instruction content from various sources.
+     * - GitHub URLs: Fetches file content via BasicGithub (SOURCE_GITHUB_TOKEN)
      * - Confluence URLs: Fetches content from Confluence
      * - File paths: Reads content from local files
      * - Plain text: Returns as-is
-     * 
+     *
      * @param inputArray Array of instructions to process
      * @return Array of processed instructions with expanded content
      * @throws IOException if Confluence access fails
@@ -63,8 +55,12 @@ public class InstructionProcessor {
         for (int i = 0; i < inputArray.length; i++) {
             String input = inputArray[i];
             if (input != null) {
+                // GitHub URL detection (must be checked before generic https://)
+                if (isGithubUrl(input)) {
+                    input = processGithubUrl(input);
+                }
                 // Confluence URL detection
-                if (input.startsWith("https://")) {
+                else if (input.startsWith("https://")) {
                     input = processConfluenceUrl(input);
                 }
                 // File path detection and processing
@@ -79,18 +75,40 @@ public class InstructionProcessor {
     }
 
     /**
-     * Processes a Confluence URL by fetching its content
-     * 
-     * @param url Confluence URL to process
-     * @return Original URL concatenated with fetched content
-     * @throws IOException if Confluence access fails
+     * Returns true if the URL points to a GitHub file.
      */
+    boolean isGithubUrl(String input) {
+        return input.startsWith("https://github.com/") ||
+               input.startsWith("https://raw.githubusercontent.com/");
+    }
+
+    /**
+     * Creates the GitHub client used to fetch file content.
+     * Overridable in tests to avoid real network calls.
+     */
+    protected GitHub createGithubClient() throws IOException {
+        return new BasicGithub();
+    }
+
+    private String processGithubUrl(String url) {
+        try {
+            String content = createGithubClient().getFileContent(url);
+            if (content != null) {
+                logger.info("Successfully fetched GitHub content from: {}", url);
+                return content;
+            }
+        } catch (Exception e) {
+            logger.warn("Error fetching GitHub content from '{}': {}. Using URL as fallback.", url, e.getMessage());
+        }
+        return url;
+    }
+
     private String processConfluenceUrl(String url) throws IOException {
         if (confluence == null) {
             logger.warn("Confluence client not available, using URL as-is: {}", url);
             return url;
         }
-        
+
         try {
             String value = confluence.contentByUrl(url).getStorage().getValue();
             if (StringUtils.isConfluenceYamlFormat(value)) {
@@ -99,45 +117,25 @@ public class InstructionProcessor {
                 return url + "\n" + value;
             }
         } catch (Exception e) {
-            logger.warn("Error fetching Confluence content from '{}': {}. Using URL as fallback.", 
+            logger.warn("Error fetching Confluence content from '{}': {}. Using URL as fallback.",
                     url, e.getMessage());
             return url;
         }
     }
 
-    /**
-     * Checks if the input string is a file path pattern.
-     * Supports absolute paths (/) and relative paths (./ or ../)
-     * 
-     * @param input the string to check
-     * @return true if the input matches a file path pattern
-     */
     private boolean isFilePath(String input) {
         return input.startsWith("/") || input.startsWith("./") || input.startsWith("../");
     }
 
-    /**
-     * Processes a file path by reading its content.
-     * Resolves paths relative to the current working directory where dmtools is run from.
-     * Implements graceful error handling:
-     * - File not found: Log warning and use original value as fallback
-     * - I/O errors: Log warning and use original value as fallback
-     * - Invalid path: Log warning and use original value as fallback
-     * 
-     * @param input the file path to process
-     * @return the file content, or original path if file not found or error occurs
-     */
     private String processFilePath(String input) {
         try {
-            // Resolve relative paths from working directory (current directory where dmtools is run from)
             Path basePath = Paths.get(workingDirectory);
-            Path filePath = input.startsWith("/") ? 
+            Path filePath = input.startsWith("/") ?
                     Paths.get(input) : basePath.resolve(input).normalize();
 
-            logger.debug("Resolving file path '{}' relative to working directory: {} -> {}", 
+            logger.debug("Resolving file path '{}' relative to working directory: {} -> {}",
                     input, workingDirectory, filePath);
 
-            // Read file content using existing FileConfig utility
             FileConfig fileConfig = new FileConfig();
             String fileContent = fileConfig.readFile(filePath.toString());
 
@@ -145,18 +143,14 @@ public class InstructionProcessor {
                 logger.debug("Successfully loaded file content from: {}", filePath);
                 return fileContent;
             }
-            
-            // File not found - log warning and use original value
-            logger.warn("File not found at: {} (resolved from '{}' relative to '{}'), using original value as fallback", 
+
+            logger.warn("File not found at: {} (resolved from '{}' relative to '{}'), using original value as fallback",
                     filePath, input, workingDirectory);
             return input;
         } catch (RuntimeException e) {
-            // Error reading file or invalid path - log warning and use original value
-            logger.warn("Error processing file path '{}': {}. Using original value as fallback.", 
+            logger.warn("Error processing file path '{}': {}. Using original value as fallback.",
                     input, e.getMessage());
             return input;
         }
     }
 }
-
-
