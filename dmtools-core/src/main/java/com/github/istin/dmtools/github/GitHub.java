@@ -554,16 +554,20 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     /**
-     * Gets file content from either a GitHub API blob URL or a standard GitHub web URL.
+     * Gets file content from either a GitHub API blob URL, a standard GitHub web URL,
+     * or a raw.githubusercontent.com URL.
      *
-     * @param fileUrl The URL to the file (either API blob URL or standard GitHub URL)
+     * @param fileUrl The URL to the file
      * @return The content of the file
      * @throws IOException If there's an error fetching the file
      */
     @Override
     public String getFileContent(String fileUrl) throws IOException {
-        if (fileUrl.contains("github.com/") && fileUrl.contains("/blob/")) {
-            // Handle standard GitHub web URL
+        if (fileUrl.startsWith("https://raw.githubusercontent.com/")) {
+            // Handle raw GitHub URL: https://raw.githubusercontent.com/owner/repo/branch/path
+            return getFileContentFromRawUrl(fileUrl);
+        } else if (fileUrl.contains("github.com/") && fileUrl.contains("/blob/")) {
+            // Handle standard GitHub web URL: https://github.com/owner/repo/blob/branch/path
             return getFileContentFromGithubWebUrl(fileUrl);
         } else {
             // Handle GitHub API blob URL
@@ -622,6 +626,45 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         String blobPath = String.format("repos/%s/git/blobs/%s", ownerRepo, sha);
 
         // Use the API URL method to get the content
+        return getFileContentFromApiUrl(path(blobPath));
+    }
+
+    /**
+     * Gets file content from a raw.githubusercontent.com URL.
+     * Converts URLs like https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}
+     * to the corresponding API URL format.
+     *
+     * @param rawUrl The raw GitHub content URL
+     * @return The content of the file
+     * @throws IOException If there's an error fetching the file
+     */
+    private String getFileContentFromRawUrl(String rawUrl) throws IOException {
+        // Parse: https://raw.githubusercontent.com/owner/repo/branch/path/to/file.md
+        String withoutPrefix = rawUrl.replace("https://raw.githubusercontent.com/", "");
+        String[] parts = withoutPrefix.split("/", 3);
+        if (parts.length < 3) {
+            throw new IllegalArgumentException("Could not parse raw GitHub URL: " + rawUrl);
+        }
+
+        String ownerRepo = parts[0] + "/" + parts[1];
+        String[] branchAndPath = parts[2].split("/", 2);
+        if (branchAndPath.length < 2) {
+            throw new IllegalArgumentException("Could not extract branch and path from raw GitHub URL: " + rawUrl);
+        }
+
+        String branch = branchAndPath[0];
+        String filePath = branchAndPath[1];
+
+        // Get file metadata to obtain the SHA
+        String contentsPath = String.format("repos/%s/contents/%s", ownerRepo, filePath);
+        GenericRequest metadataRequest = new GenericRequest(this, path(contentsPath));
+        metadataRequest.param("ref", branch);
+
+        String metadataResponse = execute(metadataRequest);
+        String sha = new JSONModel(metadataResponse).getString("sha");
+
+        // Get the blob content via SHA
+        String blobPath = String.format("repos/%s/git/blobs/%s", ownerRepo, sha);
         return getFileContentFromApiUrl(path(blobPath));
     }
 

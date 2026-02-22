@@ -121,9 +121,9 @@ The `cliPrompt` field separates CLI prompts from commands for cleaner configurat
 
 **Benefits of `cliPrompt` field:**
 - ✅ **Cleaner JSON**: Prompts separated from command strings
-- ✅ **Multiple Input Types**: Supports plain text, file paths, and Confluence URLs
+- ✅ **Multiple Input Types**: Supports plain text, local file paths, Confluence URLs, and GitHub URLs
 - ✅ **Reusability**: Same prompt file/URL across multiple configurations
-- ✅ **Automatic Processing**: Uses InstructionProcessor for Confluence/file content
+- ✅ **Automatic Processing**: Uses InstructionProcessor for content fetching
 - ✅ **Shell Escaping**: Prevents injection by escaping special characters
 
 **Supported Input Types:**
@@ -137,10 +137,13 @@ The `cliPrompt` field separates CLI prompts from commands for cleaner configurat
 
 // Confluence URL
 "cliPrompt": "https://company.atlassian.net/wiki/spaces/DEV/pages/123/CLI+Prompt+Template"
+
+// GitHub URL (public, or private with SOURCE_GITHUB_TOKEN)
+"cliPrompt": "https://github.com/your-org/playbook/blob/main/prompts/implement.md"
 ```
 
 **How it works:**
-1. Teammate processes `cliPrompt` (fetches Confluence content or reads file if needed)
+1. Teammate processes `cliPrompt` (fetches GitHub/Confluence content or reads file if needed)
 2. Creates temporary file with prompt content (UTF-8 encoded)
 3. Passes file path as quoted parameter to each CLI command
 4. Example: `./script.sh` becomes `./script.sh "/tmp/dmtools_cli_prompt_12345.txt"`
@@ -159,7 +162,7 @@ The `cliPrompt` field separates CLI prompts from commands for cleaner configurat
 |-----------|------|---------|------|
 | `skipAIProcessing` | Boolean | `false` | **CRITICAL**: CLI agent generates the response, not DMtools AI |
 | `outputType` | String | - | Usually `none` since post-action handles output, or `field`/`comment` for direct updates |
-| `cliPrompt` | String | - | **NEW v1.7.130+**: Prompt for CLI agent (plain text, file path, or Confluence URL) |
+| `cliPrompt` | String | - | **NEW v1.7.130+**: Prompt for CLI agent (plain text, local file path, Confluence URL, or GitHub URL) |
 | `cliCommands` | Array | - | Scripts that run CLI agents |
 | `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133+**: Require `output/response.md` before updating fields (prevents data loss) |
 | `cleanupInputFolder` | Boolean | `true` | **NEW v1.7.133+**: Cleanup `input/[TICKET-KEY]/` folder after execution |
@@ -803,7 +806,17 @@ function action(params) {
 }
 ```
 
-### 4. Documentation Generation
+### 4. Prompt from Shared GitHub Playbook
+```json
+{
+  "cliPrompt": "https://github.com/your-org/playbook/blob/main/prompts/implement.md",
+  "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"],
+  "skipAIProcessing": true,
+  "postJSAction": "agents/js/developTicketAndCreatePR.js"
+}
+```
+
+### 5. Documentation Generation
 ```json
 {
   "cliPrompt": "Generate documentation",
@@ -950,7 +963,7 @@ CLI Integration with Teammate enables:
 - ✅ Complex code generation and analysis tasks
 - ✅ Automated PR creation and ticket updates
 - ✅ Flexible post-processing with JavaScript
-- ✅ **NEW**: Clean configuration with `cliPrompt` field supporting plain text, files, and Confluence URLs
+- ✅ **NEW**: Clean configuration with `cliPrompt` field supporting plain text, files, Confluence URLs, and GitHub URLs
 
 **Key Pattern**: Input folder → CLI agent → Output folder → Post-action processing
 
@@ -962,7 +975,7 @@ The `cliPrompt` field (introduced in v1.7.130+) separates CLI prompts from comma
 
 ### Features
 
-- **Multiple Input Types**: Plain text, local file paths, Confluence URLs
+- **Multiple Input Types**: Plain text, local file paths, Confluence URLs, GitHub URLs
 - **Automatic Processing**: Uses InstructionProcessor for content fetching
 - **Shell Escaping**: Prevents injection by escaping `\`, `"`, `$`, `` ` ``
 - **Backwards Compatible**: Existing inline prompts still work
@@ -974,6 +987,7 @@ The `cliPrompt` field (introduced in v1.7.130+) separates CLI prompts from comma
 | **Plain text** | `"cliPrompt": "Implement from input/"` |
 | **File path** | `"cliPrompt": "./agents/prompts/dev.md"` |
 | **Confluence URL** | `"cliPrompt": "https://company.atlassian.net/wiki/..."` |
+| **GitHub URL** | `"cliPrompt": "https://github.com/org/repo/blob/main/prompts/dev.md"` |
 
 ### Runtime Behavior
 

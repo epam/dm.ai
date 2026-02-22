@@ -2,6 +2,7 @@ package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.github.GitHub;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,8 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -312,5 +315,138 @@ class InstructionProcessorTest {
         System.out.println("FormattingRules: " + expandedFormatting[0]);
         System.out.println("\nFewShots: " + expandedFewShots[0]);
         System.out.println("=".repeat(70) + "\n");
+    }
+
+
+    // ---- GitHub URL support ----
+
+    @Test
+    void testIsGithubUrl_BlobUrl() {
+        InstructionProcessor p = new InstructionProcessor(null, tempDir.toString());
+        assertTrue(p.isGithubUrl("https://github.com/IstiN/dmtools/blob/main/CLAUDE.md"));
+    }
+
+    @Test
+    void testIsGithubUrl_RawUrl() {
+        InstructionProcessor p = new InstructionProcessor(null, tempDir.toString());
+        assertTrue(p.isGithubUrl("https://raw.githubusercontent.com/IstiN/dmtools/main/CLAUDE.md"));
+    }
+
+    @Test
+    void testIsGithubUrl_ConfluenceUrl() {
+        InstructionProcessor p = new InstructionProcessor(null, tempDir.toString());
+        assertFalse(p.isGithubUrl("https://company.atlassian.net/wiki/spaces/DEV/pages/123"));
+    }
+
+    @Test
+    void testGithubUrlFetchesContent() throws IOException {
+        String expectedContent = "# CLAUDE.md content here";
+        GitHub mockGithub = mock(GitHub.class);
+        when(mockGithub.getFileContent("https://github.com/IstiN/dmtools/blob/main/CLAUDE.md"))
+                .thenReturn(expectedContent);
+
+        InstructionProcessor p = new InstructionProcessor(null, tempDir.toString()) {
+            @Override
+            protected GitHub createGithubClient() {
+                return mockGithub;
+            }
+        };
+
+        String[] result = p.extractIfNeeded("https://github.com/IstiN/dmtools/blob/main/CLAUDE.md");
+
+        assertEquals(1, result.length);
+        assertEquals(expectedContent, result[0]);
+    }
+
+    @Test
+    void testGithubUrlFetchFailureFallsBackToOriginalUrl() throws IOException {
+        String originalUrl = "https://github.com/IstiN/dmtools/blob/main/CLAUDE.md";
+        GitHub mockGithub = mock(GitHub.class);
+        when(mockGithub.getFileContent(originalUrl)).thenThrow(new IOException("Network error"));
+
+        InstructionProcessor p = new InstructionProcessor(null, tempDir.toString()) {
+            @Override
+            protected GitHub createGithubClient() {
+                return mockGithub;
+            }
+        };
+
+        String[] result = p.extractIfNeeded(originalUrl);
+
+        assertEquals(1, result.length);
+        assertEquals(originalUrl, result[0]);
+    }
+
+    @Test
+    void testGithubUrlNullContentFallsBackToOriginalUrl() throws IOException {
+        String originalUrl = "https://github.com/IstiN/dmtools/blob/main/CLAUDE.md";
+        GitHub mockGithub = mock(GitHub.class);
+        when(mockGithub.getFileContent(originalUrl)).thenReturn(null);
+
+        InstructionProcessor p = new InstructionProcessor(null, tempDir.toString()) {
+            @Override
+            protected GitHub createGithubClient() {
+                return mockGithub;
+            }
+        };
+
+        String[] result = p.extractIfNeeded(originalUrl);
+
+        assertEquals(1, result.length);
+        assertEquals(originalUrl, result[0]);
+    }
+
+    @Test
+    void testGithubUrlNotRoutedToConfluence() throws IOException {
+        GitHub mockGithub = mock(GitHub.class);
+        when(mockGithub.getFileContent(anyString())).thenReturn("github file content");
+
+        InstructionProcessor p = new InstructionProcessor(confluence, tempDir.toString()) {
+            @Override
+            protected GitHub createGithubClient() {
+                return mockGithub;
+            }
+        };
+
+        p.extractIfNeeded("https://github.com/IstiN/dmtools/blob/main/CLAUDE.md");
+
+        verifyNoInteractions(confluence);
+    }
+
+    @Test
+    void testRawGithubUrlFetchesContent() throws IOException {
+        String rawUrl = "https://raw.githubusercontent.com/IstiN/dmtools/main/CLAUDE.md";
+        String expectedContent = "# CLAUDE.md content";
+        GitHub mockGithub = mock(GitHub.class);
+        when(mockGithub.getFileContent(rawUrl)).thenReturn(expectedContent);
+
+        InstructionProcessor p = new InstructionProcessor(null, tempDir.toString()) {
+            @Override
+            protected GitHub createGithubClient() {
+                return mockGithub;
+            }
+        };
+
+        String[] result = p.extractIfNeeded(rawUrl);
+
+        assertEquals(1, result.length);
+        assertEquals(expectedContent, result[0]);
+    }
+
+    @Test
+    void testRawGithubUrlNotRoutedToConfluence() throws IOException {
+        GitHub mockGithub = mock(GitHub.class);
+        when(mockGithub.getFileContent(anyString())).thenReturn("raw content");
+
+        InstructionProcessor p = new InstructionProcessor(confluence, tempDir.toString()) {
+            @Override
+            protected GitHub createGithubClient() {
+                return mockGithub;
+            }
+        };
+
+        p.extractIfNeeded("https://raw.githubusercontent.com/IstiN/dmtools/main/CLAUDE.md");
+
+        verifyNoInteractions(confluence);
     }
 }
