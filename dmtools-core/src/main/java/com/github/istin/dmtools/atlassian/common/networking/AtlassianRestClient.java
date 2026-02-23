@@ -19,9 +19,8 @@ public abstract class AtlassianRestClient extends AbstractRestClient {
 
     @Override
     public Request.Builder sign(Request.Builder builder) {
-        System.out.println(authType + " " + authorization);
         return builder
-                .header("Authorization", authType + " " +authorization)
+                .header("Authorization", authType + " " + authorization)
                 .header("X-Atlassian-Token", "nocheck")
                 .header("Content-Type", "application/json")
                 ;
