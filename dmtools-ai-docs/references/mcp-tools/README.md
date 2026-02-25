@@ -3,7 +3,7 @@
 Complete reference for all MCP tools available in DMtools.
 
 **Total Integrations**: 17
-**Total Tools**: 164
+**Total Tools**: 168
 
 *Updated: 2026-02-25*
 
@@ -33,7 +33,7 @@ dmtools <tool_name> [arguments]
 | **FIGMA** | 12 | [figma-tools.md](figma-tools.md) |
 | **FILE** | 4 | [file-tools.md](file-tools.md) |
 | **GEMINI** | 2 | [gemini-tools.md](gemini-tools.md) |
-| **GITHUB** | 12 | [github-tools.md](github-tools.md) |
+| **GITHUB** | 16 | [github-tools.md](github-tools.md) |
 | **JIRA** | 52 | [jira-tools.md](jira-tools.md) |
 | **KB** | 5 | [kb-tools.md](kb-tools.md) |
 | **MERMAID** | 3 | [mermaid-tools.md](mermaid-tools.md) |
@@ -60,7 +60,7 @@ file_write('output.txt', 'content');
 
 - [JIRA](jira-tools.md) - 52 tools
 - [ADO](ado-tools.md) - 14 tools
-- [GITHUB](github-tools.md) - 12 tools (pull requests)
+- [GITHUB](github-tools.md) - 16 tools (pull requests, CI/CD monitoring)
 
 ### Communication
 

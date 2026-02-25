@@ -1,6 +1,6 @@
 # GitHub MCP Tools Reference
 
-**Total tools**: 12
+**Total tools**: 16
 **Integration key**: `github`
 **Category**: `pull_requests`
 
@@ -267,6 +267,111 @@ Returns: files changed, additions, deletions per file.
 
 ---
 
+### `github_get_commit_check_runs`
+
+Get all check runs (CI/CD status checks) for a specific commit SHA. Returns details about each check including status, conclusion, and output.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `commitSha` | String | ✅ | Commit SHA to get check runs for |
+
+```bash
+dmtools github_get_commit_check_runs workspace=IstiN repository=dmtools commitSha=abc123def456...
+```
+
+Returns JSON with `total_count` and array of `check_runs`, each containing:
+- `id` — Check run ID
+- `name` — Check name (e.g., "unit-tests", "Unit Tests")
+- `status` — `queued`, `in_progress`, or `completed`
+- `conclusion` — `success`, `failure`, `cancelled`, `skipped`, etc. (only when completed)
+- `html_url` — Link to check run details
+- `output` — Check output with `title`, `summary`, `text`
+
+---
+
+### `github_get_workflow_run`
+
+Get details of a specific GitHub Actions workflow run by ID. Returns status, conclusion, logs URL, and timing information.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `runId` | String | ✅ | Workflow run ID (from check runs or PR status) |
+
+```bash
+dmtools github_get_workflow_run workspace=IstiN repository=dmtools runId=22403207268
+```
+
+Returns workflow run object with:
+- `id`, `name` — Run ID and workflow name
+- `status` — `queued`, `in_progress`, or `completed`
+- `conclusion` — `success`, `failure`, `cancelled`, etc.
+- `html_url` — Link to run
+- `jobs_url`, `logs_url` — API endpoints for jobs and logs
+- `event`, `head_sha`, `head_branch` — Trigger info
+- `created_at`, `updated_at`, `run_started_at` — Timing
+
+---
+
+### `github_get_workflow_run_jobs`
+
+Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `runId` | String | ✅ | Workflow run ID |
+
+```bash
+dmtools github_get_workflow_run_jobs workspace=IstiN repository=dmtools runId=22403207268
+```
+
+Returns JSON with `total_count` and array of `jobs`, each containing:
+- `id` — Job ID (use with `github_get_job_logs`)
+- `name` — Job name (e.g., "unit-tests", "build")
+- `status`, `conclusion` — Job status and result
+- `steps` — Array of steps with individual status/conclusion
+- `html_url` — Link to job details
+
+---
+
+### `github_get_job_logs`
+
+Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `jobId` | String | ✅ | Job ID from `github_get_workflow_run_jobs` |
+
+```bash
+dmtools github_get_job_logs workspace=IstiN repository=dmtools jobId=64855476586
+```
+
+Returns raw text log output from all job steps. Useful for debugging test failures, build errors, or analyzing CI/CD behavior.
+
+**Common workflow for debugging failed CI**:
+```bash
+# 1. Get check runs for the failing commit
+dmtools github_get_commit_check_runs workspace=IstiN repository=dmtools commitSha=abc123...
+
+# 2. Find the failed workflow run ID from check_runs, then get run details
+dmtools github_get_workflow_run workspace=IstiN repository=dmtools runId=22403207268
+
+# 3. Get jobs to find which one failed
+dmtools github_get_workflow_run_jobs workspace=IstiN repository=dmtools runId=22403207268
+
+# 4. Get logs from the failed job
+dmtools github_get_job_logs workspace=IstiN repository=dmtools jobId=64855476586
+```
+
+---
+
 ## Usage in JavaScript Agents
 
 ```javascript
@@ -312,6 +417,27 @@ print('Open threads: ' + openThreads.length);
 
 // Resolve a thread using its GraphQL node ID
 github_resolve_pr_thread('PRRT_kwDOBQfyNc5A_example');
+
+// Check CI/CD status for a commit
+const checkRuns = JSON.parse(github_get_commit_check_runs('IstiN', 'dmtools', 'abc123def456...'));
+const failedChecks = checkRuns.check_runs.filter(c => c.conclusion === 'failure');
+print('Failed checks: ' + failedChecks.length);
+
+// Get workflow run details
+const run = JSON.parse(github_get_workflow_run('IstiN', 'dmtools', '22403207268'));
+print('Workflow: ' + run.name + ' - ' + run.conclusion);
+
+// Get all jobs for a workflow run
+const jobs = JSON.parse(github_get_workflow_run_jobs('IstiN', 'dmtools', '22403207268'));
+const failedJobs = jobs.jobs.filter(j => j.conclusion === 'failure');
+print('Failed jobs: ' + failedJobs.length);
+
+// Get job logs for debugging
+const logs = github_get_job_logs('IstiN', 'dmtools', '64855476586');
+if (logs.includes('FAILED')) {
+    print('Found test failures in logs');
+    // Parse logs to extract failure details
+}
 ```
 
 ## Setup
