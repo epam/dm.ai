@@ -2,10 +2,10 @@
 
 Complete reference for all MCP tools available in DMtools.
 
-**Total Integrations**: 16
-**Total Tools**: 152
+**Total Integrations**: 17
+**Total Tools**: 164
 
-*Auto-generated from `dmtools list` on: 2026-02-02 09:33:29*
+*Updated: 2026-02-25*
 
 ## Quick Start
 
@@ -33,6 +33,7 @@ dmtools <tool_name> [arguments]
 | **FIGMA** | 12 | [figma-tools.md](figma-tools.md) |
 | **FILE** | 4 | [file-tools.md](file-tools.md) |
 | **GEMINI** | 2 | [gemini-tools.md](gemini-tools.md) |
+| **GITHUB** | 12 | [github-tools.md](github-tools.md) |
 | **JIRA** | 52 | [jira-tools.md](jira-tools.md) |
 | **KB** | 5 | [kb-tools.md](kb-tools.md) |
 | **MERMAID** | 3 | [mermaid-tools.md](mermaid-tools.md) |
@@ -55,10 +56,11 @@ file_write('output.txt', 'content');
 
 ## Integration Categories
 
-### Issue Tracking
+### Issue Tracking & Source Control
 
 - [JIRA](jira-tools.md) - 52 tools
 - [ADO](ado-tools.md) - 14 tools
+- [GITHUB](github-tools.md) - 8 tools (pull requests)
 
 ### Communication
 

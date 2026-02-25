@@ -363,18 +363,48 @@ class TestCaseProcessorTest {
 ## Development Workflow
 
 ### Adding a New MCP Tool
+
+#### ⚠️ MCP Tool Parameter Type Rules (CRITICAL)
+
+The generated `MCPToolExecutor` can only convert CLI String input to a limited set of types. **Only use these parameter types** in `@MCPTool`-annotated methods:
+
+| ✅ Allowed | ❌ Not Allowed |
+|-----------|---------------|
+| `String` | `boolean` / `Boolean` |
+| `Integer` / `int` | `Calendar` / `Date` |
+| `Long` / `long` | Complex objects |
+| `String[]` | Enums |
+
+**If the underlying method uses incompatible types** (e.g., `boolean checkAllRequests`, `Calendar startDate`), create a simple MCP-specific wrapper method:
+
+```java
+// ❌ BAD: boolean and Calendar cannot be converted from CLI String
+@MCPTool(name = "my_tool", ...)
+public List<Item> complexMethod(String workspace, boolean paginate, Calendar since) { ... }
+
+// ✅ GOOD: Create a wrapper with String-only params, call the real method with defaults
+@MCPTool(name = "my_tool", ...)
+public List<Item> myToolMCP(
+        @MCPParam(name = "workspace", ...) String workspace) throws IOException {
+    return complexMethod(workspace, false, null);  // Apply sensible defaults
+}
+```
+
+#### Steps
+
 1. Create method in appropriate client class (e.g., `BasicJiraClient`, `BasicConfluence`)
 2. Annotate with `@MCPTool(name, description, integration, category)`
 3. Annotate parameters with `@MCPParam(name, description, required, example)`
-4. Build project to trigger annotation processor: `./gradlew :dmtools-core:compileJava`
-5. Generated code appears in `dmtools-core/build/generated/sources/annotationProcessor/java/main`
-6. **Write unit tests** for the new tool with mocks (MANDATORY)
-7. **Update documentation** in `docs/README-MCP.md`:
+4. **Ensure all parameters are String/Integer/Long/String[] only** (see type rules above)
+5. Build project to trigger annotation processor: `./gradlew :dmtools-core:compileJava`
+6. Generated code appears in `dmtools-core/build/generated/sources/annotationProcessor/java/main`
+7. **Write unit tests** for the new tool with mocks (MANDATORY)
+8. **Update documentation** in `docs/README-MCP.md`:
    - Add tool to the appropriate category table (Jira, Confluence, etc.)
    - Include tool name, parameters, and clear description
    - Follow existing format in the file
    - Update tool count if adding to new category
-8. Verify tool is available:
+9. Verify tool is available:
    - CLI: `./dmtools.sh list` (should show new tool)
    - CLI execution: `./dmtools.sh <tool_name> <args>`
    - JavaScript agents: `tool_name()` function (via GraalJS)
@@ -387,6 +417,34 @@ class TestCaseProcessorTest {
 |------|------------|-------------|
 | `jira_update_labels` | `key`, `labels` | Update labels for a Jira ticket. Labels parameter is comma-separated string. |
 ```
+
+### Adding a New Integration (Client)
+
+When exposing a new client class (e.g., GitHub, GitLab) as an MCP integration, follow ALL steps:
+
+1. **Annotate methods** with `@MCPTool` / `@MCPParam` (follow parameter type rules above)
+2. **Register client** in `McpCliHandler.createClientInstances()`:
+   ```java
+   try {
+       clients.put("myintegration", MyClient.getInstance());
+   } catch (IOException e) {
+       logger.warn("Failed to create MyClient: {}", e.getMessage());
+   }
+   ```
+3. **Add to `getAvailableIntegrations()`** in `McpCliHandler`:
+   ```java
+   integrations.addAll(Arrays.asList(
+       "jira", "github", "myintegration"  // ← add here
+   ));
+   ```
+4. **Add to `DMTOOLS_INTEGRATIONS`** in `dmtools.env`:
+   ```bash
+   # ⚠️ CRITICAL: If DMTOOLS_INTEGRATIONS is set, it OVERRIDES getAvailableIntegrations()
+   # Any integration NOT listed here will be INVISIBLE to `dmtools list`
+   DMTOOLS_INTEGRATIONS=jira,cli,file,github,myintegration
+   ```
+5. Build and install: `./buildInstallLocal.sh`
+6. Verify: `./dmtools.sh list myintegration` should return the tools
 
 ### Adding a New Job
 1. Create class extending `AbstractJob<Params, Result>`

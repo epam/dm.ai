@@ -15,6 +15,7 @@ import com.github.istin.dmtools.di.KnowledgeBaseComponent;
 import com.github.istin.dmtools.di.DaggerMermaidIndexComponent;
 import com.github.istin.dmtools.di.MermaidIndexComponent;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
+import com.github.istin.dmtools.github.BasicGithub;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.common.utils.JSONUtils;
 import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
@@ -510,6 +511,14 @@ public class McpCliHandler {
         }
 
         try {
+            // Create GitHub client
+            clients.put("github", BasicGithub.getInstance());
+            logger.debug("Created BasicGithub instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicGithub: {}", e.getMessage());
+        }
+
+        try {
             // Create Figma client
             clients.put("figma", BasicFigmaClient.getInstance());
             logger.debug("Created BasicFigmaClient instance");
@@ -744,7 +753,7 @@ public class McpCliHandler {
             integrations.addAll(Arrays.asList(
                 "jira", "jira_xray", "ado", "confluence", "figma",
                 "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
-                "file", "kb", "mermaid"
+                "file", "kb", "mermaid", "github"
             ));
         }
         logger.debug("Available integrations: {}", integrations);

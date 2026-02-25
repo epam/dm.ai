@@ -48,4 +48,24 @@ public class GitHubComment extends JSONModel implements IComment, IDiffHunk {
         return getString("diff_hunk");
     }
 
+    public String getPath() {
+        return getString("path");
+    }
+
+    public Long getInReplyToId() {
+        return getLong("in_reply_to_id");
+    }
+
+    public Long getPullRequestReviewId() {
+        return getLong("pull_request_review_id");
+    }
+
+    public Long getLine() {
+        return getLong("line");
+    }
+
+    public Long getOriginalLine() {
+        return getLong("original_line");
+    }
+
 }

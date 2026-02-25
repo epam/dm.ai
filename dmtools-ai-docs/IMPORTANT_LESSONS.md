@@ -483,6 +483,90 @@ Remember:
 - Users can read full docs when needed
 ```
 
+## Errors Made During MCP Tool Development
+
+### 15. MCP Tool Parameter Types — boolean/Calendar Cause ClassCastException
+
+**Error**: Annotated methods with `@MCPTool` that have `boolean` or `Calendar` parameters.
+
+**What happened**: CLI execution fails with `java.lang.String cannot be cast to java.lang.Boolean`. The generated `MCPToolExecutor` can only convert String input to `String`, `Integer`, `Long`, and `String[]`. Any other type causes a runtime cast error.
+
+**Should be**: Only use `String/Integer/Long/String[]` in `@MCPTool` methods. For methods that require complex types (boolean, Calendar, enums), create a **String-only wrapper** that calls the real method with defaults:
+
+```java
+// ❌ BAD: boolean causes ClassCastException at CLI runtime
+@MCPTool(name = "github_list_prs", ...)
+public List<IPullRequest> pullRequests(String workspace, String repository,
+        String state, boolean checkAllRequests, Calendar startDate) throws IOException { ... }
+
+// ✅ GOOD: wrapper with String-only params, calls real method with safe defaults
+@MCPTool(name = "github_list_prs", ...)
+public List<IPullRequest> listPullRequests(
+        @MCPParam(name = "workspace", ...) String workspace,
+        @MCPParam(name = "repository", ...) String repository,
+        @MCPParam(name = "state", ...) String state) throws IOException {
+    return pullRequests(workspace, repository, state, false, null);
+}
+```
+
+**Fix for skill description**:
+```markdown
+MCP Tool Parameter Type Rules
+
+Only use these types in @MCPTool-annotated method signatures:
+- String
+- Integer / int
+- Long / long
+- String[]
+
+These types cause ClassCastException and MUST NOT be used:
+- boolean / Boolean
+- Calendar / Date
+- Any enum
+- Any complex object
+
+For existing methods with incompatible types: create a separate wrapper method
+that takes only String parameters and calls the real method with sensible defaults.
+```
+
+---
+
+### 16. DMTOOLS_INTEGRATIONS Env Var Overrides getAvailableIntegrations()
+
+**Error**: Added a new integration key to `McpCliHandler.getAvailableIntegrations()` but forgot to also add it to `DMTOOLS_INTEGRATIONS` in `dmtools.env`.
+
+**What happened**: `./dmtools.sh list github` returned `{"tools": []}` even though the code was correct. The `DMTOOLS_INTEGRATIONS` env variable, when set, **completely replaces** the hardcoded list from `getAvailableIntegrations()`.
+
+**Should be**: When registering a new integration, check `dmtools.env` for `DMTOOLS_INTEGRATIONS` and add the new key there too.
+
+**Fix for skill description**:
+```markdown
+Adding a New Integration — DMTOOLS_INTEGRATIONS Gotcha
+
+When you add "myintegration" to McpCliHandler.getAvailableIntegrations():
+  integrations.addAll(Arrays.asList("jira", ..., "myintegration"));
+
+Also check if dmtools.env has DMTOOLS_INTEGRATIONS set:
+  DMTOOLS_INTEGRATIONS=jira,cli,file,...   ← must add "myintegration" here too!
+
+If DMTOOLS_INTEGRATIONS is present in env, it OVERRIDES the getAvailableIntegrations()
+hardcoded list. Any integration NOT listed in DMTOOLS_INTEGRATIONS will be invisible
+to `dmtools list <integration>` even if registered in code.
+
+The env var is useful for production environments to restrict which integrations
+are exposed, but during development it's a common pitfall to forget to update it.
+
+Full checklist when adding a new integration:
+1. @MCPTool annotations on methods (String params only!)
+2. clients.put("key", ...) in createClientInstances()
+3. Add key to getAvailableIntegrations() list
+4. Add key to DMTOOLS_INTEGRATIONS in dmtools.env
+5. ./buildInstallLocal.sh
+6. Verify: dmtools list myintegration  → should show tools
+```
+
+---
+
 ## Next Steps for Skill Improvement
 
 - [ ] Update skill description with new patterns section

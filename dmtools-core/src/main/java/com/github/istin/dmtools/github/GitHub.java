@@ -10,6 +10,8 @@ import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.github.model.*;
 import com.github.istin.dmtools.job.JobRunner;
+import com.github.istin.dmtools.mcp.MCPParam;
+import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -106,7 +108,12 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @Override
-    public List<IPullRequest> pullRequests(String workspace, String repository, String state, boolean checkAllRequests, Calendar startDate) throws IOException {
+    public List<IPullRequest> pullRequests(
+            String workspace,
+            String repository,
+            String state,
+            boolean checkAllRequests,
+            Calendar startDate) throws IOException {
         boolean isMerged = state.equalsIgnoreCase(IPullRequest.PullRequestState.STATE_MERGED);
         boolean isDeclined = state.equalsIgnoreCase(IPullRequest.PullRequestState.STATE_DECLINED);
         if (isMerged || isDeclined) {
@@ -155,8 +162,36 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return allPullRequests;
     }
 
+    @MCPTool(
+            name = "github_list_prs",
+            description = "List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public List<IPullRequest> listPullRequests(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "state", description = "The state of pull requests to list: 'open', 'closed', or 'merged'", required = true, example = "open")
+            String state) throws IOException {
+        return pullRequests(workspace, repository, state, false, null);
+    }
+
     @Override
-    public IPullRequest pullRequest(String workspace, String repository, String pullRequestId) throws IOException {
+    @MCPTool(
+            name = "github_get_pr",
+            description = "Get details of a GitHub pull request including title, description, status, author, branches, and merge info.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public IPullRequest pullRequest(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId) throws IOException {
         String response = getPullRequestResponse(workspace, repository, pullRequestId, false);
         return new GitHubPullRequest(response);
     }
@@ -182,16 +217,27 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @Override
-    public List<IComment> pullRequestComments(String workspace, String repository, String pullRequestId) throws IOException {
+    @MCPTool(
+            name = "github_get_pr_comments",
+            description = "Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public List<IComment> pullRequestComments(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId) throws IOException {
         String path = path(String.format("repos/%s/%s/pulls/%s/comments", workspace, repository, pullRequestId));
         GenericRequest getRequest = new GenericRequest(this, path);
         String response = execute(getRequest);
         List<IComment> result = new ArrayList<>();
-        if (response == null) {
-            return result;
+        if (response != null) {
+            List<IComment> comments = JSONModel.convertToModels(GitHubComment.class, new JSONArray(response));
+            result.addAll(comments);
         }
-        List<IComment> comments = JSONModel.convertToModels(GitHubComment.class, new JSONArray(response));
-        result.addAll(comments);
         result.addAll(pullRequestCommentsFromIssue(workspace, repository, pullRequestId));
         result.sort((c1, c2) -> c1.getCreated().compareTo(c2.getCreated()));
         return result;
@@ -207,8 +253,72 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return JSONModel.convertToModels(GitHubComment.class, new JSONArray(response));
     }
 
+    @MCPTool(
+            name = "github_get_pr_conversations",
+            description = "Get all review conversations (inline code comment threads) for a GitHub pull request. Groups inline code review comments into threads showing root comment and replies. Also includes general PR discussion comments as separate entries.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public List<GitHubConversation> getPRConversations(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId) throws IOException {
+        String path = path(String.format("repos/%s/%s/pulls/%s/comments", workspace, repository, pullRequestId));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        String response = execute(getRequest);
+
+        List<GitHubConversation> conversations = new ArrayList<>();
+        List<GitHubComment> inlineComments = new ArrayList<>();
+        if (response != null) {
+            inlineComments = JSONModel.convertToModels(GitHubComment.class, new JSONArray(response));
+        }
+
+        Map<Long, GitHubConversation> threadMap = new LinkedHashMap<>();
+        for (GitHubComment comment : inlineComments) {
+            Long replyToId = comment.getInReplyToId();
+            if (replyToId == null) {
+                GitHubConversation conversation = new GitHubConversation(comment);
+                threadMap.put(Long.parseLong(comment.getId()), conversation);
+                conversations.add(conversation);
+            } else {
+                GitHubConversation parentConversation = threadMap.get(replyToId);
+                if (parentConversation != null) {
+                    parentConversation.addReply(comment);
+                } else {
+                    GitHubConversation orphanConversation = new GitHubConversation(comment);
+                    threadMap.put(Long.parseLong(comment.getId()), orphanConversation);
+                    conversations.add(orphanConversation);
+                }
+            }
+        }
+
+        List<IComment> issueComments = pullRequestCommentsFromIssue(workspace, repository, pullRequestId);
+        for (IComment issueComment : issueComments) {
+            if (issueComment instanceof GitHubComment) {
+                conversations.add(new GitHubConversation((GitHubComment) issueComment));
+            }
+        }
+
+        return conversations;
+    }
+
     @Override
-    public List<IActivity> pullRequestActivities(String workspace, String repository, String pullRequestId) throws IOException {
+    @MCPTool(
+            name = "github_get_pr_activities",
+            description = "Get all activities for a GitHub pull request including reviews (approvals, change requests), inline code comments, and general discussion comments.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public List<IActivity> pullRequestActivities(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId) throws IOException {
         // Fetch review-level activities (approvals, review comments, change requests)
         String reviewsPath = path(String.format("repos/%s/%s/pulls/%s/reviews", workspace, repository, pullRequestId));
         GenericRequest reviewsRequest = new GenericRequest(this, reviewsPath);
@@ -281,12 +391,155 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @Override
-    public String addPullRequestComment(String workspace, String repository, String pullRequestId, String text) throws IOException {
+    @MCPTool(
+            name = "github_add_pr_comment",
+            description = "Add a comment to a GitHub pull request discussion.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String addPullRequestComment(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId,
+            @MCPParam(name = "text", description = "The comment text to add", required = true, example = "Looks good!")
+            String text) throws IOException {
         String path = path(String.format("repos/%s/%s/issues/%s/comments", workspace, repository, pullRequestId));
         GenericRequest postRequest = new GenericRequest(this, path);
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("body", text);
         postRequest.setBody(jsonObject.toString());
+        return post(postRequest);
+    }
+
+    @MCPTool(
+            name = "github_reply_to_pr_thread",
+            description = "Reply to an existing inline code review comment thread in a GitHub pull request. Use the comment ID of the root comment (or any comment) in the thread as inReplyToId.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String replyToPullRequestComment(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId,
+            @MCPParam(name = "inReplyToId", description = "The ID of the comment to reply to (from github_get_pr_conversations rootComment.id or replies[].id)", required = true, example = "123456789")
+            String inReplyToId,
+            @MCPParam(name = "text", description = "The reply text (Markdown supported)", required = true, example = "Fixed in the latest commit.")
+            String text) throws IOException {
+        String path = path(String.format("repos/%s/%s/pulls/%s/comments", workspace, repository, pullRequestId));
+        GenericRequest postRequest = new GenericRequest(this, path);
+        JSONObject body = new JSONObject();
+        body.put("body", text);
+        body.put("in_reply_to", Long.parseLong(inReplyToId));
+        postRequest.setBody(body.toString());
+        return post(postRequest);
+    }
+
+    @MCPTool(
+            name = "github_add_inline_comment",
+            description = "Create a new inline code review comment on a specific file and line in a GitHub pull request. To comment on a range of lines, provide both startLine and line. Side is 'RIGHT' for new code (default) or 'LEFT' for old code.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String addInlineReviewComment(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId,
+            @MCPParam(name = "path", description = "The relative file path in the repository", required = true, example = "src/main/java/com/example/Foo.java")
+            String filePath,
+            @MCPParam(name = "line", description = "The line number in the file to comment on", required = true, example = "42")
+            String line,
+            @MCPParam(name = "text", description = "The comment text (Markdown supported)", required = true, example = "This should be refactored.")
+            String text,
+            @MCPParam(name = "commitId", description = "The SHA of the commit to comment on. If empty, uses the PR head commit.", required = false, example = "abc123def456")
+            String commitId,
+            @MCPParam(name = "startLine", description = "For multi-line comments: the first line of the range. Must be less than line.", required = false, example = "40")
+            String startLine,
+            @MCPParam(name = "side", description = "Which diff side to comment on: RIGHT (new code, default) or LEFT (old code)", required = false, example = "RIGHT")
+            String side) throws IOException {
+        String resolvedCommitId = commitId;
+        if (resolvedCommitId == null || resolvedCommitId.trim().isEmpty()) {
+            String prResponse = getPullRequestResponse(workspace, repository, pullRequestId, false);
+            JSONObject prJson = new JSONObject(prResponse);
+            resolvedCommitId = prJson.getJSONObject("head").getString("sha");
+        }
+        String path = path(String.format("repos/%s/%s/pulls/%s/comments", workspace, repository, pullRequestId));
+        GenericRequest postRequest = new GenericRequest(this, path);
+        JSONObject body = new JSONObject();
+        body.put("body", text);
+        body.put("commit_id", resolvedCommitId);
+        body.put("path", filePath);
+        body.put("line", Integer.parseInt(line));
+        body.put("side", (side != null && !side.trim().isEmpty()) ? side.toUpperCase() : "RIGHT");
+        if (startLine != null && !startLine.trim().isEmpty()) {
+            body.put("start_line", Integer.parseInt(startLine));
+            body.put("start_side", (side != null && !side.trim().isEmpty()) ? side.toUpperCase() : "RIGHT");
+        }
+        postRequest.setBody(body.toString());
+        return post(postRequest);
+    }
+
+    @MCPTool(
+            name = "github_get_pr_review_threads",
+            description = "Get all review threads for a GitHub pull request via GraphQL, including each thread's node ID (needed for resolving), resolved status, file path, line, and comments. Use the returned thread 'id' with github_resolve_pr_thread.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String getPullRequestReviewThreads(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId) throws IOException {
+        String query = "query($owner: String!, $repo: String!, $prNumber: Int!) { " +
+                "repository(owner: $owner, name: $repo) { " +
+                "pullRequest(number: $prNumber) { " +
+                "reviewThreads(first: 100) { " +
+                "nodes { " +
+                "id isResolved path line startLine " +
+                "comments(first: 50) { " +
+                "nodes { databaseId body author { login } createdAt } " +
+                "} } } } } }";
+        JSONObject variables = new JSONObject();
+        variables.put("owner", workspace);
+        variables.put("repo", repository);
+        variables.put("prNumber", Integer.parseInt(pullRequestId));
+        return executeGraphQL(query, variables);
+    }
+
+    @MCPTool(
+            name = "github_resolve_pr_thread",
+            description = "Resolve a review thread in a GitHub pull request. Requires the thread's GraphQL node ID, which can be obtained from github_get_pr_review_threads (the 'id' field of each thread).",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String resolveReviewThread(
+            @MCPParam(name = "threadId", description = "The GraphQL node ID of the review thread to resolve (from github_get_pr_review_threads thread.id)", required = true, example = "PRRT_kwDOBQfyNc5A...")
+            String threadId) throws IOException {
+        String mutation = String.format(
+                "mutation { resolveReviewThread(input: { threadId: \"%s\" }) { thread { id isResolved } } }",
+                threadId);
+        return executeGraphQL(mutation, null);
+    }
+
+    private String executeGraphQL(String query, JSONObject variables) throws IOException {
+        String graphqlPath = path("graphql");
+        GenericRequest postRequest = new GenericRequest(this, graphqlPath);
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("query", query);
+        if (variables != null) {
+            requestBody.put("variables", variables);
+        }
+        postRequest.setBody(requestBody.toString());
         return post(postRequest);
     }
 
@@ -329,7 +582,21 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @Override
-    public void addPullRequestLabel(String workspace, String repository, String pullRequestId, String label) throws IOException {
+    @MCPTool(
+            name = "github_add_pr_label",
+            description = "Add a label to a GitHub pull request.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public void addPullRequestLabel(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId,
+            @MCPParam(name = "label", description = "The label name to add to the pull request", required = true, example = "bug")
+            String label) throws IOException {
         String path = path(String.format("repos/%s/%s/issues/%s/labels", workspace, repository, pullRequestId));
         GenericRequest postRequest = new GenericRequest(this, path);
         JSONArray labelsArray = new JSONArray();
@@ -429,7 +696,19 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @Override
-    public IDiffStats getPullRequestDiff(String workspace, String repository, String pullRequestID) throws IOException {
+    @MCPTool(
+            name = "github_get_pr_diff",
+            description = "Get the diff statistics for a GitHub pull request (files changed, additions, deletions). Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public IDiffStats getPullRequestDiff(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestID", description = "The pull request number", required = true, example = "74")
+            String pullRequestID) throws IOException {
         if (!IS_READ_PULL_REQUEST_DIFF) {
             return new IDiffStats.Empty();
         }
