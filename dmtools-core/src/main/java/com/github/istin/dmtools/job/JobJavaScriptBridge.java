@@ -76,6 +76,14 @@ public class JobJavaScriptBridge {
         this.clientInstances.put("cli", new CliCommandExecutor());  // CLI command execution for automation workflows
         this.clientInstances.put("kb", kbTools);  // Knowledge Base tools for KB management
 
+        // Initialize GitHub client if configured
+        try {
+            this.clientInstances.put("github", com.github.istin.dmtools.github.BasicGithub.getInstance());
+            logger.debug("GitHub client initialized for JavaScript bridge");
+        } catch (Exception e) {
+            logger.debug("GitHub client not initialized: {}. GitHub tools will not be available.", e.getMessage());
+        }
+
         // Initialize Mermaid Index Tools if available
         try {
             com.github.istin.dmtools.di.MermaidIndexComponent mermaidComponent =
@@ -383,7 +391,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail"));
+        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github"));
         // Add jira_xray if XrayClient is available
         if (trackerClient instanceof com.github.istin.dmtools.atlassian.jira.xray.XrayClient) {
             integrations.add("jira_xray");

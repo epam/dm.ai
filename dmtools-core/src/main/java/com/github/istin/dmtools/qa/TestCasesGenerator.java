@@ -138,9 +138,13 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             try {
                 // Post "processing started" comment so CI run is traceable from the ticket immediately
                 String ciRunUrl = params.getCiRunUrl();
-                if (ciRunUrl != null && !ciRunUrl.isEmpty()
-                        && !getOutputTypeSafe(params).equals(TrackerParams.OutputType.none)) {
-                    trackerClient.postComment(ticket.getTicketKey(), "Processing started. CI Run: " + ciRunUrl);
+                if (ciRunUrl != null && !ciRunUrl.isEmpty()) {
+                    if (shouldPostComments(params)) {
+                        logger.info("Tracing CI run URL to ticket {}: {}", ticket.getTicketKey(), ciRunUrl);
+                        trackerClient.postComment(ticket.getTicketKey(), "Processing started. CI Run: " + ciRunUrl);
+                    } else {
+                        logger.debug("CI run URL provided ({}) but comments disabled - not posting to ticket {}", ciRunUrl, ticket.getTicketKey());
+                    }
                 }
 
                 // Combine related fields with custom fields
@@ -161,10 +165,10 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 TicketContext ticketContext = new TicketContext(trackerClient, ticket);
                 ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences());
                 String[] additionalRulesArray = instructionProcessor.extractIfNeeded(params.getConfluencePages());
-                String additionalRules = additionalRulesArray.length > 0 ? additionalRulesArray[0] : "";
+                String additionalRules = String.join("\n\n", additionalRulesArray);
                 result.add(generateTestCases(ticketContext, additionalRules, listOfAllTestCases, params, customAdapter));
-                TrackerParams.OutputType outputType = getOutputTypeSafe(params);
-                if (!outputType.equals(TrackerParams.OutputType.none)) {
+                
+                if (shouldPostComments(params)) {
                     trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(params.getInitiator()) + ", similar test cases are linked and new test cases are generated.");
                 }
             } catch (Exception e) {
@@ -231,6 +235,16 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             int systemTokenLimits = chunkPreparation.getTokenLimit();
             int tokenLimit = (systemTokenLimits - storyTokens) / 2;
             System.out.println("GENERATION TOKEN LIMIT: " + tokenLimit);
+
+            // Extract testCasesCreationRules and merge with extraRules from confluencePages
+            String testCasesCreationRulesLink = params.getTestCasesCreationRules();
+            if (testCasesCreationRulesLink != null && !testCasesCreationRulesLink.trim().isEmpty()) {
+                String[] creationRulesArray = instructionProcessor.extractIfNeeded(testCasesCreationRulesLink);
+                String creationRules = creationRulesArray.length > 0 ? creationRulesArray[0] : "";
+                if (!creationRules.isEmpty()) {
+                    extraRules = extraRules.isEmpty() ? creationRules : extraRules + "\n\n" + creationRules;
+                }
+            }
 
             // Extract customFieldsRules (may be Confluence URL or file path)
             String customFieldsRules = params.getCustomFieldsRules();
@@ -552,19 +566,6 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
 
     private boolean isNotBlank(String value) {
         return value != null && !value.trim().isEmpty();
-    }
-
-    /**
-     * Safely gets the output type from params.
-     * For TestCasesGenerator, if the output type is null or not specified,
-     * we default to 'creation' because its primary purpose is to create new test cases.
-     */
-    private TrackerParams.OutputType getOutputTypeSafe(TestCasesGeneratorParams params) {
-        TrackerParams.OutputType outputType = params.getOutputType();
-        if (outputType == null) {
-            return TrackerParams.OutputType.creation;
-        }
-        return outputType;
     }
 
     /**

@@ -247,6 +247,27 @@ dmtools github_add_pr_label workspace=IstiN repository=dmtools pullRequestId=74 
 
 ---
 
+### `github_merge_pr`
+
+Merge a pull request. Supports merge, squash, and rebase merge methods.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner/organization |
+| `repository` | String | ✅ | Repository name |
+| `pullRequestId` | String | ✅ | Pull request number |
+| `mergeMethod` | String | ❌ | Merge method: `merge` (default), `squash`, or `rebase` |
+| `commitTitle` | String | ❌ | Title for the merge commit (defaults to PR title) |
+| `commitMessage` | String | ❌ | Extra detail to append to the merge commit message |
+
+```bash
+dmtools github_merge_pr workspace=IstiN repository=dmtools pullRequestId=74
+dmtools github_merge_pr workspace=IstiN repository=dmtools pullRequestId=74 mergeMethod=squash
+dmtools github_merge_pr workspace=IstiN repository=dmtools pullRequestId=74 mergeMethod=squash commitTitle="feat: my feature" commitMessage="Closes #123"
+```
+
+---
+
 ### `github_get_pr_diff`
 
 Get diff statistics for a pull request (files changed, lines added/deleted).

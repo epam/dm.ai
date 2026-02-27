@@ -740,6 +740,39 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         post(postRequest);
     }
 
+    @MCPTool(
+            name = "github_merge_pr",
+            description = "Merge a GitHub pull request. Supports merge, squash, and rebase merge methods.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String mergePullRequest(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number to merge", required = true, example = "74")
+            String pullRequestId,
+            @MCPParam(name = "mergeMethod", description = "The merge method: 'merge' (default), 'squash', or 'rebase'", required = false, example = "squash")
+            String mergeMethod,
+            @MCPParam(name = "commitTitle", description = "Title for the merge commit (optional, defaults to PR title)", required = false, example = "Merge feature/my-branch into main")
+            String commitTitle,
+            @MCPParam(name = "commitMessage", description = "Extra detail to append to the merge commit message (optional)", required = false, example = "Closes #123")
+            String commitMessage) throws IOException {
+        String path = path(String.format("repos/%s/%s/pulls/%s/merge", workspace, repository, pullRequestId));
+        GenericRequest putRequest = new GenericRequest(this, path);
+        JSONObject body = new JSONObject();
+        body.put("merge_method", (mergeMethod != null && !mergeMethod.trim().isEmpty()) ? mergeMethod : "merge");
+        if (commitTitle != null && !commitTitle.trim().isEmpty()) {
+            body.put("commit_title", commitTitle);
+        }
+        if (commitMessage != null && !commitMessage.trim().isEmpty()) {
+            body.put("commit_message", commitMessage);
+        }
+        putRequest.setBody(body.toString());
+        return put(putRequest);
+    }
+
     @Override
     public List<IRepository> getRepositories(String namespace) throws IOException {
         throw new UnsupportedOperationException("implement me");

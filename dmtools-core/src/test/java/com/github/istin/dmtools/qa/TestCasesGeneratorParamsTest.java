@@ -100,6 +100,7 @@ public class TestCasesGeneratorParamsTest {
             "jql",                              // existingTestCasesJql
             "High,Medium,Low",                  // testCasesPriorities
             "https://rules.com",                // relatedTestCasesRules
+            "./creation_rules.md",              // testCasesCreationRules
             "examples",                         // examples
             "Test",                             // testCaseIssueType
             true,                               // isConvertToJiraMarkdown

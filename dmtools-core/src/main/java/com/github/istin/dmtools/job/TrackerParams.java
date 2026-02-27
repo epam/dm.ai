@@ -11,7 +11,7 @@ import static com.github.istin.dmtools.job.Params.POST_ACTION;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class TrackerParams {
+public class TrackerParams implements CliPostComment {
 
     public static final String INPUT_JQL = "inputJql";
     public static final String INITIATOR = "initiator";
@@ -95,4 +95,10 @@ public class TrackerParams {
 
     @SerializedName(CI_RUN_URL)
     private String ciRunUrl;
+
+    public static final String ALWAYS_POST_COMMENTS = "alwaysPostComments";
+
+    @SerializedName(ALWAYS_POST_COMMENTS)
+    private Boolean alwaysPostComments;
+
 }

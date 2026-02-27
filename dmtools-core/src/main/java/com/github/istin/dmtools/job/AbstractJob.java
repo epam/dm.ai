@@ -154,4 +154,47 @@ public abstract class AbstractJob<Params, Result> implements Job<Params, Result>
     protected JavaScriptExecutor js(String jsCode) {
         return new JavaScriptExecutor(jsCode);
     }
+
+    /**
+     * Determines whether comments should be posted based on outputType and alwaysPostComments flag.
+     * Comments are posted if:
+     * - outputType is not 'none', OR
+     * - alwaysPostComments is explicitly set to true
+     *
+     * @param params The test case generator parameters
+     * @return true if comments should be posted, false otherwise
+     */
+    public boolean shouldPostComments(CliPostComment params) {
+        // Check alwaysPostComments flag first
+        Boolean alwaysPost = params.getAlwaysPostComments();
+        if (alwaysPost != null && alwaysPost) {
+            logger.debug("Comments will be posted: alwaysPostComments=true (overrides outputType)");
+            return true;
+        }
+
+        // Fallback to outputType check
+        TrackerParams.OutputType outputType = getOutputTypeSafe(params);
+        boolean shouldPost = !outputType.equals(TrackerParams.OutputType.none);
+
+        if (shouldPost) {
+            logger.debug("Comments will be posted: outputType={} (not 'none')", outputType);
+        } else {
+            logger.debug("Comments will NOT be posted: outputType=none and alwaysPostComments is not set to true");
+        }
+
+        return shouldPost;
+    }
+
+    /**
+     * Safely gets the output type from params.
+     * For TestCasesGenerator, if the output type is null or not specified,
+     * we default to 'creation' because its primary purpose is to create new test cases.
+     */
+    protected TrackerParams.OutputType getOutputTypeSafe(CliPostComment params) {
+        TrackerParams.OutputType outputType = params.getOutputType();
+        if (outputType == null) {
+            return TrackerParams.OutputType.creation;
+        }
+        return outputType;
+    }
 }

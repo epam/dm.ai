@@ -17,6 +17,7 @@ public class TestCasesGeneratorParams extends Params {
     public static final String EXISTING_TEST_CASES_JQL = "existingTestCasesJql";
     public static final String TEST_CASES_PRIORITIES = "testCasesPriorities";
     public static final String RELATED_TEST_CASES_RULES = "relatedTestCasesRules";
+    public static final String TEST_CASES_CREATION_RULES = "testCasesCreationRules";
     public static final String TEST_CASE_ISSUE_TYPE = "testCaseIssueType";
     public static final String IS_CONVERT_TO_JIRA_MARKDOWN = "isConvertToJiraMarkdown";
     public static final String IS_OVERRIDE_PROMPT_EXAMPLES = "isOverridePromptExamples";
@@ -48,6 +49,8 @@ public class TestCasesGeneratorParams extends Params {
     private String testCasesPriorities;
     @SerializedName(RELATED_TEST_CASES_RULES)
     private String relatedTestCasesRules;
+    @SerializedName(TEST_CASES_CREATION_RULES)
+    private String testCasesCreationRules;
     @SerializedName(EXAMPLES)
     private String examples;
     @SerializedName(TEST_CASE_ISSUE_TYPE)

@@ -47,7 +47,8 @@ class TrackerParamsTest {
             2,
             30,
             customParams,
-            "https://ci.example.com/runs/42"
+            "https://ci.example.com/runs/42",
+            true
         );
 
         assertEquals("project = TEST", params.getInputJql());
@@ -64,6 +65,7 @@ class TrackerParamsTest {
         assertEquals(30, params.getChunkProcessingTimeoutInMinutes());
         assertEquals(customParams, params.getCustomParams());
         assertEquals("https://ci.example.com/runs/42", params.getCiRunUrl());
+        assertTrue(params.getAlwaysPostComments());
     }
 
     @Test

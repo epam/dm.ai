@@ -16,7 +16,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.github.istin.dmtools.teammate.InstructionProcessor;
+import org.junit.rules.TemporaryFolder;
+import org.junit.Rule;
+
+import java.io.File;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -26,6 +32,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 public class TestCasesGeneratorTest {
+
+    @Rule
+    public TemporaryFolder tempFolder = new TemporaryFolder();
 
     private TestCasesGenerator generator;
     private Method resolveNewMethod;
@@ -647,5 +656,211 @@ public class TestCasesGeneratorTest {
         String[] result2 = generator.instructionProcessor.extractIfNeeded();
         assertNotNull(result2);
         assertEquals(0, result2.length);
+    }
+
+    @Test
+    public void shouldPostComments_ReturnsFalseWhenOutputTypeIsNoneAndFlagNotSet() {
+        // Given
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.none);
+        // alwaysPostComments is null (not set)
+        
+        // When
+        boolean result = generator.shouldPostComments(params);
+        
+        // Then
+        assertFalse("Should not post comments when outputType is 'none' and alwaysPostComments is not set", result);
+    }
+    
+    @Test
+    public void shouldPostComments_ReturnsTrueWhenAlwaysPostCommentsIsTrue() {
+        // Given
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setAlwaysPostComments(true);
+        
+        // When
+        boolean result = generator.shouldPostComments(params);
+        
+        // Then
+        assertTrue("Should post comments when alwaysPostComments is true, regardless of outputType", result);
+    }
+    
+    @Test
+    public void shouldPostComments_ReturnsFalseWhenAlwaysPostCommentsIsFalse() {
+        // Given
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setAlwaysPostComments(false);
+        
+        // When
+        boolean result = generator.shouldPostComments(params);
+        
+        // Then
+        assertFalse("Should not post comments when outputType is 'none' and alwaysPostComments is false", result);
+    }
+    
+    @Test
+    public void shouldPostComments_ReturnsTrueWhenOutputTypeIsComment() {
+        // Given
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.comment);
+        // alwaysPostComments is null (not set)
+        
+        // When
+        boolean result = generator.shouldPostComments(params);
+        
+        // Then
+        assertTrue("Should post comments when outputType is 'comment'", result);
+    }
+    
+    @Test
+    public void shouldPostComments_ReturnsTrueWhenBothConditionsMet() {
+        // Given
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.comment);
+        params.setAlwaysPostComments(true);
+
+        // When
+        boolean result = generator.shouldPostComments(params);
+
+        // Then
+        assertTrue("Should post comments when both conditions are met", result);
+    }
+
+    // ---- testCasesCreationRules field tests ----
+
+    @Test
+    public void testCasesCreationRules_FieldIsNullByDefault() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        assertNull("testCasesCreationRules should be null by default", params.getTestCasesCreationRules());
+    }
+
+    @Test
+    public void testCasesCreationRules_CanBeSetAndRead() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setTestCasesCreationRules("./agents/instructions/test_cases/rules.md");
+        assertEquals("./agents/instructions/test_cases/rules.md", params.getTestCasesCreationRules());
+    }
+
+    @Test
+    public void testCasesCreationRules_ProcessedViaInstructionProcessor() throws Exception {
+        // Given: a file with creation rules in a temp dir
+        File rulesFile = tempFolder.newFile("test_case_creation_rules.md");
+        Files.writeString(rulesFile.toPath(), "Rule 1: Tests must be independent\nRule 2: Use clear names");
+
+        TestCasesGenerator gen = new TestCasesGenerator();
+        Confluence confluence = mock(Confluence.class);
+        gen.instructionProcessor = new InstructionProcessor(confluence, tempFolder.getRoot().getAbsolutePath());
+
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        TestCaseGeneratorAgent testCaseGeneratorAgent = mock(TestCaseGeneratorAgent.class);
+        AI ai = mock(AI.class);
+        gen.trackerClient = trackerClient;
+        gen.confluence = confluence;
+        gen.testCaseGeneratorAgent = testCaseGeneratorAgent;
+        gen.ai = ai;
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(false);
+        params.setGenerateNew(true);
+        params.setTestCasesPriorities("High,Medium");
+        params.setModelTestCasesCreation("gpt-4");
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setTestCasesCreationRules("./test_case_creation_rules.md");
+
+        ITicket ticket = mock(ITicket.class);
+        when(ticket.getTicketKey()).thenReturn("DMC-456");
+        when(ticket.getKey()).thenReturn("DMC-456");
+        TicketContext ticketContext = mock(TicketContext.class);
+        when(ticketContext.getTicket()).thenReturn(ticket);
+        when(ticketContext.toText()).thenReturn("Feature description");
+
+        List<TestCaseGeneratorAgent.TestCase> generated = List.of(
+                new TestCaseGeneratorAgent.TestCase("High", "Test 1", "Description 1"));
+        when(testCaseGeneratorAgent.run(anyString(), any())).thenReturn(generated);
+        when(testCaseGeneratorAgent.run(any())).thenReturn(generated);
+        when(trackerClient.getTestCases(any(), anyString())).thenReturn(Collections.emptyList());
+
+        // When
+        TestCasesGenerator.TestCasesResult result = gen.generateTestCases(ticketContext, "", Collections.emptyList(), params);
+
+        // Then: agent was called with extraRules containing the file content
+        ArgumentCaptor<TestCaseGeneratorAgent.Params> agentParamsCaptor =
+                ArgumentCaptor.forClass(TestCaseGeneratorAgent.Params.class);
+        verify(testCaseGeneratorAgent).run(eq("gpt-4"), agentParamsCaptor.capture());
+        String capturedExtraRules = agentParamsCaptor.getValue().getExtraRules();
+        assertTrue("extraRules should contain content from testCasesCreationRules file",
+                capturedExtraRules.contains("Tests must be independent"));
+    }
+
+    @Test
+    public void confluencePages_AllElementsJoinedNotOnlyFirst() throws Exception {
+        // confluencePages is processed by runJobImpl() BEFORE calling generateTestCases().
+        // This test verifies that when generateTestCases() receives extraRules composed
+        // from multiple sources (as String.join would produce), both are passed to the agent.
+        TestCasesGenerator gen = new TestCasesGenerator();
+        Confluence confluence = mock(Confluence.class);
+        gen.instructionProcessor = new InstructionProcessor(confluence, tempFolder.getRoot().getAbsolutePath());
+
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        TestCaseGeneratorAgent testCaseGeneratorAgent = mock(TestCaseGeneratorAgent.class);
+        AI ai = mock(AI.class);
+        gen.trackerClient = trackerClient;
+        gen.confluence = confluence;
+        gen.testCaseGeneratorAgent = testCaseGeneratorAgent;
+        gen.ai = ai;
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(false);
+        params.setGenerateNew(true);
+        params.setTestCasesPriorities("High,Medium");
+        params.setModelTestCasesCreation("gpt-4");
+        params.setOutputType(TrackerParams.OutputType.none);
+
+        ITicket ticket = mock(ITicket.class);
+        when(ticket.getTicketKey()).thenReturn("DMC-789");
+        when(ticket.getKey()).thenReturn("DMC-789");
+        TicketContext ticketContext = mock(TicketContext.class);
+        when(ticketContext.getTicket()).thenReturn(ticket);
+        when(ticketContext.toText()).thenReturn("Feature description");
+
+        List<TestCaseGeneratorAgent.TestCase> generated = List.of(
+                new TestCaseGeneratorAgent.TestCase("High", "Test 1", "Desc 1"));
+        when(testCaseGeneratorAgent.run(anyString(), any())).thenReturn(generated);
+        when(testCaseGeneratorAgent.run(any())).thenReturn(generated);
+        when(trackerClient.getTestCases(any(), anyString())).thenReturn(Collections.emptyList());
+
+        // Simulate what runJobImpl() does after the fix: join ALL elements with \n\n
+        String joinedExtraRules = "Rules from page 1\n\nRules from page 2";
+        gen.generateTestCases(ticketContext, joinedExtraRules, Collections.emptyList(), params);
+
+        // Verify the joined extraRules reached the agent unchanged
+        ArgumentCaptor<TestCaseGeneratorAgent.Params> agentParamsCaptor =
+                ArgumentCaptor.forClass(TestCaseGeneratorAgent.Params.class);
+        verify(testCaseGeneratorAgent).run(eq("gpt-4"), agentParamsCaptor.capture());
+        String capturedExtraRules = agentParamsCaptor.getValue().getExtraRules();
+        assertTrue("extraRules should contain content from page 1", capturedExtraRules.contains("Rules from page 1"));
+        assertTrue("extraRules should contain content from page 2", capturedExtraRules.contains("Rules from page 2"));
+    }
+
+    @Test
+    public void confluencePages_JoinLogic_AllElementsIncluded() throws Exception {
+        // Verify that String.join("\n\n", array) (used in runJobImpl) combines all elements
+        InstructionProcessor ip = new InstructionProcessor(null, tempFolder.getRoot().getAbsolutePath());
+
+        File f1 = tempFolder.newFile("c1.md");
+        File f2 = tempFolder.newFile("c2.md");
+        Files.writeString(f1.toPath(), "Content from page 1");
+        Files.writeString(f2.toPath(), "Content from page 2");
+
+        String[] extracted = ip.extractIfNeeded("./c1.md", "./c2.md");
+        // Previously: only [0] was used → page 2 ignored
+        // Fix: String.join("\n\n", extracted) includes both
+        String joined = String.join("\n\n", extracted);
+        assertTrue("Joined result should contain content from page 1", joined.contains("Content from page 1"));
+        assertTrue("Joined result should contain content from page 2", joined.contains("Content from page 2"));
     }
 }
