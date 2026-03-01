@@ -208,6 +208,19 @@ public class CliCommandExecutor {
         // Disable git pager to prevent hangs in CI/CD environments
         envVars.put("GIT_PAGER", "cat");
         envVars.put("GIT_TERMINAL_PROMPT", "0");
+
+        // Propagate PATH and extend it with common tool installation directories.
+        // This is necessary when the JVM is launched from a GUI (e.g. IntelliJ) or CI
+        // environment that does not source shell startup scripts, so Homebrew or other
+        // package-manager paths may be absent from the inherited PATH.
+        String systemPath = System.getenv("PATH");
+        String extendedPath = systemPath != null ? systemPath : "";
+        for (String commonPath : new String[]{"/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"}) {
+            if (!extendedPath.contains(commonPath)) {
+                extendedPath = extendedPath + ":" + commonPath;
+            }
+        }
+        envVars.put("PATH", extendedPath);
         
         // Load from dmtools.env file if it exists
         Path envFilePath = Paths.get(workingDirectory.getAbsolutePath(), "dmtools.env");

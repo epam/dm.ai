@@ -235,6 +235,12 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             int systemTokenLimits = chunkPreparation.getTokenLimit();
             int tokenLimit = (systemTokenLimits - storyTokens) / 2;
             System.out.println("GENERATION TOKEN LIMIT: " + tokenLimit);
+            if (tokenLimit <= 0) {
+                throw new IllegalStateException(
+                    "Not enough tokens to generate test cases. Story tokens (" + storyTokens +
+                    ") exceed system token limit (" + systemTokenLimits + "). " +
+                    "Increase PROMPT_CHUNK_TOKEN_LIMIT env variable.");
+            }
 
             // Extract testCasesCreationRules and merge with extraRules from confluencePages
             String testCasesCreationRulesLink = params.getTestCasesCreationRules();
@@ -761,6 +767,12 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         System.out.println("SYSTEM TOKEN LIMITS: " + systemTokenLimits);
         int tokenLimit = (systemTokenLimits - storyTokens)/2;
         System.out.println("TESTCASES TOKEN LIMITS: " + tokenLimit);
+        if (tokenLimit <= 0) {
+            throw new IllegalStateException(
+                "Not enough tokens to find related test cases. Story tokens (" + storyTokens +
+                ") exceed system token limit (" + systemTokenLimits + "). " +
+                "Increase PROMPT_CHUNK_TOKEN_LIMIT env variable.");
+        }
         List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(listOfAllTestCases, tokenLimit);
 
         if (params.isEnableParallelTestCaseCheck()) {

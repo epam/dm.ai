@@ -1,8 +1,8 @@
 # GitHub MCP Tools Reference
 
-**Total tools**: 16
+**Total tools**: 20
 **Integration key**: `github`
-**Category**: `pull_requests`
+**Categories**: `pull_requests`, `actions`
 
 ## Quick Start
 
@@ -376,6 +376,29 @@ dmtools github_get_job_logs workspace=IstiN repository=dmtools jobId=64855476586
 
 Returns raw text log output from all job steps. Useful for debugging test failures, build errors, or analyzing CI/CD behavior.
 
+---
+
+### `github_get_workflow_run_logs`
+
+Download and extract **complete untruncated logs** for all jobs in a workflow run. Unlike `github_get_job_logs` which may be truncated for large logs, this tool downloads the full ZIP archive GitHub provides and returns all log files concatenated.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `runId` | String | ✅ | Workflow run ID |
+
+```bash
+dmtools github_get_workflow_run_logs workspace=IstiN repository=dmtools runId=22498697315
+```
+
+Returns all `.txt` log files from the ZIP concatenated together, each prefixed with its filename (e.g. `--- 0_Set up job.txt ---`).
+
+**Use this instead of `github_get_job_logs` when:**
+- Logs are very large and getting truncated
+- You need logs from all jobs at once (not per job)
+- You want the full raw output without pagination
+
 **Common workflow for debugging failed CI**:
 ```bash
 # 1. Get check runs for the failing commit
@@ -390,6 +413,94 @@ dmtools github_get_workflow_run_jobs workspace=IstiN repository=dmtools runId=22
 # 4. Get logs from the failed job
 dmtools github_get_job_logs workspace=IstiN repository=dmtools jobId=64855476586
 ```
+
+---
+
+### `github_list_workflow_runs`
+
+List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `status` | String | ❌ | Filter by status: `failure`, `success`, `in_progress`, `queued`, `cancelled`, `timed_out`, `action_required`, `neutral`, `skipped`, `stale`, `completed` |
+| `workflowId` | String | ❌ | Workflow filename to filter runs (e.g. `rework.yml`). If omitted, returns runs for all workflows. |
+| `perPage` | Integer | ❌ | Number of results per page (max 100, default 30) |
+
+```bash
+# All failed runs across all workflows
+dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=failure
+
+# Failed runs for a specific workflow
+dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=failure workflowId=rework.yml perPage=50
+
+# All currently running workflows
+dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=in_progress
+```
+
+Returns JSON with `total_count` and `workflow_runs` array, each run containing `id`, `name`, `status`, `conclusion`, `html_url`, `head_branch`, `created_at`, `updated_at`.
+
+---
+
+### `github_repository_dispatch`
+
+Trigger a GitHub repository dispatch event. Workflows with `on: repository_dispatch` and matching `event_type` will be triggered.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `eventType` | String | ✅ | Event type string — workflows listen via `types: [your-event]` |
+| `clientPayload` | String | ❌ | JSON string with payload passed as `client_payload` to the workflow |
+
+```bash
+dmtools github_repository_dispatch workspace=IstiN repository=dmtools eventType=rework
+dmtools github_repository_dispatch workspace=IstiN repository=dmtools eventType=rework clientPayload='{"ticket":"PROJ-123"}'
+```
+
+**Workflow YAML side:**
+```yaml
+on:
+  repository_dispatch:
+    types: [rework]
+```
+
+---
+
+### `github_trigger_workflow`
+
+Trigger a specific GitHub Actions workflow by filename (`workflow_dispatch`). The workflow must have `on: workflow_dispatch` configured.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `workflowId` | String | ✅ | Workflow filename (e.g. `rework.yml`) |
+| `inputs` | String | ❌ | JSON string with workflow inputs (e.g. `{"user_request":"...","branch":"main"}`) |
+| `ref` | String | ❌ | Branch or tag to run on (default: `main`) |
+
+```bash
+dmtools github_trigger_workflow workspace=IstiN repository=dmtools workflowId=rework.yml \
+  inputs='{"user_request":"Please rework PROJ-123"}' ref=main
+```
+
+**Workflow YAML side:**
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      user_request:
+        required: true
+```
+
+**Difference from `github_repository_dispatch`:**
+
+| | `github_repository_dispatch` | `github_trigger_workflow` |
+|---|---|---|
+| API | `POST /repos/.../dispatches` | `POST /repos/.../actions/workflows/{id}/dispatches` |
+| Targets | Any workflow listening to the event type | Specific workflow file directly |
+| Inputs | `client_payload` (free JSON) | `inputs` (named, declared in workflow YAML) |
 
 ---
 
@@ -459,7 +570,169 @@ if (logs.includes('FAILED')) {
     print('Found test failures in logs');
     // Parse logs to extract failure details
 }
+
+// Download complete (untruncated) logs for a workflow run
+const fullLogs = github_get_workflow_run_logs('ai-teammate', 'mytube', '22498697315');
+// Returns all job logs concatenated — no truncation
+
+// List all failed runs (all workflows)
+const failedRuns = JSON.parse(github_list_workflow_runs('IstiN', 'dmtools', 'failure', null, 50));
+print('Failed runs: ' + failedRuns.total_count);
+
+// List failed runs for a specific workflow
+const failedRework = JSON.parse(github_list_workflow_runs('IstiN', 'dmtools', 'failure', 'rework.yml', 30));
+for (const run of failedRework.workflow_runs) {
+    print(run.id + ' - ' + run.name + ' - ' + run.html_url);
+}
+
+// Trigger workflow dispatch (specific workflow file)
+github_trigger_workflow('IstiN', 'dmtools', 'rework.yml',
+    JSON.stringify({ user_request: 'Please rework PROJ-123' }),
+    'main');
+
+// Repository dispatch (any workflow listening to event type)
+github_repository_dispatch('IstiN', 'dmtools', 'rework',
+    JSON.stringify({ ticket: 'PROJ-123' }));
 ```
+
+## Practical Example: Failed Workflows → Jira Bugs (with Deduplication)
+
+A common automation pattern: scan for recently failed GitHub Actions runs and automatically create Jira bugs. Uses **label-based deduplication** so each failed run creates at most one bug.
+
+```javascript
+/**
+ * Scans failed GitHub Actions runs and creates Jira bugs with deduplication.
+ *
+ * Deduplication strategy: Jira label  "gh-run-{runId}"
+ * Before creating a bug we search Jira for an existing ticket with that label.
+ * If one exists we skip creation; otherwise we fetch the full logs and create the bug.
+ *
+ * Required customParams in Teammate JSON config:
+ * {
+ *   "workspace": "my-org",
+ *   "repository": "my-repo",
+ *   "workflowId": "deploy.yml",       // optional — omit to check all workflows
+ *   "jiraProject": "OPS",
+ *   "maxRuns": 20
+ * }
+ */
+function action(params) {
+    const custom      = params.jobParams.customParams;
+    const workspace   = custom.workspace;
+    const repo        = custom.repository;
+    const workflowId  = custom.workflowId  || null;   // optional
+    const jiraProject = custom.jiraProject;
+    const maxRuns     = custom.maxRuns     || 10;
+
+    // 1. Get recently failed runs
+    const runsJson = github_list_workflow_runs(workspace, repo, 'failure', workflowId, maxRuns);
+    const runs = JSON.parse(runsJson).workflow_runs;
+
+    if (!runs || runs.length === 0) {
+        print('No failed runs found.');
+        return { created: 0 };
+    }
+
+    let created = 0;
+
+    for (const run of runs) {
+        const runId = String(run.id);
+        const label = 'gh-run-' + runId;
+
+        // 2. Check for existing Jira bug with this label (deduplication)
+        const jql = 'project = "' + jiraProject + '" AND labels = "' + label + '"';
+        const existing = jira_search_by_jql(jql, 1);
+        const existingIssues = JSON.parse(existing);
+
+        if (existingIssues.total > 0) {
+            print('Run ' + runId + ' already has a bug: ' + existingIssues.issues[0].key + ' — skipping.');
+            continue;
+        }
+
+        // 3. Fetch full logs for this run
+        print('Fetching logs for failed run ' + runId + ' (' + run.name + ')...');
+        let logs = '';
+        try {
+            logs = github_get_workflow_run_logs(workspace, repo, runId);
+            // Trim to avoid Jira description overflow (keep last 20 000 chars)
+            if (logs.length > 20000) {
+                logs = '...(truncated)...\n' + logs.slice(-20000);
+            }
+        } catch (e) {
+            logs = 'Could not fetch logs: ' + e;
+        }
+
+        // 4. Build a concise summary line from log content
+        const errorLine = extractFirstError(logs);
+
+        // 5. Create Jira bug
+        const summary = '[CI Failure] ' + run.name + ' — ' + (run.head_branch || 'unknown branch') +
+                        (errorLine ? ': ' + errorLine : '');
+        const description =
+            'GitHub Actions run **' + runId + '** failed.\n\n' +
+            '- **Workflow**: ' + run.name + '\n' +
+            '- **Branch**: ' + (run.head_branch || 'N/A') + '\n' +
+            '- **Triggered at**: ' + run.created_at + '\n' +
+            '- **Run URL**: ' + run.html_url + '\n\n' +
+            '**Logs:**\n{code}\n' + logs + '\n{code}';
+
+        const newIssue = jira_create_ticket_basic(jiraProject, 'Bug', summary, description);
+        const newKey   = JSON.parse(newIssue).key;
+
+        // 6. Add deduplication label so this run is never filed twice
+        jira_update_labels(newKey, label);
+
+        print('Created ' + newKey + ' for run ' + runId);
+        created++;
+    }
+
+    return { created: created };
+}
+
+/**
+ * Extracts the first line that looks like an error from the log text.
+ */
+function extractFirstError(logs) {
+    const lines = logs.split('\n');
+    for (const line of lines) {
+        const l = line.toLowerCase();
+        if (l.includes('error') || l.includes('failed') || l.includes('exception')) {
+            // Strip leading timestamp / log-prefix noise
+            return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.Z]+ /, '').substring(0, 120);
+        }
+    }
+    return '';
+}
+```
+
+**Teammate JSON config** (`agents/detect_failed_workflows.json`):
+```json
+{
+  "name": "FailedWorkflowMonitor",
+  "params": {
+    "jsAction": "agents/js/failedWorkflowsToJira.js",
+    "customParams": {
+      "workspace": "my-org",
+      "repository": "my-repo",
+      "workflowId": "deploy.yml",
+      "jiraProject": "OPS",
+      "maxRuns": 20
+    }
+  }
+}
+```
+
+**MCP tools used in this example:**
+
+| Tool | Purpose |
+|------|---------|
+| `github_list_workflow_runs` | Get recently failed runs |
+| `github_get_workflow_run_logs` | Download full (untruncated) logs ZIP |
+| `jira_search_by_jql` | Check if bug already exists (dedup via label) |
+| `jira_create_ticket_basic` | Create the Bug ticket |
+| `jira_update_labels` | Add deduplication label `gh-run-{runId}` |
+
+---
 
 ## Setup
 

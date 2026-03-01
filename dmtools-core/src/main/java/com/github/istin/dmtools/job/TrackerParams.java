@@ -99,6 +99,6 @@ public class TrackerParams implements CliPostComment {
     public static final String ALWAYS_POST_COMMENTS = "alwaysPostComments";
 
     @SerializedName(ALWAYS_POST_COMMENTS)
-    private Boolean alwaysPostComments;
+    private Boolean alwaysPostComments = false;
 
 }

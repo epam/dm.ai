@@ -115,6 +115,63 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 | `skipJSAction` | String | JS file path | To determine skip logic |
 | `validateJSAction` | String | JS file path | To validate AI output |
 
+### Custom Parameters (`customParams`)
+
+`customParams` is a free-form key-value map that lets you pass arbitrary configuration from the JSON config into JavaScript agents. Any data type is supported: strings, numbers, booleans, nested objects, arrays.
+
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "inputJql": "key = PROJ-123",
+    "preJSAction": "agents/js/myAgent.js",
+    "customParams": {
+      "workflowId": "rework.yml",
+      "targetBranch": "main",
+      "maxRetries": 3,
+      "flags": {
+        "dryRun": false,
+        "verbose": true
+      }
+    }
+  }
+}
+```
+
+**Accessing `customParams` in a JS agent:**
+
+```javascript
+function action(params) {
+    const custom = params.jobParams.customParams;
+
+    const workflowId  = custom.workflowId;          // "rework.yml"
+    const targetBranch = custom.targetBranch;       // "main"
+    const maxRetries  = custom.maxRetries;          // 3
+    const dryRun      = custom.flags.dryRun;        // false
+
+    if (!dryRun) {
+        github_trigger_workflow(
+            "my-org",
+            "my-repo",
+            workflowId,
+            JSON.stringify({ user_request: params.ticket.key }),
+            targetBranch
+        );
+    }
+}
+```
+
+**Available `params` fields in JS agents:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `params.ticket` | Object | Current Jira/ADO ticket (key, fields, status, …) |
+| `params.jobParams` | Object | Full serialized job config — includes ALL params fields incl. `customParams` |
+| `params.jobParams.customParams` | Object | Your custom key-value map |
+| `params.response` | String | AI response (`null` in preJSAction, filled in postJSAction) |
+| `params.initiator` | String | User who triggered the job |
+| `params.inputFolderPath` | String | Absolute path to input folder (preCliJSAction only) |
+
 ### Instruction Sources
 
 The following fields all go through **InstructionProcessor**, which resolves content from four source types:

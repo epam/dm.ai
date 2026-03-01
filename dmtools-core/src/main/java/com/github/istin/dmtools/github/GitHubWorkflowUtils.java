@@ -1,12 +1,15 @@
 package com.github.istin.dmtools.github;
 
 import com.github.istin.dmtools.common.networking.GenericRequest;
+import com.github.istin.dmtools.common.utils.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Utility class for GitHub workflow operations using URLConnection (proven to work in Google Cloud).
@@ -193,5 +196,92 @@ public class GitHubWorkflowUtils {
         }
         
         return details.toString();
+    }
+
+    /**
+     * Downloads and extracts all logs for a GitHub Actions workflow run.
+     * The GitHub API returns a 302 redirect to a ZIP archive containing
+     * individual log files for each job and step.
+     *
+     * @param github   The GitHub client instance (for auth token)
+     * @param owner    Repository owner
+     * @param repo     Repository name
+     * @param runId    Workflow run ID
+     * @return Concatenated log content from all job log files in the ZIP
+     * @throws IOException if download or extraction fails
+     */
+    public static String downloadWorkflowRunLogs(GitHub github, String owner, String repo, String runId) throws IOException {
+        // Step 1: get the redirect URL (GitHub returns 302 → pre-signed S3 URL)
+        String apiUrl = String.format("https://api.github.com/repos/%s/%s/actions/runs/%s/logs", owner, repo, runId);
+        logger.info("Fetching workflow run logs redirect URL: {}", apiUrl);
+
+        String zipUrl = resolveLogsRedirect(github, apiUrl);
+        logger.info("Downloading ZIP from: {}", zipUrl);
+
+        // Step 2: download ZIP bytes (no auth needed — pre-signed URL)
+        byte[] zipBytes = downloadBytes(zipUrl);
+        logger.info("Downloaded ZIP: {} bytes", zipBytes.length);
+
+        // Step 3: extract and concatenate all .txt log files from the ZIP
+        StringBuilder result = new StringBuilder();
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName();
+                if (name.endsWith(".txt")) {
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int len;
+                    while ((len = zis.read(buf)) > 0) {
+                        baos.write(buf, 0, len);
+                    }
+                    if (result.length() > 0) result.append("\n\n--- ").append(name).append(" ---\n\n");
+                    else result.append("--- ").append(name).append(" ---\n\n");
+                    result.append(baos.toString("UTF-8"));
+                }
+                zis.closeEntry();
+            }
+        }
+        return result.toString();
+    }
+
+    private static String resolveLogsRedirect(GitHub github, String url) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setInstanceFollowRedirects(false);
+        conn.setRequestProperty("Authorization", "Bearer " + github.getAuthorization());
+        conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+        conn.setRequestProperty("User-Agent", "DMTools");
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(15000);
+        try {
+            int code = conn.getResponseCode();
+            if (code == 302 || code == 301) {
+                String location = conn.getHeaderField("Location");
+                if (location == null) throw new IOException("No Location header in redirect response");
+                return location;
+            }
+            throw new IOException("Expected redirect (301/302) but got HTTP " + code);
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private static byte[] downloadBytes(String url) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(60000);
+        try {
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) throw new IOException("HTTP " + code + " downloading logs ZIP");
+            try (InputStream is = conn.getInputStream();
+                 ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = is.read(buf)) > 0) baos.write(buf, 0, len);
+                return baos.toByteArray();
+            }
+        } finally {
+            conn.disconnect();
+        }
     }
 }

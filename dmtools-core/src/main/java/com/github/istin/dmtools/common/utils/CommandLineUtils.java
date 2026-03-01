@@ -73,10 +73,15 @@ public class CommandLineUtils {
             System.out.println("LOG: Windows detected - using cmd.exe");
             processBuilder = new ProcessBuilder("cmd.exe", "/c", command);
         } else if (os.contains("mac")) {
-            // macOS - use script command for TTY support
-            String sanitizedCommand = escapeDoubleQuotes(command);
-            String scriptCommand = String.format("script -q %s /bin/sh -c \"%s\"", tempOutput.getAbsolutePath(), sanitizedCommand);
-            processBuilder = new ProcessBuilder("/bin/sh", "-c", scriptCommand);
+            // macOS - use script command for TTY support (full path required in stripped ProcessBuilder env)
+            File scriptBin = new File("/usr/bin/script");
+            if (scriptBin.exists()) {
+                String sanitizedCommand = escapeDoubleQuotes(command);
+                String scriptCommand = String.format("/usr/bin/script -q %s /bin/sh -c \"%s\"", tempOutput.getAbsolutePath(), sanitizedCommand);
+                processBuilder = new ProcessBuilder("/bin/sh", "-c", scriptCommand);
+            } else {
+                processBuilder = new ProcessBuilder("/bin/sh", "-c", command);
+            }
         } else {
             // Linux - check if script command supports -c flag, otherwise use direct execution
             try {

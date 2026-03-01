@@ -627,7 +627,7 @@ public class PropertyReader {
 	}
 
 	// Default values (matching the ones from PromptPreparation)
-	private static final int DEFAULT_PROMPT_CHUNK_TOKEN_LIMIT = 4000;
+	private static final int DEFAULT_PROMPT_CHUNK_TOKEN_LIMIT = 50000;
 	private static final long DEFAULT_PROMPT_CHUNK_MAX_SINGLE_FILE_SIZE = 4 * 1024 * 1024; // 5MB
 	private static final long DEFAULT_PROMPT_CHUNK_MAX_TOTAL_FILES_SIZE = 4 * 1024 * 1024; // 5MB
 	private static final int DEFAULT_PROMPT_CHUNK_MAX_FILES = 10;

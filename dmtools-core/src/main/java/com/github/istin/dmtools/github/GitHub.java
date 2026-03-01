@@ -203,6 +203,67 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return post(postRequest);
     }
 
+    @MCPTool(
+            name = "github_repository_dispatch",
+            description = "Trigger a GitHub repository dispatch event. Workflows listening to 'on: repository_dispatch' with the matching event_type will be triggered.",
+            integration = "github",
+            category = "actions"
+    )
+    public String repositoryDispatch(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "eventType", description = "The type of activity that triggers the workflow (event_type)", required = true, example = "rework")
+            String eventType,
+            @MCPParam(name = "clientPayload", description = "Optional JSON string with payload passed to the workflow as client_payload", required = false, example = "{\"key\":\"value\"}")
+            String clientPayload) throws IOException {
+        JSONObject body = new JSONObject();
+        body.put("event_type", eventType);
+        if (clientPayload != null && !clientPayload.trim().isEmpty()) {
+            body.put("client_payload", new JSONObject(clientPayload));
+        }
+        return triggerAction(workspace, repository, body);
+    }
+
+    public String triggerWorkflow(
+            String workspace,
+            String repository,
+            String workflowId,
+            String request) throws IOException {
+        GitHubWorkflowUtils.triggerWorkflow(this, workspace, repository, workflowId, request);
+        return "Workflow '" + workflowId + "' triggered successfully on " + workspace + "/" + repository;
+    }
+
+    @MCPTool(
+            name = "github_trigger_workflow",
+            description = "Trigger a specific GitHub Actions workflow by filename (workflow dispatch). The workflow must have 'on: workflow_dispatch' configured.",
+            integration = "github",
+            category = "actions"
+    )
+    public String triggerWorkflow(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "workflowId", description = "The workflow filename or ID to trigger", required = true, example = "rework.yml")
+            String workflowId,
+            @MCPParam(name = "inputs", description = "JSON string with workflow inputs (e.g. {\"user_request\":\"...\",\"branch\":\"main\"})", required = false, example = "{\"user_request\":\"Please rework PROJ-123\"}")
+            String inputs,
+            @MCPParam(name = "ref", description = "The branch or tag to run the workflow on (default: main)", required = false, example = "main")
+            String ref) throws IOException {
+        String path = path(String.format("repos/%s/%s/actions/workflows/%s/dispatches", workspace, repository, workflowId));
+        GenericRequest postRequest = new GenericRequest(this, path);
+        JSONObject body = new JSONObject();
+        body.put("ref", (ref != null && !ref.trim().isEmpty()) ? ref : "main");
+        if (inputs != null && !inputs.trim().isEmpty()) {
+            body.put("inputs", new JSONObject(inputs));
+        }
+        postRequest.setBody(body.toString());
+        post(postRequest);
+        return "Workflow '" + workflowId + "' triggered successfully on " + workspace + "/" + repository;
+    }
+
     private String getPullRequestResponse(String workspace, String repository, String pullRequestId, boolean isDiff) throws IOException {
         String path = path(String.format("repos/%s/%s/pulls/%s", workspace, repository, pullRequestId));
         GenericRequest getRequest = new GenericRequest(this, path);
@@ -649,6 +710,44 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @MCPTool(
+            name = "github_list_workflow_runs",
+            description = "List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file. Use status='failure' to get all failed runs.",
+            integration = "github",
+            category = "actions"
+    )
+    public String listWorkflowRuns(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "status", description = "Filter by status: failure, success, in_progress, queued, cancelled, timed_out, action_required, neutral, skipped, stale, completed", required = false, example = "failure")
+            String status,
+            @MCPParam(name = "workflowId", description = "Optional workflow filename to filter runs (e.g. rework.yml). If omitted, returns runs for all workflows.", required = false, example = "rework.yml")
+            String workflowId,
+            @MCPParam(name = "perPage", description = "Number of results per page (max 100, default 30)", required = false, example = "50")
+            Integer perPage) throws IOException {
+        String basePath;
+        if (workflowId != null && !workflowId.trim().isEmpty()) {
+            basePath = String.format("repos/%s/%s/actions/workflows/%s/runs", workspace, repository, workflowId);
+        } else {
+            basePath = String.format("repos/%s/%s/actions/runs", workspace, repository);
+        }
+        StringBuilder query = new StringBuilder();
+        if (status != null && !status.trim().isEmpty()) {
+            query.append("status=").append(status);
+        }
+        if (perPage != null) {
+            if (query.length() > 0) query.append("&");
+            query.append("per_page=").append(perPage);
+        }
+        String fullPath = query.length() > 0
+                ? path(basePath + "?" + query)
+                : path(basePath);
+        GenericRequest getRequest = new GenericRequest(this, fullPath);
+        return execute(getRequest);
+    }
+
+    @MCPTool(
             name = "github_get_job_logs",
             description = "Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job.",
             integration = "github",
@@ -664,6 +763,22 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         String path = path(String.format("repos/%s/%s/actions/jobs/%s/logs", workspace, repository, jobId));
         GenericRequest getRequest = new GenericRequest(this, path);
         return execute(getRequest);
+    }
+
+    @MCPTool(
+            name = "github_get_workflow_run_logs",
+            description = "Download and extract complete logs for all jobs in a GitHub Actions workflow run. Returns full untruncated log content from the ZIP archive GitHub provides.",
+            integration = "github",
+            category = "actions"
+    )
+    public String getWorkflowRunLogs(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "runId", description = "The workflow run ID", required = true, example = "22498697315")
+            String runId) throws IOException {
+        return GitHubWorkflowUtils.downloadWorkflowRunLogs(this, workspace, repository, runId);
     }
 
     private String executeGraphQL(String query, JSONObject variables) throws IOException {

@@ -218,12 +218,12 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     public int getPromptChunkTokenLimit() {
         String value = getValue("PROMPT_CHUNK_TOKEN_LIMIT");
         if (value == null || value.trim().isEmpty()) {
-            return 4000; // Default value
+            return 50000; // Default value
         }
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
-            return 4000; // Default value
+            return 50000; // Default value
         }
     }
     
