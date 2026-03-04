@@ -2,14 +2,15 @@
 
 # DMtools Agent Skill Installer
 # Works with Cursor, Claude, Codex, and any Agent Skills compatible system
-# Installs to project-level directories only (.cursor/skills, .claude/skills, .codex/skills)
+# Installs to project-level directories (.cursor/skills, .claude/skills, .codex/skills)
+# and to global ~/.claude/skills if ~/.claude exists (Claude Code / GitHub Copilot CLI)
 #
 # Usage:
 #   curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash
-#   # When piped (non-interactive): installs to ALL detected project-level locations automatically
+#   # When piped (non-interactive): installs to ALL detected locations automatically
 #
 #   INSTALL_LOCATION=1 bash install.sh          # Install to first detected location only
-#   bash install.sh --all                       # Install to all detected project-level locations
+#   bash install.sh --all                       # Install to all detected locations
 #   bash install.sh                             # Interactive mode: ask user to choose
 
 set -e
@@ -29,7 +30,7 @@ for arg in "$@"; do
             echo "  $0 [options]"
             echo ""
             echo "Options:"
-            echo "  --all, -a     Install to all detected project-level locations"
+            echo "  --all, -a     Install to all detected locations"
             echo "  --help, -h    Show this help message"
             echo ""
             echo "Environment Variables:"
@@ -48,7 +49,7 @@ for arg in "$@"; do
             echo "  bash install.sh --all"
             echo "    → Install to all locations"
             echo ""
-            echo "Note: Installs only to project-level directories (.cursor/skills, .claude/skills, .codex/skills)"
+            echo "Note: Installs to project-level and global (~/.claude/skills) directories"
             echo "      Run this command from your project root directory."
             exit 0
             ;;
@@ -68,7 +69,7 @@ SKILL_NAME="dmtools"
 GITHUB_REPO="IstiN/dmtools"
 TEMP_DIR=$(mktemp -d)
 
-# Skill directories to check (project-level only)
+# Skill directories to check
 SKILL_DIRS=(
     ".cursor/skills"
     ".claude/skills"
@@ -96,11 +97,11 @@ print_info() {
     echo -e "${YELLOW}ℹ${NC} $1" >&2
 }
 
-# Detect available skill directories (project-level only)
+# Detect available skill directories (project-level + global ~/.claude)
 detect_skill_dirs() {
     local found_dirs=()
 
-    # Check project-level directories only
+    # Check project-level directories
     if [ -d ".cursor/skills" ] || [ -d ".cursor" ]; then
         found_dirs+=(".cursor/skills")
     fi
@@ -109,6 +110,22 @@ detect_skill_dirs() {
     fi
     if [ -d ".codex/skills" ] || [ -d ".codex" ]; then
         found_dirs+=(".codex/skills")
+    fi
+
+    # Check global directories (e.g. ~/.claude used by Claude Code / Copilot CLI)
+    local home_claude="$HOME/.claude"
+    if [ -d "$home_claude/skills" ] || [ -d "$home_claude" ]; then
+        # Only add if not already covered by project-level .claude
+        local already_added=false
+        for d in "${found_dirs[@]}"; do
+            if [ "$d" = ".claude/skills" ]; then
+                already_added=true
+                break
+            fi
+        done
+        if [ "$already_added" = false ]; then
+            found_dirs+=("$home_claude/skills")
+        fi
     fi
 
     # If no directories found, default to .cursor/skills in current directory
@@ -212,7 +229,7 @@ main() {
     fi
 
     # Detect available directories
-    print_info "Detecting project-level skill directories..."
+    print_info "Detecting skill directories..."
     local DIRS=($(detect_skill_dirs))
 
     if [ ${#DIRS[@]} -eq 0 ]; then
@@ -327,7 +344,7 @@ case "${1:-install}" in
         echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
         echo ""
         echo "The installer will:"
-        echo "  1. Detect project-level skill directories (.cursor, .claude, .codex)"
+        echo "  1. Detect skill directories (.cursor, .claude, .codex, ~/.claude)"
         echo "  2. Download the latest DMtools skill"
         echo "  3. Install to ALL detected locations (when piped) or ask you to choose"
         echo ""
@@ -335,7 +352,6 @@ case "${1:-install}" in
         echo "  - Piped (curl | bash): Installs to ALL detected locations automatically"
         echo "  - Interactive: Shows menu to choose specific location(s)"
         echo ""
-        echo "Note: This installer only works with project-level directories."
         echo "      Run from your project root directory."
         echo ""
         echo "Learn more: https://agentskills.io"
