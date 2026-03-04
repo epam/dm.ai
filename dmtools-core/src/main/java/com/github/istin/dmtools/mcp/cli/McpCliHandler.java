@@ -44,6 +44,7 @@ public class McpCliHandler {
 
     private volatile Map<String, Object> clientInstances;
     private volatile Map<String, AI> availableAIClients;
+    private volatile Map<String, Object> cachedToolsResponse;
 
     public McpCliHandler() {
         // Configure logging for CLI usage - suppress all logs except errors
@@ -169,6 +170,12 @@ public class McpCliHandler {
                 String filter = args.length > 2 ? args[2] : null;
                 return handleListCommand(filter);
             } else {
+                // Check if --help or -h flag is present → show tool schema instead of executing
+                for (int i = 2; i < args.length; i++) {
+                    if ("--help".equals(args[i]) || "-h".equals(args[i])) {
+                        return handleListCommand(command);
+                    }
+                }
                 return handleToolExecutionCommand(args);
             }
 
@@ -222,7 +229,9 @@ public class McpCliHandler {
 
             Object result = MCPToolExecutor.executeTool(toolName, arguments, clientInstances);
             if (result == null) {
-                return createErrorResponse("Tool executed successfully but returned no result.");
+                JSONObject response = new JSONObject();
+                response.put("success", true);
+                return response.toString(2);
             }
 
             String serialized = serializeResult(result);
@@ -293,33 +302,14 @@ public class McpCliHandler {
         for (int i = 2; i < args.length; i++) {
             String arg = args[i];
 
-            if ("--data".equals(arg) && i + 1 < args.length) {
-                // Parse JSON data
-                String jsonData = args[i + 1];
-                try {
-                    JSONObject jsonObj = new JSONObject(jsonData);
-                    jsonObj.keys().forEachRemaining(key -> {
-                        arguments.put(key, jsonObj.get(key));
-                    });
-                } catch (Exception e) {
-                    logger.warn("Failed to parse JSON data, treating as string: {}", jsonData);
-                    arguments.put("data", jsonData);
-                }
+            if (("--data".equals(arg) || "--stdin-data".equals(arg)) && i + 1 < args.length) {
+                parseJsonIntoArguments(args[i + 1], arg.substring(2), arguments);
                 i++; // Skip next argument as it was consumed
-            } else if ("--stdin-data".equals(arg) && i + 1 < args.length) {
-                // Parse stdin data (from wrapper script)
-                String stdinData = args[i + 1];
-                try {
-                    JSONObject jsonObj = new JSONObject(stdinData);
-                    jsonObj.keys().forEachRemaining(key -> {
-                        arguments.put(key, jsonObj.get(key));
-                    });
-                } catch (Exception e) {
-                    logger.warn("Failed to parse stdin data, treating as string: {}", stdinData);
-                    arguments.put("data", stdinData);
-                }
-                i++; // Skip next argument as it was consumed
-            } else if (!arg.startsWith("--")) {
+            } else if ("--verbose".equals(arg) || "--debug".equals(arg)) {
+                // Shell-level flags handled by dmtools.sh; ignored here
+            } else if (arg.startsWith("--")) {
+                logger.debug("Ignoring unknown flag: {}", arg);
+            } else {
                 // Positional argument - collect for now
                 // Only treat as key=value if it matches pattern: paramName=value (where paramName is valid identifier)
                 if (arg.contains("=") && arg.matches("^[a-zA-Z_][a-zA-Z0-9_]*=.*")) {
@@ -337,6 +327,19 @@ public class McpCliHandler {
         }
 
         return arguments;
+    }
+
+    /**
+     * Parses a JSON string and merges its keys into the arguments map.
+     */
+    private void parseJsonIntoArguments(String jsonData, String source, Map<String, Object> arguments) {
+        try {
+            JSONObject jsonObj = new JSONObject(jsonData);
+            jsonObj.keys().forEachRemaining(key -> arguments.put(key, jsonObj.get(key)));
+        } catch (Exception e) {
+            logger.warn("Failed to parse {} data, treating as string: {}", source, jsonData);
+            arguments.put("data", jsonData);
+        }
     }
 
     /**
@@ -410,10 +413,15 @@ public class McpCliHandler {
      */
     private Map<String, Object> getToolSchema(String toolName) {
         try {
-            Set<String> integrations = Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "testrail", "kb", "mermaid");
-            Map<String, Object> toolsResponse = MCPSchemaGenerator.generateToolsListResponse(integrations);
+            if (cachedToolsResponse == null) {
+                synchronized (this) {
+                    if (cachedToolsResponse == null) {
+                        cachedToolsResponse = MCPSchemaGenerator.generateToolsListResponse(getAvailableIntegrations());
+                    }
+                }
+            }
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> tools = (List<Map<String, Object>>) toolsResponse.get("tools");
+            List<Map<String, Object>> tools = (List<Map<String, Object>>) cachedToolsResponse.get("tools");
 
             for (Map<String, Object> tool : tools) {
                 if (toolName.equals(tool.get("name"))) {
@@ -431,10 +439,7 @@ public class McpCliHandler {
      */
     private boolean isArrayParameter(Map<String, Object> toolSchema, String paramName) {
         if (toolSchema == null) {
-            // Heuristic: if param name ends with 's' and contains common array indicators
-            return paramName.endsWith("s") && 
-                   (paramName.contains("url") || paramName.contains("id") || 
-                    paramName.contains("field") || paramName.contains("string"));
+            return false;
         }
         
         @SuppressWarnings("unchecked")
@@ -463,16 +468,7 @@ public class McpCliHandler {
      * Converts parameter value from String to appropriate type based on parameter name.
      */
     private Object convertParameterValue(String paramName, String value) {
-        // Common parameter types
-        if (paramName.equals("limit") || paramName.endsWith("Count") || paramName.endsWith("Size")) {
-            try {
-                return Integer.parseInt(value);
-            } catch (NumberFormatException e) {
-                logger.warn("Failed to convert '{}' to Integer for parameter '{}'", value, paramName);
-                return value;  // Return as string if conversion fails
-            }
-        }
-        // Add more type conversions as needed
+        // MCPToolExecutor handles type conversion based on schema; pass values as strings
         return value;
     }
     
@@ -602,62 +598,6 @@ public class McpCliHandler {
     }
     
     /**
-     * Creates all available AI clients based on configuration.
-     * Returns a map of client type names to AI instances.
-     * Uses AIComponentsModule helper methods to create specific client types.
-     */
-    private Map<String, AI> createAllAIClients() {
-        Map<String, AI> aiClients = new HashMap<>();
-        ConversationObserver observer = new ConversationObserver();
-        ApplicationConfiguration configuration = new PropertyReaderConfiguration();
-        
-        // Try to create Ollama client using AIComponentsModule
-        AI ollama = AIComponentsModule.createOllamaAI(observer, configuration);
-        if (ollama != null) {
-            aiClients.put("ollama", ollama);
-            logger.debug("Created BasicOllamaAI instance");
-        }
-        
-        // Try to create Anthropic client using AIComponentsModule
-        AI anthropic = AIComponentsModule.createAnthropicAI(observer, configuration);
-        if (anthropic != null) {
-            aiClients.put("anthropic", anthropic);
-            logger.debug("Created BasicAnthropicAI instance");
-        }
-        
-        // Try to create Gemini client using AIComponentsModule
-        AI gemini = AIComponentsModule.createGeminiAI(observer, configuration);
-        if (gemini != null) {
-            aiClients.put("gemini", gemini);
-            logger.debug("Created BasicGeminiAI instance");
-        }
-        
-        // Try to create Bedrock client using AIComponentsModule
-        AI bedrock = AIComponentsModule.createBedrockAI(observer, configuration);
-        if (bedrock != null) {
-            aiClients.put("bedrock", bedrock);
-            logger.debug("Created BasicBedrockAI instance");
-        }
-        
-        // Try to create OpenAI client using AIComponentsModule
-        AI openai = AIComponentsModule.createOpenAIAI(observer, configuration);
-        if (openai != null) {
-            aiClients.put("openai", openai);
-            logger.debug("Created BasicOpenAI instance");
-        }
-
-        // Try to create Dial client (fallback) using AIComponentsModule
-        AI dial = AIComponentsModule.createDialAI(observer, configuration);
-        if (dial != null) {
-            aiClients.put("dial", dial);
-            logger.debug("Created BasicDialAI instance");
-        }
-
-        logger.debug("Created {} AI client instances", aiClients.size());
-        return aiClients;
-    }
-    
-    /**
      * Gets the appropriate AI client for a given tool name.
      * Returns the client that matches the tool's expected type.
      */
@@ -710,6 +650,15 @@ public class McpCliHandler {
                 }
                 return client;
             }
+        }
+
+        // Non-AI tools don't need an AI client
+        Set<String> nonAIIntegrations = Set.of(
+            "jira", "confluence", "ado", "figma", "file", "cli",
+            "teams", "sharepoint", "testrail", "kb", "mermaid", "github"
+        );
+        if (parts.length > 0 && nonAIIntegrations.contains(parts[0])) {
+            return null;
         }
 
         // Generic AI tools - use fallback logic
@@ -958,9 +907,11 @@ public class McpCliHandler {
                 if (tool instanceof Map) {
                     Map<String, Object> toolMap = (Map<String, Object>) tool;
                     Object nameObj = toolMap.get("name");
+                    Object descObj = toolMap.get("description");
                     if (nameObj instanceof String) {
                         String toolName = ((String) nameObj).toLowerCase();
-                        if (toolName.contains(filter)) {
+                        String toolDesc = descObj instanceof String ? ((String) descObj).toLowerCase() : "";
+                        if (toolName.contains(filter) || toolDesc.contains(filter)) {
                             filteredTools.add(tool);
                         }
                     }

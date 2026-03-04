@@ -43,8 +43,8 @@ while IFS= read -r line; do
     # Skip empty lines
     [ -z "$line" ] && continue
     
-    # Log request to stderr for debugging
-    echo "DEBUG: Received request: $line" >&2
+    # Log request to stderr for debugging (only if DMTOOLS_MCP_DEBUG is set)
+    [ -n "$DMTOOLS_MCP_DEBUG" ] && echo "DEBUG: Received request: $line" >&2
     
     # Validate JSON-RPC format
     if validate_jsonrpc "$line"; then

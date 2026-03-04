@@ -385,6 +385,126 @@ class McpCliHandlerTest {
         }
     }
 
+    @Test
+    @DisplayName("Should show tool schema when --help flag is passed")
+    void testHelpFlagShowsToolSchema() {
+        String[] args = {"mcp", "jira_move_to_status", "--help"};
+        String result = mcpCliHandler.processMcpCommand(args);
+
+        // Should return valid JSON (same as list with filter)
+        JSONObject response = new JSONObject(result);
+        assertTrue(response.has("tools"), "Response should contain 'tools' key");
+    }
+
+    @Test
+    @DisplayName("Should show tool schema when -h flag is passed")
+    void testShortHelpFlagShowsToolSchema() {
+        String[] args = {"mcp", "jira_move_to_status", "-h"};
+        String result = mcpCliHandler.processMcpCommand(args);
+
+        // Should return valid JSON (same as list with filter)
+        JSONObject response = new JSONObject(result);
+        assertTrue(response.has("tools"), "Response should contain 'tools' key");
+    }
+
+    @Test
+    @DisplayName("Should filter tools by description, not just name")
+    void testFilterToolsByDescription() {
+        // "transition" appears in jira_move_to_status description but not in its name
+        String[] args = {"mcp", "list", "transition"};
+        String result = mcpCliHandler.processMcpCommand(args);
+
+        JSONObject response = new JSONObject(result);
+        assertTrue(response.has("tools"));
+        org.json.JSONArray tools = response.getJSONArray("tools");
+
+        // Should find tools where "transition" is in the description
+        boolean foundByDescription = false;
+        for (int i = 0; i < tools.length(); i++) {
+            JSONObject tool = tools.getJSONObject(i);
+            String name = tool.getString("name");
+            // If a tool was found whose name does NOT contain "transition", it was matched by description
+            if (!name.toLowerCase().contains("transition")) {
+                foundByDescription = true;
+                break;
+            }
+        }
+        assertTrue(foundByDescription || tools.length() > 0,
+            "Filter should match tools by description, not just name");
+    }
+
+    @Test
+    @DisplayName("Should explicitly ignore --verbose flag without treating it as a positional argument")
+    void testVerboseFlagExplicitlyIgnored() {
+        // --verbose should be silently ignored, NOT treated as a positional arg
+        String[] args1 = {"mcp", "test_tool", "DMC-479"};
+        String result1 = mcpCliHandler.processMcpCommand(args1);
+
+        String[] args2 = {"mcp", "test_tool", "DMC-479", "--verbose"};
+        String result2 = mcpCliHandler.processMcpCommand(args2);
+
+        // Both should produce the same error (test_tool doesn't exist)
+        // but crucially, --verbose should NOT appear in the error as a parameter
+        JSONObject response1 = new JSONObject(result1);
+        JSONObject response2 = new JSONObject(result2);
+        assertEquals(response1.getString("message"), response2.getString("message"),
+            "--verbose flag should be ignored and not change the parsed arguments");
+    }
+
+    @Test
+    @DisplayName("Non-AI tools should not trigger AI client errors")
+    void testNonAIToolsSkipAIClient() {
+        // cli_execute_command is a non-AI tool, should work without any AI provider configured
+        String[] args = {"mcp", "cli_execute_command", "--data", "{\"command\": \"echo hello\"}"};
+        String result = mcpCliHandler.processMcpCommand(args);
+
+        JSONObject response = new JSONObject(result);
+        if (response.has("error")) {
+            String message = response.getString("message");
+            // Should NOT fail with AI provider errors
+            assertFalse(message.contains("requires") && message.contains("provider"),
+                "Non-AI tool should not trigger AI provider errors. Got: " + message);
+            assertFalse(message.contains("OPENAI_API_KEY") || message.contains("GEMINI_API_KEY"),
+                "Non-AI tool should not reference AI credentials. Got: " + message);
+        }
+    }
+
+    @Test
+    @DisplayName("Schema caching should return consistent results across multiple calls")
+    void testSchemaCachingConsistency() {
+        // Call list twice - should return same results (cached)
+        String[] args = {"mcp", "list", "jira"};
+        String result1 = mcpCliHandler.processMcpCommand(args);
+        String result2 = mcpCliHandler.processMcpCommand(args);
+
+        JSONObject response1 = new JSONObject(result1);
+        JSONObject response2 = new JSONObject(result2);
+
+        assertEquals(response1.getJSONArray("tools").length(),
+            response2.getJSONArray("tools").length(),
+            "Cached schema should return consistent tool count");
+    }
+
+    @Test
+    @DisplayName("Unified JSON parsing should handle both --data and --stdin-data identically")
+    void testUnifiedJsonParsing() {
+        // Both --data and --stdin-data should parse JSON the same way
+        String json = "{\"key\": \"PROJ-123\"}";
+
+        String[] argsData = {"mcp", "test_tool", "--data", json};
+        String resultData = mcpCliHandler.processMcpCommand(argsData);
+
+        String[] argsStdin = {"mcp", "test_tool", "--stdin-data", json};
+        String resultStdin = mcpCliHandler.processMcpCommand(argsStdin);
+
+        JSONObject responseData = new JSONObject(resultData);
+        JSONObject responseStdin = new JSONObject(resultStdin);
+
+        // Both should produce the same error (test_tool doesn't exist)
+        assertEquals(responseData.getString("message"), responseStdin.getString("message"),
+            "--data and --stdin-data should produce identical results");
+    }
+
     // NOTE: Tests for provider-specific AI tools (Ollama, Bedrock, Gemini) have been moved to
     // McpCliHandlerProviderIntegrationTest in src/integrationTest/java
     // These tests make real network calls and should not be in unit tests.

@@ -90,14 +90,12 @@ info() {
 }
 
 # Execute java command with proper stderr handling
+# Usage: execute_java_command arg1 arg2 ...
 execute_java_command() {
-    local java_cmd="$1"
     if [ "$DEBUG" = true ]; then
-        # Show stderr - execute command directly
-        eval "$java_cmd"
+        "$@"
     else
-        # Suppress stderr
-        eval "$java_cmd 2>/dev/null"
+        "$@" 2>/dev/null
     fi
 }
 
@@ -158,7 +156,7 @@ find_jar_file() {
         jar_file=$(find "$SCRIPT_DIR/build/libs" -name "*-all.jar" | head -1)
     # 3. Check for any JAR file in the script directory
     elif ls "$SCRIPT_DIR"/*.jar >/dev/null 2>&1; then
-        jar_file=$(find "$SCRIPT_DIR" -name "dmtools*.jar" -o -name "*-all.jar" | head -1)
+        jar_file=$(find "$SCRIPT_DIR" -maxdepth 1 \( -name "dmtools*.jar" -o -name "*-all.jar" \) | head -1)
     # 4. Check parent directory build folder (if script is in subdirectory)
     elif ls "$SCRIPT_DIR/../build/libs"/*.jar >/dev/null 2>&1; then
         jar_file=$(find "$SCRIPT_DIR/../build/libs" -name "*-all.jar" | head -1)
@@ -200,7 +198,7 @@ Or if you're developing locally, build the project first:
 
 Note: Java 23 is required for DMTools to run."
     fi
-    execute_java_command "\"$JAVA_CMD\" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner"
+    execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner
     exit 0
 }
 
@@ -209,9 +207,6 @@ if [ $# -eq 0 ]; then
     show_banner
     exit 0
 fi
-
-# Reload environment files with messages when executing commands
-load_env_files
 
 # Initialize variables for argument parsing
 ARGS=()
@@ -270,10 +265,10 @@ case "$COMMAND" in
     "list")
         if [ ${#ARGS[@]} -gt 0 ]; then
             # List with filter
-            execute_java_command "\"$JAVA_CMD\" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list \"${ARGS[0]}\""
+            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp list "${ARGS[0]}"
         else
             # List all tools
-            execute_java_command "\"$JAVA_CMD\" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner mcp list"
+            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp list
         fi
         exit 0
         ;;
@@ -298,10 +293,10 @@ case "$COMMAND" in
         # Execute run command with JobRunner
         if [ -n "$ENCODED_PARAM" ]; then
             info "Executing job with file: $JSON_FILE and encoded parameter"
-            execute_java_command "\"$JAVA_CMD\" -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\" \"$ENCODED_PARAM\""
+            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE" "$ENCODED_PARAM"
         else
             info "Executing job with file: $JSON_FILE"
-            execute_java_command "\"$JAVA_CMD\" -cp \"$JAR_FILE\" com.github.istin.dmtools.job.JobRunner run \"$JSON_FILE\""
+            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE"
         fi
         exit $?
         ;;
