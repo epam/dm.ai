@@ -12,6 +12,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * TestCasesTrackerAdapter implementation for TestRail.
@@ -33,6 +34,10 @@ public class TestRailTestCasesAdapter implements TestCasesTrackerAdapter {
         List<ITicket> result = new ArrayList<>();
         for (String projectName : config.getProjectNames()) {
             List<TestCase> cases = client.getAllCases(projectName);
+            System.out.println("[DEBUG-LINKING] getExistingCases project='" + projectName + "' returned " + cases.size() + " cases");
+            if (!cases.isEmpty()) {
+                System.out.println("[DEBUG-LINKING] getExistingCases sample keys (first 5): " + cases.stream().limit(5).map(c -> { try { return c.getKey() + "(refs=" + c.getString("refs") + ")"; } catch (Exception e) { return c.getKey(); } }).collect(java.util.stream.Collectors.joining(", ")));
+            }
             result.addAll(cases);
         }
         return result;
@@ -43,6 +48,10 @@ public class TestRailTestCasesAdapter implements TestCasesTrackerAdapter {
         List<ITicket> result = new ArrayList<>();
         for (String projectName : config.getProjectNames()) {
             List<TestCase> cases = client.getCasesByRefs(sourceTicketKey, projectName);
+            System.out.println("[DEBUG-LINKING] getLinkedCases key='" + sourceTicketKey + "' project='" + projectName + "' returned " + cases.size() + " cases");
+            if (!cases.isEmpty()) {
+                System.out.println("[DEBUG-LINKING] getLinkedCases keys: " + cases.stream().map(c -> c.getKey()).collect(java.util.stream.Collectors.joining(", ")));
+            }
             result.addAll(cases);
         }
         return result;

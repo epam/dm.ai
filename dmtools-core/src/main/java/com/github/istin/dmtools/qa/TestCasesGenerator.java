@@ -200,6 +200,13 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         } else {
             currentlyLinked = trackerClient.getTestCases(mainTicket, params.getTestCaseIssueType());
         }
+        System.out.println("[DEBUG-LINKING] ticket=" + key + " existingCasesTotal=" + (listOfAllTestCases != null ? listOfAllTestCases.size() : "null") + " alreadyLinked=" + currentlyLinked.size());
+        if (listOfAllTestCases != null && !listOfAllTestCases.isEmpty()) {
+            System.out.println("[DEBUG-LINKING] existingCases keys (first 10): " + listOfAllTestCases.stream().limit(10).map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
+        }
+        if (!currentlyLinked.isEmpty()) {
+            System.out.println("[DEBUG-LINKING] alreadyLinked keys: " + currentlyLinked.stream().map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
+        }
         List<ITicket> finaResults = params.isFindRelated()
                 ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, listOfAllTestCases, params.isLinkRelated(), params.getRelatedTestCasesRules(), existingRelationship, currentlyLinked, params, customAdapter)
                 : Collections.emptyList();
@@ -639,11 +646,13 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             params.getModelTestCaseRelation(),
             new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence)
         );
+        System.out.println("[DEBUG-LINKING] verifyAndLink testCase=" + testCase.getKey() + " isConfirmed=" + isConfirmed);
 
         if (isConfirmed) {
             if (isLink) {
                 boolean isAlreadyLinked = currentlyLinkedTestCases != null &&
                     currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
+                System.out.println("[DEBUG-LINKING] isAlreadyLinked=" + isAlreadyLinked + " for " + testCase.getKey());
                 if (!isAlreadyLinked) {
                     if (customAdapter != null) {
                         if (needSync) {
@@ -688,24 +697,31 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         List<ITicket> chunkResults = new ArrayList<>();
 
         // Get potential test cases from the chunk
+        System.out.println("[DEBUG-LINKING] Calling relatedTestCasesAgent for ticket=" + ticketKey + " chunkSize=" + chunk.getText().length() + " chars, existingCasesInChunk=" + listOfAllTestCases.size());
         JSONArray testCaseKeys = relatedTestCasesAgent.run(
             params.getModelTestCasesRelation(),
             new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence)
         );
+        System.out.println("[DEBUG-LINKING] AI returned keys: " + testCaseKeys.toString());
 
         // Prepare list of test cases to verify
         List<ITicket> testCasesToVerify = new ArrayList<>();
         for (int j = 0; j < testCaseKeys.length(); j++) {
             String rawKey = testCaseKeys.getString(j);
             String testCaseKey = customAdapter != null ? customAdapter.normalizeKeyFromAI(rawKey) : rawKey;
+            System.out.println("[DEBUG-LINKING] rawKey='" + rawKey + "' normalizedKey='" + testCaseKey + "'");
             ITicket testCase = listOfAllTestCases.stream()
                 .filter(t -> t.getKey().equals(testCaseKey))
                 .findFirst()
                 .orElse(null);
             if (testCase != null) {
                 testCasesToVerify.add(testCase);
+                System.out.println("[DEBUG-LINKING] Found in listOfAllTestCases: " + testCaseKey);
+            } else {
+                System.out.println("[DEBUG-LINKING] NOT FOUND in listOfAllTestCases: " + testCaseKey + " (available keys sample: " + listOfAllTestCases.stream().limit(5).map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")) + ")");
             }
         }
+        System.out.println("[DEBUG-LINKING] testCasesToVerify count: " + testCasesToVerify.size());
 
         // Process post-verification either in parallel or sequentially
         if (params.isEnableParallelPostVerification() && testCasesToVerify.size() > 1) {
