@@ -495,20 +495,148 @@ public class TestCasesGeneratorTest {
     }
 
     @Test
-    public void testApplyJqlModifier_WithNullOriginalJql() throws Exception {
-        TestCasesGenerator generator = new TestCasesGenerator();
-        Method applyJqlMethod = TestCasesGenerator.class.getDeclaredMethod("applyJqlModifier", ITicket.class, TestCasesGeneratorParams.class);
-        applyJqlMethod.setAccessible(true);
+    public void shouldPostComments_ReturnsFalseWhenOutputTypeIsNoneAndFlagNotSet() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.none);
+        assertFalse(generator.shouldPostComments(params));
+    }
+
+    @Test
+    public void shouldPostComments_ReturnsTrueWhenAlwaysPostCommentsIsTrue() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setAlwaysPostComments(true);
+        assertTrue(generator.shouldPostComments(params));
+    }
+
+    @Test
+    public void shouldPostComments_ReturnsFalseWhenAlwaysPostCommentsIsFalse() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setAlwaysPostComments(false);
+        assertFalse(generator.shouldPostComments(params));
+    }
+
+    @Test
+    public void shouldPostComments_ReturnsTrueWhenOutputTypeIsComment() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.comment);
+        assertTrue(generator.shouldPostComments(params));
+    }
+
+    @Test
+    public void shouldPostComments_ReturnsTrueWhenBothConditionsMet() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setOutputType(TrackerParams.OutputType.comment);
+        params.setAlwaysPostComments(true);
+        assertTrue(generator.shouldPostComments(params));
+    }
+
+    @Test
+    public void testCasesCreationRules_FieldIsNullByDefault() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        assertNull(params.getTestCasesCreationRules());
+    }
+
+    @Test
+    public void testCasesCreationRules_CanBeSetAndRead() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setTestCasesCreationRules("./agents/instructions/test_case_creation_rules.md");
+        assertEquals("./agents/instructions/test_case_creation_rules.md", params.getTestCasesCreationRules());
+    }
+
+    @Test
+    public void testCasesCreationRules_MergedWithExtraRules() throws Exception {
+        // Given: a generator with mocked confluence + agent
+        TestCasesGenerator gen = new TestCasesGenerator();
+        Confluence mockConfluence = mock(Confluence.class);
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        TestCaseGeneratorAgent testCaseGeneratorAgent = mock(TestCaseGeneratorAgent.class);
+        AI ai = mock(AI.class);
+        gen.confluence = mockConfluence;
+        gen.trackerClient = trackerClient;
+        gen.testCaseGeneratorAgent = testCaseGeneratorAgent;
+        gen.ai = ai;
+
+        // testCasesCreationRules points to inline text (no http/file prefix → passed through as-is)
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(false);
+        params.setGenerateNew(true);
+        params.setTestCasesPriorities("High,Medium");
+        params.setModelTestCasesCreation("gpt-4");
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setTestCasesCreationRules("Rule from testCasesCreationRules");
 
         ITicket ticket = mock(ITicket.class);
-        when(ticket.getTicketKey()).thenReturn("TEST-123");
+        when(ticket.getTicketKey()).thenReturn("DMC-456");
+        when(ticket.getKey()).thenReturn("DMC-456");
+        TicketContext ticketContext = mock(TicketContext.class);
+        when(ticketContext.getTicket()).thenReturn(ticket);
+        when(ticketContext.toText()).thenReturn("Feature description");
+        when(trackerClient.getTestCases(any(), any())).thenReturn(Collections.emptyList());
+
+        List<TestCaseGeneratorAgent.TestCase> generated = List.of(
+                new TestCaseGeneratorAgent.TestCase("High", "Test 1", "Description 1"));
+        when(testCaseGeneratorAgent.run(anyString(), any())).thenReturn(generated);
+        when(testCaseGeneratorAgent.run(any())).thenReturn(generated);
+
+        // When: extraRules="Base rules" is passed in, testCasesCreationRules adds more
+        TestCasesGenerator.TestCasesResult result = gen.generateTestCases(
+                ticketContext, "Base rules", Collections.emptyList(), params);
+
+        // Then: agent called with both rules merged
+        ArgumentCaptor<TestCaseGeneratorAgent.Params> captor =
+                ArgumentCaptor.forClass(TestCaseGeneratorAgent.Params.class);
+        verify(testCaseGeneratorAgent).run(eq("gpt-4"), captor.capture());
+        String capturedRules = captor.getValue().getExtraRules();
+        assertTrue("extraRules should contain base rules", capturedRules.contains("Base rules"));
+        assertTrue("extraRules should contain testCasesCreationRules content",
+                capturedRules.contains("Rule from testCasesCreationRules"));
+    }
+
+    @Test
+    public void confluencePages_AllElementsJoinedNotOnlyFirst() throws Exception {
+        TestCasesGenerator gen = new TestCasesGenerator();
+        Confluence mockConfluence = mock(Confluence.class);
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        TestCaseGeneratorAgent testCaseGeneratorAgent = mock(TestCaseGeneratorAgent.class);
+        AI ai = mock(AI.class);
+        gen.confluence = mockConfluence;
+        gen.trackerClient = trackerClient;
+        gen.testCaseGeneratorAgent = testCaseGeneratorAgent;
+        gen.ai = ai;
 
         TestCasesGeneratorParams params = new TestCasesGeneratorParams();
-        params.setExistingTestCasesJql(null);
-        params.setJqlModifierJSAction("test.js");
+        params.setFindRelated(false);
+        params.setGenerateNew(true);
+        params.setTestCasesPriorities("High,Medium");
+        params.setModelTestCasesCreation("gpt-4");
+        params.setOutputType(TrackerParams.OutputType.none);
 
-        String result = (String) applyJqlMethod.invoke(generator, ticket, params);
+        ITicket ticket = mock(ITicket.class);
+        when(ticket.getTicketKey()).thenReturn("DMC-789");
+        when(ticket.getKey()).thenReturn("DMC-789");
+        TicketContext ticketContext = mock(TicketContext.class);
+        when(ticketContext.getTicket()).thenReturn(ticket);
+        when(ticketContext.toText()).thenReturn("Feature description");
+        when(trackerClient.getTestCases(any(), any())).thenReturn(Collections.emptyList());
 
-        assertNull(result);
+        List<TestCaseGeneratorAgent.TestCase> generated = List.of(
+                new TestCaseGeneratorAgent.TestCase("High", "Test 1", "Desc 1"));
+        when(testCaseGeneratorAgent.run(anyString(), any())).thenReturn(generated);
+        when(testCaseGeneratorAgent.run(any())).thenReturn(generated);
+
+        // Simulate what runJob() does: join ALL pages into a single extraRules string
+        String joinedExtraRules = "Rules from page 1\n\nRules from page 2";
+        gen.generateTestCases(ticketContext, joinedExtraRules, Collections.emptyList(), params);
+
+        ArgumentCaptor<TestCaseGeneratorAgent.Params> captor =
+                ArgumentCaptor.forClass(TestCaseGeneratorAgent.Params.class);
+        verify(testCaseGeneratorAgent).run(eq("gpt-4"), captor.capture());
+        String capturedRules = captor.getValue().getExtraRules();
+        assertTrue("extraRules should contain content from page 1", capturedRules.contains("Rules from page 1"));
+        assertTrue("extraRules should contain content from page 2", capturedRules.contains("Rules from page 2"));
     }
 }

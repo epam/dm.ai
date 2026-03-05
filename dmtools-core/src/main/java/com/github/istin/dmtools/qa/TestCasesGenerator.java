@@ -216,6 +216,15 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             int tokenLimit = (systemTokenLimits - storyTokens) / 2;
             System.out.println("GENERATION TOKEN LIMIT: " + tokenLimit);
 
+            // Extract testCasesCreationRules and merge with extraRules from confluencePages
+            String testCasesCreationRulesLink = params.getTestCasesCreationRules();
+            if (testCasesCreationRulesLink != null && !testCasesCreationRulesLink.trim().isEmpty()) {
+                String creationRules = extractFromConfluence(testCasesCreationRulesLink);
+                if (!creationRules.isEmpty()) {
+                    extraRules = extraRules.isEmpty() ? creationRules : extraRules + "\n\n" + creationRules;
+                }
+            }
+
             // Extract customFieldsRules (may be Confluence URL or file path)
             String customFieldsRules = params.getCustomFieldsRules();
             if (customFieldsRules != null && !customFieldsRules.trim().isEmpty()) {
