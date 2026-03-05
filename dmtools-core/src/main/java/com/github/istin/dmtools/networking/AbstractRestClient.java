@@ -20,6 +20,7 @@ import java.nio.file.attribute.FileTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 
 public abstract class AbstractRestClient implements RestClient {
     protected static final Logger logger = LogManager.getLogger(AbstractRestClient.class);
@@ -29,11 +30,8 @@ public abstract class AbstractRestClient implements RestClient {
     protected String basePath;
     protected String authorization;
     protected boolean isClearCache = false;
-    // Cache is disabled by default. Set DMTOOLS_CACHE_ENABLED=true to enable caching globally.
-    private static final boolean DEFAULT_CACHE_ENABLED =
-            "true".equalsIgnoreCase(System.getenv("DMTOOLS_CACHE_ENABLED")) ||
-            "true".equalsIgnoreCase(System.getProperty("dmtools.cache.enabled"));
-    private boolean isCacheGetRequestsEnabled = DEFAULT_CACHE_ENABLED;
+    // Cache is disabled by default. Set DMTOOLS_CACHE_ENABLED=true in dmtools.env to enable globally.
+    private boolean isCacheGetRequestsEnabled = false;
 
     public boolean isCachePostRequestsEnabled() {
         return isCachePostRequestsEnabled;
@@ -67,7 +65,7 @@ public abstract class AbstractRestClient implements RestClient {
         this.basePath = basePath;
         this.authorization = authorization;
         this.retryPolicy = new RetryPolicy(logger);
-
+        this.isCacheGetRequestsEnabled = new PropertyReader().isCacheEnabled();
         reinitCache();
     }
 

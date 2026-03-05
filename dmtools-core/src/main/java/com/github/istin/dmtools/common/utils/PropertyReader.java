@@ -318,6 +318,14 @@ public class PropertyReader {
 		return Boolean.parseBoolean(value);
 	}
 
+	public boolean isCacheEnabled() {
+		String value = getValue("DMTOOLS_CACHE_ENABLED");
+		if (value == null) {
+			return false;
+		}
+		return Boolean.parseBoolean(value);
+	}
+
 	public boolean isXrayCacheGetRequestsEnabled() {
 		String value = getValue("XRAY_CACHE_GET_REQUESTS_ENABLED");
 		if (value == null) {
