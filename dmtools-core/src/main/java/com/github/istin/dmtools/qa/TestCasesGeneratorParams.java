@@ -97,4 +97,7 @@ public class TestCasesGeneratorParams extends Params {
 
     @SerializedName(JQL_MODIFIER_JS_ACTION)
     private String jqlModifierJSAction;
+
+    @SerializedName(CustomTestCasesTrackerParams._KEY)
+    private CustomTestCasesTrackerParams customTestCasesTracker;
 }

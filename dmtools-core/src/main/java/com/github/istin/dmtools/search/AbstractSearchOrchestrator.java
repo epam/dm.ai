@@ -43,7 +43,24 @@ public abstract class AbstractSearchOrchestrator {
     public TrackerClient getTrackerClient() {
         return trackerClient;
     }
-    
+
+    /**
+     * Wires agent dependencies that cannot be injected by Dagger because orchestrators
+     * are created via {@code new} inside {@code @Provides} methods. Must be called
+     * immediately after construction before {@link #run} is invoked.
+     */
+    public void initAgents(KeywordGeneratorAgent keywordGeneratorAgent,
+                           SnippetExtensionAgent snippetExtensionAgent,
+                           SummaryContextAgent summaryContextAgent,
+                           SearchResultsAssessmentAgent searchResultsAssessmentAgent,
+                           ContextOrchestrator contextOrchestrator) {
+        this.keywordGeneratorAgent = keywordGeneratorAgent;
+        this.snippetExtensionAgent = snippetExtensionAgent;
+        this.summaryContextAgent = summaryContextAgent;
+        this.searchResultsAssessmentAgent = searchResultsAssessmentAgent;
+        this.contextOrchestrator = contextOrchestrator;
+    }
+
     public SearchStats getSearchStats() {
         return searchStats;
     }

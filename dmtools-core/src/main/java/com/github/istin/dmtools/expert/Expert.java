@@ -4,8 +4,12 @@ import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.ai.ConfluencePagesContext;
 import com.github.istin.dmtools.ai.TicketContext;
+import com.github.istin.dmtools.ai.agent.KeywordGeneratorAgent;
 import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
+import com.github.istin.dmtools.ai.agent.SearchResultsAssessmentAgent;
+import com.github.istin.dmtools.ai.agent.SnippetExtensionAgent;
 import com.github.istin.dmtools.ai.agent.SourceImpactAssessmentAgent;
+import com.github.istin.dmtools.ai.agent.SummaryContextAgent;
 import com.github.istin.dmtools.ai.agent.TeamAssistantAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 
@@ -97,6 +101,18 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
 
     @Inject
     UriToObjectFactory uriToObjectFactory;
+
+    @Inject
+    KeywordGeneratorAgent keywordGeneratorAgent;
+
+    @Inject
+    SnippetExtensionAgent snippetExtensionAgent;
+
+    @Inject
+    SummaryContextAgent summaryContextAgent;
+
+    @Inject
+    SearchResultsAssessmentAgent searchResultsAssessmentAgent;
 
     // JavaScript bridge is now inherited from AbstractJob
 
@@ -387,6 +403,7 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
         List<ChunkPreparation.Chunk> chunks = new ArrayList<>();
         for (SourceCode sourceCode : sourceCodeList) {
             CodebaseSearchOrchestrator searchOrchestrator = new CodebaseSearchOrchestrator(sourceCode);
+            searchOrchestrator.initAgents(keywordGeneratorAgent, snippetExtensionAgent, summaryContextAgent, searchResultsAssessmentAgent, contextOrchestrator);
             listOfCodebaseSearchOrchestrator.add(searchOrchestrator);
             String keywordsBlacklist = getKeywordsBlacklist(expertParams.getKeywordsBlacklist());
             int filesLimit = expertParams.getFilesLimit();

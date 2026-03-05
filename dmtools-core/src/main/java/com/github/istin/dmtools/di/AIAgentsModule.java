@@ -98,18 +98,32 @@ public class AIAgentsModule {
     }
 
     @Provides
-    ConfluenceSearchOrchestrator provideConfluenceSearchOrchestrator() {
+    ConfluenceSearchOrchestrator provideConfluenceSearchOrchestrator(
+            KeywordGeneratorAgent keywordGeneratorAgent,
+            SnippetExtensionAgent snippetExtensionAgent,
+            SummaryContextAgent summaryContextAgent,
+            SearchResultsAssessmentAgent searchResultsAssessmentAgent,
+            ContextOrchestrator contextOrchestrator) {
         try {
-            return new ConfluenceSearchOrchestrator(BasicConfluence.getInstance());
+            ConfluenceSearchOrchestrator orchestrator = new ConfluenceSearchOrchestrator(BasicConfluence.getInstance());
+            orchestrator.initAgents(keywordGeneratorAgent, snippetExtensionAgent, summaryContextAgent, searchResultsAssessmentAgent, contextOrchestrator);
+            return orchestrator;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     @Provides
-    TrackerSearchOrchestrator provideTrackerSearchOrchestrator() {
+    TrackerSearchOrchestrator provideTrackerSearchOrchestrator(
+            KeywordGeneratorAgent keywordGeneratorAgent,
+            SnippetExtensionAgent snippetExtensionAgent,
+            SummaryContextAgent summaryContextAgent,
+            SearchResultsAssessmentAgent searchResultsAssessmentAgent,
+            ContextOrchestrator contextOrchestrator) {
         try {
-            return new TrackerSearchOrchestrator(BasicJiraClient.getInstance());
+            TrackerSearchOrchestrator orchestrator = new TrackerSearchOrchestrator(BasicJiraClient.getInstance());
+            orchestrator.initAgents(keywordGeneratorAgent, snippetExtensionAgent, summaryContextAgent, searchResultsAssessmentAgent, contextOrchestrator);
+            return orchestrator;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
