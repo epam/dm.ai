@@ -257,6 +257,13 @@ if [ -z "$COMMAND" ]; then
     exit 0
 fi
 
+# Determine log configuration based on debug mode (must be before case block)
+if [ "$DEBUG" = true ]; then
+    LOG_CONFIG="log4j2-debug.xml"
+else
+    LOG_CONFIG="log4j2-cli.xml"
+fi
+
 # Handle special commands
 case "$COMMAND" in
     "help"|"-h"|"--help")
@@ -293,10 +300,10 @@ case "$COMMAND" in
         # Execute run command with JobRunner
         if [ -n "$ENCODED_PARAM" ]; then
             info "Executing job with file: $JSON_FILE and encoded parameter"
-            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE" "$ENCODED_PARAM"
+            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE" "$ENCODED_PARAM"
         else
             info "Executing job with file: $JSON_FILE"
-            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE"
+            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE"
         fi
         exit $?
         ;;
@@ -311,13 +318,6 @@ Or if you're developing locally, build the project first:
   ./gradlew build
 
 Note: Java 23 is required for DMTools to run."
-fi
-
-# Determine log configuration based on debug mode
-if [ "$DEBUG" = true ]; then
-    LOG_CONFIG="log4j2-debug.xml"
-else
-    LOG_CONFIG="log4j2-cli.xml"
 fi
 
 # Check if command starts with - or --, then proxy directly to JobRunner

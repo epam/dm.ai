@@ -32,7 +32,9 @@ import org.json.JSONObject;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -392,11 +394,24 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     
 
     private String extractFromConfluence(String... urls) throws IOException {
+        if (urls == null) {
+            return "";
+        }
         StringBuilder content = new StringBuilder();
         for (String url : urls) {
-            String value = confluence.contentByUrl(url).getStorage().getValue();
-            if (StringUtils.isConfluenceYamlFormat(value)) {
-                value = StringUtils.extractYamlContentFromConfluence(value);
+            if (url == null || url.isBlank()) {
+                continue;
+            }
+            String value;
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                value = confluence.contentByUrl(url).getStorage().getValue();
+                if (StringUtils.isConfluenceYamlFormat(value)) {
+                    value = StringUtils.extractYamlContentFromConfluence(value);
+                }
+            } else {
+                // Local file path — read directly from filesystem
+                File file = new File(url);
+                value = new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
             }
             if (!content.isEmpty()) {
                 content.append("\n");
