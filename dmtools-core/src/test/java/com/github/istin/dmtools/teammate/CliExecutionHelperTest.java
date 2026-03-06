@@ -1,7 +1,9 @@
 package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.common.model.IAttachment;
+import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import org.apache.commons.io.FileUtils;
@@ -676,5 +678,84 @@ public class CliExecutionHelperTest {
 
         assertNotNull(result);
         assertSame(commands, result, "Commands should remain unchanged for backwards compatibility");
+    }
+
+    // -------------------------------------------------------------------------
+    // writeCommentsFile tests
+    // -------------------------------------------------------------------------
+
+    interface ICommentWithToText extends com.github.istin.dmtools.common.model.IComment, com.github.istin.dmtools.common.model.ToText {}
+
+    @Test
+    void testWriteCommentsFile_WritesAllComments() throws IOException {
+        ICommentWithToText c1 = mock(ICommentWithToText.class);
+        ICommentWithToText c2 = mock(ICommentWithToText.class);
+        when(c1.toText()).thenReturn("First comment");
+        when(c2.toText()).thenReturn("Second comment");
+
+        cliHelper.writeCommentsFile(tempDir, Arrays.asList(c1, c2));
+
+        Path commentsFile = tempDir.resolve("comments.md");
+        assertTrue(Files.exists(commentsFile), "comments.md should be created");
+        String content = Files.readString(commentsFile, StandardCharsets.UTF_8);
+        assertTrue(content.contains("First comment"));
+        assertTrue(content.contains("Second comment"));
+        assertTrue(content.contains("---"), "Comments should be separated by ---");
+    }
+
+    @Test
+    void testWriteCommentsFile_NullList_DoesNotCreateFile() throws IOException {
+        cliHelper.writeCommentsFile(tempDir, null);
+
+        assertFalse(Files.exists(tempDir.resolve("comments.md")));
+    }
+
+    @Test
+    void testWriteCommentsFile_EmptyList_DoesNotCreateFile() throws IOException {
+        cliHelper.writeCommentsFile(tempDir, Collections.emptyList());
+
+        assertFalse(Files.exists(tempDir.resolve("comments.md")));
+    }
+
+    @Test
+    void testWriteCommentsFile_BlankToText_Skipped() throws IOException {
+        ICommentWithToText c1 = mock(ICommentWithToText.class);
+        ICommentWithToText c2 = mock(ICommentWithToText.class);
+        when(c1.toText()).thenReturn("   ");  // blank — should be skipped
+        when(c2.toText()).thenReturn("Real comment");
+
+        cliHelper.writeCommentsFile(tempDir, Arrays.asList(c1, c2));
+
+        Path commentsFile = tempDir.resolve("comments.md");
+        assertTrue(Files.exists(commentsFile));
+        String content = Files.readString(commentsFile, StandardCharsets.UTF_8);
+        assertFalse(content.contains("---"), "No separator expected for single non-blank comment");
+        assertTrue(content.contains("Real comment"));
+    }
+
+    @Test
+    void testWriteCommentsFile_NonToTextComment_Skipped() throws IOException {
+        // IComment that does NOT implement ToText — should be skipped
+        com.github.istin.dmtools.common.model.IComment plain = mock(com.github.istin.dmtools.common.model.IComment.class);
+        ICommentWithToText rich = mock(ICommentWithToText.class);
+        when(rich.toText()).thenReturn("Rich comment");
+
+        cliHelper.writeCommentsFile(tempDir, Arrays.asList(plain, rich));
+
+        Path commentsFile = tempDir.resolve("comments.md");
+        assertTrue(Files.exists(commentsFile));
+        String content = Files.readString(commentsFile, StandardCharsets.UTF_8);
+        assertEquals("Rich comment", content.trim());
+    }
+
+    @Test
+    void testWriteCommentsFile_AllBlank_DoesNotCreateFile() throws IOException {
+        ICommentWithToText c1 = mock(ICommentWithToText.class);
+        when(c1.toText()).thenReturn("   ");
+
+        cliHelper.writeCommentsFile(tempDir, Collections.singletonList(c1));
+
+        assertFalse(Files.exists(tempDir.resolve("comments.md")),
+                "File should not be created when all comments produce blank text");
     }
 }

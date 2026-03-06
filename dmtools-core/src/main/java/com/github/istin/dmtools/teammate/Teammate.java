@@ -394,6 +394,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     // Create input context for CLI commands
                     inputContextPath = cliHelper.createInputContext(ticket, inputParams.toString(), trackerClient);
 
+                    // Write comments.md alongside request.md — same toText() format as chunks sent to AI
+                    cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
+
                     // Run preCliJSAction to allow extending input folder with extra content before CLI execution
                     String preCliJSAction = expertParams.getPreCliJSAction();
                     if (preCliJSAction != null && !preCliJSAction.trim().isEmpty()) {

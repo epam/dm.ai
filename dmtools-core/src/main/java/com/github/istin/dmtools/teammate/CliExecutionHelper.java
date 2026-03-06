@@ -1,7 +1,9 @@
 package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.common.model.IAttachment;
+import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import org.apache.commons.io.FileUtils;
@@ -29,8 +31,9 @@ public class CliExecutionHelper {
     private static final String REQUEST_FILE_NAME = "request.md";
     private static final String OUTPUT_FOLDER = "output";  // Changed from "outputs" to "output"
     private static final String OUTPUT_FOLDER_LEGACY = "outputs";  // Backward compatibility
+    private static final String COMMENTS_FILE_NAME = "comments.md";
     private static final String RESPONSE_FILE_NAME = "response.md";
-    
+
     /**
      * Creates input context folder and files for CLI command execution.
      * 
@@ -103,7 +106,38 @@ public class CliExecutionHelper {
         
         return inputFolderPath;
     }
-    
+
+    /**
+     * Writes ticket comments to comments.md in the given input folder.
+     * Uses the same toText() format as ChunkPreparation when sending comments to AI.
+     *
+     * @param inputFolderPath Path to the input folder (created by createInputContext)
+     * @param comments List of comments to write
+     * @throws IOException if file writing fails
+     */
+    public void writeCommentsFile(Path inputFolderPath, List<? extends IComment> comments) throws IOException {
+        if (comments == null || comments.isEmpty()) {
+            return;
+        }
+        StringBuilder content = new StringBuilder();
+        for (IComment comment : comments) {
+            if (comment instanceof ToText) {
+                String text = ((ToText) comment).toText();
+                if (text != null && !text.isBlank()) {
+                    if (!content.isEmpty()) {
+                        content.append("\n\n---\n\n");
+                    }
+                    content.append(text);
+                }
+            }
+        }
+        if (!content.isEmpty()) {
+            Files.write(inputFolderPath.resolve(COMMENTS_FILE_NAME),
+                    content.toString().getBytes(StandardCharsets.UTF_8));
+            logger.info("Created comments.md with {} comments ({} bytes)", comments.size(), content.length());
+        }
+    }
+
     /**
      * Downloads ticket attachments to the specified folder.
      * 
