@@ -624,11 +624,13 @@ public class JiraClientFieldResolutionTest {
     }
 
     @Test
-    void testExtractProjectKeyFromJQL_noKnownProjects_returnsEmpty() throws IOException {
-        // When project list is empty (API unavailable), return empty — field resolution is skipped gracefully
+    void testExtractProjectKeyFromJQL_noKnownProjects_extractsFromJQLPattern() throws IOException {
+        // When project list is empty (API unavailable), the regex fallback extracts project key from JQL syntax.
+        // This allows field resolution to still work for projects the API user is not a member of.
         jiraClient.setMockProjectKeys();
-        assertEquals("", jiraClient.testExtractProjectKeyFromJQL("parent = JD-82"));
-        assertEquals("", jiraClient.testExtractProjectKeyFromJQL("project = TEST"));
+        assertEquals("JD", jiraClient.testExtractProjectKeyFromJQL("parent = JD-82"));
+        assertEquals("TEST", jiraClient.testExtractProjectKeyFromJQL("project = TEST"));
+        assertEquals("", jiraClient.testExtractProjectKeyFromJQL("summary ~ 'some text'"));
     }
 
     @Test

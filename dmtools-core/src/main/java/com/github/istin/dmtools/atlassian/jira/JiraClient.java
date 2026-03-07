@@ -1898,8 +1898,30 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 })
                 .findFirst();
 
-        match.ifPresent(key -> logger.debug("Extracted project key '{}' from JQL: {}", key, jql));
-        return match.orElse("");
+        if (match.isPresent()) {
+            logger.debug("Extracted project key '{}' from JQL: {}", match.get(), jql);
+            return match.get();
+        }
+
+        // Fallback: extract project key directly from JQL syntax (e.g. "project = MYTUBE" or "KEY-123")
+        // This handles cases where the user account is not a member of the project
+        java.util.regex.Matcher projectMatcher = Pattern.compile(
+                "\\bproject\\s*(?:=|in)\\s*[\"'(]?([A-Z][A-Z0-9_]+)[\"')]?", Pattern.CASE_INSENSITIVE
+        ).matcher(jql);
+        if (projectMatcher.find()) {
+            String extracted = projectMatcher.group(1).toUpperCase();
+            logger.debug("Extracted project key '{}' from JQL via pattern (not in member list): {}", extracted, jql);
+            return extracted;
+        }
+        // Also try to extract from a ticket key pattern like "MYTUBE-123"
+        java.util.regex.Matcher keyMatcher = Pattern.compile("\\b([A-Z][A-Z0-9_]+)-\\d+\\b").matcher(upperJql);
+        if (keyMatcher.find()) {
+            String extracted = keyMatcher.group(1);
+            logger.debug("Extracted project key '{}' from ticket key pattern in JQL: {}", extracted, jql);
+            return extracted;
+        }
+
+        return "";
     }
 
     /**
@@ -1914,26 +1936,34 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             return Collections.emptyList();
         }
 
-        //log("Attempting to resolve fields for search. JQL: " + searchQueryJQL);
+        // Flatten any comma-separated values inside individual array elements.
+        // This handles the common CLI case where the user passes a single quoted
+        // string like "key,summary,Acceptance Criterias" instead of multiple args.
+        String[] flatFields = Arrays.stream(fields)
+                .flatMap(f -> Arrays.stream(f.split(",")))
+                .map(String::trim)
+                .filter(f -> !f.isEmpty())
+                .toArray(String[]::new);
 
         // Try to extract project key from JQL query
         String projectKey = extractProjectKeyFromJQL(searchQueryJQL);
 
+        // If we still couldn't extract a project key, use the first known project key
+        // (getFields calls /field which is a global endpoint, any project key works)
         if (projectKey.isEmpty()) {
-            // If we can't determine project, return original fields
-            //log("Could not extract project key from JQL for field resolution: " + searchQueryJQL);
-            return Arrays.asList(fields);
+            List<String> knownKeys = getKnownProjectKeys();
+            if (!knownKeys.isEmpty()) {
+                projectKey = knownKeys.get(0);
+                logger.debug("Could not extract project key from JQL, using fallback: {}", projectKey);
+            }
         }
 
-        //log("Extracted project key '" + projectKey + "' from JQL. Resolving " + fields.length + " fields.");
+        if (projectKey.isEmpty()) {
+            return Arrays.asList(flatFields);
+        }
 
         // Resolve field names using the extracted project key
-        List<String> resolvedFields = resolveFieldNames(fields, projectKey);
-
-        //log("Field resolution completed. Original fields: " + String.join(", ", fields) +
-        //    " -> Resolved fields: " + String.join(", ", resolvedFields));
-
-        //log("Final fields being sent to Jira API: " + String.join(",", resolvedFields));
+        List<String> resolvedFields = resolveFieldNames(flatFields, projectKey);
 
         return resolvedFields;
     }
