@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.cli;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.Rule;
@@ -408,6 +409,106 @@ public class CliCommandExecutorTest {
         
         assertNotNull("Result should not be null", result);
         // Status command is fast and works in any repo state
+    }
+
+    // ============================================================================
+    // Configurable Whitelist Tests (CLI_ALLOWED_COMMANDS)
+    // ============================================================================
+
+    @Test
+    public void testExecuteCommand_ExtraCommandViaThreadLocalOverride_Allowed() throws IOException, InterruptedException {
+        // Simulate agent envVariables: { "CLI_ALLOWED_COMMANDS": "echo" }
+        PropertyReader.setOverrides(java.util.Collections.singletonMap(
+                CliCommandExecutor.CLI_ALLOWED_COMMANDS_KEY, "echo"));
+        try {
+            // 'echo' is not in the base whitelist but added via override
+            String result = executor.executeCommand("echo hello", null);
+            assertNotNull(result);
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test(expected = SecurityException.class)
+    public void testExecuteCommand_ExtraCommandNotConfigured_StillBlocked() throws IOException, InterruptedException {
+        // Without CLI_ALLOWED_COMMANDS, curl should remain blocked
+        PropertyReader.clearOverrides();
+        executor.executeCommand("curl https://example.com", null);
+    }
+
+    @Test
+    public void testExecuteCommand_ExtraCommandCurlAllowedViaOverride_PassesWhitelist() throws IOException, InterruptedException {
+        PropertyReader.setOverrides(java.util.Collections.singletonMap(
+                CliCommandExecutor.CLI_ALLOWED_COMMANDS_KEY, "curl,find,ls"));
+        try {
+            // curl is now allowed; it may or may not be installed, but must NOT throw SecurityException
+            executor.executeCommand("curl --version", null);
+        } catch (IOException e) {
+            // Execution failure is fine (tool not installed), SecurityException is not
+            assertFalse("Should not be a security error", e.getMessage().contains("not allowed"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    public void testExecuteCommand_ScriptWithDotSlashPrefix_MatchedByBasename() throws IOException, InterruptedException {
+        // Allow 'run-cursor-agent.sh' by basename; call it as './run-cursor-agent.sh'
+        PropertyReader.setOverrides(java.util.Collections.singletonMap(
+                CliCommandExecutor.CLI_ALLOWED_COMMANDS_KEY, "run-cursor-agent.sh"));
+        try {
+            executor.executeCommand("./run-cursor-agent.sh", null);
+        } catch (IOException e) {
+            // Script doesn't exist – that's fine; we only care it was NOT a SecurityException
+            assertFalse("Should not be a security error", e.getMessage().contains("not allowed"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    public void testExecuteCommand_ScriptWithAbsolutePath_MatchedByBasename() throws IOException, InterruptedException {
+        PropertyReader.setOverrides(java.util.Collections.singletonMap(
+                CliCommandExecutor.CLI_ALLOWED_COMMANDS_KEY, "run-cursor-agent.sh"));
+        try {
+            executor.executeCommand("/some/path/run-cursor-agent.sh --arg", null);
+        } catch (IOException e) {
+            assertFalse("Should not be a security error", e.getMessage().contains("not allowed"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test(expected = SecurityException.class)
+    public void testExecuteCommand_ScriptBasenameNotInWhitelist_StillBlocked() throws IOException, InterruptedException {
+        PropertyReader.clearOverrides();
+        // even with ./ prefix, not-whitelisted script must be blocked
+        executor.executeCommand("./unknown-script.sh", null);
+    }
+
+    @Test
+    public void testExecuteCommand_MultipleExtraCommandsCommaSeparated_AllAllowed() throws IOException, InterruptedException {
+        PropertyReader.setOverrides(java.util.Collections.singletonMap(
+                CliCommandExecutor.CLI_ALLOWED_COMMANDS_KEY, "echo, find, ls"));
+        try {
+            executor.executeCommand("echo test", null);
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    public void testExecuteCommand_BaseWhitelistIntactAfterOverride_GitStillAllowed() throws IOException, InterruptedException {
+        // Base commands must still work when CLI_ALLOWED_COMMANDS is set
+        PropertyReader.setOverrides(java.util.Collections.singletonMap(
+                CliCommandExecutor.CLI_ALLOWED_COMMANDS_KEY, "echo"));
+        try {
+            String result = executor.executeCommand("git --version", null);
+            assertNotNull(result);
+            assertTrue(result.toLowerCase().contains("git version"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
     }
 
     // ============================================================================

@@ -1,6 +1,7 @@
 package com.github.istin.dmtools.cli;
 
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.mcp.MCPParam;
 import org.apache.logging.log4j.LogManager;
@@ -12,7 +13,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -21,21 +25,28 @@ import java.util.regex.Pattern;
  * 
  * Security Features:
  * - Command whitelisting (only pre-approved commands allowed)
+ * - Additional commands configurable via CLI_ALLOWED_COMMANDS env var / dmtools.env
  * - Working directory boundary enforcement
  * - Sensitive data masking in logs
  * - Environment variable inheritance from workflow context
  * - Automatic dmtools.env file loading
  * 
- * Supported Commands:
+ * Base whitelist:
  * git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az
+ *
+ * Extra commands (opt-in, comma-separated) via dmtools.env or agent envVariables:
+ *   CLI_ALLOWED_COMMANDS=find,ls,cat,mkdir,pytest,python3,pip3,curl,ffmpeg,bash,run-cursor-agent.sh
  */
 @Singleton
 public class CliCommandExecutor {
     
     private static final Logger logger = LogManager.getLogger(CliCommandExecutor.class);
-    
-    // Whitelist of allowed command prefixes for security
-    private static final String[] ALLOWED_COMMANDS = {
+
+    /** Config key for extra allowed commands (comma-separated). */
+    public static final String CLI_ALLOWED_COMMANDS_KEY = "CLI_ALLOWED_COMMANDS";
+
+    // Security baseline – never removed regardless of configuration
+    private static final String[] BASE_ALLOWED_COMMANDS = {
         "git", "gh", "dmtools", "npm", "yarn", "docker", 
         "kubectl", "terraform", "ansible", "aws", "gcloud", "az"
     };
@@ -66,14 +77,14 @@ public class CliCommandExecutor {
      */
     @MCPTool(
         name = "cli_execute_command",
-        description = "Execute CLI commands (git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az) from JavaScript post-actions. Returns command output as string. Commands execute synchronously with environment variables inherited from workflow context. Only whitelisted commands allowed for security.",
+        description = "Execute CLI commands from JavaScript post-actions. Base whitelist: git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az. Additional commands can be enabled via CLI_ALLOWED_COMMANDS env var (comma-separated) in dmtools.env or agent envVariables, e.g. CLI_ALLOWED_COMMANDS=find,ls,cat,pytest,python3,curl,bash,run-cursor-agent.sh. Returns command output as string.",
         integration = "cli",
         category = "system"
     )
     public String executeCommand(
         @MCPParam(
             name = "command",
-            description = "CLI command to execute. Must start with whitelisted command (git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az).",
+            description = "CLI command to execute. Must start with a whitelisted command. Extend the whitelist via CLI_ALLOWED_COMMANDS in dmtools.env.",
             required = true,
             example = "git commit -m 'Automated update'"
         ) String command,
@@ -92,11 +103,13 @@ public class CliCommandExecutor {
         
         String trimmedCommand = command.trim();
         
-        // Security check: Validate command against whitelist
-        if (!isCommandWhitelisted(trimmedCommand)) {
+        // Security check: Validate command against whitelist (base + configurable extras)
+        Set<String> effectiveAllowed = buildEffectiveAllowedCommands();
+        if (!isCommandWhitelisted(trimmedCommand, effectiveAllowed)) {
             String maskedCommand = maskSensitiveData(trimmedCommand);
             logger.error("Security violation: Command not whitelisted - {}", maskedCommand);
-            throw new SecurityException("Command not allowed. Only whitelisted commands are permitted: " + String.join(", ", ALLOWED_COMMANDS));
+            throw new SecurityException("Command not allowed. Whitelisted commands: " + String.join(", ", effectiveAllowed)
+                    + ". Add more via CLI_ALLOWED_COMMANDS in dmtools.env or agent envVariables.");
         }
         
         // Resolve working directory
@@ -133,22 +146,42 @@ public class CliCommandExecutor {
     }
     
     /**
-     * Validates if command is whitelisted for execution.
-     * 
-     * @param command Command to validate
-     * @return true if command starts with allowed prefix, false otherwise
+     * Builds the effective allowed-commands set: base whitelist merged with any
+     * extra commands from {@code CLI_ALLOWED_COMMANDS} (read via PropertyReader so
+     * it respects dmtools.env, system env vars, and per-job thread-local overrides
+     * set through {@code envVariables} in agent JSON).
      */
-    private boolean isCommandWhitelisted(String command) {
-        // Extract the first part of the command (the executable name)
-        String commandName = command.split(" ")[0].toLowerCase();
-        
-        for (String allowedCommand : ALLOWED_COMMANDS) {
-            if (commandName.equals(allowedCommand)) {
-                return true;
+    private Set<String> buildEffectiveAllowedCommands() {
+        Set<String> allowed = new HashSet<>(Arrays.asList(BASE_ALLOWED_COMMANDS));
+        String extra = new PropertyReader().getValue(CLI_ALLOWED_COMMANDS_KEY);
+        if (extra != null && !extra.trim().isEmpty()) {
+            for (String cmd : extra.split(",")) {
+                String trimmed = cmd.trim();
+                if (!trimmed.isEmpty()) {
+                    allowed.add(trimmed.toLowerCase());
+                }
             }
         }
-        
-        return false;
+        return allowed;
+    }
+
+    /**
+     * Validates if command is allowed.
+     *
+     * <p>The executable name is extracted as the first whitespace-separated token.
+     * Leading {@code ./} and any directory path are stripped so that
+     * {@code ./run-cursor-agent.sh arg1} matches {@code run-cursor-agent.sh} in the
+     * allowed set.
+     */
+    private boolean isCommandWhitelisted(String command, Set<String> allowed) {
+        String token = command.split("\\s+")[0].toLowerCase();
+        // Exact match
+        if (allowed.contains(token)) {
+            return true;
+        }
+        // Basename match (strips leading ./ or full path)
+        String basename = Paths.get(token).getFileName().toString();
+        return allowed.contains(basename);
     }
     
     /**
