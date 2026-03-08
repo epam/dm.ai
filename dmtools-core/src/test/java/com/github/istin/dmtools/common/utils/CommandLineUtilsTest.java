@@ -51,19 +51,82 @@ class CommandLineUtilsTest {
     }
 
     @Test
-    void testRunCommand_ExitCode() throws IOException, InterruptedException {
+    void testRunCommand_ExitCodeZero_DoesNotThrow() throws IOException, InterruptedException {
         String os = System.getProperty("os.name").toLowerCase();
-        if (os.contains("win")) {
-            // Windows - use exit command
-            try {
-                CommandLineUtils.runCommand("exit 0");
-            } catch (Exception e) {
-                // Expected for some scenarios
-            }
-        } else {
-            // Unix/Mac - use true command which always succeeds
+        if (!os.contains("win")) {
             String result = CommandLineUtils.runCommand("true");
             assertNotNull(result);
+        }
+    }
+
+    @Test
+    void testRunCommand_NonZeroExitCode_ThrowsIOException() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            IOException ex = assertThrows(IOException.class,
+                    () -> CommandLineUtils.runCommand("false"));
+            assertTrue(ex.getMessage().contains("exit code 1"),
+                    "Exception message should contain exit code: " + ex.getMessage());
+        }
+    }
+
+    @Test
+    void testRunCommand_ExitCode128_ThrowsIOExceptionWithCode() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            // Simulate git push rejection exit code
+            IOException ex = assertThrows(IOException.class,
+                    () -> CommandLineUtils.runCommand("exit 128"));
+            assertTrue(ex.getMessage().contains("exit code 128"),
+                    "Exception message should contain exit code 128: " + ex.getMessage());
+        }
+    }
+
+    @Test
+    void testRunCommand_NonZeroExitCode_OutputIncludedInException() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            IOException ex = assertThrows(IOException.class,
+                    () -> CommandLineUtils.runCommand("echo 'error output' && exit 1"));
+            assertTrue(ex.getMessage().contains("error output") || ex.getMessage().contains("exit code 1"),
+                    "Exception should contain output or exit code: " + ex.getMessage());
+        }
+    }
+
+    @Test
+    void testRunCommand_CommandWithEmDash_Success() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            // Em-dash (—) in a command argument is what broke the old 'script -q -c "..."' approach.
+            // Writing to a temp script file avoids all shell-escaping issues.
+            String result = CommandLineUtils.runCommand("echo 'Test — em dash message'");
+            assertNotNull(result);
+            assertTrue(result.contains("em dash"), "Em-dash command should execute successfully");
+        }
+    }
+
+    @Test
+    void testRunCommand_CommandWithEmbeddedDoubleQuotes_Success() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            // Embedded double quotes in a commit message used to break script -q -c "..."
+            String result = CommandLineUtils.runCommand("echo 'Message with \"quoted\" words'");
+            assertNotNull(result);
+            assertTrue(result.contains("quoted"), "Command with embedded quotes should execute successfully");
+        }
+    }
+
+    @Test
+    void testRunCommand_EnvironmentVariableExpansion_Works() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            Map<String, String> env = new HashMap<>();
+            env.put("MY_TEST_VAR", "hello_from_env");
+            // Environment variables set via additionalEnv should be visible inside the temp script
+            String result = CommandLineUtils.runCommand("echo $MY_TEST_VAR", null, env);
+            assertNotNull(result);
+            assertTrue(result.contains("hello_from_env"),
+                    "Environment variable should be expanded in command output, got: " + result);
         }
     }
 
