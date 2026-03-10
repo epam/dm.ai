@@ -20,7 +20,7 @@ Add to your `dmtools.env`:
 
 ```bash
 # Gemini Configuration
-GEMINI_API_KEY=AIzaSyD-your-actual-api-key-here
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 GEMINI_MODEL=gemini-2.0-flash-exp  # Optional, defaults to gemini-2.0-flash-exp
 ```
 
@@ -62,23 +62,13 @@ GEMINI_MODEL=gemini-1.5-flash-002
 # - Free tier: 15 RPM, 1M TPM, 1500 RPD
 ```
 
-## 💰 Free Tier Limits
-
-| Model | Requests/Minute | Tokens/Minute | Requests/Day |
-|-------|-----------------|---------------|--------------|
-| **Gemini 2.0 Flash** | 15 | 1,000,000 | 1,500 |
-| **Gemini 1.5 Flash** | 15 | 1,000,000 | 1,500 |
-| **Gemini 1.5 Pro** | 2 | 32,000 | 50 |
-
-**Note**: Free tier is perfect for development and moderate production use. Most DMtools operations stay well within these limits.
-
 ## 🔧 Advanced Configuration
 
 ### Rate Limit Handling
 
 ```bash
 # dmtools.env
-GEMINI_API_KEY=AIzaSyD-your-api-key
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 GEMINI_MODEL=gemini-2.0-flash-exp
 GEMINI_RETRY_ATTEMPTS=3          # Retry on rate limit
 GEMINI_RETRY_DELAY_MS=2000       # Wait 2 seconds between retries
@@ -88,9 +78,9 @@ GEMINI_RETRY_DELAY_MS=2000       # Wait 2 seconds between retries
 
 ```bash
 # For higher throughput, rotate between keys
-GEMINI_API_KEY_1=AIzaSyD-first-key
-GEMINI_API_KEY_2=AIzaSyD-second-key
-GEMINI_API_KEY_3=AIzaSyD-third-key
+GEMINI_API_KEY_1=YOUR_FIRST_GEMINI_API_KEY
+GEMINI_API_KEY_2=YOUR_SECOND_GEMINI_API_KEY
+GEMINI_API_KEY_3=YOUR_THIRD_GEMINI_API_KEY
 GEMINI_LOAD_BALANCE=true
 ```
 
@@ -196,14 +186,6 @@ dmtools --debug gemini_ai_chat "test prompt"
 PROMPT_CHUNK_TOKEN_LIMIT=2000  # Smaller chunks
 ```
 
-### 3. Model Selection Strategy
-
-| Use Case | Recommended Model | Why |
-|----------|-------------------|-----|
-| Test generation | gemini-2.0-flash-exp | Fast, handles structured output well |
-| Code analysis | gemini-1.5-pro-002 | Better for complex reasoning |
-| Quick validations | gemini-2.0-flash-exp | Lowest latency |
-| Large file analysis | gemini-1.5-pro-002 | 2M token context |
 
 ## 🐛 Troubleshooting
 
@@ -222,20 +204,6 @@ curl -X POST "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-fla
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-### Rate Limiting
-
-```bash
-# Error: "Resource exhausted (429)"
-
-# Solutions:
-# 1. Add delay between requests
-sleep 4  # 4 seconds between calls for free tier
-
-# 2. Use different model
-GEMINI_MODEL=gemini-1.5-flash-002  # Higher rate limit
-
-# 3. Implement exponential backoff in code
-```
 
 ### Context Length Exceeded
 
@@ -261,16 +229,6 @@ export GEMINI_TIMEOUT_SECONDS=60
 # Or use streaming for long responses
 GEMINI_STREAM_RESPONSE=true
 ```
-
-## 📊 Performance Benchmarks
-
-| Operation | gemini-2.0-flash | gemini-1.5-pro | Notes |
-|-----------|------------------|----------------|-------|
-| Test case generation | ~2-3s | ~4-6s | 10 test cases |
-| Code review | ~1-2s | ~3-4s | 100 lines |
-| Documentation | ~3-4s | ~5-7s | 1 page |
-| JQL query generation | ~1s | ~2s | Simple queries |
-
 ## 🔒 Security Best Practices
 
 ### 1. Secure API Key Storage
@@ -353,18 +311,6 @@ const response = gemini_ai_chat(`
 }
 ```
 
-### Configure for Code Generation
-```json
-{
-  "name": "CodeGenerator",
-  "params": {
-    "aiProvider": "gemini",
-    "aiModel": "gemini-1.5-pro-002",
-    "targetLanguage": "java"
-  }
-}
-```
-
 ## 🔗 Useful Resources
 
 - [Google AI Studio](https://aistudio.google.com/) - API key management and testing
@@ -372,18 +318,5 @@ const response = gemini_ai_chat(`
 - [Pricing Calculator](https://ai.google.dev/pricing) - Estimate costs for paid tier
 - [Model Comparison](https://ai.google.dev/gemini-api/docs/models/gemini) - Detailed model capabilities
 
-## 🚦 When to Upgrade to Paid
-
-Consider paid tier when:
-- You need > 15 requests/minute consistently
-- You require > 1,500 requests/day
-- You need priority support
-- You want higher rate limits for production
-
-Paid pricing (as of 2024):
-- Gemini 2.0 Flash: $0.075 per 1M tokens
-- Gemini 1.5 Pro: $1.25 per 1M tokens
-
----
 
 *Next: [OpenAI Configuration](openai.md) | [Azure DevOps Setup](../integrations/ado.md)*

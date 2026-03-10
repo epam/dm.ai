@@ -29,7 +29,7 @@ Add to your `dmtools.env`:
 ```bash
 # Azure DevOps Configuration
 ADO_BASE_PATH=https://dev.azure.com/YourOrganization
-ADO_PAT=7q3x4y5z6a7b8c9d0e1f2g3h4i5j6k7l8m9n0o1p2q3r4s5t6u7v8w9x0y1z2
+ADO_PAT=YOUR_ADO_PERSONAL_ACCESS_TOKEN
 ADO_PROJECT=YourProject
 ADO_AREA_PATH=YourProject\\Team1\\Backend
 ADO_ITERATION_PATH=YourProject\\Sprint 23
@@ -42,7 +42,7 @@ ADO_ITERATION_PATH=YourProject\\Sprint 23
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `ADO_BASE_PATH` | Organization URL | `https://dev.azure.com/contoso` |
-| `ADO_PAT` | Personal Access Token | `7q3x4y5z6a7b8c9d...` |
+| `ADO_PAT` | Personal Access Token | `YOUR_ADO_PERSONAL_ACCESS_TOKEN...` |
 | `ADO_PROJECT` | Default project name | `MyProject` |
 
 ### Optional Variables

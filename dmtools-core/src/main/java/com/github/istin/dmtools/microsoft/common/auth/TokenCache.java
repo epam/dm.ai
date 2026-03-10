@@ -177,6 +177,14 @@ public class TokenCache {
         this.expiresAt = 0;
         
         if (cacheFile.exists()) {
+            // Overwrite file content with zeros before deletion to reduce the risk
+            // of token recovery via filesystem forensics.
+            try {
+                byte[] zeros = new byte[(int) cacheFile.length()];
+                FileUtils.writeByteArrayToFile(cacheFile, zeros);
+            } catch (IOException ignored) {
+                // Best-effort wipe: proceed to delete even if overwrite fails.
+            }
             cacheFile.delete();
         }
         

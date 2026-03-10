@@ -100,7 +100,15 @@ public class JSAIClient extends AbstractRestClient implements AI {
 
         this.scriptEngine = createGraalJSEngine();
         logger.info("Evaluating processed JavaScript for: {}", this.scriptName);
-        this.scriptEngine.eval(processedJsCode); // Evaluate the processed script
+        try {
+            this.scriptEngine.eval(processedJsCode); // Evaluate the processed script
+        } catch (ScriptException e) {
+            // Re-throw with a sanitized message to prevent secrets embedded as
+            // FreeMarker template literals from appearing in logs or stack traces.
+            throw new ScriptException("JavaScript evaluation failed for '" + this.scriptName
+                    + "': " + e.getClass().getSimpleName() + " at line " + e.getLineNumber()
+                    + " col " + e.getColumnNumber());
+        }
     }
 
     /**
@@ -254,8 +262,10 @@ public class JSAIClient extends AbstractRestClient implements AI {
         if (conversationObserver != null) {
             conversationObserver.addMessage(new ConversationObserver.Message(getName(), responseContent)); // Log AI response
         }
-        logger.info("-------- JSAI response ({}/{}) --------", scriptName, modelToUse);
-        logger.info(responseContent);
+        logger.debug("-------- JSAI response ({}/{}) --------", scriptName, modelToUse);
+        if (logger.isDebugEnabled()) {
+            logger.debug(responseContent);
+        }
         return responseContent;
     }
 
@@ -289,8 +299,10 @@ public class JSAIClient extends AbstractRestClient implements AI {
     @Override
     public String chat(String modelName, String messageContent, List<File> files) throws Exception {
         String modelToUse = (modelName == null || modelName.trim().isEmpty()) ? this.defaultModel : modelName;
-        logger.info("-------- message to JSAI ({}/{}) --------", scriptName, modelToUse);
-        logger.info("Text: {}", messageContent);
+        logger.debug("-------- message to JSAI ({}/{}) --------", scriptName, modelToUse);
+        if (logger.isDebugEnabled()) {
+            logger.debug("Text: {}", messageContent);
+        }
         if (files != null && !files.isEmpty()) {
             logger.info("Files: {}", files.stream().map(File::getName).collect(Collectors.toList()));
         }
@@ -310,7 +322,7 @@ public class JSAIClient extends AbstractRestClient implements AI {
     @Override
     public String chat(String modelName, Message... messages) throws Exception {
         String modelToUse = (modelName == null || modelName.trim().isEmpty()) ? this.defaultModel : modelName;
-        logger.info("-------- messages to JSAI ({}/{}) --------", scriptName, modelToUse);
+        logger.debug("-------- messages to JSAI ({}/{}) --------", scriptName, modelToUse);
 
         // Normalize message roles to ensure compatibility with this AI provider
         Message[] normalizedMessages = normalizeMessageRoles(messages);
@@ -327,7 +339,7 @@ public class JSAIClient extends AbstractRestClient implements AI {
                 firstUserMessageForObserver = msg.getText();
             }
 
-            logger.info("Role: {}, Text: {}", msg.getRole(), msg.getText());
+            logger.debug("Role: {}, Text: {}", msg.getRole(), msg.getText());
             JSONObject jsonMsg = new JSONObject();
             jsonMsg.put("role", msg.getRole());
             jsonMsg.put("parts", createJsonParts(msg.getText(), msg.getFiles()));

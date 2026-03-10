@@ -103,8 +103,8 @@ Configure at least one AI provider:
 ```bash
 # dmtools.env - Minimal setup
 JIRA_BASE_PATH=https://mycompany.atlassian.net
-JIRA_LOGIN_PASS_TOKEN=bXllbWFpbEBjb21wYW55LmNvbTpBVEFUVDN4RmZHRjA...
-GEMINI_API_KEY=AIzaSyD-example-key
+JIRA_LOGIN_PASS_TOKEN=<your-base64-encoded-email:api-token>
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 ```
 
 ### Full Development Configuration
@@ -113,35 +113,35 @@ GEMINI_API_KEY=AIzaSyD-example-key
 # dmtools.env - Complete development setup
 # Jira Configuration
 JIRA_BASE_PATH=https://mycompany.atlassian.net
-JIRA_LOGIN_PASS_TOKEN=bXllbWFpbEBjb21wYW55LmNvbTpBVEFUVDN4RmZHRjA...
+JIRA_LOGIN_PASS_TOKEN=<your-base64-encoded-email:api-token>
 JIRA_AUTH_TYPE=Bearer
 JIRA_FIELDS_MAPPING=customfield_10001:StoryPoints,customfield_10002:Epic
 
 # Azure DevOps
 ADO_BASE_PATH=https://dev.azure.com/myorg
-ADO_PAT=7q3x4y5z6a7b8c9d0e1f2g3h4i5j6k7l8m9n0o1p
+ADO_PAT=YOUR_ADO_PERSONAL_ACCESS_TOKEN
 ADO_PROJECT=MyProject
 ADO_AREA_PATH=MyProject\\Backend
 ADO_ITERATION_PATH=MyProject\\Sprint 23
 
 # AI Providers (multiple configured, runtime selection)
-GEMINI_API_KEY=AIzaSyD-example-key
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 GEMINI_MODEL=gemini-2.0-flash
-OPEN_AI_API_KEY=sk-proj-example-key
+OPEN_AI_API_KEY=YOUR_OPENAI_API_KEY_HERE
 OPEN_AI_MODEL=gpt-4o
 
 # Source Control
-SOURCE_GITHUB_TOKEN=ghp_example_token
+SOURCE_GITHUB_TOKEN=YOUR_GITHUB_TOKEN_HERE
 SOURCE_REPO_PATH=/Users/me/projects/myapp
 SOURCE_ORG=mycompany
 
 # Figma
-FIGMA_ACCESS_TOKEN=figd_example_token
+FIGMA_ACCESS_TOKEN=YOUR_FIGMA_ACCESS_TOKEN_HERE
 FIGMA_FILE_KEY=ABC123XYZ
 
 # Confluence
 CONFLUENCE_BASE_PATH=https://mycompany.atlassian.net/wiki
-CONFLUENCE_LOGIN_PASS_TOKEN=bXllbWFpbEBjb21wYW55LmNvbTpBVEFUVDN4RmZHRjA...
+CONFLUENCE_LOGIN_PASS_TOKEN=<your-base64-encoded-email:api-token>
 CONFLUENCE_SPACE_KEY=DOCS
 
 # Performance Tuning
@@ -176,10 +176,10 @@ dmtools-local.env
 ```bash
 # Encode credentials
 echo -n "email@company.com:api_token" | base64
-# Output: bXllbWFpbEBjb21wYW55LmNvbTphcGlfdG9rZW4=
+# Output: <your-base64-encoded-email:api-token>
 
 # Set in configuration
-JIRA_LOGIN_PASS_TOKEN=bXllbWFpbEBjb21wYW55LmNvbTphcGlfdG9rZW4=
+JIRA_LOGIN_PASS_TOKEN=<your-base64-encoded-email:api-token>
 ```
 
 ### 3. Rotate Tokens Regularly

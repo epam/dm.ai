@@ -16,7 +16,7 @@ class PropertyReaderTest {
     void setUp() throws Exception {
         propertyReader = new PropertyReader();
         // Reset static properties to avoid test interference
-        PropertyReader.prop = null;
+        PropertyReader.resetForTesting();
         // Use reflection to reset envFileProps and projectRoot for clean state
         // IMPORTANT: If reflection fails, the test should fail (not silently ignore)
         // to prevent cross-test contamination from static state
@@ -33,7 +33,7 @@ class PropertyReaderTest {
     void tearDown() throws Exception {
         // Clean up static state
         // IMPORTANT: If cleanup fails, the test should fail to prevent cross-test interference
-        PropertyReader.prop = null;
+        PropertyReader.resetForTesting();
         java.lang.reflect.Field envFilePropsField = PropertyReader.class.getDeclaredField("envFileProps");
         envFilePropsField.setAccessible(true);
         envFilePropsField.set(null, null);

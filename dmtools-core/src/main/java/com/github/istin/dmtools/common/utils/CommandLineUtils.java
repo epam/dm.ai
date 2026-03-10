@@ -1,5 +1,8 @@
 package com.github.istin.dmtools.common.utils;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -12,6 +15,8 @@ import java.util.Map;
 import java.util.UUID;
 
 public class CommandLineUtils {
+
+    private static final Logger logger = LogManager.getLogger(CommandLineUtils.class);
 
     /**
      * Runs a command-line command and returns the output as a string.
@@ -54,7 +59,8 @@ public class CommandLineUtils {
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv)
             throws IOException, InterruptedException {
 
-        System.out.println("LOG: Running command: " + command);
+        logger.debug("Running command: {}", command);
+        validateNoShellInjection(command);
 
         // Write command to a temp shell script to avoid shell-escaping issues with
         // special characters (em-dash, embedded quotes, etc.) in the command string.
@@ -101,7 +107,7 @@ public class CommandLineUtils {
         }
 
         int exitCode = process.waitFor();
-        System.out.println("LOG: Process exited with code: " + exitCode);
+        logger.debug("Process exited with code: {}", exitCode);
 
         // Propagate non-zero exit codes so callers are not silently misled.
         if (exitCode != 0) {
@@ -109,6 +115,30 @@ public class CommandLineUtils {
         }
 
         return output.toString().trim();
+    }
+
+    /**
+     * Rejects commands that contain shell injection metacharacters.
+     * Semicolons, newlines, backtick execution, and subshell substitution ($(...), ${...})
+     * are not required by any legitimate caller and are the primary vectors for
+     * injecting additional commands past a whitelist check.
+     *
+     * @param command the raw command string to validate
+     * @throws IllegalArgumentException if the command contains dangerous shell metacharacters
+     */
+    static void validateNoShellInjection(String command) {
+        if (command == null) {
+            return;
+        }
+        if (command.contains(";")
+                || command.contains("\n")
+                || command.contains("`")
+                || command.contains("$(")
+                || command.contains("${")) {
+            throw new IllegalArgumentException(
+                    "Command contains disallowed shell metacharacters (;, newline, `, $(...), ${...}): "
+                    + SecurityUtils.maskSensitiveValue(command.substring(0, Math.min(30, command.length()))));
+        }
     }
 
     /**

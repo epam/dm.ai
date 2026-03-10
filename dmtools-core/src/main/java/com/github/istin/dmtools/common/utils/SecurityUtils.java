@@ -80,8 +80,9 @@ public class SecurityUtils {
             return "****";
         }
         
-        // For longer values, show first 4 characters and mask the rest
-        return value.substring(0, 4) + "****";
+        // For longer values, show first 2 characters only (enough for prefix identification,
+        // insufficient for brute-force discrimination) and always append a fixed-width mask.
+        return value.substring(0, Math.min(2, value.length())) + "****";
     }
 
     /**

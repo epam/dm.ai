@@ -42,12 +42,23 @@ public class PropertyReader {
 		THREAD_LOCAL_OVERRIDES.remove();
 	}
 
+	/**
+	 * Resets the cached property state for testing purposes.
+	 * Package-private to restrict use to unit tests in the same package.
+	 * Do NOT call from production code.
+	 */
+	static void resetForTesting() {
+		prop = null;
+		envFileProps = null;
+		projectRoot = null;
+	}
+
 	public static void setConfigFile(String resourcePath) {
 		PATH_TO_CONFIG_FILE = resourcePath;
 	}
 
 
-	static Properties prop;
+	private static volatile Properties prop;
 	private static Properties envFileProps;
 	private static Path projectRoot = null;
 

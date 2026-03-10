@@ -137,7 +137,7 @@ public class OAuth2AuthenticationFlow {
             }
         } else if (query != null && query.contains("error=")) {
             authCodeFuture.completeExceptionally(new IOException("Authentication error: " + query));
-            response = "<html><body><h1>Authentication Failed</h1><p>Error: " + query + "</p></body></html>";
+            response = "<html><body><h1>Authentication Failed</h1><p>Error: " + htmlEncode(query) + "</p></body></html>";
             statusCode = 400;
         } else {
             response = "<html><body><h1>Invalid Request</h1></body></html>";
@@ -325,6 +325,21 @@ public class OAuth2AuthenticationFlow {
      */
     private String generateRandomState() {
         return Long.toHexString(System.currentTimeMillis()) + Long.toHexString(Double.doubleToLongBits(Math.random()));
+    }
+
+    /**
+     * Escapes HTML special characters to prevent reflected XSS when query
+     * parameters from OAuth redirects are embedded in the callback response page.
+     */
+    private static String htmlEncode(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;")
+                   .replace("'", "&#x27;");
     }
     
     /**

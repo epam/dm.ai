@@ -18,7 +18,7 @@ class RetryUtilTest {
     @BeforeEach
     void setUp() {
         // Reset static property to ensure consistent test behavior
-        PropertyReader.prop = null;
+        PropertyReader.resetForTesting();
         
         // Mock PropertyReader to use very short delays for testing
         mockedPropertyReader = Mockito.mockConstruction(PropertyReader.class, (mock, context) -> {
@@ -32,7 +32,7 @@ class RetryUtilTest {
         if (mockedPropertyReader != null) {
             mockedPropertyReader.close();
         }
-        PropertyReader.prop = null;
+        PropertyReader.resetForTesting();
     }
 
     @Test

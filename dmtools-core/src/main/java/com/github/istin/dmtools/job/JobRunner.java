@@ -42,6 +42,7 @@ import com.github.istin.dmtools.js.JSRunner;
 import com.github.istin.dmtools.kb.KBProcessingJob;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 public class JobRunner {
@@ -183,7 +184,9 @@ public class JobRunner {
         }
         
         // Existing base64-only parameter handling for backward compatibility
-        JobParams jobParams = new JobParams(new String(decodeBase64(args[0])));
+        String decodedParams = new String(decodeBase64(args[0]));
+        validateJobParamsJson(decodedParams);
+        JobParams jobParams = new JobParams(decodedParams);
         Object result = new JobRunner().run(jobParams);
         if (result == null) {
             System.err.println("Execution result of '" + jobParams.getName() + "' is null.");
@@ -194,6 +197,19 @@ public class JobRunner {
         System.exit(1);
     }
 
+    /**
+     * Executes the job described by {@code jobParams}.
+     *
+     * <p><b>Thread-pool warning:</b> Per-job credential overrides are stored in a
+     * {@link ThreadLocal} and cleared in a {@code finally} block.  This design is safe
+     * only when each invocation runs on a <em>dedicated</em> thread (CLI / single-threaded
+     * executor).  If this method is ever called from a shared thread pool (e.g., a servlet
+     * container or {@code CompletableFuture} executor), a thread that previously ran Job A
+     * (with Tenant A's credentials) could be reused for Job B before the ThreadLocal is
+     * cleared — especially if an interrupt or JVM crash occurs between
+     * {@code setOverrides} and {@code clearOverrides}.  In that scenario, migrate to
+     * explicit credential passing through the call stack instead of ThreadLocal storage.
+     */
     public Object run(JobParams jobParams) throws Exception {
         ExecutionMode mode = jobParams.getExecutionMode();
         JSONObject resolvedIntegrations = jobParams.getResolvedIntegrations();
@@ -334,6 +350,35 @@ public class JobRunner {
         byte[] decodedBytes = Base64.getDecoder().decode(input);
         // Convert the decoded bytes to a string
         return new String(decodedBytes);
+    }
+
+    /**
+     * Performs basic schema validation on decoded base64 job parameters.
+     * Rejects empty payloads and invalid JSON, and provides a helpful list of
+     * available job names when the {@code name} field is missing or unknown.
+     *
+     * @param json the decoded JSON string
+     * @throws IllegalArgumentException if the payload fails validation
+     */
+    static void validateJobParamsJson(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            throw new IllegalArgumentException("Job parameters JSON must not be empty.");
+        }
+        try {
+            JSONObject obj = new JSONObject(json);
+            String name = obj.optString("name", "").trim();
+            if (name.isEmpty()) {
+                List<String> names = new java.util.ArrayList<>();
+                for (Job job : getJobs()) {
+                    names.add(job.getName());
+                }
+                throw new IllegalArgumentException(
+                        "Job parameters JSON must contain a non-empty 'name' field. "
+                        + "Available jobs: " + names);
+            }
+        } catch (JSONException e) {
+            throw new IllegalArgumentException("Job parameters are not valid JSON: " + e.getMessage());
+        }
     }
 
     public static String encodeBase64(String input) {
