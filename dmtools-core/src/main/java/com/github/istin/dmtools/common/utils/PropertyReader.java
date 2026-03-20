@@ -351,6 +351,14 @@ public class PropertyReader {
 		return Boolean.parseBoolean(value);
 	}
 
+	public boolean isXrayEnrichmentEnabledByDefault() {
+		String value = getValue(XRAY_ENRICHMENT_ENABLED_BY_DEFAULT);
+		if (value == null) {
+			return true;
+		}
+		return Boolean.parseBoolean(value);
+	}
+
 	public int getXrayParallelBatchSize() {
 		String value = getValue(XRAY_PARALLEL_BATCH_SIZE);
 		if (value == null || value.isEmpty()) {
@@ -874,6 +882,7 @@ public class PropertyReader {
 	public static final String XRAY_PARALLEL_BATCH_SIZE = "XRAY_PARALLEL_BATCH_SIZE";
 	public static final String XRAY_PARALLEL_THREADS = "XRAY_PARALLEL_THREADS";
 	public static final String XRAY_PARALLEL_DELAY_MS = "XRAY_PARALLEL_DELAY_MS";
+	public static final String XRAY_ENRICHMENT_ENABLED_BY_DEFAULT = "XRAY_ENRICHMENT_ENABLED_BY_DEFAULT";
 
 	public String getGeminiApiKey() {
 		return getValue(GEMINI_API_KEY);

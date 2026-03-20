@@ -52,8 +52,21 @@ JIRA_AUTH_TYPE=Basic
 | `JIRA_FIELDS_MAPPING` | Custom field mappings | `customfield_10001:StoryPoints` | None |
 | `JIRA_DEFAULT_PROJECT` | Default project key | `PROJ` | None |
 | `JIRA_DEFAULT_ISSUE_TYPE` | Default issue type | `Story` | `Task` |
-| `JIRA_XRAY_CLIENT_ID` | Xray client ID for test management | `E5E7...` | None |
-| `JIRA_XRAY_CLIENT_SECRET` | Xray client secret | `8a6b...` | None |
+| `DEFAULT_TRACKER` | Default tracker implementation | `jira_xray` | Depends on setup |
+| `XRAY_BASE_PATH` | Xray API base path | `https://xray.cloud.getxray.app/api/v2` | None |
+| `XRAY_CLIENT_ID` | Xray client ID for test management | `E5E7...` | None |
+| `XRAY_CLIENT_SECRET` | Xray client secret | `8a6b...` | None |
+| `XRAY_ENRICHMENT_ENABLED_BY_DEFAULT` | Enable Xray search enrichment by default | `true` or `false` | `true` |
+
+### Xray-Specific Notes
+
+If you use Xray-backed test generation, set `DEFAULT_TRACKER=jira_xray`.
+
+With `TestCasesGenerator` and `"outputType": "creation"`, DMtools creates Xray tests automatically through `XrayClient`.
+
+Xray enrichment for search results is enabled by default, including searches used to load existing or related test cases. This preserves current client behavior, so existing configs do not need extra fields or logic changes.
+
+Set `XRAY_ENRICHMENT_ENABLED_BY_DEFAULT=false` only if you explicitly want the faster non-enriched search path.
 
 ## 🎯 Custom Fields Configuration
 

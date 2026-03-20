@@ -18,16 +18,30 @@ DMtools integrates with Xray for Jira to automatically generate comprehensive ma
 # dmtools.env
 JIRA_BASE_PATH=https://company.atlassian.net
 JIRA_LOGIN_PASS_TOKEN=base64_encoded_credentials
+DEFAULT_TRACKER=jira_xray
 
 # Optional: Xray Cloud API (for advanced features)
-JIRA_XRAY_CLIENT_ID=E5E7EXAMPLE1234567890
-JIRA_XRAY_CLIENT_SECRET=8a6bEXAMPLE1234567890abcdef
+XRAY_BASE_PATH=https://xray.cloud.getxray.app/api/v2
+XRAY_CLIENT_ID=E5E7EXAMPLE1234567890
+XRAY_CLIENT_SECRET=8a6bEXAMPLE1234567890abcdef
+
+# Optional: Xray enrichment control
+# Default is true to preserve existing client behavior.
+XRAY_ENRICHMENT_ENABLED_BY_DEFAULT=true
 
 # Custom fields (find these in Jira admin)
 XRAY_TEST_TYPE_FIELD=customfield_10030
 XRAY_TEST_STEPS_FIELD=customfield_10031
 XRAY_PRECONDITIONS_FIELD=customfield_10032
 ```
+
+### Default Behavior
+
+- Set `DEFAULT_TRACKER=jira_xray` to make `TestCasesGenerator` create Xray tests through `XrayClient`.
+- Set `"outputType": "creation"` in the job config to create issues automatically instead of only posting/generated output.
+- DMtools now enriches Xray search results by default, including the searches used to load existing/related test cases for deduplication and comparison.
+- Existing client configs do **not** need to add extra fields or change logic for this behavior.
+- If a workspace needs the faster non-enriched search path, set `XRAY_ENRICHMENT_ENABLED_BY_DEFAULT=false`.
 
 ## 📋 Test Case Structure
 
@@ -102,6 +116,7 @@ dmtools run agents/xray_test_cases_generator.json
     "instructions": "Generate detailed manual test cases with clear steps. Each step must have: action, test data (if applicable), and expected result.",
     "formattingRules": "Return JSON array. Each test case must include: priority (Critical/High/Medium/Low), summary, description, testSteps array with (index, step, data, result)",
     "outputType": "creation",
+    "testCaseIssueType": "Test",
     "outputJiraProject": "PROJ",
     "outputJiraIssueType": "Test",
     "customFields": {
@@ -113,6 +128,10 @@ dmtools run agents/xray_test_cases_generator.json
   }
 }
 ```
+
+### Existing Test Case Search
+
+When `existingTestCasesJql` or related test case lookup is used, DMtools loads Xray-enriched ticket data by default. This keeps deduplication and related-test analysis working without requiring callers to pass a special sentinel field or change existing job definitions.
 
 ## 🎨 Test Step Formatting
 

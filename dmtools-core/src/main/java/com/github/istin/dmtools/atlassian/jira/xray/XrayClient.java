@@ -80,6 +80,14 @@ public class XrayClient extends JiraClient<Ticket> {
     private final String[] extendedJiraFields;
     private final String[] customCodesOfConfigFields;
     
+    /**
+     * Sentinel field value that opts into X-ray enrichment during searchAndPerform.
+     * Add this to a TrackerRule's getRequiredExtraFields() to enable X-ray test step/precondition
+     * enrichment explicitly. When XRAY_ENRICHMENT_ENABLED_BY_DEFAULT is true (default),
+     * enrichment also runs without the sentinel to preserve existing behavior.
+     */
+    public static final String FIELD_XRAY_ENRICHMENT = "xray_enrichment";
+
     // Flag to prevent recursion when enriching tickets
     private final ThreadLocal<Boolean> isEnriching = ThreadLocal.withInitial(() -> false);
 
@@ -1375,10 +1383,24 @@ public class XrayClient extends JiraClient<Ticket> {
             super.searchAndPerform(performer, searchQueryJQL, fields);
             return;
         }
-        
+
+        boolean needsEnrichment = shouldEnrichSearchResults(fields);
+
+        // Strip sentinel from fields before passing to Jira API
+        if (needsEnrichment && fields != null) {
+            fields = stripXrayEnrichmentSentinel(fields);
+        }
+
+        if (!needsEnrichment) {
+            // No enrichment needed — stream directly without collecting into a List
+            logger.debug("XrayClient: Skipping X-ray enrichment (not requested), using streaming search for JQL: {}", searchQueryJQL);
+            super.searchAndPerform(performer, searchQueryJQL, fields);
+            return;
+        }
+
         logger.debug("XrayClient.searchAndPerform with Performer: enriching tickets with X-ray data for JQL: {}", searchQueryJQL);
         isEnriching.set(true);
-        
+
         try {
             // First, get all tickets using parent's searchAndPerform with Performer (not the List version to avoid recursion)
             // We use a collector Performer to gather tickets first, then enrich them
@@ -1410,6 +1432,28 @@ public class XrayClient extends JiraClient<Ticket> {
         } finally {
             isEnriching.set(false);
         }
+    }
+
+    boolean shouldEnrichSearchResults(String[] fields) {
+        return isXrayEnrichmentRequested(fields) || isXrayEnrichmentEnabledByDefault();
+    }
+
+    boolean isXrayEnrichmentEnabledByDefault() {
+        return new PropertyReader().isXrayEnrichmentEnabledByDefault();
+    }
+
+    String[] stripXrayEnrichmentSentinel(String[] fields) {
+        if (fields == null || fields.length == 0) {
+            return fields;
+        }
+        return java.util.Arrays.stream(fields)
+                .filter(f -> !FIELD_XRAY_ENRICHMENT.equalsIgnoreCase(f))
+                .toArray(String[]::new);
+    }
+
+    private boolean isXrayEnrichmentRequested(String[] fields) {
+        return fields != null && java.util.Arrays.stream(fields)
+                .anyMatch(f -> FIELD_XRAY_ENRICHMENT.equalsIgnoreCase(f));
     }
 
     /**

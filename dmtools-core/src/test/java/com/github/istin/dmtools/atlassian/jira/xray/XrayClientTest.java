@@ -1,12 +1,15 @@
 package com.github.istin.dmtools.atlassian.jira.xray;
 
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.After;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -21,6 +24,7 @@ public class XrayClientTest {
 
     @Before
     public void setUp() throws IOException {
+        PropertyReader.clearOverrides();
         // Create XrayClient with test configuration
         // Note: In a real test environment, these would be mocked or use test properties
         try {
@@ -45,6 +49,12 @@ public class XrayClientTest {
             org.junit.Assume.assumeTrue("XrayClient configuration not available for testing: " + e.getMessage(), false);
         }
     }
+
+    @After
+    public void tearDown() {
+        PropertyReader.clearOverrides();
+    }
+
     @Test
     public void testGetDefaultQueryFields() {
         if (xrayClient == null) {
@@ -107,5 +117,37 @@ public class XrayClientTest {
         
         // Should not throw exception (empty implementation)
         xrayClient.deleteCommentIfExists("TEST-1", "test comment");
+    }
+
+    @Test
+    public void testShouldEnrichSearchResults_DefaultsToTrue() {
+        if (xrayClient == null) {
+            return;
+        }
+
+        assertTrue(xrayClient.shouldEnrichSearchResults(new String[]{"summary"}));
+    }
+
+    @Test
+    public void testShouldEnrichSearchResults_RespectsPropertyOptOut() {
+        if (xrayClient == null) {
+            return;
+        }
+
+        PropertyReader.setOverrides(Map.of(PropertyReader.XRAY_ENRICHMENT_ENABLED_BY_DEFAULT, "false"));
+
+        assertFalse(xrayClient.shouldEnrichSearchResults(new String[]{"summary"}));
+    }
+
+    @Test
+    public void testShouldEnrichSearchResults_SentinelOverridesPropertyOptOut() {
+        if (xrayClient == null) {
+            return;
+        }
+
+        PropertyReader.setOverrides(Map.of(PropertyReader.XRAY_ENRICHMENT_ENABLED_BY_DEFAULT, "false"));
+
+        assertTrue(xrayClient.shouldEnrichSearchResults(new String[]{"summary", XrayClient.FIELD_XRAY_ENRICHMENT}));
+        assertArrayEquals(new String[]{"summary"}, xrayClient.stripXrayEnrichmentSentinel(new String[]{"summary", XrayClient.FIELD_XRAY_ENRICHMENT}));
     }
 }

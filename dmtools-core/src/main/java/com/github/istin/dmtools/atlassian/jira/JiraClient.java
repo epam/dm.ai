@@ -2033,6 +2033,186 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return value;
     }
 
+    private String performFieldUpdate(String key, String projectKey, String fieldIdentifier, Object value, String errorMessage) throws IOException {
+        Object normalizedValue = normalizeFieldUpdateValue(projectKey, fieldIdentifier, value);
+
+        GenericRequest jiraRequest = getTicket(key);
+        JSONObject body = new JSONObject();
+        body.put("update", new JSONObject()
+                .put(fieldIdentifier, new JSONArray()
+                        .put(new JSONObject()
+                                .put("set", normalizedValue)
+                        )));
+        jiraRequest.setBody(body.toString());
+
+        String updateResult = jiraRequest.put();
+        validateFieldUpdateResponse(updateResult, errorMessage);
+        return updateResult;
+    }
+
+    private void validateFieldUpdateResponse(String updateResult, String defaultMessage) throws IOException {
+        if (updateResult == null || updateResult.trim().isEmpty()) {
+            return;
+        }
+
+        String trimmedResult = updateResult.trim();
+        if (!trimmedResult.startsWith("{")) {
+            return;
+        }
+
+        try {
+            checkJiraResponseForErrors(new JSONObject(trimmedResult), defaultMessage);
+        } catch (JSONException ignored) {
+            // Non-JSON success bodies should pass through unchanged.
+        }
+    }
+
+    private Object normalizeFieldUpdateValue(String projectKey, String fieldIdentifier, Object value) throws IOException {
+        if (fieldIdentifier == null || !fieldIdentifier.startsWith("customfield_")) {
+            return value;
+        }
+
+        JSONObject fieldDefinition = findFieldDefinition(projectKey, fieldIdentifier);
+        if (!isMultiOptionField(fieldDefinition)) {
+            return value;
+        }
+        return normalizeMultiOptionValue(value);
+    }
+
+    private JSONObject findFieldDefinition(String projectKey, String fieldIdentifier) throws IOException {
+        if (projectKey == null || projectKey.isEmpty() || fieldIdentifier == null || fieldIdentifier.isEmpty()) {
+            return null;
+        }
+
+        String response = getFields(projectKey);
+        if (response == null || response.trim().isEmpty()) {
+            return null;
+        }
+
+        String trimmedResponse = response.trim();
+        try {
+            if (trimmedResponse.startsWith("[")) {
+                return findFieldDefinitionInArray(new JSONArray(trimmedResponse), fieldIdentifier);
+            }
+            if (trimmedResponse.startsWith("{")) {
+                return findFieldDefinitionInCreateMeta(new JSONObject(trimmedResponse), fieldIdentifier);
+            }
+        } catch (JSONException e) {
+            log("Failed to inspect field metadata for '" + fieldIdentifier + "': " + e.getMessage());
+        }
+        return null;
+    }
+
+    private JSONObject findFieldDefinitionInArray(JSONArray fields, String fieldIdentifier) {
+        for (int i = 0; i < fields.length(); i++) {
+            JSONObject field = fields.optJSONObject(i);
+            if (field != null && fieldMatches(field, fieldIdentifier)) {
+                return field;
+            }
+        }
+        return null;
+    }
+
+    private JSONObject findFieldDefinitionInCreateMeta(JSONObject createMetaResponse, String fieldIdentifier) {
+        JSONArray projects = createMetaResponse.optJSONArray("projects");
+        if (projects == null) {
+            return null;
+        }
+
+        for (int i = 0; i < projects.length(); i++) {
+            JSONObject project = projects.optJSONObject(i);
+            if (project == null) {
+                continue;
+            }
+
+            JSONArray issueTypes = project.optJSONArray("issuetypes");
+            if (issueTypes == null) {
+                continue;
+            }
+
+            for (int j = 0; j < issueTypes.length(); j++) {
+                JSONObject issueType = issueTypes.optJSONObject(j);
+                if (issueType == null) {
+                    continue;
+                }
+
+                JSONObject fields = issueType.optJSONObject("fields");
+                if (fields == null) {
+                    continue;
+                }
+
+                JSONObject fieldById = fields.optJSONObject(fieldIdentifier);
+                if (fieldById != null) {
+                    return fieldById;
+                }
+
+                for (String key : fields.keySet()) {
+                    JSONObject field = fields.optJSONObject(key);
+                    if (field != null && fieldMatches(field, fieldIdentifier)) {
+                        return field;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean fieldMatches(JSONObject field, String fieldIdentifier) {
+        return fieldIdentifier.equals(field.optString("id"))
+                || fieldIdentifier.equalsIgnoreCase(field.optString("name"));
+    }
+
+    private boolean isMultiOptionField(JSONObject fieldDefinition) {
+        if (fieldDefinition == null) {
+            return false;
+        }
+
+        JSONObject schema = fieldDefinition.optJSONObject("schema");
+        if (schema == null) {
+            return false;
+        }
+
+        String custom = schema.optString("custom", "").toLowerCase(Locale.ROOT);
+        String type = schema.optString("type", "").toLowerCase(Locale.ROOT);
+        String items = schema.optString("items", "").toLowerCase(Locale.ROOT);
+
+        return custom.contains(":multiselect")
+                || custom.contains(":checkboxes")
+                || ("array".equals(type) && "option".equals(items));
+    }
+
+    private Object normalizeMultiOptionValue(Object value) {
+        if (value instanceof JSONArray) {
+            JSONArray input = (JSONArray) value;
+            JSONArray normalized = new JSONArray();
+            for (int i = 0; i < input.length(); i++) {
+                normalized.put(normalizeMultiOptionEntry(input.get(i)));
+            }
+            return normalized;
+        }
+
+        if (value instanceof Collection<?>) {
+            JSONArray normalized = new JSONArray();
+            for (Object entry : (Collection<?>) value) {
+                normalized.put(normalizeMultiOptionEntry(entry));
+            }
+            return normalized;
+        }
+
+        return new JSONArray().put(normalizeMultiOptionEntry(value));
+    }
+
+    private Object normalizeMultiOptionEntry(Object value) {
+        if (value instanceof JSONObject) {
+            JSONObject jsonObject = (JSONObject) value;
+            if (jsonObject.has("id") || jsonObject.has("value") || jsonObject.has("name")) {
+                return jsonObject;
+            }
+        }
+
+        return new JSONObject().put("value", value);
+    }
+
     @MCPTool(
             name = "jira_update_field",
             description = "Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field.",
@@ -2056,20 +2236,19 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         // Skip resolution for system fields and custom field IDs
         if (isCustomFieldId || SYSTEM_FIELDS.contains(field.toLowerCase())) {
             // Update single field - either system field or specific custom field ID
-            GenericRequest jiraRequest = getTicket(key);
-            JSONObject body = new JSONObject();
-            body.put("update", new JSONObject()
-                    .put(field, new JSONArray()
-                            .put(new JSONObject()
-                                    .put("set", value)
-                            )));
-            jiraRequest.setBody(body.toString());
-            String updateResult = jiraRequest.put();
-            log("Updated field '" + field + "' on ticket " + key + " with value: " + value);
+            String updateResult = performFieldUpdate(
+                    key,
+                    projectKey,
+                    field,
+                    value,
+                    "Failed to update field '" + field + "' on ticket " + key
+            );
 
             if (updateResult == null || updateResult.trim().isEmpty()) {
+                log("Updated field '" + field + "' on ticket " + key + " with value: " + value);
                 return "Field '" + field + "' updated successfully on ticket " + key;
             }
+            log("Updated field '" + field + "' on ticket " + key + " with value: " + value);
             return updateResult;
         } else {
             // Field is a name - update ALL fields with this name
@@ -2096,15 +2275,13 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
             for (String fieldId : fieldIds) {
                 try {
-                    GenericRequest jiraRequest = getTicket(key);
-                    JSONObject body = new JSONObject();
-                    body.put("update", new JSONObject()
-                            .put(fieldId, new JSONArray()
-                                    .put(new JSONObject()
-                                            .put("set", value)
-                                    )));
-                    jiraRequest.setBody(body.toString());
-                    String updateResult = jiraRequest.put();
+                    performFieldUpdate(
+                            key,
+                            projectKey,
+                            fieldId,
+                            value,
+                            "Failed to update field '" + fieldId + "' (name: '" + field + "') on ticket " + key
+                    );
 
                     log("Updated field '" + fieldId + "' (name: '" + field + "') on ticket " + key);
                     if (fieldIds.size() > 1) {
@@ -2170,15 +2347,13 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         // Update each field
         for (String fieldId : fieldIds) {
             try {
-                GenericRequest jiraRequest = getTicket(key);
-                JSONObject body = new JSONObject();
-                body.put("update", new JSONObject()
-                        .put(fieldId, new JSONArray()
-                                .put(new JSONObject()
-                                        .put("set", value)
-                                )));
-                jiraRequest.setBody(body.toString());
-                String updateResult = jiraRequest.put();
+                performFieldUpdate(
+                        key,
+                        projectKey,
+                        fieldId,
+                        value,
+                        "Failed to update field '" + fieldId + "' (name: '" + fieldName + "') on ticket " + key
+                );
 
                 log("Updated field '" + fieldId + "' (name: '" + fieldName + "') on ticket " + key);
                 results.append("✅ Updated ").append(fieldId).append("\n");

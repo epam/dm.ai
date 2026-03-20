@@ -357,6 +357,7 @@ class PropertyReaderTest {
         assertNotNull(PropertyReader.XRAY_PARALLEL_BATCH_SIZE, "XRAY_PARALLEL_BATCH_SIZE constant should exist");
         assertNotNull(PropertyReader.XRAY_PARALLEL_THREADS, "XRAY_PARALLEL_THREADS constant should exist");
         assertNotNull(PropertyReader.XRAY_PARALLEL_DELAY_MS, "XRAY_PARALLEL_DELAY_MS constant should exist");
+        assertNotNull(PropertyReader.XRAY_ENRICHMENT_ENABLED_BY_DEFAULT, "XRAY_ENRICHMENT_ENABLED_BY_DEFAULT constant should exist");
     }
 
     @Test
@@ -366,5 +367,12 @@ class PropertyReaderTest {
         assertEquals("XRAY_PARALLEL_BATCH_SIZE", PropertyReader.XRAY_PARALLEL_BATCH_SIZE);
         assertEquals("XRAY_PARALLEL_THREADS", PropertyReader.XRAY_PARALLEL_THREADS);
         assertEquals("XRAY_PARALLEL_DELAY_MS", PropertyReader.XRAY_PARALLEL_DELAY_MS);
+        assertEquals("XRAY_ENRICHMENT_ENABLED_BY_DEFAULT", PropertyReader.XRAY_ENRICHMENT_ENABLED_BY_DEFAULT);
+    }
+
+    @Test
+    void testIsXrayEnrichmentEnabledByDefault_DefaultValue() {
+        boolean result = propertyReader.isXrayEnrichmentEnabledByDefault();
+        assertTrue(result, "X-ray enrichment should be enabled by default");
     }
 }

@@ -7,10 +7,13 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import okhttp3.OkHttpClient;
 import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -139,6 +142,86 @@ public class JiraClientTest {
 
         String result = spyClient.updateDescription(ticketKey, description);
         assertEquals("Success", result);
+    }
+
+    @Test
+    public void testUpdateField_MultiselectCustomFieldWrapsStringValueAsOptionArray() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doNothing().when(spyClient).log(anyString());
+        doReturn(mockRequest).when(spyClient).getTicket("TEST-123");
+        doReturn(new JSONArray()
+                .put(new JSONObject()
+                        .put("id", "customfield_10091")
+                        .put("name", "Dependencies")
+                        .put("schema", new JSONObject()
+                                .put("type", "array")
+                                .put("items", "option")
+                                .put("custom", "com.atlassian.jira.plugin.system.customfieldtypes:multiselect")))
+                .toString()).when(spyClient).getFields("TEST");
+        when(mockRequest.put()).thenReturn("");
+
+        spyClient.updateField("TEST-123", "customfield_10091", "Option A");
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockRequest).setBody(bodyCaptor.capture());
+
+        JSONObject requestBody = new JSONObject(bodyCaptor.getValue());
+        JSONArray setValue = requestBody.getJSONObject("update")
+                .getJSONArray("customfield_10091")
+                .getJSONObject(0)
+                .getJSONArray("set");
+
+        assertEquals(1, setValue.length());
+        assertEquals("Option A", setValue.getJSONObject(0).getString("value"));
+    }
+
+    @Test
+    public void testUpdateField_DoesNotLogSuccessWhenJiraReturnsErrorResponse() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doNothing().when(spyClient).log(anyString());
+        doReturn(mockRequest).when(spyClient).getTicket("TEST-123");
+        doReturn(new JSONArray()
+                .put(new JSONObject()
+                        .put("id", "customfield_10091")
+                        .put("name", "Dependencies")
+                        .put("schema", new JSONObject()
+                                .put("type", "array")
+                                .put("items", "option")
+                                .put("custom", "com.atlassian.jira.plugin.system.customfieldtypes:multiselect")))
+                .toString()).when(spyClient).getFields("TEST");
+        when(mockRequest.put()).thenReturn("{\"errorMessages\":[\"Option is not valid\"]}");
+
+        try {
+            spyClient.updateField("TEST-123", "customfield_10091", "Option A");
+            fail("Expected IOException");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("Option is not valid"));
+        }
+
+        verify(spyClient, never()).log(startsWith("Updated field"));
+    }
+
+    @Test
+    public void testUpdateAllFieldsWithName_DoesNotReportSuccessForErrorResponses() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doNothing().when(spyClient).log(anyString());
+        doReturn(mockRequest).when(spyClient).getTicket("TEST-123");
+        doReturn(new JSONArray()
+                .put(new JSONObject()
+                        .put("id", "customfield_10091")
+                        .put("name", "Dependencies")
+                        .put("schema", new JSONObject()
+                                .put("type", "array")
+                                .put("items", "option")
+                                .put("custom", "com.atlassian.jira.plugin.system.customfieldtypes:multiselect")))
+                .toString()).when(spyClient).getFields("TEST");
+        when(mockRequest.put()).thenReturn("{\"errorMessages\":[\"Option is not valid\"]}");
+
+        String result = spyClient.updateAllFieldsWithName("TEST-123", "Dependencies", "Option A");
+
+        assertTrue(result.contains("❌ Failed customfield_10091"));
+        assertTrue(result.contains("Updated 0 of 1 fields with name 'Dependencies'"));
+        verify(spyClient, never()).log(startsWith("Updated field"));
     }
 
     @Test
