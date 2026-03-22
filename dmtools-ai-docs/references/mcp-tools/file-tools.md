@@ -76,6 +76,47 @@ dmtools file_read "value"
 const result = file_read("path");
 ```
 
+#### Allowlist for paths outside the working directory
+
+By default, `file_read` blocks any path that resolves outside the working directory (path-traversal protection). In submodule/monorepo layouts where agents legitimately need to read files one level up (e.g. `../.dmtools/config.js`), you can whitelist specific glob patterns:
+
+**Environment variable / `dmtools.env` field:**
+
+```bash
+# Single pattern
+DMTOOLS_FILE_READ_ALLOWED_PATHS=../.dmtools/**
+
+# Multiple patterns (comma-separated)
+DMTOOLS_FILE_READ_ALLOWED_PATHS=../.dmtools/**,../config/**
+```
+
+**Behaviour:**
+
+| Situation | Result |
+|-----------|--------|
+| No config set | Default: block anything outside working dir |
+| Path matches a pattern | Allowed, even outside working dir |
+| Path does NOT match any pattern | Still blocked |
+
+**Pattern rules:**
+- Patterns are resolved **relative to the working directory**, so `../.dmtools/**` expands to the `.dmtools/` sibling of the checkout root, regardless of where the JVM is started.
+- `**` matches any number of path segments (e.g. `../.dmtools/**` allows all files recursively under `.dmtools/`).
+- `*` matches within a single path segment only (e.g. `../config/*.json` allows only `.json` files directly inside `config/`).
+- Patterns with no wildcard are treated as exact file paths.
+- Only `file_read` respects this allowlist — `file_write` and `file_delete` always require the path to be inside the working directory.
+
+**Security note:** Only exact whitelisted patterns bypass the check. A global `../**` is intentionally permitted if written explicitly, so keep patterns as narrow as possible.
+
+**Typical use case:**
+
+```
+/home/runner/work/my-org/my-repo/        ← working dir (repo root)
+  .dmtools/config.js                     ← config one level up from an agent submodule
+  agents/                                ← submodule (scripts run here)
+```
+
+Set `DMTOOLS_FILE_READ_ALLOWED_PATHS=../.dmtools/**` when agents run from within `agents/` and need to read `../.dmtools/config.js`.
+
 ---
 
 ### `file_validate_json`

@@ -2,6 +2,7 @@ package com.github.istin.dmtools.file;
 
 import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.mcp.MCPParam;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.stream.JsonReader;
@@ -14,8 +15,10 @@ import org.json.JSONObject;
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 
 /**
@@ -85,8 +88,9 @@ public class FileTools {
                 resolvedPath = workingDir.resolve(requestedPath).normalize();
             }
             
-            // Security check: Ensure resolved path is within working directory
-            if (!resolvedPath.startsWith(workingDir)) {
+            // Security check: Ensure resolved path is within working directory,
+            // OR it matches one of the user-configured allowed path patterns.
+            if (!resolvedPath.startsWith(workingDir) && !isAllowedByConfig(resolvedPath, workingDir)) {
                 logger.error("Security violation: Path traversal attempt blocked - requested: {}, resolved: {}, working dir: {}", 
                         filePath, resolvedPath, workingDir);
                 return null;
@@ -781,6 +785,108 @@ public class FileTools {
             logger.error("Failed to create file validation result JSON", e);
             return "{\"valid\": false, \"error\": \"Failed to create validation result\"}";
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Allowlist support for file_read
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns {@code true} when {@code resolvedPath} matches at least one of the
+     * glob patterns configured via {@code DMTOOLS_FILE_READ_ALLOWED_PATHS}.
+     *
+     * <p>Each raw pattern is resolved relative to {@code workingDir} before matching,
+     * so {@code ../.dmtools/**} expands to the sibling {@code .dmtools} directory of
+     * the working directory regardless of where the JVM was started.</p>
+     *
+     * <p>Pattern rules:
+     * <ul>
+     *   <li>The literal prefix (everything before the first wildcard character) is
+     *       resolved against {@code workingDir} via {@link Path#resolve(String)} +
+     *       {@link Path#normalize()} to produce an absolute base path.</li>
+     *   <li>The glob suffix (from the first wildcard onward) is matched against the
+     *       path segment(s) relative to that base using
+     *       {@link java.nio.file.FileSystems#getDefault() FileSystems} glob matching.</li>
+     *   <li>Patterns without any wildcard are treated as exact file-path matches.</li>
+     * </ul>
+     * </p>
+     */
+    private static boolean isAllowedByConfig(Path resolvedPath, Path workingDir) {
+        String raw = new PropertyReader().getFileReadAllowedPaths();
+        if (raw == null || raw.trim().isEmpty()) {
+            return false;
+        }
+
+        for (String rawPattern : raw.split(",")) {
+            rawPattern = rawPattern.trim();
+            if (rawPattern.isEmpty()) {
+                continue;
+            }
+            try {
+                if (matchesPattern(resolvedPath, workingDir, rawPattern)) {
+                    logger.debug("Path {} allowed by configured pattern '{}'", resolvedPath, rawPattern);
+                    return true;
+                }
+            } catch (Exception e) {
+                logger.warn("Error evaluating DMTOOLS_FILE_READ_ALLOWED_PATHS pattern '{}': {}", rawPattern, e.getMessage());
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Tests whether {@code resolvedPath} matches a single raw glob pattern.
+     *
+     * <p>Algorithm:
+     * <ol>
+     *   <li>Find the index of the first wildcard character ({@code *}, {@code ?},
+     *       {@code {}, {@code [}).</li>
+     *   <li>Extract the literal prefix (up to the last {@code /} before the wildcard)
+     *       and the glob suffix (from that {@code /} onward).</li>
+     *   <li>Resolve the literal prefix relative to {@code workingDir} to obtain an
+     *       absolute base path.</li>
+     *   <li>If there is no wildcard, perform an exact equality check.</li>
+     *   <li>Otherwise verify that {@code resolvedPath} starts with the base, then
+     *       match the relative remainder against the glob suffix.</li>
+     * </ol>
+     * </p>
+     */
+    static boolean matchesPattern(Path resolvedPath, Path workingDir, String rawPattern) {
+        int wildcardIdx = indexOfWildcard(rawPattern);
+
+        if (wildcardIdx < 0) {
+            // No wildcard: exact path match
+            Path exactPath = workingDir.resolve(rawPattern).normalize();
+            return resolvedPath.equals(exactPath);
+        }
+
+        // Split at the last '/' that precedes the first wildcard
+        int slashBefore = rawPattern.lastIndexOf('/', wildcardIdx - 1);
+        String literalPrefix = slashBefore >= 0 ? rawPattern.substring(0, slashBefore) : "";
+        String globSuffix    = slashBefore >= 0 ? rawPattern.substring(slashBefore + 1) : rawPattern;
+
+        Path absBase = literalPrefix.isEmpty()
+                ? workingDir
+                : workingDir.resolve(literalPrefix).normalize();
+
+        if (!resolvedPath.startsWith(absBase)) {
+            return false;
+        }
+
+        Path relative = absBase.relativize(resolvedPath);
+        PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + globSuffix);
+        return matcher.matches(relative);
+    }
+
+    /** Returns the index of the first glob wildcard character, or {@code -1} if none. */
+    private static int indexOfWildcard(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '*' || c == '?' || c == '{' || c == '[') {
+                return i;
+            }
+        }
+        return -1;
     }
 }
 

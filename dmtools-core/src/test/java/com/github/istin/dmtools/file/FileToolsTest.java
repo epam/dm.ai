@@ -1,5 +1,6 @@
 package com.github.istin.dmtools.file;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -165,6 +167,183 @@ class FileToolsTest {
         assertEquals("", result);
     }
     
+    // ========== matchesPattern / allowlist unit tests ==========
+
+    @Test
+    void testMatchesPattern_ExactFile_Matches() throws Exception {
+        // Sibling directory relative to tempDir
+        Path sibling = tempDir.getParent().resolve("sibling");
+        Files.createDirectories(sibling);
+        Path target = sibling.resolve("config.js");
+        Files.writeString(target, "content");
+
+        Path workingDir = tempDir.toAbsolutePath().normalize();
+        // pattern "parent/sibling/config.js" expressed with ".." relative syntax
+        String pattern = "../" + sibling.getFileName() + "/config.js";
+        assertTrue(FileTools.matchesPattern(target.toAbsolutePath().normalize(), workingDir, pattern));
+    }
+
+    @Test
+    void testMatchesPattern_ExactFile_DoesNotMatch() throws Exception {
+        Path sibling = tempDir.getParent().resolve("sibling2");
+        Files.createDirectories(sibling);
+        Path target = sibling.resolve("other.js");
+        Files.writeString(target, "content");
+
+        Path workingDir = tempDir.toAbsolutePath().normalize();
+        String pattern = "../" + sibling.getFileName() + "/config.js";   // different filename
+        assertFalse(FileTools.matchesPattern(target.toAbsolutePath().normalize(), workingDir, pattern));
+    }
+
+    @Test
+    void testMatchesPattern_GlobDoubleStarAllSubPaths() throws Exception {
+        Path sibling = tempDir.getParent().resolve("siblingDir");
+        Path nested  = sibling.resolve("sub/deep");
+        Files.createDirectories(nested);
+        Path target = nested.resolve("file.txt");
+        Files.writeString(target, "content");
+
+        Path workingDir = tempDir.toAbsolutePath().normalize();
+        String pattern = "../" + sibling.getFileName() + "/**";
+        assertTrue(FileTools.matchesPattern(target.toAbsolutePath().normalize(), workingDir, pattern));
+    }
+
+    @Test
+    void testMatchesPattern_GlobSingleStar_DirectChildOnly() throws Exception {
+        Path sibling = tempDir.getParent().resolve("siblingFlat");
+        Files.createDirectories(sibling);
+        Path directChild = sibling.resolve("file.js");
+        Files.writeString(directChild, "x");
+        Path deepChild = sibling.resolve("sub/file.js");
+        Files.createDirectories(sibling.resolve("sub"));
+        Files.writeString(deepChild, "y");
+
+        Path workingDir = tempDir.toAbsolutePath().normalize();
+        String pattern = "../" + sibling.getFileName() + "/*.js";
+
+        // direct child matches
+        assertTrue(FileTools.matchesPattern(directChild.toAbsolutePath().normalize(), workingDir, pattern));
+        // deep child does NOT match (single * doesn't cross directories)
+        assertFalse(FileTools.matchesPattern(deepChild.toAbsolutePath().normalize(), workingDir, pattern));
+    }
+
+    @Test
+    void testMatchesPattern_PathOutsideBase_NoMatch() throws Exception {
+        Path sibling = tempDir.getParent().resolve("siblingA");
+        Files.createDirectories(sibling);
+        Path target = sibling.resolve("secret.txt");
+        Files.writeString(target, "secret");
+
+        Path otherSibling = tempDir.getParent().resolve("siblingB");
+        Files.createDirectories(otherSibling);
+
+        Path workingDir = tempDir.toAbsolutePath().normalize();
+        // pattern only covers siblingB, not siblingA
+        String pattern = "../" + otherSibling.getFileName() + "/**";
+        assertFalse(FileTools.matchesPattern(target.toAbsolutePath().normalize(), workingDir, pattern));
+    }
+
+    // ========== readFile allowlist integration tests ==========
+
+    @Test
+    void testReadFile_OutsideWorkdirBlockedWithoutAllowlist() throws Exception {
+        Path sibling = tempDir.getParent().resolve("blockedSibling");
+        Files.createDirectories(sibling);
+        Path target = sibling.resolve("data.txt");
+        Files.writeString(target, "secret");
+
+        // No allowlist configured - should be blocked
+        PropertyReader.setOverrides(Map.of());
+        try {
+            String result = fileTools.readFile(target.toAbsolutePath().toString());
+            assertNull(result, "Path outside working dir should return null when no allowlist is set");
+        } finally {
+            PropertyReader.setOverrides(null);
+        }
+    }
+
+    @Test
+    void testReadFile_OutsideWorkdirAllowedByGlobPattern() throws Exception {
+        Path dmtools = tempDir.getParent().resolve(".dmtools");
+        Files.createDirectories(dmtools);
+        Path config = dmtools.resolve("config.js");
+        Files.writeString(config, "module.exports = {};");
+
+        PropertyReader.setOverrides(Map.of(
+                PropertyReader.DMTOOLS_FILE_READ_ALLOWED_PATHS,
+                "../.dmtools/**"
+        ));
+        try {
+            String result = fileTools.readFile(config.toAbsolutePath().toString());
+            assertEquals("module.exports = {};", result);
+        } finally {
+            PropertyReader.setOverrides(null);
+        }
+    }
+
+    @Test
+    void testReadFile_OutsideWorkdirAllowedByExactPattern() throws Exception {
+        Path sibling = tempDir.getParent().resolve("exactSibling");
+        Files.createDirectories(sibling);
+        Path target = sibling.resolve("only-this.txt");
+        Files.writeString(target, "allowed content");
+
+        PropertyReader.setOverrides(Map.of(
+                PropertyReader.DMTOOLS_FILE_READ_ALLOWED_PATHS,
+                "../exactSibling/only-this.txt"
+        ));
+        try {
+            String result = fileTools.readFile(target.toAbsolutePath().toString());
+            assertEquals("allowed content", result);
+        } finally {
+            PropertyReader.setOverrides(null);
+        }
+    }
+
+    @Test
+    void testReadFile_OutsideWorkdirMultiplePatterns() throws Exception {
+        Path sibA = tempDir.getParent().resolve("multiA");
+        Path sibB = tempDir.getParent().resolve("multiB");
+        Files.createDirectories(sibA);
+        Files.createDirectories(sibB);
+        Path fileA = sibA.resolve("a.txt");
+        Path fileB = sibB.resolve("b.txt");
+        Files.writeString(fileA, "A");
+        Files.writeString(fileB, "B");
+
+        PropertyReader.setOverrides(Map.of(
+                PropertyReader.DMTOOLS_FILE_READ_ALLOWED_PATHS,
+                "../multiA/**,../multiB/**"
+        ));
+        try {
+            assertEquals("A", fileTools.readFile(fileA.toAbsolutePath().toString()));
+            assertEquals("B", fileTools.readFile(fileB.toAbsolutePath().toString()));
+        } finally {
+            PropertyReader.setOverrides(null);
+        }
+    }
+
+    @Test
+    void testReadFile_PatternDoesNotMatchOtherPath_StillBlocked() throws Exception {
+        Path allowed = tempDir.getParent().resolve("allowedDir");
+        Path blocked = tempDir.getParent().resolve("blockedDir");
+        Files.createDirectories(allowed);
+        Files.createDirectories(blocked);
+        Path blockedFile = blocked.resolve("secret.txt");
+        Files.writeString(blockedFile, "no access");
+
+        PropertyReader.setOverrides(Map.of(
+                PropertyReader.DMTOOLS_FILE_READ_ALLOWED_PATHS,
+                "../allowedDir/**"    // only allowedDir is allowed
+        ));
+        try {
+            String result = fileTools.readFile(blockedFile.toAbsolutePath().toString());
+            assertNull(result, "File not matching any allowlist pattern should still be blocked");
+        } finally {
+            PropertyReader.setOverrides(null);
+        }
+    }
+
     // ========== writeFile Tests ==========
     
     @Test

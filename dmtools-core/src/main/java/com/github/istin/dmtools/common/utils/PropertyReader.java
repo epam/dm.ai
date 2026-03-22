@@ -234,6 +234,27 @@ public class PropertyReader {
 		return getValue(CLI_OUTPUT);
 	}
 
+	// -------------------------------------------------------------------------
+	// File read security configuration
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Configuration key for the comma-separated list of glob patterns that
+	 * {@code file_read} is allowed to access even when they resolve outside the
+	 * working directory.
+	 *
+	 * <p>Example value: {@code ../.dmtools/**,../config/**}</p>
+	 */
+	public static final String DMTOOLS_FILE_READ_ALLOWED_PATHS = "DMTOOLS_FILE_READ_ALLOWED_PATHS";
+
+	/**
+	 * Returns the raw comma-separated glob pattern string, or {@code null} when not set.
+	 * Callers are responsible for splitting on {@code ","} and resolving patterns.
+	 */
+	public String getFileReadAllowedPaths() {
+		return getValue(DMTOOLS_FILE_READ_ALLOWED_PATHS);
+	}
+
 	public String getJiraLoginPassToken() {
 		// Priority 1: Use separate email and API token if both are available
 		String email = getJiraEmail();
