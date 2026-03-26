@@ -215,7 +215,7 @@ jobs:
           # Create package.json for NPM
           cat > dmtools-ai-docs/package.json << EOF
           {
-            "name": "@dmtools/agent-skill",
+            "name": "@dm.ai/agent-skill",
             "version": "$VERSION",
             "description": "Agent Skill for DMtools - AI-powered development toolkit (Cursor, Claude, Codex compatible)",
             "keywords": ["dmtools", "agent-skills", "cursor", "claude", "ai", "jira", "azure-devops"],
