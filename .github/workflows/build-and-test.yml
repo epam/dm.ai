@@ -47,6 +47,7 @@ jobs:
       - name: Test Report
         uses: dorny/test-reporter@v1
         if: always()
+        continue-on-error: true
         with:
           name: JUnit Tests (Unified Build)
           path: '**/build/test-results/test/TEST-*.xml'
