@@ -26,7 +26,7 @@ subprojects {
     // Common repositories
     repositories {
         mavenCentral()
-        maven { url = uri("https://maven.pkg.github.com/IstiN/dmtools") }
+        maven { url = uri("https://maven.pkg.github.com/IstiN/dmtools-cli") }
     }
     
     // Common encoding

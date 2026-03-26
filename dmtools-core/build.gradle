@@ -238,11 +238,11 @@ publishing {
             pom {
                 name = 'DM Tools Core'
                 description = 'DM Tools Core Library'
-                url = 'https://github.com/IstiN/dmtools'
+                url = 'https://github.com/IstiN/dmtools-cli'
                 licenses {
                     license {
-                        name = 'MIT License'
-                        url = 'https://opensource.org/licenses/MIT'
+                        name = 'Apache License 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0'
                     }
                 }
                 developers {
@@ -253,9 +253,9 @@ publishing {
                     }
                 }
                 scm {
-                    connection = 'scm:git:git://github.com/IstiN/dmtools.git'
-                    developerConnection = 'scm:git:ssh://github.com:IstiN/dmtools.git'
-                    url = 'https://github.com/IstiN/dmtools'
+                    connection = 'scm:git:git://github.com/IstiN/dmtools-cli.git'
+                    developerConnection = 'scm:git:ssh://github.com:IstiN/dmtools-cli.git'
+                    url = 'https://github.com/IstiN/dmtools-cli'
                 }
             }
         }
@@ -263,7 +263,7 @@ publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/IstiN/dmtools")
+            url = uri("https://maven.pkg.github.com/IstiN/dmtools-cli")
             credentials {
                 username = System.getenv("GITHUB_USERNAME")
                 password = System.getenv("GITHUB_TOKEN")
