@@ -1,13 +1,14 @@
 ## [skill-v1.0.27] - 2026-03-26
 
-### Documentation
+### Added
 
-- **GitHub Branch Naming Restrictions guide** — added `references/configuration/github-branch-naming.md`
-  - How to enforce branch naming conventions using **GitHub Rulesets** (native, proactive, regex-based)
-  - Regex patterns for common conventions: `^(story|task|bug)/MAPC-\d+.*$`
-  - Step-by-step setup for repository-level and organization-level policies
-  - Alternative: GitHub Actions workflow for PR-level branch name validation
-  - Comparison table: Rulesets vs Branch Protection vs GitHub Actions vs client-side hooks
+- **5 new GitHub MCP tools** documented in `references/mcp-tools/github-tools.md`
+  - `github_update_pr_comment` — edit an existing PR/issue comment by comment ID
+  - `github_delete_pr_comment` — delete a PR/issue comment by comment ID
+  - `github_create_commit_status` — create a commit status dot (pending/success/failure/error) with `context` as unique key
+  - `github_create_check_run` — create a rich GitHub Check Run with Markdown output (in_progress); returns `id` for follow-up update
+  - `github_update_check_run` — complete a Check Run with conclusion and final summary
+- Updated **Total tools** count in `github-tools.md`: 22 → 27
 
 ## [skill-v1.0.26] - 2026-03-20
 

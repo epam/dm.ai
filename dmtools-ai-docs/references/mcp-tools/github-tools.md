@@ -1,6 +1,6 @@
 # GitHub MCP Tools Reference
 
-**Total tools**: 22
+**Total tools**: 27
 **Integration key**: `github`
 **Categories**: `pull_requests`, `actions`
 
@@ -138,7 +138,126 @@ dmtools github_add_pr_comment workspace=IstiN repository=dmtools pullRequestId=7
 
 ---
 
-### `github_reply_to_pr_thread`
+### `github_update_pr_comment`
+
+Update (edit) an existing comment on a pull request or issue by its comment ID.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `commentId` | String | ✅ | ID of the comment to update |
+| `text` | String | ✅ | New comment body (replaces existing content, Markdown supported) |
+
+```bash
+dmtools github_update_pr_comment workspace=IstiN repository=dmtools commentId=123456789 text="✅ Analysis complete."
+```
+
+---
+
+### `github_delete_pr_comment`
+
+Delete a comment on a pull request or issue by its comment ID.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `commentId` | String | ✅ | ID of the comment to delete |
+
+```bash
+dmtools github_delete_pr_comment workspace=IstiN repository=dmtools commentId=123456789
+```
+
+---
+
+### `github_create_commit_status`
+
+Create a commit status — the colored dot (🟡🟢🔴) shown next to a commit in the PR checks section. Use `pending` when analysis starts, then `success`/`failure`/`error` when done.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `sha` | String | ✅ | Commit SHA to set the status on |
+| `state` | String | ✅ | `pending` \| `success` \| `failure` \| `error` |
+| `description` | String | ❌ | Short human-readable description shown next to the status dot |
+| `context` | String | ❌ | Unique check identifier, e.g. `dmtools/pr-review` (acts as the status name) |
+| `targetUrl` | String | ❌ | URL to link from the status (e.g. CI run URL) |
+
+```bash
+# Set pending when starting
+dmtools github_create_commit_status workspace=IstiN repository=dmtools sha=abc123 \
+  state=pending context=dmtools/pr-review description="AI analysis in progress..."
+
+# Set success when done
+dmtools github_create_commit_status workspace=IstiN repository=dmtools sha=abc123 \
+  state=success context=dmtools/pr-review description="Review complete — no issues found"
+```
+
+> **Note**: the `context` field is the unique key — posting with the same `context` twice updates the existing status instead of creating a new one.
+
+---
+
+### `github_create_check_run`
+
+Create a GitHub **Check Run** — a rich CI check with progress indicator, Markdown summary, and full details visible in the PR **Checks** tab. Use `status=in_progress` when starting, then call `github_update_check_run` to complete it.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `name` | String | ✅ | Check name shown in the PR (e.g. `dmtools / pr-review`) |
+| `headSha` | String | ✅ | Commit SHA to associate this check with |
+| `status` | String | ❌ | `queued` \| `in_progress` \| `completed` (default: `queued`) |
+| `title` | String | ❌ | Title shown in the check output panel |
+| `summary` | String | ❌ | Markdown summary in the output panel |
+| `text` | String | ❌ | Additional Markdown details (supports large content) |
+| `externalId` | String | ❌ | Optional external identifier (e.g. Jira ticket key) |
+
+```bash
+# Create in-progress check run
+dmtools github_create_check_run workspace=IstiN repository=dmtools \
+  name="dmtools / pr-review" headSha=abc123 status=in_progress \
+  title="AI PR Review" summary="🔍 Analysis started..."
+```
+
+Returns a JSON object containing `id` — save this to call `github_update_check_run`.
+
+---
+
+### `github_update_check_run`
+
+Update an existing Check Run — set it to `completed` with a `success`/`failure` conclusion and final summary. Call this after `github_create_check_run` to finalize the check.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `checkRunId` | String | ✅ | ID of the check run (from `github_create_check_run` response) |
+| `status` | String | ✅ | `in_progress` \| `completed` |
+| `conclusion` | String | ❌ | Required when `status=completed`: `success` \| `failure` \| `neutral` \| `cancelled` \| `skipped` \| `timed_out` \| `action_required` |
+| `title` | String | ❌ | Updated title for the output panel |
+| `summary` | String | ❌ | Updated Markdown summary |
+| `text` | String | ❌ | Updated detailed Markdown content |
+
+```bash
+dmtools github_update_check_run workspace=IstiN repository=dmtools checkRunId=1234567890 \
+  status=completed conclusion=success \
+  title="AI PR Review — Complete" summary="✅ Review complete. Found 3 issues."
+```
+
+**Typical two-step pattern:**
+```javascript
+// 1. Create check run (in_progress)
+const run = JSON.parse(github_create_check_run('IstiN', 'dmtools', 'dmtools / pr-review', sha, 'in_progress', 'AI PR Review', '🔍 Analysing...', '', ''));
+const checkRunId = String(run.id);
+
+// ... do the analysis ...
+
+// 2. Complete it
+github_update_check_run('IstiN', 'dmtools', checkRunId, 'completed', 'success', 'AI PR Review — Done', '✅ No issues found.', '');
+```
 
 Reply to an existing **inline code review comment thread**. Use the comment ID from `github_get_pr_conversations` (`rootComment.id` or `replies[].id`) as `inReplyToId`.
 
