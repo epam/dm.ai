@@ -1,3 +1,14 @@
+## [skill-v1.0.27] - 2026-03-26
+
+### Documentation
+
+- **GitHub Branch Naming Restrictions guide** — added `references/configuration/github-branch-naming.md`
+  - How to enforce branch naming conventions using **GitHub Rulesets** (native, proactive, regex-based)
+  - Regex patterns for common conventions: `^(story|task|bug)/MAPC-\d+.*$`
+  - Step-by-step setup for repository-level and organization-level policies
+  - Alternative: GitHub Actions workflow for PR-level branch name validation
+  - Comparison table: Rulesets vs Branch Protection vs GitHub Actions vs client-side hooks
+
 ## [skill-v1.0.26] - 2026-03-20
 
 ### Documentation
