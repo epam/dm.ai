@@ -36,10 +36,8 @@ jobs:
         run: |
           ./gradlew clean build \
             :dmtools-core:shadowJar \
-            :dmtools-server:bootJar \
             publish \
             -x integrationTest \
-            -x :dmtools-automation:test \
             -x :dmtools-core:test \
             --no-daemon --info 2>&1 | tee gradle-build.log
           exit ${PIPESTATUS[0]}
@@ -180,8 +178,6 @@ jobs:
             build/test-results/test
             dmtools-core/build/reports/tests/test
             dmtools-core/build/test-results/test
-            dmtools-server/build/reports/tests/test
-            dmtools-server/build/test-results/test
           retention-days: 7
       
       - name: Upload coverage reports to Codecov
@@ -205,8 +201,6 @@ jobs:
           echo "Root build/libs/ contents (for shadowJar):"
           ls -lh build/libs/ || echo "Directory not found"
           echo ""
-          echo "dmtools-server/build/libs/ contents:"
-          ls -lh dmtools-server/build/libs/ || echo "Directory not found"
           echo ""
           
           mkdir -p build-artifacts
@@ -226,13 +220,8 @@ jobs:
           fi
           
           # Copy Server JAR (rename for consistency)
-          # bootJar outputs to root directory as dmtools-appengine.jar
-          if [ -f dmtools-appengine.jar ]; then
-            cp dmtools-appengine.jar build-artifacts/dmtools-server.jar
-            echo "✅ Server JAR: dmtools-appengine.jar -> build-artifacts/dmtools-server.jar"
           else
             echo "❌ ERROR: Server JAR not found"
-            echo "Looking for: dmtools-appengine.jar in root directory"
             echo "Available JAR files in root:"
             ls -lh *.jar 2>/dev/null || echo "No JAR files found"
             exit 1
