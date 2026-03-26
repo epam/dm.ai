@@ -3655,4 +3655,1183 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     public RetryPolicy getRetryPolicy() {
         return retryPolicy;
     }
+
+    // ─── Project structure / scheme API ───────────────────────────────────────
+
+    /**
+     * Executes a GET request against a full URL and returns the response body.
+     * Extracted as a protected method to allow overriding in tests.
+     */
+    protected String executeGet(String url) throws IOException {
+        GenericRequest request = new GenericRequest(this, url);
+        return request.execute();
+    }
+
+    /**
+     * Executes a PUT request against a full URL with the given JSON body.
+     * Extracted as a protected method to allow overriding in tests.
+     */
+    protected void executePut(String url, String body) throws IOException {
+        GenericRequest request = new GenericRequest(this, url);
+        request.setBody(body);
+        request.put();
+    }
+
+    /**
+     * Executes a POST request against a full URL with the given JSON body and returns the response body.
+     * Throws IOException if the response contains Jira error messages.
+     * Extracted as a protected method to allow overriding in tests.
+     */
+    protected String executePost(String url, String body) throws IOException {
+        GenericRequest request = new GenericRequest(this, url);
+        request.setBody(body);
+        String response = request.post();
+        if (response != null && (response.contains("errorMessages") || response.contains("\"errors\":"))) {
+            try {
+                JSONObject errorJson = new JSONObject(response);
+                JSONArray errorMessages = errorJson.optJSONArray("errorMessages");
+                if (errorMessages != null && !errorMessages.isEmpty()) {
+                    throw new IOException(errorMessages.getString(0));
+                }
+                JSONObject errorsObj = errorJson.optJSONObject("errors");
+                if (errorsObj != null && errorsObj.length() > 0) {
+                    // Collect all error values into one message
+                    java.util.StringJoiner sj = new java.util.StringJoiner("; ");
+                    for (String errKey : errorsObj.keySet()) {
+                        sj.add(errorsObj.getString(errKey));
+                    }
+                    throw new IOException(sj.toString());
+                }
+            } catch (IOException rethrow) {
+                throw rethrow;
+            } catch (Exception ignore) {
+                // not a well-formed error response — let caller decide
+            }
+        }
+        return response;
+    }
+
+    /**
+     * Returns full project details (id, key, name, style, issueTypes) from the Jira project endpoint.
+     */
+    @MCPTool(
+            name = "jira_get_project_details",
+            description = "Get full details of a Jira project including its numeric ID, key, name, style and issue types",
+            integration = "jira",
+            category = "project_management"
+    )
+    public Project getProjectDetails(
+            @MCPParam(name = "projectKey", description = "The Jira project key, e.g. TP", required = true) String projectKey) throws IOException {
+        String response = executeGet(path("project/" + projectKey));
+        return new Project(new JSONObject(response));
+    }
+
+    /**
+     * Returns the issue type scheme for a project.
+     * For classic (company-managed) projects uses the admin scheme API.
+     * For next-gen (team-managed) projects falls back to the issue types already embedded
+     * in the project details response — no admin permission required.
+     */
+    @MCPTool(
+            name = "jira_get_project_issue_type_scheme",
+            description = "Get the issue type scheme (or equivalent) assigned to a Jira project",
+            integration = "jira",
+            category = "project_management"
+    )
+    public IssueTypeScheme getProjectIssueTypeScheme(
+            @MCPParam(name = "projectKey", description = "The Jira project key, e.g. TP", required = true) String projectKey) throws IOException {
+        Project project = getProjectDetails(projectKey);
+        String projectId = project.getId();
+
+        // Classic projects: use the admin scheme API
+        if (!project.isNextGen()) {
+            String url = getBasePath() + "/rest/api/3/issuetypescheme/project?projectId=" + projectId;
+            String response = executeGet(url);
+            JSONObject json = new JSONObject(response);
+            JSONArray values = json.optJSONArray("values");
+            if (values != null && !values.isEmpty()) {
+                return new IssueTypeScheme(values.getJSONObject(0).optJSONObject("issueTypeScheme"));
+            }
+            throw new IOException("No issue type scheme found for project: " + projectKey);
+        }
+
+        // Next-gen projects: build a pseudo-scheme from the issue types in project details
+        log("Next-gen project detected — building issue type scheme from project details for " + projectKey);
+        JSONArray issueTypesJson = project.getIssueTypesJson();
+        JSONArray ids = new JSONArray();
+        if (issueTypesJson != null) {
+            for (int i = 0; i < issueTypesJson.length(); i++) {
+                ids.put(issueTypesJson.getJSONObject(i).getString("id"));
+            }
+        }
+        JSONObject schemeJson = new JSONObject()
+                .put("id", projectId)
+                .put("name", project.getName() + " Issue Type Scheme")
+                .put("issueTypeIds", ids);
+        return new IssueTypeScheme(schemeJson);
+    }
+
+    /**
+     * Returns the workflow scheme for a project.
+     * For classic (company-managed) projects uses the admin scheme API.
+     * For next-gen (team-managed) projects falls back to reading the project statuses
+     * endpoint — no admin permission required.
+     */
+    @MCPTool(
+            name = "jira_get_project_workflow_scheme",
+            description = "Get the workflow scheme (or equivalent) assigned to a Jira project",
+            integration = "jira",
+            category = "project_management"
+    )
+    public WorkflowScheme getProjectWorkflowScheme(
+            @MCPParam(name = "projectKey", description = "The Jira project key, e.g. TP", required = true) String projectKey) throws IOException {
+        Project project = getProjectDetails(projectKey);
+        String projectId = project.getId();
+
+        // Classic projects: use the admin scheme API
+        if (!project.isNextGen()) {
+            String url = getBasePath() + "/rest/api/3/workflowscheme/project?projectId=" + projectId;
+            String response = executeGet(url);
+            JSONObject json = new JSONObject(response);
+            JSONArray values = json.optJSONArray("values");
+            if (values != null && !values.isEmpty()) {
+                return new WorkflowScheme(values.getJSONObject(0).optJSONObject("workflowScheme"));
+            }
+            throw new IOException("No workflow scheme found for project: " + projectKey);
+        }
+
+        // Next-gen projects: derive a pseudo workflow scheme from the project statuses
+        log("Next-gen project detected — building workflow scheme from project statuses for " + projectKey);
+        String statusesUrl = getBasePath() + "/rest/api/3/project/" + projectKey + "/statuses";
+        String response = executeGet(statusesUrl);
+        JSONArray statusesArray = new JSONArray(response);
+        JSONObject mappings = new JSONObject();
+        for (int i = 0; i < statusesArray.length(); i++) {
+            JSONObject issueTypeEntry = statusesArray.getJSONObject(i);
+            String issueTypeId = issueTypeEntry.optString("id");
+            JSONArray statuses = issueTypeEntry.optJSONArray("statuses");
+            if (statuses != null && !statuses.isEmpty()) {
+                mappings.put(issueTypeId, statuses.getJSONObject(0).optString("name"));
+            }
+        }
+        JSONObject schemeJson = new JSONObject()
+                .put("id", projectId)
+                .put("name", project.getName() + " Workflow")
+                .put("issueTypeMappings", mappings);
+        return new WorkflowScheme(schemeJson);
+    }
+
+    /**
+     * Assigns an existing issue type scheme to a classic (company-managed) target project.
+     * Requires Jira admin permission.
+     */
+    @MCPTool(
+            name = "jira_assign_issue_type_scheme",
+            description = "Assign an issue type scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin.",
+            integration = "jira",
+            category = "project_management"
+    )
+    public void assignIssueTypeSchemeToProject(
+            @MCPParam(name = "issueTypeSchemeId", description = "Numeric ID of the issue type scheme", required = true) String issueTypeSchemeId,
+            @MCPParam(name = "projectId", description = "Numeric ID of the target Jira project", required = true) String projectId) throws IOException {
+        String url = getBasePath() + "/rest/api/3/issuetypescheme/" + issueTypeSchemeId + "/project";
+        JSONObject body = new JSONObject();
+        body.put("projectIds", new JSONArray().put(projectId));
+        executePut(url, body.toString());
+    }
+
+    /**
+     * Assigns an existing workflow scheme to a classic (company-managed) target project.
+     * Requires Jira admin permission.
+     */
+    @MCPTool(
+            name = "jira_assign_workflow_scheme",
+            description = "Assign a workflow scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin.",
+            integration = "jira",
+            category = "project_management"
+    )
+    public void assignWorkflowSchemeToProject(
+            @MCPParam(name = "workflowSchemeId", description = "Numeric ID of the workflow scheme", required = true) String workflowSchemeId,
+            @MCPParam(name = "projectId", description = "Numeric ID of the target Jira project", required = true) String projectId) throws IOException {
+        String url = getBasePath() + "/rest/api/3/workflowscheme/project";
+        JSONObject body = new JSONObject()
+                .put("workflowSchemeId", workflowSchemeId)
+                .put("projectId", projectId);
+        executePut(url, body.toString());
+    }
+
+    /**
+     * Creates a single project-scoped issue type in a Jira next-gen project.
+     * Skips silently if an issue type with the same name already exists.
+     */
+    @MCPTool(
+            name = "jira_create_project_issue_type",
+            description = "Create a project-scoped issue type in a next-gen Jira project. Use type 'subtask' for subtasks and 'standard' for all others. Skips if the name already exists. Requires Jira admin.",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String createProjectIssueType(
+            @MCPParam(name = "projectKey", description = "Key of the target Jira project, e.g. TP", required = true) String projectKey,
+            @MCPParam(name = "name", description = "Name of the issue type, e.g. Story", required = true) String name,
+            @MCPParam(name = "type", description = "Issue type kind: 'standard' or 'subtask'. Defaults to 'standard'.", required = false) String type,
+            @MCPParam(name = "description", description = "Optional description", required = false) String description) throws IOException {
+        Project project = getProjectDetails(projectKey);
+        String projectId = project.getId();
+
+        JSONArray existing = project.getIssueTypesJson();
+        if (existing != null) {
+            for (int i = 0; i < existing.length(); i++) {
+                if (name.equalsIgnoreCase(existing.getJSONObject(i).optString("name"))) {
+                    return new JSONObject().put("name", name).put("status", "exists").toString();
+                }
+            }
+        }
+
+        String issueTypeKind = (type != null && "subtask".equalsIgnoreCase(type.trim())) ? "subtask" : "standard";
+        JSONObject body = new JSONObject()
+                .put("name", name)
+                .put("description", description != null ? description : "")
+                .put("type", issueTypeKind)
+                .put("scope", new JSONObject()
+                        .put("type", "PROJECT")
+                        .put("project", new JSONObject().put("id", projectId)));
+        try {
+            String response = executePost(getBasePath() + "/rest/api/3/issuetype", body.toString());
+            String newId = new JSONObject(response).optString("id", "");
+            log("Created issue type '" + name + "' (id=" + newId + ") in " + projectKey);
+            return new JSONObject().put("name", name).put("status", "created").put("id", newId).toString();
+        } catch (Exception e) {
+            String errMsg = e.getMessage() != null ? e.getMessage() : "";
+            if (errMsg.toLowerCase().contains("already exists") || errMsg.toLowerCase().contains("already in use")) {
+                return new JSONObject().put("name", name).put("status", "exists").toString();
+            }
+            throw new IOException("Failed to create issue type '" + name + "': " + errMsg);
+        }
+    }
+
+    /**
+     * Copies issue types from source project to a target next-gen project by creating
+     * project-scoped issue types for any names that are missing in the target.
+     * Uses {@code POST /rest/api/3/issuetype} with project scope — requires Jira admin.
+     *
+     * @return JSONArray with one entry per source issue type: name, status (created/exists/failed), id
+     */
+    private JSONArray copyIssueTypesToNextGenProject(JSONArray sourceIssueTypes, String targetProjectKey, String targetProjectId) {
+        JSONArray targetIssueTypes;
+        try {
+            targetIssueTypes = getProjectDetails(targetProjectKey).getIssueTypesJson();
+        } catch (Exception e) {
+            targetIssueTypes = new JSONArray();
+        }
+
+        java.util.Set<String> existingNames = new java.util.HashSet<>();
+        if (targetIssueTypes != null) {
+            for (int i = 0; i < targetIssueTypes.length(); i++) {
+                existingNames.add(targetIssueTypes.getJSONObject(i).optString("name").toLowerCase());
+            }
+        }
+
+        JSONArray results = new JSONArray();
+        for (int i = 0; i < sourceIssueTypes.length(); i++) {
+            JSONObject srcType = sourceIssueTypes.getJSONObject(i);
+            String name = srcType.optString("name");
+            JSONObject entry = new JSONObject().put("name", name);
+
+            if (existingNames.contains(name.toLowerCase())) {
+                entry.put("status", "exists");
+                log("Issue type '" + name + "' already exists in target — skipping");
+            } else {
+                try {
+                    JSONObject body = new JSONObject()
+                            .put("name", name)
+                            .put("description", srcType.optString("description", ""))
+                            .put("type", srcType.optBoolean("subtask") ? "subtask" : "standard")
+                            .put("scope", new JSONObject()
+                                    .put("type", "PROJECT")
+                                    .put("project", new JSONObject().put("id", targetProjectId)));
+                    String response = executePost(getBasePath() + "/rest/api/3/issuetype", body.toString());
+                    String newId = new JSONObject(response).optString("id", "");
+                    entry.put("status", "created").put("id", newId);
+                    log("Created issue type '" + name + "' with id=" + newId);
+                } catch (Exception e) {
+                    String errMsg = e.getMessage() != null ? e.getMessage() : "";
+                    if (errMsg.toLowerCase().contains("already exists") || errMsg.toLowerCase().contains("already in use")) {
+                        entry.put("status", "exists");
+                        log("Issue type '" + name + "' already exists (different scope) — treating as exists");
+                    } else {
+                        entry.put("status", "failed").put("error", errMsg);
+                        log("Failed to create issue type '" + name + "': " + errMsg);
+                    }
+                }
+            }
+            results.put(entry);
+        }
+        return results;
+    }
+
+    /**
+     * Copies the issue type setup and workflow from a source project to a target project.
+     *
+     * <ul>
+     *   <li><b>Next-gen (team-managed)</b>: creates missing project-scoped issue types in target
+     *       using {@code POST /rest/api/3/issuetype} — requires Jira global admin.
+     *       Already-existing issue types (by name) are skipped.</li>
+     *   <li><b>Classic (company-managed)</b>: reassigns issue type scheme and workflow scheme —
+     *       also requires Jira global admin.</li>
+     * </ul>
+     *
+     * Returns a JSON summary including per-type status (created / exists / failed).
+     */
+    @MCPTool(
+            name = "jira_copy_project_structure",
+            description = "Copy issue types and workflow setup from a source Jira project to a target Jira project (e.g. MYTUBE → TP)",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String copyProjectStructure(
+            @MCPParam(name = "sourceProjectKey", description = "Key of the source Jira project to copy structure from, e.g. MYTUBE", required = true) String sourceProjectKey,
+            @MCPParam(name = "targetProjectKey", description = "Key of the target Jira project to apply structure to, e.g. TP", required = true) String targetProjectKey) throws IOException {
+        log("Copying project structure from " + sourceProjectKey + " to " + targetProjectKey);
+
+        Project sourceProject = getProjectDetails(sourceProjectKey);
+        Project targetProject = getProjectDetails(targetProjectKey);
+        String targetProjectId = targetProject.getId();
+
+        JSONObject result = new JSONObject()
+                .put("sourceProject", sourceProjectKey)
+                .put("targetProject", targetProjectKey)
+                .put("sourceStyle", sourceProject.getStyle())
+                .put("targetStyle", targetProject.getStyle());
+
+        if (sourceProject.isNextGen()) {
+            // ── Next-gen path: create project-scoped issue types for missing ones ─
+            JSONArray sourceIssueTypes = sourceProject.getIssueTypesJson();
+            if (sourceIssueTypes == null || sourceIssueTypes.isEmpty()) {
+                throw new IOException("Source project " + sourceProjectKey + " has no issue types");
+            }
+            log("Source has " + sourceIssueTypes.length() + " issue types; copying to " + targetProjectKey);
+            JSONArray typeResults = copyIssueTypesToNextGenProject(sourceIssueTypes, targetProjectKey, targetProjectId);
+            result.put("method", "next-gen-create-scoped")
+                  .put("issueTypes", typeResults);
+
+        } else {
+            // ── Classic path: copy schemes (requires Jira admin) ──────────────
+            IssueTypeScheme issueTypeScheme = getProjectIssueTypeScheme(sourceProjectKey);
+            log("Source issue type scheme: " + issueTypeScheme);
+            assignIssueTypeSchemeToProject(issueTypeScheme.getId(), targetProjectId);
+            log("Assigned issue type scheme '" + issueTypeScheme.getName() + "' to " + targetProjectKey);
+
+            WorkflowScheme workflowScheme = getProjectWorkflowScheme(sourceProjectKey);
+            log("Source workflow scheme: " + workflowScheme);
+            assignWorkflowSchemeToProject(workflowScheme.getId(), targetProjectId);
+            log("Assigned workflow scheme '" + workflowScheme.getName() + "' to " + targetProjectKey);
+
+            result.put("method", "classic-scheme")
+                  .put("issueTypeSchemeId", issueTypeScheme.getId())
+                  .put("issueTypeSchemeName", issueTypeScheme.getName())
+                  .put("workflowSchemeId", workflowScheme.getId())
+                  .put("workflowSchemeName", workflowScheme.getName());
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Executes a DELETE request against a full URL and returns the response body (may be empty on 204).
+     * Throws IOException if the response contains Jira error messages.
+     * Extracted as a protected method to allow overriding in tests.
+     */
+    protected String executeDelete(String url) throws IOException {
+        GenericRequest request = new GenericRequest(this, url);
+        String response = request.delete();
+        if (response != null && !response.isEmpty() && (response.contains("errorMessages") || response.contains("\"errors\":"))) {
+            try {
+                JSONObject errorJson = new JSONObject(response);
+                JSONArray errorMessages = errorJson.optJSONArray("errorMessages");
+                if (errorMessages != null && !errorMessages.isEmpty()) {
+                    throw new IOException(errorMessages.getString(0));
+                }
+                JSONObject errorsObj = errorJson.optJSONObject("errors");
+                if (errorsObj != null && errorsObj.length() > 0) {
+                    java.util.StringJoiner sj = new java.util.StringJoiner("; ");
+                    for (String errKey : errorsObj.keySet()) {
+                        sj.add(errorsObj.getString(errKey));
+                    }
+                    throw new IOException(sj.toString());
+                }
+            } catch (IOException rethrow) {
+                throw rethrow;
+            } catch (Exception ignore) {
+                // not a well-formed error response — let caller decide
+            }
+        }
+        return response;
+    }
+
+    /**
+     * Deletes a Jira project (moves it to trash). Set confirmDelete to "true" to proceed.
+     * The project can be restored using jira_restore_project.
+     * Note: Jira Cloud reserves the project key even after deletion — to permanently free the key,
+     * go to Jira Admin → System → Trash and permanently delete from there.
+     */
+    @MCPTool(
+            name = "jira_delete_project",
+            description = "Delete a Jira project by moving it to trash. The project key remains reserved until permanently deleted from Jira Admin > System > Trash. Set confirmDelete to 'true' to proceed.",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String deleteProject(
+            @MCPParam(name = "projectKey", description = "Key of the Jira project to delete, e.g. TP", required = true) String projectKey,
+            @MCPParam(name = "confirmDelete", description = "Must be 'true' to confirm deletion", required = true) String confirmDelete) throws IOException {
+        if (!"true".equalsIgnoreCase(confirmDelete)) {
+            return new JSONObject()
+                    .put("success", false)
+                    .put("message", "Deletion cancelled — set confirmDelete='true' to proceed")
+                    .toString();
+        }
+        log("Deleting project " + projectKey);
+        String deleteResponse = executeDelete(getBasePath() + "/rest/api/3/project/" + projectKey + "?enableUndo=true");
+        // 204 returns empty body; any error would throw IOException from restClient
+        return new JSONObject()
+                .put("success", true)
+                .put("projectKey", projectKey)
+                .put("message", "Project moved to trash. Key '" + projectKey + "' is reserved until permanently deleted via Jira Admin > System > Trash. Use jira_restore_project to undo.")
+                .toString();
+    }
+
+    /**
+     * Restores a Jira project from trash.
+     */
+    @MCPTool(
+            name = "jira_restore_project",
+            description = "Restore a Jira project that was previously moved to trash using jira_delete_project",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String restoreProject(
+            @MCPParam(name = "projectKey", description = "Key of the trashed Jira project to restore, e.g. TP", required = true) String projectKey) throws IOException {
+        log("Restoring project " + projectKey);
+        String response = executePost(getBasePath() + "/rest/api/3/project/" + projectKey + "/restore", "");
+        JSONObject result = new JSONObject(response);
+        return new JSONObject()
+                .put("success", true)
+                .put("projectKey", result.optString("key", projectKey))
+                .put("projectId", result.optString("id", ""))
+                .put("projectName", result.optString("name", ""))
+                .put("message", "Project restored successfully")
+                .toString();
+    }
+
+    /**
+     * Creates a fresh team-managed (next-gen) Jira project with the same structure as the source.
+     * Default issue types (Task, Story, Bug, Epic, Subtask) are automatically created by Jira.
+     * Custom types such as "Test Case" must be added manually via Project Settings > Issue Types.
+     * <p>
+     * To reuse an existing project key: first permanently delete the old project from
+     * Jira Admin → System → Trash, then run this tool.
+     */
+    @MCPTool(
+            name = "jira_clone_project",
+            description = "Create a brand-new team-managed (next-gen) Jira project that mirrors the source project. Default issue types are auto-created; custom types must be added manually. To reuse an existing key, permanently delete the old project from Jira Admin > System > Trash first.",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String cloneProject(
+            @MCPParam(name = "sourceProjectKey", description = "Key of the source project to mirror, e.g. MYTUBE", required = true) String sourceProjectKey,
+            @MCPParam(name = "newProjectKey", description = "Key for the new project, e.g. TP2", required = true) String newProjectKey,
+            @MCPParam(name = "newProjectName", description = "Name for the new project. If empty, uses source project name", required = false) String newProjectName) throws IOException {
+        log("Cloning project structure from " + sourceProjectKey + " to new project " + newProjectKey);
+
+        Project source = getProjectDetails(sourceProjectKey);
+        String targetName = (newProjectName != null && !newProjectName.isEmpty())
+                ? newProjectName : source.getName() + " (Clone)";
+        String leadAccountId = source.getLeadAccountId();
+
+        JSONObject body = new JSONObject()
+                .put("key", newProjectKey)
+                .put("name", targetName)
+                .put("projectTypeKey", source.getProjectTypeKey())
+                .put("assigneeType", "UNASSIGNED");
+
+        if (source.isNextGen()) {
+            body.put("projectTemplateKey", "com.pyxis.greenhopper.jira:gh-simplified-agility-scrum");
+        }
+        if (leadAccountId != null && !leadAccountId.isEmpty()) {
+            body.put("leadAccountId", leadAccountId);
+        }
+
+        String response = executePost(getBasePath() + "/rest/api/3/project", body.toString());
+        JSONObject created = new JSONObject(response);
+
+        Project newProject = getProjectDetails(newProjectKey);
+        JSONArray newTypes = newProject.getIssueTypesJson();
+        java.util.List<String> autoCreated = new java.util.ArrayList<>();
+        if (newTypes != null) {
+            for (int i = 0; i < newTypes.length(); i++) {
+                autoCreated.add(newTypes.getJSONObject(i).optString("name"));
+            }
+        }
+
+        JSONArray sourceTypes = source.getIssueTypesJson();
+        java.util.List<String> missingTypes = new java.util.ArrayList<>();
+        if (sourceTypes != null) {
+            for (int i = 0; i < sourceTypes.length(); i++) {
+                String name = sourceTypes.getJSONObject(i).optString("name");
+                if (!autoCreated.stream().anyMatch(n -> n.equalsIgnoreCase(name))) {
+                    missingTypes.add(name);
+                }
+            }
+        }
+
+        JSONObject result = new JSONObject()
+                .put("success", true)
+                .put("projectKey", created.optString("key", newProjectKey))
+                .put("projectId", created.optString("id", ""))
+                .put("projectName", targetName)
+                .put("style", source.isNextGen() ? "next-gen" : "classic")
+                .put("autoCreatedIssueTypes", new JSONArray(autoCreated));
+
+        if (!missingTypes.isEmpty()) {
+            result.put("missingIssueTypes", new JSONArray(missingTypes))
+                  .put("manualSteps", "Add missing issue types manually: Project Settings > Issue Types > Add issue type. Missing: " + String.join(", ", missingTypes));
+        } else {
+            result.put("message", "Project created successfully — all issue types match source");
+        }
+
+        log("Created project " + newProjectKey + " with auto-created types: " + autoCreated);
+        if (!missingTypes.isEmpty()) {
+            log("Missing types (need manual addition): " + missingTypes);
+        }
+        return result.toString();
+    }
+
+    /**
+     * Reads the board column configuration (workflow layout) of a Jira project.
+     * Returns columns with their associated status names and categories.
+     * Works for both team-managed (next-gen) and classic projects.
+     */
+    @MCPTool(
+            name = "jira_get_project_board_config",
+            description = "Read the board column configuration (workflow) of a Jira project — returns columns with status names and categories, useful for comparing or replicating project workflow",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String getProjectBoardConfig(
+            @MCPParam(name = "projectKey", description = "Key of the Jira project, e.g. MYTUBE", required = true) String projectKey) throws IOException {
+        log("Getting board config for project " + projectKey);
+
+        // Find the board for this project
+        String boardsUrl = getBasePath() + "/rest/agile/1.0/board?projectKeyOrId=" + projectKey;
+        String boardsResponse = executeGet(boardsUrl);
+        JSONObject boardsJson = new JSONObject(boardsResponse);
+        JSONArray boards = boardsJson.optJSONArray("values");
+        if (boards == null || boards.isEmpty()) {
+            throw new IOException("No board found for project " + projectKey);
+        }
+        JSONObject board = boards.getJSONObject(0);
+        String boardId = String.valueOf(board.opt("id"));
+        String boardName = board.optString("name", "");
+        String boardType = board.optString("type", "");
+
+        // Get statuses per issue type (the true workflow)
+        String statusesUrl = path("project/" + projectKey + "/statuses");
+        String statusesResponse = executeGet(statusesUrl);
+
+        // Parse unique statuses with their categories (from v3 API for scope info)
+        java.util.Map<String, String> statusCategoryById = new java.util.LinkedHashMap<>();
+        try {
+            String v3StatusesUrl = getBasePath() + "/rest/api/3/project/" + projectKey + "/statuses";
+            String v3Response = executeGet(v3StatusesUrl);
+            JSONArray v3Types = new JSONArray(v3Response);
+            if (!v3Types.isEmpty()) {
+                JSONArray firstTypeStatuses = v3Types.getJSONObject(0).optJSONArray("statuses");
+                if (firstTypeStatuses != null) {
+                    for (int i = 0; i < firstTypeStatuses.length(); i++) {
+                        JSONObject s = firstTypeStatuses.getJSONObject(i);
+                        String sid = s.optString("id");
+                        Object catObj = s.opt("statusCategory");
+                        String category = "TODO";
+                        if (catObj instanceof JSONObject) {
+                            String key = ((JSONObject) catObj).optString("key", "new");
+                            if ("indeterminate".equals(key)) category = "IN_PROGRESS";
+                            else if ("done".equals(key)) category = "DONE";
+                        } else if (catObj instanceof String) {
+                            category = (String) catObj;
+                        }
+                        statusCategoryById.put(sid, category);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log("Could not enrich statuses with categories: " + e.getMessage());
+        }
+
+        // Try to get board columns (works for classic boards, not simple boards)
+        JSONArray columns = new JSONArray();
+        try {
+            String configUrl = getBasePath() + "/rest/agile/1.0/board/" + boardId + "/configuration";
+            String configResponse = executeGet(configUrl);
+            JSONObject config = new JSONObject(configResponse);
+            JSONArray rawCols = config.optJSONObject("columnConfig") != null
+                    ? config.getJSONObject("columnConfig").optJSONArray("columns") : null;
+            if (rawCols != null) {
+                for (int i = 0; i < rawCols.length(); i++) {
+                    JSONObject col = rawCols.getJSONObject(i);
+                    JSONArray colStatuses = col.optJSONArray("statuses");
+                    JSONArray statusNames = new JSONArray();
+                    if (colStatuses != null) {
+                        for (int j = 0; j < colStatuses.length(); j++) {
+                            String sid = colStatuses.getJSONObject(j).optString("id");
+                            statusNames.put(sid);
+                        }
+                    }
+                    columns.put(new JSONObject()
+                            .put("name", col.optString("name"))
+                            .put("statusIds", statusNames));
+                }
+            }
+        } catch (Exception e) {
+            log("Could not get board column config: " + e.getMessage());
+        }
+
+        // Build per-status list from project statuses API
+        JSONArray v2Types = new JSONArray(statusesResponse);
+        java.util.LinkedHashMap<String, JSONObject> uniqueStatuses = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < v2Types.length(); i++) {
+            JSONArray typeStatuses = v2Types.getJSONObject(i).optJSONArray("statuses");
+            if (typeStatuses != null) {
+                for (int j = 0; j < typeStatuses.length(); j++) {
+                    JSONObject s = typeStatuses.getJSONObject(j);
+                    String sid = s.optString("id");
+                    if (!uniqueStatuses.containsKey(sid)) {
+                        JSONObject scope = s.optJSONObject("scope");
+                        String category = statusCategoryById.getOrDefault(sid, "TODO");
+                        uniqueStatuses.put(sid, new JSONObject()
+                                .put("id", sid)
+                                .put("name", s.optString("name"))
+                                .put("statusCategory", category)
+                                .put("scope", scope != null ? scope.optString("type", "GLOBAL") : "GLOBAL"));
+                    }
+                }
+            }
+        }
+
+        JSONArray statusList = new JSONArray(uniqueStatuses.values());
+        return new JSONObject()
+                .put("projectKey", projectKey)
+                .put("boardId", boardId)
+                .put("boardName", boardName)
+                .put("boardType", boardType)
+                .put("columns", columns)
+                .put("statuses", statusList)
+                .put("totalStatuses", statusList.length())
+                .toString();
+    }
+
+    /**
+     * Sets up the workflow of a target project using an explicit list of status definitions —
+     * no source project required. Creates missing project-scoped statuses, then applies them
+     * to the project's workflow via {@code POST /rest/api/3/workflows/update}.
+     *
+     * <p>The {@code statusDefinitions} parameter is a JSON array string, e.g.:
+     * <pre>[{"name":"Backlog","category":"TODO"},{"name":"In Development","category":"IN_PROGRESS"},{"name":"Done","category":"DONE"}]</pre>
+     * Valid category values: {@code TODO}, {@code IN_PROGRESS}, {@code DONE}.
+     */
+    @MCPTool(
+            name = "jira_setup_project_workflow",
+            description = "Set up a project's workflow using an explicit list of statuses (no source project needed). Accepts a JSON array of {name, category} objects and applies them to the target project's workflow. Valid categories: TODO, IN_PROGRESS, DONE. Works with team-managed (next-gen) Jira projects.",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String setupProjectWorkflow(
+            @MCPParam(name = "projectKey", description = "Key of the target Jira project, e.g. TP", required = true) String projectKey,
+            @MCPParam(name = "statusDefinitions", description = "JSON array of status definitions, e.g. [{\"name\":\"Backlog\",\"category\":\"TODO\"},...]. Valid categories: TODO, IN_PROGRESS, DONE.", required = true) String statusDefinitions) throws IOException {
+        log("Setting up workflow for " + projectKey + " with explicit status list");
+
+        JSONArray desiredStatuses = new JSONArray(statusDefinitions);
+        // Defensive fix: if elements arrived as Strings (double-encoded JSON), re-parse them
+        if (!desiredStatuses.isEmpty() && desiredStatuses.get(0) instanceof String) {
+            JSONArray fixed = new JSONArray();
+            for (int i = 0; i < desiredStatuses.length(); i++) {
+                fixed.put(new JSONObject(desiredStatuses.getString(i)));
+            }
+            desiredStatuses = fixed;
+        }
+
+        Project project = getProjectDetails(projectKey);
+        String projectId = project.getId();
+
+        // 1. Read current project-scoped statuses and build name→id map
+        java.util.LinkedHashMap<String, JSONObject> existingStatuses = readProjectStatuses(projectKey);
+        java.util.Map<String, String> nameToId = new java.util.LinkedHashMap<>();
+        for (JSONObject s : existingStatuses.values()) {
+            nameToId.put(s.optString("name").toLowerCase(), s.optString("id"));
+        }
+
+        // 2. Create any missing statuses
+        JSONArray created = new JSONArray();
+        for (int i = 0; i < desiredStatuses.length(); i++) {
+            JSONObject def = desiredStatuses.getJSONObject(i);
+            String name = def.optString("name");
+            String category = def.optString("category", "TODO");
+            if (!nameToId.containsKey(name.toLowerCase())) {
+                try {
+                    String body = new JSONObject()
+                            .put("statuses", new JSONArray().put(new JSONObject()
+                                    .put("name", name).put("statusCategory", category)))
+                            .put("scope", new JSONObject()
+                                    .put("type", "PROJECT")
+                                    .put("project", new JSONObject().put("id", projectId)))
+                            .toString();
+                    String response = executePost(getBasePath() + "/rest/api/3/statuses", body);
+                    JSONArray resp = new JSONArray(response);
+                    String newId = resp.isEmpty() ? "" : resp.getJSONObject(0).optString("id", "");
+                    nameToId.put(name.toLowerCase(), newId);
+                    created.put(new JSONObject().put("name", name).put("id", newId));
+                    log("Created status '" + name + "' (id=" + newId + ")");
+                } catch (Exception e) {
+                    log("Warning: could not create status '" + name + "': " + e.getMessage());
+                }
+            }
+        }
+
+        // 3. Reload to get complete id map after creations
+        existingStatuses = readProjectStatuses(projectKey);
+        nameToId.clear();
+        for (JSONObject s : existingStatuses.values()) {
+            nameToId.put(s.optString("name").toLowerCase(), s.optString("id"));
+        }
+
+        // 4. Get current workflow version
+        String workflowsUrl = getBasePath() + "/rest/api/3/workflows";
+        String workflowName = "Software workflow for project " + projectId;
+        String wfBody = new JSONObject().put("workflowNames", new JSONArray().put(workflowName)).toString();
+        String wfResp = executePost(workflowsUrl, wfBody);
+        JSONObject wfData = new JSONObject(wfResp);
+        JSONArray workflowsArr = wfData.optJSONArray("workflows");
+        if (workflowsArr == null || workflowsArr.isEmpty()) {
+            throw new IOException("No workflow found for project " + projectKey + " (name: " + workflowName + ")");
+        }
+        JSONObject currentWf = workflowsArr.getJSONObject(0);
+        String workflowId = currentWf.optString("id");
+        JSONObject versionObj = currentWf.optJSONObject("version");
+        String versionId = versionObj != null ? versionObj.optString("id") : "";
+        int versionNumber = versionObj != null ? versionObj.optInt("versionNumber", 1) : 1;
+
+        // 5. Collect current workflow status refs (for removal mapping)
+        java.util.List<String> currentRefs = new java.util.ArrayList<>();
+        JSONArray currentWfStatuses = currentWf.optJSONArray("statuses");
+        if (currentWfStatuses != null) {
+            for (int i = 0; i < currentWfStatuses.length(); i++) {
+                currentRefs.add(currentWfStatuses.getJSONObject(i).optString("statusReference"));
+            }
+        }
+
+        // 6. Build new workflow statuses + transitions
+        java.util.List<JSONObject> newWfStatuses = new java.util.ArrayList<>();
+        java.util.Set<String> usedIds = new java.util.LinkedHashSet<>();
+        String initialId = null;
+        double x = 180.0;
+        for (int i = 0; i < desiredStatuses.length(); i++) {
+            String name = desiredStatuses.getJSONObject(i).optString("name");
+            String id = nameToId.get(name.toLowerCase());
+            if (id == null || id.isEmpty()) { log("Warning: no ID for status '" + name + "', skipping"); continue; }
+            usedIds.add(id);
+            newWfStatuses.add(new JSONObject()
+                    .put("statusReference", id)
+                    .put("layout", new JSONObject().put("x", x).put("y", -16.0))
+                    .put("properties", new JSONObject()));
+            x += 180.0;
+            if (initialId == null) initialId = id;
+        }
+
+        JSONArray transitions = new JSONArray();
+        transitions.put(new JSONObject()
+                .put("id", "1").put("type", "INITIAL").put("name", "Create").put("description", "")
+                .put("toStatusReference", initialId)
+                .put("links", new JSONArray())
+                .put("properties", new JSONObject().put("jira.i18n.title", "common.forms.create"))
+                .put("actions", new JSONArray()).put("validators", new JSONArray()).put("triggers", new JSONArray()));
+        int transId = 11;
+        for (int i = 0; i < desiredStatuses.length(); i++) {
+            String name = desiredStatuses.getJSONObject(i).optString("name");
+            String id = nameToId.get(name.toLowerCase());
+            if (id == null || id.isEmpty()) continue;
+            transitions.put(new JSONObject()
+                    .put("id", String.valueOf(transId++)).put("type", "GLOBAL").put("name", name)
+                    .put("description", "").put("toStatusReference", id)
+                    .put("links", new JSONArray()).put("properties", new JSONObject())
+                    .put("actions", new JSONArray()).put("validators", new JSONArray()).put("triggers", new JSONArray()));
+        }
+
+        // 7. Build status mappings for removed statuses
+        java.util.Map<String, String> categoryFallback = new java.util.HashMap<>();
+        for (JSONObject s : existingStatuses.values()) {
+            if (usedIds.contains(s.optString("id"))) {
+                String cat = s.optString("statusCategory", "TODO");
+                if (!categoryFallback.containsKey(cat)) categoryFallback.put(cat, s.optString("id"));
+            }
+        }
+        for (String cat : new String[]{"TODO","IN_PROGRESS","DONE"}) {
+            if (!categoryFallback.containsKey(cat)) categoryFallback.put(cat, initialId);
+        }
+
+        JSONArray statusMigrations = new JSONArray();
+        for (String ref : currentRefs) {
+            if (!usedIds.contains(ref)) {
+                String cat = "TODO";
+                for (JSONObject s : existingStatuses.values()) {
+                    if (ref.equals(s.optString("id"))) { cat = s.optString("statusCategory", "TODO"); break; }
+                }
+                statusMigrations.put(new JSONObject()
+                        .put("oldStatusReference", ref)
+                        .put("newStatusReference", categoryFallback.getOrDefault(cat, initialId)));
+            }
+        }
+
+        JSONArray statusMappings = new JSONArray();
+        JSONArray issueTypes = project.getIssueTypesJson();
+        if (issueTypes != null && !statusMigrations.isEmpty()) {
+            for (int i = 0; i < issueTypes.length(); i++) {
+                String itId = issueTypes.getJSONObject(i).optString("id");
+                statusMappings.put(new JSONObject()
+                        .put("projectId", projectId).put("issueTypeId", itId)
+                        .put("statusMigrations", statusMigrations));
+            }
+        }
+
+        // 8. Build all-statuses catalog
+        JSONArray catalog = new JSONArray();
+        for (JSONObject s : existingStatuses.values()) {
+            catalog.put(new JSONObject()
+                    .put("id", s.optString("id")).put("name", s.optString("name"))
+                    .put("statusCategory", s.optString("statusCategory", "TODO"))
+                    .put("statusReference", s.optString("id")).put("description", ""));
+        }
+
+        // 9. Build workflow statuses array
+        JSONArray wfStatusesArr = new JSONArray();
+        for (JSONObject ws : newWfStatuses) wfStatusesArr.put(ws);
+
+        JSONObject workflowUpdate = new JSONObject()
+                .put("id", workflowId).put("description", "")
+                .put("version", new JSONObject().put("id", versionId).put("versionNumber", versionNumber))
+                .put("statuses", wfStatusesArr).put("transitions", transitions)
+                .put("startPointLayout", new JSONObject().put("x", 60.0).put("y", -70.0))
+                .put("loopedTransitionContainerLayout", new JSONObject())
+                .put("statusMappings", statusMappings).put("defaultStatusMappings", statusMigrations);
+
+        JSONObject updateBody = new JSONObject()
+                .put("statuses", catalog)
+                .put("workflows", new JSONArray().put(workflowUpdate));
+
+        // 10. Apply
+        executePost(getBasePath() + "/rest/api/3/workflows/update", updateBody.toString());
+
+        return new JSONObject()
+                .put("projectKey", projectKey)
+                .put("workflowId", workflowId)
+                .put("statusesSynced", usedIds.size())
+                .put("statusesCreated", created.length())
+                .put("removedStatuses", statusMigrations.length())
+                .put("result", "success")
+                .toString();
+    }
+
+    @MCPTool(
+            name = "jira_sync_project_workflow",
+            description = "Sync the workflow (statuses) of a target project to exactly match the source project using Jira's bulk workflow update API. Replaces the target workflow's statuses and transitions with those from the source project. Existing issues with removed statuses are automatically migrated to the closest matching new status. Works with team-managed (next-gen) Jira projects.",
+            integration = "jira",
+            category = "project_management"
+    )
+    public String syncProjectWorkflow(
+            @MCPParam(name = "sourceProjectKey", description = "Key of the source project to copy workflow from, e.g. MYTUBE", required = true) String sourceProjectKey,
+            @MCPParam(name = "targetProjectKey", description = "Key of the target project to update workflow for, e.g. TP", required = true) String targetProjectKey) throws IOException {
+        log("Syncing workflow from " + sourceProjectKey + " to " + targetProjectKey);
+
+        // 1. Read source workflow statuses (with categories)
+        java.util.LinkedHashMap<String, JSONObject> sourceStatuses = readProjectStatuses(sourceProjectKey);
+        log("Source " + sourceProjectKey + " has " + sourceStatuses.size() + " statuses");
+
+        // 2. Read target project info
+        Project targetProject = getProjectDetails(targetProjectKey);
+        String targetProjectId = targetProject.getId();
+
+        // 3. Ensure all source statuses exist as project-scoped statuses in target
+        java.util.LinkedHashMap<String, JSONObject> targetStatuses = readProjectStatuses(targetProjectKey);
+        java.util.Map<String, String> nameToTargetId = new java.util.HashMap<>();
+        for (JSONObject s : targetStatuses.values()) {
+            nameToTargetId.put(s.optString("name").toLowerCase(), s.optString("id"));
+        }
+
+        JSONArray statusCreationResults = new JSONArray();
+        for (JSONObject srcStatus : sourceStatuses.values()) {
+            String name = srcStatus.optString("name");
+            String category = srcStatus.optString("statusCategory", "TODO");
+            if (!nameToTargetId.containsKey(name.toLowerCase())) {
+                try {
+                    String body = new JSONObject()
+                            .put("statuses", new JSONArray().put(new JSONObject()
+                                    .put("name", name)
+                                    .put("statusCategory", category)))
+                            .put("scope", new JSONObject()
+                                    .put("type", "PROJECT")
+                                    .put("project", new JSONObject().put("id", targetProjectId)))
+                            .toString();
+                    String response = executePost(getBasePath() + "/rest/api/3/statuses", body);
+                    JSONArray resp = new JSONArray(response);
+                    String newId = resp.isEmpty() ? "" : resp.getJSONObject(0).optString("id", "");
+                    nameToTargetId.put(name.toLowerCase(), newId);
+                    statusCreationResults.put(new JSONObject().put("name", name).put("id", newId).put("action", "created"));
+                    log("Created status '" + name + "' (id=" + newId + ") in " + targetProjectKey);
+                } catch (Exception e) {
+                    log("Warning: failed to create status '" + name + "': " + e.getMessage());
+                }
+            }
+        }
+
+        // 4. Reload target statuses after creation
+        targetStatuses = readProjectStatuses(targetProjectKey);
+        nameToTargetId.clear();
+        for (JSONObject s : targetStatuses.values()) {
+            nameToTargetId.put(s.optString("name").toLowerCase(), s.optString("id"));
+        }
+
+        // 5. Read target current workflow to get version info
+        String workflowsUrl = getBasePath() + "/rest/api/3/workflows";
+        String workflowName = "Software workflow for project " + targetProjectId;
+        String workflowBody = new JSONObject()
+                .put("workflowNames", new JSONArray().put(workflowName))
+                .toString();
+        String workflowResp = executePost(workflowsUrl, workflowBody);
+        JSONObject workflowData = new JSONObject(workflowResp);
+        JSONArray workflowsArr = workflowData.optJSONArray("workflows");
+        if (workflowsArr == null || workflowsArr.isEmpty()) {
+            throw new IOException("No workflow found for target project " + targetProjectKey + " (name: " + workflowName + ")");
+        }
+        JSONObject currentWorkflow = workflowsArr.getJSONObject(0);
+        String workflowId = currentWorkflow.optString("id");
+        JSONObject versionObj = currentWorkflow.optJSONObject("version");
+        String versionId = versionObj != null ? versionObj.optString("id") : "";
+        int versionNumber = versionObj != null ? versionObj.optInt("versionNumber", 1) : 1;
+        log("Target workflow: " + workflowId + " version " + versionNumber);
+
+        // 6. Collect current target workflow status references (to find removed ones)
+        java.util.List<String> currentWorkflowStatusRefs = new java.util.ArrayList<>();
+        JSONArray currentWfStatuses = currentWorkflow.optJSONArray("statuses");
+        if (currentWfStatuses != null) {
+            for (int i = 0; i < currentWfStatuses.length(); i++) {
+                currentWorkflowStatusRefs.add(currentWfStatuses.getJSONObject(i).optString("statusReference"));
+            }
+        }
+
+        // 7. Map source status names to target status IDs
+        java.util.List<JSONObject> newWorkflowStatuses = new java.util.ArrayList<>();
+        java.util.List<JSONObject> newTransitions = new java.util.ArrayList<>();
+        java.util.Set<String> usedTargetIds = new java.util.LinkedHashSet<>();
+        String initialStatusId = null;
+        double x = 180.0;
+        for (JSONObject srcStatus : sourceStatuses.values()) {
+            String name = srcStatus.optString("name");
+            String targetId = nameToTargetId.get(name.toLowerCase());
+            if (targetId == null || targetId.isEmpty()) {
+                log("Warning: no target ID found for status '" + name + "' — skipping");
+                continue;
+            }
+            usedTargetIds.add(targetId);
+            newWorkflowStatuses.add(new JSONObject()
+                    .put("statusReference", targetId)
+                    .put("layout", new JSONObject().put("x", x).put("y", -16.0))
+                    .put("properties", new JSONObject()));
+            x += 180.0;
+            if (initialStatusId == null) initialStatusId = targetId;
+        }
+
+        // INITIAL transition
+        newTransitions.add(new JSONObject()
+                .put("id", "1")
+                .put("type", "INITIAL")
+                .put("name", "Create")
+                .put("description", "")
+                .put("toStatusReference", initialStatusId)
+                .put("links", new JSONArray())
+                .put("properties", new JSONObject().put("jira.i18n.title", "common.forms.create"))
+                .put("actions", new JSONArray())
+                .put("validators", new JSONArray())
+                .put("triggers", new JSONArray()));
+
+        // GLOBAL transition for each status
+        int transId = 11;
+        for (JSONObject srcStatus : sourceStatuses.values()) {
+            String name = srcStatus.optString("name");
+            String targetId = nameToTargetId.get(name.toLowerCase());
+            if (targetId == null || targetId.isEmpty()) continue;
+            newTransitions.add(new JSONObject()
+                    .put("id", String.valueOf(transId++))
+                    .put("type", "GLOBAL")
+                    .put("name", name)
+                    .put("description", "")
+                    .put("toStatusReference", targetId)
+                    .put("links", new JSONArray())
+                    .put("properties", new JSONObject())
+                    .put("actions", new JSONArray())
+                    .put("validators", new JSONArray())
+                    .put("triggers", new JSONArray()));
+        }
+
+        // 8. Build statusMappings for REMOVED statuses
+        java.util.List<String> removedStatusRefs = new java.util.ArrayList<>();
+        for (String ref : currentWorkflowStatusRefs) {
+            if (!usedTargetIds.contains(ref)) removedStatusRefs.add(ref);
+        }
+
+        // Map removed status categories to replacement by category similarity
+        java.util.Map<String, String> categoryFallback = new java.util.HashMap<>();
+        categoryFallback.put("TODO", initialStatusId);
+        categoryFallback.put("IN_PROGRESS", null);
+        categoryFallback.put("DONE", null);
+        for (String tid : usedTargetIds) {
+            for (JSONObject s : targetStatuses.values()) {
+                if (tid.equals(s.optString("id"))) {
+                    String cat = s.optString("statusCategory", "TODO");
+                    if (categoryFallback.get(cat) == null) categoryFallback.put(cat, tid);
+                    break;
+                }
+            }
+        }
+        // Ensure all categories have a fallback
+        for (String cat : new String[]{"TODO", "IN_PROGRESS", "DONE"}) {
+            if (categoryFallback.get(cat) == null) categoryFallback.put(cat, initialStatusId);
+        }
+
+        JSONArray statusMigrations = new JSONArray();
+        for (String removedRef : removedStatusRefs) {
+            String removedCat = "TODO";
+            for (JSONObject s : targetStatuses.values()) {
+                if (removedRef.equals(s.optString("id"))) { removedCat = s.optString("statusCategory", "TODO"); break; }
+            }
+            String replacement = categoryFallback.getOrDefault(removedCat, initialStatusId);
+            statusMigrations.put(new JSONObject()
+                    .put("oldStatusReference", removedRef)
+                    .put("newStatusReference", replacement));
+        }
+
+        // Build per-issue-type status mappings
+        JSONArray issueTypes = targetProject.getIssueTypesJson();
+        JSONArray statusMappings = new JSONArray();
+        if (issueTypes != null && !statusMigrations.isEmpty()) {
+            for (int i = 0; i < issueTypes.length(); i++) {
+                String issueTypeId = issueTypes.getJSONObject(i).optString("id");
+                statusMappings.put(new JSONObject()
+                        .put("projectId", targetProjectId)
+                        .put("issueTypeId", issueTypeId)
+                        .put("statusMigrations", statusMigrations));
+            }
+        }
+
+        // 9. Build all-statuses catalog for the request
+        JSONArray allStatusesCatalog = new JSONArray();
+        for (JSONObject s : targetStatuses.values()) {
+            allStatusesCatalog.put(new JSONObject()
+                    .put("id", s.optString("id"))
+                    .put("name", s.optString("name"))
+                    .put("statusCategory", s.optString("statusCategory", "TODO"))
+                    .put("statusReference", s.optString("id"))
+                    .put("description", ""));
+        }
+
+        // 10. Build workflow statuses as JSONArray
+        JSONArray wfStatusesArr = new JSONArray();
+        for (JSONObject ws : newWorkflowStatuses) wfStatusesArr.put(ws);
+        JSONArray wfTransitionsArr = new JSONArray();
+        for (JSONObject wt : newTransitions) wfTransitionsArr.put(wt);
+
+        JSONObject workflowUpdate = new JSONObject()
+                .put("id", workflowId)
+                .put("description", "")
+                .put("version", new JSONObject().put("id", versionId).put("versionNumber", versionNumber))
+                .put("statuses", wfStatusesArr)
+                .put("transitions", wfTransitionsArr)
+                .put("startPointLayout", new JSONObject().put("x", 60.0).put("y", -70.0))
+                .put("loopedTransitionContainerLayout", new JSONObject())
+                .put("statusMappings", statusMappings)
+                .put("defaultStatusMappings", statusMigrations);
+
+        JSONObject updateBody = new JSONObject()
+                .put("statuses", allStatusesCatalog)
+                .put("workflows", new JSONArray().put(workflowUpdate));
+
+        // 11. Call the bulk workflow update API
+        String updateUrl = getBasePath() + "/rest/api/3/workflows/update";
+        log("Calling " + updateUrl + " with workflow " + workflowId + " version " + versionNumber);
+        String updateResp = executePost(updateUrl, updateBody.toString());
+
+        return new JSONObject()
+                .put("sourceProject", sourceProjectKey)
+                .put("targetProject", targetProjectKey)
+                .put("workflowId", workflowId)
+                .put("statusesSynced", usedTargetIds.size())
+                .put("statusesCreated", statusCreationResults)
+                .put("removedStatuses", removedStatusRefs.size())
+                .put("statusMigrations", statusMigrations)
+                .put("result", "success")
+                .toString();
+    }
+
+    /**
+     * Reads unique statuses for a project (with categories) from both v2 and v3 APIs.
+     */
+    private java.util.LinkedHashMap<String, JSONObject> readProjectStatuses(String projectKey) throws IOException {
+        java.util.LinkedHashMap<String, JSONObject> result = new java.util.LinkedHashMap<>();
+
+        // v3 for status categories
+        java.util.Map<String, String> categoryById = new java.util.HashMap<>();
+        try {
+            String v3Url = getBasePath() + "/rest/api/3/project/" + projectKey + "/statuses";
+            JSONArray v3Types = new JSONArray(executeGet(v3Url));
+            if (!v3Types.isEmpty()) {
+                JSONArray firstStatuses = v3Types.getJSONObject(0).optJSONArray("statuses");
+                if (firstStatuses != null) {
+                    for (int i = 0; i < firstStatuses.length(); i++) {
+                        JSONObject s = firstStatuses.getJSONObject(i);
+                        String sid = s.optString("id");
+                        // statusCategory is an object {key: "new"|"indeterminate"|"done"}
+                        // Map to the POST API's expected values: TODO, IN_PROGRESS, DONE
+                        String category = "TODO";
+                        Object catObj = s.opt("statusCategory");
+                        if (catObj instanceof JSONObject) {
+                            String key = ((JSONObject) catObj).optString("key", "new");
+                            if ("indeterminate".equals(key)) category = "IN_PROGRESS";
+                            else if ("done".equals(key)) category = "DONE";
+                            else category = "TODO";
+                        } else if (catObj instanceof String) {
+                            category = (String) catObj;
+                        }
+                        categoryById.put(sid, category);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // v2 for full status list
+        String v2Url = path("project/" + projectKey + "/statuses");
+        JSONArray types = new JSONArray(executeGet(v2Url));
+        for (int i = 0; i < types.length(); i++) {
+            JSONArray statuses = types.getJSONObject(i).optJSONArray("statuses");
+            if (statuses != null) {
+                for (int j = 0; j < statuses.length(); j++) {
+                    JSONObject s = statuses.getJSONObject(j);
+                    String sid = s.optString("id");
+                    if (!result.containsKey(sid)) {
+                        String category = categoryById.getOrDefault(sid, "TODO");
+                        result.put(sid, new JSONObject()
+                                .put("id", sid)
+                                .put("name", s.optString("name"))
+                                .put("statusCategory", category));
+                    }
+                }
+            }
+        }
+        return result;
+    }
 }
