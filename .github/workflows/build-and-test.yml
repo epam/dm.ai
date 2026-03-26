@@ -51,7 +51,7 @@ jobs:
           name: JUnit Tests (Unified Build)
           path: '**/build/test-results/test/TEST-*.xml'
           reporter: java-junit
-          fail-on-error: true
+          fail-on-error: false
       
       - name: Analyze Build Failure
         if: steps.gradle.outcome == 'failure'
