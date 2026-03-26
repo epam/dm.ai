@@ -275,19 +275,19 @@ jobs:
 
           **macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install | bash
           \`\`\`
 
           **Windows (cmd.exe, PowerShell, Windows Terminal):**
           \`\`\`cmd
-          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
           \`\`\`
 
           ### Install DMTools Agent Skill
 
           **Automatic Installation (Recommended):**
           \`\`\`bash
-          curl -fsSL https://github.com/IstiN/dmtools-cli/releases/download/v${VERSION}/skill-install.sh | bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${VERSION}/skill-install.sh | bash
           \`\`\`
 
           **Manual Installation:**
@@ -303,18 +303,18 @@ jobs:
 
           **DMTools CLI - macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/v${VERSION}/install.sh | bash -s v${VERSION}
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install.sh | bash -s v${VERSION}
           \`\`\`
 
           **DMTools CLI - Windows (cmd.exe):**
           \`\`\`cmd
-          set DMTOOLS_VERSION=v${VERSION} && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/v${VERSION}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          set DMTOOLS_VERSION=v${VERSION} && curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
           \`\`\`
 
           **DMTools CLI - Windows (PowerShell):**
           \`\`\`powershell
           \$env:DMTOOLS_VERSION = "v${VERSION}"
-          Invoke-RestMethod -Uri "https://raw.githubusercontent.com/IstiN/dmtools-cli/v${VERSION}/install.ps1" | Invoke-Expression
+          Invoke-RestMethod -Uri "https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install.ps1" | Invoke-Expression
           \`\`\`
           
           ## 📋 System Requirements
@@ -341,8 +341,8 @@ jobs:
           
           ### Getting Help
           
-          - **Issues:** [GitHub Issues](https://github.com/IstiN/dmtools-cli/issues)
-          - **Documentation:** [Main Repository](https://github.com/IstiN/dmtools-cli)
+          - **Issues:** [GitHub Issues](https://github.com/${{ github.repository }}/issues)
+          - **Documentation:** [Main Repository](https://github.com/${{ github.repository }})
           EOF
           
           echo "Release notes generated"

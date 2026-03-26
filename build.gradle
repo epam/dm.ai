@@ -26,7 +26,7 @@ subprojects {
     // Common repositories
     repositories {
         mavenCentral()
-        maven { url = uri("https://maven.pkg.github.com/IstiN/dmtools-cli") }
+        maven { url = uri("https://maven.pkg.github.com/${System.getenv('GITHUB_REPOSITORY') ?: project.findProperty('githubRepo') ?: 'IstiN/dmtools-cli'}") }
     }
     
     // Common encoding

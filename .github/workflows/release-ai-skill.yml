@@ -112,7 +112,7 @@ jobs:
 
           ### Automatic Installation (Recommended)
           ```bash
-          curl -fsSL https://github.com/IstiN/dmtools-cli/releases/download/skill-v$VERSION/install.sh | bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/skill-v$VERSION/install.sh | bash
           ```
 
           ### Manual Installation
@@ -151,16 +151,16 @@ jobs:
 
           Re-run the installer to update:
           ```bash
-          curl -fsSL https://github.com/IstiN/dmtools-cli/releases/latest/download/install.sh | bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
           ```
 
           ## 📝 Changelog
 
-          See [CHANGELOG.md](https://github.com/IstiN/dmtools-cli/blob/main/CHANGELOG.md) for changes.
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for changes.
 
           ## 🐛 Support
 
-          Report issues at: https://github.com/IstiN/dmtools-cli/issues
+          Report issues at: https://github.com/${{ github.repository }}/issues
 
           ---
 
@@ -223,12 +223,12 @@ jobs:
             "license": "Apache-2.0",
             "repository": {
               "type": "git",
-              "url": "https://github.com/IstiN/dmtools-cli.git"
+              "url": "https://github.com/${{ github.repository }}.git"
             },
             "bugs": {
-              "url": "https://github.com/IstiN/dmtools-cli/issues"
+              "url": "https://github.com/${{ github.repository }}/issues"
             },
-            "homepage": "https://github.com/IstiN/dmtools-cli#readme",
+            "homepage": "https://github.com/${{ github.repository }}#readme",
             "files": [
               "SKILL.md",
               "references/**/*",
@@ -261,10 +261,10 @@ jobs:
 
           if [ "$STATUS" = "success" ]; then
             echo "✅ DMtools Agent Skill v$VERSION released successfully!"
-            echo "📦 Available at: https://github.com/IstiN/dmtools-cli/releases/tag/skill-v$VERSION"
+            echo "📦 Available at: https://github.com/${{ github.repository }}/releases/tag/skill-v$VERSION"
             echo ""
             echo "Install with:"
-            echo "curl -fsSL https://github.com/IstiN/dmtools-cli/releases/download/skill-v$VERSION/install.sh | bash"
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/skill-v$VERSION/install.sh | bash"
           else
             echo "❌ Release failed for version $VERSION"
           fi
