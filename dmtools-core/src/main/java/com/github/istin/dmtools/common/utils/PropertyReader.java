@@ -747,7 +747,7 @@ public class PropertyReader {
 
 	/**
 	 * Gets the maximum token limit for AI model
-	 * @return token limit, default is 4000
+	 * @return token limit, default is 50000
 	 */
 	public int getPromptChunkTokenLimit() {
 		String value = getValue("PROMPT_CHUNK_TOKEN_LIMIT");

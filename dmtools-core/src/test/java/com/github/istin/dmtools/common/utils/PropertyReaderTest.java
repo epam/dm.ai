@@ -71,7 +71,7 @@ class PropertyReaderTest {
         if ((envValue == null || envValue.trim().isEmpty()) &&
             (fileValue == null || fileValue.trim().isEmpty())) {
             // If no env/file override, expect exact default value
-            assertEquals(4000, result, "Default token limit should be 4000");
+            assertEquals(50000, result, "Default token limit should be 50000");
         } else {
             // If override exists, just verify it's a valid positive number
             assertTrue(result > 0, "Token limit should be positive");
