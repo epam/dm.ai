@@ -3,7 +3,7 @@
 # Usage:
 #   Latest version: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash
 #   Specific version: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash -s -- <version>
-# Requirements: Java 23 (will attempt automatic installation on macOS/Linux)
+# Requirements: Java 17+ (will attempt automatic installation on macOS/Linux)
 
 set -e
 
@@ -401,7 +401,7 @@ install_local_java() {
     # Ensure installation directory exists
     mkdir -p "$INSTALL_DIR"
 
-    progress "Downloading Java 23 JRE for local installation..."
+    progress "Downloading Java 17 JRE for local installation..."
 
     # Determine download URL based on platform
     local java_url=""
@@ -409,27 +409,27 @@ install_local_java() {
 
     case "$platform" in
         darwin_amd64)
-            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_mac_hotspot_23.0.1_11.tar.gz"
+            java_url="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jre_x64_mac_hotspot_17.0.13_11.tar.gz"
             java_filename="openjdk-jre-macos-x64.tar.gz"
             ;;
         darwin_arm64)
-            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_mac_hotspot_23.0.1_11.tar.gz"
+            java_url="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jre_aarch64_mac_hotspot_17.0.13_11.tar.gz"
             java_filename="openjdk-jre-macos-arm64.tar.gz"
             ;;
         linux_amd64)
-            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_linux_hotspot_23.0.1_11.tar.gz"
+            java_url="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jre_x64_linux_hotspot_17.0.13_11.tar.gz"
             java_filename="openjdk-jre-linux-x64.tar.gz"
             ;;
         linux_arm64)
-            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_linux_hotspot_23.0.1_11.tar.gz"
+            java_url="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jre_aarch64_linux_hotspot_17.0.13_11.tar.gz"
             java_filename="openjdk-jre-linux-arm64.tar.gz"
             ;;
         windows_amd64)
-            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_windows_hotspot_23.0.1_11.zip"
+            java_url="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jre_x64_windows_hotspot_17.0.13_11.zip"
             java_filename="openjdk-jre-windows-x64.zip"
             ;;
         windows_arm64)
-            java_url="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_windows_hotspot_23.0.1_11.zip"
+            java_url="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jre_aarch64_windows_hotspot_17.0.13_11.zip"
             java_filename="openjdk-jre-windows-arm64.zip"
             ;;
         *)
@@ -441,13 +441,13 @@ install_local_java() {
     local java_archive="$INSTALL_DIR/$java_filename"
 
     # Download JRE
-    if ! download_file "$java_url" "$java_archive" "Java 23 JRE" "false"; then
-        warn "Failed to download Java 23 JRE"
+    if ! download_file "$java_url" "$java_archive" "Java 17 JRE" "false"; then
+        warn "Failed to download Java 17 JRE"
         return 1
     fi
 
     # Extract JRE
-    progress "Extracting Java 23 JRE..."
+    progress "Extracting Java 17 JRE..."
     rm -rf "$jre_dir" 2>/dev/null
     mkdir -p "$jre_dir"
 
@@ -510,14 +510,14 @@ install_local_java() {
     else
         # Unix tar.gz archive
         if ! tar -xzf "$java_archive" -C "$jre_dir" --strip-components=1 2>/dev/null; then
-            warn "Failed to extract Java 23 JRE"
+            warn "Failed to extract Java 17 JRE"
             rm -f "$java_archive"
             rm -rf "$jre_dir"
             return 1
         fi
     fi
 
-    info "Java 23 JRE installed locally to $jre_dir"
+    info "Java 17 JRE installed locally to $jre_dir"
     rm -f "$java_archive"
     return 0
 }
@@ -574,11 +574,11 @@ check_java() {
             local java_major_version
             java_major_version=$(echo "$java_version" | cut -d'.' -f1)
 
-            if [ "$java_major_version" -ge 23 ] 2>/dev/null; then
+            if [ "$java_major_version" -ge 17 ] 2>/dev/null; then
                 info "Java version detected: $java_version"
                 return 0
             else
-                warn "Java $java_version is too old (need 23+). Will try to install locally..."
+                warn "Java $java_version is too old (need 17+). Will try to install locally..."
                 needs_local_install=true
             fi
         fi
@@ -592,7 +592,7 @@ check_java() {
         local platform
         platform=$(detect_platform)
 
-        progress "Attempting local Java 23 installation..."
+        progress "Attempting local Java 17 installation..."
         if install_local_java "$platform"; then
             # Verify the bundled Java
             java_cmd=$(get_java_command)
@@ -609,13 +609,13 @@ check_java() {
     if ! command -v java >/dev/null 2>&1; then
         # First check if we're on Windows - don't try to install Java automatically
         if is_windows; then
-            error "Java 23 is required but not installed. Please install Java 23 manually on Windows:
+            error "Java 17+ is required but not installed. Please install Java 23 manually on Windows:
   - Download from: https://adoptium.net/
-  - Or use Chocolatey: choco install temurin23jdk
-  - Or use Windows installer: https://adoptium.net/temurin/releases/?version=23
+  - Or use Chocolatey: choco install temurin17jdk
+  - Or use Windows installer: https://adoptium.net/temurin/releases/?version=17
   
 Note: If you're using WSL, you can install Java in WSL using:
-  sudo apt-get update && sudo apt-get install -y openjdk-23-jdk"
+  sudo apt-get update && sudo apt-get install -y openjdk-17-jdk"
         elif [ -n "${GITHUB_ACTIONS:-}" ]; then
             error "Java is not available in GitHub Actions. Please set up Java first:
             
@@ -624,7 +624,7 @@ steps:
     uses: actions/setup-java@v4
     with:
       distribution: 'temurin'
-      java-version: '23'
+      java-version: '17''
   - name: Install DMTools CLI
     run: |
       curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash"
@@ -632,11 +632,11 @@ steps:
             warn "Java not found. Attempting to install via Homebrew..."
             if command -v brew >/dev/null 2>&1; then
                 progress "Installing OpenJDK 23 via Homebrew..."
-                brew install openjdk@23 || error "Failed to install Java via Homebrew"
+                brew install openjdk@17 || error "Failed to install Java via Homebrew"
                 info "Java installed successfully via Homebrew"
             else
-                error "Java 23 is required but not installed. Please install Java 23:
-  - Via Homebrew: brew install openjdk@23
+                error "Java 17+ is required but not installed. Please install Java 23:
+  - Via Homebrew: brew install openjdk@17
   - Via Oracle: https://www.oracle.com/java/technologies/downloads/
   - Via Eclipse Temurin: https://adoptium.net/"
             fi
@@ -645,24 +645,24 @@ steps:
             if command -v apt-get >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via apt..."
                 progress "Installing OpenJDK 23..."
-                sudo apt-get update && sudo apt-get install -y openjdk-23-jdk || error "Failed to install Java 23 via apt. Please install manually."
+                sudo apt-get update && sudo apt-get install -y openjdk-17-jdk || error "Failed to install Java 23 via apt. Please install manually."
                 info "Java installed successfully"
             elif command -v yum >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via yum..."
-                sudo yum install -y java-23-openjdk-devel || error "Failed to install Java 23 via yum. Please install manually."
+                sudo yum install -y java-17-openjdk-devel || error "Failed to install Java 23 via yum. Please install manually."
                 info "Java installed successfully"
             elif command -v dnf >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via dnf..."
-                sudo dnf install -y java-23-openjdk-devel || error "Failed to install Java 23 via dnf. Please install manually."
+                sudo dnf install -y java-17-openjdk-devel || error "Failed to install Java 23 via dnf. Please install manually."
                 info "Java installed successfully"
             else
-                error "Java 23 is required but not installed. Please install Java 23:
-  - Ubuntu/Debian: sudo apt-get install openjdk-23-jdk
-  - RHEL/CentOS: sudo yum install java-23-openjdk-devel
-  - Fedora: sudo dnf install java-23-openjdk-devel"
+                error "Java 17+ is required but not installed. Please install Java 23:
+  - Ubuntu/Debian: sudo apt-get install openjdk-17-jdk
+  - RHEL/CentOS: sudo yum install java-17-openjdk-devel
+  - Fedora: sudo dnf install java-17-openjdk-devel"
             fi
         else
-            error "Java 23 is required but not installed. Please install Java 23."
+            error "Java 17+ is required but not installed. Please install Java 23."
         fi
     fi
 
@@ -675,8 +675,8 @@ steps:
 
         info "Java version detected: $java_version"
 
-        if [ "$java_major_version" -lt 23 ] 2>/dev/null; then
-            error "Java $java_version is too old. DMTools requires Java 23."
+        if [ "$java_major_version" -lt 17 ] 2>/dev/null; then
+            error "Java $java_version is too old. DMTools requires Java 17+."
         fi
     else
         error "Java installation failed. Please install Java 23 manually."
