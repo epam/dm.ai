@@ -85,6 +85,9 @@ jobs:
         run: |
           git push origin main
           git push origin --tags
+          git remote add epam https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/epam/dm.ai.git
+          git push epam main
+          git push epam --tags
       
       - name: Summary
         run: |
