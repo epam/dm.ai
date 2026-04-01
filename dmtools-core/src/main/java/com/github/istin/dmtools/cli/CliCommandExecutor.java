@@ -2,6 +2,7 @@ package com.github.istin.dmtools.cli;
 
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
+import com.github.istin.dmtools.common.utils.SecurityUtils;
 import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.mcp.MCPParam;
 import org.apache.logging.log4j.LogManager;
@@ -17,7 +18,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * CLI command execution tool for JavaScript post-action functions.
@@ -47,15 +47,9 @@ public class CliCommandExecutor {
 
     // Security baseline – never removed regardless of configuration
     private static final String[] BASE_ALLOWED_COMMANDS = {
-        "git", "gh", "dmtools", "npm", "yarn", "docker", 
+        "git", "gh", "dmtools", "npm", "yarn", "docker",
         "kubectl", "terraform", "ansible", "aws", "gcloud", "az"
     };
-    
-    // Patterns for masking sensitive data in logs
-    private static final Pattern TOKEN_PATTERN = Pattern.compile("(token[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern PASSWORD_PATTERN = Pattern.compile("(password[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern KEY_PATTERN = Pattern.compile("(key[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern GITHUB_TOKEN_PATTERN = Pattern.compile("(GITHUB_TOKEN[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
     
     /**
      * Execute CLI command from JavaScript post-action function.
@@ -282,25 +276,7 @@ public class CliCommandExecutor {
      * @return String with sensitive data replaced with ***
      */
     private String maskSensitiveData(String input) {
-        if (input == null) {
-            return null;
-        }
-        
-        String masked = input;
-        
-        // Mask tokens
-        masked = TOKEN_PATTERN.matcher(masked).replaceAll("$1***");
-        
-        // Mask passwords
-        masked = PASSWORD_PATTERN.matcher(masked).replaceAll("$1***");
-        
-        // Mask keys
-        masked = KEY_PATTERN.matcher(masked).replaceAll("$1***");
-        
-        // Mask GitHub tokens
-        masked = GITHUB_TOKEN_PATTERN.matcher(masked).replaceAll("$1***");
-        
-        return masked;
+        return SecurityUtils.maskCommand(input);
     }
 }
 

@@ -59,7 +59,7 @@ public class CommandLineUtils {
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv)
             throws IOException, InterruptedException {
 
-        logger.debug("Running command: {}", command);
+        logger.debug("Running command: {}", SecurityUtils.maskCommand(command));
         validateNoShellInjection(command);
 
         // Write command to a temp shell script to avoid shell-escaping issues with

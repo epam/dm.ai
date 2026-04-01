@@ -2,10 +2,36 @@ package com.github.istin.dmtools.common.utils;
 
 import org.json.JSONObject;
 
+import java.util.regex.Pattern;
+
 /**
  * Utility class for security-related operations, particularly for protecting sensitive information in logs
  */
 public class SecurityUtils {
+
+    private static final Pattern TOKEN_PATTERN = Pattern.compile("(token[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("(password[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern KEY_PATTERN = Pattern.compile("(key[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern GITHUB_TOKEN_PATTERN = Pattern.compile("(GITHUB_TOKEN[=:\\s]+)([^\\s]+)", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Masks sensitive values (tokens, passwords, keys) inside a command string for safe logging.
+     * Replaces matched values with *** while preserving the rest of the command.
+     *
+     * @param command the raw command string
+     * @return the command with sensitive values replaced by ***
+     */
+    public static String maskCommand(String command) {
+        if (command == null) {
+            return null;
+        }
+        String masked = command;
+        masked = TOKEN_PATTERN.matcher(masked).replaceAll("$1***");
+        masked = PASSWORD_PATTERN.matcher(masked).replaceAll("$1***");
+        masked = KEY_PATTERN.matcher(masked).replaceAll("$1***");
+        masked = GITHUB_TOKEN_PATTERN.matcher(masked).replaceAll("$1***");
+        return masked;
+    }
 
     /**
      * Creates a masked version of the config JSON for safe logging by replacing sensitive values with asterisks
