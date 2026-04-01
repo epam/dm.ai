@@ -1,5 +1,7 @@
 package com.github.istin.dmtools.common.utils;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -9,6 +11,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class JSONResourceReader  {
+
+    private static final Logger logger = LogManager.getLogger(JSONResourceReader.class);
 
     private final String file;
 
@@ -48,7 +52,7 @@ public class JSONResourceReader  {
                     input.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
     }

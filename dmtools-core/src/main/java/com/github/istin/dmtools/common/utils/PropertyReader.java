@@ -177,7 +177,7 @@ public class PropertyReader {
 							try {
 								input.close();
 							} catch (IOException e) {
-								e.printStackTrace();
+								logger.error("Unexpected error", e);
 							}
 							input = null;
 						}
@@ -199,7 +199,7 @@ public class PropertyReader {
 									input.close();
 								}
 							} catch (IOException e) {
-								e.printStackTrace();
+								logger.error("Unexpected error", e);
 							}
 						}
 					}
@@ -916,7 +916,7 @@ public class PropertyReader {
 					input.close();
 				}
 			} catch (IOException e) {
-				e.printStackTrace();
+				logger.error("Unexpected error", e);
 			}
 		}
 		return props;

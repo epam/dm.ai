@@ -345,7 +345,7 @@ public abstract class AbstractRestClient implements RestClient {
                 try {
                     Thread.currentThread().sleep(2000);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    logger.error("Unexpected error", e);
                 }
             }
 
@@ -483,7 +483,7 @@ public abstract class AbstractRestClient implements RestClient {
             try {
                 Thread.currentThread().sleep(200);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
 
@@ -621,7 +621,7 @@ public abstract class AbstractRestClient implements RestClient {
             try {
                 Thread.currentThread().sleep(500);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
 
@@ -684,7 +684,7 @@ public abstract class AbstractRestClient implements RestClient {
             try {
                 Thread.currentThread().sleep(500);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
 
@@ -743,7 +743,7 @@ public abstract class AbstractRestClient implements RestClient {
             try {
                 Thread.currentThread().sleep(500);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
 

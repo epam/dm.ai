@@ -211,7 +211,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
 //            logger.info(getRequest.execute());
             return new JSONObject(response).getJSONObject("images").optString(nodeId.replaceAll("-", ":"));
         } catch (Exception ignored) {
-            ignored.printStackTrace();
+            logger.debug("Suppressed exception", ignored);
             return null;
         }
     }
@@ -431,7 +431,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             return new FigmaFileResponse(response);
         } catch (Exception e) {
             logger.error("Failed to get Figma structure for file {}: {}", fileId, e.getMessage());
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             return null;
         }
     }
@@ -483,7 +483,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
 
         } catch (Exception e) {
             logger.error("Failed to extract visual elements from Figma design: {}", e.getMessage());
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             return null;
         }
     }
@@ -776,7 +776,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             return null;
         } catch (Exception e) {
             logger.error("Failed to get node details: {}", e.getMessage());
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             return null;
         }
     }
@@ -871,7 +871,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             return FigmaTextContentResult.create(textEntries);
         } catch (Exception e) {
             logger.error("Failed to get text content: {}", e.getMessage());
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             return null;
         }
     }
@@ -913,7 +913,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             return result;
         } catch (Exception e) {
             logger.error("Failed to get styles: {}", e.getMessage());
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             return null;
         }
     }
@@ -1013,7 +1013,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             
         } catch (Exception e) {
             logger.error("Failed to get layers: {}", e.getMessage());
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             return null;
         }
     }
@@ -1116,7 +1116,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
             
         } catch (Exception e) {
             logger.error("Failed to get batch layers: {}", e.getMessage());
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             return new HashMap<>();
         }
     }
