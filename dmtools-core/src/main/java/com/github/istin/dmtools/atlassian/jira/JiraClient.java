@@ -2579,6 +2579,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 try {
                     Thread.currentThread().sleep(sleepTimeRequest);
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     logger.error("Unexpected error", e);
                 }
             }
@@ -2699,6 +2700,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             try {
                 Thread.currentThread().sleep(sleepTimeRequest);
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 logger.error("Unexpected error", e);
             }
         }
@@ -2799,6 +2801,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             try {
                 Thread.currentThread().sleep(sleepTimeRequest);
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 logger.error("Unexpected error", e);
             }
         }
@@ -2828,6 +2831,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             try {
                 Thread.currentThread().sleep(sleepTimeRequest);
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 logger.error("Unexpected error", e);
             }
         }
@@ -2880,6 +2884,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             try {
                 Thread.currentThread().sleep(sleepTimeRequest);
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 logger.error("Unexpected error", e);
             }
         }
