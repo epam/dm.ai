@@ -12,6 +12,7 @@ import org.json.JSONArray;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.ZoneId;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
@@ -133,8 +134,8 @@ public class Vacations {
                         if (employeeName != null && employeeName.length() > 0) {
                             Vacation vacation = new Vacation();
                             vacation.set(Vacation.EMPLOYEE, employeeName);
-                            vacation.set(Vacation.START_DATE, Vacation.DEFAULT_FORMATTER.format(row.getCell(startDateIndex).getDateCellValue()));
-                            vacation.set(Vacation.END_DATE, Vacation.DEFAULT_FORMATTER.format(row.getCell(endDateIndex).getDateCellValue()));
+                            vacation.set(Vacation.START_DATE, Vacation.DEFAULT_FORMATTER.format(row.getCell(startDateIndex).getDateCellValue().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()));
+                            vacation.set(Vacation.END_DATE, Vacation.DEFAULT_FORMATTER.format(row.getCell(endDateIndex).getDateCellValue().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()));
                             vacation.set(Vacation.DURATION, String.valueOf(row.getCell(durationIndex).getNumericCellValue()));
                             vacations.put(vacation.getJSONObject());
                         }
@@ -200,7 +201,7 @@ public class Vacations {
                                 XSSFCell dayCell = vacationsSheet.getRow(1).getCell(i);
                                 String stringCellValue = dayCell.getStringCellValue();
                                 if (fillForegroundColor == 0 && !stringCellValue.equalsIgnoreCase("sat") && !stringCellValue.equalsIgnoreCase("sun")) {
-                                    String startEndDate = Vacation.DEFAULT_FORMATTER.format(vacationsSheet.getRow(0).getCell(i).getDateCellValue());
+                                    String startEndDate = Vacation.DEFAULT_FORMATTER.format(vacationsSheet.getRow(0).getCell(i).getDateCellValue().toInstant().atZone(ZoneId.systemDefault()).toLocalDate());
                                     Vacation vacation = new Vacation();
                                     vacation.set(Vacation.EMPLOYEE, employeeName);
                                     vacation.set(Vacation.START_DATE, startEndDate);

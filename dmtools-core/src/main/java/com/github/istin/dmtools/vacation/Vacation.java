@@ -4,8 +4,10 @@ import com.github.istin.dmtools.common.model.JSONModel;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -16,7 +18,8 @@ public class Vacation extends JSONModel {
     public static final String END_DATE = "END DATE";
     public static final String DURATION = "DURATION";
 
-    public static final SimpleDateFormat DEFAULT_FORMATTER = new SimpleDateFormat("MM/dd/yy");
+    /** Immutable, thread-safe date formatter for the canonical {@code MM/dd/yy} format. */
+    public static final DateTimeFormatter DEFAULT_FORMATTER = DateTimeFormatter.ofPattern("MM/dd/yy");
 
 
     public Vacation() {
@@ -40,17 +43,15 @@ public class Vacation extends JSONModel {
 
     public Date getStartDateAsDate() {
         String startDate = getStartDate();
-        Date date = null;
         try {
-            date = new SimpleDateFormat("MM/dd/yy").parse(startDate);
-        } catch (ParseException e) {
+            return toDate(LocalDate.parse(startDate, DateTimeFormatter.ofPattern("MM/dd/yy")));
+        } catch (DateTimeParseException e) {
             try {
-                date = new SimpleDateFormat("dd.MM.yy").parse(startDate);
-            } catch (ParseException ex) {
+                return toDate(LocalDate.parse(startDate, DateTimeFormatter.ofPattern("dd.MM.yy")));
+            } catch (DateTimeParseException ex) {
                 return null;
             }
         }
-        return date;
     }
 
     public Calendar getStartDateAsCalendar() {
@@ -71,17 +72,19 @@ public class Vacation extends JSONModel {
 
     public Date getEndDateAsDate() {
         String endDate = getEndDate();
-        Date date = null;
         try {
-            date = DEFAULT_FORMATTER.parse(endDate);
-        } catch (ParseException e) {
+            return toDate(LocalDate.parse(endDate, DEFAULT_FORMATTER));
+        } catch (DateTimeParseException e) {
             try {
-                date = new SimpleDateFormat("dd/MM/yy").parse(endDate);
-            } catch (ParseException ex) {
+                return toDate(LocalDate.parse(endDate, DateTimeFormatter.ofPattern("dd/MM/yy")));
+            } catch (DateTimeParseException ex) {
                 return null;
             }
         }
-        return date;
+    }
+
+    private static Date toDate(LocalDate localDate) {
+        return Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
     }
 
     public String getName() {
