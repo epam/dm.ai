@@ -119,9 +119,10 @@ public class CommandLineUtils {
 
     /**
      * Rejects commands that contain shell injection metacharacters.
-     * Semicolons, newlines, backtick execution, and subshell substitution ($(...), ${...})
-     * are not required by any legitimate caller and are the primary vectors for
-     * injecting additional commands past a whitelist check.
+     *
+     * <p>Blocked characters/sequences prevent an attacker from chaining additional
+     * commands past the whitelist check (e.g. {@code git status && evil}) or
+     * redirecting output to sensitive files (e.g. {@code git log > /etc/cron.d/x}).
      *
      * @param command the raw command string to validate
      * @throws IllegalArgumentException if the command contains dangerous shell metacharacters
@@ -132,11 +133,18 @@ public class CommandLineUtils {
         }
         if (command.contains(";")
                 || command.contains("\n")
+                || command.contains("\r")
                 || command.contains("`")
                 || command.contains("$(")
-                || command.contains("${")) {
+                || command.contains("${")
+                || command.contains("&&")
+                || command.contains("||")
+                || command.contains("|")
+                || command.contains(">")
+                || command.contains("<")) {
             throw new IllegalArgumentException(
-                    "Command contains disallowed shell metacharacters (;, newline, `, $(...), ${...}): "
+                    "Command contains disallowed shell metacharacters "
+                    + "(;, newline, \\r, `, $(...), ${...}, &&, ||, |, >, <): "
                     + SecurityUtils.maskSensitiveValue(command.substring(0, Math.min(30, command.length()))));
         }
     }
