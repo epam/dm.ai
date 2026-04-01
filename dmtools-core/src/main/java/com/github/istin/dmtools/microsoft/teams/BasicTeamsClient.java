@@ -14,7 +14,7 @@ public class BasicTeamsClient extends TeamsClient {
     
     private static final Logger logger = LogManager.getLogger(BasicTeamsClient.class);
     
-    private static BasicTeamsClient instance;
+    private static volatile BasicTeamsClient instance;
     private static final Object lock = new Object();
     private static final PropertyReader propertyReader;
     
