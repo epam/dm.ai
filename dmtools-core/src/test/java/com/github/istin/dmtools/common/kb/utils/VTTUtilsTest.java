@@ -265,27 +265,27 @@ public class VTTUtilsTest {
                 
                 f7cbbd91-4f2a-493b-8fa8-02520ca1323e/277-0
                 00:00:17.013 --> 00:00:17.213
-                <v Uladzimir Klyshevich>5.</v>
+                <v Jane Smith>5.</v>
                 
                 f7cbbd91-4f2a-493b-8fa8-02520ca1323e/326-0
                 00:00:20.173 --> 00:00:25.306
-                <v Ira Skrypnik>Today,
+                <v John Doe>Today,
                 please feel free to ask any questions in</v>
                 
                 f7cbbd91-4f2a-493b-8fa8-02520ca1323e/326-1
                 00:00:25.306 --> 00:00:27.380
-                <v Ira Skrypnik>the chat anytime.</v>
+                <v John Doe>the chat anytime.</v>
                 """;
         
         String result = VTTUtils.transformVTT(vttContent, "2025-10-24");
         
         assertNotNull(result);
         assertTrue(result.startsWith("Date: 2025-10-24"));
-        assertTrue(result.contains("[00:00:17] Uladzimir Klyshevich: 5."));
-        assertTrue(result.contains("[00:00:20] Ira Skrypnik: Today, please feel free to ask any questions in the chat anytime."));
+        assertTrue(result.contains("[00:00:17] Jane Smith: 5."));
+        assertTrue(result.contains("[00:00:20] John Doe: Today, please feel free to ask any questions in the chat anytime."));
         
-        // Should group consecutive Ira Skrypnik entries
-        assertEquals(1, result.split("\\[00:00:20\\] Ira Skrypnik:").length - 1);
+        // Should group consecutive John Doe entries
+        assertEquals(1, result.split("\\[00:00:20\\] John Doe:").length - 1);
     }
 
     @Test
