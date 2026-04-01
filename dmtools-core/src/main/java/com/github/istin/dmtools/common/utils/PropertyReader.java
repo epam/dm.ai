@@ -15,7 +15,7 @@ public class PropertyReader {
 
 	private static final Logger logger = LogManager.getLogger(PropertyReader.class);
 
-	private static String PATH_TO_CONFIG_FILE = "/config.properties";
+	private static volatile String PATH_TO_CONFIG_FILE = "/config.properties";
 
 	private static final int DEFAULT_AI_RETRY_AMOUNT = 3;
 	private static final long DEFAULT_AI_RETRY_DELAY_STEP = 20000L;
@@ -57,8 +57,8 @@ public class PropertyReader {
 
 
 	private static volatile Properties prop;
-	private static Properties envFileProps;
-	private static Path projectRoot = null;
+	private static volatile Properties envFileProps;
+	private static volatile Path projectRoot = null;
 
 	/**
 	 * Finds the project root by walking up the directory tree looking for Gradle project markers.
@@ -69,22 +69,25 @@ public class PropertyReader {
 		if (projectRoot != null) {
 			return projectRoot;
 		}
-		
-		Path current = Paths.get(System.getProperty("user.dir"));
-		while (current != null) {
-			if (Files.exists(current.resolve("settings.gradle")) || 
-				Files.exists(current.resolve("settings.gradle.kts"))) {
-				projectRoot = current;
-				logger.debug("Detected project root at: {}", projectRoot);
+		synchronized (PropertyReader.class) {
+			if (projectRoot != null) {
 				return projectRoot;
 			}
-			current = current.getParent();
+			Path current = Paths.get(System.getProperty("user.dir"));
+			while (current != null) {
+				if (Files.exists(current.resolve("settings.gradle")) ||
+					Files.exists(current.resolve("settings.gradle.kts"))) {
+					projectRoot = current;
+					logger.debug("Detected project root at: {}", projectRoot);
+					return projectRoot;
+				}
+				current = current.getParent();
+			}
+			// Fallback to user.dir if no Gradle project markers found
+			projectRoot = Paths.get(System.getProperty("user.dir"));
+			logger.debug("No Gradle project markers found, using user.dir as project root: {}", projectRoot);
+			return projectRoot;
 		}
-		
-		// Fallback to user.dir if no Gradle project markers found
-		projectRoot = Paths.get(System.getProperty("user.dir"));
-		logger.debug("No Gradle project markers found, using user.dir as project root: {}", projectRoot);
-		return projectRoot;
 	}
 
 	/**
@@ -96,44 +99,51 @@ public class PropertyReader {
 		if (envFileProps != null) {
 			return; // Already loaded
 		}
-		
-		envFileProps = new Properties();
-		
-		// Priority 1: Try to load from project root directory
-		Path root = findProjectRoot();
-		Path envFileAtRoot = root.resolve("dmtools.env");
-		if (Files.exists(envFileAtRoot) && Files.isRegularFile(envFileAtRoot)) {
-			try {
-				Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile(envFileAtRoot.toString());
-				if (!envVars.isEmpty()) {
-					envVars.forEach(envFileProps::setProperty);
-					logger.debug("Loaded {} properties from dmtools.env at project root: {}", envVars.size(), envFileAtRoot);
-					return;
-				}
-			} catch (Exception e) {
-				logger.warn("Failed to load dmtools.env from {}: {}", envFileAtRoot, e.getMessage());
+		synchronized (PropertyReader.class) {
+			if (envFileProps != null) {
+				return; // Another thread loaded it while we waited
 			}
-		}
-		
-		// Priority 2: Fall back to current working directory (if different from project root)
-		String currentDir = System.getProperty("user.dir");
-		if (currentDir != null && !currentDir.equals(root.toString())) {
-			Path envFile = Paths.get(currentDir, "dmtools.env");
-			if (Files.exists(envFile) && Files.isRegularFile(envFile)) {
+			Properties local = new Properties();
+
+			// Priority 1: Try to load from project root directory
+			Path root = findProjectRoot();
+			Path envFileAtRoot = root.resolve("dmtools.env");
+			if (Files.exists(envFileAtRoot) && Files.isRegularFile(envFileAtRoot)) {
 				try {
-					Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile(envFile.toString());
+					Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile(envFileAtRoot.toString());
 					if (!envVars.isEmpty()) {
-						envVars.forEach(envFileProps::setProperty);
-						logger.debug("Loaded {} properties from dmtools.env at working directory: {}", envVars.size(), envFile);
+						envVars.forEach(local::setProperty);
+						logger.debug("Loaded {} properties from dmtools.env at project root: {}", envVars.size(), envFileAtRoot);
+						envFileProps = local;
 						return;
 					}
 				} catch (Exception e) {
-					logger.warn("Failed to load dmtools.env from {}: {}", envFile, e.getMessage());
+					logger.warn("Failed to load dmtools.env from {}: {}", envFileAtRoot, e.getMessage());
 				}
 			}
+
+			// Priority 2: Fall back to current working directory (if different from project root)
+			String currentDir = System.getProperty("user.dir");
+			if (currentDir != null && !currentDir.equals(root.toString())) {
+				Path envFile = Paths.get(currentDir, "dmtools.env");
+				if (Files.exists(envFile) && Files.isRegularFile(envFile)) {
+					try {
+						Map<String, String> envVars = CommandLineUtils.loadEnvironmentFromFile(envFile.toString());
+						if (!envVars.isEmpty()) {
+							envVars.forEach(local::setProperty);
+							logger.debug("Loaded {} properties from dmtools.env at working directory: {}", envVars.size(), envFile);
+							envFileProps = local;
+							return;
+						}
+					} catch (Exception e) {
+						logger.warn("Failed to load dmtools.env from {}: {}", envFile, e.getMessage());
+					}
+				}
+			}
+
+			logger.debug("dmtools.env not found in project root ({}) or working directory ({})", root, currentDir);
+			envFileProps = local; // publish empty props so next caller skips loading
 		}
-		
-		logger.debug("dmtools.env not found in project root ({}) or working directory ({})", root, currentDir);
 	}
 
 	public String getValue(String propertyKey) {
@@ -144,51 +154,57 @@ public class PropertyReader {
 		}
 
 		if (prop == null) {
-			prop = new Properties();
-			InputStream input = null;
-			boolean loadedFromFile = false;
-			
-			// Priority 1: Try to load from root project's src/main/resources/config.properties
-			try {
-				Path root = findProjectRoot();
-				Path configFile = root.resolve("src/main/resources/config.properties");
-				if (Files.exists(configFile) && Files.isRegularFile(configFile)) {
-					input = Files.newInputStream(configFile);
-					prop.load(input);
-					loadedFromFile = true;
-					logger.debug("Loaded config.properties from root project: {}", configFile);
-				}
-			} catch (IOException e) {
-				logger.debug("Could not load config.properties from root project: {}", e.getMessage());
-			} finally {
-				if (input != null) {
+			synchronized (PropertyReader.class) {
+				if (prop == null) {
+					Properties local = new Properties();
+					InputStream input = null;
+					boolean loadedFromFile = false;
+
+					// Priority 1: Try to load from root project's src/main/resources/config.properties
 					try {
-						input.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					input = null;
-				}
-			}
-			
-			// Priority 2: Fall back to dmtools-core embedded resource (classpath)
-			if (!loadedFromFile) {
-				try {
-					input = getClass().getResourceAsStream(PATH_TO_CONFIG_FILE);
-					if (input != null) {
-						prop.load(input);
-						logger.debug("Loaded config.properties from classpath resource: {}", PATH_TO_CONFIG_FILE);
-					}
-				} catch (IOException e) {
-					logger.warn("Could not load config.properties from classpath: {}", e.getMessage());
-				} finally {
-					try {
-						if (input != null) {
-							input.close();
+						Path root = findProjectRoot();
+						Path configFile = root.resolve("src/main/resources/config.properties");
+						if (Files.exists(configFile) && Files.isRegularFile(configFile)) {
+							input = Files.newInputStream(configFile);
+							local.load(input);
+							loadedFromFile = true;
+							logger.debug("Loaded config.properties from root project: {}", configFile);
 						}
 					} catch (IOException e) {
-						e.printStackTrace();
+						logger.debug("Could not load config.properties from root project: {}", e.getMessage());
+					} finally {
+						if (input != null) {
+							try {
+								input.close();
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+							input = null;
+						}
 					}
+
+					// Priority 2: Fall back to dmtools-core embedded resource (classpath)
+					if (!loadedFromFile) {
+						try {
+							input = getClass().getResourceAsStream(PATH_TO_CONFIG_FILE);
+							if (input != null) {
+								local.load(input);
+								logger.debug("Loaded config.properties from classpath resource: {}", PATH_TO_CONFIG_FILE);
+							}
+						} catch (IOException e) {
+							logger.warn("Could not load config.properties from classpath: {}", e.getMessage());
+						} finally {
+							try {
+								if (input != null) {
+									input.close();
+								}
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+						}
+					}
+
+					prop = local; // publish fully-constructed object to volatile field
 				}
 			}
 		}
