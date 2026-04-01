@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.projectstatus.data;
 
 import com.github.istin.dmtools.common.model.ITicket;
@@ -5,8 +8,12 @@ import com.github.istin.dmtools.report.projectstatus.config.ReportConfiguration;
 
 import java.io.IOException;
 import java.util.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class TicketStatisticsCalculator {
+
+    private static final Logger logger = LogManager.getLogger(TicketStatisticsCalculator.class);
 
     private final ReportConfiguration config;
 
@@ -27,7 +34,7 @@ public class TicketStatisticsCalculator {
                 typePriorityCount.computeIfAbsent(type, k -> new HashMap<>())
                         .merge(priority, 1, Integer::sum);
             } catch (IOException e) {
-                System.err.println("Error processing ticket: " + e.getMessage());
+                logger.error("Error processing ticket: " + e.getMessage());
             }
         }
 
@@ -43,7 +50,7 @@ public class TicketStatisticsCalculator {
                 double storyPoints = ticket.getWeight();
                 storyPointsByType.merge(type, storyPoints, Double::sum);
             } catch (IOException e) {
-                System.err.println("Error processing ticket for story points: " + e.getMessage());
+                logger.error("Error processing ticket for story points: " + e.getMessage());
             }
         }
 
@@ -58,7 +65,7 @@ public class TicketStatisticsCalculator {
                 String priority = nullToEmpty(ticket.getPriority(), "Trivial");
                 countByPriority.merge(priority, 1, Integer::sum);
             } catch (IOException e) {
-                System.err.println("Error processing ticket priority: " + e.getMessage());
+                logger.error("Error processing ticket priority: " + e.getMessage());
             }
         }
 
@@ -77,7 +84,7 @@ public class TicketStatisticsCalculator {
                 // Add ticket to appropriate role list
                 ticketsByRole.computeIfAbsent(role, k -> new ArrayList<>()).add(ticket);
             } catch (IOException e) {
-                System.err.println("Error categorizing ticket by role: " + e.getMessage());
+                logger.error("Error categorizing ticket by role: " + e.getMessage());
             }
         }
 

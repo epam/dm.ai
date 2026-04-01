@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.common.utils;
 
 import org.apache.logging.log4j.LogManager;
@@ -61,7 +64,7 @@ public class IOUtils {
         for (File file : files) {
             if (file != null && file.exists()) {
                 if (!file.delete()) {
-                    System.err.println("Failed to delete temporary file: " + file.getAbsolutePath());
+                    logger.error("Failed to delete temporary file: " + file.getAbsolutePath());
                 }
             }
         }

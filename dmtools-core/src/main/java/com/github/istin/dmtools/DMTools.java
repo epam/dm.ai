@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools;
 
 import org.apache.logging.log4j.LogManager;
@@ -8,8 +11,8 @@ public class DMTools {
     private static final Logger logger = LogManager.getLogger(DMTools.class);
 
     public static void main(String[] args) {
-        System.out.println("Hello Dear DM.");
-        System.out.println("Root logger level: " + LogManager.getRootLogger().getLevel());
+        logger.info("Hello Dear DM.");
+        logger.info("Root logger level: " + LogManager.getRootLogger().getLevel());
         logger.debug("This is a debug message");
         logger.info("This is an info message");
         logger.warn("This is a warn message");

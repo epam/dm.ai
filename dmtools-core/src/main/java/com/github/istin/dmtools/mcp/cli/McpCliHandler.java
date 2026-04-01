@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.mcp.cli;
 
 import com.github.istin.dmtools.ai.AI;
@@ -968,7 +971,7 @@ public class McpCliHandler {
             String configFile = System.getProperty("log4j2.configurationFile");
             if (configFile != null && configFile.contains("debug")) {
                 // Debug mode enabled - don't override log configuration
-                System.err.println("[DEBUG] Debug mode enabled, preserving log configuration");
+                logger.error("[DEBUG] Debug mode enabled, preserving log configuration");
                 return;
             }
             

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.reporting.datasource;
 
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
@@ -11,8 +14,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class TrackerDataSource extends DataSource {
+
+    private static final Logger logger = LogManager.getLogger(TrackerDataSource.class);
     private final TrackerClient trackerClient;
     private final String jql;
     private final List<String> extraFields;
@@ -47,7 +54,7 @@ public class TrackerDataSource extends DataSource {
                         collector.collect(keyTimes, rawMetadata, ticket.getTicketKey());
                     }
                 } catch (Exception e) {
-                    System.err.println("Error processing ticket " + ticket.getTicketKey() + ": " + e.getMessage());
+                    logger.error("Error processing ticket " + ticket.getTicketKey() + ": " + e.getMessage());
                 }
                 return false;
             }

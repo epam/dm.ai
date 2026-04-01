@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.estimations;
 
 import com.github.istin.dmtools.ai.AI;
@@ -92,7 +95,7 @@ public class JEstimator extends AbstractJob<JEstimatorParams, ResultItem> {
                 //.limit(5)
                 .map((Function<ITicket, AIEstimatedTicket>) ticket -> new AIEstimatedTicket(Fields.STORY_POINTS, ticket))
                 .collect(Collectors.toList());
-        System.out.println(tickets.size());
+        logger.info(tickets.size());
         for (AIEstimatedTicket aiEstimatedTicket : tickets) {
             File file = new File("reports/JAI_ESTIMATION_" + aiEstimatedTicket.getKey() + ".html");
             if (file.exists()) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.dev;
 
 import com.github.istin.dmtools.ai.AI;
@@ -18,8 +21,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class UnitTestsGenerator extends AbstractJob<UnitTestsGeneratorParams, ResultItem> {
+
+    private static final Logger logger = LogManager.getLogger(UnitTestsGenerator.class);
 
     @Override
     public ResultItem runJob(UnitTestsGeneratorParams params) throws Exception {
@@ -40,7 +47,7 @@ public class UnitTestsGenerator extends AbstractJob<UnitTestsGeneratorParams, Re
                         if (shouldExclude(baseFileName, excludeClasses) || shouldExcludeByPattern(baseFileName, params.getExcludePattern())) {
                             return;
                         }
-                        System.out.println(folderPath + " " + fileName);
+                        logger.info(folderPath + " " + fileName);
 
                         String testFileName = baseFileName + params.getTestFileNamePostfix();
                         String rootTestsFolder = params.getRootTestsFolder();
@@ -78,7 +85,7 @@ public class UnitTestsGenerator extends AbstractJob<UnitTestsGeneratorParams, Re
             return pattern.matcher(baseFileName).matches();
         } catch (PatternSyntaxException e) {
             // Handle invalid regex pattern syntax here (optional)
-            System.err.println("Invalid regex pattern: " + excludePattern);
+            logger.error("Invalid regex pattern: " + excludePattern);
             return false;
         }
     }
@@ -162,7 +169,7 @@ public class UnitTestsGenerator extends AbstractJob<UnitTestsGeneratorParams, Re
         try {
             return new String(Files.readAllBytes(Paths.get(filePath)));
         } catch (IOException e) {
-            System.err.println("Error reading rules file: " + e.getMessage());
+            logger.error("Error reading rules file: " + e.getMessage());
             return ""; // Return an empty string if the file cannot be read
         }
     }

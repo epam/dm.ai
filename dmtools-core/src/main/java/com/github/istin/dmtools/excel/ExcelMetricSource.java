@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.excel;
 
 import com.github.istin.dmtools.metrics.source.CommonSourceCollector;
@@ -13,8 +16,12 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ExcelMetricSource extends CommonSourceCollector {
+
+    private static final Logger logger = LogManager.getLogger(ExcelMetricSource.class);
 
     private final String fileName;
     private final String whoColumn;
@@ -99,7 +106,7 @@ public class ExcelMetricSource extends CommonSourceCollector {
                                             break;
                                         default:
                                             // Handle other types, if necessary, or log a warning
-                                            System.out.println("Warning: Cell type is not NUMERIC or BOOLEAN. Defaulting to weight 0.0.");
+                                            logger.info("Warning: Cell type is not NUMERIC or BOOLEAN. Defaulting to weight 0.0.");
                                             break;
                                     }
 
@@ -108,7 +115,7 @@ public class ExcelMetricSource extends CommonSourceCollector {
                                     keyTimes.add(keyTime);
                                 } else {
                                     // Handle null cell, if necessary
-                                    System.out.println("Warning: Cell is null. Skipping weight assignment.");
+                                    logger.debug("Warning: Cell is null. Skipping weight assignment.");
                                 }
                             }
                         }

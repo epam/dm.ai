@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.sync;
 
 import com.github.istin.dmtools.ai.AI;
@@ -13,8 +16,12 @@ import com.github.istin.dmtools.job.ResultItem;
 
 import java.util.Calendar;
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class SourceCodeCommitTrackerSyncJob extends AbstractJob<SourceCodeCommitTrackerSyncParams, ResultItem> {
+
+    private static final Logger logger = LogManager.getLogger(SourceCodeCommitTrackerSyncJob.class);
     @Override
     public ResultItem runJob(SourceCodeCommitTrackerSyncParams sourceCodeCommitTrackerSyncParams) throws Exception {
         SourceCodeConfig[] sourceCodeConfigs = sourceCodeCommitTrackerSyncParams.getSourceCodeConfig();
@@ -46,13 +53,13 @@ public class SourceCodeCommitTrackerSyncJob extends AbstractJob<SourceCodeCommit
                     IDiffStats commitDiffStat = sourceCode.getCommitDiffStat(defaultWorkspace, defaultRepository, commit.getHash());
                     int total = commitDiffStat.getStats().getTotal();
                     if (total == 0) {
-                        System.out.println("TICKET Commit: commit url: "+ commit.getUrl() +  " ======== contains issues: " + keys +  " commit diff: EMPTY");
+                        logger.info("TICKET Commit: commit url: "+ commit.getUrl() +  " ======== contains issues: " + keys +  " commit diff: EMPTY");
                     } else {
-                        System.out.println("TICKET Commit: commit url: "+ commit.getUrl() + " ======== contains issues: " + keys + " commit diff: " + total);
+                        logger.info("TICKET Commit: commit url: "+ commit.getUrl() + " ======== contains issues: " + keys + " commit diff: " + total);
                     }
 
                 } else {
-                    System.out.println(commit.getMessage());
+                    logger.info(commit.getMessage());
                 }
             }
         }

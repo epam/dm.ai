@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.presale;
 
 import com.github.istin.dmtools.ai.AI;
@@ -18,8 +21,12 @@ import org.json.JSONObject;
 
 import java.util.List;
 import java.util.Set;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class PreSaleSupport extends AbstractJob<PreSaleSupportParams, String> {
+
+    private static final Logger logger = LogManager.getLogger(PreSaleSupport.class);
 
     @Override
     public String runJob(PreSaleSupportParams preSaleSupportParams) throws Exception {
@@ -158,9 +165,9 @@ public class PreSaleSupport extends AbstractJob<PreSaleSupportParams, String> {
     private static void buildKeyAreas(String rootRequirementsPageName, BasicConfluence confluence, PdfAsTrackerClient rfpInputTracker, DocumentationEditor documentationEditor, List<PdfPageAsTicket> dataInputTicketsWithRequirements, KeyAreaMapperViaConfluence ticketAreaMapper) throws Exception {
         JSONArray draftFeatureAreas = documentationEditor.buildDraftFeatureAreasByDataInput(dataInputTicketsWithRequirements, null);
         draftFeatureAreas = documentationEditor.cleanFeatureAreas(draftFeatureAreas);
-        System.out.println(draftFeatureAreas);
+        logger.info(draftFeatureAreas);
         JSONObject optimizedFeatureAreas = documentationEditor.createFeatureAreasTree(draftFeatureAreas);
-        System.out.println(optimizedFeatureAreas);
+        logger.info(optimizedFeatureAreas);
         documentationEditor.buildConfluenceStructure(optimizedFeatureAreas, dataInputTicketsWithRequirements, rootRequirementsPageName, confluence, ticketAreaMapper);
     }
 

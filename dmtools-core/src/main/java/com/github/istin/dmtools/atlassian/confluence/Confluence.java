@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.atlassian.confluence;
 
 import com.github.istin.dmtools.atlassian.common.networking.AtlassianRestClient;
@@ -204,7 +207,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
                 return searchResults;
             } catch (Exception e) {
                 // GraphQL API failed (403, 404, auth issues, etc.) - fallback to REST API
-                System.err.println("GraphQL search failed, falling back to REST API: " + e.getMessage());
+                logger.error("GraphQL search failed, falling back to REST API: " + e.getMessage());
             }
         }
 

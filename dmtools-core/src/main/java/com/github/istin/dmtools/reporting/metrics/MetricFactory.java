@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.reporting.metrics;
 
 import com.github.istin.dmtools.common.code.SourceCode;
@@ -26,11 +29,15 @@ import com.github.istin.dmtools.team.IEmployees;
 import com.github.istin.dmtools.figma.FigmaClient;
 
 import java.util.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Factory for creating Metric instances from configuration
  */
 public class MetricFactory {
+
+    private static final Logger logger = LogManager.getLogger(MetricFactory.class);
     private final TrackerClient trackerClient;
     private final SourceCode sourceCode;
     private final FigmaClient figmaClient;
@@ -325,7 +332,7 @@ public class MetricFactory {
             java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
             cal.setTime(sdf.parse(dateStr));
         } catch (Exception e) {
-            System.err.println("Failed to parse date: " + dateStr);
+            logger.error("Failed to parse date: " + dateStr);
             return null;
         }
         return cal;

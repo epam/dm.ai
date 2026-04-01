@@ -1,8 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.common.model;
 
 import com.github.istin.dmtools.common.utils.DateUtils;
 
 import java.util.Calendar;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public interface IPullRequest {
 
@@ -28,6 +33,8 @@ public interface IPullRequest {
 
     class Utils {
 
+    private static final Logger logger = LogManager.getLogger(IPullRequest.class);
+
         public static String upgradeTitleIfWip(IPullRequest pullRequest, String newTitle) {
             return (IPullRequest.Utils.isWIP(pullRequest) ? IPullRequest.Utils.upgradeTitleToWIP(newTitle) : newTitle).trim();
         }
@@ -50,7 +57,7 @@ public interface IPullRequest {
         public static Calendar getClosedDateAsCalendar(IPullRequest pullRequest) {
             Long closedDate = pullRequest.getClosedDate();
             if (closedDate == null) {
-                System.err.println(pullRequest);
+                logger.error("Error", pullRequest);
             }
             Calendar instance = Calendar.getInstance();
             instance.setTimeInMillis(closedDate);

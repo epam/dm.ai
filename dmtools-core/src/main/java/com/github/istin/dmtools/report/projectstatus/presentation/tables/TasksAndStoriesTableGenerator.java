@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.projectstatus.presentation.tables;
 
 import com.github.istin.dmtools.common.model.ITicket;
@@ -8,8 +11,12 @@ import com.github.istin.dmtools.report.projectstatus.presentation.TableGenerator
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class TasksAndStoriesTableGenerator implements TableGenerator {
+
+    private static final Logger logger = LogManager.getLogger(TasksAndStoriesTableGenerator.class);
     private final TableGenerator baseTableGenerator;
 
     public TasksAndStoriesTableGenerator(TableGenerator baseTableGenerator) {
@@ -53,7 +60,7 @@ public class TasksAndStoriesTableGenerator implements TableGenerator {
                 );
                 tableData.addRow(row);
             } catch (IOException e) {
-                System.err.println("Error adding task/story to table: " + e.getMessage());
+                logger.error("Error adding task/story to table: " + e.getMessage());
             }
         }
 

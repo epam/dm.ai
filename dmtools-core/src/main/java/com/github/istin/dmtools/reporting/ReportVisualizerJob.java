@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.reporting;
 
 import com.github.istin.dmtools.common.model.ITicket;
@@ -67,7 +70,7 @@ public class ReportVisualizerJob extends AbstractJob<ReportVisualizerJob.Params,
         }
 
         logger.info("Visualization generated: {}", htmlFile.getAbsolutePath());
-        System.out.println("Open in browser: file://" + htmlFile.getAbsolutePath());
+        logger.info("Open in browser: file://" + htmlFile.getAbsolutePath());
 
         return htmlFile;
     }

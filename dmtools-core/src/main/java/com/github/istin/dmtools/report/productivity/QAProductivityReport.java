@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.productivity;
 
 import com.github.istin.dmtools.ai.AI;
@@ -20,8 +23,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class QAProductivityReport extends AbstractJob<QAProductivityReportParams, ResultItem> {
+
+    private static final Logger logger = LogManager.getLogger(QAProductivityReport.class);
 
     @Override
     public ResultItem runJob(QAProductivityReportParams qaProductivityReportParams) throws Exception {
@@ -30,9 +37,9 @@ public class QAProductivityReport extends AbstractJob<QAProductivityReportParams
         Employees testers = Employees.getTesters(qaProductivityReportParams.getEmployees());
         String response = FileUtils.readFileToString(ProductivityTools.generate(BasicJiraClient.getInstance(), releaseGenerator, qaProductivityReportParams.getReportName() + (qaProductivityReportParams.isWeight() ? "_sp" : ""), formula, qaProductivityReportParams.getInputJQL(), generateListOfMetrics(qaProductivityReportParams), Release.Style.BY_SPRINTS, testers, qaProductivityReportParams.getIgnoreTicketPrefixes()));
         Set<String> unknownNames = testers.getUnknownNames();
-        System.out.println("Unknown Names");
-        System.out.println(unknownNames.size());
-        System.out.println(unknownNames);
+        logger.info("Unknown Names");
+        logger.info(unknownNames.size());
+        logger.info(unknownNames);
         return new ResultItem("qaProductivityReport", response);
     }
 

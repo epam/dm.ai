@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.documentation;
 
 import com.github.istin.dmtools.ai.AI;
@@ -59,14 +62,14 @@ public class DocumentationGenerator extends AbstractJob<DocumentationGeneratorPa
         if (!isReadFeatureAreasFromConfluenceRootPage) {
             JSONArray areas = documentationEditor.buildDraftFeatureAreasByStories(tickets);
             areas = documentationEditor.cleanFeatureAreas(areas);
-            System.out.println(areas);
+            logger.info(areas);
             optimizedFeatureAreas = documentationEditor.createFeatureAreasTree(areas);
         } else {
             optimizedFeatureAreas = documentationEditor.buildExistingAreasStructureForConfluence(eachPagePrefix, confluenceRootPage);
         }
 
         documentationEditor.buildConfluenceStructure(optimizedFeatureAreas, tickets, confluenceRootPage, confluence, ticketAreaMapper);
-        System.out.println(optimizedFeatureAreas);
+        logger.info(optimizedFeatureAreas);
 
         TicketDocumentationHistoryTrackerViaConfluence ticketDocumentationHistoryTrackerViaConfluence = new TicketDocumentationHistoryTrackerViaConfluence(confluence);
         documentationEditor.buildPagesForTickets(tickets, eachPagePrefix, confluenceRootPage, confluence, ticketAreaMapper, ticketDocumentationHistoryTrackerViaConfluence, false);

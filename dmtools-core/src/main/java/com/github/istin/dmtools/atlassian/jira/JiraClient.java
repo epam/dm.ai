@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.atlassian.jira;
 
 import com.github.istin.dmtools.atlassian.common.model.Assignee;
@@ -541,7 +544,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         SearchResult searchResults = search(searchQueryJQL, startAt, resolvedFields);
         JSONArray errorMessages = searchResults.getErrorMessages();
         if (errorMessages != null) {
-            System.err.println(errorMessages);
+            logger.error("Error", errorMessages);
             return;
         }
         int maxResults = searchResults.getMaxResults();
@@ -3063,10 +3066,10 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         priorityObject.put("name", priority);
         fields.put("priority", priorityObject);
         params.put("fields", fields);
-        System.out.println("key: " + key);
-        System.out.println("priority: " + priority);
+        logger.info("key: " + key);
+        logger.info("priority: " + priority);
         String response = updateTicket(key, params);
-        System.out.println("response: " + response);
+        logger.info("response: " + response);
         clearCache(request);
         return  response;
     }

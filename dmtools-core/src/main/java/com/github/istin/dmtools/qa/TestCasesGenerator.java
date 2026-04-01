@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.qa;
 
 import com.github.istin.dmtools.ai.AI;
@@ -166,7 +169,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                         trackerClient.postComment(ticket.getTicketKey(), errorMessage);
                     }
                 } catch (Exception commentException) {
-                    System.err.println("Failed to post error comment to ticket " + ticket.getTicketKey() + ": " + commentException.getMessage());
+                    logger.error("Failed to post error comment to ticket " + ticket.getTicketKey() + ": " + commentException.getMessage());
                 }
                 throw new RuntimeException("Test case generation failed for ticket " + ticket.getTicketKey(), e);
             }
@@ -204,12 +207,12 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         } else {
             currentlyLinked = trackerClient.getTestCases(mainTicket, params.getTestCaseIssueType());
         }
-        System.out.println("[DEBUG-LINKING] ticket=" + key + " existingCasesTotal=" + (listOfAllTestCases != null ? listOfAllTestCases.size() : "null") + " alreadyLinked=" + currentlyLinked.size());
+        logger.debug("[DEBUG-LINKING] ticket=" + key + " existingCasesTotal=" + (listOfAllTestCases != null ? listOfAllTestCases.size() : "null") + " alreadyLinked=" + currentlyLinked.size());
         if (listOfAllTestCases != null && !listOfAllTestCases.isEmpty()) {
-            System.out.println("[DEBUG-LINKING] existingCases keys (first 10): " + listOfAllTestCases.stream().limit(10).map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
+            logger.debug("[DEBUG-LINKING] existingCases keys (first 10): " + listOfAllTestCases.stream().limit(10).map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
         }
         if (!currentlyLinked.isEmpty()) {
-            System.out.println("[DEBUG-LINKING] alreadyLinked keys: " + currentlyLinked.stream().map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
+            logger.debug("[DEBUG-LINKING] alreadyLinked keys: " + currentlyLinked.stream().map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
         }
         List<ITicket> finaResults = params.isFindRelated()
                 ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, listOfAllTestCases, params.isLinkRelated(), params.getRelatedTestCasesRules(), existingRelationship, currentlyLinked, params, customAdapter)
@@ -225,7 +228,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             int storyTokens = new Claude35TokenCounter().countTokens(ticketContext.toText());
             int systemTokenLimits = chunkPreparation.getTokenLimit();
             int tokenLimit = (systemTokenLimits - storyTokens) / 2;
-            System.out.println("GENERATION TOKEN LIMIT: " + tokenLimit);
+            logger.info("GENERATION TOKEN LIMIT: " + tokenLimit);
 
             // Extract testCasesCreationRules and merge with extraRules from confluencePages
             String testCasesCreationRulesLink = params.getTestCasesCreationRules();
@@ -249,7 +252,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             if (!finaResults.isEmpty()) {
                 // Chunk existing test cases for generation
                 List<ChunkPreparation.Chunk> testCaseChunks = chunkPreparation.prepareChunks(finaResults, tokenLimit);
-                System.out.println("TEST CASE CHUNKS FOR GENERATION: " + testCaseChunks.size());
+                logger.info("TEST CASE CHUNKS FOR GENERATION: " + testCaseChunks.size());
 
                 // Generate test cases per chunk
                 for (ChunkPreparation.Chunk chunk : testCaseChunks) {
@@ -265,7 +268,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                             )
                     );
                     allGeneratedTestCases.addAll(chunkTestCases);
-                    System.out.println("Generated " + chunkTestCases.size() + " test cases from chunk");
+                    logger.info("Generated " + chunkTestCases.size() + " test cases from chunk");
                 }
 
                 if (testCaseChunks.size() > 1) {
@@ -278,7 +281,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 } else {
                     newTestCases = allGeneratedTestCases;
                 }
-                System.out.println("Final deduplicated test cases: " + newTestCases.size());
+                logger.info("Final deduplicated test cases: " + newTestCases.size());
             } else {
                 newTestCases = testCaseGeneratorAgent.run(params.getModelTestCasesCreation(),
                         new TestCaseGeneratorAgent.Params(
@@ -476,14 +479,14 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         TestCasesGeneratorParams params
     ) throws Exception {
         // Step 1: Deduplicate allGeneratedTestCases against itself to remove internal duplicates
-        System.out.println("Step 1: Deduplicating generated test cases against themselves");
+        logger.info("Step 1: Deduplicating generated test cases against themselves");
         List<TestCaseGeneratorAgent.TestCase> selfDeduplicated = deduplicateSelfInChunks(allGeneratedTestCases, params);
-        System.out.println("After self-deduplication: " + selfDeduplicated.size() + " unique test cases");
+        logger.info("After self-deduplication: " + selfDeduplicated.size() + " unique test cases");
         
         // Step 2: Deduplicate against existing test cases - use already prepared chunks
-        System.out.println("Step 2: Deduplicating against existing test cases");
+        logger.info("Step 2: Deduplicating against existing test cases");
         List<TestCaseGeneratorAgent.TestCase> finalDeduplicated = deduplicateAgainstExistingInChunks(selfDeduplicated, existingTestCaseChunks, params);
-        System.out.println("After deduplication against existing: " + finalDeduplicated.size() + " test cases");
+        logger.info("After deduplication against existing: " + finalDeduplicated.size() + " test cases");
         
         return finalDeduplicated;
     }
@@ -551,7 +554,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             // Update newTestCases to only include the ones that are not duplicates
             // This way, the next chunk will check a smaller list
             newTestCases = deduplicatedAgainstChunk;
-            System.out.println("After checking against existing chunk: " + newTestCases.size() + " test cases remain");
+            logger.debug("After checking against existing chunk: " + newTestCases.size() + " test cases remain");
         }
         
         return newTestCases;
@@ -650,13 +653,13 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             params.getModelTestCaseRelation(),
             new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence)
         );
-        System.out.println("[DEBUG-LINKING] verifyAndLink testCase=" + testCase.getKey() + " isConfirmed=" + isConfirmed);
+        logger.debug("[DEBUG-LINKING] verifyAndLink testCase=" + testCase.getKey() + " isConfirmed=" + isConfirmed);
 
         if (isConfirmed) {
             if (isLink) {
                 boolean isAlreadyLinked = currentlyLinkedTestCases != null &&
                     currentlyLinkedTestCases.stream().anyMatch(t -> t.getTicketKey().equals(testCase.getTicketKey()));
-                System.out.println("[DEBUG-LINKING] isAlreadyLinked=" + isAlreadyLinked + " for " + testCase.getKey());
+                logger.debug("[DEBUG-LINKING] isAlreadyLinked=" + isAlreadyLinked + " for " + testCase.getKey());
                 if (!isAlreadyLinked) {
                     if (customAdapter != null) {
                         if (needSync) {
@@ -701,31 +704,31 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         List<ITicket> chunkResults = new ArrayList<>();
 
         // Get potential test cases from the chunk
-        System.out.println("[DEBUG-LINKING] Calling relatedTestCasesAgent for ticket=" + ticketKey + " chunkSize=" + chunk.getText().length() + " chars, existingCasesInChunk=" + listOfAllTestCases.size());
+        logger.debug("[DEBUG-LINKING] Calling relatedTestCasesAgent for ticket=" + ticketKey + " chunkSize=" + chunk.getText().length() + " chars, existingCasesInChunk=" + listOfAllTestCases.size());
         JSONArray testCaseKeys = relatedTestCasesAgent.run(
             params.getModelTestCasesRelation(),
             new RelatedTestCasesAgent.Params(ticketText, chunk.getText(), extraRelatedTestCaseRulesFromConfluence)
         );
-        System.out.println("[DEBUG-LINKING] AI returned keys: " + testCaseKeys.toString());
+        logger.debug("[DEBUG-LINKING] AI returned keys: " + testCaseKeys.toString());
 
         // Prepare list of test cases to verify
         List<ITicket> testCasesToVerify = new ArrayList<>();
         for (int j = 0; j < testCaseKeys.length(); j++) {
             String rawKey = testCaseKeys.get(j).toString();
             String testCaseKey = customAdapter != null ? customAdapter.normalizeKeyFromAI(rawKey) : rawKey;
-            System.out.println("[DEBUG-LINKING] rawKey='" + rawKey + "' normalizedKey='" + testCaseKey + "'");
+            logger.debug("[DEBUG-LINKING] rawKey='" + rawKey + "' normalizedKey='" + testCaseKey + "'");
             ITicket testCase = listOfAllTestCases.stream()
                 .filter(t -> t.getKey().equals(testCaseKey))
                 .findFirst()
                 .orElse(null);
             if (testCase != null) {
                 testCasesToVerify.add(testCase);
-                System.out.println("[DEBUG-LINKING] Found in listOfAllTestCases: " + testCaseKey);
+                logger.debug("[DEBUG-LINKING] Found in listOfAllTestCases: " + testCaseKey);
             } else {
-                System.out.println("[DEBUG-LINKING] NOT FOUND in listOfAllTestCases: " + testCaseKey + " (available keys sample: " + listOfAllTestCases.stream().limit(5).map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")) + ")");
+                logger.debug("[DEBUG-LINKING] NOT FOUND in listOfAllTestCases: " + testCaseKey + " (available keys sample: " + listOfAllTestCases.stream().limit(5).map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")) + ")");
             }
         }
-        System.out.println("[DEBUG-LINKING] testCasesToVerify count: " + testCasesToVerify.size());
+        logger.debug("[DEBUG-LINKING] testCasesToVerify count: " + testCasesToVerify.size());
 
         // Process post-verification either in parallel or sequentially
         if (params.isEnableParallelPostVerification() && testCasesToVerify.size() > 1) {
@@ -788,11 +791,11 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         ChunkPreparation chunkPreparation = new ChunkPreparation();
 
         int storyTokens = new Claude35TokenCounter().countTokens(ticketText);
-        System.out.println("STORY TOKENS: " + storyTokens);
+        logger.info("STORY TOKENS: " + storyTokens);
         int systemTokenLimits = chunkPreparation.getTokenLimit();
-        System.out.println("SYSTEM TOKEN LIMITS: " + systemTokenLimits);
+        logger.info("SYSTEM TOKEN LIMITS: " + systemTokenLimits);
         int tokenLimit = (systemTokenLimits - storyTokens)/2;
-        System.out.println("TESTCASES TOKEN LIMITS: " + tokenLimit);
+        logger.info("TESTCASES TOKEN LIMITS: " + tokenLimit);
         List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(listOfAllTestCases, tokenLimit);
 
         if (params.isEnableParallelTestCaseCheck()) {

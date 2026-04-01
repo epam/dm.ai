@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.expert;
 
 import com.github.istin.dmtools.ai.AI;
@@ -368,7 +371,7 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
             attachResponse(orchestratorClass, "_stats.json", orchestratorClass.getSearchStats().toJson().toString(2), ticketKey, "application/json");
             attachResponse(orchestratorClass, "_result.txt", builder.toString(), ticketKey, "text/plain");
         } catch (Exception e) {
-            System.err.println("Failed to save and attach stats: " + e.getMessage());
+            logger.error("Failed to save and attach stats: " + e.getMessage());
             e.printStackTrace();
         }
     }

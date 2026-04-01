@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.broadcom.rally;
 
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
@@ -187,7 +190,7 @@ public abstract class RallyClient extends AbstractRestClient implements TrackerC
             String newCreatedTagResponse = post(tagCreationRequest);
             JSONObject createResponseObject = new JSONObject(newCreatedTagResponse);
             // Assuming the creation response gives you the created tag object
-            System.out.println(createResponseObject);
+            logger.info(createResponseObject);
             return createResponseObject.getJSONObject("CreateResult").getJSONObject("Object").getString("_ref");
         } else {
             return tags.get(0).getRef();
@@ -271,7 +274,7 @@ public abstract class RallyClient extends AbstractRestClient implements TrackerC
         RallyResponse searchResults = search(searchQuery, startAt, fields);
         JSONArray errorMessages = searchResults.getQueryResult().getErrors();
         if (errorMessages != null && !errorMessages.isEmpty()) {
-            System.err.println(errorMessages);
+            logger.error("Error", errorMessages);
             return;
         }
         int maxResults = searchResults.getQueryResult().getPageSize();
@@ -428,7 +431,7 @@ public abstract class RallyClient extends AbstractRestClient implements TrackerC
                 .param("start", 1)
                 .param("pagesize", 500);
         QueryResult queryResult = new RallyResponse(genericRequest.execute()).getQueryResult();
-        System.out.println(queryResult.getJSONObject());
+        logger.info(queryResult.getJSONObject());
         return queryResult.getIterations();
     }
 

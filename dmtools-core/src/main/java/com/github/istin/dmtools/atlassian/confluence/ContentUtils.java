@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.atlassian.confluence;
 
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
@@ -8,8 +11,12 @@ import org.jsoup.select.Elements;
 
 import java.io.File;
 import java.io.IOException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ContentUtils {
+
+    private static final Logger logger = LogManager.getLogger(ContentUtils.class);
 
     public interface UrlToImageFile {
 
@@ -27,7 +34,7 @@ public class ContentUtils {
         // Iterate over each anchor tag
         for (Element anchor : anchorTags) {
             String href = anchor.attr("href");
-            System.out.println("image url : " + href);
+            logger.info("image url : " + href);
             String text = anchor.text();
 
             for (UrlToImageFile urlToImageFile : urlToImageFiles) {

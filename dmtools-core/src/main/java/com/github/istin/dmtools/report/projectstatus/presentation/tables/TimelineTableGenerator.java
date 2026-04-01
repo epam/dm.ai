@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.projectstatus.presentation.tables;
 
 import com.github.istin.dmtools.common.model.ITicket;
@@ -12,8 +15,12 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.io.IOException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class TimelineTableGenerator implements TableGenerator {
+
+    private static final Logger logger = LogManager.getLogger(TimelineTableGenerator.class);
     private final TableGenerator baseTableGenerator;
     private final TicketSorter ticketSorter;
 
@@ -793,7 +800,7 @@ public class TimelineTableGenerator implements TableGenerator {
                 Date closedDate = parseDate(closedDateStr);
 
                 if (closedDate == null) {
-                    System.err.println("Could not parse date: " + closedDateStr);
+                    logger.error("Could not parse date: " + closedDateStr);
                     continue;
                 }
 
@@ -809,7 +816,7 @@ public class TimelineTableGenerator implements TableGenerator {
                 typeList.add(ticket);
 
             } catch (Exception e) {
-                System.err.println("Error processing ticket for timeline: " + e.getMessage());
+                logger.error("Error processing ticket for timeline: " + e.getMessage());
             }
         }
 
@@ -825,7 +832,7 @@ public class TimelineTableGenerator implements TableGenerator {
         for (ITicket bug : bugs) {
             Date creationDate = bug.getCreated(); // Use creation date
             if (creationDate == null) {
-                System.err.println("Warning: Bug " + bug.getKey() + " has no creation date, skipping for timeline.");
+                logger.error("Warning: Bug " + bug.getKey() + " has no creation date, skipping for timeline.");
                 continue; // Skip tickets without a creation date
             }
 
@@ -834,7 +841,7 @@ public class TimelineTableGenerator implements TableGenerator {
             try {
                 priority = bug.getPriority(); // Use priority
             } catch (IOException e) {
-                System.err.println("Warning: Could not get priority for bug " + bug.getKey() + ": " + e.getMessage());
+                logger.error("Warning: Could not get priority for bug " + bug.getKey() + ": " + e.getMessage());
                 // Assign a default or handle as needed, here we use null
             }
 
@@ -1035,7 +1042,7 @@ public class TimelineTableGenerator implements TableGenerator {
         for (ITicket item : items) {
             Date creationDate = item.getCreated();
             if (creationDate == null) {
-                System.err.println("Warning: Item " + item.getKey() + " has no creation date, skipping for timeline.");
+                logger.error("Warning: Item " + item.getKey() + " has no creation date, skipping for timeline.");
                 continue;
             }
 
@@ -1054,9 +1061,9 @@ public class TimelineTableGenerator implements TableGenerator {
                     categoryValue = item.getFieldsAsJSON().optString(categoryFieldName, null);
                 }
             } catch (IOException e) {
-                System.err.println("Warning: Could not get category '" + categoryFieldName + "' for item " + item.getKey() + ": " + e.getMessage());
+                logger.error("Warning: Could not get category '" + categoryFieldName + "' for item " + item.getKey() + ": " + e.getMessage());
             } catch (Exception e) { // Catch potential JSON exceptions
-                System.err.println("Warning: Error accessing category field '" + categoryFieldName + "' for item " + item.getKey() + ": " + e.getMessage());
+                logger.error("Warning: Error accessing category field '" + categoryFieldName + "' for item " + item.getKey() + ": " + e.getMessage());
             }
 
             groupedItems

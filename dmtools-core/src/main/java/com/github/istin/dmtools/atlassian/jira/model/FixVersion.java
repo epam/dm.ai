@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.atlassian.jira.model;
 
 import com.github.istin.dmtools.common.model.JSONModel;
@@ -8,8 +11,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.Date;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class FixVersion extends JSONModel implements Comparable<FixVersion>, ReportIteration {
+
+    private static final Logger logger = LogManager.getLogger(FixVersion.class);
 
     //"05/Nov/14"
     public static final String USER_RELEASE_DATE = "userReleaseDate";
@@ -52,7 +59,7 @@ public class FixVersion extends JSONModel implements Comparable<FixVersion>, Rep
     public Date getStartDate() {
         String userStartDate = getUserStartDate();
         if (userStartDate == null || userStartDate.isEmpty()) {
-            System.out.println(getJSONObject().toString());
+            logger.info(getJSONObject().toString());
         }
         return DateUtils.parseJiraDate(userStartDate);
     }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.common.utils;
 
 import org.apache.logging.log4j.LogManager;
@@ -101,7 +104,7 @@ public class CommandLineUtils {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+                logger.info(line);
                 output.append(line).append(System.lineSeparator());
             }
         }
@@ -194,7 +197,7 @@ public class CommandLineUtils {
                     });
         } catch (IOException e) {
             // Log error but don't fail - just return empty map
-            System.err.println("Warning: Could not load environment file " + filename + ": " + e.getMessage());
+            logger.error("Warning: Could not load environment file " + filename + ": " + e.getMessage());
         }
 
         return envVars;

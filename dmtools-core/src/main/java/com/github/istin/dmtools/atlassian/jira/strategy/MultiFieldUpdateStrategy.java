@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.atlassian.jira.strategy;
 
 import org.json.JSONArray;
@@ -6,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Strategy for handling multiple custom fields with the same name in Jira.
@@ -13,6 +18,8 @@ import java.util.HashMap;
  * or when fields are duplicated across projects.
  */
 public class MultiFieldUpdateStrategy {
+
+    private static final Logger logger = LogManager.getLogger(MultiFieldUpdateStrategy.class);
 
     /**
      * Represents a custom field with its metadata
@@ -79,7 +86,7 @@ public class MultiFieldUpdateStrategy {
             }
         } catch (Exception e) {
             // Log error and return empty list
-            System.err.println("Error parsing fields response: " + e.getMessage());
+            logger.error("Error parsing fields response: " + e.getMessage());
         }
 
         return matchingFields;
@@ -183,7 +190,7 @@ public class MultiFieldUpdateStrategy {
      */
     public static void logFieldSelection(String fieldName, List<CustomField> fields, CustomField selectedField) {
         if (fields.size() > 1) {
-            System.out.println("WARNING: Found " + fields.size() + " fields with name '" + fieldName + "':");
+            logger.debug("WARNING: Found " + fields.size() + " fields with name '" + fieldName + "':");
             for (CustomField field : fields) {
                 String status = field.equals(selectedField) ? " [SELECTED]" : "";
                 System.out.println("  - " + field.getId() + " (active: " + field.isActive() +

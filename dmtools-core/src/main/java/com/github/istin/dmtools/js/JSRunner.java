@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.js;
 
 import com.github.istin.dmtools.ai.AI;
@@ -172,8 +175,8 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
      */
     public static void main(String[] args) {
         if (args.length != 1) {
-            System.err.println("Usage: JSRunner <json-params>");
-            System.err.println("Example: JSRunner '{\"jsPath\": \"test.js\", \"ticket\": {\"key\": \"TEST-123\"}, \"response\": \"AI response\"}'");
+            logger.error("Usage: JSRunner <json-params>");
+            logger.error("Example: JSRunner '{\"jsPath\": \"test.js\", \"ticket\": {\"key\": \"TEST-123\"}, \"response\": \"AI response\"}'");
             System.exit(1);
         }
 
@@ -197,11 +200,11 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
             Object result = runner.runJobImpl(params);
             
             // Print result
-            System.out.println("=== JavaScript Execution Result ===");
-            System.out.println(result);
+            logger.info("=== JavaScript Execution Result ===");
+            logger.info(result);
             
         } catch (Exception e) {
-            System.err.println("Error executing JavaScript: " + e.getMessage());
+            logger.error("Error executing JavaScript: " + e.getMessage());
             e.printStackTrace();
             System.exit(1);
         }

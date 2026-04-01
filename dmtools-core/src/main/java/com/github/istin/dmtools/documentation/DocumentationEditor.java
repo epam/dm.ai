@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.documentation;
 
 import com.github.istin.dmtools.ai.ConversationObserver;
@@ -120,7 +123,7 @@ public class DocumentationEditor {
 
         }
 
-        System.out.println(areas);
+        logger.info(areas);
         for (int j = 0; j < topAreas.length(); j++) {
             JSONArray areasAndSubAreas = topAreas.getJSONArray(j);
             String area = areasAndSubAreas.getString(0);

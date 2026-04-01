@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.projectstatus.presentation.tables;
 
 import com.github.istin.dmtools.common.model.ITicket;
@@ -9,8 +12,12 @@ import com.github.istin.dmtools.report.projectstatus.presentation.TableGenerator
 
 import java.io.IOException;
 import java.util.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class BugTableGenerator implements TableGenerator {
+
+    private static final Logger logger = LogManager.getLogger(BugTableGenerator.class);
     private final TableGenerator baseTableGenerator;
     private final TicketStatisticsCalculator statisticsCalculator;
     private final TicketSorter ticketSorter;
@@ -105,7 +112,7 @@ public class BugTableGenerator implements TableGenerator {
                 tableData.addRow(rowData);
             } catch (IOException e) {
                 // Log error and potentially skip the row or add a placeholder
-                System.err.println("Error processing row for ticket: " + safeGetKey(ticket) + ". Error: " + e.getMessage());
+                logger.error("Error processing row for ticket: " + safeGetKey(ticket) + ". Error: " + e.getMessage());
             }
         }
 
@@ -133,7 +140,7 @@ public class BugTableGenerator implements TableGenerator {
                      filtered.add(bug);
                  }
              } catch (IOException e) {
-                  System.err.println("Error reading priority for bug " + bug.getKey() + " in filterBugsByPriority: " + e.getMessage());
+                  logger.error("Error reading priority for bug " + bug.getKey() + " in filterBugsByPriority: " + e.getMessage());
              }
         }
         return filtered;

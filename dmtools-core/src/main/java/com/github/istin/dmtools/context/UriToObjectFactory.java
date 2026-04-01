@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.context;
 
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
@@ -16,12 +19,16 @@ import javax.inject.Inject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Factory for creating UriToObject instances for URI processing.
  * Supports both standalone and server-managed modes.
  */
 public class UriToObjectFactory {
+
+    private static final Logger logger = LogManager.getLogger(UriToObjectFactory.class);
 
     // Injected instances for server-managed mode
     private final TrackerClient<? extends ITicket> trackerClient;
@@ -112,7 +119,7 @@ public class UriToObjectFactory {
             try {
                 return BasicJiraClient.getInstance();
             } catch (IOException e) {
-                System.err.println("Failed to get BasicJiraClient instance: " + e.getMessage());
+                logger.error("Failed to get BasicJiraClient instance: " + e.getMessage());
                 return null;
             }
         }
@@ -131,7 +138,7 @@ public class UriToObjectFactory {
             try {
                 return BasicConfluence.getInstance();
             } catch (IOException e) {
-                System.err.println("Failed to get BasicConfluence instance: " + e.getMessage());
+                logger.error("Failed to get BasicConfluence instance: " + e.getMessage());
                 return null;
             }
         }

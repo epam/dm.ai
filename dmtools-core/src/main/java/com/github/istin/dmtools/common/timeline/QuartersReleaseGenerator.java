@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.common.timeline;
 
 import com.github.istin.dmtools.common.utils.DateUtils;
@@ -8,8 +11,12 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class QuartersReleaseGenerator implements IReleaseGenerator {
+
+    private static final Logger logger = LogManager.getLogger(QuartersReleaseGenerator.class);
 
     private final String startDateAsString;
     private final Calendar startDate = Calendar.getInstance();
@@ -77,7 +84,7 @@ public class QuartersReleaseGenerator implements IReleaseGenerator {
 
         // Debug print out the quarters
         for (Release release : releases) {
-            System.out.println("Release ID: " + release.getId() + ", Name: " + release.getName());
+            logger.info("Release ID: " + release.getId() + ", Name: " + release.getName());
         }
     }
 

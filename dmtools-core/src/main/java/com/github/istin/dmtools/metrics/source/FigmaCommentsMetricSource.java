@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.metrics.source;
 
 import com.github.istin.dmtools.common.model.IComment;
@@ -9,8 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.github.istin.dmtools.common.utils.DateUtils.calendar;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class FigmaCommentsMetricSource extends CommonSourceCollector {
+
+    private static final Logger logger = LogManager.getLogger(FigmaCommentsMetricSource.class);
 
     private List<String> peopleToFilterOut;
 
@@ -31,7 +38,7 @@ public class FigmaCommentsMetricSource extends CommonSourceCollector {
         List<KeyTime> data = new ArrayList<>();
         for (String fileKey : files) {
             List<IComment> comments = figmaClient.getComments(fileKey);
-            System.out.println(comments.size());
+            logger.info(comments.size());
             for (IComment comment : comments) {
                 String name = employees.transformName(comment.getAuthor().getFullName());
                 if (employees != null) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.productivity;
 
 import com.github.istin.dmtools.ai.AI;
@@ -31,8 +34,12 @@ import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class DevProductivityReport extends AbstractJob<DevProductivityReportParams, ResultItem> {
+
+    private static final Logger logger = LogManager.getLogger(DevProductivityReport.class);
 
     @Override
     public ResultItem runJob(DevProductivityReportParams devProductivityReportParams) throws Exception {
@@ -52,9 +59,9 @@ public class DevProductivityReport extends AbstractJob<DevProductivityReportPara
         }
         String response = FileUtils.readFileToString(ProductivityTools.generate(trackerClient, releaseGenerator, team, formula, inputJQL, generateListOfMetrics(devProductivityReportParams, employees, DateUtils.parseCalendar(devProductivityReportParams.getStartDate())), Release.Style.BY_SPRINTS, devProductivityReportParams.getIgnoreTicketPrefixes()));
         Set<String> unknownNames = employees.getUnknownNames();
-        System.out.println("Unknown Names");
-        System.out.println(unknownNames.size());
-        System.out.println(unknownNames);
+        logger.info("Unknown Names");
+        logger.info(unknownNames.size());
+        logger.info(unknownNames);
         return new ResultItem("devProductivityReport", response);
 
     }
@@ -345,7 +352,7 @@ public class DevProductivityReport extends AbstractJob<DevProductivityReportPara
             if (days < 0) {
                 days = 1;
             } else if (days > 10) {
-                System.out.println("wrong reporting " + ticket.getTicketLink() + " " + days);
+                logger.info("wrong reporting " + ticket.getTicketLink() + " " + days);
             }
             if (startDate != null) {
                 List<KeyTime> datesWhenTicketWasInStatus = ChangelogAssessment.findDatesWhenTicketWasInStatus(null, false, jiraClient, ticket.getKey(), ticket, params.getStatusesInDevelopment());

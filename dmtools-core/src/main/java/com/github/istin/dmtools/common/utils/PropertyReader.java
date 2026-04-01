@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.common.utils;
 
 import org.apache.logging.log4j.LogManager;
@@ -347,7 +350,7 @@ public class PropertyReader {
         try {
             return Integer.parseInt(jiraMaxSearchResults.trim());
         } catch (NumberFormatException e) {
-            System.err.println("Invalid JIRA_MAX_SEARCH_RESULTS value: " + jiraMaxSearchResults + ", using default -1");
+            logger.error("Invalid JIRA_MAX_SEARCH_RESULTS value: " + jiraMaxSearchResults + ", using default -1");
             return -1;
         }
     }

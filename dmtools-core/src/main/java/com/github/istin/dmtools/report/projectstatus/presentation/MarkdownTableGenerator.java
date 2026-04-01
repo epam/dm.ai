@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.projectstatus.presentation;
 
 import com.github.istin.dmtools.common.model.ITicket;
@@ -8,8 +11,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class MarkdownTableGenerator implements TableGenerator {
+
+    private static final Logger logger = LogManager.getLogger(MarkdownTableGenerator.class);
 
     @Override
     public String generateTable(TableData tableData) {
@@ -106,7 +113,7 @@ public class MarkdownTableGenerator implements TableGenerator {
                 }
                 tableData.addRow(row);
             } catch (IOException e) {
-                System.err.println("Error generating table row: " + e.getMessage());
+                logger.error("Error generating table row: " + e.getMessage());
             }
         }
 

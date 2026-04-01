@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.projectstatus.data;
 
 import com.github.istin.dmtools.atlassian.jira.model.IssueType;
@@ -11,8 +14,12 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class TicketDataFetcher {
+
+    private static final Logger logger = LogManager.getLogger(TicketDataFetcher.class);
 
     private final TrackerClient trackerClient;
     private final String[] completedStatuses;
@@ -66,7 +73,7 @@ public class TicketDataFetcher {
                     storiesTasks.add(ticket);
                 }
             } catch (IOException e) {
-                System.err.println("Error processing ticket type: " + e.getMessage());
+                logger.error("Error processing ticket type: " + e.getMessage());
             }
         }
 

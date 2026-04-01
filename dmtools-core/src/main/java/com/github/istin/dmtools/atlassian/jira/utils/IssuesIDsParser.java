@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.atlassian.jira.utils;
 
 import lombok.Getter;
@@ -143,7 +146,7 @@ public class IssuesIDsParser {
         // Create pattern to match both /wiki/ and /l/cp/ URLs
         String pattern = escapedDomain + "/(wiki/|l/cp/)[^\"\\s|\\]\\\\]+";
 
-        System.out.println("Using pattern: " + pattern);
+        logger.info("Using pattern: " + pattern);
 
         // Compile the regex
         Pattern regex = Pattern.compile(pattern);
@@ -155,7 +158,7 @@ public class IssuesIDsParser {
         // Find matches
         while (matcher.find()) {
             String url = matcher.group();
-            System.out.println("Found match: " + url);
+            logger.debug("Found match: " + url);
 
             // Clean up the URL
             url = cleanupUrl(url);

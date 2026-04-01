@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.job;
 
 import org.apache.logging.log4j.LogManager;
@@ -11,19 +14,19 @@ public class UrlEncodedJobTrigger {
     private static final Logger logger = LogManager.getLogger(UrlEncodedJobTrigger.class);
 
     public static void main(String... args) throws Exception {
-        System.out.println("Root logger level: " + LogManager.getRootLogger().getLevel());
+        logger.info("Root logger level: " + LogManager.getRootLogger().getLevel());
         logger.debug("This is a debug message");
         logger.info("This is an info message");
         logger.warn("This is a warn message");
         logger.error("This is an error message");
-        System.out.println(args[0]);
+        logger.info(args[0]);
         if (args != null) {
             for (String arg : args) {
                 logger.info("arg: {}", arg);
             }
             String decodedArgs = URLDecoder.decode(args[0]).replace("\n","");
-            System.out.println(decodedArgs);
-            System.out.println(new JSONObject(decodedArgs));
+            logger.info(decodedArgs);
+            logger.info(new JSONObject(decodedArgs));
             String base64Encoded = JobRunner.encodeBase64(decodedArgs);
             JobRunner.main(new String[] {base64Encoded});
         } else {

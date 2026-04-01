@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.ai.AI;
@@ -386,7 +389,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             int requestTokens = new Claude35TokenCounter().countTokens(inputParams.toString());
             int systemTokenLimits = contextChunkPreparation.getTokenLimit();
             int tokenLimit = (systemTokenLimits - requestTokens)/2;
-            System.out.println("GENERATION TOKEN LIMIT: " + tokenLimit);
+            logger.info("GENERATION TOKEN LIMIT: " + tokenLimit);
             contextOrchestrator.setTokenLimit(tokenLimit);
             contextOrchestrator.processUrisInContent(textFieldsOnly, uriProcessingSources, 1);
             contextOrchestrator.processUrisInContent(attachments, uriProcessingSources, 1);
@@ -409,7 +412,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             }
                         } catch (Exception e) {
                             // Log but don't fail the workflow
-                            System.err.println("Failed to call hook: " + hook + ", error: " + e.getMessage());
+                            logger.error("Failed to call hook: " + hook + ", error: " + e.getMessage());
                         }
                     }
                 }

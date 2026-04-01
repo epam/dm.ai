@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2024 EPAM Systems, Inc.
+
 package com.github.istin.dmtools.report.projectstatus.presentation.tables;
 
 import com.github.istin.dmtools.common.model.ITicket;
@@ -8,8 +11,12 @@ import com.github.istin.dmtools.report.projectstatus.presentation.TableGenerator
 
 import java.io.IOException;
 import java.util.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class StoryPointsTableGenerator implements TableGenerator {
+
+    private static final Logger logger = LogManager.getLogger(StoryPointsTableGenerator.class);
     private final TableGenerator baseTableGenerator;
     private final TicketStatisticsCalculator statisticsCalculator;
     private final TicketSorter ticketSorter;
@@ -55,7 +62,7 @@ public class StoryPointsTableGenerator implements TableGenerator {
                 totalStoryPoints += storyPoints;
                 totalTickets++;
             } catch (IOException e) {
-                System.err.println("Error processing ticket for story points: " + e.getMessage());
+                logger.error("Error processing ticket for story points: " + e.getMessage());
             }
         }
 
