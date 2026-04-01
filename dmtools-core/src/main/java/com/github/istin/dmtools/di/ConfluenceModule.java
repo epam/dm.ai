@@ -7,12 +7,16 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.UriToObjectFactory;
 import dagger.Module;
 import dagger.Provides;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.inject.Singleton;
 import java.io.IOException;
 
 @Module
 public class ConfluenceModule {
+
+    private static final Logger logger = LogManager.getLogger(ConfluenceModule.class);
 
     @Provides
     @Singleton
@@ -28,7 +32,7 @@ public class ConfluenceModule {
     UriToObjectFactory provideUriToObjectFactory(TrackerClient<? extends ITicket> trackerClient, 
                                                  Confluence confluence, 
                                                  SourceCodeFactory sourceCodeFactory) {
-        System.out.println("🔧 [ConfluenceModule] Creating UriToObjectFactory for standalone mode");
+        logger.debug("[ConfluenceModule] Creating UriToObjectFactory for standalone mode");
         return new UriToObjectFactory(trackerClient, confluence, sourceCodeFactory);
     }
 }
