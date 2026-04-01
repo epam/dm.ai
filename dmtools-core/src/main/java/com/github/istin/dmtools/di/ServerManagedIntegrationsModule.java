@@ -39,6 +39,8 @@ import javax.inject.Singleton;
 import java.io.IOException;
 import java.util.*;
 import java.util.Base64;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Dagger module for server-managed job execution with pre-resolved integrations.
@@ -50,6 +52,7 @@ import java.util.Base64;
 @Module
 public class ServerManagedIntegrationsModule {
     
+    private static final Logger logger = LogManager.getLogger(ServerManagedIntegrationsModule.class);
     private final JSONObject resolvedIntegrations;
     private final String executionId;
     private final LogCallback logCallback;
@@ -74,7 +77,7 @@ public class ServerManagedIntegrationsModule {
     @Provides
     @Singleton
     ApplicationConfiguration provideServerManagedConfiguration() {
-        System.out.println("⚠️ [ServerManagedIntegrationsModule] Providing empty ApplicationConfiguration for backward compatibility only");
+        logger.info("⚠️ [ServerManagedIntegrationsModule] Providing empty ApplicationConfiguration for backward compatibility only");
         return new InMemoryConfiguration(); // Empty configuration
     }
 
@@ -88,7 +91,7 @@ public class ServerManagedIntegrationsModule {
     @Singleton
     public List<SourceCode> provideSourceCodes() {
         try {
-            System.out.println("🔧 [ServerManagedIntegrationsModule] Providing SourceCode integrations...");
+            logger.info("🔧 [ServerManagedIntegrationsModule] Providing SourceCode integrations...");
             List<SourceCode> sourceCodes = new ArrayList<>();
             
             // Check if GitHub is configured and add it
@@ -100,7 +103,7 @@ public class ServerManagedIntegrationsModule {
                 String repository = githubConfig.optString("SOURCE_GITHUB_REPOSITORY", null);
                 
                 if (url != null && token != null) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedGitHub with resolved credentials");
+                    logger.debug("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedGitHub with resolved credentials");
                     SourceCode githubSourceCode = new CustomServerManagedGitHub(url, token, workspace, repository);
                     sourceCodes.add(githubSourceCode);
                 } else {
@@ -111,7 +114,7 @@ public class ServerManagedIntegrationsModule {
             
             return sourceCodes;
         } catch (IOException e) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to create SourceCode instances: " + e.getMessage());
+            logger.error("❌ [ServerManagedIntegrationsModule] Failed to create SourceCode instances: " + e.getMessage());
             throw new RuntimeException("Failed to create SourceCode instances", e);
         }
     }
@@ -120,10 +123,10 @@ public class ServerManagedIntegrationsModule {
     @Singleton
     public TrackerClient<? extends ITicket> provideTrackerClient() {
         try {
-            System.out.println("🔧 [ServerManagedIntegrationsModule] Providing TrackerClient integration...");
+            logger.info("🔧 [ServerManagedIntegrationsModule] Providing TrackerClient integration...");
             
             if (resolvedIntegrations == null) {
-                System.err.println("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null TrackerClient");
+                logger.error("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null TrackerClient");
                 return null;
             }
 
@@ -131,7 +134,7 @@ public class ServerManagedIntegrationsModule {
             String defaultTracker = null;
             if (resolvedIntegrations.has("DEFAULT_TRACKER")) {
                 defaultTracker = resolvedIntegrations.optString("DEFAULT_TRACKER", null);
-                System.out.println("🔧 [ServerManagedIntegrationsModule] DEFAULT_TRACKER set to: " + defaultTracker);
+                logger.info("🔧 [ServerManagedIntegrationsModule] DEFAULT_TRACKER set to: " + defaultTracker);
             }
             
             // Helper method to create clients
@@ -150,10 +153,10 @@ public class ServerManagedIntegrationsModule {
                 }
                 
                 if (client != null) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Successfully created preferred tracker: " + defaultTracker);
+                    logger.debug("✅ [ServerManagedIntegrationsModule] Successfully created preferred tracker: " + defaultTracker);
                     return client;
                 } else {
-                    System.err.println("⚠️ [ServerManagedIntegrationsModule] Failed to create preferred tracker: " + defaultTracker + ". Falling back to auto-detection.");
+                    logger.error("⚠️ [ServerManagedIntegrationsModule] Failed to create preferred tracker: " + defaultTracker + ". Falling back to auto-detection.");
                 }
             }
 
@@ -183,10 +186,10 @@ public class ServerManagedIntegrationsModule {
                 if (client != null) return client;
             }
             
-            System.err.println("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO or Rally) available - returning null TrackerClient");
+            logger.error("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO or Rally) available - returning null TrackerClient");
             return null;
         } catch (Exception e) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to create TrackerClient instance with resolved credentials: " + e.getMessage());
+            logger.error("❌ [ServerManagedIntegrationsModule] Failed to create TrackerClient instance with resolved credentials: " + e.getMessage());
             return null;
         }
     }
@@ -194,11 +197,11 @@ public class ServerManagedIntegrationsModule {
     private TrackerClient<? extends ITicket> createXrayClient(JSONObject resolvedIntegrations) throws IOException {
         // X-ray requires both Jira and X-ray configuration
         if (!resolvedIntegrations.has("jira")) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] X-ray configuration requires Jira configuration");
+            logger.error("❌ [ServerManagedIntegrationsModule] X-ray configuration requires Jira configuration");
             return null;
         }
         if (!resolvedIntegrations.has("xray")) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] X-ray configuration not found in resolved integrations");
+            logger.error("❌ [ServerManagedIntegrationsModule] X-ray configuration not found in resolved integrations");
             return null;
         }
 
@@ -220,7 +223,7 @@ public class ServerManagedIntegrationsModule {
             if (!email.isEmpty() && !apiToken.isEmpty()) {
                 String credentials = email.trim() + ":" + apiToken.trim();
                 jiraToken = Base64.getEncoder().encodeToString(credentials.getBytes());
-                System.out.println("✅ [ServerManagedIntegrationsModule] Combined JIRA_EMAIL + JIRA_API_TOKEN for authentication");
+                logger.info("✅ [ServerManagedIntegrationsModule] Combined JIRA_EMAIL + JIRA_API_TOKEN for authentication");
             }
         } else if (jiraConfig.has("JIRA_LOGIN_PASS_TOKEN")) {
             jiraToken = jiraConfig.optString("JIRA_LOGIN_PASS_TOKEN", "");
@@ -233,12 +236,12 @@ public class ServerManagedIntegrationsModule {
 
         if (!jiraBasePath.isEmpty() && !jiraToken.isEmpty() && 
             !xrayBasePath.isEmpty() && !xrayClientId.isEmpty() && !xrayClientSecret.isEmpty()) {
-            System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedXrayClient with resolved credentials");
+            logger.debug("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedXrayClient with resolved credentials");
             return new CustomServerManagedXrayClient(jiraBasePath, jiraToken, jiraAuthType, 
                     jiraExtraFieldsProject, jiraExtraFields, maxSearchResults,
                     xrayBasePath, xrayClientId, xrayClientSecret);
         } else {
-            System.err.println("❌ [ServerManagedIntegrationsModule] X-ray configuration missing required parameters");
+            logger.error("❌ [ServerManagedIntegrationsModule] X-ray configuration missing required parameters");
             return null;
         }
     }
@@ -260,14 +263,14 @@ public class ServerManagedIntegrationsModule {
                     // Combine email:token and base64 encode
                     String credentials = email.trim() + ":" + apiToken.trim();
                     token = Base64.getEncoder().encodeToString(credentials.getBytes());
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Combined JIRA_EMAIL + JIRA_API_TOKEN for authentication");
+                    logger.info("✅ [ServerManagedIntegrationsModule] Combined JIRA_EMAIL + JIRA_API_TOKEN for authentication");
                 }
             } else if (jiraConfig.has("JIRA_LOGIN_PASS_TOKEN")) {
                 token = jiraConfig.optString("JIRA_LOGIN_PASS_TOKEN", "");
             }
             
             if (!basePath.isEmpty() && !token.isEmpty()) {
-                System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials (maxSearchResults=" + maxSearchResults + ")");
+                logger.debug("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedJiraClient with resolved credentials (maxSearchResults=" + maxSearchResults + ")");
                 return new CustomServerManagedJiraClient(basePath, token, authType, extraFields, maxSearchResults);
             } else {
                 System.err.println("❌ [ServerManagedIntegrationsModule] Jira configuration missing required parameters (JIRA_BASE_PATH=" + 
@@ -285,7 +288,7 @@ public class ServerManagedIntegrationsModule {
             String patToken = adoConfig.optString("ADO_PAT_TOKEN", "");
             
             if (!organization.isEmpty() && !project.isEmpty() && !patToken.isEmpty()) {
-                System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedAzureDevOpsClient with resolved credentials");
+                logger.debug("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedAzureDevOpsClient with resolved credentials");
                 return new CustomServerManagedAzureDevOpsClient(organization, project, patToken);
             } else {
                 System.err.println("❌ [ServerManagedIntegrationsModule] ADO configuration missing required parameters (ADO_ORGANIZATION=" + 
@@ -304,7 +307,7 @@ public class ServerManagedIntegrationsModule {
             String token = rallyConfig.optString("RALLY_TOKEN", "");
 
             if (!token.isEmpty()) {
-                System.out.println("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedRallyClient with resolved credentials");
+                logger.debug("✅ [ServerManagedIntegrationsModule] Creating CustomServerManagedRallyClient with resolved credentials");
                 return new CustomServerManagedRallyClient(basePath, token);
             } else {
                 System.err.println("❌ [ServerManagedIntegrationsModule] Rally configuration missing required parameters (token=" +
@@ -339,7 +342,7 @@ public class ServerManagedIntegrationsModule {
             // Performance optimization: Clean cache folder first, then enable caching
             setClearCache(true);  // This cleans the cache folder
             setCacheGetRequestsEnabled(true);  // Enable caching for better performance
-            System.out.println("✅ [CustomServerManagedJiraClient] Cache cleaned and enabled for performance optimization");
+            logger.debug("✅ [CustomServerManagedJiraClient] Cache cleaned and enabled for performance optimization");
             System.out.println("✅ [CustomServerManagedJiraClient] Max search results configured: " + 
                 (maxSearchResults == -1 ? "unlimited" : String.valueOf(maxSearchResults)));
             
@@ -360,7 +363,7 @@ public class ServerManagedIntegrationsModule {
                         extendedFields.add(trimmedField);
                     }
                 }
-                System.out.println("✅ [CustomServerManagedJiraClient] Added extra fields: " + extraFields);
+                logger.info("✅ [CustomServerManagedJiraClient] Added extra fields: " + extraFields);
             }
             
             extendedJiraFields = extendedFields.toArray(new String[0]);
@@ -430,7 +433,7 @@ public class ServerManagedIntegrationsModule {
 
             // Performance optimization: Enable caching (following CustomServerManagedJiraClient pattern)
             setCacheGetRequestsEnabled(true);
-            System.out.println("✅ [CustomServerManagedXrayClient] Cache cleaned and enabled for performance optimization");
+            logger.debug("✅ [CustomServerManagedXrayClient] Cache cleaned and enabled for performance optimization");
             System.out.println("✅ [CustomServerManagedXrayClient] Max search results configured: " +
                     (maxSearchResults == -1 ? "unlimited" : String.valueOf(maxSearchResults)));
         }
@@ -453,7 +456,7 @@ public class ServerManagedIntegrationsModule {
             // Performance optimization: Clean cache folder first, then enable caching
             setClearCache(true);  // This cleans the cache folder
             setCacheGetRequestsEnabled(true);  // Enable caching for better performance
-            System.out.println("✅ [CustomServerManagedAzureDevOpsClient] Cache cleaned and enabled for performance optimization");
+            logger.debug("✅ [CustomServerManagedAzureDevOpsClient] Cache cleaned and enabled for performance optimization");
         }
         
         @Override
@@ -473,7 +476,7 @@ public class ServerManagedIntegrationsModule {
             setLogEnabled(true);
             setClearCache(true);
             setCacheGetRequestsEnabled(true);
-            System.out.println("✅ [CustomServerManagedRallyClient] Cache cleaned and enabled for performance optimization");
+            logger.debug("✅ [CustomServerManagedRallyClient] Cache cleaned and enabled for performance optimization");
         }
 
         @Override
@@ -525,20 +528,20 @@ public class ServerManagedIntegrationsModule {
     @Singleton
     public Confluence provideConfluence() {
         try {
-            System.out.println("🔧 [ServerManagedIntegrationsModule] Providing Confluence integration...");
+            logger.info("🔧 [ServerManagedIntegrationsModule] Providing Confluence integration...");
             
             if (resolvedIntegrations == null) {
-                System.err.println("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null Confluence");
+                logger.error("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null Confluence");
                 return null;
             }
             
             if (!resolvedIntegrations.has("confluence")) {
-                System.err.println("❌ [ServerManagedIntegrationsModule] No Confluence integration found in resolved integrations - returning null");
+                logger.error("❌ [ServerManagedIntegrationsModule] No Confluence integration found in resolved integrations - returning null");
                 return null;
             }
             
             JSONObject confluenceConfig = resolvedIntegrations.getJSONObject("confluence");
-            System.out.println("🔧 [ServerManagedIntegrationsModule] Found Confluence configuration: " + confluenceConfig.length() + " parameters");
+            logger.debug("🔧 [ServerManagedIntegrationsModule] Found Confluence configuration: " + confluenceConfig.length() + " parameters");
             
             // Log configuration details (without sensitive data)
             for (String key : confluenceConfig.keySet()) {
@@ -565,7 +568,7 @@ public class ServerManagedIntegrationsModule {
                         String credentials = email.trim() + ":" + apiToken.trim();
                         token = Base64.getEncoder().encodeToString(credentials.getBytes());
                     }
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Combined CONFLUENCE_EMAIL + CONFLUENCE_API_TOKEN for authentication");
+                    logger.info("✅ [ServerManagedIntegrationsModule] Combined CONFLUENCE_EMAIL + CONFLUENCE_API_TOKEN for authentication");
                 }
             } else if (confluenceConfig.has("CONFLUENCE_LOGIN_PASS_TOKEN")) {
                 token = confluenceConfig.optString("CONFLUENCE_LOGIN_PASS_TOKEN", null);
@@ -590,7 +593,7 @@ public class ServerManagedIntegrationsModule {
             return new CustomServerManagedConfluence(url, token, defaultSpace, authType, executionId, logCallback);
             
         } catch (Exception e) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to provide Confluence integration: " + e.getMessage());
+            logger.error("❌ [ServerManagedIntegrationsModule] Failed to provide Confluence integration: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -631,20 +634,20 @@ public class ServerManagedIntegrationsModule {
     @Singleton
     AI provideAI(ConversationObserver observer) {
         try {
-            System.out.println("🤖 [ServerManagedIntegrationsModule] Providing AI integration...");
+            logger.info("🤖 [ServerManagedIntegrationsModule] Providing AI integration...");
             
             if (resolvedIntegrations == null) {
-                System.err.println("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null AI");
+                logger.error("❌ [ServerManagedIntegrationsModule] No resolved integrations found - returning null AI");
                 return null;
             }
             
             // Check available AI integrations in priority order
-            System.out.println("🔍 [ServerManagedIntegrationsModule] Checking available AI integrations...");
+            logger.debug("🔍 [ServerManagedIntegrationsModule] Checking available AI integrations...");
             
             // First check for Ollama
             if (resolvedIntegrations.has("ollama")) {
                 JSONObject ollamaConfig = resolvedIntegrations.getJSONObject("ollama");
-                System.out.println("🔍 [ServerManagedIntegrationsModule] Found Ollama configuration: " + ollamaConfig.length() + " parameters");
+                logger.debug("🔍 [ServerManagedIntegrationsModule] Found Ollama configuration: " + ollamaConfig.length() + " parameters");
                 
                 String basePath = ollamaConfig.optString("OLLAMA_BASE_PATH", "http://localhost:11434");
                 String model = ollamaConfig.optString("OLLAMA_MODEL", null);
@@ -663,14 +666,14 @@ public class ServerManagedIntegrationsModule {
                         (apiKey != null ? " (with API key)" : ""));
                     return new OllamaAIClient(basePath, model, apiKey, numCtx, numPredict, observer, customHeaders);
                 } else {
-                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Ollama configuration missing OLLAMA_MODEL, skipping");
+                    logger.debug("⚠️ [ServerManagedIntegrationsModule] Ollama configuration missing OLLAMA_MODEL, skipping");
                 }
             }
             
             // Then check for Anthropic
             if (resolvedIntegrations.has("anthropic")) {
                 JSONObject anthropicConfig = resolvedIntegrations.getJSONObject("anthropic");
-                System.out.println("🔍 [ServerManagedIntegrationsModule] Found Anthropic configuration: " + anthropicConfig.length() + " parameters");
+                logger.debug("🔍 [ServerManagedIntegrationsModule] Found Anthropic configuration: " + anthropicConfig.length() + " parameters");
                 
                 String basePath = anthropicConfig.optString("ANTHROPIC_BASE_PATH", "https://api.anthropic.com/v1/messages");
                 String model = anthropicConfig.optString("ANTHROPIC_MODEL", null);
@@ -683,34 +686,34 @@ public class ServerManagedIntegrationsModule {
                 );
                 
                 if (model != null && !model.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating AnthropicAIClient with resolved credentials");
+                    logger.debug("✅ [ServerManagedIntegrationsModule] Creating AnthropicAIClient with resolved credentials");
                     return new AnthropicAIClient(basePath, model, maxTokens, observer, customHeaders);
                 } else {
-                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Anthropic configuration missing ANTHROPIC_MODEL, skipping");
+                    logger.debug("⚠️ [ServerManagedIntegrationsModule] Anthropic configuration missing ANTHROPIC_MODEL, skipping");
                 }
             }
             
             // Then check for Gemini
             if (resolvedIntegrations.has("gemini")) {
                 JSONObject geminiConfig = resolvedIntegrations.getJSONObject("gemini");
-                System.out.println("🔍 [ServerManagedIntegrationsModule] Found Gemini configuration: " + geminiConfig.length() + " parameters");
+                logger.debug("🔍 [ServerManagedIntegrationsModule] Found Gemini configuration: " + geminiConfig.length() + " parameters");
                 
                 String apiKey = geminiConfig.optString("GEMINI_API_KEY", null);
                 String model = geminiConfig.optString("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash");
                 String basePath = geminiConfig.optString("GEMINI_BASE_PATH", null);
                 
                 if (apiKey != null && !apiKey.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating custom Gemini JSAIClient with resolved credentials");
+                    logger.debug("✅ [ServerManagedIntegrationsModule] Creating custom Gemini JSAIClient with resolved credentials");
                     return createCustomGeminiAI(apiKey, model, basePath, observer);
                 } else {
-                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Gemini configuration missing GEMINI_API_KEY, skipping");
+                    logger.debug("⚠️ [ServerManagedIntegrationsModule] Gemini configuration missing GEMINI_API_KEY, skipping");
                 }
             }
             
             // Then check for Dial
             if (resolvedIntegrations.has("dial")) {
                 JSONObject dialConfig = resolvedIntegrations.getJSONObject("dial");
-                System.out.println("🔍 [ServerManagedIntegrationsModule] Found Dial configuration: " + dialConfig.length() + " parameters");
+                logger.debug("🔍 [ServerManagedIntegrationsModule] Found Dial configuration: " + dialConfig.length() + " parameters");
                 
                 String apiKey = dialConfig.optString("DIAL_AI_API_KEY", null);
                 String model = dialConfig.optString("DIAL_AI_MODEL", "gpt-4");
@@ -718,18 +721,18 @@ public class ServerManagedIntegrationsModule {
                 String apiVersion = dialConfig.optString("DIAL_API_VERSION", null);
                 
                 if (apiKey != null && !apiKey.isEmpty()) {
-                    System.out.println("✅ [ServerManagedIntegrationsModule] Creating custom DialAIClient with resolved credentials");
+                    logger.debug("✅ [ServerManagedIntegrationsModule] Creating custom DialAIClient with resolved credentials");
                     return new DialAIClient(basePath, apiKey, model, apiVersion, observer);
                 } else {
-                    System.out.println("⚠️ [ServerManagedIntegrationsModule] Dial configuration missing DIAL_AI_API_KEY, skipping");
+                    logger.debug("⚠️ [ServerManagedIntegrationsModule] Dial configuration missing DIAL_AI_API_KEY, skipping");
                 }
             }
             
-            System.err.println("❌ [ServerManagedIntegrationsModule] No valid AI integration found - returning null AI");
+            logger.error("❌ [ServerManagedIntegrationsModule] No valid AI integration found - returning null AI");
             return null;
             
         } catch (Exception e) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to provide AI integration: " + e.getMessage());
+            logger.error("❌ [ServerManagedIntegrationsModule] Failed to provide AI integration: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -748,7 +751,7 @@ public class ServerManagedIntegrationsModule {
     UriToObjectFactory provideUriToObjectFactory(TrackerClient<? extends ITicket> trackerClient, 
                                                  Confluence confluence, 
                                                  SourceCodeFactory sourceCodeFactory) {
-        System.out.println("🔧 [ServerManagedIntegrationsModule] Creating UriToObjectFactory with server-managed integrations");
+        logger.debug("🔧 [ServerManagedIntegrationsModule] Creating UriToObjectFactory with server-managed integrations");
         return new UriToObjectFactory(trackerClient, confluence, sourceCodeFactory);
     }
 
@@ -756,20 +759,20 @@ public class ServerManagedIntegrationsModule {
     @Singleton
     public FigmaClient provideFigmaClient() {
         try {
-            System.out.println("🎨 [ServerManagedIntegrationsModule] Providing Figma integration...");
+            logger.info("🎨 [ServerManagedIntegrationsModule] Providing Figma integration...");
             
             if (resolvedIntegrations == null) {
-                System.out.println("⚠️ [ServerManagedIntegrationsModule] No resolved integrations found, skipping Figma");
+                logger.debug("⚠️ [ServerManagedIntegrationsModule] No resolved integrations found, skipping Figma");
                 return null;
             }
             
             if (!resolvedIntegrations.has("figma")) {
-                System.out.println("⚠️ [ServerManagedIntegrationsModule] No Figma integration found in resolved integrations");
+                logger.debug("⚠️ [ServerManagedIntegrationsModule] No Figma integration found in resolved integrations");
                 return null;
             }
             
             JSONObject figmaConfig = resolvedIntegrations.getJSONObject("figma");
-            System.out.println("🎨 [ServerManagedIntegrationsModule] Found Figma configuration: " + figmaConfig.length() + " parameters");
+            logger.debug("🎨 [ServerManagedIntegrationsModule] Found Figma configuration: " + figmaConfig.length() + " parameters");
             
             // Log configuration details (without sensitive data)
             for (String key : figmaConfig.keySet()) {
@@ -782,25 +785,25 @@ public class ServerManagedIntegrationsModule {
             String token = figmaConfig.optString("FIGMA_TOKEN", null);
             
             if (token == null) {
-                System.err.println("❌ [ServerManagedIntegrationsModule] Figma configuration missing required token parameter");
+                logger.error("❌ [ServerManagedIntegrationsModule] Figma configuration missing required token parameter");
                 return null;
             }
             
             // Normalize base path using FigmaClient's static method
             basePath = FigmaClient.normalizeBasePath(basePath);
             
-            System.out.println("✅ [ServerManagedIntegrationsModule] Creating FigmaClient with normalized basePath=" + basePath);
+            logger.debug("✅ [ServerManagedIntegrationsModule] Creating FigmaClient with normalized basePath=" + basePath);
             
             FigmaClient figmaClient = new FigmaClient(basePath, token);
             
             // Clear cache to ensure fresh data for server-managed execution
             figmaClient.setClearCache(true);
-            System.out.println("✅ [ServerManagedIntegrationsModule] FigmaClient configured with cache clearing enabled for fresh data");
+            logger.debug("✅ [ServerManagedIntegrationsModule] FigmaClient configured with cache clearing enabled for fresh data");
             
             return figmaClient;
             
         } catch (Exception e) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to provide Figma integration: " + e.getMessage());
+            logger.error("❌ [ServerManagedIntegrationsModule] Failed to provide Figma integration: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -883,12 +886,12 @@ public class ServerManagedIntegrationsModule {
             
             // Log the masked version to protect sensitive information
             JSONObject maskedConfig = SecurityUtils.maskSensitiveInformation(configJson);
-            System.out.println("✅ [ServerManagedIntegrationsModule] Initializing custom Gemini JSAIClient with config: " + maskedConfig.toString(2));
+            logger.info("✅ [ServerManagedIntegrationsModule] Initializing custom Gemini JSAIClient with config: " + maskedConfig.toString(2));
             
             return new JSAIClient(configJson, observer);
             
         } catch (Exception e) {
-            System.err.println("❌ [ServerManagedIntegrationsModule] Failed to create custom Gemini AI: " + e.getMessage());
+            logger.error("❌ [ServerManagedIntegrationsModule] Failed to create custom Gemini AI: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Failed to create custom Gemini AI", e);
         }
