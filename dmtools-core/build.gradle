@@ -250,7 +250,7 @@ publishing {
                     developer {
                         id = 'istin'
                         name = 'Uladzimir Klyshevich'
-                        email = 'uladzimir.klyshevich@gmail.com'
+                        email = 'https://github.com/epam/dm.ai/discussions'
                     }
                 }
                 scm {
