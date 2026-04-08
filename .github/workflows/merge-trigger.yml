@@ -50,8 +50,8 @@ jobs:
 
       - name: Configure Git Author
         run: |
-          git config --global user.name "AI Teammate"
-          git config --global user.email "agent.ai.native@gmail.com"
+          git config --global user.name "dm.ai"
+          git config --global user.email "dm.ai@epam.com"
 
       - name: Run Merge Trigger
         env:

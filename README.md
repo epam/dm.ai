@@ -3,6 +3,8 @@ Delivery Management Tools
 
 [![Latest Release](https://img.shields.io/github/v/release/IstiN/dmtools?label=latest%20version)](https://github.com/IstiN/dmtools/releases/latest) [![codecov](https://codecov.io/gh/IstiN/dmtools/branch/main/graph/badge.svg)](https://codecov.io/gh/IstiN/dmtools) [![](https://jitpack.io/v/IstiN/dmtools.svg)](https://jitpack.io/#IstiN/dmtools)
 
+> 🚀 **Latest DMTools release: [v1.7.157](https://github.com/IstiN/dmtools/releases/tag/v1.7.157)** — used by the AI Teammate workflows in this repository.
+
 ---
 
 ## 📚 Documentation
