@@ -362,6 +362,8 @@ public class GitHubPRTest {
     public void testAddInlineReviewComment_withExplicitCommitId() throws IOException {
         String responseJson = buildCommentJson(9002L, "Inline review", "2024-01-02T10:00:00Z", null).toString();
         doReturn(responseJson).when(gitHub).post(any(GenericRequest.class));
+        // submitPendingReview does a GET to list reviews (returns empty array = no pending reviews)
+        doReturn("[]").when(gitHub).execute(any(GenericRequest.class));
 
         String result = gitHub.addInlineReviewComment(
                 WORKSPACE, REPOSITORY, PR_ID,
@@ -370,14 +372,15 @@ public class GitHubPRTest {
 
         assertNotNull(result);
         verify(gitHub, times(1)).post(any(GenericRequest.class));
-        // explicit commitId provided — no GET request for PR head
-        verify(gitHub, never()).execute(any(GenericRequest.class));
+        // explicit commitId provided — only 1 GET from submitPendingReview (list reviews)
+        verify(gitHub, times(1)).execute(any(GenericRequest.class));
     }
 
     @Test
     public void testAddInlineReviewComment_autofetchesCommitIdWhenEmpty() throws IOException {
         JSONObject prJson = buildPRJsonWithSha("74", "Test PR", "open", "deadbeef1234");
-        doReturn(prJson.toString()).when(gitHub).execute(any(GenericRequest.class));
+        // First execute() = GET PR to fetch head sha, second execute() = submitPendingReview GET reviews
+        doReturn(prJson.toString()).doReturn("[]").when(gitHub).execute(any(GenericRequest.class));
 
         String responseJson = buildCommentJson(9003L, "Auto-fetched commit", "2024-01-02T10:00:00Z", null).toString();
         doReturn(responseJson).when(gitHub).post(any(GenericRequest.class));
@@ -388,8 +391,8 @@ public class GitHubPRTest {
                 "", null, null);
 
         assertNotNull(result);
-        // should GET the PR to fetch head sha
-        verify(gitHub, times(1)).execute(any(GenericRequest.class));
+        // 1st GET: fetch PR head sha, 2nd GET: submitPendingReview list reviews
+        verify(gitHub, times(2)).execute(any(GenericRequest.class));
         verify(gitHub, times(1)).post(any(GenericRequest.class));
     }
 
