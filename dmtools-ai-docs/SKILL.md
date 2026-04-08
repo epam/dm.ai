@@ -257,6 +257,7 @@ function action(params) {
 | | [JavaScript Agents](references/agents/javascript-agents.md) | GraalJS development with 152+ MCP tools |
 | | [Teammate Configs](references/agents/teammate-configs.md) | JSON-based AI workflows (CLI safety v1.7.133+) |
 | | [CLI Integration](references/agents/cli-integration.md) | Cursor, Claude, Copilot, Gemini CLI agents |
+| | [Agent Doc Sync](references/agents/agent-doc-sync/SKILL.md) | Auto-sync agent documentation to Confluence |
 | **Testing** | [Test Generation](references/test-generation/xray-manual.md) | Xray test case creation |
 | **MCP Tools** | [MCP Tools Reference](references/mcp-tools/README.md) | Auto-generated list of 152+ tools (16 integrations) |
 | **CI/CD** | [GitHub Actions](references/workflows/github-actions-teammate.md) | Automated ticket processing + CI run tracing |
