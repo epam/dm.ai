@@ -1,0 +1,90 @@
+name: SM Agent
+
+run-name: "SM Agent : ${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}"
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  sm-agent:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: sm-agent
+      cancel-in-progress: false
+
+    steps:
+      - name: 📋 Job Info
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🤖 SM Agent Started"
+          echo "⏰ Trigger: ${{ github.event_name }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install DMTools CLI from current repo
+        run: bash install.sh
+
+      - name: Add DMTools to PATH
+        run: echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
+
+      - name: Verify DMTools Installation
+        run: dmtools -v || echo "dmtools version check failed"
+
+      - name: Configure Git Author
+        run: |
+          git config --global user.name "AI Teammate"
+          git config --global user.email "agent.ai.native@gmail.com"
+          echo "✅ Git author configured as AI Teammate"
+
+      - name: Run SM Agent
+        env:
+          # Jira Configuration
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_PATH: ${{ vars.JIRA_BASE_PATH }}
+          JIRA_AUTH_TYPE: ${{ vars.JIRA_AUTH_TYPE }}
+          JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES: ${{ vars.JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES }}
+          JIRA_CLEAR_CACHE: "true"
+
+          # DMTools Integration Settings
+          DMTOOLS_INTEGRATIONS: "jira,github,file"
+
+          # AI Service Configuration
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_DEFAULT_MODEL: ${{ vars.GEMINI_DEFAULT_MODEL }}
+          GEMINI_BASE_PATH: ${{ vars.GEMINI_BASE_PATH }}
+          DEFAULT_LLM: "gemini"
+          DEFAULT_TRACKER: "jira"
+
+          # GitHub Authentication
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_GITHUB_WORKSPACE: epam
+          SOURCE_GITHUB_REPOSITORY: dm.ai
+          DMTOOLS_FILE_READ_ALLOWED_PATHS: "../.dmtools/**"
+
+        run: |
+          CI_RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "CI Run URL: ${CI_RUN_URL}"
+          dmtools --debug run agents/sm.json --ciRunUrl "${CI_RUN_URL}"

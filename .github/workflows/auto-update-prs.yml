@@ -1,0 +1,24 @@
+name: Auto-update open PRs when main changes
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-prs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Update open PRs that are behind main
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          sleep 15
+          prs=$(gh pr list --repo ${{ github.repository }} --state open --json number,mergeable,headRefName --jq '.[] | select(.mergeable != "CONFLICTING") | .number')
+          for pr in $prs; do
+            echo "Updating PR #$pr..."
+            gh pr update-branch $pr --repo ${{ github.repository }} || echo "PR #$pr skipped (up to date or conflict)"
+          done

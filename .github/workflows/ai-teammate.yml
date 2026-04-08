@@ -1,0 +1,191 @@
+name: AI Teammate
+
+# Customize run name to show config and ticket key
+run-name: "${{ inputs.config_file }} : ${{ inputs.concurrency_key }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      config_file:
+        description: 'Path to config'
+        required: true
+      encoded_config:
+        description: 'Encoded or JSON Agent Config'
+        required: false
+      concurrency_key:
+        description: 'Ticket key for concurrency grouping (e.g., JD-123)'
+        required: true
+      project_key:
+        description: 'Project key for multi-project config selection (e.g., dmc)'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  ai-teammate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ai-teammate-${{ inputs.config_file }}-${{ inputs.concurrency_key }}
+      cancel-in-progress: false
+
+    steps:
+      - name: 📋 Job Info
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🤖 AI Teammate Workflow Started"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📁 Config File: ${{ inputs.config_file }}"
+          echo "🎫 Ticket Key: ${{ inputs.concurrency_key }}"
+          if [ -n "${{ inputs.encoded_config }}" ]; then
+            echo "📝 Encoded Config: provided"
+          else
+            echo "📝 Encoded Config: (not provided - using default JQL from config)"
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure npm global prefix
+        if: vars.AI_AGENT_PROVIDER == 'copilot'
+        run: |
+          npm config set prefix ~/.npm-global
+          echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache npm global packages
+        if: vars.AI_AGENT_PROVIDER == 'copilot'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm-global
+            ~/.local/bin
+          key: ${{ runner.os }}-npm-global-copilot-${{ hashFiles('.github/workflows/ai-teammate.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-global-copilot-
+            ${{ runner.os }}-npm-global-
+
+      - name: Install Copilot CLI
+        if: vars.AI_AGENT_PROVIDER == 'copilot'
+        run: |
+          if ! command -v github-copilot-cli &> /dev/null; then
+            echo "📦 Installing GitHub Copilot CLI..."
+            npm install -g @github/copilot
+          else
+            echo "✅ Copilot CLI already installed (from cache)"
+          fi
+          echo "✅ Copilot CLI ready"
+
+      - name: Verify Copilot CLI Installation
+        if: vars.AI_AGENT_PROVIDER == 'copilot'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.PAT_TOKEN }}
+        run: |
+          npx @github/copilot --version || echo "Copilot CLI verification - will be available with token"
+
+      - name: Install DMTools CLI from current repo
+        run: |
+          bash install.sh
+
+      - name: Add DMTools to PATH
+        run: echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
+
+      - name: Verify DMTools Installation
+        run: dmtools -v || echo "dmtools version check failed"
+
+      - name: Configure Git Author
+        run: |
+          git config --global user.name "AI Teammate"
+          git config --global user.email "dm.ai@epam.com"
+          echo "✅ Git author configured as AI Teammate"
+
+      - name: Run AI Teammate
+        env:
+          PATH: "/home/runner/.local/bin:/home/runner/.dmtools/bin:/bin:/usr/bin:$PATH"
+
+          # Jira Configuration
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_PATH: ${{ vars.JIRA_BASE_PATH }}
+          JIRA_AUTH_TYPE: ${{ vars.JIRA_AUTH_TYPE }}
+          JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES: ${{ vars.JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES }}
+          JIRA_CLEAR_CACHE: "true"
+          DMTOOLS_CACHE_ENABLED: ${{ vars.DMTOOLS_CACHE_ENABLED }}
+
+          # Confluence Configuration
+          CONFLUENCE_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          CONFLUENCE_BASE_PATH: ${{ vars.CONFLUENCE_BASE_PATH }}
+          CONFLUENCE_DEFAULT_SPACE: ${{ vars.CONFLUENCE_DEFAULT_SPACE }}
+
+          # Azure DevOps Configuration
+          ADO_ORGANIZATION: ${{ vars.ADO_ORGANIZATION }}
+          ADO_PROJECT: ${{ vars.ADO_PROJECT }}
+          ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
+
+          # Figma Configuration
+          FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
+          FIGMA_BASE_PATH: ${{ vars.FIGMA_BASE_PATH }}
+
+          # GitHub Authentication
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_GITHUB_WORKSPACE: epam
+          SOURCE_GITHUB_REPOSITORY: dm.ai
+
+          # AI / Gemini Configuration
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_DEFAULT_MODEL: ${{ vars.GEMINI_DEFAULT_MODEL }}
+          GEMINI_BASE_PATH: ${{ vars.GEMINI_BASE_PATH }}
+
+          # GitHub Copilot CLI Authentication
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.PAT_TOKEN }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL || 'gpt-5-mini' }}
+
+          # AI Agent Provider
+          AI_AGENT_PROVIDER: ${{ vars.AI_AGENT_PROVIDER }}
+
+          # DMTools Integration Settings
+          DMTOOLS_INTEGRATIONS: "jira,confluence,ado,figma,ai,cli,file,github"
+
+          # Encoded config input
+          ENCODED_CONFIG: ${{ inputs.encoded_config }}
+
+          # DMTools Advanced Configuration
+          PROMPT_CHUNK_TOKEN_LIMIT: ${{ vars.PROMPT_CHUNK_TOKEN_LIMIT }}
+          CLI_ALLOWED_COMMANDS: "find,ls,cat,mkdir,bash"
+
+        run: |
+          echo "Using configuration: ${{ inputs.config_file }}"
+
+          # Build CI run URL for traceability
+          CI_RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "CI Run URL: ${CI_RUN_URL}"
+
+          if [ -n "${ENCODED_CONFIG}" ]; then
+            echo "Encoded config received."
+            dmtools --debug run "${{ inputs.config_file }}" "${ENCODED_CONFIG}" --ciRunUrl "${CI_RUN_URL}"
+          else
+            echo "No encoded config provided."
+            dmtools --debug run "${{ inputs.config_file }}" --ciRunUrl "${CI_RUN_URL}"
+          fi

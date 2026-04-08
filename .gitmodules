@@ -1,0 +1,3 @@
+[submodule "agents"]
+	path = agents
+	url = git@github.com:IstiN/dmtools-agents.git

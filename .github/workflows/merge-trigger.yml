@@ -1,0 +1,92 @@
+name: Merge Trigger
+
+run-name: "Merge Trigger : CI passed → retry pr_approved merges"
+
+on:
+  workflow_run:
+    workflows: ["Unit Tests"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  merge-trigger:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository }}
+    concurrency:
+      group: merge-trigger-${{ github.event.workflow_run.head_branch }}-${{ github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
+
+    steps:
+      - name: 📋 Job Info
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔀 Merge Trigger Started"
+          echo "⚡ Unit Tests passed on: ${{ github.event.workflow_run.head_branch }}"
+          echo "🔗 Triggered by run: ${{ github.event.workflow_run.html_url }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install DMTools CLI from current repo
+        run: bash install.sh
+
+      - name: Add DMTools to PATH
+        run: echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
+
+      - name: Configure Git Author
+        run: |
+          git config --global user.name "AI Teammate"
+          git config --global user.email "agent.ai.native@gmail.com"
+
+      - name: Run Merge Trigger
+        env:
+          # Jira Configuration
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_PATH: ${{ vars.JIRA_BASE_PATH }}
+          JIRA_AUTH_TYPE: ${{ vars.JIRA_AUTH_TYPE }}
+          JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES: ${{ vars.JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES }}
+          JIRA_CLEAR_CACHE: "true"
+          DMTOOLS_CACHE_ENABLED: ${{ vars.DMTOOLS_CACHE_ENABLED }}
+
+          # DMTools Integration Settings
+          DMTOOLS_INTEGRATIONS: "jira,github,file"
+
+          # AI Service Configuration
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_DEFAULT_MODEL: ${{ vars.GEMINI_DEFAULT_MODEL }}
+          GEMINI_BASE_PATH: ${{ vars.GEMINI_BASE_PATH }}
+          DEFAULT_LLM: "gemini"
+          DEFAULT_TRACKER: "jira"
+
+          # GitHub Authentication
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_GITHUB_WORKSPACE: epam
+          SOURCE_GITHUB_REPOSITORY: dm.ai
+
+          CLI_ALLOWED_COMMANDS: "find,ls,cat,mkdir,bash,run-agent.sh"
+          DMTOOLS_FILE_READ_ALLOWED_PATHS: "../.dmtools/**"
+
+        run: |
+          CI_RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "CI Run URL: ${CI_RUN_URL}"
+          dmtools run agents/sm_merge.json --ciRunUrl "${CI_RUN_URL}"
