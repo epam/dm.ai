@@ -25,8 +25,8 @@ jobs:
 
       - name: Configure Git for tests
         run: |
-          git config --global user.name "Test User"
-          git config --global user.email "test@test.com"
+          git config --global user.name "dm.ai"
+          git config --global user.email "dm.ai@epam.com"
 
       - name: Run unit tests
         run: ./gradlew :dmtools-core:test --no-daemon -x integrationTest
