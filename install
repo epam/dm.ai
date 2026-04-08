@@ -1,8 +1,8 @@
 #!/bin/bash
 # DMTools CLI Installation Script
 # Usage:
-#   Latest version: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash
-#   Specific version: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash -s -- <version>
+#   Latest version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash
+#   Specific version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- <version>
 # Requirements: Java 17+ (will attempt automatic installation on macOS/Linux)
 
 set -e
@@ -15,7 +15,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO="IstiN/dmtools-cli"
+REPO="epam/dm.ai"
 INSTALL_DIR="$HOME/.dmtools"
 BIN_DIR="$INSTALL_DIR/bin"
 JAR_PATH="$INSTALL_DIR/dmtools.jar"
@@ -627,7 +627,7 @@ steps:
       java-version: '17''
   - name: Install DMTools CLI
     run: |
-      curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash"
+      curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash"
         elif [[ "$OSTYPE" == "darwin"* ]]; then
             warn "Java not found. Attempting to install via Homebrew..."
             if command -v brew >/dev/null 2>&1; then
