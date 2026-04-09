@@ -102,9 +102,10 @@ jobs:
 
           # Create "Java unit tests" check run via API for this commit
           # This satisfies the branch protection required status check
+          # Uses github.token (GitHub Actions app) which has checks:write permission
           COMMIT_SHA=$(git rev-parse HEAD)
           curl -s -X POST \
-            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Authorization: Bearer ${{ github.token }}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/epam/dm.ai/check-runs \
             -d "{
