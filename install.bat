@@ -1,8 +1,8 @@
 @echo off
 REM DMTools CLI Installation Script for Windows
 REM Works in cmd.exe and automatically uses PowerShell
-REM Usage: curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
-REM For specific version: set DMTOOLS_VERSION=v1.7.120 && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.120/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+REM Usage: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+REM For specific version: set DMTOOLS_VERSION=v1.7.120 && curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/v1.7.120/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
 
 setlocal
 
@@ -21,10 +21,10 @@ if "%DETECTED_VERSION%"=="" (
 
 REM Construct installer URL
 if "%DETECTED_VERSION%"=="latest" (
-    set INSTALLER_URL=https://github.com/IstiN/dmtools/releases/latest/download/install.ps1
+    set INSTALLER_URL=https://github.com/epam/dm.ai/releases/latest/download/install.ps1
     echo Using latest version...
 ) else (
-    set INSTALLER_URL=https://github.com/IstiN/dmtools/releases/download/%DETECTED_VERSION%/install.ps1
+    set INSTALLER_URL=https://github.com/epam/dm.ai/releases/download/%DETECTED_VERSION%/install.ps1
     echo Using version: %DETECTED_VERSION%
 )
 
@@ -59,7 +59,7 @@ echo   - Windows 10/11: PowerShell is pre-installed
 echo   - Older Windows: Download from https://aka.ms/powershell
 echo.
 echo Or use Git Bash:
-echo   curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install ^| bash
+echo   curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install ^| bash
 echo.
 pause
 exit /b 1

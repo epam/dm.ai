@@ -172,9 +172,10 @@ jobs:
 
           cd ..
 
-          # Copy install script
+          # Copy install scripts (bash + PowerShell)
           cp dmtools-ai-docs/install.sh $DIST_DIR/skill-install.sh
           chmod +x $DIST_DIR/skill-install.sh
+          cp dmtools-ai-docs/skill-install.ps1 $DIST_DIR/skill-install.ps1
 
           echo "✅ Skill package created:"
           ls -lh $DIST_DIR/
@@ -193,6 +194,7 @@ jobs:
             dist/dmtools-skill-*.zip
             dist/dmtools-skill-*.tar.gz
             dist/skill-install.sh
+            dist/skill-install.ps1
             dist/skill-checksums.sha256
           retention-days: 7
 
@@ -288,9 +290,14 @@ jobs:
 
           ### Install DMTools Agent Skill
 
-          **Automatic Installation (Recommended):**
+          **macOS / Linux / Git Bash:**
           \`\`\`bash
           curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${VERSION}/skill-install.sh | bash
+          \`\`\`
+
+          **Windows (PowerShell):**
+          \`\`\`powershell
+          irm https://github.com/${{ github.repository }}/releases/download/v${VERSION}/skill-install.ps1 | iex
           \`\`\`
 
           **Manual Installation:**
@@ -301,6 +308,7 @@ jobs:
              - \`~/.cursor/skills/\` (global Cursor)
              - \`~/.claude/skills/\` (global Claude)
              - \`~/.codex/skills/\` (global Codex)
+             - \`%USERPROFILE%\.claude\skills\` (global Claude on Windows)
 
           ### Install Specific Version (v${VERSION})
 
@@ -370,6 +378,7 @@ jobs:
             skill/dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.zip
             skill/dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
             skill/skill-install.sh
+            skill/skill-install.ps1
             skill/skill-checksums.sha256
       
       - name: Summary
@@ -392,7 +401,8 @@ jobs:
           echo "**Agent Skill:**" >> $GITHUB_STEP_SUMMARY
           echo "- Skill ZIP (dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.zip)" >> $GITHUB_STEP_SUMMARY
           echo "- Skill TAR (dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz)" >> $GITHUB_STEP_SUMMARY
-          echo "- skill-install.sh (automatic installer)" >> $GITHUB_STEP_SUMMARY
+          echo "- skill-install.sh (automatic installer, macOS/Linux)"  >> $GITHUB_STEP_SUMMARY
+          echo "- skill-install.ps1 (automatic installer, Windows PowerShell)" >> $GITHUB_STEP_SUMMARY
           echo "- skill-checksums.sha256 (checksums)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ All artifacts compiled, tested, and packaged successfully!" >> $GITHUB_STEP_SUMMARY

@@ -1,7 +1,7 @@
 # DMTools CLI Installation Script for Windows PowerShell
-# Usage: Invoke-RestMethod -Uri 'https://github.com/IstiN/dmtools/releases/latest/download/install.ps1' | Invoke-Expression
-# Or: irm https://github.com/IstiN/dmtools/releases/latest/download/install.ps1 | iex (PowerShell 5.1+)
-# For specific version: $env:DMTOOLS_VERSION="v1.7.126"; irm https://raw.githubusercontent.com/IstiN/dmtools/v1.7.126/install.ps1 | iex
+# Usage: Invoke-RestMethod -Uri 'https://github.com/epam/dm.ai/releases/latest/download/install.ps1' | Invoke-Expression
+# Or: irm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex (PowerShell 5.1+)
+# For specific version: $env:DMTOOLS_VERSION="v1.7.126"; irm https://raw.githubusercontent.com/epam/dm.ai/v1.7.126/install.ps1 | iex
 # Requirements: Java 23 (will attempt automatic installation)
 
 $ErrorActionPreference = "Stop"
@@ -25,7 +25,7 @@ function Write-Error-Message {
 }
 
 # Configuration
-$REPO = "IstiN/dmtools"
+$REPO = "epam/dm.ai"
 $INSTALL_DIR = "$env:USERPROFILE\.dmtools"
 $BIN_DIR = "$INSTALL_DIR\bin"
 $JAR_PATH = "$INSTALL_DIR\dmtools.jar"
