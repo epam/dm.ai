@@ -20,6 +20,7 @@ import com.github.istin.dmtools.di.MermaidIndexComponent;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.github.BasicGithub;
 import com.github.istin.dmtools.gitlab.BasicGitLab;
+import com.github.istin.dmtools.bitrise.BasicBitrise;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
 import com.github.istin.dmtools.microsoft.teams.TeamsAuthTools;
@@ -560,6 +561,14 @@ public class McpCliHandler {
             logger.debug("Created BasicGitLab instance");
         } catch (IOException e) {
             logger.warn("Failed to create BasicGitLab: {}", e.getMessage());
+        }
+
+        try {
+            // Create Bitrise client
+            clients.put("bitrise", BasicBitrise.getInstance());
+            logger.debug("Created BasicBitrise instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicBitrise: {}", e.getMessage());
         }
 
         try {
