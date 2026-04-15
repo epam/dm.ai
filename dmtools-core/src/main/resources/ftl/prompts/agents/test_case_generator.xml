@@ -17,9 +17,11 @@
             ${global.storyDescription}
             Ensure your feedback is constructive and professional.
         </story_description>
+        <#if global.priorities?? && global.priorities?has_content>
         <priorities>
             ${global.priorities}
         </priorities>
+        </#if>
         <existing_test_cases>
             ⚠️⚠️⚠️ CRITICAL WARNING ⚠️⚠️⚠️
 
