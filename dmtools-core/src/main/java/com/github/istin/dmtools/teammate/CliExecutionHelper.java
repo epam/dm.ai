@@ -259,15 +259,16 @@ public class CliExecutionHelper {
                 String key = entry.getKey();
                 String value = entry.getValue();
                 if (key == null || key.isBlank() || value == null) {
-                    logger.warn("Skipping invalid envVariables entry: key={}, value={}", key, value);
+                    logger.warn("Skipping invalid envVariables entry: key={}, keyBlank={}, valueNull={}",
+                            key, key != null && key.isBlank(), value == null);
                     skipped++;
                     continue;
                 }
                 merged.put(key, value);
             }
-            int merged_count = jobOverrides.size() - skipped;
+            int mergedCount = jobOverrides.size() - skipped;
             logger.info("Merging {} per-job envVariables override(s) into subprocess environment ({} skipped due to null/blank key or null value)",
-                    merged_count, skipped);
+                    mergedCount, skipped);
             envVars = merged;
         }
         
