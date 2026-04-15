@@ -194,7 +194,7 @@ Current breakdown (16 integrations):
 - **Jira** (52 tools): Ticket management, search, comments, Xray test management
 - **Teams** (30 tools): Messages, chats, files, transcripts, meetings
 - **Confluence** (17 tools): Page management, search, content access, attachments
-- **ADO** (14 tools): Azure DevOps work items, queries, comments, attachments
+- **ADO** (31 tools): Azure DevOps work items, queries, comments, attachments, pull requests, code review threads
 - **Figma** (12 tools): Design extraction, icons, layers, styles, components
 - **AI Providers** (12 tools):
   - Gemini (2): Chat, multimodal
@@ -212,6 +212,7 @@ Current breakdown (16 integrations):
 **Example tools**:
 - `jira_get_ticket`, `jira_search_by_jql`, `jira_xray_create_test`
 - `ado_get_work_item`, `ado_move_to_state`, `ado_add_comment`
+- `ado_list_prs`, `ado_get_pr`, `ado_add_pr_comment`, `ado_resolve_pr_thread`, `ado_merge_pr`
 - `figma_get_layers`, `figma_get_icons`, `figma_download_node_image`
 - `teams_send_message`, `teams_messages_since`, `teams_download_file`
 - `gemini_ai_chat`, `openai_ai_chat`, `openai_ai_chat_with_files`, `bedrock_ai_chat`

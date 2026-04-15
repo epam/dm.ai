@@ -24,7 +24,12 @@ public enum IntegrationType {
     /**
      * Microsoft Teams integration for chat and messaging.
      */
-    TEAMS("teams");
+    TEAMS("teams"),
+
+    /**
+     * Azure DevOps integration for work items and Git operations.
+     */
+    ADO("ado");
     
     private final String value;
     
