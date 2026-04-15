@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -792,5 +793,96 @@ public class CliExecutionHelperTest {
     void testIsVideoFile_NullOrEmpty_ReturnsFalse() {
         assertFalse(CliExecutionHelper.isVideoFile(null));
         assertFalse(CliExecutionHelper.isVideoFile(""));
+    }
+
+    // ── PropertyReader envVariables propagation ─────────────────────────────
+
+    @Test
+    void testExecuteCliCommands_JobOverridesPropagatedToSubprocess() {
+        // Arrange: set a per-job override that should reach the subprocess env
+        com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(
+                Map.of("COPILOT_MODEL", "claude-opus-4.6", "AI_AGENT_PROVIDER", "copilot")
+        );
+        try {
+            String[] commands = {"run-agent.sh prompt"};
+            try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+                mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                        .thenReturn(Map.of("AI_AGENT_PROVIDER", "cursor")); // dmtools.env has old value
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class)))
+                        .thenReturn("ok");
+
+                cliHelper.executeCliCommands(commands, null, "dmtools.env");
+
+                // Verify subprocess received merged env where job override wins over dmtools.env
+                mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                        anyString(),
+                        isNull(),
+                        argThat((Map<String, String> env) ->
+                                "claude-opus-4.6".equals(env.get("COPILOT_MODEL"))
+                                && "copilot".equals(env.get("AI_AGENT_PROVIDER")) // override beats dmtools.env
+                        )
+                ));
+            }
+        } finally {
+            com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testExecuteCliCommands_NoJobOverrides_UsesOnlyDmtoolsEnv() {
+        // Arrange: no per-job overrides — should just use dmtools.env vars
+        com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        String[] commands = {"echo hello"};
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of("COPILOT_MODEL", "gpt-5-mini"));
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class)))
+                    .thenReturn("hello");
+
+            cliHelper.executeCliCommands(commands, null, "dmtools.env");
+
+            mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                    anyString(),
+                    isNull(),
+                    argThat((Map<String, String> env) -> "gpt-5-mini".equals(env.get("COPILOT_MODEL")))
+            ));
+        }
+    }
+
+    @Test
+    void testExecuteCliCommands_NullOrBlankKeysInOverridesAreSkipped() {
+        // Arrange: overrides contain null key, blank key, null value — all should be skipped safely
+        java.util.HashMap<String, String> badOverrides = new java.util.HashMap<>();
+        badOverrides.put(null, "some-value");   // null key
+        badOverrides.put("  ", "other-value");  // blank key
+        badOverrides.put("VALID_KEY", null);    // null value
+        badOverrides.put("COPILOT_MODEL", "claude-opus-4.6"); // only this survives
+        com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(badOverrides);
+        try {
+            String[] commands = {"echo test"};
+            try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+                mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                        .thenReturn(new java.util.HashMap<>());
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class)))
+                        .thenReturn("test");
+
+                // Should NOT throw NullPointerException
+                assertDoesNotThrow(() -> cliHelper.executeCliCommands(commands, null, "dmtools.env"));
+
+                // Valid entry must be present; invalid ones must be absent
+                mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                        anyString(),
+                        isNull(),
+                        argThat((Map<String, String> env) ->
+                                "claude-opus-4.6".equals(env.get("COPILOT_MODEL"))
+                                && !env.containsKey(null)
+                                && !env.containsKey("  ")
+                                && !env.containsKey("VALID_KEY")
+                        )
+                ));
+            }
+        } finally {
+            com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
     }
 }
