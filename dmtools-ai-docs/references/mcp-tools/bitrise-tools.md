@@ -1,6 +1,6 @@
 # Bitrise MCP Tools Reference
 
-**Total tools**: 18  
+**Total tools**: 23  
 **Integration key**: `bitrise`  
 **Categories**: `apps`, `builds`, `artifacts`, `config`, `secrets`, `pipelines`
 
@@ -266,18 +266,42 @@ dmtools bitrise_get_yml appSlug=abc123
 
 ### `bitrise_update_yml`
 
-Upload/replace the `bitrise.yml` for an app.
+Upload/replace the `bitrise.yml` for an app. Automatically validates the YAML before uploading.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `appSlug` | String | ✅ | App slug |
-| `ymlContent` | String | ✅ | Full YAML content of the new `bitrise.yml` |
+| `ymlContent` | String | ✅ | YAML content **or a file path** ending in `.yml`/`.yaml` (file is read automatically) |
 
 ```bash
+# Pass inline YAML
 dmtools bitrise_update_yml appSlug=abc123 ymlContent="format_version: '11'\n..."
+
+# Pass a file path — content is read from disk and validated before upload
+dmtools bitrise_update_yml appSlug=abc123 ymlContent=/path/to/bitrise.yml
 ```
 
-⚠️ This replaces the entire `bitrise.yml`. Always fetch the current version first with `bitrise_get_yml`.
+⚠️ This replaces the entire `bitrise.yml`. Always fetch the current version first with `bitrise_get_yml`.  
+⚠️ Validation runs automatically before upload via `POST /validate-bitrise-yml`; the upload is aborted on validation failure.
+
+---
+
+### `bitrise_validate_yml`
+
+Validate a `bitrise.yml` against the Bitrise API without uploading it.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `ymlContent` | String | ✅ | YAML content **or a file path** (same resolution logic as `bitrise_update_yml`) |
+| `appSlug` | String | ❌ | Optional — validate against a specific app's constraints |
+
+```bash
+# Validate a local file
+dmtools bitrise_validate_yml ymlContent=/path/to/bitrise.yml
+
+# Validate inline YAML scoped to an app
+dmtools bitrise_validate_yml appSlug=abc123 ymlContent="format_version: '11'\n..."
+```
 
 ---
 
@@ -443,6 +467,10 @@ dmtools bitrise_abort_pipeline appSlug=abc123 pipelineId=pipeline-uuid-here
 ---
 
 ## JSRunner Integration
+
+> ⚠️ **Security Warning**: JSRunner scripts may log all function arguments (including parameter values) for
+> debugging purposes. **Never pass raw secret values** to tools like `bitrise_upsert_secret` from JSRunner
+> scripts. Store secrets in environment variables and reference them by name, or use the Bitrise Secrets UI.
 
 All Bitrise tools are available in JavaScript agent scripts. The function signature mirrors the MCP parameters positionally:
 

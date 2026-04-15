@@ -7,6 +7,7 @@ import com.github.istin.dmtools.bitrise.model.BitriseArtifact;
 import com.github.istin.dmtools.bitrise.model.BitriseApp;
 import com.github.istin.dmtools.bitrise.model.BitriseBuild;
 import com.github.istin.dmtools.common.networking.GenericRequest;
+import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.mcp.MCPParam;
 import com.github.istin.dmtools.mcp.MCPTool;
 import com.github.istin.dmtools.networking.AbstractRestClient;
@@ -17,6 +18,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,8 +57,12 @@ public abstract class Bitrise extends AbstractRestClient {
 
     @Override
     public synchronized Request.Builder sign(Request.Builder builder) {
+        // Bitrise API expects "Authorization: token <PAT>"
+        String authHeader = (authorization != null && !authorization.startsWith("token "))
+                ? "token " + authorization
+                : authorization;
         return builder
-                .header("Authorization", authorization)
+                .header("Authorization", authHeader)
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json");
     }
@@ -77,11 +84,10 @@ public abstract class Bitrise extends AbstractRestClient {
             String title,
             @MCPParam(name = "limit", description = "Max number of apps to return (1-50, default 50)", required = false, example = "20")
             Integer limit) throws IOException {
-        StringBuilder query = new StringBuilder("apps?");
-        if (sortBy != null && !sortBy.isEmpty()) query.append("sort_by=").append(sortBy).append("&");
-        if (title != null && !title.isEmpty()) query.append("title=").append(title).append("&");
-        if (limit != null) query.append("limit=").append(limit).append("&");
-        GenericRequest req = new GenericRequest(this, path(query.toString()));
+        GenericRequest req = new GenericRequest(this, path("apps"));
+        if (sortBy != null && !sortBy.isEmpty()) req.param("sort_by", sortBy);
+        if (title != null && !title.isEmpty()) req.param("title", title);
+        if (limit != null) req.param("limit", String.valueOf(limit));
         return execute(req);
     }
 
@@ -121,13 +127,12 @@ public abstract class Bitrise extends AbstractRestClient {
             Integer limit,
             @MCPParam(name = "next", description = "Pagination cursor from previous response paging.next", required = false, example = "next_cursor_value")
             String next) throws IOException {
-        StringBuilder query = new StringBuilder("apps/" + appSlug + "/builds?");
-        if (workflowId != null && !workflowId.isEmpty()) query.append("workflow=").append(workflowId).append("&");
-        if (branch != null && !branch.isEmpty()) query.append("branch=").append(branch).append("&");
-        if (status != null && !status.isEmpty()) query.append("status=").append(mapBuildStatus(status)).append("&");
-        if (limit != null) query.append("limit=").append(limit).append("&");
-        if (next != null && !next.isEmpty()) query.append("next=").append(next).append("&");
-        GenericRequest req = new GenericRequest(this, path(query.toString()));
+        GenericRequest req = new GenericRequest(this, path("apps/" + appSlug + "/builds"));
+        if (workflowId != null && !workflowId.isEmpty()) req.param("workflow", workflowId);
+        if (branch != null && !branch.isEmpty()) req.param("branch", branch);
+        if (status != null && !status.isEmpty()) req.param("status", mapBuildStatus(status));
+        if (limit != null) req.param("limit", String.valueOf(limit));
+        if (next != null && !next.isEmpty()) req.param("next", next);
         return execute(req);
     }
 
@@ -295,19 +300,52 @@ public abstract class Bitrise extends AbstractRestClient {
 
     @MCPTool(
             name = "bitrise_update_yml",
-            description = "Upload/replace the bitrise.yml configuration file for a Bitrise app. Pass the full YAML content.",
+            description = "Upload/replace the bitrise.yml configuration file for a Bitrise app. Pass either the full YAML content or a local file path ending in .yml/.yaml. The YAML is validated via the Bitrise API before uploading.",
             integration = "bitrise",
             category = "config"
     )
     public String updateBitriseYml(
             @MCPParam(name = "appSlug", description = "The Bitrise app slug", required = true, example = "abc123def456")
             String appSlug,
-            @MCPParam(name = "ymlContent", description = "Full content of the new bitrise.yml file", required = true, example = "format_version: '11'\ndefault_step_lib_source: ...\n")
+            @MCPParam(name = "ymlContent", description = "Full YAML content OR a local file path to a .yml/.yaml file", required = true, example = "/path/to/bitrise.yml")
             String ymlContent) throws IOException {
+        String content = resolveYmlContent(ymlContent);
+
+        // Validate before uploading
+        String validationResult = validateBitriseYml(content, appSlug);
+        JSONObject validationJson = new JSONObject(validationResult);
+        if (validationJson.has("error_message") && !validationJson.isNull("error_message")
+                && !validationJson.optString("error_message").isEmpty()) {
+            throw new IOException("bitrise.yml validation failed: " + validationJson.optString("error_message"));
+        }
+        if (validationJson.has("warnings")) {
+            logger.warn("bitrise.yml validation warnings: {}", validationJson.opt("warnings"));
+        }
+
         JSONObject body = new JSONObject();
-        body.put("app_config_datastore_yaml", ymlContent);
+        body.put("app_config_datastore_yaml", content);
         String url = path("apps/" + appSlug + "/bitrise.yml");
         GenericRequest req = new GenericRequest(this, url);
+        req.setBody(body.toString());
+        return post(req);
+    }
+
+    @MCPTool(
+            name = "bitrise_validate_yml",
+            description = "Validate a bitrise.yml file content via the Bitrise API. Returns validation errors and warnings without modifying the app configuration. Accepts YAML content or a local file path.",
+            integration = "bitrise",
+            category = "config"
+    )
+    public String validateBitriseYml(
+            @MCPParam(name = "ymlContent", description = "Full YAML content OR a local file path to a .yml/.yaml file to validate", required = true, example = "/path/to/bitrise.yml")
+            String ymlContent,
+            @MCPParam(name = "appSlug", description = "Optional app slug for app-specific validation (stack, machines, licenses)", required = false, example = "abc123def456")
+            String appSlug) throws IOException {
+        String content = resolveYmlContent(ymlContent);
+        JSONObject body = new JSONObject();
+        body.put("bitrise_yml", content);
+        GenericRequest req = new GenericRequest(this, path("validate-bitrise-yml"));
+        if (appSlug != null && !appSlug.isEmpty()) req.param("app_slug", appSlug);
         req.setBody(body.toString());
         return post(req);
     }
@@ -406,8 +444,8 @@ public abstract class Bitrise extends AbstractRestClient {
         putReq.setBody(body.toString());
         try {
             return put(putReq);
-        } catch (IOException e) {
-            if (e.getMessage() != null && e.getMessage().contains("404")) {
+        } catch (RestClient.RestClientException e) {
+            if (e.getCode() == 404) {
                 // Secret doesn't exist yet — create it via POST
                 String postUrl = path("apps/" + appSlug + "/secrets");
                 GenericRequest postReq = new GenericRequest(this, postUrl);
@@ -517,5 +555,30 @@ public abstract class Bitrise extends AbstractRestClient {
             case "aborted":     return "4";
             default:            return status; // pass through numeric values as-is
         }
+    }
+
+    /**
+     * Resolves {@code ymlContent} to actual YAML text.
+     * If the value looks like a file path (starts with {@code /}, {@code ./}, {@code ../},
+     * or ends with {@code .yml}/{@code .yaml}), the file is read from disk.
+     * Otherwise the value is returned as-is (inline YAML).
+     */
+    private String resolveYmlContent(String ymlContent) throws IOException {
+        if (ymlContent == null) throw new IOException("ymlContent must not be null");
+        String trimmed = ymlContent.trim();
+        boolean looksLikeFilePath = trimmed.startsWith("/")
+                || trimmed.startsWith("./")
+                || trimmed.startsWith("../")
+                || trimmed.endsWith(".yml")
+                || trimmed.endsWith(".yaml");
+        if (looksLikeFilePath) {
+            java.nio.file.Path path = Paths.get(trimmed);
+            if (!Files.exists(path)) {
+                throw new IOException("bitrise.yml file not found: " + trimmed);
+            }
+            logger.info("Reading bitrise.yml from file: {}", trimmed);
+            return new String(Files.readAllBytes(path), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        return ymlContent;
     }
 }

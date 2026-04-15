@@ -771,7 +771,7 @@ public class McpCliHandler {
         Set<String> nonAIIntegrations = Set.of(
             "jira", "confluence", "ado", "figma", "file", "cli",
             "teams", "sharepoint", "testrail", "kb", "mermaid", "github",
-            "gitlab", "source", "tracker"
+            "gitlab", "bitrise", "source", "tracker"
         );
         if (parts.length > 0 && nonAIIntegrations.contains(parts[0])) {
             return null;
@@ -818,7 +818,7 @@ public class McpCliHandler {
             integrations.addAll(Arrays.asList(
                 "jira", "jira_xray", "ado", "confluence", "figma",
                 "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
-                "file", "kb", "mermaid", "github", "gitlab"
+                "file", "kb", "mermaid", "github", "gitlab", "bitrise"
             ));
         }
         logger.debug("Available integrations: {}", integrations);

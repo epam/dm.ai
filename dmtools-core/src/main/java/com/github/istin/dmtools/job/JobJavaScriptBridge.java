@@ -175,6 +175,19 @@ public class JobJavaScriptBridge {
             logger.debug("BasicFigmaClient not initialized: {}. Figma tools will not be available.", e.getMessage());
         }
 
+        // Initialize Bitrise client if configured
+        try {
+            com.github.istin.dmtools.bitrise.BasicBitrise bitriseInstance = com.github.istin.dmtools.bitrise.BasicBitrise.getInstance();
+            if (bitriseInstance != null) {
+                this.clientInstances.put("bitrise", bitriseInstance);
+                logger.debug("BasicBitrise initialized for JavaScript bridge");
+            } else {
+                logger.debug("BasicBitrise not configured (BITRISE_TOKEN not set). Bitrise tools will not be available.");
+            }
+        } catch (Exception e) {
+            logger.debug("BasicBitrise not initialized: {}. Bitrise tools will not be available.", e.getMessage());
+        }
+
         // Don't initialize JavaScript context in constructor - use lazy initialization instead
         // This significantly improves startup time for commands that don't need JS execution
         // initializeJavaScriptContext();
@@ -451,7 +464,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github"));
+        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "bitrise"));
         // Add jira_xray if XrayClient is available
         if (trackerClient instanceof com.github.istin.dmtools.atlassian.jira.xray.XrayClient) {
             integrations.add("jira_xray");
