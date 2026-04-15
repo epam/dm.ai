@@ -1196,8 +1196,578 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         }
     }
 
+    // ========== Pull Request / Git Operations ==========
+
     /**
-     * Get the cached file for an attachment URL.
+     * Build a Git API path for pull request operations.
+     * ADO Git API: {project}/_apis/git/repositories/{repository}/pullrequests/...
+     */
+    private String gitPrPath(String repository, String suffix) {
+        return String.format("/%s/_apis/git/repositories/%s/pullrequests%s", project, repository, suffix);
+    }
+
+    /**
+     * Execute a PATCH request with regular application/json content type (not json-patch+json).
+     * Used for Git API operations which require standard JSON, unlike work item operations.
+     */
+    private String patchJson(GenericRequest request) throws IOException {
+        request.header("Content-Type", "application/json");
+        return patch(request);
+    }
+
+    @MCPTool(
+            name = "ado_list_prs",
+            description = "List pull requests in an Azure DevOps Git repository by status. Status can be 'active', 'completed', or 'abandoned'.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_list_prs"}
+    )
+    public String listPullRequests(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "status", description = "The status of pull requests to list: 'active', 'completed', or 'abandoned'. 'open'/'opened' accepted as synonym for 'active'.", required = true, example = "active")
+            String status) throws IOException {
+        // Normalize status synonyms for cross-platform compatibility
+        if ("open".equalsIgnoreCase(status) || "opened".equalsIgnoreCase(status)) {
+            status = "active";
+        } else if ("closed".equalsIgnoreCase(status) || "merged".equalsIgnoreCase(status) || "declined".equalsIgnoreCase(status)) {
+            status = "completed";
+        }
+        String path = path(gitPrPath(repository, ""));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("searchCriteria.status", status)
+                .param("api-version", API_VERSION);
+        return execute(request);
+    }
+
+    @MCPTool(
+            name = "ado_get_pr",
+            description = "Get details of an Azure DevOps pull request including title, description, status, author, reviewers, branches, and merge info.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_get_pr"}
+    )
+    public String getPullRequest(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID (numeric)", required = true, example = "1")
+            String pullRequestId) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+        return execute(request);
+    }
+
+    @MCPTool(
+            name = "ado_get_pr_comments",
+            description = "Get all comment threads for an Azure DevOps pull request. Each thread contains comments, file context for inline comments, and status (active, fixed, closed, etc.).",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_get_pr_comments"}
+    )
+    public String getPullRequestThreads(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/threads"));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+        return execute(request);
+    }
+
+    @MCPTool(
+            name = "ado_add_pr_comment",
+            description = "Add a general comment to an Azure DevOps pull request (creates a new thread). For inline code comments, use ado_add_inline_comment instead.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_add_pr_comment"}
+    )
+    public String addPullRequestComment(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "text", description = "The comment text to add (Markdown supported)", required = true, example = "Looks good!")
+            String text) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/threads"));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject comment = new JSONObject();
+        comment.put("parentCommentId", 0);
+        comment.put("content", text);
+        comment.put("commentType", 1); // 1 = text
+
+        JSONArray comments = new JSONArray();
+        comments.put(comment);
+
+        JSONObject thread = new JSONObject();
+        thread.put("comments", comments);
+        thread.put("status", 1); // 1 = active
+
+        request.setBody(thread.toString());
+        return post(request);
+    }
+
+    @MCPTool(
+            name = "ado_reply_to_pr_thread",
+            description = "Reply to an existing comment thread in an Azure DevOps pull request. Use the threadId from ado_get_pr_comments.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_reply_to_pr_thread"}
+    )
+    public String replyToPullRequestThread(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "threadId", description = "The ID of the thread to reply to (from ado_get_pr_comments)", required = true, example = "42")
+            String threadId,
+            @MCPParam(name = "text", description = "The reply text (Markdown supported)", required = true, example = "Fixed in the latest commit.")
+            String text) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/threads/" + threadId + "/comments"));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject comment = new JSONObject();
+        comment.put("content", text);
+        comment.put("parentCommentId", 1);
+        comment.put("commentType", 1); // 1 = text
+
+        request.setBody(comment.toString());
+        return post(request);
+    }
+
+    @MCPTool(
+            name = "ado_add_inline_comment",
+            description = "Create a new inline code comment on a specific file and line range in an Azure DevOps pull request. Creates a new thread with file context.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_add_inline_comment"}
+    )
+    public String addInlineComment(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "filePath", description = "The relative file path in the repository (must start with /)", required = true, example = "/src/main/java/com/example/Foo.java", aliases = {"path"})
+            String filePath,
+            @MCPParam(name = "line", description = "The line number to comment on (1-based)", required = true, example = "42")
+            String line,
+            @MCPParam(name = "text", description = "The comment text (Markdown supported)", required = true, example = "This should be refactored.")
+            String text,
+            @MCPParam(name = "startLine", description = "For multi-line comments: the first line of the range. Must be less than or equal to line.", required = false, example = "40")
+            String startLine,
+            @MCPParam(name = "side", description = "Which diff side to comment on: 'right' (new code, default) or 'left' (old code)", required = false, example = "right")
+            String side) throws IOException {
+        // Ensure filePath starts with /
+        if (!filePath.startsWith("/")) {
+            filePath = "/" + filePath;
+        }
+
+        int lineNum;
+        try {
+            lineNum = Integer.parseInt(line);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid line: expected a numeric line number, but got: '" + line + "'", e);
+        }
+
+        int startLineNum = lineNum;
+        if (startLine != null && !startLine.trim().isEmpty()) {
+            try {
+                startLineNum = Integer.parseInt(startLine);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid startLine: expected a numeric line number, but got: '" + startLine + "'", e);
+            }
+        }
+
+        // Determine position context based on side
+        boolean isLeftSide = "left".equalsIgnoreCase(side);
+
+        JSONObject rightFileStart = new JSONObject();
+        JSONObject rightFileEnd = new JSONObject();
+        JSONObject leftFileStart = new JSONObject();
+        JSONObject leftFileEnd = new JSONObject();
+
+        if (isLeftSide) {
+            leftFileStart.put("line", startLineNum);
+            leftFileStart.put("offset", 1);
+            leftFileEnd.put("line", lineNum);
+            leftFileEnd.put("offset", 1);
+        } else {
+            rightFileStart.put("line", startLineNum);
+            rightFileStart.put("offset", 1);
+            rightFileEnd.put("line", lineNum);
+            rightFileEnd.put("offset", 1);
+        }
+
+        JSONObject threadContext = new JSONObject();
+        threadContext.put("filePath", filePath);
+        if (isLeftSide) {
+            threadContext.put("leftFileStart", leftFileStart);
+            threadContext.put("leftFileEnd", leftFileEnd);
+        } else {
+            threadContext.put("rightFileStart", rightFileStart);
+            threadContext.put("rightFileEnd", rightFileEnd);
+        }
+
+        JSONObject comment = new JSONObject();
+        comment.put("parentCommentId", 0);
+        comment.put("content", text);
+        comment.put("commentType", 1);
+
+        JSONArray comments = new JSONArray();
+        comments.put(comment);
+
+        JSONObject thread = new JSONObject();
+        thread.put("comments", comments);
+        thread.put("threadContext", threadContext);
+        thread.put("status", 1); // 1 = active
+
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/threads"));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+        request.setBody(thread.toString());
+        return post(request);
+    }
+
+    @MCPTool(
+            name = "ado_resolve_pr_thread",
+            description = "Resolve (close) a comment thread in an Azure DevOps pull request. Sets the thread status to 'fixed'. Other statuses: 'active', 'closed', 'byDesign', 'pending', 'wontFix'.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_resolve_pr_thread"}
+    )
+    public String resolveThread(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "threadId", description = "The ID of the thread to resolve (from ado_get_pr_comments)", required = true, example = "42")
+            String threadId,
+            @MCPParam(name = "status", description = "The new status: 'fixed' (default/resolved), 'closed', 'byDesign', 'wontFix', 'pending', 'active'", required = false, example = "fixed")
+            String status) throws IOException {
+        // Map string status to ADO numeric status
+        int statusCode = mapThreadStatus(status != null && !status.trim().isEmpty() ? status : "fixed");
+
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/threads/" + threadId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject body = new JSONObject();
+        body.put("status", statusCode);
+        request.setBody(body.toString());
+        return patchJson(request);
+    }
+
+    /**
+     * Map thread status string to ADO numeric status code.
+     * ADO thread status codes: 0=unknown, 1=active, 2=fixed, 3=wontFix, 4=closed, 5=byDesign, 6=pending
+     */
+    private int mapThreadStatus(String status) {
+        return switch (status.toLowerCase()) {
+            case "active" -> 1;
+            case "fixed", "resolved" -> 2;
+            case "wontfix", "wont_fix" -> 3;
+            case "closed" -> 4;
+            case "bydesign", "by_design" -> 5;
+            case "pending" -> 6;
+            default -> 2; // default to fixed
+        };
+    }
+
+    @MCPTool(
+            name = "ado_update_pr_comment",
+            description = "Update (edit) an existing comment in a pull request thread. Requires both threadId and commentId.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String updatePullRequestComment(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "threadId", description = "The ID of the thread containing the comment", required = true, example = "42")
+            String threadId,
+            @MCPParam(name = "commentId", description = "The ID of the comment to update", required = true, example = "1")
+            String commentId,
+            @MCPParam(name = "text", description = "The new comment text (replaces existing content)", required = true, example = "Updated analysis.")
+            String text) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/threads/" + threadId + "/comments/" + commentId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject body = new JSONObject();
+        body.put("content", text);
+        request.setBody(body.toString());
+        return patchJson(request);
+    }
+
+    @MCPTool(
+            name = "ado_delete_pr_comment",
+            description = "Delete a comment from a pull request thread. Requires both threadId and commentId.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String deletePullRequestComment(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "threadId", description = "The ID of the thread containing the comment", required = true, example = "42")
+            String threadId,
+            @MCPParam(name = "commentId", description = "The ID of the comment to delete", required = true, example = "2")
+            String commentId) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/threads/" + threadId + "/comments/" + commentId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+        return delete(request);
+    }
+
+    @MCPTool(
+            name = "ado_get_pr_diff",
+            description = "Get the diff/changes for an Azure DevOps pull request. Returns the list of changed files with change types.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_get_pr_diff"}
+    )
+    public String getPullRequestDiffStat(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId) throws IOException {
+        // First get the PR iterations to find the latest iteration
+        String iterationsPath = path(gitPrPath(repository, "/" + pullRequestId + "/iterations"));
+        GenericRequest iterRequest = new GenericRequest(this, iterationsPath)
+                .param("api-version", API_VERSION);
+        String iterResponse = execute(iterRequest);
+        JSONObject iterResult = new JSONObject(iterResponse);
+        JSONArray iterations = iterResult.optJSONArray("value");
+
+        if (iterations == null || iterations.isEmpty()) {
+            return new JSONObject().put("changes", new JSONArray()).toString();
+        }
+
+        // Get changes from the latest iteration
+        int latestIteration = iterations.length();
+        String changesPath = path(gitPrPath(repository, "/" + pullRequestId + "/iterations/" + latestIteration + "/changes"));
+        GenericRequest changesRequest = new GenericRequest(this, changesPath)
+                .param("api-version", API_VERSION);
+        return execute(changesRequest);
+    }
+
+    @MCPTool(
+            name = "ado_merge_pr",
+            description = "Complete (merge) an Azure DevOps pull request. Sets status to 'completed' with the specified merge strategy.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_merge_pr"}
+    )
+    public String completePullRequest(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID to complete/merge", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "mergeStrategy", description = "The merge strategy: 'squash' (default), 'noFastForward', 'rebase', 'rebaseMerge'", required = false, example = "squash")
+            String mergeStrategy,
+            @MCPParam(name = "deleteSourceBranch", description = "Whether to delete the source branch after merging (default: true)", required = false, example = "true")
+            String deleteSourceBranch,
+            @MCPParam(name = "commitMessage", description = "Optional merge commit message", required = false, example = "Merging feature branch")
+            String commitMessage) throws IOException {
+        // First get the PR to obtain lastMergeSourceCommit (required for completion)
+        String prResponse = getPullRequest(repository, pullRequestId);
+        JSONObject pr = new JSONObject(prResponse);
+        JSONObject lastMergeSourceCommit = pr.optJSONObject("lastMergeSourceCommit");
+
+        String path = path(gitPrPath(repository, "/" + pullRequestId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject body = new JSONObject();
+        body.put("status", "completed");
+
+        if (lastMergeSourceCommit != null) {
+            body.put("lastMergeSourceCommit", lastMergeSourceCommit);
+        }
+
+        JSONObject completionOptions = new JSONObject();
+        completionOptions.put("mergeStrategy", (mergeStrategy != null && !mergeStrategy.trim().isEmpty()) ? mergeStrategy : "squash");
+        completionOptions.put("deleteSourceBranch",
+                deleteSourceBranch == null || deleteSourceBranch.trim().isEmpty() || Boolean.parseBoolean(deleteSourceBranch));
+        if (commitMessage != null && !commitMessage.trim().isEmpty()) {
+            completionOptions.put("mergeCommitMessage", commitMessage);
+        }
+        body.put("completionOptions", completionOptions);
+
+        request.setBody(body.toString());
+        return patchJson(request);
+    }
+
+    @MCPTool(
+            name = "ado_add_pr_label",
+            description = "Add a label (tag) to an Azure DevOps pull request.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String addPullRequestLabel(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "label", description = "The label name to add", required = true, example = "needs-review")
+            String label) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/labels"));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION + "-preview.1");
+
+        JSONObject body = new JSONObject();
+        body.put("name", label);
+        request.setBody(body.toString());
+        return post(request);
+    }
+
+    @MCPTool(
+            name = "ado_remove_pr_label",
+            description = "Remove a label (tag) from an Azure DevOps pull request. Requires the labelId (from ado_get_pr or ado_list_prs labels array).",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String removePullRequestLabel(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "labelId", description = "The label ID to remove (from the PR labels array, not the label name)", required = true, example = "e10671ab-...")
+            String labelId) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/labels/" + labelId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION + "-preview.1");
+        return delete(request);
+    }
+
+    @MCPTool(
+            name = "ado_get_pr_reviewers",
+            description = "Get all reviewers for an Azure DevOps pull request with their vote status. Vote: 10=approved, 5=approved with suggestions, 0=no vote, -5=waiting for author, -10=rejected.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String getPullRequestReviewers(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/reviewers"));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+        return execute(request);
+    }
+
+    @MCPTool(
+            name = "ado_add_pr_reviewer",
+            description = "Add a reviewer to an Azure DevOps pull request. Optionally set their initial vote.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String addPullRequestReviewer(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "reviewerId", description = "The reviewer's ID (GUID from ado_get_user_by_email or uniqueName)", required = true, example = "ab1c2d3e-...")
+            String reviewerId,
+            @MCPParam(name = "vote", description = "Optional initial vote: 10=approve, 5=approve with suggestions, 0=no vote, -5=wait for author, -10=reject", required = false, example = "0")
+            String vote) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/reviewers/" + reviewerId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject body = new JSONObject();
+        if (vote != null && !vote.trim().isEmpty()) {
+            body.put("vote", Integer.parseInt(vote));
+        }
+        request.setBody(body.toString());
+        return put(request);
+    }
+
+    @MCPTool(
+            name = "ado_set_pr_vote",
+            description = "Set the current user's vote on a pull request. Vote values: 10=approve, 5=approve with suggestions, 0=reset/no vote, -5=wait for author, -10=reject.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String setPullRequestVote(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "reviewerId", description = "The reviewer's ID (GUID) — use ado_get_my_profile or ado_get_user_by_email to get it", required = true, example = "ab1c2d3e-...")
+            String reviewerId,
+            @MCPParam(name = "vote", description = "Vote value: 10=approve, 5=approve with suggestions, 0=reset, -5=wait for author, -10=reject", required = true, example = "10")
+            String vote) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/reviewers/" + reviewerId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject body = new JSONObject();
+        body.put("vote", Integer.parseInt(vote));
+        request.setBody(body.toString());
+        return put(request);
+    }
+
+    @MCPTool(
+            name = "ado_update_pr",
+            description = "Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String updatePullRequest(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId,
+            @MCPParam(name = "title", description = "New title for the pull request", required = false, example = "Updated PR title")
+            String title,
+            @MCPParam(name = "description", description = "New description for the pull request (Markdown supported)", required = false, example = "Updated description")
+            String description,
+            @MCPParam(name = "status", description = "New status: 'active' or 'abandoned'", required = false, example = "active")
+            String status) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+
+        JSONObject body = new JSONObject();
+        if (title != null && !title.trim().isEmpty()) {
+            body.put("title", title);
+        }
+        if (description != null && !description.trim().isEmpty()) {
+            body.put("description", description);
+        }
+        if (status != null && !status.trim().isEmpty()) {
+            body.put("status", status);
+        }
+        request.setBody(body.toString());
+        return patchJson(request);
+    }
+
+    @MCPTool(
+            name = "ado_get_pr_work_items",
+            description = "Get work items linked to an Azure DevOps pull request.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String getPullRequestWorkItems(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request ID", required = true, example = "1")
+            String pullRequestId) throws IOException {
+        String path = path(gitPrPath(repository, "/" + pullRequestId + "/workitems"));
+        GenericRequest request = new GenericRequest(this, path)
+                .param("api-version", API_VERSION);
+        return execute(request);
+    }
+
+    /**
      * Creates a unique filename based on MD5 hash of the URL.
      */
     private File getCachedFile(String url) {
@@ -1235,8 +1805,8 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         String contentType = genericRequest.getHeaders().get("Content-Type");
         MediaType mediaType;
         
-        if (contentType != null && contentType.contains("json-patch")) {
-            // Use the custom Content-Type for JSON Patch
+        if (contentType != null && !contentType.isEmpty()) {
+            // Use the explicitly set Content-Type (supports both json-patch and regular json)
             mediaType = MediaType.parse(contentType);
         } else {
             // Default to JSON Patch for ADO work item operations

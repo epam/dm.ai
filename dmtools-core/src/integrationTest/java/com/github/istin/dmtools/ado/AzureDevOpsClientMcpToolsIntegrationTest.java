@@ -14,6 +14,7 @@ import com.github.istin.dmtools.common.model.IUser;
 import com.github.istin.dmtools.common.tracker.model.Status;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.jupiter.api.*;
 
@@ -745,6 +746,343 @@ public class AzureDevOpsClientMcpToolsIntegrationTest {
         
         logger.info("✓ ado_download_attachment test passed (method exists and is callable)");
         logger.info("  Note: Full attachment test requires uploading an attachment first");
+    }
+
+    // ========== Pull Request / Git Operations Tests ==========
+
+    private static final String TEST_REPOSITORY = "ai-native-sdlc-blueprint";
+
+    /**
+     * Test 20: MCP Tool - ado_list_prs
+     * Verifies listing pull requests by status
+     */
+    @Test
+    @Order(20)
+    void testListPullRequests() throws IOException {
+        logger.info("Testing ado_list_prs MCP tool");
+
+        String response = adoClient.listPullRequests(TEST_REPOSITORY, "active");
+        assertNotNull(response);
+        logger.info("List PRs response length: {}", response.length());
+
+        JSONObject result = new JSONObject(response);
+        assertTrue(result.has("value"), "Response should contain 'value' array");
+        JSONArray prs = result.getJSONArray("value");
+        logger.info("Found {} active pull requests", prs.length());
+
+        // Also test with 'open' synonym
+        String openResponse = adoClient.listPullRequests(TEST_REPOSITORY, "open");
+        assertNotNull(openResponse);
+
+        logger.info("✓ ado_list_prs test passed");
+    }
+
+    /**
+     * Test 21: MCP Tool - ado_get_pr
+     * Verifies getting a specific pull request by ID
+     */
+    @Test
+    @Order(21)
+    void testGetPullRequest() throws IOException {
+        logger.info("Testing ado_get_pr MCP tool");
+
+        // First list PRs to get a valid ID
+        String listResponse = adoClient.listPullRequests(TEST_REPOSITORY, "active");
+        JSONObject listResult = new JSONObject(listResponse);
+        JSONArray prs = listResult.getJSONArray("value");
+
+        if (prs.isEmpty()) {
+            // Try completed PRs if no active ones
+            listResponse = adoClient.listPullRequests(TEST_REPOSITORY, "completed");
+            listResult = new JSONObject(listResponse);
+            prs = listResult.getJSONArray("value");
+        }
+
+        if (prs.isEmpty()) {
+            logger.warn("No pull requests found to test ado_get_pr. Skipping detailed check.");
+            return;
+        }
+
+        String prId = String.valueOf(prs.getJSONObject(0).getInt("pullRequestId"));
+        String response = adoClient.getPullRequest(TEST_REPOSITORY, prId);
+        assertNotNull(response);
+
+        JSONObject pr = new JSONObject(response);
+        assertTrue(pr.has("pullRequestId"));
+        assertTrue(pr.has("title"));
+        assertTrue(pr.has("status"));
+        assertTrue(pr.has("sourceRefName"));
+        assertTrue(pr.has("targetRefName"));
+        logger.info("PR #{}: {} (status: {})", pr.getInt("pullRequestId"), pr.getString("title"), pr.getString("status"));
+
+        logger.info("✓ ado_get_pr test passed");
+    }
+
+    /**
+     * Test 22: MCP Tool - ado_get_pr_comments
+     * Verifies getting comment threads for a pull request
+     */
+    @Test
+    @Order(22)
+    void testGetPullRequestComments() throws IOException {
+        logger.info("Testing ado_get_pr_comments MCP tool");
+
+        String prId = findAnyPrId();
+        if (prId == null) {
+            logger.warn("No PRs available. Skipping ado_get_pr_comments test.");
+            return;
+        }
+
+        String response = adoClient.getPullRequestThreads(TEST_REPOSITORY, prId);
+        assertNotNull(response);
+
+        JSONObject result = new JSONObject(response);
+        assertTrue(result.has("value"), "Response should contain 'value' array");
+        JSONArray threads = result.getJSONArray("value");
+        logger.info("Found {} threads for PR #{}", threads.length(), prId);
+
+        logger.info("✓ ado_get_pr_comments test passed");
+    }
+
+    /**
+     * Test 23: MCP Tool - ado_add_pr_comment + ado_resolve_pr_thread
+     * Verifies adding a comment and then resolving the thread
+     */
+    @Test
+    @Order(23)
+    void testAddAndResolvePullRequestComment() throws IOException {
+        logger.info("Testing ado_add_pr_comment + ado_resolve_pr_thread MCP tools");
+
+        String prId = findActivePrId();
+        if (prId == null) {
+            logger.warn("No active PRs available. Skipping add/resolve comment test.");
+            return;
+        }
+
+        // Add a comment
+        String commentText = "🤖 Integration test comment from DMtools - " + System.currentTimeMillis();
+        String addResponse = adoClient.addPullRequestComment(TEST_REPOSITORY, prId, commentText);
+        assertNotNull(addResponse);
+        logger.info("Added comment to PR #{}", prId);
+
+        JSONObject thread = new JSONObject(addResponse);
+        assertTrue(thread.has("id"), "Thread response should contain 'id'");
+        String threadId = String.valueOf(thread.getInt("id"));
+        logger.info("Created thread #{}", threadId);
+
+        // Resolve the thread
+        String resolveResponse = adoClient.resolveThread(TEST_REPOSITORY, prId, threadId, "fixed");
+        assertNotNull(resolveResponse);
+        logger.info("Resolved thread #{}", threadId);
+
+        logger.info("✓ ado_add_pr_comment + ado_resolve_pr_thread test passed");
+    }
+
+    /**
+     * Test 24: MCP Tool - ado_reply_to_pr_thread
+     * Verifies replying to an existing thread
+     */
+    @Test
+    @Order(24)
+    void testReplyToPullRequestThread() throws IOException {
+        logger.info("Testing ado_reply_to_pr_thread MCP tool");
+
+        String prId = findActivePrId();
+        if (prId == null) {
+            logger.warn("No active PRs available. Skipping reply test.");
+            return;
+        }
+
+        // First create a thread
+        String addResponse = adoClient.addPullRequestComment(TEST_REPOSITORY, prId,
+                "🤖 Thread for reply test - " + System.currentTimeMillis());
+        JSONObject thread = new JSONObject(addResponse);
+        String threadId = String.valueOf(thread.getInt("id"));
+
+        // Reply to the thread
+        String replyResponse = adoClient.replyToPullRequestThread(TEST_REPOSITORY, prId, threadId,
+                "🤖 Reply from DMtools integration test");
+        assertNotNull(replyResponse);
+        logger.info("Replied to thread #{}", threadId);
+
+        // Clean up - resolve the thread
+        adoClient.resolveThread(TEST_REPOSITORY, prId, threadId, "closed");
+
+        logger.info("✓ ado_reply_to_pr_thread test passed");
+    }
+
+    /**
+     * Test 25: MCP Tool - ado_update_pr_comment
+     * Verifies updating an existing comment
+     */
+    @Test
+    @Order(25)
+    void testUpdatePullRequestComment() throws IOException {
+        logger.info("Testing ado_update_pr_comment MCP tool");
+
+        String prId = findActivePrId();
+        if (prId == null) {
+            logger.warn("No active PRs available. Skipping update comment test.");
+            return;
+        }
+
+        // Create a thread
+        String addResponse = adoClient.addPullRequestComment(TEST_REPOSITORY, prId,
+                "🤖 Original comment - " + System.currentTimeMillis());
+        JSONObject thread = new JSONObject(addResponse);
+        String threadId = String.valueOf(thread.getInt("id"));
+        String commentId = "1"; // First comment in the thread
+
+        // Update the comment
+        String updateResponse = adoClient.updatePullRequestComment(TEST_REPOSITORY, prId, threadId, commentId,
+                "🤖 Updated comment - " + System.currentTimeMillis());
+        assertNotNull(updateResponse);
+        logger.info("Updated comment in thread #{}", threadId);
+
+        // Clean up
+        adoClient.resolveThread(TEST_REPOSITORY, prId, threadId, "closed");
+
+        logger.info("✓ ado_update_pr_comment test passed");
+    }
+
+    /**
+     * Test 26: MCP Tool - ado_get_pr_diff
+     * Verifies getting the diff/changes for a pull request
+     */
+    @Test
+    @Order(26)
+    void testGetPullRequestDiff() throws IOException {
+        logger.info("Testing ado_get_pr_diff MCP tool");
+
+        String prId = findAnyPrId();
+        if (prId == null) {
+            logger.warn("No PRs available. Skipping diff test.");
+            return;
+        }
+
+        String response = adoClient.getPullRequestDiffStat(TEST_REPOSITORY, prId);
+        assertNotNull(response);
+        logger.info("PR diff response length: {}", response.length());
+
+        logger.info("✓ ado_get_pr_diff test passed");
+    }
+
+    /**
+     * Test 27: MCP Tool - ado_get_pr_reviewers
+     * Verifies getting reviewers for a pull request
+     */
+    @Test
+    @Order(27)
+    void testGetPullRequestReviewers() throws IOException {
+        logger.info("Testing ado_get_pr_reviewers MCP tool");
+
+        String prId = findAnyPrId();
+        if (prId == null) {
+            logger.warn("No PRs available. Skipping reviewers test.");
+            return;
+        }
+
+        String response = adoClient.getPullRequestReviewers(TEST_REPOSITORY, prId);
+        assertNotNull(response);
+
+        JSONObject result = new JSONObject(response);
+        assertTrue(result.has("value"), "Response should contain 'value' array");
+        logger.info("Found {} reviewers for PR #{}", result.getJSONArray("value").length(), prId);
+
+        logger.info("✓ ado_get_pr_reviewers test passed");
+    }
+
+    /**
+     * Test 28: MCP Tool - ado_get_pr_work_items
+     * Verifies getting linked work items for a pull request
+     */
+    @Test
+    @Order(28)
+    void testGetPullRequestWorkItems() throws IOException {
+        logger.info("Testing ado_get_pr_work_items MCP tool");
+
+        String prId = findAnyPrId();
+        if (prId == null) {
+            logger.warn("No PRs available. Skipping work items test.");
+            return;
+        }
+
+        String response = adoClient.getPullRequestWorkItems(TEST_REPOSITORY, prId);
+        assertNotNull(response);
+
+        JSONObject result = new JSONObject(response);
+        assertTrue(result.has("value"), "Response should contain 'value' array");
+        logger.info("Found {} linked work items for PR #{}", result.getJSONArray("value").length(), prId);
+
+        logger.info("✓ ado_get_pr_work_items test passed");
+    }
+
+    /**
+     * Test 29: MCP Tool - ado_add_pr_label + ado_remove_pr_label
+     * Verifies adding and removing labels on a pull request
+     */
+    @Test
+    @Order(29)
+    void testAddAndRemovePullRequestLabel() throws IOException {
+        logger.info("Testing ado_add_pr_label + ado_remove_pr_label MCP tools");
+
+        String prId = findActivePrId();
+        if (prId == null) {
+            logger.warn("No active PRs available. Skipping label test.");
+            return;
+        }
+
+        // Add a label
+        String labelName = "dmtools-test-" + System.currentTimeMillis();
+        String addResponse = adoClient.addPullRequestLabel(TEST_REPOSITORY, prId, labelName);
+        assertNotNull(addResponse);
+
+        JSONObject label = new JSONObject(addResponse);
+        assertTrue(label.has("id"), "Label response should contain 'id'");
+        String labelId = label.getString("id");
+        logger.info("Added label '{}' (id: {}) to PR #{}", labelName, labelId, prId);
+
+        // Remove the label
+        String removeResponse = adoClient.removePullRequestLabel(TEST_REPOSITORY, prId, labelId);
+        assertNotNull(removeResponse);
+        logger.info("Removed label '{}' from PR #{}", labelName, prId);
+
+        logger.info("✓ ado_add_pr_label + ado_remove_pr_label test passed");
+    }
+
+    // ========== PR Test Helper Methods ==========
+
+    /**
+     * Find any pull request ID (active or completed) for read-only tests.
+     */
+    private String findAnyPrId() throws IOException {
+        String response = adoClient.listPullRequests(TEST_REPOSITORY, "active");
+        JSONObject result = new JSONObject(response);
+        JSONArray prs = result.getJSONArray("value");
+        if (!prs.isEmpty()) {
+            return String.valueOf(prs.getJSONObject(0).getInt("pullRequestId"));
+        }
+        // Try completed PRs
+        response = adoClient.listPullRequests(TEST_REPOSITORY, "completed");
+        result = new JSONObject(response);
+        prs = result.getJSONArray("value");
+        if (!prs.isEmpty()) {
+            return String.valueOf(prs.getJSONObject(0).getInt("pullRequestId"));
+        }
+        return null;
+    }
+
+    /**
+     * Find an active pull request ID for read-write tests.
+     */
+    private String findActivePrId() throws IOException {
+        String response = adoClient.listPullRequests(TEST_REPOSITORY, "active");
+        JSONObject result = new JSONObject(response);
+        JSONArray prs = result.getJSONArray("value");
+        if (!prs.isEmpty()) {
+            return String.valueOf(prs.getJSONObject(0).getInt("pullRequestId"));
+        }
+        return null;
     }
 }
 
