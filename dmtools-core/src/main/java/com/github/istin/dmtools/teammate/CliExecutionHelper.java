@@ -253,9 +253,23 @@ public class CliExecutionHelper {
         // agent config actually reaches run-agent.sh.
         Map<String, String> jobOverrides = PropertyReader.getOverrides();
         if (!jobOverrides.isEmpty()) {
-            logger.info("Merging {} per-job envVariables override(s) into subprocess environment", jobOverrides.size());
-            envVars = new java.util.HashMap<>(envVars);
-            envVars.putAll(jobOverrides);
+            java.util.HashMap<String, String> merged = new java.util.HashMap<>(envVars);
+            int skipped = 0;
+            for (Map.Entry<String, String> entry : jobOverrides.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                if (key == null || key.isBlank() || value == null) {
+                    logger.warn("Skipping invalid envVariables entry: key={}, keyBlank={}, valueNull={}",
+                            key, key != null && key.isBlank(), value == null);
+                    skipped++;
+                    continue;
+                }
+                merged.put(key, value);
+            }
+            int mergedCount = jobOverrides.size() - skipped;
+            logger.info("Merging {} per-job envVariables override(s) into subprocess environment ({} skipped due to null/blank key or null value)",
+                    mergedCount, skipped);
+            envVars = merged;
         }
         
         // Convert Path to File for ProcessBuilder - safer than changing system properties
