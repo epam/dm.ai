@@ -834,4 +834,68 @@ function processWithDelay(items) {
 
 ---
 
+## 🔀 Runtime Property Switching with `set_env_variable()`
+
+When a workflow needs to interact with **multiple GitHub organisations** (or other integrations requiring different credentials), you can switch the active credential at runtime using `set_env_variable()`.
+
+### How it works
+
+`set_env_variable(propertyName, envVarName)` tells dmtools to read a different environment variable for the given property. The actual secret value stays inside Java — the JS agent only provides the **name** of the env var, never the value itself.
+
+### Setup (environment / CI secrets)
+
+Define your credentials as separate environment variables in your CI configuration:
+
+```bash
+FIRST_GITHUB_TOKEN=...    # token for first organisation
+SECOND_GITHUB_TOKEN=...   # token for second organisation
+```
+
+### Usage in JS agents
+
+```javascript
+function action(params) {
+    // Switch to first organisation's token
+    set_env_variable("SOURCE_GITHUB_TOKEN", "FIRST_GITHUB_TOKEN");
+    github_trigger_workflow({
+        workspace: "first-org",
+        repository: "some-repo",
+        workflowId: "deploy.yml",
+        inputs: "{}"
+    });
+
+    // Switch to second organisation's token
+    set_env_variable("SOURCE_GITHUB_TOKEN", "SECOND_GITHUB_TOKEN");
+    github_create_pull_request({
+        workspace: "second-org",
+        repository: "another-repo",
+        sourceBranch: "feature/my-branch",
+        targetBranch: "main",
+        title: "My PR"
+    });
+
+    return { status: "done" };
+}
+```
+
+### Security guarantees
+
+| What JS sees | What stays in Java |
+|---|---|
+| `"FIRST_GITHUB_TOKEN"` (string name) | `ghp_xxxx...` (actual token value) |
+
+- The env var **name** is validated: only uppercase letters, digits, and underscores (`[A-Z0-9_]`) are accepted.
+- If the env var is not set, dmtools throws an error — the message contains the variable name only, never the token value.
+- The token value is never logged or returned to JS context.
+
+### Supported properties
+
+Currently `set_env_variable()` supports switching the GitHub token:
+
+| Property name | Effect |
+|---|---|
+| `SOURCE_GITHUB_TOKEN` | Recreates the GitHub client with the new token |
+
+---
+
 *Next: [Teammate Configurations](teammate-configs.md) | [MCP Tools Usage Examples](examples/mcp-tools-usage.md)*

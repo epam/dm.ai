@@ -11,8 +11,10 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
+import com.github.istin.dmtools.github.BasicGithub;
 import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
+import java.util.regex.Pattern;
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -44,6 +46,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JobJavaScriptBridge {
 
     private static final Logger logger = LogManager.getLogger(JobJavaScriptBridge.class);
+
+    /** Only uppercase letters, digits and underscores are allowed as env var names. */
+    private static final Pattern SAFE_ENV_VAR_NAME = Pattern.compile("^[A-Z0-9_]+$");
+
+    /** Overrides for dmtools properties set by JS via set_env_variable(). Values stay in Java. */
+    private final Map<String, String> propertyOverrides = new HashMap<>();
 
     private final TrackerClient<?> trackerClient;
     private final AI ai;
@@ -167,6 +175,19 @@ public class JobJavaScriptBridge {
             logger.debug("BasicFigmaClient not initialized: {}. Figma tools will not be available.", e.getMessage());
         }
 
+        // Initialize Bitrise client if configured
+        try {
+            com.github.istin.dmtools.bitrise.BasicBitrise bitriseInstance = com.github.istin.dmtools.bitrise.BasicBitrise.getInstance();
+            if (bitriseInstance != null) {
+                this.clientInstances.put("bitrise", bitriseInstance);
+                logger.debug("BasicBitrise initialized for JavaScript bridge");
+            } else {
+                logger.debug("BasicBitrise not configured (BITRISE_TOKEN not set). Bitrise tools will not be available.");
+            }
+        } catch (Exception e) {
+            logger.debug("BasicBitrise not initialized: {}. Bitrise tools will not be available.", e.getMessage());
+        }
+
         // Don't initialize JavaScript context in constructor - use lazy initialization instead
         // This significantly improves startup time for commands that don't need JS execution
         // initializeJavaScriptContext();
@@ -201,6 +222,9 @@ public class JobJavaScriptBridge {
 
             // Expose require function for module loading
             jsContext.getBindings("js").putMember("require", new RequireProxy());
+
+            // Expose set_env_variable for runtime property switching (alias name only, value stays in Java)
+            jsContext.getBindings("js").putMember("set_env_variable", new SetEnvVariableProxy());
 
             // Expose MCP tools using generated infrastructure
             exposeMCPToolsUsingGenerated();
@@ -440,7 +464,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github"));
+        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "bitrise"));
         // Add jira_xray if XrayClient is available
         if (trackerClient instanceof com.github.istin.dmtools.atlassian.jira.xray.XrayClient) {
             integrations.add("jira_xray");
@@ -547,6 +571,63 @@ public class JobJavaScriptBridge {
     }
 
     /**
+     * Proxy for set_env_variable(propertyName, envVarName) JS function.
+     * Allows a JS agent to redirect a dmtools property to read from a different env variable.
+     * The actual token value stays in Java — JS only provides the env var NAME.
+     */
+    private class SetEnvVariableProxy implements ProxyExecutable {
+        @Override
+        public Object execute(Value... arguments) {
+            if (arguments.length < 2) {
+                throw new IllegalArgumentException("set_env_variable requires 2 arguments: propertyName, envVarName");
+            }
+            String propertyName = arguments[0].asString();
+            String envVarName = arguments[1].asString();
+            setEnvVariable(propertyName, envVarName);
+            return true;
+        }
+    }
+
+    /**
+     * Sets a dmtools property to the value of the specified environment variable.
+     * Called from JS via set_env_variable(propertyName, envVarName).
+     * The env var NAME is provided by JS; the actual value is resolved in Java only.
+     *
+     * @param propertyName the dmtools property key (e.g. "SOURCE_GITHUB_TOKEN")
+     * @param envVarName   the name of the environment variable whose value to use
+     */
+    public void setEnvVariable(String propertyName, String envVarName) {
+        if (!SAFE_ENV_VAR_NAME.matcher(envVarName).matches()) {
+            throw new IllegalArgumentException(
+                "Invalid environment variable name '" + envVarName + "': only A-Z, 0-9 and _ are allowed");
+        }
+        String value = System.getenv(envVarName);
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Environment variable '" + envVarName + "' is not set or is empty");
+        }
+        propertyOverrides.put(propertyName, value);
+        logger.info("Property '{}' redirected via env var '{}' (value not logged)", propertyName, envVarName);
+        refreshClientForProperty(propertyName);
+    }
+
+    /**
+     * Recreates the affected client in clientInstances after a property override.
+     */
+    private void refreshClientForProperty(String propertyName) {
+        if ("SOURCE_GITHUB_TOKEN".equals(propertyName)) {
+            String newToken = propertyOverrides.get("SOURCE_GITHUB_TOKEN");
+            try {
+                BasicGithub refreshed = BasicGithub.createWithToken(newToken);
+                clientInstances.put("github", refreshed);
+                logger.info("GitHub client refreshed with new token from property override");
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to refresh GitHub client after property override", e);
+            }
+        }
+    }
+
+    /**
      * Expose a single MCP tool to JavaScript context using generated executor
      */
     private void exposeToolToJS(String toolName, Map<String, Object> toolSchema) {
@@ -616,6 +697,9 @@ public class JobJavaScriptBridge {
 
             // Ensure require function is available for this execution
             jsContext.getBindings("js").putMember("require", new RequireProxy());
+
+            // Ensure set_env_variable is available for this execution
+            jsContext.getBindings("js").putMember("set_env_variable", new SetEnvVariableProxy());
             
             // Evaluate the JavaScript code
             jsContext.eval("js", jsCode);

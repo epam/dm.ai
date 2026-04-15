@@ -38,6 +38,25 @@ public class BasicGithub extends GitHub {
     }
 
 
+    /**
+     * Creates a new GitHub client instance with the specified token, reusing the default base path.
+     * Use this when a JS agent needs to switch tokens at runtime via set_env_variable().
+     *
+     * @param token the GitHub authorization token
+     * @return a new BasicGithub instance configured with the given token
+     */
+    public static BasicGithub createWithToken(String token) throws IOException {
+        SourceCodeConfig config = SourceCodeConfig.builder()
+                .branchName(DEFAULT_CONFIG.getBranchName())
+                .repoName(DEFAULT_CONFIG.getRepoName())
+                .workspaceName(DEFAULT_CONFIG.getWorkspaceName())
+                .type(SourceCodeConfig.Type.GITHUB)
+                .auth(token)
+                .path(DEFAULT_CONFIG.getPath())
+                .build();
+        return new BasicGithub(config);
+    }
+
     private static BasicGithub instance;
 
     public static synchronized SourceCode getInstance() throws IOException {

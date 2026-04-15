@@ -20,6 +20,7 @@ import com.github.istin.dmtools.di.MermaidIndexComponent;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.github.BasicGithub;
 import com.github.istin.dmtools.gitlab.BasicGitLab;
+import com.github.istin.dmtools.bitrise.BasicBitrise;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
 import com.github.istin.dmtools.microsoft.teams.TeamsAuthTools;
@@ -563,6 +564,14 @@ public class McpCliHandler {
         }
 
         try {
+            // Create Bitrise client
+            clients.put("bitrise", BasicBitrise.getInstance());
+            logger.debug("Created BasicBitrise instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicBitrise: {}", e.getMessage());
+        }
+
+        try {
             // Create Figma client
             clients.put("figma", BasicFigmaClient.getInstance());
             logger.debug("Created BasicFigmaClient instance");
@@ -762,7 +771,7 @@ public class McpCliHandler {
         Set<String> nonAIIntegrations = Set.of(
             "jira", "confluence", "ado", "figma", "file", "cli",
             "teams", "sharepoint", "testrail", "kb", "mermaid", "github",
-            "gitlab", "source", "tracker"
+            "gitlab", "bitrise", "source", "tracker"
         );
         if (parts.length > 0 && nonAIIntegrations.contains(parts[0])) {
             return null;
@@ -809,7 +818,7 @@ public class McpCliHandler {
             integrations.addAll(Arrays.asList(
                 "jira", "jira_xray", "ado", "confluence", "figma",
                 "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
-                "file", "kb", "mermaid", "github", "gitlab"
+                "file", "kb", "mermaid", "github", "gitlab", "bitrise"
             ));
         }
         logger.debug("Available integrations: {}", integrations);
