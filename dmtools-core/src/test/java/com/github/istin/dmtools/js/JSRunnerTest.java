@@ -493,10 +493,11 @@ class JSRunnerTest {
         // Then: params.inputJql in JS should be the TrackerParams-level value
         assertNotNull(result);
         String resultStr = result.toString();
-        assertTrue(resultStr.contains("PROJ-123"),
+        JSONObject resultJson = new JSONObject(resultStr);
+        assertTrue(resultJson.getBoolean("hasInputJql"),
+                "JS should report hasInputJql=true, got: " + resultStr);
+        assertEquals("key = PROJ-123", resultJson.getString("inputJql"),
                 "JS should receive inputJql from TrackerParams level, got: " + resultStr);
-        assertTrue(resultStr.contains("hasInputJql"));
-        assertTrue(resultStr.contains("true"));
     }
 
     @Test
@@ -526,11 +527,12 @@ class JSRunnerTest {
         // Then
         assertNotNull(result);
         String resultStr = result.toString();
-        assertTrue(resultStr.contains("hasMetadata"));
-        assertTrue(resultStr.contains("true"));
-        assertTrue(resultStr.contains("build_ios_simulator"),
+        JSONObject resultJson = new JSONObject(resultStr);
+        assertTrue(resultJson.getBoolean("hasMetadata"),
+                "JS should receive metadata, got: " + resultStr);
+        assertEquals("build_ios_simulator", resultJson.getString("agentId"),
                 "JS should receive metadata.agentId, got: " + resultStr);
-        assertTrue(resultStr.contains("MAPC"),
+        assertEquals("MAPC", resultJson.getString("contextId"),
                 "JS should receive metadata.contextId, got: " + resultStr);
     }
 
@@ -557,9 +559,11 @@ class JSRunnerTest {
         // Then: neither inputJql nor metadata should appear in JS params
         assertNotNull(result);
         String resultStr = result.toString();
-        // inputJql and metadata should not be in the keys
-        assertFalse(resultStr.contains("\"inputJql\""),
-                "inputJql should not be in JS params when null, got: " + resultStr);
+        JSONObject resultJson = new JSONObject(resultStr);
+        assertFalse(resultJson.getBoolean("hasInputJql"),
+                "hasInputJql should be false when inputJql is not set, got: " + resultStr);
+        assertFalse(resultJson.getBoolean("hasMetadata"),
+                "hasMetadata should be false when metadata is not set, got: " + resultStr);
     }
 
     @Test

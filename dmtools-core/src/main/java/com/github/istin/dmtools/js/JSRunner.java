@@ -15,6 +15,7 @@ import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ExecutionMode;
 import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.Params;
+import com.github.istin.dmtools.job.TrackerParams;
 import com.google.gson.annotations.SerializedName;
 import dagger.Component;
 import lombok.Getter;
@@ -168,10 +169,10 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
         // overrides (e.g. inputJql, metadata) are accessible at params.inputJql
         // in JavaScript, not only inside params.jobParams.
         if (params.getInputJql() != null) {
-            executor.with("inputJql", params.getInputJql());
+            executor.with(TrackerParams.INPUT_JQL, params.getInputJql());
         }
         if (params.getMetadata() != null) {
-            executor.with("metadata", params.getMetadata());
+            executor.with(TrackerParams.METADATA, params.getMetadata());
         }
 
         Object result = executor.execute();
