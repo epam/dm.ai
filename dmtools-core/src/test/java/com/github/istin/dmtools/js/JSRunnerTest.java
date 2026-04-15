@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.js;
 
 import com.github.istin.dmtools.ai.AI;
+import com.github.istin.dmtools.ai.model.Metadata;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -466,5 +467,234 @@ class JSRunnerTest {
         assertEquals(ticket, params.getTicket());
         assertEquals(response, params.getResponse());
         assertEquals(initiator, params.getInitiator());
+    }
+
+    @Test
+    void testInputJqlForwardedToJSContext() throws Exception {
+        // Given: inputJql set at TrackerParams level (as it arrives from encoded_config)
+        String jsCode = """
+            function action(params) {
+                return {
+                    inputJql: params.inputJql,
+                    jobParamsInputJql: params.jobParams ? params.jobParams.inputJql : null,
+                    hasInputJql: params.inputJql !== undefined && params.inputJql !== null
+                };
+            }
+            """;
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(jsCode);
+        params.setInputJql("key = PROJ-123");
+        params.setJobParams(Map.of("inputJql", "key = DEFAULT-999", "other", "value"));
+
+        // When
+        Object result = jsRunner.runJobImpl(params);
+
+        // Then: params.inputJql in JS should be the TrackerParams-level value
+        assertNotNull(result);
+        String resultStr = result.toString();
+        JSONObject resultJson = new JSONObject(resultStr);
+        assertTrue(resultJson.getBoolean("hasInputJql"),
+                "JS should report hasInputJql=true, got: " + resultStr);
+        assertEquals("key = PROJ-123", resultJson.getString("inputJql"),
+                "JS should receive inputJql from TrackerParams level, got: " + resultStr);
+    }
+
+    @Test
+    void testMetadataForwardedToJSContext() throws Exception {
+        // Given: metadata set at TrackerParams level (as it arrives from encoded_config)
+        String jsCode = """
+            function action(params) {
+                return {
+                    hasMetadata: params.metadata !== undefined && params.metadata !== null,
+                    agentId: params.metadata ? params.metadata.agentId : null,
+                    contextId: params.metadata ? params.metadata.contextId : null
+                };
+            }
+            """;
+
+        Metadata metadata = new Metadata();
+        metadata.setAgentId("build_ios_simulator");
+        metadata.setContextId("MAPC");
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(jsCode);
+        params.setMetadata(metadata);
+
+        // When
+        Object result = jsRunner.runJobImpl(params);
+
+        // Then
+        assertNotNull(result);
+        String resultStr = result.toString();
+        JSONObject resultJson = new JSONObject(resultStr);
+        assertTrue(resultJson.getBoolean("hasMetadata"),
+                "JS should receive metadata, got: " + resultStr);
+        assertEquals("build_ios_simulator", resultJson.getString("agentId"),
+                "JS should receive metadata.agentId, got: " + resultStr);
+        assertEquals("MAPC", resultJson.getString("contextId"),
+                "JS should receive metadata.contextId, got: " + resultStr);
+    }
+
+    @Test
+    void testInputJqlNotForwardedWhenNull() throws Exception {
+        // Given: inputJql is NOT set — should not pollute JS context
+        String jsCode = """
+            function action(params) {
+                return {
+                    hasInputJql: params.inputJql !== undefined && params.inputJql !== null,
+                    hasMetadata: params.metadata !== undefined && params.metadata !== null,
+                    keys: Object.keys(params)
+                };
+            }
+            """;
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(jsCode);
+        // inputJql and metadata are NOT set
+
+        // When
+        Object result = jsRunner.runJobImpl(params);
+
+        // Then: neither inputJql nor metadata should appear in JS params
+        assertNotNull(result);
+        String resultStr = result.toString();
+        JSONObject resultJson = new JSONObject(resultStr);
+        assertFalse(resultJson.getBoolean("hasInputJql"),
+                "hasInputJql should be false when inputJql is not set, got: " + resultStr);
+        assertFalse(resultJson.getBoolean("hasMetadata"),
+                "hasMetadata should be false when metadata is not set, got: " + resultStr);
+    }
+
+    @Test
+    void testInputJqlPriorityOverJobParams() throws Exception {
+        // Given: inputJql at both TrackerParams level AND inside jobParams
+        // This simulates: file config has jobParams.inputJql default,
+        // encoded_config adds params.inputJql override
+        String jsCode = """
+            function action(params) {
+                var topLevel = params.inputJql || '';
+                var fromJobParams = (params.jobParams && params.jobParams.inputJql) || '';
+                return {
+                    effectiveJql: topLevel || fromJobParams,
+                    topLevelJql: topLevel,
+                    jobParamsJql: fromJobParams
+                };
+            }
+            """;
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(jsCode);
+        params.setInputJql("key = OVERRIDE-123");
+        params.setJobParams(Map.of("inputJql", "key = DEFAULT-999"));
+
+        // When
+        Object result = jsRunner.runJobImpl(params);
+
+        // Then: effectiveJql should be the top-level override
+        assertNotNull(result);
+        String resultStr = result.toString();
+        assertTrue(resultStr.contains("OVERRIDE-123"),
+                "Top-level inputJql should take priority, got: " + resultStr);
+        // Both values should be present
+        assertTrue(resultStr.contains("DEFAULT-999"),
+                "jobParams.inputJql should still be accessible, got: " + resultStr);
+    }
+
+    // ─── Backward compatibility tests ───────────────────────────────────────
+
+    @Test
+    void testBackwardCompat_OldScriptsReadingOnlyJobParams() throws Exception {
+        // Old-style scripts that read ONLY from params.jobParams must keep working
+        // exactly as before. No top-level inputJql is set (simulates pre-fix dmtools).
+        String oldStyleJS = """
+            function action(params) {
+                var jp = params.jobParams || {};
+                var jql = jp.inputJql || 'none';
+                return {
+                    jql: jql,
+                    hasTopLevelJql: params.inputJql !== undefined && params.inputJql !== null
+                };
+            }
+            """;
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(oldStyleJS);
+        // Only jobParams.inputJql is set — no TrackerParams.inputJql
+        params.setJobParams(Map.of("inputJql", "key = LEGACY-456"));
+
+        Object result = jsRunner.runJobImpl(params);
+
+        assertNotNull(result);
+        String resultStr = result.toString();
+        assertTrue(resultStr.contains("LEGACY-456"),
+                "Old scripts should still read jobParams.inputJql, got: " + resultStr);
+        // params.inputJql should NOT appear because TrackerParams.inputJql was not set
+        assertFalse(resultStr.contains("\"hasTopLevelJql\":true"),
+                "Top-level inputJql should be absent when not set, got: " + resultStr);
+    }
+
+    @Test
+    void testBackwardCompat_ExistingParamKeysUnchanged() throws Exception {
+        // Verify that the standard param keys (jobParams, ticket, response, initiator)
+        // are still present and nothing existing is removed.
+        String jsCode = """
+            function action(params) {
+                var keys = Object.keys(params).sort();
+                return {
+                    keys: keys,
+                    hasJobParams: 'jobParams' in params,
+                    hasTicket: 'ticket' in params,
+                    hasResponse: 'response' in params,
+                    hasInitiator: 'initiator' in params
+                };
+            }
+            """;
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(jsCode);
+        params.setJobParams(Map.of("key", "val"));
+        params.setTicket(Map.of("key", "TEST-1"));
+        params.setResponse("resp");
+        params.setInitiator("user@example.com");
+
+        Object result = jsRunner.runJobImpl(params);
+
+        assertNotNull(result);
+        String resultStr = result.toString();
+        assertTrue(resultStr.contains("\"hasJobParams\":true"), "jobParams must be present");
+        assertTrue(resultStr.contains("\"hasTicket\":true"), "ticket must be present");
+        assertTrue(resultStr.contains("\"hasResponse\":true"), "response must be present");
+        assertTrue(resultStr.contains("\"hasInitiator\":true"), "initiator must be present");
+    }
+
+    @Test
+    void testBackwardCompat_JobParamsNotMutatedByTopLevelFields() throws Exception {
+        // The top-level inputJql should NOT overwrite or modify jobParams.inputJql.
+        // Both must coexist independently.
+        String jsCode = """
+            function action(params) {
+                var jp = params.jobParams || {};
+                return {
+                    jobParamsJql: jp.inputJql,
+                    topJql: params.inputJql,
+                    areEqual: (jp.inputJql === params.inputJql)
+                };
+            }
+            """;
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(jsCode);
+        params.setInputJql("key = ENCODED-789");
+        params.setJobParams(Map.of("inputJql", "key = FILE-DEFAULT-111"));
+
+        Object result = jsRunner.runJobImpl(params);
+
+        assertNotNull(result);
+        String resultStr = result.toString();
+        assertTrue(resultStr.contains("ENCODED-789"), "top-level inputJql present");
+        assertTrue(resultStr.contains("FILE-DEFAULT-111"), "jobParams.inputJql intact");
+        assertTrue(resultStr.contains("\"areEqual\":false"),
+                "top-level and jobParams.inputJql must be independent, got: " + resultStr);
     }
 }

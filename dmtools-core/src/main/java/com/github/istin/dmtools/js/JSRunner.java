@@ -13,7 +13,9 @@ import com.github.istin.dmtools.di.DaggerJSRunnerComponent;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ExecutionMode;
+import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.Params;
+import com.github.istin.dmtools.job.TrackerParams;
 import com.google.gson.annotations.SerializedName;
 import dagger.Component;
 import lombok.Getter;
@@ -158,11 +160,22 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
         // Prepare JavaScript execution
         SourceCode primarySourceCode = sourceCodes != null && !sourceCodes.isEmpty() ? sourceCodes.get(0) : null;
         
-        Object result = js(jsPath)
+        JavaScriptExecutor executor = js(jsPath)
                 .mcpWithKB(trackerClient, ai, confluence, primarySourceCode, kbTools)
                 .withJobContext(params.getJobParams(), params.getTicket(), params.getResponse())
-                .with("initiator", params.getInitiator())
-                .execute();
+                .with("initiator", params.getInitiator());
+
+        // Forward TrackerParams fields to JS context so that encoded_config
+        // overrides (e.g. inputJql, metadata) are accessible at params.inputJql
+        // in JavaScript, not only inside params.jobParams.
+        if (params.getInputJql() != null) {
+            executor.with(TrackerParams.INPUT_JQL, params.getInputJql());
+        }
+        if (params.getMetadata() != null) {
+            executor.with(TrackerParams.METADATA, params.getMetadata());
+        }
+
+        Object result = executor.execute();
 
         logger.info("JavaScript execution completed successfully");
         logger.debug("JavaScript result: {}", result);
