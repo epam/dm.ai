@@ -9,6 +9,7 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -245,6 +246,16 @@ public class CliExecutionHelper {
             if (envVars.containsKey("CURSOR_API_KEY")) {
                 logger.info("CURSOR_API_KEY found in environment (length: {})", envVars.get("CURSOR_API_KEY").length());
             }
+        }
+
+        // Merge per-job envVariables overrides (from JSON config) into the subprocess env.
+        // These take priority over dmtools.env so that e.g. COPILOT_MODEL set in a JSON
+        // agent config actually reaches run-agent.sh.
+        Map<String, String> jobOverrides = PropertyReader.getOverrides();
+        if (!jobOverrides.isEmpty()) {
+            logger.info("Merging {} per-job envVariables override(s) into subprocess environment", jobOverrides.size());
+            envVars = new java.util.HashMap<>(envVars);
+            envVars.putAll(jobOverrides);
         }
         
         // Convert Path to File for ProcessBuilder - safer than changing system properties
