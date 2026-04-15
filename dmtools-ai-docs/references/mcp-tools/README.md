@@ -24,7 +24,7 @@ dmtools <tool_name> [arguments]
 
 | Integration | Tools | Documentation |
 |-------------|-------|---------------|
-| **ADO** | 14 | [ado-tools.md](ado-tools.md) |
+| **ADO** | 31 | [ado-tools.md](ado-tools.md) |
 | **ANTHROPIC** | 2 | [anthropic-tools.md](anthropic-tools.md) |
 | **BEDROCK** | 2 | [bedrock-tools.md](bedrock-tools.md) |
 | **CLI** | 1 | [cli-tools.md](cli-tools.md) |
@@ -59,7 +59,7 @@ file_write('output.txt', 'content');
 ### Issue Tracking & Source Control
 
 - [JIRA](jira-tools.md) - 52 tools
-- [ADO](ado-tools.md) - 14 tools
+- [ADO](ado-tools.md) - 31 tools
 - [GITHUB](github-tools.md) - 16 tools (pull requests, CI/CD monitoring)
 
 ### Communication
