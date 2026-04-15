@@ -291,19 +291,14 @@ public class JobJavaScriptBridge {
                                 memberValue = convertPolyglotValueToJSON(memberValue);
                             }
                         }
-                        // Convert JSONArray to List<String> for array parameters
+                        // Convert JSONArray to List<Object> for array parameters, preserving element types
                         if (memberValue instanceof JSONArray) {
                             JSONArray jsonArray = (JSONArray) memberValue;
-                            List<String> stringList = new ArrayList<>();
+                            List<Object> objList = new ArrayList<>();
                             for (int i = 0; i < jsonArray.length(); i++) {
-                                Object item = jsonArray.get(i);
-                                if (item instanceof String) {
-                                    stringList.add((String) item);
-                                } else {
-                                    stringList.add(item.toString());
-                                }
+                                objList.add(jsonArray.get(i));
                             }
-                            memberValue = stringList;
+                            memberValue = objList;
                         } else if (memberValue instanceof String) {
                             String strValue = ((String) memberValue).trim();
                             // Only try to parse as JSON array if it looks like a valid JSON array
@@ -312,18 +307,13 @@ public class JobJavaScriptBridge {
                                 // Handle case where JavaScript passes array as JSON string
                                 try {
                                     JSONArray jsonArray = new JSONArray(strValue);
-                                    List<String> stringList = new ArrayList<>();
+                                    List<Object> objList = new ArrayList<>();
                                     for (int i = 0; i < jsonArray.length(); i++) {
-                                        Object item = jsonArray.get(i);
-                                        if (item instanceof String) {
-                                            stringList.add((String) item);
-                                        } else {
-                                            stringList.add(item.toString());
-                                        }
+                                        objList.add(jsonArray.get(i));
                                     }
-                                    memberValue = stringList;
-                                    logger.debug("Parsed JSON array string for {}: {} elements", key, stringList.size());
-                                } catch (Exception e) {
+                                    memberValue = objList;
+                                    logger.debug("Parsed JSON array string for {}: {} elements", key, objList.size());
+                                } catch (org.json.JSONException e) {
                                     // If parsing fails, keep original value (it's just a string starting with [)
                                     logger.debug("Failed to parse as JSON array for {} (keeping as string): {}", key, e.getMessage());
                                 }
@@ -344,16 +334,11 @@ public class JobJavaScriptBridge {
                             Object value = entry.getValue();
                             if (value instanceof JSONArray) {
                                 JSONArray jsonArray = (JSONArray) value;
-                                List<String> stringList = new ArrayList<>();
+                                List<Object> objList = new ArrayList<>();
                                 for (int i = 0; i < jsonArray.length(); i++) {
-                                    Object item = jsonArray.get(i);
-                                    if (item instanceof String) {
-                                        stringList.add((String) item);
-                                    } else {
-                                        stringList.add(item.toString());
-                                    }
+                                    objList.add(jsonArray.get(i));
                                 }
-                                hostMap.put(entry.getKey(), stringList);
+                                hostMap.put(entry.getKey(), objList);
                             } else if (value instanceof String) {
                                 String strValue = ((String) value).trim();
                                 // Only try to parse as JSON array if it looks like a valid JSON array
@@ -362,18 +347,13 @@ public class JobJavaScriptBridge {
                                     // Handle case where JavaScript passes array as JSON string
                                     try {
                                         JSONArray jsonArray = new JSONArray(strValue);
-                                        List<String> stringList = new ArrayList<>();
+                                        List<Object> objList = new ArrayList<>();
                                         for (int i = 0; i < jsonArray.length(); i++) {
-                                            Object item = jsonArray.get(i);
-                                            if (item instanceof String) {
-                                                stringList.add((String) item);
-                                            } else {
-                                                stringList.add(item.toString());
-                                            }
+                                            objList.add(jsonArray.get(i));
                                         }
-                                        hostMap.put(entry.getKey(), stringList);
-                                        logger.debug("Parsed JSON array string for {}: {} elements", entry.getKey(), stringList.size());
-                                    } catch (Exception e) {
+                                        hostMap.put(entry.getKey(), objList);
+                                        logger.debug("Parsed JSON array string for {}: {} elements", entry.getKey(), objList.size());
+                                    } catch (org.json.JSONException e) {
                                         // If parsing fails, keep original value (it's just a string starting with [)
                                         logger.debug("Failed to parse as JSON array for {} (keeping as string): {}", entry.getKey(), e.getMessage());
                                     }
@@ -428,26 +408,11 @@ public class JobJavaScriptBridge {
                             logger.debug("Converted ArrayList to String[] for parameter {}: {} elements", entry.getKey(), array.length);
                         } else {
                             // Non-array parameter but we auto-parsed a JSON array string.
-                            // Reconstruct the original JSON array string faithfully:
-                            // parse each element back to JSONObject/JSONArray so that
-                            // the result is '[{...},{...}]' (array of objects), not
-                            // '["string","string"]' (array of strings).
+                            // Elements are preserved as their original JSON types (JSONObject, JSONArray,
+                            // String, Integer, Boolean, JSONObject.NULL) — put them directly.
                             JSONArray reconstructed = new JSONArray();
                             for (Object item : list) {
-                                String str = item != null ? item.toString() : null;
-                                if (str != null) {
-                                    try {
-                                        reconstructed.put(new JSONObject(str));
-                                    } catch (Exception e1) {
-                                        try {
-                                            reconstructed.put(new JSONArray(str));
-                                        } catch (Exception e2) {
-                                            reconstructed.put(str);
-                                        }
-                                    }
-                                } else {
-                                    reconstructed.put(JSONObject.NULL);
-                                }
+                                reconstructed.put(item != null ? item : JSONObject.NULL);
                             }
                             String jsonStr = reconstructed.toString();
                             convertedArgsMap.put(entry.getKey(), jsonStr);

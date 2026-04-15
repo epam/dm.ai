@@ -965,10 +965,11 @@ class JobJavaScriptBridgeTest {
 
     @Test
     void testJsonArrayStringPassedAsStringParam_PreservesNonObjectElements() throws Exception {
-        // Edge case: JSON array of primitives should still be reconstructed faithfully
+        // JSON arrays with mixed primitive types (strings, numbers, booleans, null) must
+        // be reconstructed faithfully — number 1 stays 1, not "1"; true stays true, not "true".
         String jsCode = """
             function action(params) {
-                var data = JSON.stringify(["hello", "world"]);
+                var data = JSON.stringify(["hello", 42, true, null]);
                 file_write('/tmp/test.json', data);
                 return { ok: true };
             }
@@ -993,9 +994,11 @@ class JobJavaScriptBridgeTest {
                     if (!(content instanceof String)) return false;
                     String s = (String) content;
                     JSONArray arr = new JSONArray(s);
-                    assertEquals(2, arr.length());
+                    assertEquals(4, arr.length());
                     assertEquals("hello", arr.getString(0));
-                    assertEquals("world", arr.getString(1));
+                    assertEquals(42, arr.getInt(1));        // number, not "42"
+                    assertTrue(arr.getBoolean(2));          // boolean, not "true"
+                    assertTrue(arr.isNull(3));              // null, not "null"
                     return true;
                 }),
                 any(Map.class)
