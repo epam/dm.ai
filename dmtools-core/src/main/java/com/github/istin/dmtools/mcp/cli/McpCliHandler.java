@@ -26,6 +26,7 @@ import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
 import com.github.istin.dmtools.microsoft.teams.TeamsAuthTools;
 import com.github.istin.dmtools.microsoft.sharepoint.BasicSharePointClient;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
+import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import com.github.istin.dmtools.mcp.generated.MCPToolRegistry;
 import com.github.istin.dmtools.mcp.MCPToolDefinition;
@@ -545,6 +546,14 @@ public class McpCliHandler {
             logger.debug("Created BasicConfluence instance");
         } catch (IOException e) {
             logger.warn("Failed to create BasicConfluence: {}", e.getMessage());
+        }
+
+        try {
+            // Create ADO client
+            clients.put("ado", BasicAzureDevOpsClient.getInstance());
+            logger.debug("Created BasicAzureDevOpsClient instance");
+        } catch (Exception e) {
+            logger.warn("Failed to create BasicAzureDevOpsClient: {}", e.getMessage());
         }
 
         try {
