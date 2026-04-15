@@ -8,6 +8,7 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -864,6 +865,141 @@ class JobJavaScriptBridgeTest {
                 "Expected 'parent' in result: " + resultStr);
             assertTrue(resultStr.contains("CHILD-1"),
                 "Expected 'CHILD-1' accessible via dot notation: " + resultStr);
+        }
+    }
+
+    @Test
+    void testJsonArrayStringPassedAsStringParam_SingleElement() throws Exception {
+        // Regression: bitrise_trigger_build envVars is a String parameter that receives
+        // a JSON array. With 1 element, the old code extracted the raw string losing the
+        // [] wrapper, causing Bitrise to silently ignore it.
+        String jsCode = """
+            function action(params) {
+                var envVars = JSON.stringify([{"mapped_to":"TICKET_KEY","value":"MAPC-123","is_expand":true}]);
+                bitrise_trigger_build("slug", "workflow", "branch", "commit msg", envVars);
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("bitrise_trigger_build"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("bitrise_trigger_build"),
+                argThat(args -> {
+                    Object envVars = args.get("envVars");
+                    if (!(envVars instanceof String)) return false;
+                    String s = (String) envVars;
+                    // Must be a JSON array with an object inside, not a bare string
+                    JSONArray arr = new JSONArray(s);
+                    assertEquals(1, arr.length());
+                    JSONObject obj = arr.getJSONObject(0);
+                    assertEquals("TICKET_KEY", obj.getString("mapped_to"));
+                    assertEquals("MAPC-123", obj.getString("value"));
+                    return true;
+                }),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testJsonArrayStringPassedAsStringParam_MultipleElements() throws Exception {
+        // Regression: bitrise_trigger_build envVars with multiple env var objects.
+        // Old code reconstructed JSONArray from List<String> creating array of strings
+        // instead of array of objects, causing Bitrise 400 error.
+        String jsCode = """
+            function action(params) {
+                var envVars = JSON.stringify([
+                    {"mapped_to":"TICKET_KEY","value":"MAPC-123","is_expand":true},
+                    {"mapped_to":"INPUT_JQL","value":"key = MAPC-123","is_expand":true},
+                    {"mapped_to":"PLATFORM","value":"ios","is_expand":true}
+                ]);
+                bitrise_trigger_build("slug", "workflow", "branch", "commit msg", envVars);
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("bitrise_trigger_build"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("bitrise_trigger_build"),
+                argThat(args -> {
+                    Object envVars = args.get("envVars");
+                    if (!(envVars instanceof String)) return false;
+                    String s = (String) envVars;
+                    JSONArray arr = new JSONArray(s);
+                    assertEquals(3, arr.length());
+                    // Each element must be a JSONObject, not a String
+                    JSONObject first = arr.getJSONObject(0);
+                    assertEquals("TICKET_KEY", first.getString("mapped_to"));
+                    JSONObject second = arr.getJSONObject(1);
+                    assertEquals("INPUT_JQL", second.getString("mapped_to"));
+                    JSONObject third = arr.getJSONObject(2);
+                    assertEquals("PLATFORM", third.getString("mapped_to"));
+                    return true;
+                }),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testJsonArrayStringPassedAsStringParam_PreservesNonObjectElements() throws Exception {
+        // Edge case: JSON array of primitives should still be reconstructed faithfully
+        String jsCode = """
+            function action(params) {
+                var data = JSON.stringify(["hello", "world"]);
+                file_write('/tmp/test.json', data);
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("file_write"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("file_write"),
+                argThat(args -> {
+                    Object content = args.get("content");
+                    if (!(content instanceof String)) return false;
+                    String s = (String) content;
+                    JSONArray arr = new JSONArray(s);
+                    assertEquals(2, arr.length());
+                    assertEquals("hello", arr.getString(0));
+                    assertEquals("world", arr.getString(1));
+                    return true;
+                }),
+                any(Map.class)
+            ));
         }
     }
 }

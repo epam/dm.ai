@@ -426,18 +426,32 @@ public class JobJavaScriptBridge {
                             }
                             convertedArgsMap.put(entry.getKey(), array);
                             logger.debug("Converted ArrayList to String[] for parameter {}: {} elements", entry.getKey(), array.length);
-                        } else if (list.size() == 1 && list.get(0) instanceof String) {
-                            // Single string element in ArrayList for non-array parameter - extract as string
-                            convertedArgsMap.put(entry.getKey(), list.get(0));
-                            logger.debug("Extracted single string from ArrayList for parameter {}: {}", entry.getKey(), list.get(0));
                         } else {
-                            // Multiple elements in ArrayList but parameter is NOT an array type in schema.
-                            // This happens when a JSON array string was auto-parsed (e.g. file_write content
-                            // that is valid JSON). Reconstruct as JSON array string to preserve original intent.
-                            JSONArray reconstructed = new JSONArray(list);
+                            // Non-array parameter but we auto-parsed a JSON array string.
+                            // Reconstruct the original JSON array string faithfully:
+                            // parse each element back to JSONObject/JSONArray so that
+                            // the result is '[{...},{...}]' (array of objects), not
+                            // '["string","string"]' (array of strings).
+                            JSONArray reconstructed = new JSONArray();
+                            for (Object item : list) {
+                                String str = item != null ? item.toString() : null;
+                                if (str != null) {
+                                    try {
+                                        reconstructed.put(new JSONObject(str));
+                                    } catch (Exception e1) {
+                                        try {
+                                            reconstructed.put(new JSONArray(str));
+                                        } catch (Exception e2) {
+                                            reconstructed.put(str);
+                                        }
+                                    }
+                                } else {
+                                    reconstructed.put(JSONObject.NULL);
+                                }
+                            }
                             String jsonStr = reconstructed.toString();
                             convertedArgsMap.put(entry.getKey(), jsonStr);
-                            logger.debug("Reconstructed JSON string for non-array parameter {}: {} chars", entry.getKey(), jsonStr.length());
+                            logger.debug("Reconstructed JSON array string for non-array parameter {}: {} chars", entry.getKey(), jsonStr.length());
                         }
                     }
                 } else {
