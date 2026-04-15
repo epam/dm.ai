@@ -44,6 +44,17 @@ public class PropertyReader {
   }
 
   /**
+   * Get the current per-thread environment variable overrides.
+   * Used by CliExecutionHelper to propagate envVariables from JSON config into subprocess env.
+   *
+   * @return unmodifiable view of current overrides, or empty map if none set
+   */
+  public static Map<String, String> getOverrides() {
+    Map<String, String> overrides = THREAD_LOCAL_OVERRIDES.get();
+    return overrides != null ? Collections.unmodifiableMap(overrides) : Collections.emptyMap();
+  }
+
+  /**
    * Resets the cached property state for testing purposes.
    * Package-private to restrict use to unit tests in the same package.
    * Do NOT call from production code.
