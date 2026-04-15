@@ -49,7 +49,7 @@ public class BasicBitrise extends Bitrise {
 
     /**
      * Returns a shared singleton instance, or {@code null} when not configured.
-     * Thread-safe: uses double-checked locking.
+     * Thread-safe: uses synchronized method.
      */
     public static synchronized BasicBitrise getInstance() throws IOException {
         if (instance == null) {

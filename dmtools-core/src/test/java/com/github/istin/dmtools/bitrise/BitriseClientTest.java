@@ -547,6 +547,20 @@ class BitriseClientTest {
     }
 
     // -------------------------------------------------------------------------
+    // updateBitriseYml validation failure tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void updateBitriseYml_throwsWhenValidationFails() throws IOException {
+        String validationError = "{\"error_message\":\"Invalid workflow definition\"}";
+        doReturn(validationError).when(bitrise).post(any(GenericRequest.class));
+
+        IOException exception = assertThrows(IOException.class,
+                () -> bitrise.updateBitriseYml(APP_SLUG, "format_version: '11'"));
+        assertTrue(exception.getMessage().contains("validation failed"));
+    }
+
+    // -------------------------------------------------------------------------
     // updateBitriseYml file-path support tests
     // -------------------------------------------------------------------------
 

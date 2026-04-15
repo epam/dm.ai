@@ -18,6 +18,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -316,7 +318,12 @@ public abstract class Bitrise extends AbstractRestClient {
         JSONObject validationJson = new JSONObject(validationResult);
         if (validationJson.has("error_message") && !validationJson.isNull("error_message")
                 && !validationJson.optString("error_message").isEmpty()) {
-            throw new IOException("bitrise.yml validation failed: " + validationJson.optString("error_message"));
+            String errorMsg = validationJson.optString("error_message");
+            // Truncate to avoid leaking sensitive YAML content in logs/stack traces
+            if (errorMsg.length() > 500) {
+                errorMsg = errorMsg.substring(0, 500) + "... (truncated)";
+            }
+            throw new IOException("bitrise.yml validation failed: " + errorMsg);
         }
         if (validationJson.has("warnings")) {
             logger.warn("bitrise.yml validation warnings: {}", validationJson.opt("warnings"));
@@ -408,8 +415,7 @@ public abstract class Bitrise extends AbstractRestClient {
             String appSlug,
             @MCPParam(name = "secretName", description = "The secret environment variable name", required = true, example = "MY_API_KEY")
             String secretName) throws IOException {
-        GenericRequest req = new GenericRequest(this, path("apps/" + appSlug + "/secrets/" + secretName));
-        return execute(req);
+        GenericRequest req = new GenericRequest(this, path("apps/" + appSlug + "/secrets/" + encodePathSegment(secretName)));        return execute(req);
     }
 
     @MCPTool(
@@ -439,7 +445,7 @@ public abstract class Bitrise extends AbstractRestClient {
         if (expandInStepInputs != null) body.put("expand_in_step_inputs", expandInStepInputs);
 
         // Try PUT (update) first; if secret not found, fall back to POST (create)
-        String putUrl = path("apps/" + appSlug + "/secrets/" + secretName);
+        String putUrl = path("apps/" + appSlug + "/secrets/" + encodePathSegment(secretName));
         GenericRequest putReq = new GenericRequest(this, putUrl);
         putReq.setBody(body.toString());
         try {
@@ -467,7 +473,7 @@ public abstract class Bitrise extends AbstractRestClient {
             String appSlug,
             @MCPParam(name = "secretName", description = "The secret name to delete", required = true, example = "MY_API_KEY")
             String secretName) throws IOException {
-        String url = path("apps/" + appSlug + "/secrets/" + secretName);
+        String url = path("apps/" + appSlug + "/secrets/" + encodePathSegment(secretName));
         GenericRequest req = new GenericRequest(this, url);
         return delete(req);
     }
@@ -483,7 +489,7 @@ public abstract class Bitrise extends AbstractRestClient {
             String appSlug,
             @MCPParam(name = "secretName", description = "The secret name", required = true, example = "MY_API_KEY")
             String secretName) throws IOException {
-        GenericRequest req = new GenericRequest(this, path("apps/" + appSlug + "/secrets/" + secretName + "/value"));
+        GenericRequest req = new GenericRequest(this, path("apps/" + appSlug + "/secrets/" + encodePathSegment(secretName) + "/value"));
         return execute(req);
     }
 
@@ -563,6 +569,10 @@ public abstract class Bitrise extends AbstractRestClient {
      * or ends with {@code .yml}/{@code .yaml}), the file is read from disk.
      * Otherwise the value is returned as-is (inline YAML).
      */
+    private static String encodePathSegment(String segment) {
+        return URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
     private String resolveYmlContent(String ymlContent) throws IOException {
         if (ymlContent == null) throw new IOException("ymlContent must not be null");
         String trimmed = ymlContent.trim();
