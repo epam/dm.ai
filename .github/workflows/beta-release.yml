@@ -35,6 +35,10 @@ jobs:
   # ─── Build & test (reuses existing reusable workflow) ─────────────────────
   build-and-test:
     needs: version
+    permissions:
+      checks: write    # required by build-and-test nested job
+      packages: write  # required by build-and-test nested job
+      contents: read
     uses: ./.github/workflows/build-and-test.yml
     secrets: inherit
     with:
