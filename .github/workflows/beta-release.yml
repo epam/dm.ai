@@ -7,9 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read    # least-privilege default; create-beta-release overrides to write
-  checks: write     # required by the build-and-test reusable workflow
-  packages: write   # required by the build-and-test reusable workflow
+  contents: read  # least-privilege default; elevated grants are per-job
 
 jobs:
   # ─── Determine beta version (no gradle.properties bump) ───────────────────
@@ -37,6 +35,10 @@ jobs:
   # ─── Build & test (reuses existing reusable workflow) ─────────────────────
   build-and-test:
     needs: version
+    permissions:
+      checks: write    # required by build-and-test nested job
+      packages: write  # required by build-and-test nested job
+      contents: read
     uses: ./.github/workflows/build-and-test.yml
     secrets: inherit
     with:
