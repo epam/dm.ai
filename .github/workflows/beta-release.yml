@@ -7,9 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  checks: write
-  packages: write
+  contents: read  # least-privilege default; elevated grants are per-job
 
 jobs:
   # ─── Determine beta version (no gradle.properties bump) ───────────────────
@@ -29,9 +27,9 @@ jobs:
         id: beta_version
         run: |
           BASE_VERSION=$(grep '^version=' gradle.properties | cut -d'=' -f2)
-          BETA_VERSION="${BASE_VERSION}-beta.${{ github.run_number }}"
-          echo "version=$BETA_VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v${BETA_VERSION}" >> $GITHUB_OUTPUT
+          BETA_VERSION="${BASE_VERSION}-beta.${{ github.run_number }}.${{ github.run_attempt }}"
+          echo "version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v${BETA_VERSION}" >> "$GITHUB_OUTPUT"
           echo "📦 Beta version: $BETA_VERSION"
 
   # ─── Build & test (reuses existing reusable workflow) ─────────────────────
@@ -77,12 +75,16 @@ jobs:
           cd dmtools-ai-docs
 
           zip -r ../$DIST_DIR/dmtools-skill-v${VERSION}.zip . \
-            -x "*.git*" -x ".DS_Store" -x "node_modules/*" \
-            -x "*.swp" -x ".cursorrules" -x ".github/*" -x "install.sh"
+            -x "*.git*" -x "*/.git/*" -x ".DS_Store" -x "node_modules/*" -x "*/node_modules/*" \
+            -x "*.swp" -x ".cursorrules" -x ".github/*" -x "*/.github/*" -x "install.sh"
 
           tar -czf ../$DIST_DIR/dmtools-skill-v${VERSION}.tar.gz \
-            --exclude='.git*' --exclude='.DS_Store' --exclude='node_modules' \
-            --exclude='.cursorrules' --exclude='.github' --exclude='install.sh' .
+            --exclude='.git' --exclude='.git/*' --exclude='*/.git' --exclude='*/.git/*' \
+            --exclude='.DS_Store' \
+            --exclude='node_modules' --exclude='node_modules/*' --exclude='*/node_modules' --exclude='*/node_modules/*' \
+            --exclude='.cursorrules' \
+            --exclude='.github' --exclude='.github/*' --exclude='*/.github' --exclude='*/.github/*' \
+            --exclude='install.sh' .
 
           cd ..
           cp dmtools-ai-docs/install.sh $DIST_DIR/skill-install.sh
@@ -156,13 +158,16 @@ jobs:
 
           **macOS / Linux:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install.sh | bash -s ${{ needs.version.outputs.tag }}
+          curl -fLo install.sh https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install.sh
+          chmod +x install.sh
+          ./install.sh ${{ needs.version.outputs.tag }}
           \`\`\`
 
           **Windows (PowerShell):**
           \`\`\`powershell
           \$env:DMTOOLS_VERSION = "${{ needs.version.outputs.tag }}"
-          Invoke-RestMethod -Uri "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install.ps1" | Invoke-Expression
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install.ps1" -OutFile "install.ps1"
+          .\install.ps1
           \`\`\`
 
           ## 📊 Build Info
