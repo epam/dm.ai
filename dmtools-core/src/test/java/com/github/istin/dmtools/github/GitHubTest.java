@@ -9,9 +9,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 /**
  * Unit tests for GitHub class that test functionality without external API calls.
@@ -78,5 +78,61 @@ public class GitHubTest {
     public void testGetDefaultWorkspace() {
         String workspace = gitHub.getDefaultWorkspace();
         assertEquals("testWorkspace", workspace);
+    }
+
+    // ── parseUris tests ──────────────────────────────────────────────────────
+
+    @Test
+    public void testParseUris_plainUrl() throws Exception {
+        String input = "See https://github.com/epam/dm.ai/blob/main/README.md for details.";
+        Set<String> uris = gitHub.parseUris(input);
+        assertEquals(1, uris.size());
+        assertEquals("https://github.com/epam/dm.ai/blob/main/README.md", uris.iterator().next());
+    }
+
+    @Test
+    public void testParseUris_smartLinkSuffix_doesNotPollutePath() throws Exception {
+        // Jira/Confluence smart-link format:
+        // [url|display-text|smart-link]
+        String input = "[[https://github.com/epam/dm.ai/blob/main/agents/js/smAgent.js" +
+                "|https://github.com/epam/dm.ai/blob/main/agents/js/smAgent.js|smart-link]]";
+        Set<String> uris = gitHub.parseUris(input);
+        assertEquals(1, uris.size());
+        String parsed = uris.iterator().next();
+        assertFalse("URL must not contain pipe character", parsed.contains("|"));
+        assertEquals("https://github.com/epam/dm.ai/blob/main/agents/js/smAgent.js", parsed);
+    }
+
+    @Test
+    public void testParseUris_multipleSmartLinks() throws Exception {
+        String input = "See [[https://github.com/epam/dm.ai/blob/main/README.md" +
+                "|https://github.com/epam/dm.ai/blob/main/README.md|smart-link]] " +
+                "and [[https://github.com/epam/dm.ai/blob/main/CONTRIBUTING.md" +
+                "|https://github.com/epam/dm.ai/blob/main/CONTRIBUTING.md|smart-link]]";
+        Set<String> uris = gitHub.parseUris(input);
+        assertEquals(2, uris.size());
+        for (String uri : uris) {
+            assertFalse("URL must not contain pipe character", uri.contains("|"));
+        }
+        assertTrue(uris.contains("https://github.com/epam/dm.ai/blob/main/README.md"));
+        assertTrue(uris.contains("https://github.com/epam/dm.ai/blob/main/CONTRIBUTING.md"));
+    }
+
+    @Test
+    public void testParseUris_emptyInput() throws Exception {
+        Set<String> uris = gitHub.parseUris("");
+        assertTrue(uris.isEmpty());
+    }
+
+    @Test
+    public void testParseUris_nullInput() throws Exception {
+        Set<String> uris = gitHub.parseUris(null);
+        assertTrue(uris.isEmpty());
+    }
+
+    @Test
+    public void testParseUris_noGithubUrls() throws Exception {
+        Set<String> uris = gitHub.parseUris("Just some text without any GitHub links.");
+        assertTrue(uris.isEmpty());
     }
 }

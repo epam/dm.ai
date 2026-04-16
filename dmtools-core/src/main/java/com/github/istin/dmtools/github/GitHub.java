@@ -1600,7 +1600,11 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
         // Pattern to match GitHub URLs in the format:
         // https://github.com/{owner}/{repo}/blob/{branch}/{path}
-        String pattern = "https://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+?)(?=[\\s\"'<>]|$)";
+        // The lookahead stops at whitespace, quotes, angle brackets, pipes and square
+        // brackets so that Confluence/Jira smart-link suffixes like
+        //   |https://...|smart-link]
+        // are not included in the matched URL.
+        String pattern = "https://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+?)(?=[\\s\"'<>|\\[\\]]|$)";
 
         Pattern r = Pattern.compile(pattern);
         Matcher m = r.matcher(object);
@@ -1619,6 +1623,12 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     public Object uriToObject(String uri) throws Exception {
         if (uri == null || uri.isEmpty()) {
             return null;
+        }
+
+        // Strip Confluence/Jira smart-link suffix: url|display-text|smart-link]
+        // e.g. https://github.com/.../file.md|https://github.com/.../file.md|smart-link]
+        if (uri.contains("|")) {
+            uri = uri.substring(0, uri.indexOf('|'));
         }
 
         // Check if the URI is a GitHub file URL
