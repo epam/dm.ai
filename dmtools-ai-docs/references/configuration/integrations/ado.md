@@ -17,7 +17,8 @@ DMtools provides 23+ MCP tools for Azure DevOps integration, enabling work item 
    - **Expiration**: Set appropriate expiry (max 1 year)
    - **Scopes**: Select "Custom defined" and enable:
      - Work Items: Read & Write
-     - Code: Read (if needed)
+     - Code: Read & Write (required for PR operations)
+     - Pull Request Threads: Read & Write
      - Project and Team: Read
 
 5. Click **Create** and copy the token immediately
@@ -82,6 +83,29 @@ ADO_ITERATION_PATH=YourProject\\Sprint 23
 | `ado_add_comment` | Add comment | `dmtools ado_add_comment 12345 "Review complete"` |
 | `ado_get_comments` | Get all comments | `dmtools ado_get_comments 12345` |
 | `ado_add_relation` | Link work items | `dmtools ado_add_relation 12345 12346 "Parent"` |
+
+### Pull Request Operations
+
+| Tool | Description | Example |
+|------|-------------|---------|
+| `ado_list_prs` | List PRs by status | `dmtools ado_list_prs "my-repo" "active"` |
+| `ado_get_pr` | Get PR details | `dmtools ado_get_pr "my-repo" "1"` |
+| `ado_get_pr_comments` | Get PR threads | `dmtools ado_get_pr_comments "my-repo" "1"` |
+| `ado_add_pr_comment` | Add PR comment | `dmtools ado_add_pr_comment "my-repo" "1" "LGTM"` |
+| `ado_reply_to_pr_thread` | Reply to thread | `dmtools ado_reply_to_pr_thread "my-repo" "1" "42" "Fixed"` |
+| `ado_add_inline_comment` | Inline code comment | `dmtools ado_add_inline_comment "my-repo" "1" "/src/App.java" "42" "Refactor"` |
+| `ado_resolve_pr_thread` | Resolve thread | `dmtools ado_resolve_pr_thread "my-repo" "1" "42" "fixed"` |
+| `ado_update_pr_comment` | Edit comment | `dmtools ado_update_pr_comment "my-repo" "1" "42" "1" "Updated"` |
+| `ado_delete_pr_comment` | Delete comment | `dmtools ado_delete_pr_comment "my-repo" "1" "42" "2"` |
+| `ado_get_pr_diff` | Get PR changes | `dmtools ado_get_pr_diff "my-repo" "1"` |
+| `ado_merge_pr` | Complete/merge PR | `dmtools ado_merge_pr "my-repo" "1" "squash"` |
+| `ado_add_pr_label` | Add PR label | `dmtools ado_add_pr_label "my-repo" "1" "needs-review"` |
+| `ado_remove_pr_label` | Remove PR label | `dmtools ado_remove_pr_label "my-repo" "1" "label-id"` |
+| `ado_get_pr_reviewers` | Get reviewers | `dmtools ado_get_pr_reviewers "my-repo" "1"` |
+| `ado_add_pr_reviewer` | Add reviewer | `dmtools ado_add_pr_reviewer "my-repo" "1" "user-guid"` |
+| `ado_set_pr_vote` | Vote on PR | `dmtools ado_set_pr_vote "my-repo" "1" "user-guid" "10"` |
+| `ado_update_pr` | Update PR title/desc | `dmtools ado_update_pr "my-repo" "1" "New title"` |
+| `ado_get_pr_work_items` | Linked work items | `dmtools ado_get_pr_work_items "my-repo" "1"` |
 
 ### Sprint & Planning
 
