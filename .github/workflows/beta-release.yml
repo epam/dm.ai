@@ -7,7 +7,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read  # least-privilege default; elevated grants are per-job
+  contents: read    # least-privilege default; create-beta-release overrides to write
+  checks: write     # required by the build-and-test reusable workflow
+  packages: write   # required by the build-and-test reusable workflow
 
 jobs:
   # ─── Determine beta version (no gradle.properties bump) ───────────────────
