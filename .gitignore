@@ -93,13 +93,18 @@ cache*/
 data/dmtools-db.lock.db
 data/dmtools-db.mv.db
 data/*.db
-data/*.db
 data/*.lock.db
 data/*.mv.db
 
 # Security files
 cookies.txt
 jwt_token.txt
+
+# ---------------------------------
+# IDE & Editor Configurations
+# ---------------------------------
+.idea/
+.vscode/
 
 # Environment files (contain sensitive API keys and tokens)
 .env
