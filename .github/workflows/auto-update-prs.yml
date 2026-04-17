@@ -23,16 +23,20 @@ jobs:
         run: |
           sleep 15
           prs=$(gh pr list --repo ${{ github.repository }} --state open --base main \
-            --json number,mergeable,mergeStateStatus \
-            --jq '.[] | select(.mergeable == "MERGEABLE" and .mergeStateStatus == "BEHIND") | .number')
+            --json number,mergeable,isDraft,mergeStateStatus \
+            --jq '.[]
+                   | select(.isDraft == false)
+                   | select(.mergeable == "MERGEABLE")
+                   | select(.mergeStateStatus != "DIRTY")
+                   | .number')
 
           if [ -z "$prs" ]; then
-            echo "No open PRs to update."
+            echo "No candidate PRs found."
             exit 0
           fi
 
           for pr in $prs; do
-            echo "Updating PR #$pr..."
-            gh pr update-branch $pr --repo ${{ github.repository }} \
+            echo "Attempting to update PR #$pr..."
+            gh pr update-branch "$pr" --repo ${{ github.repository }} \
               || echo "PR #$pr skipped (already up to date or conflict)"
           done
