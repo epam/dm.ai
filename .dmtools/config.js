@@ -35,21 +35,32 @@ IMPORTANT SCOPE CONSTRAINTS:
 `,
 
     additionalInstructions: {
+        po_refinement: [
+            './agents/instructions/common/investigate_before_answer.md',
+            './.dmtools/instructions/product/po_domain_knowledge.md'
+        ],
         story_description: [
+            './.dmtools/instructions/product/po_domain_knowledge.md',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story'
         ],
         story_acceptance_criterias: [
+            './.dmtools/instructions/product/po_domain_knowledge.md',
+            './agents/instructions/common/investigate_before_answer.md',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story'
         ],
         story_questions: [
+            './.dmtools/instructions/product/po_domain_knowledge.md',
+            './agents/instructions/common/investigate_before_answer.md',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665581/Template+Q',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/18186241/Template+Jira+Markdown'
         ],
         story_solution: [
+            './.dmtools/instructions/product/po_domain_knowledge.md',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/56754177/Template+Solution+Design',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/18186241/Template+Jira+Markdown'
         ],
         solution_description: [
+            './.dmtools/instructions/product/po_domain_knowledge.md',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/56754177/Template+Solution+Design',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/18186241/Template+Jira+Markdown'
         ],
