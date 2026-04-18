@@ -298,7 +298,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         int perPage = 100;
         do {
             StringBuilder urlBuilder = new StringBuilder(
-                    String.format("projects/%s/repository/commits?ref_name=%s&per_page=%d&page=%d",
+                    String.format("projects/%s/repository/commits?ref_name=%s&per_page=%d&page=%d&with_stats=true",
                             getEncodedProject(workspace, repository), branchName, perPage, page));
             if (startDate != null && !startDate.isEmpty()) {
                 urlBuilder.append("&since=").append(startDate);

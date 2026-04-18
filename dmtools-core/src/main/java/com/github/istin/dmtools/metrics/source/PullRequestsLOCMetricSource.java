@@ -70,10 +70,20 @@ public class PullRequestsLOCMetricSource extends CommonSourceCollector {
                 continue;
             }
 
-            // Fetch commit diff stats
+            // Use inline stats if the commit model already carries them (e.g. GitLab with_stats=true),
+            // otherwise fall back to a separate getCommitDiffStat API call.
             int additions = 0, deletions = 0;
             try {
-                IDiffStats diffStats = sourceCode.getCommitDiffStat(workspace, repo, commitKey);
+                IDiffStats diffStats = null;
+                if (model instanceof IDiffStats) {
+                    IStats inlineStats = ((IDiffStats) model).getStats();
+                    if (inlineStats != null) {
+                        diffStats = (IDiffStats) model;
+                    }
+                }
+                if (diffStats == null) {
+                    diffStats = sourceCode.getCommitDiffStat(workspace, repo, commitKey);
+                }
                 if (diffStats != null) {
                     IStats stats = diffStats.getStats();
                     if (stats != null) {
