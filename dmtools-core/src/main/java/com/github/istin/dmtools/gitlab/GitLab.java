@@ -56,9 +56,17 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         int page = 1;
         int perPage = 100; // Adjust as needed, GitLab default is 20, max is 100
 
+        // Build base URL with optional created_after for server-side filtering
+        String baseUrl = String.format("projects/%s/merge_requests?state=%s&per_page=%d",
+                getEncodedProject(workspace, repository), state, perPage);
+        if (startDate != null) {
+            String createdAfter = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                    .format(startDate.getTime());
+            baseUrl += "&created_after=" + createdAfter;
+        }
+
         do {
-            String path = path(String.format("projects/%s/merge_requests?state=%s&per_page=%d&page=%d",
-                    getEncodedProject(workspace, repository), state, perPage, page));
+            String path = path(baseUrl + "&page=" + page);
 
             GenericRequest getRequest = new GenericRequest(this, path);
             String response = execute(getRequest);
@@ -69,11 +77,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
             List<IPullRequest> pullRequests = JSONModel.convertToModels(GitLabPullRequest.class, new JSONArray(response));
             allPullRequests.addAll(pullRequests);
-            if (startDate != null && !pullRequests.isEmpty() && pullRequests.get(pullRequests.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
-                break;
-            }
             if (!checkAllRequests || pullRequests.size() < perPage) {
-                // Stop if we are not checking all requests or if there are fewer pull requests than the perPage limit
                 break;
             }
 
