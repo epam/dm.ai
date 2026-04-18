@@ -65,10 +65,14 @@ public class MetricFactory {
     }
 
     public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType) throws Exception {
-        return createMetric(metricName, metricParams, dataSourceType, null);
+        return createMetric(metricName, metricParams, dataSourceType, null, null);
     }
 
     public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType, Map<String, Object> dataSourceParams) throws Exception {
+        return createMetric(metricName, metricParams, dataSourceType, dataSourceParams, null);
+    }
+
+    public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType, Map<String, Object> dataSourceParams, SourceCode resolvedSourceCode) throws Exception {
         // Merge: data source params as defaults, metric params override
         Map<String, Object> params = new HashMap<>();
         if (dataSourceParams != null) {
@@ -86,7 +90,7 @@ public class MetricFactory {
             TrackerRule rule = createTrackerRule(metricName, params);
             metric = new Metric(label, isWeight, rule);
         } else if ("pullRequests".equals(dataSourceType) || "commits".equals(dataSourceType)) {
-            SourceCollector collector = createSourceCollector(metricName, params);
+            SourceCollector collector = createSourceCollector(metricName, params, resolvedSourceCode);
             metric = new Metric(label, isWeight, isPersonalized, collector);
         } else if ("figma".equals(dataSourceType)) {
             SourceCollector collector = createFigmaCollector(metricName, params);
@@ -211,6 +215,11 @@ public class MetricFactory {
     }
 
     private SourceCollector createSourceCollector(String metricName, Map<String, Object> params) {
+        return createSourceCollector(metricName, params, null);
+    }
+
+    private SourceCollector createSourceCollector(String metricName, Map<String, Object> params, SourceCode resolvedSourceCode) {
+        SourceCode sourceCode = resolvedSourceCode != null ? resolvedSourceCode : this.sourceCode;
         if (sourceCode == null) {
             throw new IllegalArgumentException("SourceCode is not configured");
         }

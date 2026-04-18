@@ -242,7 +242,8 @@ public class ReportGenerator {
                     metricConfig.getName(),
                     metricConfig.getParams(),
                     sourceConfig.getName(),
-                    sourceConfig.getParams()
+                    sourceConfig.getParams(),
+                    dataSource.getSourceCode()
                 );
 
                 DataSourceResult result = new DataSourceResult();
