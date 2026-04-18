@@ -228,21 +228,23 @@ public class ReportGenerator {
         for (DataSourceConfig sourceConfig : config.getDataSources()) {
             Map<String, DataSourceResult> sourceResults = new ConcurrentHashMap<>();
 
-            // Create data source
+            // Create data source — resolves per-datasource SourceCode (e.g. gitlab vs github)
+            SourceCode resolvedSourceCode = dataSourceFactory.resolveSourceCode(sourceConfig.getParams(), sourceCode);
             DataSource dataSource = dataSourceFactory.createDataSource(
                 sourceConfig.getName(),
                 sourceConfig.getParams(),
                 trackerClient,
-                sourceCode
+                resolvedSourceCode
             );
 
-            // Process each metric
+            // Process each metric — pass resolvedSourceCode so MetricFactory uses the right provider
             for (MetricConfig metricConfig : sourceConfig.getMetrics()) {
                 Metric metric = metricFactory.createMetric(
                     metricConfig.getName(),
                     metricConfig.getParams(),
                     sourceConfig.getName(),
-                    sourceConfig.getParams()
+                    sourceConfig.getParams(),
+                    resolvedSourceCode
                 );
 
                 DataSourceResult result = new DataSourceResult();

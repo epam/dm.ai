@@ -56,7 +56,7 @@ public class DataSourceFactory {
      * Resolve SourceCode for a data source. If params contain "sourceType" (e.g. "github"),
      * create the specific provider. Otherwise fall back to the globally provided sourceCode.
      */
-    private SourceCode resolveSourceCode(Map<String, Object> params, SourceCode fallback) {
+    public SourceCode resolveSourceCode(Map<String, Object> params, SourceCode fallback) {
         String sourceType = params != null ? (String) params.get("sourceType") : null;
         if (sourceType != null && !sourceType.isEmpty()) {
             try {
