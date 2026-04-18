@@ -56,6 +56,11 @@ public class PullRequestsDataSource extends DataSource {
 
 
     @Override
+    public SourceCode getSourceCode() {
+        return sourceCode;
+    }
+
+    @Override
     public JSONObject extractRawMetadata(Object item) {
         if (item instanceof JSONModel) {
             return ((JSONModel) item).getJSONObject();

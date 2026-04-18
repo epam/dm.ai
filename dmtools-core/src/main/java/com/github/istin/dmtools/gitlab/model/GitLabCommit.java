@@ -41,7 +41,13 @@ public class GitLabCommit extends JSONModel implements ICommit, IDiffStats {
 
     @Override
     public IStats getStats() {
-        throw new UnsupportedOperationException();
+        JSONObject statsObj = getJSONObject("stats");
+        if (statsObj == null) return null;
+        return new IStats() {
+            @Override public int getTotal()     { return statsObj.optInt("total", 0); }
+            @Override public int getAdditions() { return statsObj.optInt("additions", 0); }
+            @Override public int getDeletions() { return statsObj.optInt("deletions", 0); }
+        };
     }
 
     @Override
@@ -51,13 +57,22 @@ public class GitLabCommit extends JSONModel implements ICommit, IDiffStats {
 
     @Override
     public IUser getAuthor() {
-        // GitLab provides author details directly within `author`
-        return getModel(GitLabUser.class, "author");
+        // GitLab commits API returns author_name and author_email as flat top-level strings,
+        // not as a nested object. Build a synthetic GitLabUser from those fields.
+        String name = getString("author_name");
+        String email = getString("author_email");
+        if (name == null) return null;
+        JSONObject userJson = new JSONObject();
+        userJson.put("name", name);
+        userJson.put("email", email);
+        return new GitLabUser(userJson);
     }
 
     @Override
     public Long getCommiterTimestamp() {
-        return DateUtils.parseIsoDate(getJSONObject("committer").getString("date")).getTime();
+        // GitLab uses committed_date (ISO 8601) at top level, not committer.date
+        java.util.Date parsed = DateUtils.smartParseDate(getString("committed_date"));
+        return parsed != null ? parsed.getTime() : null;
     }
 
     @Override
@@ -67,7 +82,7 @@ public class GitLabCommit extends JSONModel implements ICommit, IDiffStats {
 
     @Override
     public String getUrl() {
-        return "url is not supported";
+        return getString("web_url");
     }
 
 }

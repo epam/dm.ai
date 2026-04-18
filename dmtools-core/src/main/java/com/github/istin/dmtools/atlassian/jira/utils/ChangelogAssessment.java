@@ -69,7 +69,12 @@ public class ChangelogAssessment {
                                 String displayName = history.getAuthor().getFullName();
                                 KeyTime keyTime = new KeyTime(key, created, customName != null ? customName : displayName);
                                 if (isSetWeight) {
-                                    keyTime.setWeight(ticket.getWeight());
+                                    double w = ticket.getWeight();
+                                    // Only use story points as weight when they are set (positive).
+                                    // Unset story points return -1; leave the default weight of 1.0.
+                                    if (w > 0) {
+                                        keyTime.setWeight(w);
+                                    }
                                 }
                                 result.add(keyTime);
                             }
@@ -91,7 +96,10 @@ public class ChangelogAssessment {
                     }
                     KeyTime keyTime = new KeyTime(key, createdCalendar, creator != null ? creator.getFullName() : null);
                     if (isSetWeight) {
-                        keyTime.setWeight(ticket.getWeight());
+                        double w = ticket.getWeight();
+                        if (w > 0) {
+                            keyTime.setWeight(w);
+                        }
                     }
                     result.add(keyTime);
                 }

@@ -55,6 +55,11 @@ public class CommitsDataSource extends DataSource {
     }
 
     @Override
+    public SourceCode getSourceCode() {
+        return sourceCode;
+    }
+
+    @Override
     public String getSourceName() {
         return "commits";
     }
