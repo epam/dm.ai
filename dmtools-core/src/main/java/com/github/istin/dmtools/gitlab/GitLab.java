@@ -56,8 +56,10 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         int page = 1;
         int perPage = 100; // Adjust as needed, GitLab default is 20, max is 100
 
-        // Build base URL with optional created_after for server-side filtering
-        String baseUrl = String.format("projects/%s/merge_requests?state=%s&per_page=%d",
+        // Build base URL with optional created_after for server-side filtering.
+        // Sort ascending (oldest first) so early pages are stable between daily runs
+        // and the HTTP cache only misses on the last page (newest MRs).
+        String baseUrl = String.format("projects/%s/merge_requests?state=%s&per_page=%d&order_by=created_at&sort=asc",
                 getEncodedProject(workspace, repository), state, perPage);
         if (startDate != null) {
             String createdAfter = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
