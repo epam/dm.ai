@@ -51,23 +51,12 @@ public class PullRequestsLinesOfCodeMetricSource extends CommonSourceCollector {
                     displayName = IEmployees.UNKNOWN;
                 }
                 KeyTime keyTime = new KeyTime(model.getId(), model.getCommitterDate(), isPersonalized ? displayName : metricName);
-//                BitbucketResult commitDiff = bitbucket.getCommitDiff(workspace, repo, model.getId());
-//                List<Diff> diffs = commitDiff.getDiffs();
-//                int amountOfLines = 0;
-//                for (Diff diff : diffs) {
-//                    if (!isValidFileCounted(diff.getSource())) {
-//                        continue;
-//                    }
-//
-//                    List<Hunk> hunks = diff.getHunks();
-//                    for (Hunk hunk : hunks) {
-//                        List<Segment> segments = hunk.getSegments();
-//                        for (Segment segment : segments) {
-//                            amountOfLines = amountOfLines + segment.getLines().size();
-//                        }
-//                    }
-//                }
-//                keyTime.setWeight(amountOfLines/1000d);
+                // Use commit stats (additions + deletions) available on all SourceCode providers.
+                // Divide by 1000 to express as K-lines.
+                if (model.getStats() != null) {
+                    int linesChanged = model.getStats().getAdditions() + model.getStats().getDeletions();
+                    keyTime.setWeight(linesChanged / 1000d);
+                }
                 data.add(keyTime);
                 return false;
             }

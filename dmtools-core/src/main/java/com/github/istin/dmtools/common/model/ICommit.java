@@ -21,6 +21,10 @@ public interface ICommit {
 
     String getUrl();
 
+    default IStats getStats() {
+        return null;
+    }
+
     class Utils {
 
         public static Calendar getComitterDate(ICommit commit) {
