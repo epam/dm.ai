@@ -41,7 +41,13 @@ public class GitLabCommit extends JSONModel implements ICommit, IDiffStats {
 
     @Override
     public IStats getStats() {
-        throw new UnsupportedOperationException();
+        JSONObject stats = getJSONObject("stats");
+        if (stats == null) return null;
+        return new IStats() {
+            @Override public int getTotal()     { return stats.optInt("total", 0); }
+            @Override public int getAdditions() { return stats.optInt("additions", 0); }
+            @Override public int getDeletions() { return stats.optInt("deletions", 0); }
+        };
     }
 
     @Override
