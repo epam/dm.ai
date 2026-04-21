@@ -4,6 +4,8 @@
 package com.github.istin.dmtools.ai;
 
 import com.github.istin.dmtools.atlassian.common.networking.AtlassianRestClient;
+import com.github.istin.dmtools.atlassian.jira.model.IssueLink;
+import com.github.istin.dmtools.atlassian.jira.model.Relationship;
 import com.github.istin.dmtools.atlassian.jira.utils.IssuesIDsParser;
 import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
@@ -17,7 +19,6 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -131,6 +132,43 @@ public class TicketContext implements ToText {
             comments = fetchedComments;
         }
         
+    }
+
+    public void prepareContext(boolean withComments, boolean withExtraTickets, boolean ignoreClonedBy) throws IOException {
+        if (ignoreClonedBy) {
+            this.excludedExtraTicketKeys = collectClonedByKeys(ticket);
+        }
+        prepareContext(withComments, withExtraTickets);
+    }
+
+    /**
+     * Collects the keys of tickets linked to the given ticket via "is cloned by" or "clones"
+     * relationships, so they can be excluded from AI context to avoid duplicate noise.
+     */
+    public static Set<String> collectClonedByKeys(ITicket ticket) {
+        Set<String> keys = new HashSet<>();
+        try {
+            if (ticket instanceof com.github.istin.dmtools.atlassian.jira.model.Ticket) {
+                com.github.istin.dmtools.atlassian.jira.model.Fields fields =
+                        ((com.github.istin.dmtools.atlassian.jira.model.Ticket) ticket).getFields();
+                if (fields != null) {
+                    List<IssueLink> links = fields.getIssueLinks();
+                    if (links != null) {
+                        for (IssueLink link : links) {
+                            if (Relationship.isClonedBy(link)) {
+                                String key = link.getKey();
+                                if (key != null) {
+                                    keys.add(key);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not collect cloned-by keys: {}", e.getMessage());
+        }
+        return keys;
     }
 
     /**

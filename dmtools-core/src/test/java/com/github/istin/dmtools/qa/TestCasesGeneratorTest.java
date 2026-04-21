@@ -9,13 +9,13 @@ import com.github.istin.dmtools.ai.Claude35TokenCounter;
 import com.github.istin.dmtools.ai.TicketContext;
 import com.github.istin.dmtools.ai.agent.TestCaseGeneratorAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.jira.model.Fields;
+import com.github.istin.dmtools.atlassian.jira.model.IssueLink;
 import com.github.istin.dmtools.atlassian.jira.model.Relationship;
+import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
-import com.github.istin.dmtools.atlassian.jira.model.Fields;
-import com.github.istin.dmtools.atlassian.jira.model.IssueLink;
-import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.TrackerParams;
 import org.junit.Before;
@@ -662,7 +662,7 @@ public class TestCasesGeneratorTest {
         when(cloneLink.getKey()).thenReturn("PROJ-999");
         when(mockFields.getIssueLinks()).thenReturn(Arrays.asList(cloneLink));
 
-        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        Set<String> result = TicketContext.collectClonedByKeys(mockJiraTicket);
         assertEquals(1, result.size());
         assertTrue(result.contains("PROJ-999"));
     }
@@ -678,7 +678,7 @@ public class TestCasesGeneratorTest {
         when(relatesLink.getOutwardType()).thenReturn(Relationship.RELATES_TO);
         when(mockFields.getIssueLinks()).thenReturn(Arrays.asList(relatesLink));
 
-        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        Set<String> result = TicketContext.collectClonedByKeys(mockJiraTicket);
         assertTrue(result.isEmpty());
     }
 
@@ -690,14 +690,14 @@ public class TestCasesGeneratorTest {
         when(mockJiraTicket.getFields()).thenReturn(mockFields);
         when(mockFields.getIssueLinks()).thenReturn(null);
 
-        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        Set<String> result = TicketContext.collectClonedByKeys(mockJiraTicket);
         assertTrue(result.isEmpty());
     }
 
     @Test
     public void testCollectClonedByKeys_nonJiraTicket_returnsEmpty() {
         ITicket nonJiraTicket = mock(ITicket.class);
-        Set<String> result = TestCasesGenerator.collectClonedByKeys(nonJiraTicket);
+        Set<String> result = TicketContext.collectClonedByKeys(nonJiraTicket);
         assertTrue(result.isEmpty());
     }
 
@@ -722,7 +722,7 @@ public class TestCasesGeneratorTest {
         when(mockJiraTicket.getFields()).thenReturn(mockFields);
         when(mockFields.getIssueLinks()).thenReturn(Arrays.asList(cloneLink, relatesLink, blockerLink));
 
-        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        Set<String> result = TicketContext.collectClonedByKeys(mockJiraTicket);
         assertEquals(1, result.size());
         assertTrue(result.contains("PROJ-100"));
     }

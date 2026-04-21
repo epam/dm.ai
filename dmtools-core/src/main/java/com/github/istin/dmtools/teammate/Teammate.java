@@ -12,8 +12,6 @@ import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.ai.agent.SourceImpactAssessmentAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
-import com.github.istin.dmtools.atlassian.jira.model.IssueLink;
-import com.github.istin.dmtools.atlassian.jira.model.Relationship;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
@@ -49,9 +47,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultItem>> {
 
@@ -367,10 +363,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             
             // Create and prepare ticket context
             TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-            if (expertParams.isIgnoreClonedByRelationship()) {
-                ticketContext.setExcludedExtraTicketKeys(collectClonedByKeys(ticket));
-            }
-            ticketContext.prepareContext(true, false);
+            ticketContext.prepareContext(true, false, expertParams.isIgnoreClonedByRelationship());
             // Get attachments and convert to text
             List<? extends IAttachment> attachments = ticket.getAttachments();
             if (expertParams.isSkipAllAttachments()) {
@@ -711,32 +704,6 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             return Collections.emptyList();
         }
         return mermaidIndexTools.read(config.getIntegration(), config.getStoragePath());
-    }
-
-    static Set<String> collectClonedByKeys(ITicket ticket) {
-        Set<String> keys = new HashSet<>();
-        try {
-            if (ticket instanceof com.github.istin.dmtools.atlassian.jira.model.Ticket) {
-                com.github.istin.dmtools.atlassian.jira.model.Fields fields =
-                        ((com.github.istin.dmtools.atlassian.jira.model.Ticket) ticket).getFields();
-                if (fields != null) {
-                    List<IssueLink> links = fields.getIssueLinks();
-                    if (links != null) {
-                        for (IssueLink link : links) {
-                            if (Relationship.isClonedBy(link)) {
-                                String key = link.getKey();
-                                if (key != null) {
-                                    keys.add(key);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.debug("Could not collect cloned-by keys: {}", e.getMessage());
-        }
-        return keys;
     }
 
 }

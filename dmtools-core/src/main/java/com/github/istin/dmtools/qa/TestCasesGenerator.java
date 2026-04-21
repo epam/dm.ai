@@ -12,7 +12,6 @@ import com.github.istin.dmtools.ai.agent.RelatedTestCasesAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseDeduplicationAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseGeneratorAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
-import com.github.istin.dmtools.atlassian.jira.model.IssueLink;
 import com.github.istin.dmtools.atlassian.jira.model.Relationship;
 import com.github.istin.dmtools.teammate.InstructionProcessor;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
@@ -40,9 +39,7 @@ import javax.inject.Singleton;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.*;
 
 public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, List<TestCasesGenerator.TestCasesResult>> {
@@ -150,10 +147,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 }
 
                 TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-                if (params.isIgnoreClonedByRelationship()) {
-                    ticketContext.setExcludedExtraTicketKeys(collectClonedByKeys(ticket));
-                }
-                ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences());
+                ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences(), params.isIgnoreClonedByRelationship());
                 String additionalRules = extractFromConfluence(params.getConfluencePages());
                 result.add(generateTestCases(ticketContext, additionalRules, listOfAllTestCases, params, customAdapter));
                 TrackerParams.OutputType outputType = getOutputTypeSafe(params);
@@ -198,31 +192,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         return sb.toString();
     }
 
-    static Set<String> collectClonedByKeys(ITicket ticket) {
-        Set<String> keys = new HashSet<>();
-        try {
-            if (ticket instanceof com.github.istin.dmtools.atlassian.jira.model.Ticket) {
-                com.github.istin.dmtools.atlassian.jira.model.Fields fields =
-                        ((com.github.istin.dmtools.atlassian.jira.model.Ticket) ticket).getFields();
-                if (fields != null) {
-                    List<IssueLink> links = fields.getIssueLinks();
-                    if (links != null) {
-                        for (IssueLink link : links) {
-                            if (Relationship.isClonedBy(link)) {
-                                String key = link.getKey();
-                                if (key != null) {
-                                    keys.add(key);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.debug("Could not collect cloned-by keys: {}", e.getMessage());
-        }
-        return keys;
-    }
+
 
     public TestCasesResult generateTestCases(TicketContext ticketContext, String extraRules, List<? extends ITicket> listOfAllTestCases, TestCasesGeneratorParams params) throws Exception {
         return generateTestCases(ticketContext, extraRules, listOfAllTestCases, params, null);
