@@ -2004,13 +2004,23 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         // Try to extract project key from JQL query
         String projectKey = extractProjectKeyFromJQL(searchQueryJQL);
 
-        // If we still couldn't extract a project key, use the first known project key
-        // (getFields calls /field which is a global endpoint, any project key works)
+        // If we still couldn't extract a project key, prefer JIRA_EXTRA_FIELDS_PROJECT
+        // (set via setProjectContext) as it is the explicitly configured project context.
+        String projectContext = getProjectContext();
+        if (projectKey.isEmpty() && projectContext != null && !projectContext.isBlank()) {
+            projectKey = projectContext.trim().toUpperCase(Locale.ROOT);
+            logger.debug("Could not extract project key from JQL, using projectContext fallback: {}", projectKey);
+        }
+
+        // Last resort: pick the first known project key.
+        // getFields(projectKey) usually resolves fields via the global /field endpoint,
+        // but it can fall back to issue/createmeta?projectKeys=..., where the chosen
+        // project key must be valid and accessible.
         if (projectKey.isEmpty()) {
             List<String> knownKeys = getKnownProjectKeys();
             if (!knownKeys.isEmpty()) {
                 projectKey = knownKeys.get(0);
-                logger.debug("Could not extract project key from JQL, using fallback: {}", projectKey);
+                logger.debug("Could not extract project key from JQL, using first known project key as fallback: {}", projectKey);
             }
         }
 
