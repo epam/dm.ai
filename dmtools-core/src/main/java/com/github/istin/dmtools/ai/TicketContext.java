@@ -166,7 +166,7 @@ public class TicketContext implements ToText {
                 }
             }
         } catch (Exception e) {
-            logger.debug("Could not collect cloned-by keys: {}", e.getMessage());
+            logger.debug("Could not collect cloned-by keys", e);
         }
         return keys;
     }
