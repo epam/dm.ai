@@ -704,8 +704,10 @@ public class JiraClientFieldResolutionTest {
     void testResolveFieldNamesForSearch_usesProjectContextBeforeKnownProjectKeys() throws Exception {
         // When JQL contains no extractable project key, projectContext (= JIRA_EXTRA_FIELDS_PROJECT)
         // must be used as the first fallback — not the first entry from getKnownProjectKeys().
+        // "Story Points" exists only in the MYPROJECT mock response, so if it resolves to
+        // customfield_10001 we know MYPROJECT was used and not "OTHER".
         jiraClient.setMockProjectKeys("OTHER");
-        jiraClient.setProjectContext("MYPROJECT");
+        jiraClient.setProjectContext("myproject"); // lowercase to verify trim+toUpperCase
         jiraClient.setMockFieldsResponse("MYPROJECT", """
                 [
                   {"id":"summary","name":"Summary","custom":false},
@@ -713,11 +715,9 @@ public class JiraClientFieldResolutionTest {
                 ]
                 """);
 
-        // JQL has no project key — fallback must pick projectContext "MYPROJECT", not "OTHER"
-        List<String> result = invokeResolveFieldNamesForSearch("filter = 12345", new String[]{"summary"});
+        List<String> result = invokeResolveFieldNamesForSearch("filter = 12345", new String[]{"summary", "Story Points"});
 
         assertNotNull(result);
-        // Verify it resolved using MYPROJECT fields (no exception = correct project was used)
-        assertFalse(result.contains(null));
+        assertEquals(List.of("summary", "customfield_10001"), result);
     }
 }
