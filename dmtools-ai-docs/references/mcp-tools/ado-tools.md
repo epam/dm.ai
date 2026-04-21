@@ -1,6 +1,6 @@
 # ADO MCP Tools
 
-**Total Tools**: 31
+**Total Tools**: 36
 
 ## Quick Reference
 
@@ -27,6 +27,12 @@ const pr = ado_get_pr("ai-native-sdlc-blueprint", "1");
 const threads = ado_get_pr_comments("ai-native-sdlc-blueprint", "1");
 ado_add_pr_comment("ai-native-sdlc-blueprint", "1", "Looks good!");
 ado_resolve_pr_thread("ai-native-sdlc-blueprint", "1", "42", "fixed");
+// Pipeline operations
+const pipelines = ado_list_pipelines();
+const run = ado_trigger_pipeline(9, "main", null);
+const runs = ado_list_pipeline_runs(9, 10);
+const runDetail = ado_get_pipeline_run(9, run.id);
+const logs = ado_get_pipeline_logs(run.id, null, 200);
 ```
 
 ## Available Tools
@@ -72,6 +78,16 @@ ado_resolve_pr_thread("ai-native-sdlc-blueprint", "1", "42", "fixed");
 | `ado_set_pr_vote` | Set current user's vote on a PR | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewerId` (string, **required**)<br>`vote` (string, **required**) |
 | `ado_update_pr` | Update PR properties (title, description, status) | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`title` (string, optional)<br>`description` (string, optional)<br>`status` (string, optional) |
 | `ado_get_pr_work_items` | Get work items linked to a PR | `repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+
+### Pipeline Management Tools
+
+| Tool Name | Description | Parameters |
+|-----------|-------------|------------|
+| `ado_list_pipelines` | List all pipelines defined in the ADO project | None |
+| `ado_trigger_pipeline` | Trigger a pipeline run (equiv. `github_trigger_workflow`) | `pipelineId` (int, **required**)<br>`branch` (string, optional — accepts `main` or `refs/heads/main`)<br>`variables` (string JSON, optional — e.g. `{"myVar":"value"}`) |
+| `ado_list_pipeline_runs` | List recent runs of a pipeline (equiv. `github_list_workflow_runs`) | `pipelineId` (int, **required**)<br>`top` (int, optional, default: 10) |
+| `ado_get_pipeline_run` | Get details of a specific pipeline run (state, result, timestamps) | `pipelineId` (int, **required**)<br>`runId` (int, **required**) |
+| `ado_get_pipeline_logs` | Get combined task logs for a pipeline run (equiv. `github_get_job_logs`) | `buildId` (int, **required**)<br>`taskName` (string, optional — case-insensitive filter)<br>`tailLines` (int, optional, default: 200, 0 = all) |
 
 ## Detailed Parameter Information
 
@@ -544,3 +560,89 @@ Update the tags of a work item (semicolon-separated string)
 
 ---
 
+
+## Pipeline Management Tools
+
+### `ado_list_pipelines`
+
+List all pipelines defined in the ADO project.
+
+**Parameters:** None
+
+---
+
+### `ado_trigger_pipeline`
+
+Trigger a pipeline run. Equivalent to `github_trigger_workflow`.
+
+**Parameters:**
+
+- **`pipelineId`** (int) 🔴 Required
+  - The pipeline ID to trigger
+  - Example: `9`
+
+- **`branch`** (string) ⚪ Optional
+  - Branch to run the pipeline on. Accepts both short name (`main`) and fully-qualified ref (`refs/heads/main`) — the prefix is normalized automatically.
+  - Example: `main`
+
+- **`variables`** (string JSON) ⚪ Optional
+  - Pipeline variables as a JSON object. Each key becomes a non-secret variable.
+  - Example: `{"workItemId":"42","env":"staging"}`
+
+---
+
+### `ado_list_pipeline_runs`
+
+List recent runs of a pipeline. Equivalent to `github_list_workflow_runs`.
+
+**Parameters:**
+
+- **`pipelineId`** (int) 🔴 Required
+  - The pipeline ID
+  - Example: `9`
+
+- **`top`** (int) ⚪ Optional
+  - Number of runs to return. Default: `10`
+  - Example: `20`
+
+---
+
+### `ado_get_pipeline_run`
+
+Get details of a specific pipeline run including state (`inProgress`, `completed`) and result (`succeeded`, `failed`, `canceled`).
+
+**Parameters:**
+
+- **`pipelineId`** (int) 🔴 Required
+  - The pipeline ID
+  - Example: `9`
+
+- **`runId`** (int) 🔴 Required
+  - The run ID (returned by `ado_trigger_pipeline` or `ado_list_pipeline_runs`)
+  - Example: `42`
+
+---
+
+### `ado_get_pipeline_logs`
+
+Get combined logs for all tasks in a pipeline run. Uses the build timeline API to discover task log IDs, then fetches each log. Equivalent to `github_get_job_logs`.
+
+**Parameters:**
+
+- **`buildId`** (int) 🔴 Required
+  - The build/run ID (same as the `id` from `ado_trigger_pipeline` or `ado_list_pipeline_runs`)
+  - Example: `42`
+
+- **`taskName`** (string) ⚪ Optional
+  - Case-insensitive substring filter — only tasks whose name contains this string are included.
+  - Example: `PowerShell`
+
+- **`tailLines`** (int) ⚪ Optional
+  - Lines to return from the end of each task log. Default: `200`. Use `0` for full logs.
+  - Example: `100`
+
+**Notes:**
+- `Stage` and `Checkpoint` records are automatically skipped (they have no useful log content).
+- Output is formatted as sections: `=== Task: <name> ===`
+
+---

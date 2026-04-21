@@ -187,26 +187,29 @@ jobs:
           echo "Release notes generated"
 
       - name: Create Beta Release
-        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ needs.version.outputs.tag }}
-          name: "DMTools Beta ${{ needs.version.outputs.tag }}"
-          body_path: release_notes.md
-          draft: false
-          prerelease: true   # ← keeps main stable release as "latest"
-          files: |
-            cli/dmtools-v${{ needs.version.outputs.version }}-all.jar
-            cli/install.sh
-            cli/install
-            cli/install.bat
-            cli/install.ps1
-            cli/dmtools.sh
-            skill/dmtools-skill-v${{ needs.version.outputs.version }}.zip
-            skill/dmtools-skill-v${{ needs.version.outputs.version }}.tar.gz
-            skill/skill-install.sh
-            skill/skill-install.ps1
+        run: |
+          TAG="${{ needs.version.outputs.tag }}"
+          # If the release already exists (e.g. workflow re-run), delete it first so we can recreate with fresh assets
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists — deleting so assets can be re-uploaded"
+            gh release delete "$TAG" --yes --cleanup-tag || true
+          fi
+          gh release create "$TAG" \
+            --title "DMTools Beta $TAG" \
+            --notes-file release_notes.md \
+            --prerelease \
+            cli/dmtools-v${{ needs.version.outputs.version }}-all.jar \
+            cli/install.sh \
+            cli/install \
+            cli/install.bat \
+            cli/install.ps1 \
+            cli/dmtools.sh \
+            skill/dmtools-skill-v${{ needs.version.outputs.version }}.zip \
+            skill/dmtools-skill-v${{ needs.version.outputs.version }}.tar.gz \
+            skill/skill-install.sh \
+            skill/skill-install.ps1 \
             skill/skill-checksums.sha256
 
       - name: Summary

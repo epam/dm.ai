@@ -1776,6 +1776,186 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         return new File(getCacheFolderName() + "/" + value + imageExtension);
     }
 
+    // ========== Pipeline Operations ==========
+
+    /**
+     * List all pipelines in the project.
+     */
+    @MCPTool(
+            name = "ado_list_pipelines",
+            description = "List all pipelines defined in the ADO project.",
+            integration = "ado",
+            category = "pipeline_management"
+    )
+    public JSONObject listPipelines() throws IOException {
+        String path = String.format("/%s/_apis/pipelines", project);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION);
+        String response = execute(request);
+        return new JSONObject(response);
+    }
+
+    /**
+     * Trigger a pipeline run.
+     * Equivalent to github_trigger_workflow.
+     */
+    @MCPTool(
+            name = "ado_trigger_pipeline",
+            description = "Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow.",
+            integration = "ado",
+            category = "pipeline_management"
+    )
+    public JSONObject triggerPipeline(
+            @MCPParam(name = "pipelineId", description = "The pipeline ID to trigger", required = true) int pipelineId,
+            @MCPParam(name = "branch", description = "The branch to run the pipeline on (e.g. 'main')", required = false) String branch,
+            @MCPParam(name = "variables", description = "JSON object of pipeline variables, e.g. {\"myVar\":\"value\"}", required = false) String variablesJson
+    ) throws IOException {
+        String path = String.format("/%s/_apis/pipelines/%d/runs", project, pipelineId);
+
+        JSONObject body = new JSONObject();
+
+        if (branch != null && !branch.isBlank()) {
+            // Accept both "main" and "refs/heads/main" formats
+            String normalizedBranch = branch.trim();
+            if (!normalizedBranch.startsWith("refs/heads/")) {
+                normalizedBranch = "refs/heads/" + normalizedBranch;
+            }
+            body.put("resources", new JSONObject()
+                    .put("repositories", new JSONObject()
+                            .put("self", new JSONObject()
+                                    .put("refName", normalizedBranch))));
+        }
+
+        if (variablesJson != null && !variablesJson.isBlank()) {
+            JSONObject rawVars = new JSONObject(variablesJson);
+            JSONObject variables = new JSONObject();
+            for (String key : rawVars.keySet()) {
+                variables.put(key, new JSONObject().put("value", rawVars.get(key).toString()).put("isSecret", false));
+            }
+            body.put("variables", variables);
+        }
+
+        GenericRequest triggerRequest = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION);
+        triggerRequest.setBody(body.toString());
+        String response = triggerRequest.post();
+        return new JSONObject(response);
+    }
+
+    /**
+     * List runs of a specific pipeline.
+     * Equivalent to github_list_workflow_runs.
+     */
+    @MCPTool(
+            name = "ado_list_pipeline_runs",
+            description = "List recent runs of a pipeline. Equivalent to github_list_workflow_runs.",
+            integration = "ado",
+            category = "pipeline_management"
+    )
+    public JSONObject listPipelineRuns(
+            @MCPParam(name = "pipelineId", description = "The pipeline ID", required = true) int pipelineId,
+            @MCPParam(name = "top", description = "Number of runs to return (default 10)", required = false) Integer top
+    ) throws IOException {
+        int limit = (top != null && top > 0) ? top : 10;
+        String path = String.format("/%s/_apis/pipelines/%d/runs", project, pipelineId);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION)
+                .param("$top", limit);
+        String response = execute(request);
+        return new JSONObject(response);
+    }
+
+    /**
+     * Get details of a specific pipeline run.
+     */
+    @MCPTool(
+            name = "ado_get_pipeline_run",
+            description = "Get details of a specific pipeline run including state and result.",
+            integration = "ado",
+            category = "pipeline_management"
+    )
+    public JSONObject getPipelineRun(
+            @MCPParam(name = "pipelineId", description = "The pipeline ID", required = true) int pipelineId,
+            @MCPParam(name = "runId", description = "The run ID", required = true) int runId
+    ) throws IOException {
+        String path = String.format("/%s/_apis/pipelines/%d/runs/%d", project, pipelineId, runId);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION);
+        String response = execute(request);
+        return new JSONObject(response);
+    }
+
+    /**
+     * Get combined logs for all tasks in a pipeline build run.
+     * Uses the build timeline to discover task log IDs, then fetches each log.
+     * Equivalent to github_get_job_logs.
+     */
+    @MCPTool(
+            name = "ado_get_pipeline_logs",
+            description = "Get combined logs for all tasks in a pipeline run (build ID). Equivalent to github_get_job_logs.",
+            integration = "ado",
+            category = "pipeline_management"
+    )
+    public String getPipelineLogs(
+            @MCPParam(name = "buildId", description = "The build/run ID returned by ado_trigger_pipeline or ado_list_pipeline_runs", required = true) int buildId,
+            @MCPParam(name = "taskName", description = "Optional: filter logs to a specific task name (case-insensitive substring match)", required = false) String taskName,
+            @MCPParam(name = "tailLines", description = "Lines to return from the end of each task log (default 200, 0 = all)", required = false) Integer tailLines
+    ) throws IOException {
+        String timelinePath = String.format("/%s/_apis/build/builds/%d/timeline", project, buildId);
+        String timelineResponse = execute(new GenericRequest(this, path(timelinePath))
+                .param("api-version", API_VERSION));
+        JSONObject timeline = new JSONObject(timelineResponse);
+        JSONArray records = timeline.optJSONArray("records");
+
+        if (records == null || records.isEmpty()) {
+            return "(no timeline records found for build " + buildId + ")";
+        }
+
+        int tail = (tailLines != null && tailLines >= 0) ? tailLines : 200;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject record = records.getJSONObject(i);
+            String type = record.optString("type", "");
+            String name = record.optString("name", "");
+
+            // Stage/Checkpoint records don't carry meaningful log content
+            if ("Stage".equals(type) || "Checkpoint".equals(type)) continue;
+
+            if (taskName != null && !taskName.isBlank()
+                    && !name.toLowerCase(Locale.ROOT).contains(taskName.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+
+            JSONObject log = record.optJSONObject("log");
+            if (log == null) continue;
+            int logId = log.optInt("id", -1);
+            if (logId < 0) continue;
+
+            String logPath = String.format("/%s/_apis/build/builds/%d/logs/%d", project, buildId, logId);
+            try {
+                GenericRequest logRequest = new GenericRequest(this, path(logPath))
+                        .param("api-version", API_VERSION);
+                String logContent = execute(logRequest);
+
+                if (logContent == null || logContent.isBlank()) continue;
+
+                String[] lines = logContent.split("\n");
+                String[] slice = (tail > 0 && lines.length > tail)
+                        ? Arrays.copyOfRange(lines, lines.length - tail, lines.length)
+                        : lines;
+
+                sb.append("=== ").append(type).append(": ").append(name).append(" ===\n");
+                for (String line : slice) sb.append(line).append("\n");
+                sb.append("\n");
+            } catch (Exception e) {
+                logger.warn("Failed to fetch log {} for build {}: {}", logId, buildId, e.getMessage());
+            }
+        }
+
+        return sb.length() > 0 ? sb.toString() : "(no logs found for build " + buildId + ")";
+    }
+
     // ========== Helper Methods ==========
 
     /**
