@@ -128,6 +128,7 @@ public class TestCasesGeneratorParamsTest {
             "jqlModifier.js"                    // jqlModifierJSAction
             , null                              // testCasesCreationRules
             , null                              // customTestCasesTracker
+            , true                              // ignoreClonedByRelationship
         );
 
         assertTrue("Constructor should set enableParallelTestCaseCheck correctly",

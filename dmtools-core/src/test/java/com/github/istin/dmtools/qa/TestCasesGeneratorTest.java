@@ -13,6 +13,9 @@ import com.github.istin.dmtools.atlassian.jira.model.Relationship;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.atlassian.jira.model.Fields;
+import com.github.istin.dmtools.atlassian.jira.model.IssueLink;
+import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.TrackerParams;
 import org.junit.Before;
@@ -21,8 +24,10 @@ import org.mockito.ArgumentCaptor;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -641,5 +646,90 @@ public class TestCasesGeneratorTest {
         String capturedRules = captor.getValue().getExtraRules();
         assertTrue("extraRules should contain content from page 1", capturedRules.contains("Rules from page 1"));
         assertTrue("extraRules should contain content from page 2", capturedRules.contains("Rules from page 2"));
+    }
+
+    // ---- Tests for collectClonedByKeys and ignoreClonedByRelationship ----
+
+    @Test
+    public void testCollectClonedByKeys_withClonedByLink_returnsKey() {
+        Ticket mockJiraTicket = mock(Ticket.class);
+        Fields mockFields = mock(Fields.class);
+        IssueLink cloneLink = mock(IssueLink.class);
+
+        when(mockJiraTicket.getFields()).thenReturn(mockFields);
+        when(cloneLink.getInwardType()).thenReturn(Relationship.IS_CLONED_BY);
+        when(cloneLink.getOutwardType()).thenReturn(Relationship.CLONES);
+        when(cloneLink.getKey()).thenReturn("PROJ-999");
+        when(mockFields.getIssueLinks()).thenReturn(Arrays.asList(cloneLink));
+
+        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        assertEquals(1, result.size());
+        assertTrue(result.contains("PROJ-999"));
+    }
+
+    @Test
+    public void testCollectClonedByKeys_noClonedByLink_returnsEmpty() {
+        Ticket mockJiraTicket = mock(Ticket.class);
+        Fields mockFields = mock(Fields.class);
+        IssueLink relatesLink = mock(IssueLink.class);
+
+        when(mockJiraTicket.getFields()).thenReturn(mockFields);
+        when(relatesLink.getInwardType()).thenReturn(Relationship.RELATES_TO);
+        when(relatesLink.getOutwardType()).thenReturn(Relationship.RELATES_TO);
+        when(mockFields.getIssueLinks()).thenReturn(Arrays.asList(relatesLink));
+
+        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testCollectClonedByKeys_nullIssueLinks_returnsEmpty() {
+        Ticket mockJiraTicket = mock(Ticket.class);
+        Fields mockFields = mock(Fields.class);
+
+        when(mockJiraTicket.getFields()).thenReturn(mockFields);
+        when(mockFields.getIssueLinks()).thenReturn(null);
+
+        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testCollectClonedByKeys_nonJiraTicket_returnsEmpty() {
+        ITicket nonJiraTicket = mock(ITicket.class);
+        Set<String> result = TestCasesGenerator.collectClonedByKeys(nonJiraTicket);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testCollectClonedByKeys_mixedLinks_returnsOnlyClonedByKeys() {
+        Ticket mockJiraTicket = mock(Ticket.class);
+        Fields mockFields = mock(Fields.class);
+
+        IssueLink cloneLink = mock(IssueLink.class);
+        when(cloneLink.getInwardType()).thenReturn(Relationship.IS_CLONED_BY);
+        when(cloneLink.getOutwardType()).thenReturn(Relationship.CLONES);
+        when(cloneLink.getKey()).thenReturn("PROJ-100");
+
+        IssueLink relatesLink = mock(IssueLink.class);
+        when(relatesLink.getInwardType()).thenReturn(Relationship.RELATES_TO);
+        when(relatesLink.getOutwardType()).thenReturn(Relationship.RELATES_TO);
+
+        IssueLink blockerLink = mock(IssueLink.class);
+        when(blockerLink.getInwardType()).thenReturn(Relationship.IS_BLOCKED_BY);
+        when(blockerLink.getOutwardType()).thenReturn(Relationship.BLOCKS);
+
+        when(mockJiraTicket.getFields()).thenReturn(mockFields);
+        when(mockFields.getIssueLinks()).thenReturn(Arrays.asList(cloneLink, relatesLink, blockerLink));
+
+        Set<String> result = TestCasesGenerator.collectClonedByKeys(mockJiraTicket);
+        assertEquals(1, result.size());
+        assertTrue(result.contains("PROJ-100"));
+    }
+
+    @Test
+    public void testIgnoreClonedByRelationship_defaultIsTrue() {
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        assertTrue("ignoreClonedByRelationship should default to true", params.isIgnoreClonedByRelationship());
     }
 }

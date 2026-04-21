@@ -17,6 +17,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -47,6 +49,10 @@ public class TicketContext implements ToText {
     @Getter
     private List<ITicket> extraTickets = new ArrayList<>();
 
+    @Setter
+    @Getter
+    private Set<String> excludedExtraTicketKeys = new HashSet<>();
+
     public TicketContext(TrackerClient<? extends ITicket> trackerClient, ITicket ticket) {
         this.trackerClient = trackerClient;
         this.ticket = ticket;
@@ -75,6 +81,7 @@ public class TicketContext implements ToText {
                 // Filter out self-references and prepare list of keys to fetch
                 List<String> keysToFetch = keys.stream()
                         .filter(key -> !key.equalsIgnoreCase(ticket.getKey()))
+                        .filter(key -> !excludedExtraTicketKeys.contains(key))
                         .collect(Collectors.toList());
 
                 if (!keysToFetch.isEmpty()) {

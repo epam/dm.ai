@@ -45,6 +45,7 @@ public class TestCasesGeneratorParams extends Params {
     public static final String JQL_MODIFIER_JS_ACTION = "jqlModifierJSAction";
     public static final String TEST_CASES_CREATION_RULES = "testCasesCreationRules";
     public static final String CUSTOM_TEST_CASES_TRACKER = "customTestCasesTracker";
+    public static final String IGNORE_CLONED_BY_RELATIONSHIP = "ignoreClonedByRelationship";
 
     @SerializedName(EXISTING_TEST_CASES_JQL)
     private String existingTestCasesJql;
@@ -108,4 +109,7 @@ public class TestCasesGeneratorParams extends Params {
 
     @SerializedName(CUSTOM_TEST_CASES_TRACKER)
     private CustomTestCasesTrackerParams customTestCasesTracker;
+
+    @SerializedName(IGNORE_CLONED_BY_RELATIONSHIP)
+    private boolean ignoreClonedByRelationship = true;
 }

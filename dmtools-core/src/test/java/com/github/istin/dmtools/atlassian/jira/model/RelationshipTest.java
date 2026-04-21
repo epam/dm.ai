@@ -138,4 +138,32 @@ public class RelationshipTest {
         Mockito.when(issueLink.getInwardType()).thenReturn("other");
         assertFalse(Relationship.isLinkedTo(issueLink));
     }
+
+    @Test
+    public void testIsClonedBy_InwardIsClonedBy() {
+        Mockito.when(issueLink.getInwardType()).thenReturn(Relationship.IS_CLONED_BY);
+        Mockito.when(issueLink.getOutwardType()).thenReturn("clones");
+        assertTrue(Relationship.isClonedBy(issueLink));
+    }
+
+    @Test
+    public void testIsClonedBy_OutwardClones() {
+        Mockito.when(issueLink.getInwardType()).thenReturn("is cloned by");
+        Mockito.when(issueLink.getOutwardType()).thenReturn(Relationship.CLONES);
+        assertTrue(Relationship.isClonedBy(issueLink));
+    }
+
+    @Test
+    public void testIsClonedBy_CaseInsensitive() {
+        Mockito.when(issueLink.getInwardType()).thenReturn("IS CLONED BY");
+        Mockito.when(issueLink.getOutwardType()).thenReturn("CLONES");
+        assertTrue(Relationship.isClonedBy(issueLink));
+    }
+
+    @Test
+    public void testIsClonedBy_NotClone() {
+        Mockito.when(issueLink.getInwardType()).thenReturn(Relationship.RELATES_TO);
+        Mockito.when(issueLink.getOutwardType()).thenReturn(Relationship.RELATES_TO);
+        assertFalse(Relationship.isClonedBy(issueLink));
+    }
 }
