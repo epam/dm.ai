@@ -7,6 +7,8 @@ import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ChunkPreparation;
 import com.github.istin.dmtools.ai.Claude35TokenCounter;
 import com.github.istin.dmtools.ai.TicketContext;
+import com.github.istin.dmtools.ai.agent.RelatedTestCaseAgent;
+import com.github.istin.dmtools.ai.agent.RelatedTestCasesAgent;
 import com.github.istin.dmtools.ai.agent.TestCaseGeneratorAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
@@ -18,10 +20,12 @@ import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.TrackerParams;
+import org.json.JSONArray;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,6 +35,9 @@ import java.util.Set;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 public class TestCasesGeneratorTest {
@@ -731,5 +738,276 @@ public class TestCasesGeneratorTest {
     public void testIgnoreClonedByRelationship_defaultIsTrue() {
         TestCasesGeneratorParams params = new TestCasesGeneratorParams();
         assertTrue("ignoreClonedByRelationship should default to true", params.isIgnoreClonedByRelationship());
+    }
+
+    // ---- VerifiedTestCase inner class tests ----
+
+    @Test
+    public void testVerifiedTestCase_gettersReturnCorrectValues() {
+        ITicket mockTicket = mock(ITicket.class);
+        String explanation = "This TC validates the same auth flow";
+        TestCasesGenerator.VerifiedTestCase vc = new TestCasesGenerator.VerifiedTestCase(mockTicket, explanation);
+
+        assertSame(mockTicket, vc.getTicket());
+        assertEquals(explanation, vc.getExplanation());
+    }
+
+    @Test
+    public void testVerifiedTestCase_nullExplanationAllowed() {
+        ITicket mockTicket = mock(ITicket.class);
+        TestCasesGenerator.VerifiedTestCase vc = new TestCasesGenerator.VerifiedTestCase(mockTicket, null);
+
+        assertSame(mockTicket, vc.getTicket());
+        assertNull(vc.getExplanation());
+    }
+
+    // ---- Batch comment tests ----
+
+    private TestCasesGenerator buildGeneratorWithMocks(
+            TrackerClient<ITicket> trackerClient,
+            RelatedTestCaseAgent relatedTestCaseAgent,
+            RelatedTestCasesAgent relatedTestCasesAgent) throws Exception {
+        TestCasesGenerator gen = new TestCasesGenerator();
+        setField(gen, "trackerClient", trackerClient);
+        setField(gen, "confluence", mock(Confluence.class));
+        setField(gen, "relatedTestCaseAgent", relatedTestCaseAgent);
+        setField(gen, "relatedTestCasesAgent", relatedTestCasesAgent);
+        setField(gen, "testCaseGeneratorAgent", mock(TestCaseGeneratorAgent.class));
+        setField(gen, "ai", mock(AI.class));
+        return gen;
+    }
+
+    private void setField(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    @Test
+    public void testBatchComment_postedWhenEnabled() throws Exception {
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        RelatedTestCaseAgent relatedTestCaseAgent = mock(RelatedTestCaseAgent.class);
+        RelatedTestCasesAgent relatedTestCasesAgent = mock(RelatedTestCasesAgent.class);
+
+        ITicket tc1 = mock(ITicket.class);
+        when(tc1.getKey()).thenReturn("TC-1");
+        when(tc1.getTicketKey()).thenReturn("TC-1");
+        when(tc1.toText()).thenReturn("TC text 1");
+        when(tc1.getTicketTitle()).thenReturn("Login test");
+
+        TestCasesGenerator gen = buildGeneratorWithMocks(trackerClient, relatedTestCaseAgent, relatedTestCasesAgent);
+
+        when(relatedTestCasesAgent.run(any(), any()))
+                .thenReturn(new JSONArray("[\"TC-1\"]"));
+        when(relatedTestCaseAgent.run(any(), any()))
+                .thenReturn(new RelatedTestCaseAgent.Result(true, "validates the same auth flow"));
+        when(trackerClient.getTestCases(any(), any())).thenReturn(Collections.emptyList());
+
+        ITicket mainTicket = mock(ITicket.class);
+        when(mainTicket.getTicketKey()).thenReturn("STORY-1");
+        when(mainTicket.getKey()).thenReturn("STORY-1");
+        TicketContext ctx = mock(TicketContext.class);
+        when(ctx.getTicket()).thenReturn(mainTicket);
+        when(ctx.toText()).thenReturn("Story text");
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(true);
+        params.setLinkRelated(false);
+        params.setGenerateNew(false);
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setPostLinkedTestCasesComment(true);
+        params.setRelatedTestCaseExplanationPrompt("Explain why the TC is related");
+
+        gen.generateTestCases(ctx, "", List.of(tc1), params);
+
+        ArgumentCaptor<String> commentCaptor = ArgumentCaptor.forClass(String.class);
+        verify(trackerClient).postComment(eq("STORY-1"), commentCaptor.capture());
+        String comment = commentCaptor.getValue();
+        assertTrue("Comment should contain TC key", comment.contains("TC-1"));
+        assertFalse("Comment should NOT repeat summary (Jira auto-links)", comment.contains("Login test"));
+        assertTrue("Comment should contain explanation", comment.contains("validates the same auth flow"));
+        assertTrue("Comment should start with header", comment.startsWith("Related test cases identified:"));
+    }
+
+    @Test
+    public void testBatchComment_notPostedWhenDisabled() throws Exception {
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        RelatedTestCaseAgent relatedTestCaseAgent = mock(RelatedTestCaseAgent.class);
+        RelatedTestCasesAgent relatedTestCasesAgent = mock(RelatedTestCasesAgent.class);
+
+        ITicket tc1 = mock(ITicket.class);
+        when(tc1.getKey()).thenReturn("TC-1");
+        when(tc1.getTicketKey()).thenReturn("TC-1");
+        when(tc1.toText()).thenReturn("TC text 1");
+
+        TestCasesGenerator gen = buildGeneratorWithMocks(trackerClient, relatedTestCaseAgent, relatedTestCasesAgent);
+
+        when(relatedTestCasesAgent.run(any(), any()))
+                .thenReturn(new JSONArray("[\"TC-1\"]"));
+        when(relatedTestCaseAgent.run(any(), any()))
+                .thenReturn(new RelatedTestCaseAgent.Result(true, "some explanation"));
+        when(trackerClient.getTestCases(any(), any())).thenReturn(Collections.emptyList());
+
+        ITicket mainTicket = mock(ITicket.class);
+        when(mainTicket.getTicketKey()).thenReturn("STORY-1");
+        when(mainTicket.getKey()).thenReturn("STORY-1");
+        TicketContext ctx = mock(TicketContext.class);
+        when(ctx.getTicket()).thenReturn(mainTicket);
+        when(ctx.toText()).thenReturn("Story text");
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(true);
+        params.setLinkRelated(false);
+        params.setGenerateNew(false);
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setPostLinkedTestCasesComment(false); // disabled
+
+        gen.generateTestCases(ctx, "", List.of(tc1), params);
+
+        verify(trackerClient, never()).postComment(anyString(), anyString());
+    }
+
+    @Test
+    public void testBatchComment_notPostedWhenNoRelatedTcsFound() throws Exception {
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        RelatedTestCaseAgent relatedTestCaseAgent = mock(RelatedTestCaseAgent.class);
+        RelatedTestCasesAgent relatedTestCasesAgent = mock(RelatedTestCasesAgent.class);
+
+        ITicket tc1 = mock(ITicket.class);
+        when(tc1.getKey()).thenReturn("TC-1");
+        when(tc1.getTicketKey()).thenReturn("TC-1");
+        when(tc1.toText()).thenReturn("TC text 1");
+
+        TestCasesGenerator gen = buildGeneratorWithMocks(trackerClient, relatedTestCaseAgent, relatedTestCasesAgent);
+
+        when(relatedTestCasesAgent.run(any(), any()))
+                .thenReturn(new JSONArray("[\"TC-1\"]"));
+        when(relatedTestCaseAgent.run(any(), any()))
+                .thenReturn(new RelatedTestCaseAgent.Result(false, null)); // not related
+        when(trackerClient.getTestCases(any(), any())).thenReturn(Collections.emptyList());
+
+        ITicket mainTicket = mock(ITicket.class);
+        when(mainTicket.getTicketKey()).thenReturn("STORY-1");
+        when(mainTicket.getKey()).thenReturn("STORY-1");
+        TicketContext ctx = mock(TicketContext.class);
+        when(ctx.getTicket()).thenReturn(mainTicket);
+        when(ctx.toText()).thenReturn("Story text");
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(true);
+        params.setLinkRelated(false);
+        params.setGenerateNew(false);
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setPostLinkedTestCasesComment(true); // enabled but no results
+
+        gen.generateTestCases(ctx, "", List.of(tc1), params);
+
+        verify(trackerClient, never()).postComment(anyString(), anyString());
+    }
+
+    @Test
+    public void testExplanationPrompt_passedToAgent() throws Exception {
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        RelatedTestCaseAgent relatedTestCaseAgent = mock(RelatedTestCaseAgent.class);
+        RelatedTestCasesAgent relatedTestCasesAgent = mock(RelatedTestCasesAgent.class);
+
+        ITicket tc1 = mock(ITicket.class);
+        when(tc1.getKey()).thenReturn("TC-1");
+        when(tc1.getTicketKey()).thenReturn("TC-1");
+        when(tc1.toText()).thenReturn("TC text 1");
+
+        TestCasesGenerator gen = buildGeneratorWithMocks(trackerClient, relatedTestCaseAgent, relatedTestCasesAgent);
+
+        when(relatedTestCasesAgent.run(any(), any()))
+                .thenReturn(new JSONArray("[\"TC-1\"]"));
+        when(relatedTestCaseAgent.run(any(), any()))
+                .thenReturn(new RelatedTestCaseAgent.Result(true, "validates same flow"));
+        when(trackerClient.getTestCases(any(), any())).thenReturn(Collections.emptyList());
+
+        ITicket mainTicket = mock(ITicket.class);
+        when(mainTicket.getTicketKey()).thenReturn("STORY-1");
+        when(mainTicket.getKey()).thenReturn("STORY-1");
+        TicketContext ctx = mock(TicketContext.class);
+        when(ctx.getTicket()).thenReturn(mainTicket);
+        when(ctx.toText()).thenReturn("Story text");
+
+        String expectedPrompt = "Explain why the TC is related or needs deprecation";
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(true);
+        params.setLinkRelated(false);
+        params.setGenerateNew(false);
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRelatedTestCaseExplanationPrompt(expectedPrompt);
+
+        gen.generateTestCases(ctx, "", List.of(tc1), params);
+
+        ArgumentCaptor<RelatedTestCaseAgent.Params> agentParamsCaptor =
+                ArgumentCaptor.forClass(RelatedTestCaseAgent.Params.class);
+        verify(relatedTestCaseAgent).run(isNull(), agentParamsCaptor.capture());
+        assertEquals("explanationPrompt should be passed to agent",
+                expectedPrompt, agentParamsCaptor.getValue().getExplanationPrompt());
+    }
+
+    @Test
+    public void testBatchComment_multipleTickets_allIncluded() throws Exception {
+        @SuppressWarnings("unchecked")
+        TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
+        RelatedTestCaseAgent relatedTestCaseAgent = mock(RelatedTestCaseAgent.class);
+        RelatedTestCasesAgent relatedTestCasesAgent = mock(RelatedTestCasesAgent.class);
+
+        ITicket tc1 = mock(ITicket.class);
+        when(tc1.getKey()).thenReturn("TC-1");
+        when(tc1.getTicketKey()).thenReturn("TC-1");
+        when(tc1.toText()).thenReturn("TC text 1");
+        when(tc1.getTicketTitle()).thenReturn("Login test");
+
+        ITicket tc2 = mock(ITicket.class);
+        when(tc2.getKey()).thenReturn("TC-2");
+        when(tc2.getTicketKey()).thenReturn("TC-2");
+        when(tc2.toText()).thenReturn("TC text 2");
+        when(tc2.getTicketTitle()).thenReturn("Session test");
+
+        TestCasesGenerator gen = buildGeneratorWithMocks(trackerClient, relatedTestCaseAgent, relatedTestCasesAgent);
+
+        when(relatedTestCasesAgent.run(any(), any()))
+                .thenReturn(new JSONArray("[\"TC-1\", \"TC-2\"]"));
+        when(relatedTestCaseAgent.run(any(), any(RelatedTestCaseAgent.Params.class)))
+                .thenAnswer(inv -> {
+                    RelatedTestCaseAgent.Params p = inv.getArgument(1);
+                    if (p.getExistingTestCase().contains("TC text 1")) {
+                        return new RelatedTestCaseAgent.Result(true, "covers auth functionality");
+                    }
+                    return new RelatedTestCaseAgent.Result(true, "needs deprecation after delivery");
+                });
+        when(trackerClient.getTestCases(any(), any())).thenReturn(Collections.emptyList());
+
+        ITicket mainTicket = mock(ITicket.class);
+        when(mainTicket.getTicketKey()).thenReturn("STORY-1");
+        when(mainTicket.getKey()).thenReturn("STORY-1");
+        TicketContext ctx = mock(TicketContext.class);
+        when(ctx.getTicket()).thenReturn(mainTicket);
+        when(ctx.toText()).thenReturn("Story text");
+
+        TestCasesGeneratorParams params = new TestCasesGeneratorParams();
+        params.setFindRelated(true);
+        params.setLinkRelated(false);
+        params.setGenerateNew(false);
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setPostLinkedTestCasesComment(true);
+        params.setRelatedTestCaseExplanationPrompt("Why is this TC related?");
+
+        gen.generateTestCases(ctx, "", List.of(tc1, tc2), params);
+
+        ArgumentCaptor<String> commentCaptor = ArgumentCaptor.forClass(String.class);
+        verify(trackerClient).postComment(eq("STORY-1"), commentCaptor.capture());
+        String comment = commentCaptor.getValue();
+        assertTrue("Comment must list TC-1", comment.contains("TC-1"));
+        assertTrue("Comment must list TC-2", comment.contains("TC-2"));
+        assertTrue("Comment must include auth explanation", comment.contains("covers auth functionality"));
+        assertTrue("Comment must include deprecation explanation", comment.contains("needs deprecation after delivery"));
     }
 }

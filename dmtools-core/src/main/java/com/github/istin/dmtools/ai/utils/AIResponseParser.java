@@ -14,6 +14,35 @@ import java.util.regex.Pattern;
 
 public class AIResponseParser {
 
+    public static class BooleanWithExplanation {
+        public final boolean value;
+        public final String explanation;
+
+        public BooleanWithExplanation(boolean value, String explanation) {
+            this.value = value;
+            this.explanation = explanation;
+        }
+    }
+
+    public static BooleanWithExplanation parseBooleanWithExplanation(String response) throws IllegalArgumentException {
+        String trimmedResponse = response.trim();
+        Pattern pattern = Pattern.compile("^\\s*(true|false)\\b(?:\\s*,\\s*(.*))?$",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(trimmedResponse);
+
+        if (!matcher.find()) {
+            throw new IllegalArgumentException("No valid boolean value found in the response.");
+        }
+
+        String token = matcher.group(1).toLowerCase();
+        if ("true".equals(token)) {
+            String explanation = matcher.group(2) != null ? matcher.group(2).trim() : null;
+            return new BooleanWithExplanation(true, explanation != null && !explanation.isEmpty() ? explanation : null);
+        } else {
+            return new BooleanWithExplanation(false, null);
+        }
+    }
+
     public static boolean parseBooleanResponse(String response) throws IllegalArgumentException {
         // Convert response to lowercase to handle case insensitivity
         String trimmedResponse = response.trim().toLowerCase();

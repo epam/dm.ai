@@ -18,11 +18,61 @@
     </input_data>
     <formatting>
         <rules>
+            <#if (global.explanationPrompt)?has_content>
+            <rule>When the test case is related, respond with "true, {explanation}" where {explanation} follows this guidance: ${global.explanationPrompt}</rule>
+            <rule>When the test case is not related, respond with "false".</rule>
+            <rule>Do not add any other text beyond the required format.</rule>
+            <#else>
             <rule>Respond with a boolean value only, without any explanation.</rule>
             <rule>Your response must be either "true" or "false".</rule>
+            </#if>
         </rules>
     </formatting>
     <examples>
+        <#if (global.explanationPrompt)?has_content>
+        <example>
+            <human>
+                {new story}
+                User login functionality
+                Implement a secure user login system with email and password
+                {new story}
+
+                {existing test case}
+                Test case for password reset functionality
+                Verify that users can reset their passwords through email
+                {existing test case}
+            </human>
+            <ai>true, This test case is related because it validates the password reset flow which is part of the same authentication system targeted by this story.</ai>
+        </example>
+        <example>
+            <human>
+                {new story}
+                Replace legacy session-based authentication with token-based auth
+                Migrate all authentication flows to use JWT tokens instead of server-side sessions
+                {new story}
+
+                {existing test case}
+                Test case for session login
+                Verify that users can log in and their session is maintained across page reloads
+                {existing test case}
+            </human>
+            <ai>true, This test case needs to be deprecated once this story is delivered, as the new token-based authentication replaces the session-based flow it validates.</ai>
+        </example>
+        <example>
+            <human>
+                {new story}
+                Product catalog search
+                Implement a search functionality for the product catalog
+                {new story}
+
+                {existing test case}
+                Test case for user profile update
+                Verify that users can update their profile information
+                {existing test case}
+            </human>
+            <ai>false</ai>
+        </example>
+        <#else>
         <example>
             <human>
                 {new story}
@@ -51,5 +101,6 @@
             </human>
             <ai>false</ai>
         </example>
+        </#if>
     </examples>
 </prompt>
