@@ -76,6 +76,23 @@ public class AzureDevOpsPipelineToolsTest {
     }
 
     @Test
+    void testTriggerPipeline_withFullRefBranch_doesNotDoublePrefixRefs() throws IOException {
+        String fakeResponse = "{\"id\":45,\"state\":\"inProgress\"}";
+        client.setMockPostResponse("/TestProject/_apis/pipelines/9/runs", fakeResponse);
+
+        // Pass an already-qualified ref — should NOT become refs/heads/refs/heads/main
+        client.triggerPipeline(9, "refs/heads/main", null);
+
+        String postedBody = client.getLastPostedBody("/TestProject/_apis/pipelines/9/runs");
+        JSONObject posted = new JSONObject(postedBody);
+        String refName = posted.getJSONObject("resources")
+                .getJSONObject("repositories")
+                .getJSONObject("self")
+                .getString("refName");
+        assertEquals("refs/heads/main", refName, "refs/heads/ prefix must not be duplicated");
+    }
+
+    @Test
     void testTriggerPipeline_withVariables_includesVariablesInBody() throws IOException {
         String fakeResponse = "{\"id\":44,\"state\":\"inProgress\"}";
         client.setMockPostResponse("/TestProject/_apis/pipelines/9/runs", fakeResponse);

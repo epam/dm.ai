@@ -190,8 +190,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ needs.version.outputs.tag }}" \
-            --title "DMTools Beta ${{ needs.version.outputs.tag }}" \
+          TAG="${{ needs.version.outputs.tag }}"
+          # If the release already exists (e.g. workflow re-run), delete it first so we can recreate with fresh assets
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists — deleting so assets can be re-uploaded"
+            gh release delete "$TAG" --yes --cleanup-tag || true
+          fi
+          gh release create "$TAG" \
+            --title "DMTools Beta $TAG" \
             --notes-file release_notes.md \
             --prerelease \
             cli/dmtools-v${{ needs.version.outputs.version }}-all.jar \

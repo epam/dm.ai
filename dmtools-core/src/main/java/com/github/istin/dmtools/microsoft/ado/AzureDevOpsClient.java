@@ -1788,8 +1788,10 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             category = "pipeline_management"
     )
     public JSONObject listPipelines() throws IOException {
-        String path = String.format("/%s/_apis/pipelines?api-version=%s", project, API_VERSION);
-        String response = execute(new GenericRequest(this, path(path)));
+        String path = String.format("/%s/_apis/pipelines", project);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION);
+        String response = execute(request);
         return new JSONObject(response);
     }
 
@@ -1808,15 +1810,20 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "branch", description = "The branch to run the pipeline on (e.g. 'main')", required = false) String branch,
             @MCPParam(name = "variables", description = "JSON object of pipeline variables, e.g. {\"myVar\":\"value\"}", required = false) String variablesJson
     ) throws IOException {
-        String path = String.format("/%s/_apis/pipelines/%d/runs?api-version=%s", project, pipelineId, API_VERSION);
+        String path = String.format("/%s/_apis/pipelines/%d/runs", project, pipelineId);
 
         JSONObject body = new JSONObject();
 
         if (branch != null && !branch.isBlank()) {
+            // Accept both "main" and "refs/heads/main" formats
+            String normalizedBranch = branch.trim();
+            if (!normalizedBranch.startsWith("refs/heads/")) {
+                normalizedBranch = "refs/heads/" + normalizedBranch;
+            }
             body.put("resources", new JSONObject()
                     .put("repositories", new JSONObject()
                             .put("self", new JSONObject()
-                                    .put("refName", "refs/heads/" + branch))));
+                                    .put("refName", normalizedBranch))));
         }
 
         if (variablesJson != null && !variablesJson.isBlank()) {
@@ -1828,7 +1835,8 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             body.put("variables", variables);
         }
 
-        GenericRequest triggerRequest = new GenericRequest(this, path(path));
+        GenericRequest triggerRequest = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION);
         triggerRequest.setBody(body.toString());
         String response = triggerRequest.post();
         return new JSONObject(response);
@@ -1849,9 +1857,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "top", description = "Number of runs to return (default 10)", required = false) Integer top
     ) throws IOException {
         int limit = (top != null && top > 0) ? top : 10;
-        String path = String.format("/%s/_apis/pipelines/%d/runs?api-version=%s&$top=%d",
-                project, pipelineId, API_VERSION, limit);
-        String response = execute(new GenericRequest(this, path(path)));
+        String path = String.format("/%s/_apis/pipelines/%d/runs", project, pipelineId);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION)
+                .param("$top", limit);
+        String response = execute(request);
         return new JSONObject(response);
     }
 
@@ -1868,9 +1878,10 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "pipelineId", description = "The pipeline ID", required = true) int pipelineId,
             @MCPParam(name = "runId", description = "The run ID", required = true) int runId
     ) throws IOException {
-        String path = String.format("/%s/_apis/pipelines/%d/runs/%d?api-version=%s",
-                project, pipelineId, runId, API_VERSION);
-        String response = execute(new GenericRequest(this, path(path)));
+        String path = String.format("/%s/_apis/pipelines/%d/runs/%d", project, pipelineId, runId);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION);
+        String response = execute(request);
         return new JSONObject(response);
     }
 
@@ -1890,9 +1901,9 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "taskName", description = "Optional: filter logs to a specific task name (case-insensitive substring match)", required = false) String taskName,
             @MCPParam(name = "tailLines", description = "Lines to return from the end of each task log (default 200, 0 = all)", required = false) Integer tailLines
     ) throws IOException {
-        String timelinePath = String.format("/%s/_apis/build/builds/%d/timeline?api-version=%s",
-                project, buildId, API_VERSION);
-        String timelineResponse = execute(new GenericRequest(this, path(timelinePath)));
+        String timelinePath = String.format("/%s/_apis/build/builds/%d/timeline", project, buildId);
+        String timelineResponse = execute(new GenericRequest(this, path(timelinePath))
+                .param("api-version", API_VERSION));
         JSONObject timeline = new JSONObject(timelineResponse);
         JSONArray records = timeline.optJSONArray("records");
 
@@ -1921,10 +1932,10 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             int logId = log.optInt("id", -1);
             if (logId < 0) continue;
 
-            String logPath = String.format("/%s/_apis/build/builds/%d/logs/%d?api-version=%s",
-                    project, buildId, logId, API_VERSION);
+            String logPath = String.format("/%s/_apis/build/builds/%d/logs/%d", project, buildId, logId);
             try {
-                GenericRequest logRequest = new GenericRequest(this, path(logPath));
+                GenericRequest logRequest = new GenericRequest(this, path(logPath))
+                        .param("api-version", API_VERSION);
                 String logContent = execute(logRequest);
 
                 if (logContent == null || logContent.isBlank()) continue;
