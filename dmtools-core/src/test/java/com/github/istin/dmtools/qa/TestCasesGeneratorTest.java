@@ -825,7 +825,7 @@ public class TestCasesGeneratorTest {
         verify(trackerClient).postComment(eq("STORY-1"), commentCaptor.capture());
         String comment = commentCaptor.getValue();
         assertTrue("Comment should contain TC key", comment.contains("TC-1"));
-        assertTrue("Comment should contain TC title", comment.contains("Login test"));
+        assertFalse("Comment should NOT repeat summary (Jira auto-links)", comment.contains("Login test"));
         assertTrue("Comment should contain explanation", comment.contains("validates the same auth flow"));
         assertTrue("Comment should start with header", comment.startsWith("Related test cases identified:"));
     }

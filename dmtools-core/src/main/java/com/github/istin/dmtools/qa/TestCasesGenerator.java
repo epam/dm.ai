@@ -256,13 +256,6 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 comment.append("Related test cases identified:\n");
                 for (VerifiedTestCase vc : verifiedResults) {
                     comment.append("- ").append(vc.getTicket().getKey());
-                    try {
-                        String summary = vc.getTicket().getTicketTitle();
-                        if (summary != null && !summary.trim().isEmpty()) {
-                            comment.append(": ").append(summary);
-                        }
-                    } catch (Exception ignored) {
-                    }
                     if (vc.getExplanation() != null && !vc.getExplanation().trim().isEmpty()) {
                         comment.append(" \u2014 ").append(vc.getExplanation());
                     }
