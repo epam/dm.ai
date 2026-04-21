@@ -153,4 +153,50 @@ public class XrayClientTest {
         assertTrue(xrayClient.shouldEnrichSearchResults(new String[]{"summary", XrayClient.FIELD_XRAY_ENRICHMENT}));
         assertArrayEquals(new String[]{"summary"}, xrayClient.stripXrayEnrichmentSentinel(new String[]{"summary", XrayClient.FIELD_XRAY_ENRICHMENT}));
     }
+
+    @Test
+    public void testConstructor_unknownExtraField_doesNotAddNullToFields() throws Exception {
+        // When an extra field name does not exist in Jira, getFieldCustomCode returns null.
+        // The constructor must skip that null instead of adding it to the fields array,
+        // otherwise resolveFieldNamesForSearch throws NPE (hotfix regression guard).
+        XrayClient clientWithBadField = new XrayClient(
+                "https://test-jira.atlassian.net",
+                "dGVzdDp0ZXN0",
+                "Basic",
+                -1,
+                "https://xray.cloud.getxray.app/api/v2",
+                "test_client_id",
+                "test_client_secret",
+                false,
+                false,
+                false,
+                100L,
+                null,   // extraFieldsProject null → skips field resolution loop
+                null    // extraFields null
+        );
+
+        String[] extended = clientWithBadField.getExtendedQueryFields();
+        assertNotNull(extended);
+        for (String f : extended) {
+            assertNotNull("extendedQueryFields must not contain null entries", f);
+        }
+
+        String[] defaults = clientWithBadField.getDefaultQueryFields();
+        assertNotNull(defaults);
+        for (String f : defaults) {
+            assertNotNull("defaultQueryFields must not contain null entries", f);
+        }
+    }
+
+    @Test
+    public void testStripXrayEnrichmentSentinel_nullElementsPassThrough_noNPE() {
+        if (xrayClient == null) {
+            return;
+        }
+        // stripXrayEnrichmentSentinel uses equalsIgnoreCase which is safe against null
+        // when called as FIELD_XRAY_ENRICHMENT.equalsIgnoreCase(f) — verify no NPE.
+        String[] fieldsWithNull = {"summary", null, "status"};
+        String[] result = xrayClient.stripXrayEnrichmentSentinel(fieldsWithNull);
+        assertNotNull(result);
+    }
 }

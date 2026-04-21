@@ -197,7 +197,11 @@ public class XrayClient extends JiraClient<Ticket> {
                 String extraField = extraFields[i];
                 String fieldCustomCode = getFieldCustomCode(extraFieldsProject, extraField);
                 customCodesOfConfigFields[i] = fieldCustomCode;
-                defaultFields.add(fieldCustomCode);
+                if (fieldCustomCode != null) {
+                    defaultFields.add(fieldCustomCode);
+                } else {
+                    logger.warn("Extra field '{}' not found in Jira project '{}', skipping.", extraField, extraFieldsProject);
+                }
             }
         } else {
             customCodesOfConfigFields = null;

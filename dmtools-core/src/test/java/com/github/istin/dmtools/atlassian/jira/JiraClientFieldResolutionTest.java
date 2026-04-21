@@ -642,4 +642,61 @@ public class JiraClientFieldResolutionTest {
         jiraClient.setMockProjectKeys("MY", "MYPROJ");
         assertEquals("MYPROJ", jiraClient.testExtractProjectKeyFromJQL("parent = MYPROJ-10"));
     }
+
+    // --- resolveFieldNamesForSearch null-safety tests (hotfix) ---
+
+    @SuppressWarnings("unchecked")
+    private List<String> invokeResolveFieldNamesForSearch(String jql, String[] fields) throws Exception {
+        Method method = JiraClient.class.getDeclaredMethod("resolveFieldNamesForSearch", String.class, String[].class);
+        method.setAccessible(true);
+        return (List<String>) method.invoke(jiraClient, jql, fields);
+    }
+
+    @Test
+    void testResolveFieldNamesForSearch_nullElementInFieldsArray_doesNotThrowNPE() throws Exception {
+        // Simulates the scenario where an extra field name was not found in Jira
+        // (getFieldCustomCode returned null) and null ended up in the fields array.
+        jiraClient.setMockProjectKeys("DIGIX");
+        jiraClient.setMockFieldsResponse("DIGIX", """
+                [
+                  {"id":"summary","name":"Summary","custom":false},
+                  {"id":"customfield_10001","name":"Story Points","custom":true}
+                ]
+                """);
+
+        String[] fieldsWithNull = {"summary", null, "Story Points"};
+
+        List<String> result = invokeResolveFieldNamesForSearch("key = DIGIX-72781", fieldsWithNull);
+
+        assertNotNull(result, "Result should not be null");
+        assertFalse(result.contains(null), "Result must not contain null entries");
+    }
+
+    @Test
+    void testResolveFieldNamesForSearch_allNullElements_returnsEmptyOrNonNull() throws Exception {
+        jiraClient.setMockProjectKeys("DIGIX");
+        String[] allNulls = {null, null, null};
+
+        List<String> result = invokeResolveFieldNamesForSearch("key = DIGIX-1", allNulls);
+
+        assertNotNull(result);
+        assertFalse(result.contains(null));
+    }
+
+    @Test
+    void testResolveFieldNamesForSearch_noNulls_behavesAsNormal() throws Exception {
+        jiraClient.setMockProjectKeys("DIGIX");
+        jiraClient.setMockFieldsResponse("DIGIX", """
+                [
+                  {"id":"summary","name":"Summary","custom":false},
+                  {"id":"customfield_10001","name":"Acceptance Criteria","custom":true}
+                ]
+                """);
+
+        String[] fields = {"summary", "Acceptance Criteria"};
+        List<String> result = invokeResolveFieldNamesForSearch("key = DIGIX-1", fields);
+
+        assertNotNull(result);
+        assertFalse(result.contains(null));
+    }
 }

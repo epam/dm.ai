@@ -1989,7 +1989,13 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         // Flatten any comma-separated values inside individual array elements.
         // This handles the common CLI case where the user passes a single quoted
         // string like "key,summary,Acceptance Criterias" instead of multiple args.
+        long nullCount = Arrays.stream(fields).filter(f -> f == null).count();
+        if (nullCount > 0) {
+            logger.warn("resolveFieldNamesForSearch: {} null field(s) detected in fields array — likely caused by extra field name(s) not found in Jira. Non-null fields: {}",
+                    nullCount, Arrays.stream(fields).filter(f -> f != null).collect(java.util.stream.Collectors.joining(", ")));
+        }
         String[] flatFields = Arrays.stream(fields)
+                .filter(f -> f != null)
                 .flatMap(f -> Arrays.stream(f.split(",")))
                 .map(String::trim)
                 .filter(f -> !f.isEmpty())
