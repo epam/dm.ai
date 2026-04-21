@@ -147,7 +147,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 }
 
                 TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-                ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences());
+                ticketContext.prepareContext(false, params.isIncludeOtherTicketReferences(), params.isIgnoreClonedByRelationship());
                 String additionalRules = extractFromConfluence(params.getConfluencePages());
                 result.add(generateTestCases(ticketContext, additionalRules, listOfAllTestCases, params, customAdapter));
                 TrackerParams.OutputType outputType = getOutputTypeSafe(params);
@@ -191,6 +191,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         }
         return sb.toString();
     }
+
+
 
     public TestCasesResult generateTestCases(TicketContext ticketContext, String extraRules, List<? extends ITicket> listOfAllTestCases, TestCasesGeneratorParams params) throws Exception {
         return generateTestCases(ticketContext, extraRules, listOfAllTestCases, params, null);

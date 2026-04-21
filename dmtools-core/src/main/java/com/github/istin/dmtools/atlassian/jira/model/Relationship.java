@@ -28,6 +28,8 @@ public class Relationship {
     public static final String RELATE = "relate";
     public static final String RELATES = "Relates";
     public static final String TESTS = "Tests";
+    public static final String IS_CLONED_BY = "is cloned by";
+    public static final String CLONES = "clones";
 
     public static boolean isFixedInOrImplementedIn(IssueLink issueLink) {
         String inwardType = issueLink.getInwardType();
@@ -59,5 +61,11 @@ public class Relationship {
     public static boolean isLinkedTo(IssueLink issueLink) {
         String inwardType = issueLink.getInwardType();
         return inwardType.equalsIgnoreCase(Relationship.LINKED_TO) || inwardType.equalsIgnoreCase(Relationship.LINKED_WITH);
+    }
+
+    public static boolean isClonedBy(IssueLink issueLink) {
+        String inwardType = issueLink.getInwardType();
+        String outwardType = issueLink.getOutwardType();
+        return IS_CLONED_BY.equalsIgnoreCase(inwardType) || CLONES.equalsIgnoreCase(outwardType);
     }
 }

@@ -101,6 +101,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("writeAgentParamsToFiles")
         private boolean writeAgentParamsToFiles = false;
 
+        @SerializedName("ignoreClonedByRelationship")
+        private boolean ignoreClonedByRelationship = true;
+
     }
 
     /**
@@ -360,7 +363,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             
             // Create and prepare ticket context
             TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-            ticketContext.prepareContext(true, false);
+            ticketContext.prepareContext(true, false, expertParams.isIgnoreClonedByRelationship());
             // Get attachments and convert to text
             List<? extends IAttachment> attachments = ticket.getAttachments();
             if (expertParams.isSkipAllAttachments()) {

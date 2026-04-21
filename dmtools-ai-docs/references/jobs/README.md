@@ -150,6 +150,7 @@ dmtools run agents/xray_test_cases_generator.json
 - `isConvertToJiraMarkdown` - Convert output to Jira markdown (default: true)
 - `includeOtherTicketReferences` - Include linked tickets in context (default: true)
 - `isOverridePromptExamples` - Override default prompt examples (default: false)
+- `ignoreClonedByRelationship` - Exclude tickets linked via "is cloned by" from AI context (default: **true**). Prevents cloned duplicates from overloading the context.
 
 **Relationships**:
 - `testCaseLinkRelationship` - Default relationship type (default: "is tested by")
@@ -404,6 +405,7 @@ dmtools Teammate --inputJql "key = PROJ-123"
 - `indexes` - Array of index configurations for additional context
   - Each index has `integration` (index name) and `storagePath` (path to index)
 - `systemRequestCommentAlias` - Alias for system request in comments
+- `ignoreClonedByRelationship` - Exclude tickets linked via "is cloned by" from AI context (default: **true**). Prevents cloned duplicates from overloading the context.
 
 **Index Configuration** (IndexConfig):
 ```json
