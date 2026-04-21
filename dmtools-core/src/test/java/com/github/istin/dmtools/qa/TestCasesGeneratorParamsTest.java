@@ -129,6 +129,8 @@ public class TestCasesGeneratorParamsTest {
             , null                              // testCasesCreationRules
             , null                              // customTestCasesTracker
             , true                              // ignoreClonedByRelationship
+            , null                              // relatedTestCaseExplanationPrompt
+            , false                             // postLinkedTestCasesComment
         );
 
         assertTrue("Constructor should set enableParallelTestCaseCheck correctly",
@@ -283,6 +285,63 @@ public class TestCasesGeneratorParamsTest {
                    deserializedParams.isEnableParallelPostVerification());
         assertEquals("Deserialized params should have parallelPostVerificationThreads=7",
                      7, deserializedParams.getParallelPostVerificationThreads());
+    }
+
+    @Test
+    public void testDefaultRelatedTestCaseExplanationPromptIsNull() {
+        assertNull("relatedTestCaseExplanationPrompt should be null by default",
+                   params.getRelatedTestCaseExplanationPrompt());
+    }
+
+    @Test
+    public void testDefaultPostLinkedTestCasesCommentIsFalse() {
+        assertFalse("postLinkedTestCasesComment should be false by default",
+                    params.isPostLinkedTestCasesComment());
+    }
+
+    @Test
+    public void testSetRelatedTestCaseExplanationPrompt() {
+        params.setRelatedTestCaseExplanationPrompt("Explain why the TC is related or needs deprecation.");
+        assertEquals("Explain why the TC is related or needs deprecation.",
+                     params.getRelatedTestCaseExplanationPrompt());
+    }
+
+    @Test
+    public void testSetPostLinkedTestCasesComment() {
+        params.setPostLinkedTestCasesComment(true);
+        assertTrue("postLinkedTestCasesComment should be true after setter",
+                   params.isPostLinkedTestCasesComment());
+    }
+
+    @Test
+    public void testSerializationWithExplanationParams() {
+        params.setRelatedTestCaseExplanationPrompt("Explain why");
+        params.setPostLinkedTestCasesComment(true);
+
+        String json = gson.toJson(params);
+        JSONObject jsonObject = new JSONObject(json);
+
+        assertEquals("Serialized JSON should contain relatedTestCaseExplanationPrompt",
+                     "Explain why", jsonObject.getString("relatedTestCaseExplanationPrompt"));
+        assertTrue("Serialized JSON should contain postLinkedTestCasesComment=true",
+                   jsonObject.getBoolean("postLinkedTestCasesComment"));
+    }
+
+    @Test
+    public void testDeserializationWithExplanationParams() {
+        String json = "{\"relatedTestCaseExplanationPrompt\":\"Why is it related\",\"postLinkedTestCasesComment\":true}";
+        TestCasesGeneratorParams deserialized = gson.fromJson(json, TestCasesGeneratorParams.class);
+
+        assertEquals("Why is it related", deserialized.getRelatedTestCaseExplanationPrompt());
+        assertTrue(deserialized.isPostLinkedTestCasesComment());
+    }
+
+    @Test
+    public void testConstantValues_ExplanationParams() {
+        assertEquals("relatedTestCaseExplanationPrompt",
+                     TestCasesGeneratorParams.RELATED_TEST_CASE_EXPLANATION_PROMPT);
+        assertEquals("postLinkedTestCasesComment",
+                     TestCasesGeneratorParams.POST_LINKED_TEST_CASES_COMMENT);
     }
 }
 

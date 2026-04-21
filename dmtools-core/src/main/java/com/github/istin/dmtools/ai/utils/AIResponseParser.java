@@ -14,6 +14,33 @@ import java.util.regex.Pattern;
 
 public class AIResponseParser {
 
+    public static class BooleanWithExplanation {
+        public final boolean value;
+        public final String explanation;
+
+        public BooleanWithExplanation(boolean value, String explanation) {
+            this.value = value;
+            this.explanation = explanation;
+        }
+    }
+
+    public static BooleanWithExplanation parseBooleanWithExplanation(String response) throws IllegalArgumentException {
+        String trimmedResponse = response.trim().toLowerCase();
+
+        int trueIndex = trimmedResponse.indexOf("true");
+        int falseIndex = trimmedResponse.indexOf("false");
+
+        if (trueIndex != -1 && (falseIndex == -1 || trueIndex < falseIndex)) {
+            int commaIndex = response.indexOf(',', trueIndex + 4);
+            String explanation = commaIndex != -1 ? response.substring(commaIndex + 1).trim() : null;
+            return new BooleanWithExplanation(true, explanation);
+        } else if (falseIndex != -1) {
+            return new BooleanWithExplanation(false, null);
+        } else {
+            throw new IllegalArgumentException("No valid boolean value found in the response.");
+        }
+    }
+
     public static boolean parseBooleanResponse(String response) throws IllegalArgumentException {
         // Convert response to lowercase to handle case insensitivity
         String trimmedResponse = response.trim().toLowerCase();
