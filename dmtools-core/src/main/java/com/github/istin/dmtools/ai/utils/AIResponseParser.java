@@ -25,19 +25,21 @@ public class AIResponseParser {
     }
 
     public static BooleanWithExplanation parseBooleanWithExplanation(String response) throws IllegalArgumentException {
-        String trimmedResponse = response.trim().toLowerCase();
+        String trimmedResponse = response.trim();
+        Pattern pattern = Pattern.compile("^\\s*(true|false)\\b(?:\\s*,\\s*(.*))?$",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(trimmedResponse);
 
-        int trueIndex = trimmedResponse.indexOf("true");
-        int falseIndex = trimmedResponse.indexOf("false");
-
-        if (trueIndex != -1 && (falseIndex == -1 || trueIndex < falseIndex)) {
-            int commaIndex = response.indexOf(',', trueIndex + 4);
-            String explanation = commaIndex != -1 ? response.substring(commaIndex + 1).trim() : null;
-            return new BooleanWithExplanation(true, explanation);
-        } else if (falseIndex != -1) {
-            return new BooleanWithExplanation(false, null);
-        } else {
+        if (!matcher.find()) {
             throw new IllegalArgumentException("No valid boolean value found in the response.");
+        }
+
+        String token = matcher.group(1).toLowerCase();
+        if ("true".equals(token)) {
+            String explanation = matcher.group(2) != null ? matcher.group(2).trim() : null;
+            return new BooleanWithExplanation(true, explanation != null && !explanation.isEmpty() ? explanation : null);
+        } else {
+            return new BooleanWithExplanation(false, null);
         }
     }
 
