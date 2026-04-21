@@ -878,6 +878,106 @@ function action(params) {
 }
 ```
 
+---
+
+## 🔄 SCM Abstraction Layer (Multi-Provider Support)
+
+The agents repository provides a provider-based SCM abstraction so agents can work with **GitHub** or **Azure DevOps** (and future providers like GitLab/Bitbucket) without hard-coding `github_*` tools.
+
+### Configuration
+
+**Global** — via `.dmtools/config.js`:
+```javascript
+module.exports = {
+  scm: { provider: 'ado' },          // 'github' (default) or 'ado'
+  repository: {
+    owner: 'MyOrg',                  // GitHub org or ADO org name
+    repo:  'my-repo'
+  }
+}
+```
+
+**Per-agent** — via JSON `customParams`:
+```json
+{
+  "customParams": {
+    "scmProvider": "ado"
+  }
+}
+```
+
+The per-agent override takes precedence over the global config.
+
+### Usage in Agents
+
+Agents call `configLoader.createScm(config)` to get a provider instance:
+
+```javascript
+var configLoader = require('./configLoader.js');
+
+function action(params) {
+    var config = configLoader.loadProjectConfig(params.jobParams || params);
+    var scm    = configLoader.createScm(config);
+
+    // List open pull requests
+    var prs = JSON.parse(scm.listPrs('open'));
+
+    // Post a comment
+    scm.addComment(prId, 'LGTM!');
+
+    // Reply to a review thread
+    scm.replyToThread(prId, thread, 'Fixed, thank you!');
+
+    // Resolve a review thread
+    scm.resolveThread(prId, thread);
+
+    // Merge a PR
+    scm.mergePr(prId, 'squash', 'feat: my feature', '');
+
+    return { success: true };
+}
+```
+
+### Provider Interface
+
+Both `GithubProvider` and `AdoProvider` implement these 17 methods:
+
+| Method | Description | ADO support |
+|--------|-------------|-------------|
+| `listPrs(state)` | List PRs (`'open'`/`'active'`/`'completed'`) | ✅ |
+| `getPr(prId)` | Get PR details | ✅ |
+| `getPrComments(prId)` | Get PR comments | ✅ |
+| `addComment(prId, text)` | Post a PR comment | ✅ |
+| `replyToThread(prId, thread, text)` | Reply to review thread | ✅ |
+| `resolveThread(prId, thread)` | Resolve/complete review thread | ✅ |
+| `addInlineComment(prId, file, line, text)` | Add inline code comment | ✅ |
+| `mergePr(prId, method, title, msg)` | Merge a PR | ✅ |
+| `addLabel(prId, label)` | Add label/tag to PR | ✅ |
+| `removeLabel(prId, label)` | Remove label/tag from PR | ✅ |
+| `getPrDiff(prId)` | Get PR diff | ✅ |
+| `fetchDiscussions(prId)` | Get review threads (normalised) | ✅ |
+| `getRemoteRepoInfo(workspace, repo)` | Get repository metadata | ✅ |
+| `getCommitCheckRuns(sha)` | Get CI check results for a commit | ⚠️ GitHub only |
+| `getJobLogs(jobId, lines)` | Get CI job logs | ⚠️ GitHub only |
+| `listWorkflowRuns(workflow, branch)` | List workflow/pipeline runs | ⚠️ GitHub only |
+| `triggerWorkflow(owner, repo, workflow, inputs, ref)` | Trigger CI workflow | ⚠️ GitHub only |
+
+> **Note**: ADO-unsupported CI methods (`getCommitCheckRuns`, `getJobLogs`, `listWorkflowRuns`, `triggerWorkflow`) return `null` and log a warning — agents that use these are GitHub-only by nature.
+
+### Using `scm` in `smAgent.js` rules
+
+The `smAgent.js` SM dispatcher uses `scm.triggerWorkflow(...)` to start Teammate jobs.  
+With `scmProvider: 'ado'` the ADO equivalent (`ado_trigger_pipeline`) is used automatically.
+
+```javascript
+// .dmtools/config.js — route smAgent to ADO pipeline
+module.exports = {
+  scm: { provider: 'ado' },
+  repository: { owner: 'MyOrg', repo: 'my-repo' }
+};
+```
+
+
 ### Security guarantees
 
 | What JS sees | What stays in Java |
