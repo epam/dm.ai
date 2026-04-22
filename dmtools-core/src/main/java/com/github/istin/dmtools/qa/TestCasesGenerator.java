@@ -58,6 +58,13 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         private List<TestCaseGeneratorAgent.TestCase> newTestCases;
     }
 
+    @Getter
+    @AllArgsConstructor
+    public static class VerifiedTestCase {
+        private ITicket ticket;
+        private String explanation;
+    }
+
     @Inject
     TrackerClient<? extends ITicket> trackerClient;
 
@@ -216,9 +223,47 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         if (!currentlyLinked.isEmpty()) {
             logger.debug("[DEBUG-LINKING] alreadyLinked keys: " + currentlyLinked.stream().map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
         }
-        List<ITicket> finaResults = params.isFindRelated()
+        List<VerifiedTestCase> verifiedResults = params.isFindRelated()
                 ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, listOfAllTestCases, params.isLinkRelated(), params.getRelatedTestCasesRules(), existingRelationship, currentlyLinked, params, customAdapter)
                 : Collections.emptyList();
+
+        List<ITicket> finaResults = new ArrayList<>();
+        for (VerifiedTestCase vc : verifiedResults) {
+            finaResults.add(vc.getTicket());
+        }
+
+        if (params.isPostLinkedTestCasesComment() && !verifiedResults.isEmpty()) {
+            boolean isHtml = TrackerClient.TextType.HTML.equals(trackerClient.getTextType());
+            StringBuilder comment = new StringBuilder();
+            if (isHtml) {
+                comment.append("<b>Related test cases identified:</b><ul>");
+                for (VerifiedTestCase vc : verifiedResults) {
+                    comment.append("<li><b>").append(vc.getTicket().getKey()).append("</b>");
+                    try {
+                        String summary = vc.getTicket().getTicketTitle();
+                        if (summary != null && !summary.trim().isEmpty()) {
+                            comment.append(": ").append(summary);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    if (vc.getExplanation() != null && !vc.getExplanation().trim().isEmpty()) {
+                        comment.append(" \u2014 ").append(vc.getExplanation());
+                    }
+                    comment.append("</li>");
+                }
+                comment.append("</ul>");
+            } else {
+                comment.append("Related test cases identified:\n");
+                for (VerifiedTestCase vc : verifiedResults) {
+                    comment.append("- ").append(vc.getTicket().getKey());
+                    if (vc.getExplanation() != null && !vc.getExplanation().trim().isEmpty()) {
+                        comment.append(" \u2014 ").append(vc.getExplanation());
+                    }
+                    comment.append("\n");
+                }
+            }
+            trackerClient.postComment(key, comment.toString().trim());
+        }
 
         // Initialize accumulator for all generated test cases
         List<TestCaseGeneratorAgent.TestCase> allGeneratedTestCases = new ArrayList<>();
@@ -637,9 +682,9 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
 
     /**
      * Verifies if a test case is related to the story and optionally links it.
-     * @return the test case if confirmed, null otherwise
+     * @return a VerifiedTestCase with the ticket and explanation if confirmed, null otherwise
      */
-    private ITicket verifyAndLinkTestCase(
+    private VerifiedTestCase verifyAndLinkTestCase(
             ITicket testCase,
             String ticketKey,
             String ticketText,
@@ -651,10 +696,11 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             boolean needSync,
             TestCasesTrackerAdapter customAdapter) throws Exception {
 
-        boolean isConfirmed = relatedTestCaseAgent.run(
+        RelatedTestCaseAgent.Result agentResult = relatedTestCaseAgent.run(
             params.getModelTestCaseRelation(),
-            new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence)
+            new RelatedTestCaseAgent.Params(ticketText, testCase.toText(), extraRelatedTestCaseRulesFromConfluence, params.getRelatedTestCaseExplanationPrompt())
         );
+        boolean isConfirmed = agentResult.isRelated();
         logger.debug("[DEBUG-LINKING] verifyAndLink testCase=" + testCase.getKey() + " isConfirmed=" + isConfirmed);
 
         if (isConfirmed) {
@@ -682,7 +728,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                     }
                 }
             }
-            return testCase;
+            return new VerifiedTestCase(testCase, agentResult.getExplanation());
         }
         return null;
     }
@@ -691,7 +737,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
      * Processes a single chunk to find related test cases and optionally verify them.
      * This method eliminates code duplication between parallel and sequential processing.
      */
-    private List<ITicket> processChunk(
+    private List<VerifiedTestCase> processChunk(
             ChunkPreparation.Chunk chunk,
             String ticketKey,
             String ticketText,
@@ -703,7 +749,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             TestCasesGeneratorParams params,
             TestCasesTrackerAdapter customAdapter) throws Exception {
 
-        List<ITicket> chunkResults = new ArrayList<>();
+        List<VerifiedTestCase> chunkResults = new ArrayList<>();
 
         // Get potential test cases from the chunk
         logger.debug("[DEBUG-LINKING] Calling relatedTestCasesAgent for ticket=" + ticketKey + " chunkSize=" + chunk.getText().length() + " chars, existingCasesInChunk=" + listOfAllTestCases.size());
@@ -738,7 +784,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 Math.min(params.getParallelPostVerificationThreads(), testCasesToVerify.size())
             );
             try {
-                List<Future<ITicket>> verificationFutures = new ArrayList<>();
+                List<Future<VerifiedTestCase>> verificationFutures = new ArrayList<>();
 
                 for (ITicket testCase : testCasesToVerify) {
                     verificationFutures.add(postVerificationExecutor.submit(() ->
@@ -749,8 +795,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 }
 
                 // Collect verified results
-                for (Future<ITicket> future : verificationFutures) {
-                    ITicket verifiedTestCase = future.get();
+                for (Future<VerifiedTestCase> future : verificationFutures) {
+                    VerifiedTestCase verifiedTestCase = future.get();
                     if (verifiedTestCase != null) {
                         chunkResults.add(verifiedTestCase);
                     }
@@ -768,7 +814,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         } else {
             // Sequential post-verification
             for (ITicket testCase : testCasesToVerify) {
-                ITicket verifiedTestCase = verifyAndLinkTestCase(testCase, ticketKey, ticketText, isLink,
+                VerifiedTestCase verifiedTestCase = verifyAndLinkTestCase(testCase, ticketKey, ticketText, isLink,
                                                                  relationship, currentlyLinkedTestCases,
                                                                  extraRelatedTestCaseRulesFromConfluence, params, false,
                                                                  customAdapter);
@@ -782,13 +828,13 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
     }
 
     @NotNull
-    public List<ITicket> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params) throws Exception {
+    public List<VerifiedTestCase> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params) throws Exception {
         return findAndLinkSimilarTestCasesBySummary(ticketKey, ticketText, listOfAllTestCases, isLink, relatedTestCasesRulesLink, relationship, currentlyLinkedTestCases, params, null);
     }
 
     @NotNull
-    public List<ITicket> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params, TestCasesTrackerAdapter customAdapter) throws Exception {
-        List<ITicket> finaResults = new ArrayList<>();
+    public List<VerifiedTestCase> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params, TestCasesTrackerAdapter customAdapter) throws Exception {
+        List<VerifiedTestCase> finaResults = new ArrayList<>();
         String extraRelatedTestCaseRulesFromConfluence = extractFromConfluence(relatedTestCasesRulesLink);
         ChunkPreparation chunkPreparation = new ChunkPreparation();
 
@@ -804,7 +850,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             // Parallel chunk processing
             ExecutorService executorService = Executors.newFixedThreadPool(params.getParallelTestCaseCheckThreads());
             try {
-                List<Future<List<ITicket>>> futures = new ArrayList<>();
+                List<Future<List<VerifiedTestCase>>> futures = new ArrayList<>();
 
                 for (ChunkPreparation.Chunk chunk : chunks) {
                     futures.add(executorService.submit(() ->
@@ -814,10 +860,10 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 }
 
                 // Collect results from all chunks
-                for (Future<List<ITicket>> future : futures) {
-                    List<ITicket> chunkResults = future.get();
-                    for (ITicket result : chunkResults) {
-                        if (!finaResults.contains(result)) {
+                for (Future<List<VerifiedTestCase>> future : futures) {
+                    List<VerifiedTestCase> chunkResults = future.get();
+                    for (VerifiedTestCase result : chunkResults) {
+                        if (finaResults.stream().noneMatch(v -> v.getTicket().equals(result.getTicket()))) {
                             finaResults.add(result);
                         }
                     }
@@ -835,11 +881,11 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         } else {
             // Sequential chunk processing
             for (ChunkPreparation.Chunk chunk : chunks) {
-                List<ITicket> chunkResults = processChunk(chunk, ticketKey, ticketText, listOfAllTestCases,
+                List<VerifiedTestCase> chunkResults = processChunk(chunk, ticketKey, ticketText, listOfAllTestCases,
                                                           isLink, relationship, currentlyLinkedTestCases,
                                                           extraRelatedTestCaseRulesFromConfluence, params, customAdapter);
-                for (ITicket result : chunkResults) {
-                    if (!finaResults.contains(result)) {
+                for (VerifiedTestCase result : chunkResults) {
+                    if (finaResults.stream().noneMatch(v -> v.getTicket().equals(result.getTicket()))) {
                         finaResults.add(result);
                     }
                 }

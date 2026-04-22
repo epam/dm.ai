@@ -151,8 +151,8 @@ dmtools run agents/xray_test_cases_generator.json
 - `includeOtherTicketReferences` - Include linked tickets in context (default: true)
 - `isOverridePromptExamples` - Override default prompt examples (default: false)
 - `ignoreClonedByRelationship` - Exclude tickets linked via "is cloned by" from AI context (default: **true**). Prevents cloned duplicates from overloading the context.
-
-**Relationships**:
+- `relatedTestCaseExplanationPrompt` - When set, instructs the LLM to return an explanation alongside the `true` result (format: `"true, <explanation>"`). The value is the guidance text for what kind of explanation to provide (e.g., *"Explain why the TC is related to this story, or state if it needs to be deprecated once the story is delivered."*). Default: `null` (disabled, preserves `true`/`false` only behavior).
+- `postLinkedTestCasesComment` - When `true`, after finding all related test cases for a story, post a single Jira comment listing every linked TC with its explanation. Requires `relatedTestCaseExplanationPrompt` to be set for explanations to appear. Default: **false**.
 - `testCaseLinkRelationship` - Default relationship type (default: "is tested by")
 - `testCaseLinkRelationshipForNew` - Relationship for new test cases (overrides default)
 - `testCaseLinkRelationshipForExisting` - Relationship for existing test cases (overrides default)

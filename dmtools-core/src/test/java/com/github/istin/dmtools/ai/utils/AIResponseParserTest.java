@@ -12,6 +12,46 @@ import java.util.List;
 
 public class AIResponseParserTest extends TestCase {
 
+    public void testParseBooleanWithExplanation_TrueWithExplanation() {
+        AIResponseParser.BooleanWithExplanation result = AIResponseParser.parseBooleanWithExplanation("true, because it validates the same flow");
+        assertTrue(result.value);
+        assertEquals("because it validates the same flow", result.explanation);
+    }
+
+    public void testParseBooleanWithExplanation_TrueWithoutComma() {
+        AIResponseParser.BooleanWithExplanation result = AIResponseParser.parseBooleanWithExplanation("true");
+        assertTrue(result.value);
+        assertNull(result.explanation);
+    }
+
+    public void testParseBooleanWithExplanation_FalseNoExplanation() {
+        AIResponseParser.BooleanWithExplanation result = AIResponseParser.parseBooleanWithExplanation("false");
+        assertFalse(result.value);
+        assertNull(result.explanation);
+    }
+
+    public void testParseBooleanWithExplanation_FalseIgnoresTrailingText() {
+        AIResponseParser.BooleanWithExplanation result = AIResponseParser.parseBooleanWithExplanation("false, not related");
+        assertFalse(result.value);
+        assertNull(result.explanation);
+    }
+
+    public void testParseBooleanWithExplanation_TrueDeprecationReason() {
+        AIResponseParser.BooleanWithExplanation result = AIResponseParser.parseBooleanWithExplanation(
+            "true, This test case needs to be deprecated once this story is delivered.");
+        assertTrue(result.value);
+        assertEquals("This test case needs to be deprecated once this story is delivered.", result.explanation);
+    }
+
+    public void testParseBooleanWithExplanation_ThrowsOnInvalidInput() {
+        try {
+            AIResponseParser.parseBooleanWithExplanation("maybe");
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
+    }
+
     public void testParseBooleanResponse() {
         try {
             assertTrue(AIResponseParser.parseBooleanResponse("... true ..."));

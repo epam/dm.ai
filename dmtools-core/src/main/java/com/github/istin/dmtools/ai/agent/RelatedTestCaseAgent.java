@@ -8,7 +8,7 @@ import com.github.istin.dmtools.ai.utils.AIResponseParser;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-public class RelatedTestCaseAgent extends AbstractSimpleAgent<RelatedTestCaseAgent.Params, Boolean> {
+public class RelatedTestCaseAgent extends AbstractSimpleAgent<RelatedTestCaseAgent.Params, RelatedTestCaseAgent.Result> {
 
     @AllArgsConstructor
     @Getter
@@ -16,6 +16,14 @@ public class RelatedTestCaseAgent extends AbstractSimpleAgent<RelatedTestCaseAge
         private String newStory;
         private String existingTestCase;
         private String extraRules;
+        private String explanationPrompt;
+    }
+
+    @AllArgsConstructor
+    @Getter
+    public static class Result {
+        private boolean isRelated;
+        private String explanation;
     }
 
     public RelatedTestCaseAgent() {
@@ -24,7 +32,8 @@ public class RelatedTestCaseAgent extends AbstractSimpleAgent<RelatedTestCaseAge
     }
 
     @Override
-    public Boolean transformAIResponse(Params params, String response) throws Exception {
-        return AIResponseParser.parseBooleanResponse(response);
+    public Result transformAIResponse(Params params, String response) throws Exception {
+        AIResponseParser.BooleanWithExplanation parsed = AIResponseParser.parseBooleanWithExplanation(response);
+        return new Result(parsed.value, parsed.explanation);
     }
 }

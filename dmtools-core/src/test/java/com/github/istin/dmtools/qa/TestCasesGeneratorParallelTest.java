@@ -98,10 +98,10 @@ public class TestCasesGeneratorParallelTest {
                 .thenReturn(new JSONArray("[\"TC-0\", \"TC-1\", \"TC-2\", \"TC-3\", \"TC-4\"]"));
 
         when(relatedTestCaseAgent.run(anyString(), any(RelatedTestCaseAgent.Params.class)))
-                .thenReturn(true);
+                .thenReturn(new RelatedTestCaseAgent.Result(true, null));
 
         // Act
-        List<ITicket> result = generator.findAndLinkSimilarTestCasesBySummary(
+        List<TestCasesGenerator.VerifiedTestCase> result = generator.findAndLinkSimilarTestCasesBySummary(
                 ticketKey, ticketText, allTestCases, true, "http://rules", Relationship.RELATES_TO, Collections.emptyList(), params
         );
 
@@ -154,11 +154,11 @@ public class TestCasesGeneratorParallelTest {
                     String testText = params1.getExistingTestCase();
                     // Extract test case number from "Test Case X"
                     int num = Integer.parseInt(testText.split(" ")[2]);
-                    return num % 2 == 0; // Only even numbers are confirmed
+                    return new RelatedTestCaseAgent.Result(num % 2 == 0, null); // Only even numbers are confirmed
                 });
 
         // Act
-        List<ITicket> result = generator.findAndLinkSimilarTestCasesBySummary(
+        List<TestCasesGenerator.VerifiedTestCase> result = generator.findAndLinkSimilarTestCasesBySummary(
                 ticketKey, ticketText, allTestCases, true, "http://rules", Relationship.RELATES_TO, Collections.emptyList(), params
         );
 
@@ -205,10 +205,10 @@ public class TestCasesGeneratorParallelTest {
         when(relatedTestCasesAgent.run(anyString(), any(RelatedTestCasesAgent.Params.class)))
                 .thenReturn(new JSONArray("[\"TC-0\", \"TC-1\", \"TC-2\", \"TC-3\", \"TC-4\", \"TC-5\", \"TC-6\", \"TC-7\"]"));
         when(relatedTestCaseAgent.run(anyString(), any(RelatedTestCaseAgent.Params.class)))
-                .thenReturn(true);
+                .thenReturn(new RelatedTestCaseAgent.Result(true, null));
 
         // Act
-        List<ITicket> result = generator.findAndLinkSimilarTestCasesBySummary(
+        List<TestCasesGenerator.VerifiedTestCase> result = generator.findAndLinkSimilarTestCasesBySummary(
                 ticketKey, ticketText, allTestCases, true, "http://rules", Relationship.RELATES_TO, Collections.emptyList(), params
         );
 
@@ -247,10 +247,10 @@ public class TestCasesGeneratorParallelTest {
         when(relatedTestCasesAgent.run(anyString(), any(RelatedTestCasesAgent.Params.class)))
                 .thenReturn(new JSONArray("[\"TC-0\", \"TC-1\"]"));
         when(relatedTestCaseAgent.run(anyString(), any(RelatedTestCaseAgent.Params.class)))
-                .thenReturn(true);
+                .thenReturn(new RelatedTestCaseAgent.Result(true, null));
 
         // Act
-        List<ITicket> result = generator.findAndLinkSimilarTestCasesBySummary(
+        List<TestCasesGenerator.VerifiedTestCase> result = generator.findAndLinkSimilarTestCasesBySummary(
                 ticketKey, ticketText, allTestCases, true, "http://rules", Relationship.RELATES_TO, Collections.emptyList(), params
         );
 

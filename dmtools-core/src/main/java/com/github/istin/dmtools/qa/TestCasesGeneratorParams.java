@@ -46,6 +46,8 @@ public class TestCasesGeneratorParams extends Params {
     public static final String TEST_CASES_CREATION_RULES = "testCasesCreationRules";
     public static final String CUSTOM_TEST_CASES_TRACKER = "customTestCasesTracker";
     public static final String IGNORE_CLONED_BY_RELATIONSHIP = "ignoreClonedByRelationship";
+    public static final String RELATED_TEST_CASE_EXPLANATION_PROMPT = "relatedTestCaseExplanationPrompt";
+    public static final String POST_LINKED_TEST_CASES_COMMENT = "postLinkedTestCasesComment";
 
     @SerializedName(EXISTING_TEST_CASES_JQL)
     private String existingTestCasesJql;
@@ -112,4 +114,10 @@ public class TestCasesGeneratorParams extends Params {
 
     @SerializedName(IGNORE_CLONED_BY_RELATIONSHIP)
     private boolean ignoreClonedByRelationship = true;
+
+    @SerializedName(RELATED_TEST_CASE_EXPLANATION_PROMPT)
+    private String relatedTestCaseExplanationPrompt;
+
+    @SerializedName(POST_LINKED_TEST_CASES_COMMENT)
+    private boolean postLinkedTestCasesComment = false;
 }
