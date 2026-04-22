@@ -921,15 +921,29 @@ function action(params) {
 
     // List open pull requests
     var prs = JSON.parse(scm.listPrs('open'));
+    if (!prs || prs.length === 0) {
+        return { success: false, error: 'No open pull requests found' };
+    }
+
+    // Pick the first open PR
+    var pr   = prs[0];
+    var prId = pr.id || pr.number || pr.pullRequestId;
 
     // Post a comment
     scm.addComment(prId, 'LGTM!');
 
-    // Reply to a review thread
-    scm.replyToThread(prId, thread, 'Fixed, thank you!');
+    // Fetch review threads and work with the first open one
+    var discussions = scm.fetchDiscussions(prId);
+    var rawThreads  = (discussions.rawThreads && discussions.rawThreads.threads) || [];
+    var thread      = rawThreads.find(function(t) { return !t.resolved; }) || null;
 
-    // Resolve a review thread
-    scm.resolveThread(prId, thread);
+    if (thread) {
+        // Reply to a review thread
+        scm.replyToThread(prId, thread, 'Fixed, thank you!');
+
+        // Resolve a review thread
+        scm.resolveThread(prId, thread);
+    }
 
     // Merge a PR
     scm.mergePr(prId, 'squash', 'feat: my feature', '');
@@ -962,20 +976,11 @@ Both `GithubProvider` and `AdoProvider` implement these 17 methods:
 | `listWorkflowRuns(workflow, branch)` | List workflow/pipeline runs | ⚠️ GitHub only |
 | `triggerWorkflow(owner, repo, workflow, inputs, ref)` | Trigger CI workflow | ⚠️ GitHub only |
 
-> **Note**: ADO-unsupported CI methods (`getCommitCheckRuns`, `getJobLogs`, `listWorkflowRuns`, `triggerWorkflow`) return `null` and log a warning — agents that use these are GitHub-only by nature.
+> **Note**: CI methods (`getCommitCheckRuns`, `getJobLogs`, `listWorkflowRuns`, `triggerWorkflow`) are currently GitHub-only. On ADO they log a warning and return `null` — agents that call these methods require GitHub as the SCM provider.
 
 ### Using `scm` in `smAgent.js` rules
 
-The `smAgent.js` SM dispatcher uses `scm.triggerWorkflow(...)` to start Teammate jobs.  
-With `scmProvider: 'ado'` the ADO equivalent (`ado_trigger_pipeline`) is used automatically.
-
-```javascript
-// .dmtools/config.js — route smAgent to ADO pipeline
-module.exports = {
-  scm: { provider: 'ado' },
-  repository: { owner: 'MyOrg', repo: 'my-repo' }
-};
-```
+The `smAgent.js` SM dispatcher calls `scm.triggerWorkflow(...)` to start Teammate jobs. Because `triggerWorkflow` is currently GitHub-only, `smAgent.js` requires GitHub as the SCM provider (`scm.provider = 'github'`, the default). ADO pipeline triggering is not yet supported via the SCM abstraction.
 
 
 ### Security guarantees
