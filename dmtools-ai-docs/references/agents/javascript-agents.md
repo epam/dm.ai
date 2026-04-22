@@ -882,105 +882,21 @@ function action(params) {
 
 ## 🔄 SCM Abstraction Layer (Multi-Provider Support)
 
-The agents repository provides a provider-based SCM abstraction so agents can work with **GitHub** or **Azure DevOps** (and future providers like GitLab/Bitbucket) without hard-coding `github_*` tools.
+The agents repository ships a provider-based SCM abstraction (`createScm`) so agents can work with **GitHub** or **Azure DevOps** without hard-coding `github_*` tools. Future providers (GitLab, Bitbucket) can be added by following the same pattern.
 
-### Configuration
+📖 **Full documentation** → [scm-abstraction SKILL.md](https://github.com/IstiN/dmtools-agents/blob/main/.github/skills/scm-abstraction/SKILL.md)
 
-**Global** — via `.dmtools/config.js`:
-```javascript
-module.exports = {
-  scm: { provider: 'ado' },          // 'github' (default) or 'ado'
-  repository: {
-    owner: 'MyOrg',                  // GitHub org or ADO org name
-    repo:  'my-repo'
-  }
-}
+Covers: configuration (global & per-agent), `createScm` usage, full 17-method provider interface, ADO support matrix, adding new providers, and unit-test mock patterns.
+
+**Quick config:**
+```js
+// .dmtools/config.js
+module.exports = { scm: { provider: 'ado' }, repository: { owner: 'MyOrg', repo: 'my-repo' } }
 ```
-
-**Per-agent** — via JSON `customParams`:
 ```json
-{
-  "customParams": {
-    "scmProvider": "ado"
-  }
-}
+{ "customParams": { "scmProvider": "ado" } }
 ```
 
-The per-agent override takes precedence over the global config.
-
-### Usage in Agents
-
-Agents call `configLoader.createScm(config)` to get a provider instance:
-
-```javascript
-var configLoader = require('./configLoader.js');
-
-function action(params) {
-    var config = configLoader.loadProjectConfig(params.jobParams || params);
-    var scm    = configLoader.createScm(config);
-
-    // List open pull requests
-    var prs = JSON.parse(scm.listPrs('open'));
-    if (!prs || prs.length === 0) {
-        return { success: false, error: 'No open pull requests found' };
-    }
-
-    // Pick the first open PR
-    var pr   = prs[0];
-    var prId = pr.id || pr.number || pr.pullRequestId;
-
-    // Post a comment
-    scm.addComment(prId, 'LGTM!');
-
-    // Fetch review threads and work with the first open one
-    var discussions = scm.fetchDiscussions(prId);
-    var rawThreads  = (discussions.rawThreads && discussions.rawThreads.threads) || [];
-    var thread      = rawThreads.find(function(t) { return !t.resolved; }) || null;
-
-    if (thread) {
-        // Reply to a review thread
-        scm.replyToThread(prId, thread, 'Fixed, thank you!');
-
-        // Resolve a review thread
-        scm.resolveThread(prId, thread);
-    }
-
-    // Merge a PR
-    scm.mergePr(prId, 'squash', 'feat: my feature', '');
-
-    return { success: true };
-}
-```
-
-### Provider Interface
-
-Both `GithubProvider` and `AdoProvider` implement these 17 methods:
-
-| Method | Description | ADO support |
-|--------|-------------|-------------|
-| `listPrs(state)` | List PRs (`'open'`/`'active'`/`'completed'`) | ✅ |
-| `getPr(prId)` | Get PR details | ✅ |
-| `getPrComments(prId)` | Get PR comments | ✅ |
-| `addComment(prId, text)` | Post a PR comment | ✅ |
-| `replyToThread(prId, thread, text)` | Reply to review thread | ✅ |
-| `resolveThread(prId, thread)` | Resolve/complete review thread | ✅ |
-| `addInlineComment(prId, file, line, text)` | Add inline code comment | ✅ |
-| `mergePr(prId, method, title, msg)` | Merge a PR | ✅ |
-| `addLabel(prId, label)` | Add label/tag to PR | ✅ |
-| `removeLabel(prId, label)` | Remove label/tag from PR | ✅ |
-| `getPrDiff(prId)` | Get PR diff | ✅ |
-| `fetchDiscussions(prId)` | Get review threads (normalised) | ✅ |
-| `getRemoteRepoInfo(workspace, repo)` | Get repository metadata | ✅ |
-| `getCommitCheckRuns(sha)` | Get CI check results for a commit | ⚠️ GitHub only |
-| `getJobLogs(jobId, lines)` | Get CI job logs | ⚠️ GitHub only |
-| `listWorkflowRuns(workflow, branch)` | List workflow/pipeline runs | ⚠️ GitHub only |
-| `triggerWorkflow(owner, repo, workflow, inputs, ref)` | Trigger CI workflow | ⚠️ GitHub only |
-
-> **Note**: CI methods (`getCommitCheckRuns`, `getJobLogs`, `listWorkflowRuns`, `triggerWorkflow`) are currently GitHub-only. On ADO they log a warning and return `null` — agents that call these methods require GitHub as the SCM provider.
-
-### Using `scm` in `smAgent.js` rules
-
-The `smAgent.js` SM dispatcher calls `scm.triggerWorkflow(...)` to start Teammate jobs. Because `triggerWorkflow` is currently GitHub-only, `smAgent.js` requires GitHub as the SCM provider (`scm.provider = 'github'`, the default). ADO pipeline triggering is not yet supported via the SCM abstraction.
 
 
 ### Security guarantees
