@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch: {}
 
 concurrency:
   group: auto-update-prs
@@ -21,7 +22,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          sleep 15
+          # After a push to main, GitHub invalidates cached mergeability for all open PRs
+          # and recomputes asynchronously — returning "UNKNOWN" until ready. Retry until
+          # no PRs are stuck in UNKNOWN (up to ~90s) so the MERGEABLE filter doesn't miss them.
+          for attempt in $(seq 1 6); do
+            unknown=$(gh pr list --repo ${{ github.repository }} --state open --base main \
+              --json number,mergeable \
+              --jq '[.[] | select(.mergeable == "UNKNOWN")] | length')
+            echo "Attempt $attempt: $unknown PR(s) still in UNKNOWN mergeability state"
+            [ "$unknown" -eq 0 ] && break
+            sleep 15
+          done
+
           prs=$(gh pr list --repo ${{ github.repository }} --state open --base main \
             --json number,mergeable,isDraft,mergeStateStatus \
             --jq '.[]
