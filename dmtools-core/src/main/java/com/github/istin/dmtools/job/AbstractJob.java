@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.ai.AI;
+import com.github.istin.dmtools.ai.model.Metadata;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import dagger.Component;
 import lombok.Getter;
@@ -156,6 +157,20 @@ public abstract class AbstractJob<Params, Result> implements Job<Params, Result>
      */
     protected JavaScriptExecutor js(String jsCode) {
         return new JavaScriptExecutor(jsCode);
+    }
+
+    protected static String agentNamePrefix(TrackerParams params) {
+        Metadata metadata = params.getMetadata();
+        if (metadata != null) {
+            String name = metadata.getContextId();
+            if (name == null || name.isEmpty()) {
+                name = metadata.getAgentId();
+            }
+            if (name != null && !name.isEmpty()) {
+                return "[" + name + "] ";
+            }
+        }
+        return "";
     }
 
     /**
