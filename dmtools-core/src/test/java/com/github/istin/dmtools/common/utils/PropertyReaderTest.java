@@ -310,8 +310,19 @@ class PropertyReaderTest {
 
     @Test
     void testGetJiraExtraFields_NullValue() {
+        String envValue = System.getenv("JIRA_EXTRA_FIELDS");
+        String fileValue = propertyReader.getValue("JIRA_EXTRA_FIELDS");
         String[] result = propertyReader.getJiraExtraFields();
-        assertNull(result);
+
+        boolean hasConfiguredValue = (envValue != null && !envValue.trim().isEmpty() && !envValue.startsWith("$")) ||
+            (fileValue != null && !fileValue.trim().isEmpty() && !fileValue.startsWith("$"));
+
+        if (!hasConfiguredValue) {
+            assertNull(result);
+        } else {
+            assertNotNull(result);
+            assertTrue(result.length > 0);
+        }
     }
 
     @Test

@@ -8,11 +8,15 @@ import com.github.istin.dmtools.reporting.ReportGeneratorJob;
 import com.github.istin.dmtools.reporting.ReportVisualizerJob;
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.util.Base64;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class JobRunnerTest {
 
@@ -50,10 +54,42 @@ public class JobRunnerTest {
         assertTrue(invokeCreateJobInstance("KBProcessingJob") instanceof KBProcessingJob);
     }
 
+    @Test
+    public void testKBProcessingJobUsesCliFacingNameInListingAndValidation() throws Exception {
+        assertEquals("KBProcessingJob", new KBProcessingJob().getName());
+
+        String listJobsOutput = invokeListJobs();
+        assertTrue(listJobsOutput.contains("- KBProcessingJob"));
+        assertFalse(listJobsOutput.contains("- KBProcessing\n"));
+
+        try {
+            JobRunner.validateJobParamsJson("{}");
+            fail("Expected validateJobParamsJson to reject missing job name");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("KBProcessingJob"));
+            assertFalse(e.getMessage().contains("KBProcessing,"));
+        }
+    }
+
     private Object invokeCreateJobInstance(String jobName) throws Exception {
         Method method = JobRunner.class.getDeclaredMethod("createJobInstance", String.class);
         method.setAccessible(true);
         return method.invoke(null, jobName);
+    }
+
+    private String invokeListJobs() throws Exception {
+        Method method = JobRunner.class.getDeclaredMethod("listJobs");
+        method.setAccessible(true);
+
+        PrintStream originalOut = System.out;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try {
+            System.setOut(new PrintStream(output));
+            method.invoke(null);
+        } finally {
+            System.setOut(originalOut);
+        }
+        return output.toString();
     }
 
 }
