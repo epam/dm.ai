@@ -61,6 +61,11 @@ module.exports = {
             './.dmtools/instructions/product/po_domain_knowledge.md',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story'
         ],
+        story_acceptance_criteria: [
+            './.dmtools/instructions/product/po_domain_knowledge.md',
+            './agents/instructions/common/investigate_before_answer.md',
+            'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story'
+        ],
         story_acceptance_criterias: [
             './.dmtools/instructions/product/po_domain_knowledge.md',
             './agents/instructions/common/investigate_before_answer.md',
