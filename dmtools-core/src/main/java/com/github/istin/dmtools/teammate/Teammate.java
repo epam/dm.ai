@@ -337,7 +337,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 if (shouldPostComments(expertParams)) {
                     try {
                         logger.info("Tracing CI run URL to ticket {}: {}", ticket.getTicketKey(), ciRunUrl);
-                        trackerClient.postComment(ticket.getTicketKey(), "Processing started. CI Run: " + ciRunUrl);
+                        trackerClient.postComment(ticket.getTicketKey(), agentNamePrefix(expertParams) + "Processing started. CI Run: " + ciRunUrl);
                     } catch (Exception e) {
                         logger.warn("Failed to post CI run trace comment for ticket {} — continuing. Error: {}",
                                 ticket.getTicketKey(), e.getMessage());

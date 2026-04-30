@@ -15,7 +15,10 @@ module.exports = {
 
     jira: {
         project: 'DMC',
-        parentTicket: 'DMC-101'
+        parentTicket: 'DMC-101',
+        fields: {
+            acceptanceCriteria: 'Acceptance Criteria'
+        }
     },
 
     git: {
@@ -81,3 +84,4 @@ module.exports = {
         ]
     }
 };
+
