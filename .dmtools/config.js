@@ -24,15 +24,27 @@ module.exports = {
 
     agentConfigsDir: 'agents',
 
-    customInstructions: `
-IMPORTANT SCOPE CONSTRAINTS:
-- This repository is the dmtools CLI module (dmtools-core) ONLY.
-- API module (dmtools-server) and UI module are OUT OF SCOPE - do NOT implement, modify, or create tickets for them.
-- All implementation work must target dmtools-core/src/main/java only.
-- When creating subtasks, only create [CORE] subtasks. Do NOT create [API], [UI], or [SD API] subtasks.
-- All new MCP tools must follow the @MCPTool / @MCPParam annotation pattern in dmtools-core.
-- Do NOT suggest or reference Spring Boot, REST endpoints, or frontend changes.
-`,
+    cliPrompts: {
+        story_development: [
+            './.dmtools/instructions/architecture/dmtools_core_scope.md',
+            './.dmtools/prompts/development_focus.md'
+        ],
+        bug_development: [
+            './.dmtools/instructions/architecture/dmtools_core_scope.md',
+            './.dmtools/prompts/development_focus.md'
+        ],
+        bug_rca: [
+            './.dmtools/instructions/architecture/dmtools_core_scope.md'
+        ],
+        pr_review: [
+            './.dmtools/instructions/architecture/dmtools_core_scope.md',
+            './.dmtools/prompts/review_focus.md'
+        ],
+        pr_rework: [
+            './.dmtools/instructions/architecture/dmtools_core_scope.md',
+            './.dmtools/prompts/rework_focus.md'
+        ]
+    },
 
     additionalInstructions: {
         po_refinement: [
