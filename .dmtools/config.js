@@ -17,6 +17,7 @@ module.exports = {
         project: 'DMC',
         parentTicket: 'DMC-101',
         questions: {
+            fetchJql: 'parent = {ticketKey} AND issuetype = Subtask ORDER BY created ASC',
             answerField: 'Answer'
         },
         fields: {
@@ -59,6 +60,11 @@ module.exports = {
         ],
         story_description: [
             './.dmtools/instructions/product/po_domain_knowledge.md',
+            'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story'
+        ],
+        story_acceptance_criteria: [
+            './.dmtools/instructions/product/po_domain_knowledge.md',
+            './agents/instructions/common/investigate_before_answer.md',
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/11665485/Template+Story'
         ],
         story_acceptance_criterias: [
