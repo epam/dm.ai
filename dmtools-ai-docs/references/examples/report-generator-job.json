@@ -1,0 +1,38 @@
+{
+  "name": "ReportGeneratorJob",
+  "params": {
+    "reportName": "weekly-engineering-report",
+    "startDate": "2026-01-01",
+    "endDate": "2026-01-31",
+    "dataSources": [
+      {
+        "name": "tracker",
+        "params": {
+          "jql": "project = DEMO AND status = Done"
+        },
+        "metrics": [
+          {
+            "name": "TicketMovedToStatusRule",
+            "params": {
+              "statuses": [
+                "Done"
+              ],
+              "label": "Delivered"
+            }
+          }
+        ]
+      }
+    ],
+    "timeGrouping": {
+      "type": "monthly"
+    },
+    "aggregation": {
+      "formula": "${Delivered}"
+    },
+    "output": {
+      "mode": "combined",
+      "outputPath": "reports",
+      "visualizer": "default"
+    }
+  }
+}

@@ -63,6 +63,8 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 - [QAProductivityReport](#qaproductivityreport) - QA team productivity metrics
 - [DevProductivityReport](#devproductivityreport) - Development team productivity metrics
 - [BAProductivityReport](#baproductivityreport) - Business Analyst team productivity metrics
+- [ReportGeneratorJob](#reportgeneratorjob) - Build configurable JSON/HTML reports
+- [ReportVisualizerJob](#reportvisualizerjob) - Render report JSON as interactive HTML
 
 ### Project Management
 - [JEstimator](#jestimator) - Estimate story points and effort
@@ -85,6 +87,21 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 ---
 
 ## 🎯 Featured Jobs
+
+### Quick reference for common agent jobs
+
+| Job | Summary | Preferred `name` | Example |
+|-----|---------|------------------|---------|
+| `Teammate` | Orchestrates ticket context, AI instructions, and optional CLI or JS hooks for end-to-end workflow automation. | `Teammate` | [story_development.json](../../../agents/story_development.json) |
+| `JSRunner` | Executes one GraalJS script with DMtools context for isolated automation, debugging, and JS agent testing. | `JSRunner` | [run_all.json](../../../agents/js/unit-tests/run_all.json) |
+| `TestCasesGenerator` | Generates related and net-new test cases from tracker tickets, then creates or posts the configured output. | `TestCasesGenerator` | [test_cases_generator.json](../../../agents/test_cases_generator.json) |
+| `InstructionsGenerator` | Builds reusable implementation instructions from tracker tickets and writes them to Confluence or a local file. | `InstructionsGenerator` | [InstructionsGenerator](#instructionsgenerator) |
+| `DevProductivityReport` | Produces developer productivity metrics from tracker, source control, and optional spreadsheet inputs. | `DevProductivityReport` | [DevProductivityReport](#devproductivityreport) |
+| `BAProductivityReport` | Calculates BA delivery metrics such as created work, field updates, and workflow movement over time. | `BAProductivityReport` | [BAProductivityReport](#baproductivityreport) |
+| `QAProductivityReport` | Calculates QA metrics such as bugs, tests, comments, and key status transitions across releases. | `QAProductivityReport` | [QAProductivityReport](#qaproductivityreport) |
+| `ReportGeneratorJob` | Generates configurable analytics reports as JSON and HTML from tracker, SCM, CSV, or Figma data. | `ReportGeneratorJob` | [report-generator-job.json](../examples/report-generator-job.json) |
+| `ReportVisualizerJob` | Renders a saved JSON report as an interactive HTML dashboard without regenerating report data. | `ReportVisualizerJob` | [report-visualizer-job.json](../examples/report-visualizer-job.json) |
+| `KBProcessingJob` | Runs the knowledge-base pipeline that processes source content and aggregates searchable KB output. | `KBProcessingJob` | [kb-processing-job.json](../examples/kb-processing-job.json) |
 
 ### TestCasesGenerator
 
@@ -949,6 +966,65 @@ dmtools run agents/test/test-postprocess.json
 - One-off data transformations using MCP tools
 
 → **See also**: [JS Agent Testing Guide](../agents/javascript-agents.md#-testing-and-debugging-agents) for dry-run patterns, debug mode, and Node.js unit testing.
+
+---
+
+### ReportGeneratorJob
+
+Generate configurable analytics reports from tracker, SCM, CSV, or Figma data.
+
+**Purpose**: Build JSON output and, when configured, paired HTML reports from reusable metric definitions and time groupings.
+
+**Preferred config name**: `ReportGeneratorJob`
+
+**Legacy alias**: `ReportGenerator` still works for existing configs.
+
+**Usage**:
+```bash
+dmtools run dmtools-ai-docs/references/examples/report-generator-job.json
+```
+
+**Example config**: [report-generator-job.json](../examples/report-generator-job.json)
+
+→ **See also**: [Report Generator Guide](../reporting/report-generation.md)
+
+---
+
+### ReportVisualizerJob
+
+Convert an existing JSON report into interactive HTML without rerunning the full report pipeline.
+
+**Purpose**: Re-render stored report data when you need a refreshed HTML view or a different output file path.
+
+**Preferred config name**: `ReportVisualizerJob`
+
+**Legacy alias**: `ReportVisualizer` still works for existing configs.
+
+**Usage**:
+```bash
+dmtools run dmtools-ai-docs/references/examples/report-visualizer-job.json
+```
+
+**Example config**: [report-visualizer-job.json](../examples/report-visualizer-job.json)
+
+---
+
+### KBProcessingJob
+
+Run the knowledge-base processing pipeline that analyzes source files and aggregates KB artifacts.
+
+**Purpose**: Turn raw source material into structured knowledge-base output for later search, summaries, and question answering.
+
+**Preferred config name**: `KBProcessingJob`
+
+**Legacy alias**: `KBProcessing` still works for existing configs.
+
+**Usage**:
+```bash
+dmtools run dmtools-ai-docs/references/examples/kb-processing-job.json
+```
+
+**Example config**: [kb-processing-job.json](../examples/kb-processing-job.json)
 
 ---
 

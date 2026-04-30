@@ -3,11 +3,16 @@
 
 package com.github.istin.dmtools.job;
 
+import com.github.istin.dmtools.kb.KBProcessingJob;
+import com.github.istin.dmtools.reporting.ReportGeneratorJob;
+import com.github.istin.dmtools.reporting.ReportVisualizerJob;
 import org.junit.Test;
 
+import java.lang.reflect.Method;
 import java.util.Base64;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class JobRunnerTest {
 
@@ -31,6 +36,24 @@ public class JobRunnerTest {
         byte[] encodedBytes = Base64.getEncoder().encode(input.getBytes());
         String encoded = new String(encodedBytes);
         assertEquals(expected, encoded);
+    }
+
+    @Test
+    public void testCreateJobInstanceAcceptsExactAndLegacyReportNames() throws Exception {
+        assertTrue(invokeCreateJobInstance("ReportGenerator") instanceof ReportGeneratorJob);
+        assertTrue(invokeCreateJobInstance("ReportGeneratorJob") instanceof ReportGeneratorJob);
+
+        assertTrue(invokeCreateJobInstance("ReportVisualizer") instanceof ReportVisualizerJob);
+        assertTrue(invokeCreateJobInstance("ReportVisualizerJob") instanceof ReportVisualizerJob);
+
+        assertTrue(invokeCreateJobInstance("KBProcessing") instanceof KBProcessingJob);
+        assertTrue(invokeCreateJobInstance("KBProcessingJob") instanceof KBProcessingJob);
+    }
+
+    private Object invokeCreateJobInstance(String jobName) throws Exception {
+        Method method = JobRunner.class.getDeclaredMethod("createJobInstance", String.class);
+        method.setAccessible(true);
+        return method.invoke(null, jobName);
     }
 
 }

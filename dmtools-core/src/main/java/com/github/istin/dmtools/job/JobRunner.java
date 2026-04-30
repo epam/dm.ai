@@ -71,8 +71,10 @@ public class JobRunner {
             case "baproductivityreport": return new BAProductivityReport();
             case "businessanalyticdorgeneration": return new BusinessAnalyticDORGeneration();
             case "qaproductivityreport": return new QAProductivityReport();
-            case "reportgenerator": return new ReportGeneratorJob();
-            case "reportvisualizer": return new com.github.istin.dmtools.reporting.ReportVisualizerJob();
+            case "reportgenerator":
+            case "reportgeneratorjob": return new ReportGeneratorJob();
+            case "reportvisualizer":
+            case "reportvisualizerjob": return new com.github.istin.dmtools.reporting.ReportVisualizerJob();
             case "scrummasterdaily": return new ScrumMasterDaily();
             case "expert": return new Expert();
             case "teammate": return new Teammate();
@@ -82,7 +84,8 @@ public class JobRunner {
             case "unittestsgenerator": return new UnitTestsGenerator();
             case "commitstriage": return new CommitsTriage();
             case "jsrunner": return new JSRunner();
-            case "kbprocessing": return new KBProcessingJob();
+            case "kbprocessing":
+            case "kbprocessingjob": return new KBProcessingJob();
             default: return null;
         }
     }

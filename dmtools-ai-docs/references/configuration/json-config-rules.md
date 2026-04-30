@@ -92,8 +92,13 @@ The `"name"` field in JSON configuration **MUST** exactly match the Java Job cla
 | `RequirementsCollector` | Collect requirements |
 | `UserStoryGenerator` | Generate user stories |
 | `JSRunner` | Run JavaScript agents |
+| `ReportGeneratorJob` | Generate configurable analytics reports |
+| `ReportVisualizerJob` | Render report JSON as HTML |
+| `KBProcessingJob` | Process knowledge-base content |
 
 **Important**: Run `dmtools --list-jobs` to see all available job names.
+
+**Backward-compatible aliases**: `ReportGenerator`, `ReportVisualizer`, and `KBProcessing` are still accepted for existing configs.
 
 ## Configuration Structure
 

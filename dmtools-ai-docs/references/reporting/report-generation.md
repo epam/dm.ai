@@ -1,25 +1,25 @@
 # Report Generator Skill Guide
 
-This guide explains how to generate DMtools reports, which data sources and metrics you can use, and how to tune formulas, scores, and output. All examples below are taken from `agents/reports/dmc_report.json`.
+This guide explains how to generate DMtools reports, which data sources and metrics you can use, and how to tune formulas, scores, and output. The example config for this guide lives at `dmtools-ai-docs/references/examples/report-generator-job.json`.
 
 **Quick Start**
 
-1. Create or edit a report config file like `agents/reports/dmc_report.json`.
+1. Create or edit a report config file like `dmtools-ai-docs/references/examples/report-generator-job.json`.
 2. Run the report:
 
 ```bash
-dmtools run agents/reports/dmc_report.json
+dmtools run dmtools-ai-docs/references/examples/report-generator-job.json
 ```
 
 3. Find the output in the configured `outputPath` (HTML and JSON).
 
 **Report Config Structure**
 
-The report is a job config with `"name": "ReportGenerator"` and a `params` object.
+The report is a job config with `"name": "ReportGeneratorJob"` and a `params` object. Legacy configs that still use `"ReportGenerator"` remain supported.
 
 ```json
 {
-  "name": "ReportGenerator",
+  "name": "ReportGeneratorJob",
   "params": {
     "reportName": "My Code Contribution Report",
     "startDate": "2024-03-01",
@@ -63,7 +63,7 @@ Use `aliases` to merge multiple names into a single person and map bots.
 
 **Data Sources**
 
-Supported data sources in `dmc_report.json`:
+Supported data sources in the example config:
 
 - `tracker`: Jira/ADO tracker data via JQL.
 - `pullRequests`: Pull requests from GitHub, GitLab, or Bitbucket (via `sourceType`).
@@ -255,7 +255,7 @@ Common metric parameters:
 
 **Tracker Rules**
 
-From `dmc_report.json`:
+Example snippet:
 
 - `TicketMovedToStatusRule`
 - `TicketCreatorsRule`
@@ -333,7 +333,7 @@ Examples:
 
 **Pull Request Metrics**
 
-From `dmc_report.json`:
+Example snippet:
 
 - `PullRequestsMetricSource`
 - `PullRequestsMergedByMetricSource`
@@ -356,7 +356,7 @@ Example:
 
 **Commit Metrics**
 
-From `dmc_report.json`:
+Example snippet:
 
 - `CommitsMetricSource`
 - `LinesOfCodeMetricSource`
@@ -571,7 +571,8 @@ Multiple time groupings can be generated in a single run.
 
 **Where To Start**
 
-Use the existing config as a template:
+Use the example config as a template:
 
-- `agents/reports/dmc_report.json`
-- `agents/reports/aggregation_formula.js`
+- `dmtools-ai-docs/references/examples/report-generator-job.json`
+- [ReportGeneratorJob quick reference](../jobs/README.md#reportgeneratorjob)
+- [ReportVisualizerJob quick reference](../jobs/README.md#reportvisualizerjob)
