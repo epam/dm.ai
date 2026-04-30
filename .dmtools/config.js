@@ -16,6 +16,9 @@ module.exports = {
     jira: {
         project: 'DMC',
         parentTicket: 'DMC-101',
+        questions: {
+            answerField: 'Answer'
+        },
         fields: {
             acceptanceCriteria: 'Acceptance Criteria'
         }

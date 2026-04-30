@@ -52,11 +52,11 @@ jobs:
           submodules: true
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Set up Java 17
+      - name: Set up Java 23
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '23'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -100,9 +100,20 @@ jobs:
         run: |
           npx @github/copilot --version || echo "Copilot CLI verification - will be available with token"
 
-      - name: Install DMTools CLI from current repo
+      - name: Validate Copilot model
+        if: vars.AI_AGENT_PROVIDER == 'copilot'
+        env:
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
         run: |
-          bash install.sh
+          if [ -z "${COPILOT_MODEL}" ]; then
+            echo "::error::COPILOT_MODEL repository variable must be set for copilot provider"
+            exit 1
+          fi
+          echo "Using Copilot model: ${COPILOT_MODEL}"
+
+      - name: Install DMTools CLI v1.7.179
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/v1.7.179/install.sh | bash -s v1.7.179
 
       - name: Add DMTools to PATH
         run: echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
@@ -164,7 +175,7 @@ jobs:
 
           # GitHub Copilot CLI Authentication
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.PAT_TOKEN }}
-          COPILOT_MODEL: ${{ vars.COPILOT_MODEL || 'gpt-5-mini' }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
 
           # AI Agent Provider
           AI_AGENT_PROVIDER: ${{ vars.AI_AGENT_PROVIDER }}
