@@ -16,9 +16,6 @@ module.exports = {
     jira: {
         project: 'DMC',
         parentTicket: 'DMC-101',
-        questions: {
-            answerField: 'customfield_10330'
-        },
         fields: {
             acceptanceCriteria: 'Acceptance Criteria'
         }
