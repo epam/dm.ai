@@ -17,6 +17,7 @@ module.exports = {
         project: 'DMC',
         parentTicket: 'DMC-101',
         questions: {
+            fetchJql: 'parent = {ticketKey} AND issuetype = Subtask ORDER BY created ASC',
             answerField: 'Answer'
         },
         fields: {
