@@ -15,11 +15,11 @@ dmtools run dmtools-ai-docs/references/examples/report-generator-job.json
 
 **Report Config Structure**
 
-The report is a job config with `"name": "ReportGeneratorJob"` and a `params` object. Legacy configs that still use `"ReportGenerator"` remain supported.
+The report is a job config with `"name": "ReportGenerator"` and a `params` object. The exact class name `"ReportGeneratorJob"` is also supported.
 
 ```json
 {
-  "name": "ReportGeneratorJob",
+  "name": "ReportGenerator",
   "params": {
     "reportName": "My Code Contribution Report",
     "startDate": "2024-03-01",
@@ -574,5 +574,5 @@ Multiple time groupings can be generated in a single run.
 Use the example config as a template:
 
 - `dmtools-ai-docs/references/examples/report-generator-job.json`
-- [ReportGeneratorJob quick reference](../jobs/README.md#reportgeneratorjob)
-- [ReportVisualizerJob quick reference](../jobs/README.md#reportvisualizerjob)
+- [ReportGenerator quick reference](../jobs/README.md#reportgenerator)
+- [ReportVisualizer quick reference](../jobs/README.md#reportvisualizer)

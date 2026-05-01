@@ -77,8 +77,8 @@ The `"name"` field in JSON configuration **MUST** exactly match the Java Job cla
 
 ### Valid Job Names
 
-| Job Name (use exactly as shown) | Purpose |
-|----------------------------------|---------|
+| Accepted job `name` | Purpose |
+|---------------------|---------|
 | `TestCasesGenerator` | Generate test cases from stories |
 | `Teammate` | AI teammate for ticket analysis |
 | `Expert` | Domain expert Q&A |
@@ -92,13 +92,11 @@ The `"name"` field in JSON configuration **MUST** exactly match the Java Job cla
 | `RequirementsCollector` | Collect requirements |
 | `UserStoryGenerator` | Generate user stories |
 | `JSRunner` | Run JavaScript agents |
-| `ReportGeneratorJob` | Generate configurable analytics reports |
-| `ReportVisualizerJob` | Render report JSON as HTML |
-| `KBProcessingJob` | Process knowledge-base content |
+| `ReportGenerator` / `ReportGeneratorJob` | Generate configurable analytics reports |
+| `ReportVisualizer` / `ReportVisualizerJob` | Render report JSON as HTML |
+| `KBProcessingJob` / `KBProcessing` | Process knowledge-base content |
 
-**Important**: Run `dmtools --list-jobs` to see all available job names.
-
-**Backward-compatible aliases**: `ReportGenerator`, `ReportVisualizer`, and `KBProcessing` are still accepted for existing configs.
+**Important**: Run `dmtools --list-jobs` to see the CLI-facing class names. Report and KB configs also accept the alternate names shown above.
 
 ## Configuration Structure
 
@@ -115,7 +113,7 @@ The `"name"` field in JSON configuration **MUST** exactly match the Java Job cla
 
 ### Required Fields
 
-1. **name** (string, required) - Exact Java Job class name
+1. **name** (string, required) - Supported job identifier (usually the Java Job class name)
 2. **params** (object, required) - Job parameters
 
 ### Common Parameters

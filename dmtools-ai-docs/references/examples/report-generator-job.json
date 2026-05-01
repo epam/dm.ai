@@ -1,5 +1,5 @@
 {
-  "name": "ReportGeneratorJob",
+  "name": "ReportGenerator",
   "params": {
     "reportName": "weekly-engineering-report",
     "startDate": "2026-01-01",

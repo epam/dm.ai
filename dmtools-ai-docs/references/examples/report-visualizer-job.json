@@ -1,5 +1,5 @@
 {
-  "name": "ReportVisualizerJob",
+  "name": "ReportVisualizer",
   "params": {
     "jsonReportPath": "reports/weekly-engineering-report.json",
     "outputHtmlPath": "reports/weekly-engineering-report.html"
