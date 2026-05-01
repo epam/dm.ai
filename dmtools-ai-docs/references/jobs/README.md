@@ -232,11 +232,11 @@ dmtools InstructionsGenerator --inputJql "project = QA AND type = Test" \
   --outputDestination "confluence" \
   --outputPath "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Test+Guidelines"
 
-# Use configuration file
-dmtools run agents/instructions_generator.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/instructions-generator-job.json
 ```
 
-**Configuration** (`agents/instructions_generator_dmc.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/instructions-generator-job.json`):
 
 **IMPORTANT**: The `"name"` field must exactly match the Job class name. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -320,13 +320,13 @@ Generated instructions typically include:
 **Example Workflow**:
 ```bash
 # Step 1: Generate initial instructions from 50 best stories
-dmtools run agents/instructions_generator.json
+dmtools run dmtools-ai-docs/references/examples/instructions-generator-job.json
 
 # Step 2: Review and manually refine the generated instructions
 
 # Step 3: Update instructions as project evolves (merges with existing)
 # Edit config: "mergeWithExisting": true
-dmtools run agents/instructions_generator.json
+dmtools run dmtools-ai-docs/references/examples/instructions-generator-job.json
 ```
 
 **Integration with Confluence**:
@@ -595,11 +595,11 @@ Generate productivity reports for QA team showing test cases created, bugs found
 # Generate QA productivity report
 dmtools QAProductivityReport --start_date "01.01.2026" --inputJql "project = QA"
 
-# Use configuration file
-dmtools run reports/qa_productivity.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/qa-productivity-report.json
 ```
 
-**Configuration** (`reports/qa_productivity.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/qa-productivity-report.json`):
 
 **IMPORTANT**: The `"name"` field must be exactly `"QAProductivityReport"`. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -617,8 +617,8 @@ dmtools run reports/qa_productivity.json
     "statuses_in_testing": ["In Testing", "Testing"],
     "statuses_in_development": ["In Progress", "In Review"],
     "ignore_ticket_prefixes": ["[DRAFT]", "[POC]"],
-    "formula": "reports/qa_productivity_formula.js",
-    "employees": "reports/qa_team.json",
+    "formula": "dmtools-ai-docs/references/examples/qa-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/qa-team.json",
     "comments_regex": ".*tested.*|.*verified.*"
   }
 }
@@ -659,25 +659,23 @@ dmtools run reports/qa_productivity.json
 
 **Output**: HTML report file with metrics grouped by employee and time period (weeks by default).
 
-**Employee File Format** (`reports/qa_team.json`):
+**Employee File Format** (`dmtools-ai-docs/references/examples/qa-team.json`):
 ```json
-{
-  "testers": [
-    {
-      "name": "John Doe",
-      "jiraName": "john.doe",
-      "email": "john.doe@company.com"
-    },
-    {
-      "name": "Jane Smith",
-      "jiraName": "jane.smith",
-      "email": "jane.smith@company.com"
-    }
-  ]
-}
+[
+  {
+    "Employee": "Jane Smith",
+    "Role": "Tester",
+    "Level": "A3"
+  },
+  {
+    "Employee": "John Doe",
+    "Role": "Tester",
+    "Level": "B1"
+  }
+]
 ```
 
-**Formula File** (`reports/qa_productivity_formula.js`):
+**Formula File** (`dmtools-ai-docs/references/examples/qa-productivity-formula.js`):
 ```javascript
 // Custom productivity calculation
 function calculate(metrics) {
@@ -702,11 +700,11 @@ Generate productivity reports for Development team showing stories/bugs moved to
 # Generate Dev productivity report
 dmtools DevProductivityReport --start_date "01.01.2026" --inputJql "project = DEV"
 
-# Use configuration file
-dmtools run reports/dev_productivity.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/dev-productivity-report.json
 ```
 
-**Configuration** (`reports/dev_productivity.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/dev-productivity-report.json`):
 
 **IMPORTANT**: The `"name"` field must be exactly `"DevProductivityReport"`. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -732,8 +730,8 @@ dmtools run reports/dev_productivity.json
         "branch": "main"
       }
     ],
-    "formula": "reports/dev_productivity_formula.js",
-    "employees": "reports/dev_team.json",
+    "formula": "dmtools-ai-docs/references/examples/dev-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/dev-team.json",
     "ignore_ticket_prefixes": ["[SPIKE]", "[RESEARCH]"],
     "comment_regex_responsible": "Implemented by:\\s+(\\w+)"
   }
@@ -801,11 +799,11 @@ Generate productivity reports for Business Analyst team showing features/stories
 # Generate BA productivity report
 dmtools BAProductivityReport --start_date "01.01.2026" --inputJql "project = BA"
 
-# Use configuration file
-dmtools run reports/ba_productivity.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/ba-productivity-report.json
 ```
 
-**Configuration** (`reports/ba_productivity.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/ba-productivity-report.json`):
 
 **IMPORTANT**: The `"name"` field must be exactly `"BAProductivityReport"`. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -825,8 +823,8 @@ dmtools run reports/ba_productivity.json
       "https://www.figma.com/file/abc123/Product-Design",
       "https://www.figma.com/file/xyz789/UX-Mockups"
     ],
-    "formula": "reports/ba_productivity_formula.js",
-    "employees": "reports/ba_team.json",
+    "formula": "dmtools-ai-docs/references/examples/ba-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/ba-team.json",
     "ignore_ticket_prefixes": ["[TEMPLATE]", "[EXAMPLE]"]
   }
 }
@@ -858,24 +856,20 @@ When `figma_files` is provided, the report includes comments posted by BAs in Fi
 
 **Output**: HTML report file with BA metrics grouped by employee and time period (weeks).
 
-**Employee File Format** (`reports/ba_team.json`):
+**Employee File Format** (`dmtools-ai-docs/references/examples/ba-team.json`):
 ```json
-{
-  "businessAnalysts": [
-    {
-      "name": "Alice Johnson",
-      "jiraName": "alice.johnson",
-      "email": "alice.johnson@company.com",
-      "figmaEmail": "alice.johnson@company.com"
-    },
-    {
-      "name": "Bob Williams",
-      "jiraName": "bob.williams",
-      "email": "bob.williams@company.com",
-      "figmaEmail": "bob.williams@company.com"
-    }
-  ]
-}
+[
+  {
+    "Employee": "Jane Smith",
+    "Role": "Business Analyst",
+    "Level": "A3"
+  },
+  {
+    "Employee": "John Doe",
+    "Role": "Business Analyst",
+    "Level": "B1"
+  }
+]
 ```
 
 **Use Cases**:

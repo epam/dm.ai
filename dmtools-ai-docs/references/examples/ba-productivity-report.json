@@ -1,0 +1,23 @@
+{
+  "name": "BAProductivityReport",
+  "params": {
+    "start_date": "01.01.2026",
+    "inputJql": "project = BA AND issuetype in (Feature, Story, Task)",
+    "report_name": "ba_team_report",
+    "is_weight": true,
+    "feature_project_code": "BA",
+    "story_project_code": "BA",
+    "statuses_done": [
+      "Done",
+      "Closed",
+      "Resolved"
+    ],
+    "statuses_in_progress": [
+      "In Progress",
+      "Analysis",
+      "Review"
+    ],
+    "formula": "dmtools-ai-docs/references/examples/ba-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/ba-team.json"
+  }
+}
