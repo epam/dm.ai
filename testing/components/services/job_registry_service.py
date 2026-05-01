@@ -1,15 +1,10 @@
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass(frozen=True)
-class JobRegistration:
-    aliases: tuple[str, ...]
-    class_name: str
+from testing.core.interfaces.job_registry import JobRegistration, JobRegistry
 
 
-class JobRegistryService:
+class JobRegistryService(JobRegistry):
     _CASE_BLOCK_PATTERN = re.compile(
         r'((?:case\s+"[^"]+":\s*)+)return new ([\w\.]+)\(\);',
         re.MULTILINE,

@@ -1,17 +1,11 @@
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass(frozen=True)
-class DocumentationRow:
-    job: str
-    accepted_names: tuple[str, ...]
-    example_path: Path
+from testing.core.interfaces.documentation_audit import DocumentationAudit, DocumentationRow
 
 
-class DocumentationAuditService:
+class DocumentationAuditService(DocumentationAudit):
     _JSON_NAME_PATTERN = re.compile(r'"name"\s*:\s*"([^"]+)"')
     _TARGET_ROWS = {
         "Teammate": "Teammate",
@@ -66,8 +60,7 @@ class DocumentationAuditService:
         row_key = self._TARGET_ROWS[canonical_name]
         return self._rows[row_key]
 
-    @staticmethod
-    def read_job_name_from_example(example_path: Path) -> str:
+    def read_job_name_from_example(self, example_path: Path) -> str:
         return json.loads(example_path.read_text(encoding="utf-8"))["name"]
 
     def find_inexact_name_field_mentions(

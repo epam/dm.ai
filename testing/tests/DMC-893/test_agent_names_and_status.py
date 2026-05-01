@@ -8,13 +8,17 @@ REPOSITORY_ROOT = TESTING_ROOT.parent
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from testing.components.services.documentation_audit_service import DocumentationAuditService
-from testing.components.services.job_registry_service import JobRegistryService
 from testing.core.config.repository_paths import (
     DMTOOLS_AI_DOCS_ROOT,
     JOB_RUNNER_PATH,
     TEAMMATE_CONFIGS_DOC_PATH,
 )
+from testing.core.factories.repository_audit_factory import (
+    create_documentation_audit,
+    create_job_registry,
+)
+from testing.core.interfaces.documentation_audit import DocumentationAudit
+from testing.core.interfaces.job_registry import JobRegistry
 
 
 class AgentNamesAndStatusAuditTest(unittest.TestCase):
@@ -31,10 +35,13 @@ class AgentNamesAndStatusAuditTest(unittest.TestCase):
         "KBProcessingJob",
     ]
 
+    registry: JobRegistry
+    docs: DocumentationAudit
+
     @classmethod
     def setUpClass(cls) -> None:
-        cls.registry = JobRegistryService(JOB_RUNNER_PATH)
-        cls.docs = DocumentationAuditService(TEAMMATE_CONFIGS_DOC_PATH, DMTOOLS_AI_DOCS_ROOT)
+        cls.registry = create_job_registry(JOB_RUNNER_PATH)
+        cls.docs = create_documentation_audit(TEAMMATE_CONFIGS_DOC_PATH, DMTOOLS_AI_DOCS_ROOT)
 
     def test_audited_jobs_are_registered_and_listed(self) -> None:
         missing_from_factory = sorted(
