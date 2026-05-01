@@ -325,4 +325,4 @@ Common configuration issues:
 
 ---
 
-*Need help? Check integration-specific guides or report issues at [github.com/IstiN/dmtools/issues](https://github.com/IstiN/dmtools/issues)*
+*Need help? Check integration-specific guides or report issues at [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)*
