@@ -31,9 +31,12 @@ curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh |
 
 ### Upgrading from legacy installs
 
-1. Replace any `IstiN/dmtools` or `raw.githubusercontent.com/.../main/install.sh` bootstrap commands with `https://github.com/epam/dm.ai/releases/latest/download/install.sh`.
-2. Remove stale aliases or wrapper scripts that bypass `~/.dmtools/bin/dmtools` before reinstalling.
-3. If a CI job caches `~/.dmtools`, update the cache key when switching away from legacy install URLs.
+1. Back up `~/.dmtools` before starting so you can restore the current installation, local cache, and wrapper scripts if the migration needs to be rolled back.
+2. Replace any `IstiN/dmtools` or `raw.githubusercontent.com/.../main/install.sh` bootstrap commands with `https://github.com/epam/dm.ai/releases/latest/download/install.sh` so the install points to the EPAM release asset path.
+3. Preserve or merge your existing `dmtools.env`, `dmtools-local.env`, and other local configuration files instead of replacing them blindly during reinstall.
+4. Remove stale aliases, wrapper scripts, or PATH entries that bypass `~/.dmtools/bin/dmtools`, and confirm `which dmtools` / `Get-Command dmtools` resolve to the new install.
+5. Verify the migrated installation with `dmtools --version` and `dmtools list`, and update CI cache keys that still reference legacy install URLs.
+6. If anything fails, roll back by restoring the backup copy of `~/.dmtools` and reactivating the previous wrapper or PATH configuration.
 
 ### Method 2: Local Development Installation
 
