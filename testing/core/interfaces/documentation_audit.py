@@ -30,5 +30,5 @@ class DocumentationAudit(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def find_deprecated_mentions(self, canonical_names: list[str]) -> list[str]:
+    def find_deprecated_mentions(self, identifiers: list[str]) -> list[str]:
         raise NotImplementedError

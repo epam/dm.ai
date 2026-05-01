@@ -88,7 +88,7 @@ class DocumentationAuditService(DocumentationAudit):
                 )
         return hits
 
-    def find_deprecated_mentions(self, canonical_names: list[str]) -> list[str]:
+    def find_deprecated_mentions(self, identifiers: list[str]) -> list[str]:
         patterns = [
             lambda name: re.compile(rf"~~\s*`?{re.escape(name)}`?\s*~~"),
             lambda name: re.compile(rf"\bdeprecated\b[^\n]*`?{re.escape(name)}`?", re.IGNORECASE),
@@ -98,7 +98,7 @@ class DocumentationAuditService(DocumentationAudit):
         hits: list[str] = []
         for doc_path in self._docs_root.rglob("*.md"):
             text = doc_path.read_text(encoding="utf-8")
-            for name in canonical_names:
+            for name in identifiers:
                 for factory in patterns:
                     match = factory(name).search(text)
                     if match:

@@ -74,8 +74,19 @@ class AgentNamesAndStatusAuditTest(unittest.TestCase):
         self.assertEqual([], invalid_examples, f"Example configs do not resolve to audited jobs: {invalid_examples}")
 
     def test_active_audited_jobs_are_not_marked_deprecated(self) -> None:
-        deprecated_mentions = self.docs.find_deprecated_mentions(self.AUDITED_NAMES)
-        self.assertEqual([], deprecated_mentions, f"Audited active jobs marked deprecated: {deprecated_mentions}")
+        audited_identifiers = sorted(
+            {
+                accepted_name
+                for canonical_name in self.AUDITED_NAMES
+                for accepted_name in self.docs.get_row_for_canonical_name(canonical_name).accepted_names
+            }
+        )
+        deprecated_mentions = self.docs.find_deprecated_mentions(audited_identifiers)
+        self.assertEqual(
+            [],
+            deprecated_mentions,
+            f"Audited active identifiers marked deprecated: {deprecated_mentions}",
+        )
 
     def test_documented_name_fields_use_exact_registered_identifiers(self) -> None:
         audited_inputs = {
