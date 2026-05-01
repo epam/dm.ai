@@ -1,39 +1,38 @@
 # DMTools
 Delivery Management Tools
 
-[![Latest Release](https://img.shields.io/github/v/release/IstiN/dmtools?label=latest%20version)](https://github.com/IstiN/dmtools/releases/latest) [![codecov](https://codecov.io/gh/IstiN/dmtools/branch/main/graph/badge.svg)](https://codecov.io/gh/IstiN/dmtools) [![](https://jitpack.io/v/IstiN/dmtools.svg)](https://jitpack.io/#IstiN/dmtools)
+[![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest) [![codecov](https://codecov.io/gh/epam/dm.ai/branch/main/graph/badge.svg)](https://codecov.io/gh/epam/dm.ai) [![](https://jitpack.io/v/epam/dm.ai.svg)](https://jitpack.io/#epam/dm.ai)
 
-> 🚀 **Latest DMTools release: [v1.7.157](https://github.com/IstiN/dmtools/releases/tag/v1.7.157)** — used by the AI Teammate workflows in this repository.
+> 🚀 **Latest DMTools release: [v1.7.179](https://github.com/epam/dm.ai/releases/tag/v1.7.179)** — installer assets are published under `https://github.com/epam/dm.ai/releases/latest/download/`.
 
 ---
 
 ## 📚 Documentation
 
-**Complete documentation is available in the [docs/](docs/) folder:**
+**Complete documentation is available in [dmtools-ai-docs/](dmtools-ai-docs/):**
 
 ### Quick Links
-- 🚀 **[Getting Started](docs/getting-started/)** - Install, configure, and run your first commands
-  - [Installation Guide](docs/getting-started/installation.md)
-  - [Configuration Guide](docs/getting-started/configuration.md)
-  - [First Steps](docs/getting-started/first-steps.md)
+- 🚀 **[Getting Started](dmtools-ai-docs/references/installation/README.md)** - Install, configure, and run your first commands
+  - [Installation Guide](dmtools-ai-docs/references/installation/README.md)
+  - [Configuration Guide](dmtools-ai-docs/references/configuration/README.md)
+  - [Examples](dmtools-ai-docs/references/examples/)
 
-- 💻 **[CLI Usage](docs/cli-usage/)** - Command-line interface guide
-  - [MCP Tools Reference](docs/cli-usage/mcp-tools.md) - 67 built-in tools
+- 💻 **[CLI Usage](dmtools-ai-docs/references/mcp-tools/README.md)** - Command-line interface guide
+  - [MCP Tools Reference](dmtools-ai-docs/references/mcp-tools/README.md) - 67+ built-in tools
 
-- ⚙️ **[Jobs (JobRunner)](docs/jobs/)** - 20 automation jobs
-  - [Business Analysis Jobs](docs/jobs/business-analysis/)
-  - [Development Jobs](docs/jobs/development/)
-  - [QA Jobs](docs/jobs/qa/)
-  - [Reporting Jobs](docs/jobs/reports/)
+- ⚙️ **[Jobs (JobRunner)](dmtools-ai-docs/references/jobs/README.md)** - 20+ automation jobs
+  - [Job Reference](dmtools-ai-docs/references/jobs/README.md)
+  - [Workflows](dmtools-ai-docs/references/workflows/)
+  - [Reporting](dmtools-ai-docs/references/reporting/)
 
-- 🤖 **[AI Teammate Workflows](docs/ai-teammate/)** - GitHub Actions automation
-  - [Overview](docs/ai-teammate/README.md)
-  - [JavaScript Actions](docs/ai-teammate/javascript-actions.md)
-  - [Agent Configuration](docs/ai-teammate/agent-configuration.md)
+- 🤖 **[AI Teammate Workflows](dmtools-ai-docs/references/workflows/github-actions-teammate.md)** - GitHub Actions automation
+  - [GitHub Actions Teammate](dmtools-ai-docs/references/workflows/github-actions-teammate.md)
+  - [Examples](dmtools-ai-docs/references/examples/)
+  - [Agent Skill Guide](dmtools-ai-docs/SKILL.md)
 
-- 🔌 **[Integrations](docs/integrations/)** - Connect to Jira, Confluence, Figma, GitHub, etc.
+- 🔌 **[Integrations](dmtools-ai-docs/references/configuration/integrations/)** - Connect to Jira, Confluence, Figma, GitHub, etc.
 
-- 📖 **[Complete Documentation Index](docs/README.md)**
+- 📖 **[Complete Documentation Index](dmtools-ai-docs/README.md)**
 
 ---
 
@@ -41,28 +40,28 @@ Delivery Management Tools
 
 ### Installation
 
-**Latest Version:** ![Latest Release](https://img.shields.io/github/v/release/IstiN/dmtools?label=)
+**Latest Version:** ![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=)
 
 **macOS / Linux / Git Bash:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
 ```
 
 **Windows (cmd.exe, PowerShell, Windows Terminal):**
 ```cmd
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
 ```
 
-**Specific Version (e.g., v1.7.126):**
+**Specific Version (e.g., v1.7.179):**
 
 **macOS / Linux / Git Bash:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.126/install.sh | bash -s v1.7.126
+curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install | bash -s -- v1.7.179
 ```
 
 **Windows:**
 ```cmd
-set DMTOOLS_VERSION=v1.7.126 && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.126/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+set DMTOOLS_VERSION=v1.7.179 && curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
 ```
 
 **Verify installation:**
@@ -71,7 +70,13 @@ dmtools --version
 dmtools list
 ```
 
-See [INSTALL_INSTRUCTIONS.md](INSTALL_INSTRUCTIONS.md) for detailed installation guide and troubleshooting.
+See the [installation guide](dmtools-ai-docs/references/installation/README.md) and [troubleshooting guide](dmtools-ai-docs/references/installation/troubleshooting.md) for details.
+
+### Upgrading from legacy installs
+
+1. Re-run the installer from `https://github.com/epam/dm.ai/releases/latest/download/install` (or `install.bat` / `install.ps1` on Windows) to replace wrappers that still point to `IstiN/dmtools` or raw GitHub URLs.
+2. If `which dmtools` or `Get-Command dmtools` resolves outside `~/.dmtools/bin`, remove stale aliases and wrapper scripts from your shell profile or old CI bootstrap steps.
+3. For CI caches, refresh any keys tied to legacy install URLs after switching to the release asset path.
 
 ### Configuration
 
@@ -101,18 +106,18 @@ dmtools jira_search_by_jql "project = PROJ AND status = Open" "summary,status"
 dmtools list
 ```
 
-See **[First Steps Guide](docs/getting-started/first-steps.md)** for more examples.
+See the [examples reference](dmtools-ai-docs/references/examples/) for more usage patterns.
 
 ---
 
 ## Simple Run (Legacy)
-1. Download the release from: [DMTools Releases](https://github.com/IstiN/dmtools/releases)
+1. Download the release from: [DMTools Releases](https://github.com/epam/dm.ai/releases)
 2. Set environment variables.
 3. Run the command:
    ```bash
    java -cp dmtools.jar com.github.istin.dmtools.job.UrlEncodedJobTrigger "$JOB_PARAMS"
    ```
-   API of base64 encoded `JOB_PARAMS`: [API Description](https://github.com/IstiN/dmtools/blob/main/api_description.md)
+   `JOB_PARAMS` is a Base64-encoded payload accepted by `UrlEncodedJobTrigger`.
 
 ---
 
@@ -135,7 +140,7 @@ For complete OAuth2 setup instructions including:
 - ✅ **GitHub Actions** with secrets management
 - ✅ **Security configuration** and troubleshooting
 
-📖 **See the comprehensive guide**: [oauth-setup.md](docs/deployment/oauth-setup.md)
+📖 **OAuth2 deployment notes are maintained with the server configuration in this repository.**
 
 ### Live Application
 - **Production**: https://ai-native.cloud
