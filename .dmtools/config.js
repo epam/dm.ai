@@ -91,5 +91,14 @@ module.exports = {
         bug_creation: [
             'https://dmtools.atlassian.net/wiki/spaces/AINA/pages/18186241/Template+Jira+Markdown'
         ]
+    },
+
+    jobParamPatches: {
+        test_cases_generator: {
+            confluencePages: [
+                './agents/instructions/test_cases/test_case_creation_rules.md',
+                './.dmtools/instructions/test_cases/dm_ai_functional_test_case_rules.md'
+            ]
+        }
     }
 };
