@@ -74,9 +74,12 @@ See the [installation guide](dmtools-ai-docs/references/installation/README.md) 
 
 ### Upgrading from legacy installs
 
-1. Re-run the installer from `https://github.com/epam/dm.ai/releases/latest/download/install.sh` (or `install.bat` / `install.ps1` on Windows) to replace wrappers that still point to `IstiN/dmtools` or raw GitHub URLs.
-2. If `which dmtools` or `Get-Command dmtools` resolves outside `~/.dmtools/bin`, remove stale aliases and wrapper scripts from your shell profile or old CI bootstrap steps.
-3. For CI caches, refresh any keys tied to legacy install URLs after switching to the release asset path.
+1. Back up `~/.dmtools` before changing anything so you can restore the current wrapper, JAR, and local state if the migration goes wrong.
+2. Re-run the installer from `https://github.com/epam/dm.ai/releases/latest/download/install.sh` (or `install.bat` / `install.ps1` on Windows) to replace any `IstiN/dmtools` or raw GitHub bootstrap paths with the EPAM release asset path.
+3. Preserve or merge your existing `dmtools.env`, `dmtools-local.env`, and any other local configuration instead of overwriting them during the reinstall.
+4. If `which dmtools` or `Get-Command dmtools` resolves outside `~/.dmtools/bin`, remove stale aliases, wrapper scripts, and outdated PATH entries from your shell profile or CI bootstrap steps.
+5. Verify the migrated install with `dmtools --version` and `dmtools list`, and refresh CI cache keys that still reference legacy install URLs.
+6. If the migration fails, roll back by restoring the backup copy of `~/.dmtools` and re-enabling the previous wrapper or PATH entry.
 
 ### Deprecated compatibility shims
 
