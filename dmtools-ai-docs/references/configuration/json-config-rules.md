@@ -82,7 +82,7 @@ The `"name"` field in JSON configuration **MUST** exactly match the Java Job cla
 | `TestCasesGenerator` | Generate test cases from stories |
 | `Teammate` | AI teammate for ticket analysis |
 | `Expert` | Domain expert Q&A |
-| `CodeGenerator` | Generate code from stories |
+| `CodeGenerator` | Deprecated compatibility shim. Accepted for one release, logs a warning, and performs no generation. |
 | `UnitTestsGenerator` | Generate unit tests |
 | `DocumentationGenerator` | Generate documentation |
 | `DiagramsCreator` | Create Mermaid diagrams |

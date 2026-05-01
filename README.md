@@ -78,6 +78,10 @@ See the [installation guide](dmtools-ai-docs/references/installation/README.md) 
 2. If `which dmtools` or `Get-Command dmtools` resolves outside `~/.dmtools/bin`, remove stale aliases and wrapper scripts from your shell profile or old CI bootstrap steps.
 3. For CI caches, refresh any keys tied to legacy install URLs after switching to the release asset path.
 
+### Deprecated compatibility shims
+
+- `CodeGenerator` is deprecated and kept only as a compatibility shim for one release. Invocations now log a warning and return a no-op response; migrate affected automation before `v1.8.0`.
+
 ### Configuration
 
 ```bash

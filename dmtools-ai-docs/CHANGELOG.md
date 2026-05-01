@@ -1,3 +1,10 @@
+## [skill-v1.0.28] - 2026-05-01
+
+### Changed
+
+- Marked `CodeGenerator` as a deprecated compatibility shim across job/configuration docs
+- Added migration guidance that the shim is no-op, logs a deprecation warning, and is scheduled for removal before `v1.8.0`
+
 ## [skill-v1.0.27] - 2026-03-26
 
 ### Added
@@ -270,4 +277,3 @@ All notable changes to the DMtools Agent Skill will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
