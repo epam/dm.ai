@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
-from testing.core.config.doc_sync_config import TicketConfig
 from testing.core.utils.repo_sandbox import CommandResult, RepoSandbox
 
 
@@ -19,12 +20,40 @@ class SyncRunResult:
     skill_reference_row: str
 
 
+class AuditedDocumentConfig(Protocol):
+    source_relative_path: str
+    skill_reference_path: str
+    updated_title: str
+    updated_summary: str
+    changelog_marker: str
+
+
+class TicketConfig(Protocol):
+    scripts: tuple[str, ...]
+    audited_document: AuditedDocumentConfig
+
+
+class Sandbox(Protocol):
+    def cleanup(self) -> None: ...
+
+    def read_text(self, relative_path: str) -> str: ...
+
+    def write_text(self, relative_path: str, content: str) -> None: ...
+
+    def run(self, command: str, timeout: int = 1800) -> CommandResult: ...
+
+
 class SkillDocsSyncService:
-    def __init__(self, repository_root: Path) -> None:
+    def __init__(
+        self,
+        repository_root: Path,
+        sandbox_factory: Callable[[Path], Sandbox] = RepoSandbox,
+    ) -> None:
         self.repository_root = repository_root
+        self._sandbox_factory = sandbox_factory
 
     def run(self, ticket_config: TicketConfig) -> SyncRunResult:
-        sandbox = RepoSandbox(self.repository_root)
+        sandbox = self._sandbox_factory(self.repository_root)
         try:
             self._apply_manual_edits(sandbox, ticket_config)
             bootstrap_docs = sandbox.run("./buildInstallLocal.sh")
@@ -51,7 +80,7 @@ class SkillDocsSyncService:
         finally:
             sandbox.cleanup()
 
-    def _apply_manual_edits(self, sandbox: RepoSandbox, ticket_config: TicketConfig) -> None:
+    def _apply_manual_edits(self, sandbox: Sandbox, ticket_config: TicketConfig) -> None:
         audited_document = ticket_config.audited_document
         source_path = audited_document.source_relative_path
         source_text = sandbox.read_text(source_path)

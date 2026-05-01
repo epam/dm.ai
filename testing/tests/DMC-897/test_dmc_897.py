@@ -1,5 +1,6 @@
-from pathlib import Path
 import sys
+from pathlib import Path
+from runpy import run_path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -7,7 +8,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from testing.components.services.skill_docs_sync_service import SkillDocsSyncService
-from testing.core.config.doc_sync_config import DMC_897_CONFIG
+
+
+DMC_897_CONFIG = run_path(str(Path(__file__).with_name("doc_sync_config.py")))["DMC_897_CONFIG"]
 
 
 def test_dmc_897_skill_docs_stay_synchronized() -> None:
@@ -49,3 +52,55 @@ def test_dmc_897_skill_docs_stay_synchronized() -> None:
         )
 
     assert not failures, "\n\n".join(failures)
+
+
+class FakeSandbox:
+    def __init__(self, skill_row: str) -> None:
+        self._files = {
+            "dmtools-ai-docs/references/agents/teammate-configs.md": "# AI Teammate Configuration Guide\n\nOriginal summary.",
+            "dmtools-ai-docs/CHANGELOG.md": "## 1.7.133\n\n### Documentation\n\n- Existing item\n",
+            "dmtools-ai-docs/references/mcp-tools/README.md": "Auto-generated from `dmtools list` on: 2026-05-01",
+            "dmtools-ai-docs/SKILL.md": skill_row,
+        }
+        self.commands: list[str] = []
+        self.cleaned_up = False
+
+    def cleanup(self) -> None:
+        self.cleaned_up = True
+
+    def read_text(self, relative_path: str) -> str:
+        return self._files[relative_path]
+
+    def write_text(self, relative_path: str, content: str) -> None:
+        self._files[relative_path] = content
+
+    def run(self, command: str, timeout: int = 1800):
+        del timeout
+        self.commands.append(command)
+        return type(
+            "CommandResultLike",
+            (),
+            {"command": command, "returncode": 0, "stdout": "", "stderr": "", "combined_output": ""},
+        )()
+
+
+def test_dmc_897_service_accepts_injected_sandbox() -> None:
+    skill_row = (
+        "| | [Audited Teammate Configurations|references/agents/teammate-configs.md] | "
+        "Audited configuration reference for teammate workflow documentation corrections. |"
+    )
+    sandbox = FakeSandbox(skill_row)
+    service = SkillDocsSyncService(REPO_ROOT, sandbox_factory=lambda _: sandbox)
+
+    result = service.run(DMC_897_CONFIG)
+
+    assert sandbox.commands == [
+        "./buildInstallLocal.sh",
+        "./scripts/update-skill-docs.sh",
+        "./scripts/generate-mcp-docs.sh",
+    ]
+    assert result.generated_index_refreshed is True
+    assert result.changelog_mentions_correction is True
+    assert result.skill_reference_title_synced is True
+    assert result.skill_reference_summary_synced is True
+    assert sandbox.cleaned_up is True
