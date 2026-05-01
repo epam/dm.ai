@@ -12,6 +12,7 @@ class DocumentationRow:
 
 
 class DocumentationAuditService:
+    _JSON_NAME_PATTERN = re.compile(r'"name"\s*:\s*"([^"]+)"')
     _TARGET_ROWS = {
         "Teammate": "Teammate",
         "JSRunner": "JSRunner",
@@ -69,6 +70,31 @@ class DocumentationAuditService:
     def read_job_name_from_example(example_path: Path) -> str:
         return json.loads(example_path.read_text(encoding="utf-8"))["name"]
 
+    def find_inexact_name_field_mentions(
+        self,
+        accepted_names: dict[str, str],
+        exact_name_spellings: set[str],
+    ) -> list[str]:
+        hits: list[str] = []
+        for doc_path in self._docs_root.rglob("*.md"):
+            text = doc_path.read_text(encoding="utf-8")
+            for match in self._JSON_NAME_PATTERN.finditer(text):
+                documented_name = match.group(1)
+                if documented_name in exact_name_spellings:
+                    continue
+                canonical_name = accepted_names.get(documented_name.lower())
+                if canonical_name is None:
+                    continue
+                allowed_names = ", ".join(
+                    sorted(name for name in exact_name_spellings if accepted_names.get(name.lower()) == canonical_name)
+                )
+                line = text.count("\n", 0, match.start()) + 1
+                hits.append(
+                    f"{doc_path.relative_to(self._docs_root)}:{line}: "
+                    f"{documented_name!r} should use exact identifier(s): {allowed_names}"
+                )
+        return hits
+
     def find_deprecated_mentions(self, canonical_names: list[str]) -> list[str]:
         patterns = [
             lambda name: re.compile(rf"~~\s*`?{re.escape(name)}`?\s*~~"),
@@ -86,4 +112,3 @@ class DocumentationAuditService:
                         hits.append(f"{doc_path.relative_to(self._docs_root)}: {match.group(0)}")
                         break
         return hits
-

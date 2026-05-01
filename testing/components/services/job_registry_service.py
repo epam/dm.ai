@@ -54,4 +54,3 @@ class JobRegistryService:
     @property
     def listed_job_names(self) -> set[str]:
         return set(self._listed_jobs)
-

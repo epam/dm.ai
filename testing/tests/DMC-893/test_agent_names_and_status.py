@@ -58,7 +58,7 @@ class AgentNamesAndStatusAuditTest(unittest.TestCase):
 
             example_name = self.docs.read_job_name_from_example(row.example_path)
             resolved_name = accepted_inputs.get(example_name.lower())
-            if resolved_name != canonical_name:
+            if example_name not in row.accepted_names or resolved_name != canonical_name:
                 invalid_examples.append(
                     f"{row.example_path.relative_to(REPOSITORY_ROOT)} uses {example_name!r}, resolves to {resolved_name!r}"
                 )
@@ -69,6 +69,23 @@ class AgentNamesAndStatusAuditTest(unittest.TestCase):
     def test_active_audited_jobs_are_not_marked_deprecated(self) -> None:
         deprecated_mentions = self.docs.find_deprecated_mentions(self.AUDITED_NAMES)
         self.assertEqual([], deprecated_mentions, f"Audited active jobs marked deprecated: {deprecated_mentions}")
+
+    def test_documented_name_fields_use_exact_registered_identifiers(self) -> None:
+        audited_inputs = {
+            alias: canonical_name
+            for alias, canonical_name in self.registry.accepted_input_names.items()
+            if canonical_name in self.AUDITED_NAMES
+        }
+        exact_name_spellings = {
+            accepted_name
+            for canonical_name in self.AUDITED_NAMES
+            for accepted_name in self.docs.get_row_for_canonical_name(canonical_name).accepted_names
+        }
+        inexact_mentions = self.docs.find_inexact_name_field_mentions(
+            audited_inputs,
+            exact_name_spellings,
+        )
+        self.assertEqual([], inexact_mentions, f"Docs use non-exact job identifiers in name fields: {inexact_mentions}")
 
 
 if __name__ == "__main__":
