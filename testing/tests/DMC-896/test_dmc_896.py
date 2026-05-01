@@ -10,13 +10,18 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from testing.components.services.skill_summary_audit_service import (  # noqa: E402
     SkillSummaryAuditService,
 )
+from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: E402
+
+
+TEST_DIRECTORY = Path(__file__).resolve().parent
+CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
 
 
 class TestDMC896SkillSummaries(unittest.TestCase):
     def test_skill_descriptions_are_concise_and_technical(self) -> None:
         service = SkillSummaryAuditService(
             repository_root=REPOSITORY_ROOT,
-            skill_roots=["dmtools-ai-docs", "agents/.github/skills"],
+            skill_roots=list(CONFIG.get("skill_roots", [])),
         )
 
         audits = service.audit_all()

@@ -2,7 +2,7 @@
 
 ## What this test covers
 
-This test audits all discoverable `SKILL.md` frontmatter descriptions under the configured skill roots and verifies that each summary:
+This test audits all discoverable `SKILL.md` frontmatter descriptions under the configured ticket scope and verifies that each summary:
 
 - stays within 2 sentences
 - stays within 160 characters
@@ -11,7 +11,7 @@ This test audits all discoverable `SKILL.md` frontmatter descriptions under the 
 
 ## Assumption
 
-The ticket input does not include the explicit list of the "10 audited agents", so the automation treats every discoverable `SKILL.md` description in the configured roots as in scope.
+The ticket input does not include the explicit list of the "10 audited agents", so the automation audits the discoverable `SKILL.md` descriptions under `dmtools-ai-docs`, which is the only repo area named in the preconditions.
 
 ## Install dependencies
 
