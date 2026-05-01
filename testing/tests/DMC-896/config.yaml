@@ -1,0 +1,17 @@
+test_id: DMC-896
+type: content
+framework: unittest
+platform: filesystem
+dependencies: []
+summary_table_path: dmtools-ai-docs/references/agents/teammate-configs.md
+expected_agents:
+  - Teammate
+  - JSRunner
+  - TestCasesGenerator
+  - InstructionsGenerator
+  - DevProductivityReport
+  - BAProductivityReport
+  - QAProductivityReport
+  - ReportGenerator
+  - ReportVisualizer
+  - KBProcessingJob
