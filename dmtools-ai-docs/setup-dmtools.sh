@@ -26,7 +26,7 @@ else
     echo -e "${RED}✗${NC} DMtools is not installed"
     echo ""
     echo "Installing DMtools..."
-    curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+    curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
     if command -v dmtools &> /dev/null; then
         echo -e "${GREEN}✓${NC} DMtools installed successfully"
@@ -166,4 +166,4 @@ echo "  1. Edit dmtools.env and add your credentials"
 echo "  2. Run: dmtools list (to verify configuration)"
 echo "  3. Start using DMtools!"
 echo ""
-echo "Documentation: https://github.com/IstiN/dmtools"
+echo "Documentation: https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs"

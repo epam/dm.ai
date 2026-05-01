@@ -5,7 +5,7 @@
 The fastest way to install DMtools:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
 This script will:
@@ -23,11 +23,17 @@ This script will:
 
 ```bash
 # Latest stable version
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
 # Specific version
-DMTOOLS_VERSION=1.2.3 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
 ```
+
+### Upgrading from legacy installs
+
+1. Replace any `IstiN/dmtools` or `raw.githubusercontent.com/.../main/install.sh` bootstrap commands with `https://github.com/epam/dm.ai/releases/latest/download/install.sh`.
+2. Remove stale aliases or wrapper scripts that bypass `~/.dmtools/bin/dmtools` before reinstalling.
+3. If a CI job caches `~/.dmtools`, update the cache key when switching away from legacy install URLs.
 
 ### Method 2: Local Development Installation
 
@@ -35,8 +41,8 @@ For developers working on DMtools:
 
 ```bash
 # Clone the repository
-git clone https://github.com/IstiN/dmtools.git
-cd dmtools/dmtools-core
+git clone https://github.com/epam/dm.ai.git
+cd dm.ai
 
 # Build and install locally
 ./buildInstallLocal.sh
@@ -51,9 +57,9 @@ cd dmtools/dmtools-core
 
 ```bash
 # Download the JAR directly
-DMTOOLS_VERSION=1.0.8  # Replace with desired version
+DMTOOLS_VERSION=1.7.179  # Replace with desired version
 wget -O ~/.dmtools/dmtools.jar \
-  "https://github.com/IstiN/dmtools/releases/download/v${DMTOOLS_VERSION}/dmtools-v${DMTOOLS_VERSION}-all.jar"
+  "https://github.com/epam/dm.ai/releases/download/v${DMTOOLS_VERSION}/dmtools-v${DMTOOLS_VERSION}-all.jar"
 
 # Create the wrapper script
 cat > ~/bin/dmtools << 'EOF'
@@ -128,7 +134,7 @@ After installation, verify DMtools is working:
 ```bash
 # Check version
 dmtools --version
-# Output: DMtools version v1.0.8 (or your installed version)
+# Output: DMtools version v1.7.179 (or your installed version)
 
 # List all available MCP tools
 dmtools list
@@ -310,7 +316,7 @@ FROM openjdk:17-slim
 
 # Install DMtools
 RUN apt-get update && apt-get install -y curl bash \
-    && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash \
+    && curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash \
     && apt-get clean
 
 # Set up environment
@@ -332,12 +338,12 @@ docker run -it dmtools --version
 ### Update to Latest Version
 ```bash
 # Re-run the installer
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
 ### Update to Specific Version
 ```bash
-DMTOOLS_VERSION=1.2.3 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
 ```
 
 ### Check Current Version
@@ -375,4 +381,4 @@ After installation:
 
 ---
 
-*Need help? Report issues at [github.com/IstiN/dmtools/issues](https://github.com/IstiN/dmtools/issues)*
+*Need help? Report issues at [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)*
