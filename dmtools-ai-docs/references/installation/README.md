@@ -311,7 +311,7 @@ alias dmtools-dev='java -jar /path/to/your/dmtools-core/build/libs/dmtools-v*-al
 
 For containerized environments:
 
-    ```dockerfile
+```dockerfile
 FROM openjdk:17-slim
 
 # Install DMtools

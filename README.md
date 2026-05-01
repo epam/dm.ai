@@ -74,7 +74,7 @@ See the [installation guide](dmtools-ai-docs/references/installation/README.md) 
 
 ### Upgrading from legacy installs
 
-1. Re-run the installer from `https://github.com/epam/dm.ai/releases/latest/download/install` (or `install.bat` / `install.ps1` on Windows) to replace wrappers that still point to `IstiN/dmtools` or raw GitHub URLs.
+1. Re-run the installer from `https://github.com/epam/dm.ai/releases/latest/download/install.sh` (or `install.bat` / `install.ps1` on Windows) to replace wrappers that still point to `IstiN/dmtools` or raw GitHub URLs.
 2. If `which dmtools` or `Get-Command dmtools` resolves outside `~/.dmtools/bin`, remove stale aliases and wrapper scripts from your shell profile or old CI bootstrap steps.
 3. For CI caches, refresh any keys tied to legacy install URLs after switching to the release asset path.
 

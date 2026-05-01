@@ -120,7 +120,7 @@ wget: unable to resolve host address 'github.com'
 3. **Download manually:**
    ```bash
    # Download via browser, then:
-   java -jar ~/Downloads/dmtools-v1.0.8-all.jar --version
+   java -jar ~/Downloads/dmtools-v1.7.179-all.jar --version
    ```
 
 4. **Use alternative download method:**
