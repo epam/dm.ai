@@ -14,7 +14,7 @@ Error: Java 17 or higher is required. Current version: 11
 1. **Let the installer handle it:**
    ```bash
    # Re-run installer, it will install Java automatically
-   curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
    ```
 
 2. **Manual Java installation:**
@@ -91,7 +91,7 @@ mkdir: cannot create directory '/home/user/.dmtools': Permission denied
 
 3. **Re-run installer:**
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
    ```
 
 ### Issue: "Network error" or "Failed to download"
@@ -114,19 +114,19 @@ wget: unable to resolve host address 'github.com'
    ```bash
    export HTTP_PROXY=http://proxy.company.com:8080
    export HTTPS_PROXY=http://proxy.company.com:8080
-   curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
    ```
 
 3. **Download manually:**
    ```bash
    # Download via browser, then:
-   java -jar ~/Downloads/dmtools-v1.0.8-all.jar --version
+   java -jar ~/Downloads/dmtools-v1.7.179-all.jar --version
    ```
 
 4. **Use alternative download method:**
    ```bash
    # Using wget instead of curl
-   wget -O - https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+   wget -O - https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
    ```
 
 ## 🖥️ Platform-Specific Issues
@@ -225,7 +225,7 @@ Exception in thread "main" java.lang.NoClassDefFoundError
 1. **Re-download the JAR:**
    ```bash
    rm ~/.dmtools/dmtools.jar
-   curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
    ```
 
 2. **Check JAR integrity:**
@@ -304,7 +304,7 @@ dmtools --version 2>&1
 If these solutions don't resolve your issue:
 
 1. **Check existing issues:**
-   - [GitHub Issues](https://github.com/IstiN/dmtools/issues)
+   - [GitHub Issues](https://github.com/epam/dm.ai/issues)
 
 2. **Create a new issue with:**
    - Output from diagnostic commands above
@@ -333,7 +333,7 @@ rm ~/bin/dmtools
 rm -rf ~/.java/
 
 # 4. Reinstall
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
 # 5. Reload shell
 exec $SHELL
@@ -341,4 +341,4 @@ exec $SHELL
 
 ---
 
-*Still having issues? Report at [github.com/IstiN/dmtools/issues](https://github.com/IstiN/dmtools/issues)*
+*Still having issues? Report at [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)*

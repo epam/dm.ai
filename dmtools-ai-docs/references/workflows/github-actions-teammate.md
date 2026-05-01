@@ -83,12 +83,12 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.dmtools
-        key: dmtools-v1.7.127-${{ runner.os }}
+        key: dmtools-release-latest-${{ runner.os }}
 
     - name: Install DMTools CLI
       if: steps.cache-dmtools.outputs.cache-hit != 'true'
       run: |
-        curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/v1.7.127/install.sh | DMTOOLS_VERSION=v1.7.127 bash
+        curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
     - name: Add DMTools to PATH
       run: |
