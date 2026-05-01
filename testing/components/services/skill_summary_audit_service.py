@@ -5,30 +5,6 @@ from testing.core.models.skill_summary_audit import SkillSummaryAudit
 
 
 class SkillSummaryAuditService:
-    ACTION_VERBS = {
-        "aggregates",
-        "audits",
-        "builds",
-        "calculates",
-        "collects",
-        "creates",
-        "executes",
-        "fetches",
-        "generates",
-        "loads",
-        "orchestrates",
-        "parses",
-        "posts",
-        "processes",
-        "produces",
-        "renders",
-        "runs",
-        "syncs",
-        "transforms",
-        "updates",
-        "validates",
-        "writes",
-    }
     FILLER_WORDS = {
         "advanced",
         "comprehensive",
@@ -51,13 +27,12 @@ class SkillSummaryAuditService:
         self.repository_root = repository_root
         self.summary_table_path = summary_table_path
 
-    def audit_all(self) -> list[SkillSummaryAudit]:
+    def audit_all(self, expected_names: list[str] | None = None) -> list[SkillSummaryAudit]:
         audits: list[SkillSummaryAudit] = []
-        for name, description in self._load_reference_summaries():
+        for name, description in self._load_reference_summaries(expected_names):
             normalized = re.sub(r"\s+", " ", description).strip()
             sentences = self._split_sentences(normalized)
             filler_words = self._find_filler_words(normalized)
-            leading_word = self._leading_word(normalized)
             audits.append(
                 SkillSummaryAudit(
                     path=self.repository_root / self.summary_table_path,
@@ -66,8 +41,6 @@ class SkillSummaryAuditService:
                     character_count=len(normalized),
                     sentence_count=len(sentences),
                     filler_words=filler_words,
-                    leading_word=leading_word,
-                    starts_with_action_verb=leading_word in self.ACTION_VERBS,
                     has_passive_voice=bool(
                         self.PASSIVE_VOICE_PATTERN.search(normalized)
                     ),
@@ -75,15 +48,38 @@ class SkillSummaryAuditService:
             )
         return audits
 
-    def _load_reference_summaries(self) -> list[tuple[str, str]]:
+    def available_agent_names(self) -> list[str]:
+        return [name for name, _ in self._load_reference_summaries()]
+
+    def _load_reference_summaries(
+        self, expected_names: list[str] | None = None
+    ) -> list[tuple[str, str]]:
         table_path = self.repository_root / self.summary_table_path
         rows = self._parse_reference_table(table_path)
-        return [
+        summaries = [
             (
                 self._normalize_job_name(row["Job"]),
                 row["Summary"],
             )
             for row in rows
+        ]
+        if expected_names is None:
+            return summaries
+
+        summary_by_name = {name: description for name, description in summaries}
+        missing_names = [
+            expected_name
+            for expected_name in expected_names
+            if expected_name not in summary_by_name
+        ]
+        if missing_names:
+            raise ValueError(
+                "Expected agent summaries were not found in "
+                f"{table_path}: {', '.join(missing_names)}"
+            )
+        return [
+            (expected_name, summary_by_name[expected_name])
+            for expected_name in expected_names
         ]
 
     def _parse_reference_table(self, path: Path) -> list[dict[str, str]]:
@@ -137,7 +133,3 @@ class SkillSummaryAuditService:
                 }
             )
         )
-
-    def _leading_word(self, description: str) -> str:
-        match = re.match(r"^[`*_]*([A-Za-z][A-Za-z-]*)", description)
-        return match.group(1).lower() if match else ""

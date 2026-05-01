@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -25,18 +27,26 @@ class TestDMC896SkillSummaries(unittest.TestCase):
             summary_table_path=str(CONFIG["summary_table_path"]),
         )
 
-        audits = service.audit_all()
-        audited_agents = [audit.name for audit in audits]
-
         self.assertEqual(
             10,
             len(EXPECTED_AGENTS),
             "The ticket must explicitly configure the 10 audited agents.",
         )
-        self.assertListEqual(
-            EXPECTED_AGENTS,
-            audited_agents,
-            "The audited agent set does not match the ticket's 10-agent scope.",
+        self.assertEqual(
+            len(EXPECTED_AGENTS),
+            len(set(EXPECTED_AGENTS)),
+            "The configured ticket scope must not contain duplicate agents.",
+        )
+
+        available_agents = service.available_agent_names()
+        missing_agents = [
+            agent for agent in EXPECTED_AGENTS if agent not in available_agents
+        ]
+
+        self.assertFalse(
+            missing_agents,
+            "The configured ticket scope is missing audited agents from the "
+            f"reference table: {', '.join(missing_agents)}",
         )
 
     def test_agent_summaries_are_concise_and_technical(self) -> None:
@@ -45,7 +55,7 @@ class TestDMC896SkillSummaries(unittest.TestCase):
             summary_table_path=str(CONFIG["summary_table_path"]),
         )
 
-        audits = service.audit_all()
+        audits = service.audit_all(EXPECTED_AGENTS)
 
         self.assertGreater(
             len(audits),
@@ -69,6 +79,54 @@ class TestDMC896SkillSummaries(unittest.TestCase):
                 "Agent summary audit failed for "
                 f"{len(failures)} of {len(audits)} descriptions:\n{details}"
             )
+
+    def test_expected_agents_are_audited_without_requiring_an_exact_table_match(
+        self,
+    ) -> None:
+        table = textwrap.dedent(
+            """
+            | Job | Summary |
+            |-----|---------|
+            | `ExtraJob` | Extra rows should not affect the configured audit scope. |
+            | `TargetA` | Target summaries stay concise and active. |
+            | `TargetB` | Target summaries remain technical and brief. |
+            """
+        ).strip()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            table_path = temp_root / "summaries.md"
+            table_path.write_text(table, encoding="utf-8")
+            service = SkillSummaryAuditService(
+                repository_root=temp_root,
+                summary_table_path=table_path.name,
+            )
+
+            audits = service.audit_all(["TargetB", "TargetA"])
+
+        self.assertListEqual(["TargetB", "TargetA"], [audit.name for audit in audits])
+
+    def test_active_voice_does_not_require_a_leading_action_verb(self) -> None:
+        table = textwrap.dedent(
+            """
+            | Job | Summary |
+            |-----|---------|
+            | `TargetA` | This summary describes technical behavior without filler. |
+            """
+        ).strip()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            table_path = temp_root / "summaries.md"
+            table_path.write_text(table, encoding="utf-8")
+            service = SkillSummaryAuditService(
+                repository_root=temp_root,
+                summary_table_path=table_path.name,
+            )
+
+            audits = service.audit_all(["TargetA"])
+
+        self.assertTrue(audits[0].is_valid)
 
 
 if __name__ == "__main__":

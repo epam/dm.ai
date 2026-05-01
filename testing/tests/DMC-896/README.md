@@ -25,7 +25,7 @@ The ticket scope is pinned in `config.yaml` to the 10 jobs listed in the "Common
 - `ReportVisualizer`
 - `KBProcessingJob`
 
-The test fails if that exact audited set changes or if any summary falls outside the length/tone rules.
+The test fails if any configured agent is missing from the reference table or if any configured summary falls outside the length/tone rules.
 
 ## Install dependencies
 

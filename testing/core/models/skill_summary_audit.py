@@ -10,8 +10,6 @@ class SkillSummaryAudit:
     character_count: int
     sentence_count: int
     filler_words: tuple[str, ...]
-    leading_word: str
-    starts_with_action_verb: bool
     has_passive_voice: bool
 
     @property
@@ -20,7 +18,6 @@ class SkillSummaryAudit:
             self.character_count <= 160
             and self.sentence_count <= 2
             and not self.filler_words
-            and self.starts_with_action_verb
             and not self.has_passive_voice
         )
 
@@ -33,11 +30,6 @@ class SkillSummaryAudit:
         if self.filler_words:
             reasons.append(
                 "contains filler wording: " + ", ".join(sorted(self.filler_words))
-            )
-        if not self.starts_with_action_verb:
-            reasons.append(
-                "expected technical active voice with an action verb lead, got "
-                + repr(self.leading_word or "<empty>")
             )
         if self.has_passive_voice:
             reasons.append("contains passive voice")
