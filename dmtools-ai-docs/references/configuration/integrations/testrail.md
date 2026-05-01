@@ -4,6 +4,8 @@
 
 DMtools provides 15 MCP tools for TestRail integration, enabling automated test case creation, requirement linking, and test management directly from Jira/ADO stories.
 
+If you only need the TestRail-focused AI assistant package, install `/dmtools-testrail` with the instructions in [../../installation/README.md#install-only-the-skills-you-need](../../installation/README.md#install-only-the-skills-you-need).
+
 ## 🔑 API Key Generation
 
 ### Step 1: Create TestRail API Key

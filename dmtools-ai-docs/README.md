@@ -43,8 +43,43 @@ INSTALL_LOCATION=2 bash install.sh    # Second location (.claude)
 # Install to all locations (explicit)
 bash install.sh --all
 
+# Install only selected focused skills
+DMTOOLS_SKILLS=jira,github bash install.sh
+bash install.sh --skills jira,github
+
 # Show help
 bash install.sh --help
+```
+
+## Install Only the Skills You Need
+
+Use focused packages when you want dedicated slash commands such as `/dmtools-jira` or `/dmtools-github` instead of the full `/dmtools` bundle.
+
+| Skill | Slash command | Latest package | Latest tarball |
+|------|------|------|------|
+| Full DMtools | `/dmtools` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.tar.gz` |
+| Jira | `/dmtools-jira` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.tar.gz` |
+| GitHub | `/dmtools-github` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.tar.gz` |
+| Azure DevOps | `/dmtools-ado` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.tar.gz` |
+| TestRail | `/dmtools-testrail` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.tar.gz` |
+
+### Installer Selection Examples
+
+```bash
+# Install only Jira
+DMTOOLS_SKILLS=jira curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+
+# Install Jira + GitHub together
+DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+
+# Local installer usage
+bash install.sh --skills ado,testrail
+```
+
+```powershell
+# PowerShell installer usage
+$env:DMTOOLS_SKILLS = "jira,github"
+irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | iex
 ```
 
 ## 📦 Manual Installation

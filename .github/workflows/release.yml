@@ -181,33 +181,107 @@ jobs:
         run: |
           VERSION="${{ needs.version-and-tag.outputs.version }}"
           DIST_DIR="dist"
-          mkdir -p $DIST_DIR
+          mkdir -p "$DIST_DIR" "$DIST_DIR/staging"
 
-          # Create the skill package
-          echo "📦 Creating DMtools Agent Skill package..."
-          cd dmtools-ai-docs
+          copy_skill_doc() {
+            local source_file="$1"
+            local target_root="$2"
+            mkdir -p "$target_root/$(dirname "$source_file")"
+            cp "dmtools-ai-docs/$source_file" "$target_root/$source_file"
+          }
 
-          # Create ZIP archive (exclude install.sh - it's a separate release asset)
-          zip -r ../$DIST_DIR/dmtools-skill-v${VERSION}.zip . \
-            -x "*.git*" \
-            -x ".DS_Store" \
-            -x "node_modules/*" \
-            -x "*.swp" \
-            -x ".cursorrules" \
-            -x ".github/*" \
-            -x "install.sh"
+          create_skill_manifest() {
+            local target_root="$1"
+            local skill_name="$2"
+            local title="$3"
+            local description="$4"
+            cat > "$target_root/SKILL.md" <<EOF
+          ---
+          name: $skill_name
+          description: $description
+          license: Apache-2.0
+          compatibility:
+            - Java 17+
+            - macOS, Linux, Windows (WSL)
+          metadata:
+            version: skill-v$VERSION
+            author: DMtools Team
+            repository: https://github.com/epam/dm.ai
+            documentation: https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs
+          ---
 
-          # Create tarball for *nix systems (exclude install.sh - it's a separate release asset)
-          tar -czf ../$DIST_DIR/dmtools-skill-v${VERSION}.tar.gz \
-            --exclude='.git*' \
-            --exclude='.DS_Store' \
-            --exclude='node_modules' \
-            --exclude='.cursorrules' \
-            --exclude='.github' \
-            --exclude='install.sh' \
-            .
+          # $title
 
-          cd ..
+          Install instructions: [references/installation/README.md#install-only-the-skills-you-need](references/installation/README.md#install-only-the-skills-you-need)
+
+          Use the focused configuration and MCP reference pages included in this package:
+          EOF
+          }
+
+          package_directory() {
+            local source_dir="$1"
+            local base_name="$2"
+            local output_dir="$PWD/$DIST_DIR"
+            (
+              cd "$source_dir"
+              zip -rq "$output_dir/${base_name}-v${VERSION}.zip" .
+              tar -czf "$output_dir/${base_name}-v${VERSION}.tar.gz" .
+            )
+            cp "$DIST_DIR/${base_name}-v${VERSION}.zip" "$DIST_DIR/${base_name}.zip"
+            cp "$DIST_DIR/${base_name}-v${VERSION}.tar.gz" "$DIST_DIR/${base_name}.tar.gz"
+          }
+
+          echo "📦 Creating DMtools Agent Skill packages..."
+
+          package_directory "dmtools-ai-docs" "dmtools-skill"
+
+          mkdir -p "$DIST_DIR/staging/jira"
+          create_skill_manifest "$DIST_DIR/staging/jira" "dmtools-jira" "DMtools Jira Skill" "Focused DMtools skill for Jira setup, Jira MCP tools, and Xray-backed workflows."
+          cat >> "$DIST_DIR/staging/jira/SKILL.md" <<'EOF'
+          - [Jira configuration](references/configuration/integrations/jira.md)
+          - [Jira MCP tools](references/mcp-tools/jira-tools.md)
+          - [Xray manual generation](references/test-generation/xray-manual.md)
+          EOF
+          copy_skill_doc "references/installation/README.md" "$DIST_DIR/staging/jira"
+          copy_skill_doc "references/configuration/integrations/jira.md" "$DIST_DIR/staging/jira"
+          copy_skill_doc "references/mcp-tools/jira-tools.md" "$DIST_DIR/staging/jira"
+          copy_skill_doc "references/test-generation/xray-manual.md" "$DIST_DIR/staging/jira"
+          package_directory "$DIST_DIR/staging/jira" "dmtools-jira-skill"
+
+          mkdir -p "$DIST_DIR/staging/github"
+          create_skill_manifest "$DIST_DIR/staging/github" "dmtools-github" "DMtools GitHub Skill" "Focused DMtools skill for GitHub configuration and pull request tooling."
+          cat >> "$DIST_DIR/staging/github/SKILL.md" <<'EOF'
+          - [GitHub configuration](references/configuration/integrations/github.md)
+          - [GitHub MCP tools](references/mcp-tools/github-tools.md)
+          EOF
+          copy_skill_doc "references/installation/README.md" "$DIST_DIR/staging/github"
+          copy_skill_doc "references/configuration/integrations/github.md" "$DIST_DIR/staging/github"
+          copy_skill_doc "references/mcp-tools/github-tools.md" "$DIST_DIR/staging/github"
+          package_directory "$DIST_DIR/staging/github" "dmtools-github-skill"
+
+          mkdir -p "$DIST_DIR/staging/ado"
+          create_skill_manifest "$DIST_DIR/staging/ado" "dmtools-ado" "DMtools Azure DevOps Skill" "Focused DMtools skill for Azure DevOps configuration, work item automation, and PR tooling."
+          cat >> "$DIST_DIR/staging/ado/SKILL.md" <<'EOF'
+          - [ADO configuration](references/configuration/integrations/ado.md)
+          - [ADO MCP tools](references/mcp-tools/ado-tools.md)
+          EOF
+          copy_skill_doc "references/installation/README.md" "$DIST_DIR/staging/ado"
+          copy_skill_doc "references/configuration/integrations/ado.md" "$DIST_DIR/staging/ado"
+          copy_skill_doc "references/mcp-tools/ado-tools.md" "$DIST_DIR/staging/ado"
+          package_directory "$DIST_DIR/staging/ado" "dmtools-ado-skill"
+
+          mkdir -p "$DIST_DIR/staging/testrail"
+          create_skill_manifest "$DIST_DIR/staging/testrail" "dmtools-testrail" "DMtools TestRail Skill" "Focused DMtools skill for TestRail configuration and generated test case workflows."
+          cat >> "$DIST_DIR/staging/testrail/SKILL.md" <<'EOF'
+          - [TestRail configuration](references/configuration/integrations/testrail.md)
+          - [TestRail MCP tools](references/mcp-tools/testrail-tools.md)
+          - [TestRail manual generation](references/test-generation/testrail-manual.md)
+          EOF
+          copy_skill_doc "references/installation/README.md" "$DIST_DIR/staging/testrail"
+          copy_skill_doc "references/configuration/integrations/testrail.md" "$DIST_DIR/staging/testrail"
+          copy_skill_doc "references/mcp-tools/testrail-tools.md" "$DIST_DIR/staging/testrail"
+          copy_skill_doc "references/test-generation/testrail-manual.md" "$DIST_DIR/staging/testrail"
+          package_directory "$DIST_DIR/staging/testrail" "dmtools-testrail-skill"
 
           # Copy install scripts (bash + PowerShell)
           cp dmtools-ai-docs/install.sh $DIST_DIR/skill-install.sh
@@ -230,6 +304,14 @@ jobs:
           path: |
             dist/dmtools-skill-*.zip
             dist/dmtools-skill-*.tar.gz
+            dist/dmtools-jira-skill*.zip
+            dist/dmtools-jira-skill*.tar.gz
+            dist/dmtools-github-skill*.zip
+            dist/dmtools-github-skill*.tar.gz
+            dist/dmtools-ado-skill*.zip
+            dist/dmtools-ado-skill*.tar.gz
+            dist/dmtools-testrail-skill*.zip
+            dist/dmtools-testrail-skill*.tar.gz
             dist/skill-install.sh
             dist/skill-install.ps1
             dist/skill-checksums.sha256
@@ -337,15 +419,24 @@ jobs:
           irm https://github.com/${{ github.repository }}/releases/download/v${VERSION}/skill-install.ps1 | iex
           \`\`\`
 
+          **Focused skill install:**
+          \`\`\`bash
+          DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${VERSION}/skill-install.sh | bash
+          \`\`\`
+
+          **Focused packages:**
+          - \`dmtools-jira-skill.zip\` → \`/dmtools-jira\`
+          - \`dmtools-github-skill.zip\` → \`/dmtools-github\`
+          - \`dmtools-ado-skill.zip\` → \`/dmtools-ado\`
+          - \`dmtools-testrail-skill.zip\` → \`/dmtools-testrail\`
+
           **Manual Installation:**
-          1. Download \`dmtools-skill-v${VERSION}.zip\` or \`dmtools-skill-v${VERSION}.tar.gz\`
+          1. Download \`dmtools-skill.zip\` or a focused package such as \`dmtools-jira-skill.zip\`
           2. Extract to one of these directories:
              - \`.cursor/skills/\` (project-level Cursor)
              - \`.claude/skills/\` (project-level Claude)
-             - \`~/.cursor/skills/\` (global Cursor)
              - \`~/.claude/skills/\` (global Claude)
-             - \`~/.codex/skills/\` (global Codex)
-             - \`%USERPROFILE%\.claude\skills\` (global Claude on Windows)
+             - \`.codex/skills/\` (project-level Codex)
 
           ### Install Specific Version (v${VERSION})
 
@@ -414,6 +505,24 @@ jobs:
             cli/dmtools.sh
             skill/dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.zip
             skill/dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-skill.zip
+            skill/dmtools-skill.tar.gz
+            skill/dmtools-jira-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-jira-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-jira-skill.zip
+            skill/dmtools-jira-skill.tar.gz
+            skill/dmtools-github-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-github-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-github-skill.zip
+            skill/dmtools-github-skill.tar.gz
+            skill/dmtools-ado-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-ado-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-ado-skill.zip
+            skill/dmtools-ado-skill.tar.gz
+            skill/dmtools-testrail-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-testrail-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-testrail-skill.zip
+            skill/dmtools-testrail-skill.tar.gz
             skill/skill-install.sh
             skill/skill-install.ps1
             skill/skill-checksums.sha256
@@ -438,6 +547,7 @@ jobs:
           echo "**Agent Skill:**" >> $GITHUB_STEP_SUMMARY
           echo "- Skill ZIP (dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.zip)" >> $GITHUB_STEP_SUMMARY
           echo "- Skill TAR (dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz)" >> $GITHUB_STEP_SUMMARY
+          echo "- Focused packages: dmtools-jira-skill, dmtools-github-skill, dmtools-ado-skill, dmtools-testrail-skill" >> $GITHUB_STEP_SUMMARY
           echo "- skill-install.sh (automatic installer, macOS/Linux)"  >> $GITHUB_STEP_SUMMARY
           echo "- skill-install.ps1 (automatic installer, Windows PowerShell)" >> $GITHUB_STEP_SUMMARY
           echo "- skill-checksums.sha256 (checksums)" >> $GITHUB_STEP_SUMMARY

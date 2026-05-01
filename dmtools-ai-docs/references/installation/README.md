@@ -8,6 +8,8 @@ The fastest way to install DMtools:
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
+If you only need focused AI assistant skills, see [Install Only the Skills You Need](#install-only-the-skills-you-need).
+
 This script will:
 1. ✅ Check for Java 17+ (install if missing)
 2. ✅ Download the latest DMtools release
@@ -28,6 +30,42 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | b
 # Specific version
 curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
 ```
+
+## Install Only the Skills You Need
+
+Use the focused skill packages when you want integration-specific slash commands in your AI assistant instead of the full `/dmtools` bundle.
+
+| Skill | Slash command | Latest ZIP | Latest TAR |
+|------|------|------|------|
+| Full DMtools | `/dmtools` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.tar.gz` |
+| Jira | `/dmtools-jira` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.tar.gz` |
+| GitHub | `/dmtools-github` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.tar.gz` |
+| Azure DevOps | `/dmtools-ado` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.tar.gz` |
+| TestRail | `/dmtools-testrail` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.tar.gz` |
+
+### Skill Installer Examples
+
+```bash
+# Install only Jira
+DMTOOLS_SKILLS=jira curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+
+# Install Jira + GitHub together
+DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+
+# Run the installer locally and pass the package list directly
+bash install.sh --skills ado,testrail
+```
+
+```powershell
+$env:DMTOOLS_SKILLS = "jira,github"
+irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | iex
+```
+
+### Manual Focused Package Installation
+
+1. Download the ZIP or TAR for the skill you need.
+2. Extract it into `.cursor/skills/`, `.claude/skills/`, or `.codex/skills/`.
+3. The extracted folder name becomes the slash command, for example `dmtools-jira` → `/dmtools-jira`.
 
 ### Upgrading from legacy installs
 
