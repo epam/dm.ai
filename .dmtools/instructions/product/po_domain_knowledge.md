@@ -36,10 +36,12 @@ This is the **Teammate pattern** — the backbone of all agent workflows.
 
 ### 3. 📊 Ready-made Jobs
 Pre-built automation pipelines that don't need a CLI agent:
-- `ReportGenerator` — dev productivity reports
+- `ReportGenerator` — configurable analytics pipeline that collects tracker, SCM, CSV, or Figma data, computes metrics, and outputs JSON/HTML reports (`ReportGeneratorJob` also works in configs)
+- `ReportVisualizer` — interactive HTML visualization that re-renders an existing generated report JSON without recalculating metrics (`ReportVisualizerJob` also works in configs)
 - `TestCasesGenerator` — auto-generate test cases from stories
 - `Expert` — domain Q&A from knowledge base
 - `JSRunner` — custom JavaScript automation (SM agent, intake, etc.)
+- `KBProcessingJob` — process source content into structured knowledge-base output (`KBProcessing` remains accepted for older configs)
 
 ---
 

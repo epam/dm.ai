@@ -47,7 +47,6 @@ public class KBProcessingJob extends AbstractJob<KBOrchestratorParams, KBResult>
     
     @Override
     public String getName() {
-        return "KBProcessing";
+        return "KBProcessingJob";
     }
 }
-

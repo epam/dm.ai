@@ -1,0 +1,26 @@
+{
+  "name": "QAProductivityReport",
+  "params": {
+    "start_date": "01.01.2026",
+    "inputJql": "project = QA AND issuetype in ('Test', Story, Task, Bug)",
+    "report_name": "qa_team_report",
+    "is_weight": true,
+    "bugs_project_code": "QA",
+    "test_cases_project_code": "QA",
+    "statuses_done": [
+      "Done",
+      "Closed"
+    ],
+    "statuses_in_testing": [
+      "In Testing",
+      "Testing"
+    ],
+    "statuses_in_development": [
+      "In Progress",
+      "In Review"
+    ],
+    "formula": "dmtools-ai-docs/references/examples/qa-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/qa-team.json",
+    "comments_regex": ".*tested.*|.*verified.*"
+  }
+}

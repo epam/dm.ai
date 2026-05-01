@@ -1,0 +1,10 @@
+{
+  "name": "KBProcessingJob",
+  "params": {
+    "sourceName": "architecture-docs",
+    "inputFile": "input/source.md",
+    "outputPath": "kb-output",
+    "processingMode": "FULL",
+    "cleanOutput": false
+  }
+}

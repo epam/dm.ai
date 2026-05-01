@@ -1,0 +1,17 @@
+{
+  "name": "InstructionsGenerator",
+  "params": {
+    "inputJql": "project = DMC AND type = Story",
+    "fields": [
+      "summary",
+      "description",
+      "acceptance_criteria"
+    ],
+    "instructionType": "user_story",
+    "outputDestination": "file",
+    "outputPath": "output/dmc-story-instructions.md",
+    "mergeWithExisting": false,
+    "additionalContext": "Focus on concise ticket-writing guidance with generic examples only.",
+    "platform": "jira"
+  }
+}

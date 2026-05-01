@@ -1,0 +1,12 @@
+[
+  {
+    "Employee": "Jane Smith",
+    "Role": "Developer",
+    "Level": "A3"
+  },
+  {
+    "Employee": "John Doe",
+    "Role": "Developer",
+    "Level": "B1"
+  }
+]

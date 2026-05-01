@@ -63,6 +63,8 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 - [QAProductivityReport](#qaproductivityreport) - QA team productivity metrics
 - [DevProductivityReport](#devproductivityreport) - Development team productivity metrics
 - [BAProductivityReport](#baproductivityreport) - Business Analyst team productivity metrics
+- [ReportGenerator](#reportgenerator) - Build configurable JSON/HTML reports
+- [ReportVisualizer](#reportvisualizer) - Render report JSON as interactive HTML
 
 ### Project Management
 - [JEstimator](#jestimator) - Estimate story points and effort
@@ -85,6 +87,21 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 ---
 
 ## 🎯 Featured Jobs
+
+### Quick reference for common agent jobs
+
+| Job | Summary | Accepted `name` | Example |
+|-----|---------|-----------------|---------|
+| `Teammate` | Orchestrates ticket context, AI instructions, and optional CLI or JS hooks for end-to-end workflow automation. | `Teammate` | [story_development.json](../../../agents/story_development.json) |
+| `JSRunner` | Executes one GraalJS script with DMtools context for isolated automation, debugging, and JS agent testing. | `JSRunner` | [run_all.json](../../../agents/js/unit-tests/run_all.json) |
+| `TestCasesGenerator` | Generates related and net-new test cases from tracker tickets, then creates or posts the configured output. | `TestCasesGenerator` | [test_cases_generator.json](../../../agents/test_cases_generator.json) |
+| `InstructionsGenerator` | Builds reusable implementation instructions from tracker tickets and writes them to Confluence or a local file. | `InstructionsGenerator` | [instructions-generator-job.json](../examples/instructions-generator-job.json) |
+| `DevProductivityReport` | Produces developer productivity metrics from tracker, source control, and optional spreadsheet inputs. | `DevProductivityReport` | [dev-productivity-report.json](../examples/dev-productivity-report.json) |
+| `BAProductivityReport` | Calculates BA delivery metrics such as created work, field updates, and workflow movement over time. | `BAProductivityReport` | [ba-productivity-report.json](../examples/ba-productivity-report.json) |
+| `QAProductivityReport` | Calculates QA metrics such as bugs, tests, comments, and key status transitions across releases. | `QAProductivityReport` | [qa-productivity-report.json](../examples/qa-productivity-report.json) |
+| `ReportGenerator` | Generates configurable analytics reports as JSON and HTML from tracker, SCM, CSV, or Figma data. | `ReportGenerator` / `ReportGeneratorJob` | [report-generator-job.json](../examples/report-generator-job.json) |
+| `ReportVisualizer` | Renders a saved JSON report as an interactive HTML dashboard without regenerating report data. | `ReportVisualizer` / `ReportVisualizerJob` | [report-visualizer-job.json](../examples/report-visualizer-job.json) |
+| `KBProcessingJob` | Runs the knowledge-base pipeline that processes source content and aggregates searchable KB output. | `KBProcessingJob` / `KBProcessing` | [kb-processing-job.json](../examples/kb-processing-job.json) |
 
 ### TestCasesGenerator
 
@@ -215,11 +232,11 @@ dmtools InstructionsGenerator --inputJql "project = QA AND type = Test" \
   --outputDestination "confluence" \
   --outputPath "https://yourcompany.atlassian.net/wiki/spaces/YOUR_SPACE/pages/PAGE_ID/Test+Guidelines"
 
-# Use configuration file
-dmtools run agents/instructions_generator.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/instructions-generator-job.json
 ```
 
-**Configuration** (`agents/instructions_generator_dmc.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/instructions-generator-job.json`):
 
 **IMPORTANT**: The `"name"` field must exactly match the Job class name. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -303,13 +320,13 @@ Generated instructions typically include:
 **Example Workflow**:
 ```bash
 # Step 1: Generate initial instructions from 50 best stories
-dmtools run agents/instructions_generator.json
+dmtools run dmtools-ai-docs/references/examples/instructions-generator-job.json
 
 # Step 2: Review and manually refine the generated instructions
 
 # Step 3: Update instructions as project evolves (merges with existing)
 # Edit config: "mergeWithExisting": true
-dmtools run agents/instructions_generator.json
+dmtools run dmtools-ai-docs/references/examples/instructions-generator-job.json
 ```
 
 **Integration with Confluence**:
@@ -578,11 +595,11 @@ Generate productivity reports for QA team showing test cases created, bugs found
 # Generate QA productivity report
 dmtools QAProductivityReport --start_date "01.01.2026" --inputJql "project = QA"
 
-# Use configuration file
-dmtools run reports/qa_productivity.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/qa-productivity-report.json
 ```
 
-**Configuration** (`reports/qa_productivity.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/qa-productivity-report.json`):
 
 **IMPORTANT**: The `"name"` field must be exactly `"QAProductivityReport"`. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -600,8 +617,8 @@ dmtools run reports/qa_productivity.json
     "statuses_in_testing": ["In Testing", "Testing"],
     "statuses_in_development": ["In Progress", "In Review"],
     "ignore_ticket_prefixes": ["[DRAFT]", "[POC]"],
-    "formula": "reports/qa_productivity_formula.js",
-    "employees": "reports/qa_team.json",
+    "formula": "dmtools-ai-docs/references/examples/qa-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/qa-team.json",
     "comments_regex": ".*tested.*|.*verified.*"
   }
 }
@@ -642,25 +659,23 @@ dmtools run reports/qa_productivity.json
 
 **Output**: HTML report file with metrics grouped by employee and time period (weeks by default).
 
-**Employee File Format** (`reports/qa_team.json`):
+**Employee File Format** (`dmtools-ai-docs/references/examples/qa-team.json`):
 ```json
-{
-  "testers": [
-    {
-      "name": "John Doe",
-      "jiraName": "john.doe",
-      "email": "john.doe@company.com"
-    },
-    {
-      "name": "Jane Smith",
-      "jiraName": "jane.smith",
-      "email": "jane.smith@company.com"
-    }
-  ]
-}
+[
+  {
+    "Employee": "Jane Smith",
+    "Role": "Tester",
+    "Level": "A3"
+  },
+  {
+    "Employee": "John Doe",
+    "Role": "Tester",
+    "Level": "B1"
+  }
+]
 ```
 
-**Formula File** (`reports/qa_productivity_formula.js`):
+**Formula File** (`dmtools-ai-docs/references/examples/qa-productivity-formula.js`):
 ```javascript
 // Custom productivity calculation
 function calculate(metrics) {
@@ -685,11 +700,11 @@ Generate productivity reports for Development team showing stories/bugs moved to
 # Generate Dev productivity report
 dmtools DevProductivityReport --start_date "01.01.2026" --inputJql "project = DEV"
 
-# Use configuration file
-dmtools run reports/dev_productivity.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/dev-productivity-report.json
 ```
 
-**Configuration** (`reports/dev_productivity.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/dev-productivity-report.json`):
 
 **IMPORTANT**: The `"name"` field must be exactly `"DevProductivityReport"`. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -715,8 +730,8 @@ dmtools run reports/dev_productivity.json
         "branch": "main"
       }
     ],
-    "formula": "reports/dev_productivity_formula.js",
-    "employees": "reports/dev_team.json",
+    "formula": "dmtools-ai-docs/references/examples/dev-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/dev-team.json",
     "ignore_ticket_prefixes": ["[SPIKE]", "[RESEARCH]"],
     "comment_regex_responsible": "Implemented by:\\s+(\\w+)"
   }
@@ -784,11 +799,11 @@ Generate productivity reports for Business Analyst team showing features/stories
 # Generate BA productivity report
 dmtools BAProductivityReport --start_date "01.01.2026" --inputJql "project = BA"
 
-# Use configuration file
-dmtools run reports/ba_productivity.json
+# Use the tracked example config from this repository
+dmtools run dmtools-ai-docs/references/examples/ba-productivity-report.json
 ```
 
-**Configuration** (`reports/ba_productivity.json`):
+**Configuration** (`dmtools-ai-docs/references/examples/ba-productivity-report.json`):
 
 **IMPORTANT**: The `"name"` field must be exactly `"BAProductivityReport"`. See [JSON Configuration Rules](../configuration/json-config-rules.md).
 
@@ -808,8 +823,8 @@ dmtools run reports/ba_productivity.json
       "https://www.figma.com/file/abc123/Product-Design",
       "https://www.figma.com/file/xyz789/UX-Mockups"
     ],
-    "formula": "reports/ba_productivity_formula.js",
-    "employees": "reports/ba_team.json",
+    "formula": "dmtools-ai-docs/references/examples/ba-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/ba-team.json",
     "ignore_ticket_prefixes": ["[TEMPLATE]", "[EXAMPLE]"]
   }
 }
@@ -841,24 +856,20 @@ When `figma_files` is provided, the report includes comments posted by BAs in Fi
 
 **Output**: HTML report file with BA metrics grouped by employee and time period (weeks).
 
-**Employee File Format** (`reports/ba_team.json`):
+**Employee File Format** (`dmtools-ai-docs/references/examples/ba-team.json`):
 ```json
-{
-  "businessAnalysts": [
-    {
-      "name": "Alice Johnson",
-      "jiraName": "alice.johnson",
-      "email": "alice.johnson@company.com",
-      "figmaEmail": "alice.johnson@company.com"
-    },
-    {
-      "name": "Bob Williams",
-      "jiraName": "bob.williams",
-      "email": "bob.williams@company.com",
-      "figmaEmail": "bob.williams@company.com"
-    }
-  ]
-}
+[
+  {
+    "Employee": "Jane Smith",
+    "Role": "Business Analyst",
+    "Level": "A3"
+  },
+  {
+    "Employee": "John Doe",
+    "Role": "Business Analyst",
+    "Level": "B1"
+  }
+]
 ```
 
 **Use Cases**:
@@ -949,6 +960,65 @@ dmtools run agents/test/test-postprocess.json
 - One-off data transformations using MCP tools
 
 → **See also**: [JS Agent Testing Guide](../agents/javascript-agents.md#-testing-and-debugging-agents) for dry-run patterns, debug mode, and Node.js unit testing.
+
+---
+
+### ReportGenerator
+
+Generate configurable analytics reports from tracker, SCM, CSV, or Figma data.
+
+**Purpose**: Build JSON output and, when configured, paired HTML reports from reusable metric definitions and time groupings.
+
+**Example config name**: `ReportGenerator`
+
+**Also accepted**: `ReportGeneratorJob`
+
+**Usage**:
+```bash
+dmtools run dmtools-ai-docs/references/examples/report-generator-job.json
+```
+
+**Example config**: [report-generator-job.json](../examples/report-generator-job.json)
+
+→ **See also**: [Report Generator Guide](../reporting/report-generation.md)
+
+---
+
+### ReportVisualizer
+
+Convert an existing JSON report into interactive HTML without rerunning the full report pipeline.
+
+**Purpose**: Re-render stored report data when you need a refreshed HTML view or a different output file path.
+
+**Example config name**: `ReportVisualizer`
+
+**Also accepted**: `ReportVisualizerJob`
+
+**Usage**:
+```bash
+dmtools run dmtools-ai-docs/references/examples/report-visualizer-job.json
+```
+
+**Example config**: [report-visualizer-job.json](../examples/report-visualizer-job.json)
+
+---
+
+### KBProcessingJob
+
+Run the knowledge-base processing pipeline that analyzes source files and aggregates KB artifacts.
+
+**Purpose**: Turn raw source material into structured knowledge-base output for later search, summaries, and question answering.
+
+**Preferred config name**: `KBProcessingJob`
+
+**Legacy alias**: `KBProcessing` still works for existing configs.
+
+**Usage**:
+```bash
+dmtools run dmtools-ai-docs/references/examples/kb-processing-job.json
+```
+
+**Example config**: [kb-processing-job.json](../examples/kb-processing-job.json)
 
 ---
 

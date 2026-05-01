@@ -2,7 +2,7 @@
 
 **→ See also: [Agent Best Practices](best-practices.md) for critical patterns, common helpers, and lessons learned from real-world development**
 
-## ⚠️ CRITICAL: The "name" Field is Java Class Name
+## ⚠️ CRITICAL: The "name" Field Maps to a Supported Job Identifier
 
 **READ THIS FIRST - The `"name"` field is NOT customizable:**
 
@@ -12,13 +12,16 @@
 }
 ```
 
-This is a **technical identifier** for Java class instantiation:
+This is a **technical identifier** for job instantiation:
 - `"TestCasesGenerator"` → `new TestCasesGenerator()`
 - `"Teammate"` → `new Teammate()`
 - `"Expert"` → `new Expert()`
 
 **Rules:**
-- ✅ Use exact class names from [Jobs Reference](../jobs/README.md)
+- ✅ Use the supported names from [Jobs Reference](../jobs/README.md)
+- ✅ Most jobs use the exact Java class name
+- ✅ Report docs and examples use `ReportGenerator` / `ReportVisualizer`; `ReportGeneratorJob` / `ReportVisualizerJob` are also accepted
+- ✅ `KBProcessingJob` is the canonical KB name; legacy `KBProcessing` still works for backward compatibility
 - ❌ Do NOT customize: "My Generator" will fail
 - ❌ Do NOT change case: "testcasesgenerator" will fail
 
@@ -29,6 +32,21 @@ See [JSON Configuration Rules](../configuration/json-config-rules.md) for comple
 ## 🎯 Overview
 
 AI Teammates are JSON-configured workflows that combine AI analysis with pre/post-processing JavaScript agents. They enable complex automation scenarios like test generation, code analysis, and documentation creation.
+
+## 🧭 Common job reference
+
+| Job | Summary | Accepted `name` | Example |
+|-----|---------|-----------------|---------|
+| `Teammate` | Orchestrates ticket context, AI instructions, and optional CLI or JS hooks for end-to-end workflow automation. | `Teammate` | [story_development.json](../../../agents/story_development.json) |
+| `JSRunner` | Executes one GraalJS script with DMtools context for isolated automation, debugging, and JS agent testing. | `JSRunner` | [run_all.json](../../../agents/js/unit-tests/run_all.json) |
+| `TestCasesGenerator` | Generates related and net-new test cases from tracker tickets, then creates or posts the configured output. | `TestCasesGenerator` | [test_cases_generator.json](../../../agents/test_cases_generator.json) |
+| `InstructionsGenerator` | Builds reusable implementation instructions from tracker tickets and writes them to Confluence or a local file. | `InstructionsGenerator` | [instructions-generator-job.json](../examples/instructions-generator-job.json) |
+| `DevProductivityReport` | Produces developer productivity metrics from tracker, source control, and optional spreadsheet inputs. | `DevProductivityReport` | [dev-productivity-report.json](../examples/dev-productivity-report.json) |
+| `BAProductivityReport` | Calculates BA delivery metrics such as created work, field updates, and workflow movement over time. | `BAProductivityReport` | [ba-productivity-report.json](../examples/ba-productivity-report.json) |
+| `QAProductivityReport` | Calculates QA metrics such as bugs, tests, comments, and key status transitions across releases. | `QAProductivityReport` | [qa-productivity-report.json](../examples/qa-productivity-report.json) |
+| `ReportGenerator` | Generates configurable analytics reports as JSON and HTML from tracker, SCM, CSV, or Figma data. | `ReportGenerator` / `ReportGeneratorJob` | [report-generator-job.json](../examples/report-generator-job.json) |
+| `ReportVisualizer` | Renders a saved JSON report as an interactive HTML dashboard without regenerating report data. | `ReportVisualizer` / `ReportVisualizerJob` | [report-visualizer-job.json](../examples/report-visualizer-job.json) |
+| `KBProcessingJob` | Runs the knowledge-base pipeline that processes source content and aggregates searchable KB output. | `KBProcessingJob` / `KBProcessing` | [kb-processing-job.json](../examples/kb-processing-job.json) |
 
 ## 📋 Configuration Structure
 

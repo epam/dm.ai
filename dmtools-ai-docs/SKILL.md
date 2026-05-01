@@ -1,6 +1,6 @@
 ---
 name: dmtools
-description: Comprehensive documentation and assistance for DMtools - AI-powered development toolkit with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMtools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/dmc_report), creating CLI agent workflows, or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator jobs.
+description: Comprehensive documentation and assistance for DMtools - AI-powered development toolkit with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMtools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows, or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator jobs.
 license: Apache-2.0
 compatibility:
   - Java 17+
@@ -141,7 +141,7 @@ Use this skill when:
 - Configuring AI providers (Gemini, OpenAI, Claude, DIAL, Ollama)
 - Developing JavaScript agents with MCP tools
 - Generating test cases (Jira, Xray, Cucumber)
-- Generating analytics reports (ReportGenerator, dmc_report)
+- Generating analytics reports (ReportGenerator, ReportVisualizer)
 - Troubleshooting DMtools issues
 - Working with dmtools.env configuration
 - Creating AI teammate configurations
@@ -253,7 +253,14 @@ function action(params) {
 | | [Teammate](references/jobs/README.md#teammate) | Flexible AI assistant with custom instructions |
 | | [Expert](references/jobs/README.md#expert) | Domain expert Q&A based on project context |
 | | [TestCasesGenerator](references/jobs/README.md#testcasesgenerator) | Automated test case generation |
-| | [ReportGenerator](references/reporting/report-generation.md) | Report configuration, data sources, metrics |
+| | [InstructionsGenerator](references/jobs/README.md#instructionsgenerator) | Build reusable implementation instructions from tracker tickets |
+| | [JSRunner](references/jobs/README.md#jsrunner) | Execute a standalone JavaScript agent with DMtools context |
+| | [DevProductivityReport](references/jobs/README.md#devproductivityreport) | Developer productivity metrics from tracker and SCM data |
+| | [BAProductivityReport](references/jobs/README.md#baproductivityreport) | BA productivity metrics across created work and status changes |
+| | [QAProductivityReport](references/jobs/README.md#qaproductivityreport) | QA productivity metrics across bugs, tests, and comments |
+| | [ReportGenerator](references/reporting/report-generation.md) | Generate JSON and HTML analytics reports from configurable sources |
+| | [ReportVisualizer](references/jobs/README.md#reportvisualizer) | Render an existing report JSON as interactive HTML |
+| | [KBProcessingJob](references/jobs/README.md#kbprocessingjob) | Process source material into knowledge-base artifacts |
 | **Agents** | [Agent Best Practices](references/agents/best-practices.md) | **⚠️ CRITICAL**: Patterns and lessons learned |
 | | [JavaScript Agents](references/agents/javascript-agents.md) | GraalJS development with 152+ MCP tools |
 | | [Teammate Configs](references/agents/teammate-configs.md) | JSON-based AI workflows (CLI safety v1.7.133+) |

@@ -1,0 +1,28 @@
+{
+  "name": "DevProductivityReport",
+  "params": {
+    "start_date": "01.01.2026",
+    "inputJql": "project = DEV AND issuetype in (Story, Bug, Task)",
+    "report_name": "dev_team_report",
+    "is_weight": true,
+    "statuses_ready_for_testing": [
+      "Ready for Testing",
+      "Code Review Done"
+    ],
+    "statuses_in_testing": [
+      "In Testing",
+      "QA"
+    ],
+    "statuses_in_development": [
+      "In Progress",
+      "In Review",
+      "Development"
+    ],
+    "initial_status": "To Do",
+    "calc_weight_type": "STORY_POINTS",
+    "time_period_type": "WEEKS",
+    "formula": "dmtools-ai-docs/references/examples/dev-productivity-formula.js",
+    "employees": "dmtools-ai-docs/references/examples/dev-team.json",
+    "comment_regex_responsible": "Implemented by:\\s+(\\w+)"
+  }
+}
