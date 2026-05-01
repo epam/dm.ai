@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 import re
 from pathlib import Path
 from typing import Iterable
@@ -54,6 +55,7 @@ DESCRIPTION_VERBS = frozenset(
         "works",
     }
 )
+SUMMARY_CONTEXT_HEADINGS = frozenset({"overview", "summary"})
 TEXT_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
 
 
@@ -118,24 +120,31 @@ class DocumentationConsistencyService(DocumentationConsistencyChecker):
             matching_paragraphs = [
                 paragraph
                 for paragraph in paragraphs
-                if self._is_descriptive_job_paragraph(paragraph.text, reference.all_names)
+                if self._is_summary_candidate(paragraph, reference.all_names)
             ]
             if not matching_paragraphs:
                 continue
 
-            best_overlap = 0
-            best_excerpt = ""
-            for paragraph in matching_paragraphs:
-                overlap = len(reference.summary_keywords & self._text_keywords(paragraph.text))
-                if overlap > best_overlap:
-                    best_overlap = overlap
-                    best_excerpt = f"L{paragraph.start_line}: {paragraph.text}"
-
-            required_overlap = self._required_summary_overlap(reference)
-            if best_overlap < required_overlap:
+            if not any(
+                self._contains_canonical_summary(paragraph.text, reference.summary)
+                for paragraph in matching_paragraphs
+            ):
+                best_paragraph = max(
+                    matching_paragraphs,
+                    key=lambda paragraph: self._summary_similarity(
+                        paragraph.text,
+                        reference.summary,
+                    ),
+                )
+                best_similarity = self._summary_similarity(
+                    best_paragraph.text,
+                    reference.summary,
+                )
                 findings.append(
                     f"{reference.job} summary drift: expected '{reference.summary}' "
-                    f"(best prose match {best_overlap}/{required_overlap}: {best_excerpt or 'no matching prose found'})"
+                    f"(best summary candidate {best_similarity:.2f} at "
+                    f"L{best_paragraph.start_line} under '{best_paragraph.heading}': "
+                    f"{best_paragraph.text})"
                 )
 
         return findings
@@ -153,10 +162,6 @@ class DocumentationConsistencyService(DocumentationConsistencyChecker):
         return token.endswith(suffixes) and len(_camel_case_segments(token)) > 1
 
     @staticmethod
-    def _required_summary_overlap(reference: JobReference) -> int:
-        return 1 if len(reference.summary_keywords) == 1 else 2
-
-    @staticmethod
     def _text_keywords(text: str) -> frozenset[str]:
         keywords: set[str] = set()
         for token in TEXT_TOKEN_PATTERN.findall(text.lower()):
@@ -166,11 +171,32 @@ class DocumentationConsistencyService(DocumentationConsistencyChecker):
                 keywords.add(token)
         return frozenset(keywords)
 
-    @staticmethod
-    def _is_descriptive_job_paragraph(text: str, names: tuple[str, ...]) -> bool:
-        if not any(_mentions_name(text, name) for name in names):
+    def _contains_canonical_summary(self, text: str, summary: str) -> bool:
+        return self._normalize_text(summary) in self._normalize_text(text)
+
+    def _summary_similarity(self, text: str, summary: str) -> float:
+        return SequenceMatcher(
+            None,
+            self._normalize_text(text),
+            self._normalize_text(summary),
+        ).ratio()
+
+    def _is_summary_candidate(self, paragraph, names: tuple[str, ...]) -> bool:
+        if not any(_mentions_name(paragraph.text, name) for name in names):
             return False
-        return bool(DocumentationConsistencyService._text_keywords(text) & DESCRIPTION_VERBS)
+        if not self._is_summary_heading(paragraph.heading, names):
+            return False
+        return bool(self._text_keywords(paragraph.text) & DESCRIPTION_VERBS)
+
+    def _is_summary_heading(self, heading: str, names: tuple[str, ...]) -> bool:
+        normalized_heading = self._normalize_text(heading)
+        if normalized_heading in SUMMARY_CONTEXT_HEADINGS:
+            return True
+        return any(self._normalize_text(name) in normalized_heading for name in names)
+
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        return " ".join(TEXT_TOKEN_PATTERN.findall(text.lower()))
 
     @staticmethod
     def format_table_mismatch(

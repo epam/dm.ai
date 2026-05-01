@@ -17,6 +17,7 @@ CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(r"\b([A-Z][A-Za-z0-9]+)\b")
 class MarkdownParagraph:
     start_line: int
     text: str
+    heading: str
 
 
 def extract_job_reference_table(path: Path) -> list[JobReference]:
@@ -67,48 +68,45 @@ def extract_markdown_paragraphs(path: Path) -> list[MarkdownParagraph]:
     current_lines: list[str] = []
     current_start_line = 0
     inside_fence = False
+    current_heading = ""
+
+    def flush_paragraph() -> None:
+        nonlocal current_lines, current_start_line
+        if current_lines:
+            paragraphs.append(
+                MarkdownParagraph(
+                    start_line=current_start_line,
+                    text=" ".join(current_lines),
+                    heading=current_heading,
+                )
+            )
+            current_lines = []
+            current_start_line = 0
 
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         stripped_line = line.strip()
 
         if stripped_line.startswith("```"):
-            if current_lines:
-                paragraphs.append(
-                    MarkdownParagraph(
-                        start_line=current_start_line,
-                        text=" ".join(current_lines),
-                    )
-                )
-                current_lines = []
-                current_start_line = 0
+            flush_paragraph()
             inside_fence = not inside_fence
             continue
 
         if inside_fence:
             continue
 
+        if stripped_line.startswith("#"):
+            flush_paragraph()
+            current_heading = stripped_line.lstrip("#").strip()
+            continue
+
         if not stripped_line:
-            if current_lines:
-                paragraphs.append(
-                    MarkdownParagraph(
-                        start_line=current_start_line,
-                        text=" ".join(current_lines),
-                    )
-                )
-                current_lines = []
-                current_start_line = 0
+            flush_paragraph()
             continue
 
         if not current_lines:
             current_start_line = line_number
         current_lines.append(stripped_line)
 
-    if current_lines:
-        paragraphs.append(
-            MarkdownParagraph(
-                start_line=current_start_line,
-                text=" ".join(current_lines),
-            )
-        )
+    flush_paragraph()
 
     return paragraphs
