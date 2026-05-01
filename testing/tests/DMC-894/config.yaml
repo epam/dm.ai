@@ -1,0 +1,6 @@
+test_id: DMC-894
+type: api
+framework: rest
+platform: node
+dependencies: []
+target_file: dmtools-ai-docs/references/agents/teammate-configs.md
