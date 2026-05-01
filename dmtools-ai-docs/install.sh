@@ -6,7 +6,7 @@
 # and to global ~/.claude/skills if ~/.claude exists (Claude Code / GitHub Copilot CLI)
 #
 # Usage:
-#   curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.129/skill-install.sh | bash
+#   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
 #   # When piped (non-interactive): installs to ALL detected locations automatically
 #
 #   INSTALL_LOCATION=1 bash install.sh          # Install to first detected location only
@@ -37,7 +37,7 @@ for arg in "$@"; do
             echo "  INSTALL_LOCATION  Set to number (1,2,3...) to select specific location"
             echo ""
             echo "Examples:"
-            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.129/skill-install.sh | bash"
+            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash"
             echo "    → Non-interactive mode: installs to ALL detected locations automatically"
             echo ""
             echo "  bash install.sh"

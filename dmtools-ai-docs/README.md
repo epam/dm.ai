@@ -10,7 +10,7 @@ Universal AI assistant skill for DMtools - works with Cursor, Claude, Codex, and
 
 ```bash
 # Run from your project root directory
-curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
 ```
 
 The installer will:
@@ -49,7 +49,7 @@ bash install.sh --help
 
 ## 📦 Manual Installation
 
-1. Download `dmtools-skill-v1.7.129.zip` from [Releases](https://github.com/IstiN/dmtools/releases)
+1. Download the latest `dmtools-skill-v<release>.zip` from [Releases](https://github.com/epam/dm.ai/releases/latest)
 2. Extract to one of these **project-level directories** in your project root:
 
 | Location | Platform | Description |
@@ -115,7 +115,7 @@ dmtools/
 To update to the latest version, run from your project root directory:
 
 ```bash
-curl -fsSL https://github.com/IstiN/dmtools/releases/download/v1.7.129/skill-install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
 ```
 
 **Note**: This will update the skill in your current project's skill directories.
@@ -134,9 +134,9 @@ Apache License 2.0
 
 ## 🔗 Resources
 
-- **DMtools Repository**: [github.com/IstiN/dmtools](https://github.com/IstiN/dmtools)
+- **DMtools Repository**: [github.com/epam/dm.ai](https://github.com/epam/dm.ai)
 - **Agent Skills Standard**: [agentskills.io](https://agentskills.io)
-- **Issues & Support**: [github.com/IstiN/dmtools/issues](https://github.com/IstiN/dmtools/issues)
+- **Issues & Support**: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
 
 ---
 
