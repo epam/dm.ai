@@ -3,18 +3,22 @@
 
 package com.github.istin.dmtools.job;
 
+import com.github.istin.dmtools.dev.CodeGenerator;
 import com.github.istin.dmtools.kb.KBProcessingJob;
 import com.github.istin.dmtools.reporting.ReportGeneratorJob;
 import com.github.istin.dmtools.reporting.ReportVisualizerJob;
 import org.junit.Test;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.util.Base64;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -55,6 +59,13 @@ public class JobRunnerTest {
     }
 
     @Test
+    public void testCodeGeneratorCompatibilityShimRemainsRegistered() throws Exception {
+        assertTrue(invokeCreateJobInstance("CodeGenerator") instanceof CodeGenerator);
+        assertTrue(invokeCreateJobInstance("codegenerator") instanceof CodeGenerator);
+        assertTrue(invokeListJobs().contains("- CodeGenerator"));
+    }
+
+    @Test
     public void testKBProcessingJobUsesCliFacingNameInListingAndValidation() throws Exception {
         assertEquals("KBProcessingJob", new KBProcessingJob().getName());
 
@@ -69,6 +80,23 @@ public class JobRunnerTest {
             assertTrue(e.getMessage().contains("KBProcessingJob"));
             assertFalse(e.getMessage().contains("KBProcessing,"));
         }
+    }
+
+    @Test
+    public void testRunSupportsCodeGeneratorCompatibilityShim() throws Exception {
+        JobParams jobParams = new JobParams();
+        jobParams.setName("CodeGenerator");
+        jobParams.set(JobParams.PARAMS, new JSONObject());
+
+        Object result = new JobRunner().run(jobParams);
+
+        assertNotNull(result);
+        assertTrue(result instanceof List);
+        List<?> items = (List<?>) result;
+        assertEquals(1, items.size());
+        ResultItem item = (ResultItem) items.get(0);
+        assertEquals("CodeGenerator", item.getKey());
+        assertEquals(CodeGenerator.getCompatibilityResponse(), item.getResult());
     }
 
     private Object invokeCreateJobInstance(String jobName) throws Exception {
