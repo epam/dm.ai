@@ -1,0 +1,6 @@
+test_id: DMC-905
+type: documentation
+framework: node
+platform: linux
+dependencies: []
+command: node testing/tests/DMC-905/deprecated-internal-job-aliases.test.js
