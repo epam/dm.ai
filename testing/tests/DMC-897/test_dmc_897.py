@@ -78,11 +78,6 @@ class FakeSandbox:
     def run(self, command: str, timeout: int = 1800):
         del timeout
         self.commands.append(command)
-        if command == "./scripts/update-skill-docs.sh":
-            title, summary = self._read_audited_document_details()
-            self._files["dmtools-ai-docs/SKILL.md"] = (
-                f"| | [{title}|references/agents/teammate-configs.md] | {summary} |"
-            )
         if command == "./scripts/generate-mcp-docs.sh" and self.refresh_generated_index:
             self._files["dmtools-ai-docs/references/mcp-tools/README.md"] = (
                 "# DMtools MCP Tools Reference\n\n"
@@ -95,16 +90,10 @@ class FakeSandbox:
             {"command": command, "returncode": 0, "stdout": "", "stderr": "", "combined_output": ""},
         )()
 
-    def _read_audited_document_details(self) -> tuple[str, str]:
-        source_text = self._files["dmtools-ai-docs/references/agents/teammate-configs.md"]
-        lines = [line for line in source_text.splitlines() if line.strip()]
-        return lines[0].removeprefix("# ").strip(), lines[1].strip()
-
-
-def test_dmc_897_service_accepts_injected_sandbox() -> None:
+def test_dmc_897_service_accepts_injected_sandbox_without_masking_skill_sync_bug() -> None:
     skill_row = (
-        "| | [Audited Teammate Configurations|references/agents/teammate-configs.md] | "
-        "Audited configuration reference for teammate workflow documentation corrections. |"
+        "| | [Teammate Configs|references/agents/teammate-configs.md] | "
+        "JSON-based AI workflows (CLI safety v1.7.133+) |"
     )
     sandbox = FakeSandbox(skill_row)
     service = SkillDocsSyncService(REPO_ROOT, sandbox_factory=lambda _: sandbox)
@@ -118,15 +107,16 @@ def test_dmc_897_service_accepts_injected_sandbox() -> None:
     ]
     assert result.generated_index_refreshed is True
     assert result.changelog_mentions_correction is True
-    assert result.skill_reference_title_synced is True
-    assert result.skill_reference_summary_synced is True
+    assert result.skill_reference_title_synced is False
+    assert result.skill_reference_summary_synced is False
+    assert result.skill_reference_row == skill_row
     assert sandbox.cleaned_up is True
 
 
 def test_dmc_897_service_detects_stale_generated_index() -> None:
     skill_row = (
-        "| | [Audited Teammate Configurations|references/agents/teammate-configs.md] | "
-        "Audited configuration reference for teammate workflow documentation corrections. |"
+        "| | [Teammate Configs|references/agents/teammate-configs.md] | "
+        "JSON-based AI workflows (CLI safety v1.7.133+) |"
     )
     sandbox = FakeSandbox(skill_row, refresh_generated_index=False)
     service = SkillDocsSyncService(REPO_ROOT, sandbox_factory=lambda _: sandbox)
