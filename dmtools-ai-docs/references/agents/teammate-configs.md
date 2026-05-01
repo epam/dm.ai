@@ -20,8 +20,8 @@ This is a **technical identifier** for job instantiation:
 **Rules:**
 - ✅ Use the supported names from [Jobs Reference](../jobs/README.md)
 - ✅ Most jobs use the exact Java class name
-- ✅ Report docs and examples use `ReportGenerator` / `ReportVisualizer`; `ReportGeneratorJob` / `ReportVisualizerJob` are also accepted
-- ✅ `KBProcessingJob` is the canonical KB name; legacy `KBProcessing` still works for backward compatibility
+- ✅ Report docs and examples use `ReportGenerator` / `ReportVisualizer`; internal aliases `ReportGeneratorJob` / `ReportVisualizerJob` are **[deprecated]** -> use `ReportGenerator` / `ReportVisualizer`
+- ✅ KB docs should use `KBProcessing`; internal alias `KBProcessingJob` is **[deprecated]** -> use `KBProcessing`
 - ❌ Do NOT customize: "My Generator" will fail
 - ❌ Do NOT change case: "testcasesgenerator" will fail
 
@@ -44,9 +44,9 @@ AI Teammates are JSON-configured workflows that combine AI analysis with pre/pos
 | `DevProductivityReport` | Produces developer productivity metrics from tracker, source control, and optional spreadsheet inputs. | `DevProductivityReport` | [dev-productivity-report.json](../examples/dev-productivity-report.json) |
 | `BAProductivityReport` | Calculates BA delivery metrics such as created work, field updates, and workflow movement over time. | `BAProductivityReport` | [ba-productivity-report.json](../examples/ba-productivity-report.json) |
 | `QAProductivityReport` | Calculates QA metrics such as bugs, tests, comments, and key status transitions across releases. | `QAProductivityReport` | [qa-productivity-report.json](../examples/qa-productivity-report.json) |
-| `ReportGenerator` | Generates configurable analytics reports as JSON and HTML from tracker, SCM, CSV, or Figma data. | `ReportGenerator` / `ReportGeneratorJob` | [report-generator-job.json](../examples/report-generator-job.json) |
-| `ReportVisualizer` | Renders a saved JSON report as an interactive HTML dashboard without regenerating report data. | `ReportVisualizer` / `ReportVisualizerJob` | [report-visualizer-job.json](../examples/report-visualizer-job.json) |
-| `KBProcessingJob` | Runs the knowledge-base pipeline that processes source content and aggregates searchable KB output. | `KBProcessingJob` / `KBProcessing` | [kb-processing-job.json](../examples/kb-processing-job.json) |
+| `ReportGenerator` | Generates configurable analytics reports as JSON and HTML from tracker, SCM, CSV, or Figma data. | `ReportGenerator`; `ReportGeneratorJob` **[deprecated]** -> `ReportGenerator` | [report-generator-job.json](../examples/report-generator-job.json) |
+| `ReportVisualizer` | Renders a saved JSON report as an interactive HTML dashboard without regenerating report data. | `ReportVisualizer`; `ReportVisualizerJob` **[deprecated]** -> `ReportVisualizer` | [report-visualizer-job.json](../examples/report-visualizer-job.json) |
+| `KBProcessing` | Runs the knowledge-base pipeline that processes source content and aggregates searchable KB output. | `KBProcessing`; `KBProcessingJob` **[deprecated]** -> `KBProcessing` | [kb-processing-job.json](../examples/kb-processing-job.json) |
 
 ## 📋 Configuration Structure
 
