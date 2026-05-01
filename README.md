@@ -81,6 +81,10 @@ See the [installation guide](dmtools-ai-docs/references/installation/README.md) 
 5. Verify the migrated install with `dmtools --version` and `dmtools list`, and refresh CI cache keys that still reference legacy install URLs.
 6. If the migration fails, roll back by restoring the backup copy of `~/.dmtools` and re-enabling the previous wrapper or PATH entry.
 
+### Deprecated compatibility shims
+
+- `CodeGenerator` is deprecated and kept only as a compatibility shim for one release. Invocations now log a warning and return a no-op response; migrate affected automation before `v1.8.0`.
+
 ### Configuration
 
 ```bash

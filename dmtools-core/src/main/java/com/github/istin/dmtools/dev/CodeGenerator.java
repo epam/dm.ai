@@ -4,31 +4,31 @@
 package com.github.istin.dmtools.dev;
 
 import com.github.istin.dmtools.ai.AI;
-import com.github.istin.dmtools.ai.ConversationObserver;
-import com.github.istin.dmtools.ai.JAssistant;
-import com.github.istin.dmtools.ai.TicketContext;
-import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
-import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
-import com.github.istin.dmtools.common.code.SourceCode;
-import com.github.istin.dmtools.common.model.ITicket;
-import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.ResultItem;
-import com.github.istin.dmtools.ai.dial.BasicDialAI;
-import com.github.istin.dmtools.prompt.PromptManager;
-import com.github.istin.dmtools.report.freemarker.GenericCell;
-import com.github.istin.dmtools.report.freemarker.GenericReport;
-import com.github.istin.dmtools.report.freemarker.GenericRow;
-import org.json.JSONArray;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class CodeGenerator extends AbstractJob<CodeGeneratorParams, List<ResultItem>> {
 
+    public static final String REMOVAL_VERSION = "v1.8.0";
+    private final Logger logger;
+
+    public CodeGenerator() {
+        this(LogManager.getLogger(CodeGenerator.class));
+    }
+
+    CodeGenerator(Logger logger) {
+        this.logger = logger;
+    }
+
     @Override
-    public List<ResultItem> runJob(CodeGeneratorParams params) throws Exception {
-        return runJob(params.getConfluenceRootPage(), params.getEachPagePrefix(), params.getInputJQL(), params.getInitiator(), params.getRole(), params.getSources());
+    public List<ResultItem> runJob(CodeGeneratorParams params) {
+        logger.warn(getDeprecationMessage());
+        return Collections.singletonList(new ResultItem(getName(), getCompatibilityResponse()));
     }
 
     @Override
@@ -36,50 +36,13 @@ public class CodeGenerator extends AbstractJob<CodeGeneratorParams, List<ResultI
         return null;
     }
 
-    public static List<ResultItem> runJob(String confluenceRootPage, String eachPagePrefix, String inputJQL, String initiator, String role, JSONArray sources) throws Exception {
-        BasicConfluence confluence = BasicConfluence.getInstance();
-
-        TrackerClient<? extends ITicket> trackerClient = BasicJiraClient.getInstance();
-        List<SourceCode> basicSourceCodes = SourceCode.Impl.getConfiguredSourceCodes(sources);
-        ConversationObserver conversationObserver = new ConversationObserver();
-        BasicDialAI ai = new BasicDialAI(conversationObserver);
-        PromptManager promptManager = new PromptManager();
-
-        JAssistant jAssistant = new JAssistant(trackerClient, basicSourceCodes, ai, promptManager);
-
-        List<ResultItem> resultItems = new ArrayList<>();
-        trackerClient.searchAndPerform(ticket -> {
-            TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-            ticketContext.prepareContext();
-            String response = generateCode(confluenceRootPage, eachPagePrefix, role, ticketContext, jAssistant, conversationObserver, confluence, basicSourceCodes);
-            trackerClient.postCommentIfNotExists(ticket.getTicketKey(), trackerClient.tag(initiator) + ", code is prepared.");
-            resultItems.add(new ResultItem(ticket.getKey(), response));
-            return false;
-        }, inputJQL, trackerClient.getExtendedQueryFields());
-        return resultItems;
+    public static String getDeprecationMessage() {
+        return "CodeGenerator is deprecated and now runs as a compatibility shim. "
+                + "No code will be generated. Migrate to supported workflows before " + REMOVAL_VERSION + ".";
     }
 
-    public static String generateCode(String confluenceRootPage, String eachPagePrefix, String role, TicketContext ticketContext, JAssistant jAssistant, ConversationObserver conversationObserver, BasicConfluence confluence, List<SourceCode> basicSourceCode) throws Exception {
-        String response = jAssistant.generateCode(role, ticketContext);
-        List<ConversationObserver.Message> messages = conversationObserver.getMessages();
-        if (confluenceRootPage == null || eachPagePrefix == null || confluenceRootPage.isEmpty() || eachPagePrefix.isEmpty()) {
-            messages.clear();
-            return "";
-        }
-
-        if (!messages.isEmpty()) {
-            GenericReport genericReport = new GenericReport();
-            genericReport.setIsNotWiki(false);
-            genericReport.setName(eachPagePrefix + " " + ticketContext.getTicket().getKey());
-            for (ConversationObserver.Message message : messages) {
-                GenericRow row = new GenericRow(false);
-                row.getCells().add(new GenericCell("<b>" + message.getAuthor() + "</b>"));
-                row.getCells().add(new GenericCell(message.getText()));
-                genericReport.getRows().add(row);
-            }
-            conversationObserver.printAndClear();
-            confluence.publishPageToDefaultSpace(confluenceRootPage, eachPagePrefix, genericReport);
-        }
-        return response;
+    public static String getCompatibilityResponse() {
+        return "CodeGenerator compatibility shim executed successfully. "
+                + "No action was taken and no code artifacts were produced.";
     }
 }
