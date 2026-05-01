@@ -9,9 +9,21 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 INSTALL_SCRIPT = REPOSITORY_ROOT / "install.sh"
 DOC_PATH = REPOSITORY_ROOT / "docs" / "install-skills.md"
 ALL_SKILLS = (
-    "dmtools,jira,confluence,bitbucket,github,gitlab,figma,teams,"
+    "dmtools,jira,confluence,github,gitlab,figma,teams,"
     "sharepoint,ado,testrail,xray,report,expert,teammate"
 )
+RUNTIME_SKILL_INTEGRATIONS = {
+    "jira": {"jira"},
+    "confluence": {"confluence"},
+    "github": {"github"},
+    "gitlab": {"gitlab"},
+    "figma": {"figma"},
+    "teams": {"teams", "teams_auth"},
+    "sharepoint": {"sharepoint", "teams_auth"},
+    "ado": {"ado"},
+    "testrail": {"testrail"},
+    "xray": {"jira_xray"},
+}
 
 
 def run_installer_functions(commands: str, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -87,6 +99,20 @@ printf 'invalid=%s\\n' "$INVALID_SKILLS_CSV"
         self.assertIn("skills=jira,github", result.stdout)
         self.assertIn("invalid=unknown", result.stdout)
 
+    def test_bitbucket_is_rejected_until_runtime_support_exists(self) -> None:
+        result = run_installer_functions(
+            """
+printf 'available=%s\\n' "$(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+parse_installer_args --skills bitbucket
+resolve_skill_selection
+"""
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(f"available={ALL_SKILLS}", result.stdout)
+        self.assertIn("No valid skills selected", result.stderr)
+        self.assertIn("Unknown skills: bitbucket", result.stderr)
+
     def test_all_invalid_skills_fail_with_non_zero_exit(self) -> None:
         result = run_installer_functions(
             """
@@ -120,6 +146,28 @@ cat "$INSTALLER_ENV_PATH"
         self.assertIn("Selected skills already installed: jira", result.stdout)
         self.assertIn('DMTOOLS_SKILLS="jira"', result.stdout)
         self.assertIn('DMTOOLS_INTEGRATIONS="ai,cli,file,kb,mermaid,jira"', result.stdout)
+
+    def test_runtime_backed_skills_add_expected_integrations(self) -> None:
+        command_lines = []
+        for skill in RUNTIME_SKILL_INTEGRATIONS:
+            command_lines.extend(
+                [
+                    f'parse_installer_args --skills "{skill}"',
+                    "resolve_skill_selection",
+                    'printf "%s=%s\\n" "$EFFECTIVE_SKILLS_CSV" "$EFFECTIVE_INTEGRATIONS_CSV"',
+                ]
+            )
+        result = run_installer_functions("\n".join(command_lines))
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        for skill, expected_integrations in RUNTIME_SKILL_INTEGRATIONS.items():
+            matching_lines = [
+                line for line in result.stdout.splitlines() if line.startswith(f"{skill}=")
+            ]
+            self.assertEqual(1, len(matching_lines), result.stdout)
+            actual_integrations = set(matching_lines[0].split("=", 1)[1].split(","))
+            for integration in expected_integrations:
+                self.assertIn(integration, actual_integrations, matching_lines[0])
 
 
 class TestInstallerSkillDocumentation(unittest.TestCase):
