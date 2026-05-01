@@ -18,21 +18,18 @@ const teammateConfigsPath = path.resolve(
 
 const expectations = [
   {
-    type: 'deprecated-alias',
     alias: 'ReportGeneratorJob',
     target: 'ReportGenerator',
     relatedPaths: ['report-generation.md', 'report-generator-job.json'],
   },
   {
-    type: 'deprecated-alias',
     alias: 'ReportVisualizerJob',
     target: 'ReportVisualizer',
     relatedPaths: ['report-visualizer-job.json'],
   },
   {
-    type: 'canonical-name',
     alias: 'KBProcessingJob',
-    legacyAlias: 'KBProcessing',
+    target: 'KBProcessing',
     relatedPaths: ['kb-processing-job.json'],
   },
 ];
@@ -71,46 +68,13 @@ function verifyDeprecatedAlias(expectation, lines, failures) {
   }
 }
 
-function verifyCanonicalName(expectation, lines, failures) {
-  const token = `\`${expectation.alias}\``;
-  const lineIndexes = findLineIndexesContaining(lines, token);
-
-  if (lineIndexes.length === 0) {
-    failures.push(
-      `${expectation.alias}: entry is missing from teammate-configs.md.`,
-    );
-    return;
-  }
-
-  const candidateWindows = buildWindows(lines, lineIndexes, 2);
-  const canonicalWindows = candidateWindows.filter((window) => {
-    const mentionsLegacyAlias = window.text.includes(`\`${expectation.legacyAlias}\``);
-    const mentionsCanonicalContract =
-      /canonical|preferred/i.test(window.text) ||
-      window.line.includes(`\`${expectation.alias}\` / \`${expectation.legacyAlias}\``);
-
-    return mentionsLegacyAlias && mentionsCanonicalContract;
-  });
-
-  if (canonicalWindows.length === 0) {
-    failures.push(
-      `${expectation.alias}: found ${lineIndexes.length} reference(s), but none document it as the canonical name with ${expectation.legacyAlias} as the legacy alias.\n${formatWindows(candidateWindows)}`,
-    );
-  }
-}
-
 function verifyDeprecatedMigrationPointers() {
   const content = readText(teammateConfigsPath);
   const lines = splitLines(content);
   const failures = [];
 
   for (const expectation of expectations) {
-    if (expectation.type === 'deprecated-alias') {
-      verifyDeprecatedAlias(expectation, lines, failures);
-      continue;
-    }
-
-    verifyCanonicalName(expectation, lines, failures);
+    verifyDeprecatedAlias(expectation, lines, failures);
   }
 
   assert.deepStrictEqual(
@@ -118,7 +82,7 @@ function verifyDeprecatedMigrationPointers() {
     [],
     [
       `${ticketKey} failed.`,
-      `Expected teammate-configs.md to document deprecated aliases with migration pointers and keep canonical naming guidance aligned with the jobs reference.`,
+      `Expected teammate-configs.md to mark ReportGeneratorJob, ReportVisualizerJob, and KBProcessingJob as deprecated aliases with explicit migration pointers to their public configuration names.`,
       ...failures,
       `Checked file: ${teammateConfigsPath}`,
     ].join('\n\n'),
