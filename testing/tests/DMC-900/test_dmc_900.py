@@ -16,23 +16,24 @@ def test_dmc_900_active_install_guidance_has_no_legacy_install_references() -> N
     assert not findings, service.format_findings(findings)
 
 
-def test_dmc_900_scans_only_primary_install_docs(tmp_path: Path) -> None:
+def test_dmc_900_scans_install_guidance_anywhere_in_dmtools_docs(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
-    unrelated_docs = repository_root / "dmtools-ai-docs" / "guides"
-    installation_docs = repository_root / "dmtools-ai-docs" / "references" / "installation"
+    docs_root = repository_root / "dmtools-ai-docs"
+    install_readme = docs_root / "README.md"
+    changelog = docs_root / "CHANGELOG.md"
 
-    unrelated_docs.mkdir(parents=True)
-    installation_docs.mkdir(parents=True)
+    docs_root.mkdir(parents=True)
 
     (repository_root / "README.md").write_text("# Overview\n", encoding="utf-8")
-    (unrelated_docs / "README.md").write_text(
-        "# Setup\n"
+    install_readme.write_text(
+        "# DMtools Skill\n"
+        "## Quick Install\n"
         "curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/dmtools-ai-docs/setup-dmtools.sh | bash\n",
         encoding="utf-8",
     )
-    (installation_docs / "README.md").write_text(
-        "# Installation\n"
-        "curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/dmtools-ai-docs/setup-dmtools.sh | bash\n",
+    changelog.write_text(
+        "# Changelog\n"
+        "Supports raw URLs: https://raw.githubusercontent.com/owner/repo/branch/path/to/file.md\n",
         encoding="utf-8",
     )
 
@@ -41,5 +42,5 @@ def test_dmc_900_scans_only_primary_install_docs(tmp_path: Path) -> None:
     findings = service.forbidden_legacy_reference_findings()
 
     assert [(finding.file_path, finding.line_number) for finding in findings] == [
-        ("dmtools-ai-docs/references/installation/README.md", 2)
+        ("dmtools-ai-docs/README.md", 3)
     ]
