@@ -41,7 +41,7 @@ find_java_command() {
 JAVA_CMD=$(find_java_command 2>/dev/null) || {
     echo "Error: Java 23 is required but not found." >&2
     echo "Please install DMTools first:" >&2
-    echo "  curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash" >&2
+    echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash" >&2
     exit 1
 }
 
@@ -191,7 +191,7 @@ usage() {
     # Check if JAR file exists before calling JobRunner
     if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
         error "DMTools JAR file not found. Please install DMTools first:
-  curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
 Or if you're developing locally, build the project first:
   ./gradlew build
@@ -326,7 +326,7 @@ esac
 # Check if JAR file exists
 if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
     error "DMTools JAR file not found. Please install DMTools first:
-  curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
 Or if you're developing locally, build the project first:
   ./gradlew build
