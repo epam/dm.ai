@@ -2,17 +2,13 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { RepositoryConfig } = require('../../core/config/repositoryConfig');
-const { NodeFileSystemRepository } = require('../../frameworks/api/rest/nodeFileSystemRepository');
 const {
-  TeammateConfigExampleUsageAuditService,
-} = require('../../components/services/teammateConfigExampleUsageAuditService');
+  createTeammateConfigExampleUsageAuditService,
+} = require('../../components/services/createTeammateConfigExampleUsageAuditService');
 
 test('DMC-894 validates teammate example usage links', () => {
   const repoRoot = path.resolve(__dirname, '../../..');
-  const config = new RepositoryConfig(repoRoot);
-  const repository = new NodeFileSystemRepository();
-  const auditService = new TeammateConfigExampleUsageAuditService({ config, repository });
+  const auditService = createTeammateConfigExampleUsageAuditService({ repoRoot });
 
   const auditResult = auditService.auditCommonJobReference();
   const auditedJobs = auditResult.entries.map((entry) => entry.job);
