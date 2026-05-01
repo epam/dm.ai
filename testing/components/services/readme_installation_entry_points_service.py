@@ -13,7 +13,6 @@ EXPECTED_POWERSHELL_PATH = (
 )
 EXPECTED_RELEASES_URL = "https://github.com/epam/dm.ai/releases/latest"
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
-MARKDOWN_LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 HTML_LINK_PATTERN = re.compile(r"""<a\s+[^>]*href=["']([^"']+)["']""", re.IGNORECASE)
 AUTO_LINK_PATTERN = re.compile(r"<(https?://[^>]+)>")
 BARE_URL_PATTERN = re.compile(r"(?<![<(])https?://[^\s)>]+")
@@ -102,28 +101,26 @@ class ReadmeInstallationEntryPointsService:
 
         headings_preview = ", ".join(self.headings()) or "none"
         installation_section = self._section_body("Installation")
-        navigation_region = self._navigation_region_for_installation()
-        navigation_targets = self._link_targets(navigation_region)
-        if not navigation_region:
+        toc_region = self._table_of_contents_region()
+        toc_targets = self._link_targets(toc_region)
+        if not toc_region:
             failures.append(
                 ValidationFailure(
                     step=4,
-                    summary="README does not provide a navigation area above Installation.",
-                    expected="A table of contents or equivalent navigation area linking to the Installation section.",
+                    summary="README is missing a Table of Contents section for Installation discovery.",
+                    expected="A Table of Contents block containing an Installation anchor link.",
                     actual=f"Available headings: {headings_preview}",
                 )
             )
-        elif not any(
-            self._is_installation_anchor(target) for target in navigation_targets
-        ):
+        elif not any(self._is_installation_anchor(target) for target in toc_targets):
             failures.append(
                 ValidationFailure(
                     step=4,
-                    summary="README does not expose a semantic navigation link to the Installation section.",
-                    expected="A top-of-page navigation link targeting the Installation anchor.",
+                    summary="README Table of Contents does not link to the Installation section.",
+                    expected="A Table of Contents link targeting the Installation anchor.",
                     actual=(
-                        "Navigation link targets: "
-                        + (", ".join(navigation_targets) if navigation_targets else "none")
+                        "Table of Contents link targets: "
+                        + (", ".join(toc_targets) if toc_targets else "none")
                     ),
                 )
             )
@@ -186,12 +183,17 @@ class ReadmeInstallationEntryPointsService:
             self._next_heading_line(heading.line_index, max_level=heading.level),
         )
 
-    def _navigation_region_for_installation(self) -> str:
+    def _table_of_contents_region(self) -> str:
+        toc_heading = self._heading_by_title("Table of Contents")
         installation_heading = self._heading_by_title("Installation")
-        title_heading = self._title_heading()
-        if installation_heading is None or title_heading is None:
+        if toc_heading is None or installation_heading is None:
             return ""
-        return self._body_between(title_heading.line_index + 1, installation_heading.line_index)
+        if toc_heading.line_index >= installation_heading.line_index:
+            return ""
+        return self._body_between(
+            toc_heading.line_index + 1,
+            self._next_heading_line(toc_heading.line_index, max_level=toc_heading.level),
+        )
 
     def _parse_headings(self) -> list[Heading]:
         headings: list[Heading] = []
@@ -211,12 +213,12 @@ class ReadmeInstallationEntryPointsService:
         return next((heading for heading in self._headings if heading.level == 1), None)
 
     def _heading_by_title(self, section_title: str) -> Heading | None:
-        expected_title = section_title.strip().lower()
+        expected_title = self._normalize_heading_title(section_title)
         return next(
             (
                 heading
                 for heading in self._headings
-                if heading.title.lower() == expected_title
+                if self._normalize_heading_title(heading.title) == expected_title
             ),
             None,
         )
@@ -233,12 +235,11 @@ class ReadmeInstallationEntryPointsService:
     def _link_targets(self, text: str) -> list[str]:
         targets: list[str] = []
         seen: set[str] = set()
-        for pattern in (
-            MARKDOWN_LINK_PATTERN,
-            HTML_LINK_PATTERN,
-            AUTO_LINK_PATTERN,
-            BARE_URL_PATTERN,
-        ):
+        for target in self._markdown_link_targets(text):
+            if target not in seen:
+                seen.add(target)
+                targets.append(target)
+        for pattern in (HTML_LINK_PATTERN, AUTO_LINK_PATTERN, BARE_URL_PATTERN):
             for match in pattern.findall(text):
                 target = match.strip()
                 if target and target not in seen:
@@ -247,12 +248,77 @@ class ReadmeInstallationEntryPointsService:
         return targets
 
     @staticmethod
+    def _markdown_link_targets(text: str) -> list[str]:
+        targets: list[str] = []
+        index = 0
+        length = len(text)
+        while index < length:
+            if text[index] != "[":
+                index += 1
+                continue
+
+            closing_bracket = ReadmeInstallationEntryPointsService._find_matching_delimiter(
+                text=text,
+                start_index=index,
+                opening="[",
+                closing="]",
+            )
+            if closing_bracket == -1:
+                index += 1
+                continue
+
+            if closing_bracket + 1 >= length or text[closing_bracket + 1] != "(":
+                index = closing_bracket + 1
+                continue
+
+            closing_parenthesis = ReadmeInstallationEntryPointsService._find_matching_delimiter(
+                text=text,
+                start_index=closing_bracket + 1,
+                opening="(",
+                closing=")",
+            )
+            if closing_parenthesis == -1:
+                index = closing_bracket + 1
+                continue
+
+            target = text[closing_bracket + 2 : closing_parenthesis].strip()
+            if target:
+                targets.append(target)
+            index = closing_parenthesis + 1
+        return targets
+
+    @staticmethod
+    def _find_matching_delimiter(
+        text: str,
+        start_index: int,
+        opening: str,
+        closing: str,
+    ) -> int:
+        depth = 0
+        for index in range(start_index, len(text)):
+            character = text[index]
+            if character == "\\":
+                continue
+            if character == opening:
+                depth += 1
+                continue
+            if character == closing:
+                depth -= 1
+                if depth == 0:
+                    return index
+        return -1
+
+    @staticmethod
     def _is_installation_anchor(target: str) -> bool:
         if "#" not in target:
             return False
         fragment = target.split("#", maxsplit=1)[1].strip().lower()
         normalized_fragment = re.sub(r"[\s_]+", "-", fragment)
         return normalized_fragment == INSTALLATION_ANCHOR
+
+    @staticmethod
+    def _normalize_heading_title(title: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
 
     @staticmethod
     def _preview(value: str, limit: int = 240) -> str:
