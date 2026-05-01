@@ -421,7 +421,7 @@ jobs:
 
           **Focused skill install:**
           \`\`\`bash
-          DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${VERSION}/skill-install.sh | bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${VERSION}/skill-install.sh | bash -s -- --skills jira,github
           \`\`\`
 
           **Focused packages:**

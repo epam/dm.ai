@@ -53,7 +53,7 @@ while [ $# -gt 0 ]; do
             echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash"
             echo "    → Non-interactive mode: installs to ALL detected locations automatically"
             echo ""
-            echo "  DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash"
+            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github"
             echo "    → Install only /dmtools-jira and /dmtools-github"
             echo ""
             echo "  bash install.sh"

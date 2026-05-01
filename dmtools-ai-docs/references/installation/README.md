@@ -47,10 +47,10 @@ Use the focused skill packages when you want integration-specific slash commands
 
 ```bash
 # Install only Jira
-DMTOOLS_SKILLS=jira curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira
 
 # Install Jira + GitHub together
-DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github
 
 # Run the installer locally and pass the package list directly
 bash install.sh --skills ado,testrail

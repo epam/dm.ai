@@ -67,10 +67,10 @@ Use focused packages when you want dedicated slash commands such as `/dmtools-ji
 
 ```bash
 # Install only Jira
-DMTOOLS_SKILLS=jira curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira
 
 # Install Jira + GitHub together
-DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github
 
 # Local installer usage
 bash install.sh --skills ado,testrail
