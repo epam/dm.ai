@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from pathlib import Path
 
@@ -9,17 +10,13 @@ REFERENCE_TABLE_HEADER = "| Job | Summary | Accepted `name` | Example |"
 REFERENCE_TABLE_SEPARATOR = "|-----|---------|-----------------|---------|"
 JSON_NAME_PATTERN = re.compile(r'"name"\s*:\s*"([^"\n]+)"')
 BACKTICKED_IDENTIFIER_PATTERN = re.compile(r"`([A-Z][A-Za-z0-9]+)`")
-JOB_LIKE_SUFFIXES = (
-    "Teammate",
-    "Runner",
-    "Generator",
-    "Report",
-    "Creator",
-    "Support",
-    "Daily",
-    "Job",
-    "Expert",
-)
+CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(r"\b([A-Z][A-Za-z0-9]+)\b")
+
+
+@dataclass(frozen=True)
+class MarkdownParagraph:
+    start_line: int
+    text: str
 
 
 def extract_job_reference_table(path: Path) -> list[JobReference]:
@@ -57,17 +54,61 @@ def extract_json_name_values(path: Path) -> list[str]:
     return JSON_NAME_PATTERN.findall(content)
 
 
-def extract_backticked_job_like_identifiers(path: Path) -> list[str]:
+def extract_identifier_tokens(path: Path) -> list[str]:
     content = path.read_text(encoding="utf-8")
-    return [
-        token
-        for token in BACKTICKED_IDENTIFIER_PATTERN.findall(content)
-        if _looks_like_job_identifier(token)
-    ]
+    tokens = set(JSON_NAME_PATTERN.findall(content))
+    tokens.update(BACKTICKED_IDENTIFIER_PATTERN.findall(content))
+    tokens.update(CAMEL_CASE_IDENTIFIER_PATTERN.findall(content))
+    return sorted(tokens)
 
 
-def _looks_like_job_identifier(token: str) -> bool:
-    if token in {"Teammate", "JSRunner", "Expert"}:
-        return True
-    return token.endswith(JOB_LIKE_SUFFIXES)
+def extract_markdown_paragraphs(path: Path) -> list[MarkdownParagraph]:
+    paragraphs: list[MarkdownParagraph] = []
+    current_lines: list[str] = []
+    current_start_line = 0
+    inside_fence = False
 
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped_line = line.strip()
+
+        if stripped_line.startswith("```"):
+            if current_lines:
+                paragraphs.append(
+                    MarkdownParagraph(
+                        start_line=current_start_line,
+                        text=" ".join(current_lines),
+                    )
+                )
+                current_lines = []
+                current_start_line = 0
+            inside_fence = not inside_fence
+            continue
+
+        if inside_fence:
+            continue
+
+        if not stripped_line:
+            if current_lines:
+                paragraphs.append(
+                    MarkdownParagraph(
+                        start_line=current_start_line,
+                        text=" ".join(current_lines),
+                    )
+                )
+                current_lines = []
+                current_start_line = 0
+            continue
+
+        if not current_lines:
+            current_start_line = line_number
+        current_lines.append(stripped_line)
+
+    if current_lines:
+        paragraphs.append(
+            MarkdownParagraph(
+                start_line=current_start_line,
+                text=" ".join(current_lines),
+            )
+        )
+
+    return paragraphs
