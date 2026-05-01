@@ -2,16 +2,30 @@
 
 ## What this test covers
 
-This test audits all discoverable `SKILL.md` frontmatter descriptions under the configured ticket scope and verifies that each summary:
+This test audits the 10 agent blurbs documented in the common job reference table at
+`dmtools-ai-docs/references/agents/teammate-configs.md` and verifies that each summary:
 
 - stays within 2 sentences
 - stays within 160 characters
 - avoids filler wording
-- includes a concise `Use ...` guidance sentence when a second sentence is present
+- uses concise, technical, active voice
 
-## Assumption
+## Ticket scope
 
-The ticket input does not include the explicit list of the "10 audited agents", so the automation audits the discoverable `SKILL.md` descriptions under `dmtools-ai-docs`, which is the only repo area named in the preconditions.
+The ticket scope is pinned in `config.yaml` to the 10 jobs listed in the "Common job reference" table:
+
+- `Teammate`
+- `JSRunner`
+- `TestCasesGenerator`
+- `InstructionsGenerator`
+- `DevProductivityReport`
+- `BAProductivityReport`
+- `QAProductivityReport`
+- `ReportGenerator`
+- `ReportVisualizer`
+- `KBProcessingJob`
+
+The test fails if that exact audited set changes or if any summary falls outside the length/tone rules.
 
 ## Install dependencies
 
@@ -25,7 +39,7 @@ python testing/tests/DMC-896/test_dmc_896.py
 
 ## Environment variables / config
 
-None.
+No environment variables are required. The audited table path and 10-agent scope are defined in `config.yaml`.
 
 ## Expected passing output
 

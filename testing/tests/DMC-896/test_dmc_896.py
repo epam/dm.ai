@@ -15,13 +15,34 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
+EXPECTED_AGENTS = list(CONFIG.get("expected_agents", []))
 
 
 class TestDMC896SkillSummaries(unittest.TestCase):
-    def test_skill_descriptions_are_concise_and_technical(self) -> None:
+    def test_ticket_scope_matches_expected_agents(self) -> None:
         service = SkillSummaryAuditService(
             repository_root=REPOSITORY_ROOT,
-            skill_roots=list(CONFIG.get("skill_roots", [])),
+            summary_table_path=str(CONFIG["summary_table_path"]),
+        )
+
+        audits = service.audit_all()
+        audited_agents = [audit.name for audit in audits]
+
+        self.assertEqual(
+            10,
+            len(EXPECTED_AGENTS),
+            "The ticket must explicitly configure the 10 audited agents.",
+        )
+        self.assertListEqual(
+            EXPECTED_AGENTS,
+            audited_agents,
+            "The audited agent set does not match the ticket's 10-agent scope.",
+        )
+
+    def test_agent_summaries_are_concise_and_technical(self) -> None:
+        service = SkillSummaryAuditService(
+            repository_root=REPOSITORY_ROOT,
+            summary_table_path=str(CONFIG["summary_table_path"]),
         )
 
         audits = service.audit_all()
@@ -29,7 +50,7 @@ class TestDMC896SkillSummaries(unittest.TestCase):
         self.assertGreater(
             len(audits),
             0,
-            "No SKILL.md descriptions were found in the configured roots.",
+            "No agent summaries were found in the configured job reference table.",
         )
 
         failures = [audit for audit in audits if not audit.is_valid]
@@ -45,7 +66,7 @@ class TestDMC896SkillSummaries(unittest.TestCase):
                 ]
             )
             self.fail(
-                "Skill summary audit failed for "
+                "Agent summary audit failed for "
                 f"{len(failures)} of {len(audits)} descriptions:\n{details}"
             )
 

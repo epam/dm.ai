@@ -2,68 +2,142 @@ import re
 from pathlib import Path
 
 from testing.core.models.skill_summary_audit import SkillSummaryAudit
-from testing.core.utils.skill_frontmatter import extract_frontmatter_value
 
 
 class SkillSummaryAuditService:
+    ACTION_VERBS = {
+        "aggregates",
+        "audits",
+        "builds",
+        "calculates",
+        "collects",
+        "creates",
+        "executes",
+        "fetches",
+        "generates",
+        "loads",
+        "orchestrates",
+        "parses",
+        "posts",
+        "processes",
+        "produces",
+        "renders",
+        "runs",
+        "syncs",
+        "transforms",
+        "updates",
+        "validates",
+        "writes",
+    }
     FILLER_WORDS = {
         "advanced",
         "comprehensive",
         "cutting-edge",
         "enhanced",
         "innovative",
+        "intuitive",
         "powerful",
         "revolutionary",
+        "robust",
         "seamless",
+        "user-friendly",
     }
+    PASSIVE_VOICE_PATTERN = re.compile(
+        r"\b(?:is|are|was|were|be|been|being)\s+\w+(?:ed|en)\b",
+        re.IGNORECASE,
+    )
 
-    def __init__(self, repository_root: Path, skill_roots: list[str]) -> None:
+    def __init__(self, repository_root: Path, summary_table_path: str) -> None:
         self.repository_root = repository_root
-        self.skill_roots = skill_roots
+        self.summary_table_path = summary_table_path
 
     def audit_all(self) -> list[SkillSummaryAudit]:
         audits: list[SkillSummaryAudit] = []
-        for skill_file in self._discover_skill_files():
-            description = extract_frontmatter_value(skill_file, "description")
-            if not description:
-                continue
-            name = extract_frontmatter_value(skill_file, "name") or skill_file.parent.name
+        for name, description in self._load_reference_summaries():
             normalized = re.sub(r"\s+", " ", description).strip()
-            sentences = [
-                sentence.strip()
-                for sentence in re.split(r"(?<=[.!?])\s+", normalized)
-                if sentence.strip()
-            ]
-            filler_words = tuple(
-                sorted(
-                    {
-                        word
-                        for word in self.FILLER_WORDS
-                        if re.search(rf"\b{re.escape(word)}\b", normalized, re.IGNORECASE)
-                    }
-                )
-            )
-            has_use_sentence = len(sentences) <= 1 or (
-                len(sentences) >= 2 and sentences[1].startswith("Use ")
-            )
+            sentences = self._split_sentences(normalized)
+            filler_words = self._find_filler_words(normalized)
+            leading_word = self._leading_word(normalized)
             audits.append(
                 SkillSummaryAudit(
-                    path=skill_file,
+                    path=self.repository_root / self.summary_table_path,
                     name=name,
                     description=normalized,
                     character_count=len(normalized),
                     sentence_count=len(sentences),
                     filler_words=filler_words,
-                    has_use_sentence=has_use_sentence,
+                    leading_word=leading_word,
+                    starts_with_action_verb=leading_word in self.ACTION_VERBS,
+                    has_passive_voice=bool(
+                        self.PASSIVE_VOICE_PATTERN.search(normalized)
+                    ),
                 )
             )
-        return sorted(audits, key=lambda audit: str(audit.path))
+        return audits
 
-    def _discover_skill_files(self) -> list[Path]:
-        skill_files: list[Path] = []
-        for root in self.skill_roots:
-            absolute_root = self.repository_root / root
-            if not absolute_root.exists():
+    def _load_reference_summaries(self) -> list[tuple[str, str]]:
+        table_path = self.repository_root / self.summary_table_path
+        rows = self._parse_reference_table(table_path)
+        return [
+            (
+                self._normalize_job_name(row["Job"]),
+                row["Summary"],
+            )
+            for row in rows
+        ]
+
+    def _parse_reference_table(self, path: Path) -> list[dict[str, str]]:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines[:-1]):
+            if not line.strip().startswith("|"):
                 continue
-            skill_files.extend(absolute_root.rglob("SKILL.md"))
-        return sorted(set(skill_files))
+            header = self._parse_table_row(line)
+            if "Job" not in header or "Summary" not in header:
+                continue
+            if not self._is_separator_row(lines[index + 1]):
+                continue
+            rows: list[dict[str, str]] = []
+            for row_line in lines[index + 2 :]:
+                if not row_line.strip().startswith("|"):
+                    break
+                values = self._parse_table_row(row_line)
+                if len(values) != len(header):
+                    continue
+                rows.append(dict(zip(header, values)))
+            if rows:
+                return rows
+        raise ValueError(f"Could not find the job summary table in {path}")
+
+    def _parse_table_row(self, line: str) -> list[str]:
+        return [cell.strip() for cell in line.strip().split("|")[1:-1]]
+
+    def _is_separator_row(self, line: str) -> bool:
+        cells = self._parse_table_row(line)
+        return all(cells) and all(
+            set(cell.replace(":", "")) == {"-"} for cell in cells
+        )
+
+    def _normalize_job_name(self, raw_name: str) -> str:
+        return raw_name.replace("`", "").strip()
+
+    def _split_sentences(self, description: str) -> list[str]:
+        return [
+            sentence.strip()
+            for sentence in re.split(r"(?<=[.!?])\s+", description)
+            if sentence.strip()
+        ]
+
+    def _find_filler_words(self, description: str) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    word
+                    for word in self.FILLER_WORDS
+                    if re.search(rf"\b{re.escape(word)}\b", description, re.IGNORECASE)
+                }
+            )
+        )
+
+    def _leading_word(self, description: str) -> str:
+        match = re.match(r"^[`*_]*([A-Za-z][A-Za-z-]*)", description)
+        return match.group(1).lower() if match else ""

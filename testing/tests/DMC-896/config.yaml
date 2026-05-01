@@ -3,5 +3,15 @@ type: content
 framework: unittest
 platform: filesystem
 dependencies: []
-skill_roots:
-  - dmtools-ai-docs
+summary_table_path: dmtools-ai-docs/references/agents/teammate-configs.md
+expected_agents:
+  - Teammate
+  - JSRunner
+  - TestCasesGenerator
+  - InstructionsGenerator
+  - DevProductivityReport
+  - BAProductivityReport
+  - QAProductivityReport
+  - ReportGenerator
+  - ReportVisualizer
+  - KBProcessingJob
