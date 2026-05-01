@@ -2,6 +2,8 @@
 
 Complete reference for all 23 available jobs in DMtools. Jobs are specialized workflows that orchestrate MCP tools, AI agents, and data processing.
 
+> **Deprecation notice:** `CodeGenerator` is no longer a supported development workflow. The CLI entry remains as a compatibility shim for one release, logs a deprecation warning, and performs no generation. Migrate to `Teammate`-driven development flows or other supported jobs before `v1.8.0`.
+
 ---
 
 ## ⚠️ CRITICAL: The "name" Field is NOT User-Defined
@@ -49,7 +51,6 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 - [QAProductivityReport](#qaproductivityreport) - QA team productivity metrics
 
 ### Development (Dev)
-- [CodeGenerator](#codegenerator) - Generate code from user stories
 - [UnitTestsGenerator](#unittestsgenerator) - Generate unit tests for code
 - [DevProductivityReport](#devproductivityreport) - Dev team productivity metrics
 - [CommitsTriage](#commitstriage) - Analyze and categorize commits
