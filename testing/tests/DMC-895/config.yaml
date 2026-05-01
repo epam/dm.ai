@@ -1,0 +1,6 @@
+test_id: DMC-895
+type: documentation
+framework: node
+platform: linux
+dependencies: []
+command: node testing/tests/DMC-895/deprecated-agent-migration-pointers.test.js
