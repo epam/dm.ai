@@ -775,7 +775,7 @@ console.info("Info message");
 
 ```json
 {
-  "name": "StoryProcessor",
+  "name": "Teammate",
   "params": {
     "preprocessJSAction": "agents/js/validateStory.js",
     "postprocessJSAction": "agents/js/updateTickets.js",
