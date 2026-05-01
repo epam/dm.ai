@@ -55,15 +55,16 @@ def test_dmc_897_skill_docs_stay_synchronized() -> None:
 
 
 class FakeSandbox:
-    def __init__(self, skill_row: str) -> None:
+    def __init__(self, skill_row: str, refresh_generated_index: bool = True) -> None:
         self._files = {
             "dmtools-ai-docs/references/agents/teammate-configs.md": "# AI Teammate Configuration Guide\n\nOriginal summary.",
             "dmtools-ai-docs/CHANGELOG.md": "## 1.7.133\n\n### Documentation\n\n- Existing item\n",
-            "dmtools-ai-docs/references/mcp-tools/README.md": "Auto-generated from `dmtools list` on: 2026-05-01",
+            "dmtools-ai-docs/references/mcp-tools/README.md": "Initial README content",
             "dmtools-ai-docs/SKILL.md": skill_row,
         }
         self.commands: list[str] = []
         self.cleaned_up = False
+        self.refresh_generated_index = refresh_generated_index
 
     def cleanup(self) -> None:
         self.cleaned_up = True
@@ -77,11 +78,27 @@ class FakeSandbox:
     def run(self, command: str, timeout: int = 1800):
         del timeout
         self.commands.append(command)
+        if command == "./scripts/update-skill-docs.sh":
+            title, summary = self._read_audited_document_details()
+            self._files["dmtools-ai-docs/SKILL.md"] = (
+                f"| | [{title}|references/agents/teammate-configs.md] | {summary} |"
+            )
+        if command == "./scripts/generate-mcp-docs.sh" and self.refresh_generated_index:
+            self._files["dmtools-ai-docs/references/mcp-tools/README.md"] = (
+                "# DMtools MCP Tools Reference\n\n"
+                "**Total Integrations**: 17\n\n"
+                "*Generated from MCPToolRegistry on: Fri May 01 21:34:54 UTC 2026*"
+            )
         return type(
             "CommandResultLike",
             (),
             {"command": command, "returncode": 0, "stdout": "", "stderr": "", "combined_output": ""},
         )()
+
+    def _read_audited_document_details(self) -> tuple[str, str]:
+        source_text = self._files["dmtools-ai-docs/references/agents/teammate-configs.md"]
+        lines = [line for line in source_text.splitlines() if line.strip()]
+        return lines[0].removeprefix("# ").strip(), lines[1].strip()
 
 
 def test_dmc_897_service_accepts_injected_sandbox() -> None:
@@ -104,3 +121,16 @@ def test_dmc_897_service_accepts_injected_sandbox() -> None:
     assert result.skill_reference_title_synced is True
     assert result.skill_reference_summary_synced is True
     assert sandbox.cleaned_up is True
+
+
+def test_dmc_897_service_detects_stale_generated_index() -> None:
+    skill_row = (
+        "| | [Audited Teammate Configurations|references/agents/teammate-configs.md] | "
+        "Audited configuration reference for teammate workflow documentation corrections. |"
+    )
+    sandbox = FakeSandbox(skill_row, refresh_generated_index=False)
+    service = SkillDocsSyncService(REPO_ROOT, sandbox_factory=lambda _: sandbox)
+
+    result = service.run(DMC_897_CONFIG)
+
+    assert result.generated_index_refreshed is False

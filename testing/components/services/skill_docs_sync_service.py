@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
+from testing.core.interfaces.skill_docs_sync import AuditedDocumentConfig, Sandbox, TicketConfig
 from testing.core.utils.repo_sandbox import CommandResult, RepoSandbox
 
 
@@ -19,31 +19,12 @@ class SyncRunResult:
     skill_reference_summary_synced: bool
     skill_reference_row: str
 
-
-class AuditedDocumentConfig(Protocol):
-    source_relative_path: str
-    skill_reference_path: str
-    updated_title: str
-    updated_summary: str
-    changelog_marker: str
-
-
-class TicketConfig(Protocol):
-    scripts: tuple[str, ...]
-    audited_document: AuditedDocumentConfig
-
-
-class Sandbox(Protocol):
-    def cleanup(self) -> None: ...
-
-    def read_text(self, relative_path: str) -> str: ...
-
-    def write_text(self, relative_path: str, content: str) -> None: ...
-
-    def run(self, command: str, timeout: int = 1800) -> CommandResult: ...
-
-
 class SkillDocsSyncService:
+    GENERATED_INDEX_PATH = "dmtools-ai-docs/references/mcp-tools/README.md"
+    GENERATED_INDEX_STALE_MARKER = "DMC-897 stale MCP tools index marker"
+    GENERATED_INDEX_HEADER = "# DMtools MCP Tools Reference"
+    GENERATED_INDEX_FOOTER = "*Generated from MCPToolRegistry on:"
+
     def __init__(
         self,
         repository_root: Path,
@@ -56,11 +37,12 @@ class SkillDocsSyncService:
         sandbox = self._sandbox_factory(self.repository_root)
         try:
             self._apply_manual_edits(sandbox, ticket_config)
+            self._mark_generated_index_as_stale(sandbox)
             bootstrap_docs = sandbox.run("./buildInstallLocal.sh")
             update_docs = sandbox.run(ticket_config.scripts[0])
             generate_docs = sandbox.run(ticket_config.scripts[1])
 
-            generated_index = sandbox.read_text("dmtools-ai-docs/references/mcp-tools/README.md")
+            generated_index = sandbox.read_text(self.GENERATED_INDEX_PATH)
             changelog = sandbox.read_text("dmtools-ai-docs/CHANGELOG.md")
             skill_reference_row = self._find_skill_reference_row(
                 sandbox.read_text("dmtools-ai-docs/SKILL.md"),
@@ -71,7 +53,7 @@ class SkillDocsSyncService:
                 bootstrap_docs=bootstrap_docs,
                 update_docs=update_docs,
                 generate_docs=generate_docs,
-                generated_index_refreshed="Auto-generated from `dmtools list` on:" in generated_index,
+                generated_index_refreshed=self._generated_index_was_refreshed(generated_index),
                 changelog_mentions_correction=ticket_config.audited_document.changelog_marker in changelog,
                 skill_reference_title_synced=ticket_config.audited_document.updated_title in skill_reference_row,
                 skill_reference_summary_synced=ticket_config.audited_document.updated_summary in skill_reference_row,
@@ -110,6 +92,23 @@ class SkillDocsSyncService:
             updated_changelog = changelog_entry + "\n" + changelog_text
 
         sandbox.write_text(changelog_path, updated_changelog)
+
+    def _mark_generated_index_as_stale(self, sandbox: Sandbox) -> None:
+        sandbox.write_text(
+            self.GENERATED_INDEX_PATH,
+            (
+                f"{self.GENERATED_INDEX_HEADER}\n\n"
+                "This content was intentionally replaced before the docs scripts ran.\n\n"
+                f"{self.GENERATED_INDEX_STALE_MARKER}\n"
+            ),
+        )
+
+    def _generated_index_was_refreshed(self, generated_index: str) -> bool:
+        return (
+            self.GENERATED_INDEX_STALE_MARKER not in generated_index
+            and self.GENERATED_INDEX_HEADER in generated_index
+            and self.GENERATED_INDEX_FOOTER in generated_index
+        )
 
     @staticmethod
     def _find_skill_reference_row(skill_markdown: str, skill_reference_path: str) -> str:
