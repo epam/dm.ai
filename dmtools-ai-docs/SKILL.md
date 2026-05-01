@@ -8,8 +8,8 @@ compatibility:
 metadata:
   version: skill-v1.0.23
   author: DMtools Team
-  repository: https://github.com/IstiN/dmtools
-  documentation: https://github.com/IstiN/dmtools
+  repository: https://github.com/epam/dm.ai
+  documentation: https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs
 ---
 
 # DMtools Development Assistant
@@ -26,7 +26,7 @@ Run the automated setup helper that checks and configures everything:
 
 ```bash
 # Download and run setup helper
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/dmtools-ai-docs/setup-dmtools.sh | bash
+curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/dmtools-ai-docs/setup-dmtools.sh | bash
 ```
 
 **This script will:**
@@ -47,7 +47,7 @@ which dmtools || echo "DMtools not installed"
 **If NOT installed:**
 ```bash
 # Offer to install DMtools automatically
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
 ```
 
 ### Step 2: Check for dmtools.env configuration
@@ -157,7 +157,7 @@ If automated setup didn't work, follow these manual steps:
 
 #### 1. Install DMtools CLI
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
 ```
 
 #### 2. Create dmtools.env
@@ -420,9 +420,9 @@ See [CLI Integration Guide](references/agents/cli-integration.md) for complete e
 
 ## Resources
 
-- Repository: https://github.com/IstiN/dmtools
-- MCP Tools Reference: https://github.com/IstiN/dmtools/blob/main/docs/README-MCP.md
-- Issues: https://github.com/IstiN/dmtools/issues
+- Repository: https://github.com/epam/dm.ai
+- MCP Tools Reference: https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/mcp-tools
+- Issues: https://github.com/epam/dm.ai/issues
 
 ## 🤖 AI Assistant Instructions
 
@@ -461,7 +461,7 @@ I'll help you configure it. First, which integrations do you need?
 
 ```bash
 # Step 1: Run automated setup
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/dmtools-ai-docs/setup-dmtools.sh | bash
+curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/dmtools-ai-docs/setup-dmtools.sh | bash
 
 # Step 2: If dmtools.env needs credentials, guide user:
 # "I've created dmtools.env. You need to add your credentials:
