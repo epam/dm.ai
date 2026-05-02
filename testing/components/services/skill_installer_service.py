@@ -35,14 +35,18 @@ class SkillSelectionAuditResult:
     metadata_path: str
     retained_skill: str
     removed_skill: str
+    selected_skills: tuple[str, ...]
+    added_skill: str | None
     initial_retained_state: SkillDirectoryState
     initial_removed_state: SkillDirectoryState
+    initial_added_state: SkillDirectoryState | None
     initial_metadata_exists: bool
     initial_metadata_raw: str | None
     initial_metadata: InstalledSkillsMetadata | None
     initial_parse_error: str | None
     final_retained_state: SkillDirectoryState
     final_removed_state: SkillDirectoryState
+    final_added_state: SkillDirectoryState | None
     final_metadata_exists: bool
     final_metadata_raw: str | None
     final_metadata: InstalledSkillsMetadata | None
@@ -107,13 +111,42 @@ class SkillInstallerService:
         retained_skill: str = "jira",
         removed_skill: str = "github",
     ) -> SkillSelectionAuditResult:
+        return self._run_skill_transition(
+            retained_skill=retained_skill,
+            removed_skill=removed_skill,
+            selected_skills=(retained_skill,),
+            added_skill=None,
+        )
+
+    def run_selective_skill_transition(
+        self,
+        *,
+        retained_skill: str = "jira",
+        removed_skill: str = "github",
+        added_skill: str = "ado",
+    ) -> SkillSelectionAuditResult:
+        return self._run_skill_transition(
+            retained_skill=retained_skill,
+            removed_skill=removed_skill,
+            selected_skills=(retained_skill, added_skill),
+            added_skill=added_skill,
+        )
+
+    def _run_skill_transition(
+        self,
+        *,
+        retained_skill: str,
+        removed_skill: str,
+        selected_skills: tuple[str, ...],
+        added_skill: str | None,
+    ) -> SkillSelectionAuditResult:
         sandbox = self._sandbox_factory(self.repository_root)
         try:
             installer_path = sandbox.workspace / self.INSTALLER_RELATIVE_PATH
             skills_root = sandbox.workspace / self.SKILLS_ROOT_RELATIVE_PATH
             metadata_path = skills_root / "installed-skills.json"
 
-            self._prepare_fake_release_environment(sandbox, retained_skill)
+            self._prepare_fake_release_environment(sandbox, selected_skills)
             self._seed_installed_skills(
                 skills_root=skills_root,
                 retained_skill=retained_skill,
@@ -132,13 +165,18 @@ class SkillInstallerService:
             initial_removed_state = self._directory_state(
                 skills_root / self.skill_install_name(removed_skill)
             )
+            initial_added_state = (
+                self._directory_state(skills_root / self.skill_install_name(added_skill))
+                if added_skill is not None
+                else None
+            )
 
             installer_command_result = sandbox.run(
                 self._build_installer_command(
                     installer_path=installer_path,
                     fake_bin_dir=sandbox.workspace.parent / "fake-bin",
                     fake_release_dir=sandbox.workspace.parent / "fake-releases",
-                    selected_skills_csv=retained_skill,
+                    selected_skills_csv=",".join(selected_skills),
                 )
             )
 
@@ -157,8 +195,11 @@ class SkillInstallerService:
                 metadata_path=metadata_path.as_posix(),
                 retained_skill=retained_skill,
                 removed_skill=removed_skill,
+                selected_skills=selected_skills,
+                added_skill=added_skill,
                 initial_retained_state=initial_retained_state,
                 initial_removed_state=initial_removed_state,
+                initial_added_state=initial_added_state,
                 initial_metadata_exists=initial_metadata_exists,
                 initial_metadata_raw=initial_metadata_raw,
                 initial_metadata=initial_metadata,
@@ -168,6 +209,11 @@ class SkillInstallerService:
                 ),
                 final_removed_state=self._directory_state(
                     skills_root / self.skill_install_name(removed_skill)
+                ),
+                final_added_state=(
+                    self._directory_state(skills_root / self.skill_install_name(added_skill))
+                    if added_skill is not None
+                    else None
                 ),
                 final_metadata_exists=final_metadata_exists,
                 final_metadata_raw=final_metadata_raw,
@@ -181,6 +227,18 @@ class SkillInstallerService:
         self,
         result: SkillSelectionAuditResult,
     ) -> list[SkillSelectionAuditFailure]:
+        return self._validate_skill_transition(result)
+
+    def validate_selective_transition(
+        self,
+        result: SkillSelectionAuditResult,
+    ) -> list[SkillSelectionAuditFailure]:
+        return self._validate_skill_transition(result)
+
+    def _validate_skill_transition(
+        self,
+        result: SkillSelectionAuditResult,
+    ) -> list[SkillSelectionAuditFailure]:
         failures: list[SkillSelectionAuditFailure] = []
 
         failures.extend(
@@ -190,7 +248,8 @@ class SkillInstallerService:
                 expected_exists=True,
                 required_files=("SKILL.md",),
                 expectation=(
-                    "The precondition must include the retained Jira skill artifacts before the rerun."
+                    f"The precondition must include the retained {result.retained_skill!r} "
+                    "skill artifacts before the rerun."
                 ),
             )
         )
@@ -201,10 +260,24 @@ class SkillInstallerService:
                 expected_exists=True,
                 required_files=("SKILL.md",),
                 expectation=(
-                    "The precondition must include the removable GitHub skill artifacts before the rerun."
+                    f"The precondition must include the removable {result.removed_skill!r} "
+                    "skill artifacts before the rerun."
                 ),
             )
         )
+        if result.added_skill is not None and result.initial_added_state is not None:
+            failures.extend(
+                self._validate_skill_directory(
+                    step=1,
+                    state=result.initial_added_state,
+                    expected_exists=False,
+                    required_files=(),
+                    expectation=(
+                        f"The precondition must not already include the new "
+                        f"{result.added_skill!r} skill artifacts before the rerun."
+                    ),
+                )
+            )
         failures.extend(
             self._validate_metadata(
                 step=1,
@@ -220,7 +293,10 @@ class SkillInstallerService:
             failures.append(
                 SkillSelectionAuditFailure(
                     step=2,
-                    summary="Re-running the skill installer with only Jira selected should succeed.",
+                    summary=(
+                        "Re-running the skill installer with the requested selective skill set "
+                        "should succeed."
+                    ),
                     details=(
                         f"Command exited with {result.installer_command_result.returncode}.\n"
                         f"Command: {result.installer_command_result.command}"
@@ -235,26 +311,45 @@ class SkillInstallerService:
                 state=result.final_retained_state,
                 expected_exists=True,
                 required_files=("SKILL.md",),
-                expectation="The Jira skill artifacts should remain installed after the rerun.",
+                expectation=(
+                    f"The retained {result.retained_skill!r} skill artifacts should remain "
+                    "installed after the rerun."
+                ),
             )
         )
         failures.extend(
             self._validate_skill_directory(
-                step=4,
+                step=3,
                 state=result.final_removed_state,
                 expected_exists=False,
                 required_files=(),
-                expectation="The GitHub skill artifacts should be removed after the rerun.",
+                expectation=(
+                    f"The removed {result.removed_skill!r} skill artifacts should be deleted "
+                    "after the rerun."
+                ),
             )
         )
+        if result.added_skill is not None and result.final_added_state is not None:
+            failures.extend(
+                self._validate_skill_directory(
+                    step=3,
+                    state=result.final_added_state,
+                    expected_exists=True,
+                    required_files=("SKILL.md",),
+                    expectation=(
+                        f"The newly selected {result.added_skill!r} skill artifacts should be "
+                        "installed during the rerun."
+                    ),
+                )
+            )
         failures.extend(
             self._validate_metadata(
-                step=5,
+                step=4,
                 metadata_exists=result.final_metadata_exists,
                 metadata=result.final_metadata,
                 parse_error=result.final_parse_error,
                 metadata_path=result.metadata_path,
-                expected_skills=(result.retained_skill,),
+                expected_skills=result.selected_skills,
             )
         )
 
@@ -484,21 +579,26 @@ class SkillInstallerService:
         failures: list[SkillSelectionAuditFailure],
     ) -> str:
         lines = [
-            "Selective skill uninstall verification failed.",
+            "Selective skill transition verification failed.",
             "",
             "Steps to reproduce:",
             (
-                "1. Start from a workspace where .claude/skills contains both Jira and GitHub "
-                "skill folders plus installed-skills.json metadata."
+                "1. Start from a workspace where .claude/skills contains the retained and "
+                "removed skill folders plus installed-skills.json metadata."
             ),
             (
                 f"2. Re-run {self.INSTALLER_RELATIVE_PATH} with "
-                f"DMTOOLS_SKILLS={result.retained_skill!r}."
+                f"DMTOOLS_SKILLS={','.join(result.selected_skills)!r}."
             ),
             (
                 f"3. Verify {self.skill_install_name(result.retained_skill)!r} remains, "
-                f"{self.skill_install_name(result.removed_skill)!r} is removed, and "
-                "installed-skills.json lists only Jira."
+                f"{self.skill_install_name(result.removed_skill)!r} is removed"
+                + (
+                    f", {self.skill_install_name(result.added_skill)!r} is installed,"
+                    if result.added_skill is not None
+                    else ","
+                )
+                + " and installed-skills.json matches the selected skills exactly."
             ),
             "",
             "Observed state:",
@@ -516,6 +616,17 @@ class SkillInstallerService:
                 f"exists={result.initial_removed_state.exists} | "
                 f"files={', '.join(result.initial_removed_state.files) or '<empty>'}"
             ),
+        ]
+        if result.initial_added_state is not None:
+            lines.append(
+                (
+                    f"- Initial added dir: {result.initial_added_state.path} | "
+                    f"exists={result.initial_added_state.exists} | "
+                    f"files={', '.join(result.initial_added_state.files) or '<empty>'}"
+                )
+            )
+        lines.extend(
+            [
             (
                 f"- Final retained dir: {result.final_retained_state.path} | "
                 f"exists={result.final_retained_state.exists} | "
@@ -526,6 +637,18 @@ class SkillInstallerService:
                 f"exists={result.final_removed_state.exists} | "
                 f"files={', '.join(result.final_removed_state.files) or '<empty>'}"
             ),
+            ]
+        )
+        if result.final_added_state is not None:
+            lines.append(
+                (
+                    f"- Final added dir: {result.final_added_state.path} | "
+                    f"exists={result.final_added_state.exists} | "
+                    f"files={', '.join(result.final_added_state.files) or '<empty>'}"
+                )
+            )
+        lines.extend(
+            [
             (
                 f"- Initial metadata exists={result.initial_metadata_exists} "
                 f"parse_error={result.initial_parse_error or '<none>'}"
@@ -540,7 +663,8 @@ class SkillInstallerService:
             "",
             "Final metadata:",
             result.final_metadata_raw.rstrip() if result.final_metadata_raw is not None else "<missing>",
-        ]
+            ]
+        )
 
         if failures:
             lines.extend(
@@ -675,17 +799,18 @@ class SkillInstallerService:
     def _prepare_fake_release_environment(
         self,
         sandbox: Sandbox,
-        retained_skill: str,
+        selected_skills: tuple[str, ...],
     ) -> None:
         fake_release_dir = sandbox.workspace.parent / "fake-releases"
         fake_bin_dir = sandbox.workspace.parent / "fake-bin"
         fake_release_dir.mkdir(parents=True, exist_ok=True)
         fake_bin_dir.mkdir(parents=True, exist_ok=True)
 
-        self._write_skill_package(
-            fake_release_dir / self.skill_asset_name(retained_skill),
-            retained_skill,
-        )
+        for skill in selected_skills:
+            self._write_skill_package(
+                fake_release_dir / self.skill_asset_name(skill),
+                skill,
+            )
         self._write_fake_curl(fake_bin_dir / "curl")
         self._write_fake_unzip(fake_bin_dir / "unzip")
 
