@@ -19,7 +19,7 @@ def write_page_fixture(repository_root: Path, skill_name: str, package_name: str
 
     per_skill_root = repository_root / "dmtools-ai-docs" / "per-skill-packages"
     per_skill_root.mkdir(parents=True, exist_ok=True)
-    (per_skill_root / "README.md").write_text("# Per-skill Index\n", encoding="utf-8")
+    (per_skill_root / "index.md").write_text("# Per-skill Index\n", encoding="utf-8")
 
     page_path = per_skill_root / f"{skill_name}.md"
     page_path.write_text(
@@ -58,7 +58,7 @@ def write_page_fixture(repository_root: Path, skill_name: str, package_name: str
                 "## Linkbacks",
                 "",
                 "- [Installation guide](../references/installation/README.md)",
-                "- [Per-skill index](README.md)",
+                "- [Per-skill index](index.md)",
                 "",
                 "## Maintainer / Contact",
                 "",
@@ -119,3 +119,17 @@ def test_expected_skill_comes_from_shared_catalog_mapping(tmp_path: Path) -> Non
         for expectation in PerSkillCatalogService.EXPECTED_SKILLS
         if expectation.skill_name == "dmtools-jira"
     )
+
+
+def test_child_pages_excludes_per_skill_index_aliases(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    per_skill_root = repository_root / "dmtools-ai-docs" / "per-skill-packages"
+    per_skill_root.mkdir(parents=True)
+    (per_skill_root / "index.md").write_text("# Canonical index\n", encoding="utf-8")
+    (per_skill_root / "README.md").write_text("# Legacy alias\n", encoding="utf-8")
+    skill_page = per_skill_root / "dmtools-github.md"
+    skill_page.write_text("# dmtools-github\n", encoding="utf-8")
+
+    service = PerSkillPageAuditService(repository_root)
+
+    assert service.child_pages() == [skill_page]

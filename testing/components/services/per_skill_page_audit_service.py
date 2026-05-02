@@ -16,6 +16,7 @@ MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 
 
 class PerSkillPageAuditService:
+    PER_SKILL_INDEX_ALIASES = frozenset({"index.md", "readme.md"})
     MANDATORY_SECTIONS = (
         "Overview",
         "Package / Artifact",
@@ -32,7 +33,7 @@ class PerSkillPageAuditService:
         self.repository_root = repository_root
         self.docs_root = repository_root / "dmtools-ai-docs"
         self.per_skill_root = self.docs_root / "per-skill-packages"
-        self.per_skill_index_path = self.per_skill_root / "README.md"
+        self.per_skill_index_path = repository_root / PerSkillCatalogService.CATALOG_RELATIVE_PATH
         self.installation_guide_path = (
             self.docs_root / "references" / "installation" / "README.md"
         )
@@ -75,7 +76,7 @@ class PerSkillPageAuditService:
         return sorted(
             path
             for path in self.per_skill_root.glob("*.md")
-            if path.name.lower() != "readme.md"
+            if path.name.lower() not in self.PER_SKILL_INDEX_ALIASES
         )
 
     def audit_page(self, page_path: Path) -> list[str]:
