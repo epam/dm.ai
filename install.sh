@@ -23,6 +23,8 @@ BIN_DIR="${DMTOOLS_BIN_DIR:-$INSTALL_DIR/bin}"
 JAR_PATH="$INSTALL_DIR/dmtools.jar"
 SCRIPT_PATH="$BIN_DIR/dmtools"
 INSTALLER_ENV_PATH="${DMTOOLS_INSTALLER_ENV_PATH:-$BIN_DIR/dmtools-installer.env}"
+INSTALLED_SKILLS_JSON_PATH="${DMTOOLS_INSTALLED_SKILLS_JSON_PATH:-$INSTALL_DIR/installed-skills.json}"
+ENDPOINTS_JSON_PATH="${DMTOOLS_ENDPOINTS_JSON_PATH:-$INSTALL_DIR/endpoints.json}"
 AVAILABLE_SKILLS=(
     dmtools jira confluence github gitlab figma teams
     sharepoint ado testrail xray
@@ -86,6 +88,76 @@ to_lower() {
 join_by_comma() {
     local IFS=","
     printf '%s' "$*"
+}
+
+json_escape() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//$'\n'/\\n}"
+    value="${value//$'\r'/\\r}"
+    value="${value//$'\t'/\\t}"
+    printf '%s' "$value"
+}
+
+json_string_array() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="\"$escaped\""
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+json_skill_objects() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="{\"name\":\"$escaped\"}"
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+json_endpoint_objects() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="{\"name\":\"$escaped\",\"path\":\"/dmtools/$escaped\"}"
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
 }
 
 append_unique() {
@@ -303,6 +375,41 @@ EOF
 
     printf '%s\n' "$new_content" > "$INSTALLER_ENV_PATH"
     info "Configured installer-managed skills at $INSTALLER_ENV_PATH"
+}
+
+write_installer_metadata() {
+    local version="$1"
+    if [ -z "$version" ]; then
+        error "Installer version is required to write machine-readable metadata."
+    fi
+
+    mkdir -p "$INSTALL_DIR"
+
+    local escaped_version
+    escaped_version=$(json_escape "$version")
+    local skills_json
+    skills_json=$(json_skill_objects "${EFFECTIVE_SKILLS[@]}")
+    local integrations_json
+    integrations_json=$(json_string_array "${EFFECTIVE_INTEGRATIONS[@]}")
+    local endpoints_json
+    endpoints_json=$(json_endpoint_objects "${EFFECTIVE_SKILLS[@]}")
+
+    cat > "$INSTALLED_SKILLS_JSON_PATH" <<EOF
+{
+  "version": "$escaped_version",
+  "installed_skills": $skills_json,
+  "integrations": $integrations_json
+}
+EOF
+
+    cat > "$ENDPOINTS_JSON_PATH" <<EOF
+{
+  "version": "$escaped_version",
+  "endpoints": $endpoints_json
+}
+EOF
+
+    info "Generated machine-readable installer metadata at $INSTALLED_SKILLS_JSON_PATH and $ENDPOINTS_JSON_PATH"
 }
 
 # Detect platform
@@ -1212,6 +1319,9 @@ main() {
     
     # Download DMTools
     download_dmtools "$version"
+
+    # Persist machine-readable metadata for state tracking and endpoint discovery
+    write_installer_metadata "$version"
     
     # Update shell configuration
     update_shell_config
