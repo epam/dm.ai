@@ -27,6 +27,13 @@ class DocumentationPublicationGateService:
     )
     SIGNOFF_MARKERS = ("approved", "approve", "lgtm", "sign-off", "signed off")
     DUPLICATE_CHECK_PATTERN = re.compile(r"\bduplicate[- ]check\b", re.IGNORECASE)
+    DUPLICATE_CHECK_LINE_PATTERN = re.compile(
+        r"(?mi)^\s*(?:[*-]\s*)?duplicate[- ]check(?:\s+(?:entry|completed|complete|recorded))?\b"
+    )
+    JQL_LINE_PATTERN = re.compile(r"(?mi)^\s*(?:[*-]\s*)?jql\s*:\s*\S")
+    REPO_SEARCH_LINE_PATTERN = re.compile(
+        r"(?mi)^\s*(?:[*-]\s*)?(?:repo(?:sitory)? search|github search)\s*:\s*\S"
+    )
     JQL_PATTERN = re.compile(
         r"(\bjql\b|project\s*=|issuekey\s*=|labels\s+in\s*\(|summary\s+~)",
         re.IGNORECASE,
@@ -34,6 +41,19 @@ class DocumentationPublicationGateService:
     REPO_SEARCH_PATTERN = re.compile(
         r"(\brepo:\S+|\brepo search\b|\bgithub search\b|\brg\s+\S+|\bripgrep\b)",
         re.IGNORECASE,
+    )
+    AUTOMATION_COMMENT_MARKERS = (
+        "[test_case_automation]",
+        "[pr_test_automation_review]",
+        "[pr_test_automation_rework]",
+        "automated test pr review",
+        "automated test rework",
+        "pull request review",
+        "recommendation:",
+        "re-run result",
+        "what was fixed",
+        "new test result",
+        "processing started",
     )
 
     def __init__(
@@ -276,12 +296,15 @@ class DocumentationPublicationGateService:
         return path == "README.md" or path.startswith("dmtools-ai-docs/")
 
     def _find_duplicate_check_comment_preview(self, comments_text: str) -> str:
-        normalized_blocks = [
-            block.strip()
-            for block in re.split(r"\n\s*-\s*\n", comments_text)
-            if block.strip()
-        ]
-        for block in normalized_blocks:
+        for block in self._comment_blocks(comments_text):
+            if self._is_automation_comment_block(block):
+                continue
+            if not self.DUPLICATE_CHECK_LINE_PATTERN.search(block):
+                continue
+            if not self.JQL_LINE_PATTERN.search(block):
+                continue
+            if not self.REPO_SEARCH_LINE_PATTERN.search(block):
+                continue
             if not self.DUPLICATE_CHECK_PATTERN.search(block):
                 continue
             if not self.JQL_PATTERN.search(block):
@@ -290,6 +313,18 @@ class DocumentationPublicationGateService:
                 continue
             return self._preview_text(block)
         return ""
+
+    @staticmethod
+    def _comment_blocks(comments_text: str) -> tuple[str, ...]:
+        return tuple(
+            block.strip()
+            for block in re.split(r"\n\s*-\s*\n", comments_text)
+            if block.strip()
+        )
+
+    def _is_automation_comment_block(self, block: str) -> bool:
+        normalized = self._normalize_text(block)
+        return any(marker in normalized for marker in self.AUTOMATION_COMMENT_MARKERS)
 
     def _successful_checks_for_pull_request(
         self,
