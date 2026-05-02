@@ -259,6 +259,94 @@ join_by_comma() {
     printf '%s' "$*"
 }
 
+json_escape() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//$'\n'/\\n}"
+    value="${value//$'\r'/\\r}"
+    value="${value//$'\t'/\\t}"
+    printf '%s' "$value"
+}
+
+json_string_array() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="\"$escaped\""
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+array_contains() {
+    local needle="$1"
+    shift
+    local item
+    for item in "$@"; do
+        if [ "$item" = "$needle" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+remove_deselected_skills() {
+    local target_dir="$1"
+    shift
+    local selected_skills=("$@")
+    local known_skill
+
+    for known_skill in dmtools jira github ado testrail; do
+        if array_contains "$known_skill" "${selected_skills[@]}"; then
+            continue
+        fi
+
+        local install_name
+        install_name=$(skill_install_name "$known_skill") || return 1
+        if [ -d "$target_dir/$install_name" ]; then
+            rm -rf "$target_dir/$install_name"
+            print_info "Removed deselected skill: $target_dir/$install_name"
+        fi
+    done
+}
+
+write_installed_skills_metadata() {
+    local target_dir="$1"
+    shift
+    local selected_skills=("$@")
+    local active_commands=()
+    local skill_key
+
+    for skill_key in "${selected_skills[@]}"; do
+        active_commands+=("$(skill_command_name "$skill_key")")
+    done
+
+    local installed_skills_json
+    local active_commands_json
+    installed_skills_json=$(json_string_array "${selected_skills[@]}")
+    active_commands_json=$(json_string_array "${active_commands[@]}")
+
+    cat > "$target_dir/installed-skills.json" <<EOF
+{
+  "installed_skills": $installed_skills_json,
+  "active_commands": $active_commands_json
+}
+EOF
+
+    print_success "Updated $target_dir/installed-skills.json"
+}
+
 detect_skill_dirs() {
     local found_dirs=()
 
@@ -469,6 +557,11 @@ main() {
         for dir in "${target_dirs[@]}"; do
             install_to_directory "$skill_source" "$dir" "$install_name"
         done
+    done
+
+    for dir in "${target_dirs[@]}"; do
+        remove_deselected_skills "$dir" "${requested_skills[@]}"
+        write_installed_skills_metadata "$dir" "${requested_skills[@]}"
     done
 
     rm -rf "$TEMP_DIR"
