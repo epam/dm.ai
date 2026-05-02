@@ -11,6 +11,28 @@ class TeammateConfigExampleUsageAuditService {
     this.repository = repository;
   }
 
+  findCommonJobReferenceEntryByAcceptedName(entries, acceptedName) {
+    return entries.find((entry) => entry.acceptedNames.includes(acceptedName)) ?? null;
+  }
+
+  resolveExampleUsagePath(entry) {
+    if (!entry.exampleUsage) {
+      return null;
+    }
+
+    return this.repository.resolveRelative(this.config.teammateConfigsPath, entry.exampleUsage.target);
+  }
+
+  resolveExampleUsageRelativePath(entry) {
+    const resolvedPath = this.resolveExampleUsagePath(entry);
+
+    if (!resolvedPath) {
+      return null;
+    }
+
+    return this.repository.relativeToRoot(this.config.repoRoot, resolvedPath);
+  }
+
   auditCommonJobReference() {
     const teammateConfigs = this.repository.readText(this.config.teammateConfigsPath);
     const section = extractSection(teammateConfigs, '🧭 Common job reference');
