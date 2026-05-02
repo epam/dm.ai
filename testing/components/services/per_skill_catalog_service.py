@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,7 +37,13 @@ class ValidationFailure:
 class PerSkillCatalogService:
     CATALOG_RELATIVE_PATH = "dmtools-ai-docs/per-skill-packages/index.md"
     TABLE_HEADER = "| Skill | Slash command | Java package | Artifact alias |"
-    TABLE_SEPARATOR = "| --- | --- | --- | --- |"
+    EXPECTED_HEADER_CELLS = (
+        "skill",
+        "slash command",
+        "java package",
+        "artifact alias",
+    )
+    SEPARATOR_CELL_PATTERN = re.compile(r"^:?-{3,}:?$")
     EXPECTED_SKILLS: tuple[SkillCatalogExpectation, ...] = (
         SkillCatalogExpectation(
             "dmtools-jira",
@@ -232,37 +239,43 @@ class PerSkillCatalogService:
         header_indexes = [
             index
             for index, line in enumerate(lines)
-            if line.strip() == self.TABLE_HEADER
+            if self._is_header_row(line)
         ]
         if not header_indexes:
             raise ValueError(
-                f"Catalogue table header {self.TABLE_HEADER!r} not found in {self.catalog_path}."
+                "Catalogue table with the visible header "
+                f"{self.TABLE_HEADER!r} not found in {self.catalog_path}."
             )
         if len(header_indexes) > 1:
             raise ValueError(
-                "Expected exactly one canonical catalogue table with header "
+                "Expected exactly one canonical catalogue table with the visible header "
                 f"{self.TABLE_HEADER!r} in {self.catalog_path}, but found {len(header_indexes)}."
             )
 
         index = header_indexes[0]
-        if index + 1 >= len(lines) or lines[index + 1].strip() != self.TABLE_SEPARATOR:
+        if index + 1 >= len(lines) or not self._is_separator_row(lines[index + 1]):
             raise ValueError(
-                f"Malformed catalogue table in {self.catalog_path}: expected separator "
-                f"{self.TABLE_SEPARATOR!r} after header."
+                f"Malformed catalogue table in {self.catalog_path}: expected a valid markdown "
+                "separator row after the canonical header."
             )
 
         rows: list[CatalogRow] = []
         for row_index, row in enumerate(lines[index + 2 :], start=index + 3):
-            normalized = row.strip()
-            if not normalized.startswith("|"):
+            cells = self._parse_table_row(row)
+            if cells is None:
                 break
-            cells = tuple(cell.strip() for cell in normalized.strip("|").split("|"))
             if len(cells) != 4:
                 raise ValueError(
                     f"Unexpected catalogue row in {self.catalog_path} at line "
-                    f"{row_index}: {normalized}"
+                    f"{row_index}: {row.strip()}"
                 )
-            rows.append(CatalogRow(line_number=row_index, text=normalized, cells=cells))
+            rows.append(
+                CatalogRow(
+                    line_number=row_index,
+                    text=row.strip(),
+                    cells=cells,
+                )
+            )
 
         if not rows:
             raise ValueError(
@@ -281,6 +294,38 @@ class PerSkillCatalogService:
             (row for row in rows if row.cells[0].strip("`") == normalized_skill_name),
             None,
         )
+
+    def _is_header_row(self, line: str) -> bool:
+        cells = self._parse_table_row(line)
+        return cells is not None and tuple(
+            self._normalize_header_cell(cell) for cell in cells
+        ) == self.EXPECTED_HEADER_CELLS
+
+    def _is_separator_row(self, line: str) -> bool:
+        cells = self._parse_table_row(line)
+        return cells is not None and len(cells) == 4 and all(
+            self.SEPARATOR_CELL_PATTERN.fullmatch(cell) for cell in cells
+        )
+
+    @staticmethod
+    def _parse_table_row(line: str) -> tuple[str, ...] | None:
+        stripped = line.strip()
+        if stripped.count("|") < 3:
+            return None
+
+        cells = [cell.strip() for cell in stripped.split("|")]
+        if stripped.startswith("|"):
+            cells = cells[1:]
+        if stripped.endswith("|"):
+            cells = cells[:-1]
+        if len(cells) < 2:
+            return None
+
+        return tuple(cells)
+
+    @staticmethod
+    def _normalize_header_cell(cell: str) -> str:
+        return " ".join(cell.strip().lower().split())
 
     @staticmethod
     def format_failures(failures: list[ValidationFailure]) -> str:

@@ -65,6 +65,31 @@ def test_dmc_914_service_reports_missing_artifact_alias(tmp_path: Path) -> None:
     assert "com.github.istin:dmtools-report" in failures[0].actual
 
 
+def test_dmc_914_service_accepts_equivalent_markdown_table_format(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    catalog_path = repository_root / "dmtools-ai-docs/per-skill-packages/index.md"
+    catalog_path.parent.mkdir(parents=True)
+
+    rows = [
+        "  Skill | Slash command | Java package | Artifact alias  ",
+        " :--- | :---: | ---: | --- ",
+        *[
+            (
+                f" `{skill.skill_name}` | `{skill.slash_command}` | "
+                f"`{skill.java_package}` | `{skill.artifact_alias}` "
+            )
+            for skill in PerSkillCatalogService.EXPECTED_SKILLS
+        ],
+    ]
+    catalog_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    service = PerSkillCatalogService(repository_root)
+
+    assert service.validate() == []
+
+
 def test_dmc_914_service_rejects_skill_mentions_outside_canonical_table(
     tmp_path: Path,
 ) -> None:
