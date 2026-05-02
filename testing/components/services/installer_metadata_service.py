@@ -34,6 +34,18 @@ class InstallerMetadataRun:
 
 class InstallerMetadataService:
     DEFAULT_INSTALLER_URL = "https://raw.githubusercontent.com/epam/dm.ai/main/install"
+    _SKILL_COLLECTION_KEYS = frozenset(
+        {
+            "skills",
+            "installed_skills",
+            "installed-skills",
+            "installedskills",
+            "selected_skills",
+            "selected-skills",
+            "selectedskills",
+        }
+    )
+    _SKILL_VALUE_KEYS = ("skill", "slug", "name", "id")
 
     def __init__(
         self,
@@ -92,8 +104,19 @@ class InstallerMetadataService:
         return json.loads(path.read_text(encoding="utf-8"))
 
     def payload_contains_skills(self, payload: Any, expected_skills: Sequence[str]) -> bool:
-        observed_skills = {skill.lower() for skill in self._iter_skill_values(payload)}
+        observed_skills = self.declared_skills(payload)
         return set(skill.lower() for skill in expected_skills).issubset(observed_skills)
+
+    def declared_skills(self, payload: Any) -> set[str]:
+        if not isinstance(payload, dict):
+            return set()
+
+        observed_skills: set[str] = set()
+        for key, value in payload.items():
+            if self._normalize_key(key) not in self._SKILL_COLLECTION_KEYS:
+                continue
+            observed_skills.update(self._extract_skill_collection(value))
+        return observed_skills
 
     def payload_contains_version(self, payload: Any) -> bool:
         for key, value in self._walk_key_values(payload):
@@ -170,18 +193,36 @@ class InstallerMetadataService:
             return "<empty>"
         return "\n".join(entries)
 
-    def _iter_skill_values(self, payload: Any) -> Iterable[str]:
+    def _extract_skill_collection(self, payload: Any) -> set[str]:
         if isinstance(payload, str):
-            return ()
-        observed: list[str] = []
-        for key, value in self._walk_key_values(payload):
-            if key.lower() not in {"skill", "skills", "name", "id"}:
-                continue
-            if isinstance(value, str):
-                observed.append(value)
-            elif isinstance(value, list):
-                observed.extend(str(item) for item in value if isinstance(item, str))
-        return tuple(observed)
+            return {
+                skill.strip().lower()
+                for skill in payload.split(",")
+                if skill.strip()
+            }
+
+        if isinstance(payload, list):
+            observed_skills: set[str] = set()
+            for item in payload:
+                observed_skills.update(self._extract_skill_collection(item))
+            return observed_skills
+
+        if isinstance(payload, dict):
+            observed_skills: set[str] = set()
+            for key in self._SKILL_VALUE_KEYS:
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    observed_skills.update(self._extract_skill_collection(value))
+
+            for key, value in payload.items():
+                if self._normalize_key(key) in self._SKILL_COLLECTION_KEYS:
+                    observed_skills.update(self._extract_skill_collection(value))
+            return observed_skills
+
+        return set()
+
+    def _normalize_key(self, value: str) -> str:
+        return value.replace("-", "_").lower()
 
     def _walk_key_values(self, payload: Any) -> Iterable[tuple[str, Any]]:
         if isinstance(payload, dict):

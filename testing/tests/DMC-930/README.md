@@ -26,3 +26,11 @@ The test requires outbound network access to:
 
 It uses a temp directory for `HOME`, `DMTOOLS_INSTALL_DIR`, and `DMTOOLS_BIN_DIR`
 so it does not modify the user environment.
+
+## Expected output when the test passes
+
+- `pytest` reports `3 passed`
+- The installer output includes `Effective skills: jira,confluence (source: env)`
+- The install directory contains `installed-skills.json` and `endpoints.json`
+- `installed-skills.json` exposes the selected skills plus version metadata
+- `endpoints.json` includes `/dmtools/jira` and `/dmtools/confluence`

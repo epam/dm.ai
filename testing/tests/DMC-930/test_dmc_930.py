@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Mapping, Sequence
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from testing.components.factories.installer_metadata_service_factory import (  # noqa: E402
+    create_installer_metadata_service,
+)
 from testing.components.services.installer_metadata_service import (  # noqa: E402
     InstallerMetadataService,
 )
+from testing.core.models.process_execution_result import ProcessExecutionResult  # noqa: E402
 from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: E402
-from testing.frameworks.api.rest.subprocess_process_runner import (  # noqa: E402
-    SubprocessProcessRunner,
-)
 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
@@ -24,9 +26,8 @@ EXPECTED_ENDPOINTS = tuple(f"/dmtools/{skill}" for skill in SELECTED_SKILLS)
 
 
 def build_service() -> InstallerMetadataService:
-    return InstallerMetadataService(
+    return create_installer_metadata_service(
         repository_root=REPOSITORY_ROOT,
-        runner=SubprocessProcessRunner(),
         installer_url=str(CONFIG["installer_url"]),
     )
 
@@ -86,3 +87,35 @@ def test_dmc_930_selective_install_generates_machine_readable_metadata_files() -
         + ", ".join(missing_endpoints),
     )
 
+
+class _UnusedRunner:
+    def run(
+        self,
+        args: Sequence[str],
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+        trace_network: bool = False,
+    ) -> ProcessExecutionResult:
+        del args, cwd, env, trace_network
+        raise AssertionError("The process runner is not used by this helper-only test.")
+
+
+def test_dmc_930_payload_contains_skills_reads_explicit_skill_collections() -> None:
+    service = InstallerMetadataService(REPOSITORY_ROOT, runner=_UnusedRunner())
+    payload = {
+        "version": "v1.7.179",
+        "skills": [{"name": "jira"}, {"id": "confluence"}],
+    }
+
+    assert service.payload_contains_skills(payload, SELECTED_SKILLS)
+
+
+def test_dmc_930_payload_contains_skills_ignores_unrelated_nested_name_and_id_fields() -> None:
+    service = InstallerMetadataService(REPOSITORY_ROOT, runner=_UnusedRunner())
+    payload = {
+        "version": "v1.7.179",
+        "metadata": {"name": "jira", "id": "confluence"},
+        "artifacts": [{"name": "dmtools.jar"}, {"id": "download"}],
+    }
+
+    assert not service.payload_contains_skills(payload, SELECTED_SKILLS)
