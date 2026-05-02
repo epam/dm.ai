@@ -1,5 +1,4 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
 
 const {
@@ -10,6 +9,7 @@ const {
   readText,
   splitLines,
 } = require('../../core/utils/documentAudit');
+const { createExampleUsageAuditService } = require('../DMC-894/createExampleUsageAuditService');
 
 const ticketKey = 'DMC-895';
 const teammateConfigsPath = path.resolve(
@@ -22,40 +22,61 @@ const expectations = [
     alias: 'ReportGeneratorJob',
     target: 'ReportGenerator',
     relatedPaths: ['report-generation.md', 'report-generator-job.json'],
+    expectedExamplePath: 'dmtools-ai-docs/references/examples/report-generator-job.json',
   },
   {
     alias: 'ReportVisualizerJob',
     target: 'ReportVisualizer',
     relatedPaths: ['report-visualizer-job.json'],
+    expectedExamplePath: 'dmtools-ai-docs/references/examples/report-visualizer-job.json',
   },
   {
     alias: 'KBProcessingJob',
     target: 'KBProcessing',
     relatedPaths: ['kb-processing-job.json'],
+    expectedExamplePath: 'dmtools-ai-docs/references/examples/kb-processing-job.json',
   },
 ];
 
-function extractMarkdownTargets(text) {
-  return Array.from(text.matchAll(/\[[^\]]+\]\(([^)]+)\)/g), (match) => match[1]);
+function verifyExpectedExampleUsage(
+  expectation,
+  commonJobReferenceAudit,
+  exampleUsageAuditService,
+  failures,
+) {
+  const entry = exampleUsageAuditService.findCommonJobReferenceEntryByAcceptedName(
+    commonJobReferenceAudit.entries,
+    expectation.alias,
+  );
+
+  if (!entry) {
+    failures.push(
+      `${expectation.alias}: Common job reference is missing a row whose accepted names include ${expectation.alias}.`,
+    );
+    return;
+  }
+
+  const entryIssues = commonJobReferenceAudit.issues.filter((issue) =>
+    issue.startsWith(`[${entry.job}]`),
+  );
+
+  if (entryIssues.length > 0) {
+    failures.push(
+      `${expectation.alias}: shared example-usage audit reported link issues for ${entry.job}.\n${entryIssues.join('\n')}`,
+    );
+    return;
+  }
+
+  const resolvedExamplePath = exampleUsageAuditService.resolveExampleUsageRelativePath(entry);
+
+  if (resolvedExamplePath !== expectation.expectedExamplePath) {
+    failures.push(
+      `${expectation.alias}: expected migration example to resolve to ${expectation.expectedExamplePath}, but found ${resolvedExamplePath ?? 'no resolved example path'}.`,
+    );
+  }
 }
 
-function resolveExistingRelatedTargets(basePath, text, relatedPaths) {
-  return extractMarkdownTargets(text)
-    .filter((target) =>
-      relatedPaths.some((relatedPath) => target.includes(relatedPath)),
-    )
-    .map((target) => {
-      const [relativeTarget] = target.split('#', 1);
-
-      return {
-        target,
-        resolvedPath: path.resolve(path.dirname(basePath), relativeTarget),
-      };
-    })
-    .filter(({ resolvedPath }) => fs.existsSync(resolvedPath));
-}
-
-function verifyDeprecatedAlias(expectation, lines, failures) {
+function verifyDeprecatedAlias(expectation, lines, commonJobReferenceAudit, exampleUsageAuditService, failures) {
   const token = `\`${expectation.alias}\``;
   const lineIndexes = findLineIndexesContaining(lines, token);
 
@@ -89,28 +110,29 @@ function verifyDeprecatedAlias(expectation, lines, failures) {
     return;
   }
 
-  const linkedTargets = migrationWindows.flatMap((window) =>
-    resolveExistingRelatedTargets(
-      teammateConfigsPath,
-      window.text,
-      expectation.relatedPaths,
-    ),
+  verifyExpectedExampleUsage(
+    expectation,
+    commonJobReferenceAudit,
+    exampleUsageAuditService,
+    failures,
   );
-
-  if (linkedTargets.length === 0) {
-    failures.push(
-      `${expectation.alias}: deprecated migration text exists, but none of the expected guide/example links resolve on disk.\n${formatWindows(migrationWindows)}`,
-    );
-  }
 }
 
 function verifyDeprecatedMigrationPointers() {
   const content = readText(teammateConfigsPath);
   const lines = splitLines(content);
   const failures = [];
+  const exampleUsageAuditService = createExampleUsageAuditService();
+  const commonJobReferenceAudit = exampleUsageAuditService.auditCommonJobReference();
 
   for (const expectation of expectations) {
-    verifyDeprecatedAlias(expectation, lines, failures);
+    verifyDeprecatedAlias(
+      expectation,
+      lines,
+      commonJobReferenceAudit,
+      exampleUsageAuditService,
+      failures,
+    );
   }
 
   assert.deepStrictEqual(
