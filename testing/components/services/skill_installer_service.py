@@ -7,7 +7,7 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from testing.core.utils.repo_sandbox import CommandResult, RepoSandbox
 
@@ -82,6 +82,41 @@ class SkillSelectionAuditFailure:
     step: int
     summary: str
     details: str
+
+
+@dataclass(frozen=True)
+class SkillEndpointsMetadata:
+    command_entries: tuple[str, ...]
+    raw: str
+
+
+@dataclass(frozen=True)
+class SkillDeselectAllAuditResult:
+    installer_command_result: CommandResult
+    workspace_root: str
+    installer_path: str
+    skills_root: str
+    metadata_path: str
+    endpoints_path: str
+    seeded_skills: tuple[str, ...]
+    initial_skill_states: tuple[SkillDirectoryState, ...]
+    initial_metadata_exists: bool
+    initial_metadata_raw: str | None
+    initial_metadata: InstalledSkillsMetadata | None
+    initial_parse_error: str | None
+    initial_endpoints_exists: bool
+    initial_endpoints_raw: str | None
+    initial_endpoints: SkillEndpointsMetadata | None
+    initial_endpoints_parse_error: str | None
+    final_skill_states: tuple[SkillDirectoryState, ...]
+    final_metadata_exists: bool
+    final_metadata_raw: str | None
+    final_metadata: InstalledSkillsMetadata | None
+    final_parse_error: str | None
+    final_endpoints_exists: bool
+    final_endpoints_raw: str | None
+    final_endpoints: SkillEndpointsMetadata | None
+    final_endpoints_parse_error: str | None
 
 
 class Sandbox(Protocol):
@@ -350,6 +385,179 @@ class SkillInstallerService:
                 parse_error=result.final_parse_error,
                 metadata_path=result.metadata_path,
                 expected_skills=result.selected_skills,
+            )
+        )
+
+        return failures
+
+    def run_deselect_all_skills(
+        self,
+        *,
+        seeded_skills: tuple[str, ...] = ("jira",),
+    ) -> SkillDeselectAllAuditResult:
+        sandbox = self._sandbox_factory(self.repository_root)
+        try:
+            installer_path = sandbox.workspace / self.INSTALLER_RELATIVE_PATH
+            skills_root = sandbox.workspace / self.SKILLS_ROOT_RELATIVE_PATH
+            metadata_path = skills_root / "installed-skills.json"
+            endpoints_path = skills_root / "endpoints.json"
+
+            self._prepare_fake_release_environment(sandbox, "dmtools")
+            self._seed_skill_selection_state(skills_root=skills_root, skills=seeded_skills)
+
+            (
+                initial_metadata_exists,
+                initial_metadata_raw,
+                initial_metadata,
+                initial_parse_error,
+            ) = self._read_metadata(metadata_path)
+            (
+                initial_endpoints_exists,
+                initial_endpoints_raw,
+                initial_endpoints,
+                initial_endpoints_parse_error,
+            ) = self._read_endpoints_metadata(endpoints_path)
+            initial_skill_states = self._skill_directory_states(skills_root)
+
+            installer_command_result = sandbox.run(
+                self._build_installer_command(
+                    installer_path=installer_path,
+                    fake_bin_dir=sandbox.workspace.parent / "fake-bin",
+                    fake_release_dir=sandbox.workspace.parent / "fake-releases",
+                    selected_skills_csv="",
+                )
+            )
+
+            (
+                final_metadata_exists,
+                final_metadata_raw,
+                final_metadata,
+                final_parse_error,
+            ) = self._read_metadata(metadata_path)
+            (
+                final_endpoints_exists,
+                final_endpoints_raw,
+                final_endpoints,
+                final_endpoints_parse_error,
+            ) = self._read_endpoints_metadata(endpoints_path)
+
+            return SkillDeselectAllAuditResult(
+                installer_command_result=installer_command_result,
+                workspace_root=sandbox.workspace.as_posix(),
+                installer_path=installer_path.as_posix(),
+                skills_root=skills_root.as_posix(),
+                metadata_path=metadata_path.as_posix(),
+                endpoints_path=endpoints_path.as_posix(),
+                seeded_skills=seeded_skills,
+                initial_skill_states=initial_skill_states,
+                initial_metadata_exists=initial_metadata_exists,
+                initial_metadata_raw=initial_metadata_raw,
+                initial_metadata=initial_metadata,
+                initial_parse_error=initial_parse_error,
+                initial_endpoints_exists=initial_endpoints_exists,
+                initial_endpoints_raw=initial_endpoints_raw,
+                initial_endpoints=initial_endpoints,
+                initial_endpoints_parse_error=initial_endpoints_parse_error,
+                final_skill_states=self._skill_directory_states(skills_root),
+                final_metadata_exists=final_metadata_exists,
+                final_metadata_raw=final_metadata_raw,
+                final_metadata=final_metadata,
+                final_parse_error=final_parse_error,
+                final_endpoints_exists=final_endpoints_exists,
+                final_endpoints_raw=final_endpoints_raw,
+                final_endpoints=final_endpoints,
+                final_endpoints_parse_error=final_endpoints_parse_error,
+            )
+        finally:
+            sandbox.cleanup()
+
+    def validate_deselect_all_skills(
+        self,
+        result: SkillDeselectAllAuditResult,
+    ) -> list[SkillSelectionAuditFailure]:
+        failures: list[SkillSelectionAuditFailure] = []
+
+        for state in result.initial_skill_states:
+            failures.extend(
+                self._validate_skill_directory(
+                    step=1,
+                    state=state,
+                    expected_exists=True,
+                    required_files=("SKILL.md", "artifact.txt"),
+                    expectation=(
+                        "The precondition must include installed skill artifacts before clearing "
+                        "the selection."
+                    ),
+                )
+            )
+        failures.extend(
+            self._validate_metadata(
+                step=1,
+                metadata_exists=result.initial_metadata_exists,
+                metadata=result.initial_metadata,
+                parse_error=result.initial_parse_error,
+                metadata_path=result.metadata_path,
+                expected_skills=result.seeded_skills,
+            )
+        )
+        failures.extend(
+            self._validate_endpoints_metadata(
+                step=1,
+                endpoints_exists=result.initial_endpoints_exists,
+                endpoints=result.initial_endpoints,
+                parse_error=result.initial_endpoints_parse_error,
+                endpoints_path=result.endpoints_path,
+                expected_commands=tuple(
+                    self.skill_command_name(skill) for skill in result.seeded_skills
+                ),
+            )
+        )
+
+        if result.installer_command_result.returncode != 0:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=2,
+                    summary="Re-running the skill installer with an empty DMTOOLS_SKILLS value should succeed.",
+                    details=(
+                        f"Command exited with {result.installer_command_result.returncode}.\n"
+                        f"Command: {result.installer_command_result.command}"
+                    ),
+                )
+            )
+            return failures
+
+        if result.final_skill_states:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=3,
+                    summary="All skill folders should be removed after deselecting every skill.",
+                    details=(
+                        "Observed remaining directories: "
+                        + ", ".join(
+                            f"{state.path} (files={', '.join(state.files) or '<empty>'})"
+                            for state in result.final_skill_states
+                        )
+                    ),
+                )
+            )
+        failures.extend(
+            self._validate_metadata(
+                step=4,
+                metadata_exists=result.final_metadata_exists,
+                metadata=result.final_metadata,
+                parse_error=result.final_parse_error,
+                metadata_path=result.metadata_path,
+                expected_skills=(),
+            )
+        )
+        failures.extend(
+            self._validate_endpoints_metadata(
+                step=5,
+                endpoints_exists=result.final_endpoints_exists,
+                endpoints=result.final_endpoints,
+                parse_error=result.final_endpoints_parse_error,
+                endpoints_path=result.endpoints_path,
+                expected_commands=(),
             )
         )
 
@@ -690,6 +898,109 @@ class SkillInstallerService:
         )
         return "\n".join(lines)
 
+    def format_deselect_all_failures(
+        self,
+        result: SkillDeselectAllAuditResult,
+        failures: list[SkillSelectionAuditFailure],
+    ) -> str:
+        seeded_skills_display = ", ".join(result.seeded_skills)
+        lines = [
+            "Empty skill selection clearing verification failed.",
+            "",
+            "Steps to reproduce:",
+            (
+                "1. Start from a workspace where .claude/skills contains installed skill folders "
+                f"for {seeded_skills_display} plus installed-skills.json and endpoints.json."
+            ),
+            (
+                "2. Re-run dmtools-ai-docs/install.sh with DMTOOLS_SKILLS set to an empty string."
+            ),
+            "3. Verify that no dmtools skill folders remain and both metadata files are cleared.",
+            "",
+            "Observed state:",
+            f"- Installer: {result.installer_path}",
+            f"- Workspace: {result.workspace_root}",
+            f"- Skills root: {result.skills_root}",
+            f"- Installed-skills metadata: {result.metadata_path}",
+            f"- Endpoints metadata: {result.endpoints_path}",
+            (
+                "- Initial skill directories: "
+                + (
+                    ", ".join(
+                        f"{state.path} (files={', '.join(state.files) or '<empty>'})"
+                        for state in result.initial_skill_states
+                    )
+                    or "<none>"
+                )
+            ),
+            (
+                "- Final skill directories: "
+                + (
+                    ", ".join(
+                        f"{state.path} (files={', '.join(state.files) or '<empty>'})"
+                        for state in result.final_skill_states
+                    )
+                    or "<none>"
+                )
+            ),
+            (
+                f"- Initial installed-skills exists={result.initial_metadata_exists} "
+                f"parse_error={result.initial_parse_error or '<none>'}"
+            ),
+            (
+                f"- Final installed-skills exists={result.final_metadata_exists} "
+                f"parse_error={result.final_parse_error or '<none>'}"
+            ),
+            (
+                f"- Initial endpoints exists={result.initial_endpoints_exists} "
+                f"parse_error={result.initial_endpoints_parse_error or '<none>'}"
+            ),
+            (
+                f"- Final endpoints exists={result.final_endpoints_exists} "
+                f"parse_error={result.final_endpoints_parse_error or '<none>'}"
+            ),
+            "",
+            "Initial installed-skills.json:",
+            result.initial_metadata_raw.rstrip() if result.initial_metadata_raw is not None else "<missing>",
+            "",
+            "Final installed-skills.json:",
+            result.final_metadata_raw.rstrip() if result.final_metadata_raw is not None else "<missing>",
+            "",
+            "Initial endpoints.json:",
+            result.initial_endpoints_raw.rstrip()
+            if result.initial_endpoints_raw is not None
+            else "<missing>",
+            "",
+            "Final endpoints.json:",
+            result.final_endpoints_raw.rstrip()
+            if result.final_endpoints_raw is not None
+            else "<missing>",
+        ]
+
+        if failures:
+            lines.extend(
+                [
+                    "",
+                    "Failures:",
+                    *[
+                        f"- Step {failure.step}: {failure.summary} {failure.details}"
+                        for failure in failures
+                    ],
+                ]
+            )
+
+        lines.extend(
+            [
+                "",
+                "Installer stdout:",
+                result.installer_command_result.stdout.rstrip() or "<empty>",
+                "",
+                "Installer stderr:",
+                result.installer_command_result.stderr.rstrip() or "<empty>",
+            ]
+        )
+        return "\n".join(lines)
+
     def format_invalid_skill_reinstall_failures(
         self,
         result: InvalidSkillReinstallAuditResult,
@@ -799,14 +1110,22 @@ class SkillInstallerService:
     def _prepare_fake_release_environment(
         self,
         sandbox: Sandbox,
-        selected_skills: tuple[str, ...],
+        *skills: str | tuple[str, ...],
     ) -> None:
         fake_release_dir = sandbox.workspace.parent / "fake-releases"
         fake_bin_dir = sandbox.workspace.parent / "fake-bin"
         fake_release_dir.mkdir(parents=True, exist_ok=True)
         fake_bin_dir.mkdir(parents=True, exist_ok=True)
 
-        for skill in selected_skills:
+        prepared_skills: list[str] = []
+        for skill_entry in skills:
+            candidates = skill_entry if isinstance(skill_entry, tuple) else (skill_entry,)
+            for skill in candidates:
+                normalized_skill = skill.strip().lower()
+                if normalized_skill and normalized_skill not in prepared_skills:
+                    prepared_skills.append(normalized_skill)
+
+        for skill in prepared_skills:
             self._write_skill_package(
                 fake_release_dir / self.skill_asset_name(skill),
                 skill,
@@ -826,6 +1145,18 @@ class SkillInstallerService:
             selected_skills=(retained_skill, removed_skill),
         )
 
+    def _seed_skill_selection_state(
+        self,
+        *,
+        skills_root: Path,
+        skills: tuple[str, ...],
+    ) -> None:
+        self._seed_selected_skills(
+            skills_root=skills_root,
+            selected_skills=skills,
+        )
+        self._write_endpoints_metadata(skills_root, skills)
+
     def _seed_selected_skills(
         self,
         *,
@@ -841,6 +1172,26 @@ class SkillInstallerService:
         }
         (skills_root / "installed-skills.json").write_text(
             json.dumps(metadata, indent=2),
+            encoding="utf-8",
+        )
+
+    def _write_endpoints_metadata(
+        self,
+        skills_root: Path,
+        skills: tuple[str, ...],
+    ) -> None:
+        payload = {
+            "version": "test-seed",
+            "endpoints": [
+                {
+                    "name": skill,
+                    "path": self.skill_command_name(skill),
+                }
+                for skill in skills
+            ],
+        }
+        (skills_root / "endpoints.json").write_text(
+            json.dumps(payload, indent=2),
             encoding="utf-8",
         )
 
@@ -971,6 +1322,17 @@ class SkillInstallerService:
         return True, raw, metadata, parse_error
 
     @staticmethod
+    def _read_endpoints_metadata(
+        endpoints_path: Path,
+    ) -> tuple[bool, str | None, SkillEndpointsMetadata | None, str | None]:
+        if not endpoints_path.is_file():
+            return False, None, None, None
+
+        raw = endpoints_path.read_text(encoding="utf-8")
+        metadata, parse_error = SkillInstallerService._parse_endpoints_metadata(raw)
+        return True, raw, metadata, parse_error
+
+    @staticmethod
     def _parse_metadata(
         raw: str,
     ) -> tuple[InstalledSkillsMetadata | None, str | None]:
@@ -1003,6 +1365,42 @@ class SkillInstallerService:
         )
 
     @staticmethod
+    def _parse_endpoints_metadata(
+        raw: str,
+    ) -> tuple[SkillEndpointsMetadata | None, str | None]:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as error:
+            return None, f"Invalid JSON: {error}"
+
+        command_entries = tuple(
+            dict.fromkeys(SkillInstallerService._collect_dmtools_entries(payload))
+        )
+        return (
+            SkillEndpointsMetadata(
+                command_entries=command_entries,
+                raw=raw,
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _collect_dmtools_entries(payload: Any) -> tuple[str, ...]:
+        if isinstance(payload, str):
+            return (payload,) if payload.startswith("/dmtools") else ()
+        if isinstance(payload, list):
+            collected: list[str] = []
+            for item in payload:
+                collected.extend(SkillInstallerService._collect_dmtools_entries(item))
+            return tuple(collected)
+        if isinstance(payload, dict):
+            collected = []
+            for value in payload.values():
+                collected.extend(SkillInstallerService._collect_dmtools_entries(value))
+            return tuple(collected)
+        return ()
+
+    @staticmethod
     def _build_installer_command(
         *,
         installer_path: Path,
@@ -1019,6 +1417,15 @@ class SkillInstallerService:
             bash {shlex.quote(installer_path.as_posix())}
             """
         ).strip()
+
+    @staticmethod
+    def _skill_directory_states(skills_root: Path) -> tuple[SkillDirectoryState, ...]:
+        if not skills_root.is_dir():
+            return ()
+        return tuple(
+            SkillInstallerService._directory_state(path)
+            for path in sorted(child for child in skills_root.iterdir() if child.is_dir())
+        )
 
     def _validate_metadata(
         self,
@@ -1075,6 +1482,54 @@ class SkillInstallerService:
                     details=(
                         f"Expected {expected_commands}, observed {metadata.active_commands} "
                         f"in {metadata_path}."
+                    ),
+                )
+            )
+
+        return failures
+
+    @staticmethod
+    def _validate_endpoints_metadata(
+        *,
+        step: int,
+        endpoints_exists: bool,
+        endpoints: SkillEndpointsMetadata | None,
+        parse_error: str | None,
+        endpoints_path: str,
+        expected_commands: tuple[str, ...],
+    ) -> list[SkillSelectionAuditFailure]:
+        failures: list[SkillSelectionAuditFailure] = []
+
+        if not endpoints_exists:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=step,
+                    summary="endpoints.json must exist.",
+                    details=f"{endpoints_path} was not found.",
+                )
+            )
+            return failures
+
+        if parse_error is not None:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=step,
+                    summary="endpoints.json must be valid JSON.",
+                    details=f"{endpoints_path} could not be parsed: {parse_error}",
+                )
+            )
+            return failures
+
+        assert endpoints is not None
+
+        if endpoints.command_entries != expected_commands:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=step,
+                    summary="endpoints.json must match the selected command entries exactly.",
+                    details=(
+                        f"Expected {expected_commands}, observed {endpoints.command_entries} "
+                        f"in {endpoints_path}."
                     ),
                 )
             )
