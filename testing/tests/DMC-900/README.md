@@ -23,5 +23,5 @@ No environment variables are required. The test reads documentation files direct
 ## Expected passing output
 
 ```text
-2 passed
+3 passed
 ```
