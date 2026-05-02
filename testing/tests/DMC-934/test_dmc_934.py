@@ -6,10 +6,10 @@ from pathlib import Path
 from testing.components.services.documentation_consistency_service import (
     DocumentationConsistencyService,
 )
-from testing.core.interfaces.documentation_consistency_checker import (
-    DocumentationConsistencyChecker,
-)
 from testing.core.models.job_reference import JobReference
+from testing.core.utils.documentation_consistency_assertions import (
+    documentation_consistency_failure_message,
+)
 from testing.core.utils.markdown_job_reference_parser import extract_markdown_paragraphs
 
 
@@ -33,7 +33,7 @@ def test_dmc_934_documentation_audit_handles_whitespace_only_jsrunner_variations
         "Expected the live JSRunner documentation to display the canonical summary "
         f"for users. Found: {live_jsrunner_summary.text!r}"
     )
-    assert _consistency_failure_message(live_checker) is None
+    assert documentation_consistency_failure_message(live_checker) is None
 
     whitespace_fixture_root = _create_whitespace_variation_fixture(
         tmp_path,
@@ -41,7 +41,7 @@ def test_dmc_934_documentation_audit_handles_whitespace_only_jsrunner_variations
     )
     whitespace_checker = DocumentationConsistencyService(whitespace_fixture_root)
 
-    assert _consistency_failure_message(whitespace_checker) is None
+    assert documentation_consistency_failure_message(whitespace_checker) is None
 
     whitespace_jsrunner_summary = _summary_paragraph(
         whitespace_checker.javascript_agents_path,
@@ -125,60 +125,6 @@ def _create_whitespace_variation_fixture(
     )
 
     return repository_root
-
-
-def _consistency_failure_message(
-    checker: DocumentationConsistencyChecker,
-) -> str | None:
-    teammate_table, jobs_table = checker.canonical_reference_tables()
-    if _canonical_reference_signatures(teammate_table) != _canonical_reference_signatures(
-        jobs_table
-    ):
-        return checker.format_table_mismatch(
-            checker.canonical_paths[0].name,
-            teammate_table,
-            checker.canonical_paths[1].name,
-            jobs_table,
-        )
-
-    references_by_name = checker.reference_by_name()
-    valid_names = checker.valid_job_names()
-
-    invalid_job_name_findings = {
-        path.name: invalid_names
-        for path in checker.secondary_paths
-        if (invalid_names := checker.invalid_job_names(path, valid_names))
-    }
-    summary_drift_findings = {
-        path.name: summary_mismatches
-        for path in checker.secondary_paths
-        if (
-            summary_mismatches := checker.inconsistent_secondary_summaries(
-                path,
-                references_by_name,
-            )
-        )
-    }
-
-    failure_sections: list[str] = []
-    if invalid_job_name_findings:
-        failure_sections.append(
-            checker.format_invalid_name_findings(invalid_job_name_findings)
-        )
-    if summary_drift_findings:
-        failure_sections.append(checker.format_summary_findings(summary_drift_findings))
-
-    return "\n\n".join(failure_sections) if failure_sections else None
-
-
-def _canonical_reference_signatures(
-    references: list[JobReference],
-) -> list[tuple[tuple[str, ...], str]]:
-    return sorted(
-        (tuple(sorted(reference.all_names)), reference.summary) for reference in references
-    )
-
-
 def _summary_paragraph(path: Path, heading: str):
     for paragraph in extract_markdown_paragraphs(path):
         if paragraph.heading == heading:
