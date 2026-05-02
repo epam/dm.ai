@@ -31,7 +31,7 @@ class InstallerScriptService(InstallerScript):
     def run_main(
         self,
         args: Sequence[str] = (),
-        extra_env: Mapping[str, str] | None = None,
+        extra_env: Mapping[str, str | None] | None = None,
         post_script: str = "",
     ) -> ProcessExecutionResult:
         with tempfile.TemporaryDirectory(prefix="dmtools-installer-") as temp_dir:
@@ -39,11 +39,12 @@ class InstallerScriptService(InstallerScript):
             bin_dir = install_dir / "bin"
             installer_env_path = bin_dir / "dmtools-installer.env"
 
-            env = {
+            env: dict[str, str | None] = {
                 "DMTOOLS_INSTALLER_TEST_MODE": "true",
                 "DMTOOLS_INSTALL_DIR": str(install_dir),
                 "DMTOOLS_BIN_DIR": str(bin_dir),
                 "DMTOOLS_INSTALLER_ENV_PATH": str(installer_env_path),
+                "DMTOOLS_SKILLS": None,
             }
             if extra_env:
                 env.update(extra_env)
@@ -64,8 +65,13 @@ class InstallerScriptService(InstallerScript):
                 download_dmtools() {{
                     local version="$1"
                     info "stubbed download_dmtools $version"
-                    mkdir -p "$(dirname "$JAR_PATH")"
+                    mkdir -p "$(dirname "$JAR_PATH")" "$BIN_DIR"
                     printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
+                    cat > "$SCRIPT_PATH" <<'EOF'
+#!/bin/bash
+echo "dmtools stub"
+EOF
+                    chmod +x "$SCRIPT_PATH"
                 }}
 
                 update_shell_config() {{
