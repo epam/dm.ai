@@ -67,6 +67,15 @@ class PerSkillPageAuditService:
             )
             return findings
 
+        missing_page_names = sorted(self.expected_page_names() - {path.name for path in child_pages})
+        if missing_page_names:
+            findings.append(
+                "Expected mandatory skill pages under "
+                f"{self.relative_path(self.per_skill_root)} are missing: "
+                + ", ".join(missing_page_names)
+                + "."
+            )
+
         for page_path in child_pages:
             findings.extend(self.audit_page(page_path))
 
@@ -78,6 +87,9 @@ class PerSkillPageAuditService:
             for path in self.per_skill_root.glob("*.md")
             if path.name.lower() not in self.PER_SKILL_INDEX_ALIASES
         )
+
+    def expected_page_names(self) -> set[str]:
+        return {f"{skill_name}.md" for skill_name in self.skill_expectations}
 
     def audit_page(self, page_path: Path) -> list[str]:
         findings: list[str] = []

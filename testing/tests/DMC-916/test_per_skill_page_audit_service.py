@@ -147,3 +147,22 @@ def test_repository_exposes_child_pages_for_each_canonical_skill() -> None:
     )
 
     assert service.child_pages() == expected_pages
+
+
+def test_audit_reports_missing_expected_skill_page(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    per_skill_root = repository_root / "dmtools-ai-docs" / "per-skill-packages"
+    per_skill_root.mkdir(parents=True)
+    (per_skill_root / "index.md").write_text("# Canonical index\n", encoding="utf-8")
+
+    for expectation in PerSkillCatalogService.EXPECTED_SKILLS:
+        if expectation.skill_name == "dmtools-github":
+            continue
+        write_page_fixture(repository_root, expectation.skill_name, expectation.java_package)
+
+    service = PerSkillPageAuditService(repository_root)
+
+    assert service.audit() == [
+        "Expected mandatory skill pages under dmtools-ai-docs/per-skill-packages are missing: "
+        "dmtools-github.md."
+    ]
