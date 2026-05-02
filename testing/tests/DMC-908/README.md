@@ -10,12 +10,14 @@ This test executes the user-facing command from the ticket:
 ./dmtools.sh run codegenerator --param1=test
 ```
 
-It verifies that the command:
+It verifies that the user-facing wrapper:
 
 - exits successfully;
 - shows a deprecation warning containing `deprecated` and `1.8.0`;
-- returns the compatibility shim success response; and
+- returns the compatibility shim success response, including `No action was taken and no code artifacts were produced.`; and
 - does not fail by treating `codegenerator` as a missing configuration file.
+
+It also executes the underlying `JobRunner` entry point through the testing framework abstraction so the test can prove the compatibility shim remains a visible no-op even when wrapper behavior regresses.
 
 ## Install dependencies
 
@@ -25,7 +27,7 @@ No additional dependencies are required. Use the repository-provided Node.js run
 
 - Run from the repository root: `/home/runner/work/dm.ai/dm.ai`
 - Java available for `./dmtools.sh`
-- A built DMTools JAR available via the repository build or local install
+- A built DMTools fat JAR from the current checkout (`./gradlew :dmtools-core:shadowJar`)
 
 ## Run this test
 
