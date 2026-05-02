@@ -74,7 +74,8 @@ def test_dmc_929_service_uses_injected_sandbox_and_parses_exact_metadata(tmp_pat
 
     assert len(sandbox.commands) == 1
     assert "dmtools-ai-docs/install.sh" in sandbox.commands[0][0]
-    assert "--skills jira" in sandbox.commands[0][0]
+    assert "DMTOOLS_SKILLS=jira" in sandbox.commands[0][0]
+    assert "--skills jira" not in sandbox.commands[0][0]
     assert sandbox.cleaned_up is True
     assert result.initial_metadata is not None
     assert result.initial_metadata.installed_skills == ("jira", "github")

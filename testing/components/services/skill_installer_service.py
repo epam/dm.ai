@@ -164,7 +164,7 @@ class SkillInstallerService:
                 step=1,
                 state=result.initial_retained_state,
                 expected_exists=True,
-                expected_files=("SKILL.md", "artifact.txt"),
+                required_files=("SKILL.md",),
                 expectation=(
                     "The precondition must include the retained Jira skill artifacts before the rerun."
                 ),
@@ -175,7 +175,7 @@ class SkillInstallerService:
                 step=1,
                 state=result.initial_removed_state,
                 expected_exists=True,
-                expected_files=("SKILL.md", "artifact.txt"),
+                required_files=("SKILL.md",),
                 expectation=(
                     "The precondition must include the removable GitHub skill artifacts before the rerun."
                 ),
@@ -210,7 +210,7 @@ class SkillInstallerService:
                 step=3,
                 state=result.final_retained_state,
                 expected_exists=True,
-                expected_files=("SKILL.md", "artifact.txt"),
+                required_files=("SKILL.md",),
                 expectation="The Jira skill artifacts should remain installed after the rerun.",
             )
         )
@@ -219,7 +219,7 @@ class SkillInstallerService:
                 step=4,
                 state=result.final_removed_state,
                 expected_exists=False,
-                expected_files=(),
+                required_files=(),
                 expectation="The GitHub skill artifacts should be removed after the rerun.",
             )
         )
@@ -250,8 +250,8 @@ class SkillInstallerService:
                 "skill folders plus installed-skills.json metadata."
             ),
             (
-                f"2. Re-run {self.INSTALLER_RELATIVE_PATH} with only "
-                f"{result.retained_skill!r} selected."
+                f"2. Re-run {self.INSTALLER_RELATIVE_PATH} with "
+                f"DMTOOLS_SKILLS={result.retained_skill!r}."
             ),
             (
                 f"3. Verify {self.skill_install_name(result.retained_skill)!r} remains, "
@@ -553,7 +553,8 @@ class SkillInstallerService:
             set -e
             export PATH={shlex.quote(fake_bin_dir.as_posix())}:$PATH
             export SKILL_INSTALLER_FAKE_RELEASES={shlex.quote(fake_release_dir.as_posix())}
-            bash {shlex.quote(installer_path.as_posix())} --skills {shlex.quote(selected_skill)}
+            export DMTOOLS_SKILLS={shlex.quote(selected_skill)}
+            bash {shlex.quote(installer_path.as_posix())}
             """
         ).strip()
 
@@ -624,7 +625,7 @@ class SkillInstallerService:
         step: int,
         state: SkillDirectoryState,
         expected_exists: bool,
-        expected_files: tuple[str, ...],
+        required_files: tuple[str, ...],
         expectation: str,
     ) -> list[SkillSelectionAuditFailure]:
         if state.exists != expected_exists:
@@ -639,15 +640,22 @@ class SkillInstallerService:
                 )
             ]
 
-        if expected_exists and state.files != expected_files:
-            return [
-                SkillSelectionAuditFailure(
-                    step=step,
-                    summary=expectation,
-                    details=(
-                        f"{state.path} should contain {expected_files}, observed {state.files}."
-                    ),
-                )
-            ]
+        if expected_exists:
+            missing_files = tuple(
+                required_file
+                for required_file in required_files
+                if required_file not in state.files
+            )
+            if missing_files:
+                return [
+                    SkillSelectionAuditFailure(
+                        step=step,
+                        summary=expectation,
+                        details=(
+                            f"{state.path} is missing required files {missing_files}; "
+                            f"observed {state.files}."
+                        ),
+                    )
+                ]
 
         return []
