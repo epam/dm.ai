@@ -9,7 +9,7 @@ class InstallerScript(Protocol):
     def run_main(
         self,
         args: Sequence[str] = (),
-        extra_env: Mapping[str, str] | None = None,
+        extra_env: Mapping[str, str | None] | None = None,
         post_script: str = "",
     ) -> ProcessExecutionResult:
         raise NotImplementedError
