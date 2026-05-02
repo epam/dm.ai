@@ -17,3 +17,9 @@ python3 -m pytest testing/tests/DMC-917/test_dmc_917.py -q
 ## Environment
 
 No environment variables are required. The test reads `dmtools-ai-docs/references/installation/README.md` from this repository checkout.
+
+## Expected passing output
+
+```text
+4 passed
+```
