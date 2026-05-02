@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const {
@@ -34,6 +35,26 @@ const expectations = [
   },
 ];
 
+function extractMarkdownTargets(text) {
+  return Array.from(text.matchAll(/\[[^\]]+\]\(([^)]+)\)/g), (match) => match[1]);
+}
+
+function resolveExistingRelatedTargets(basePath, text, relatedPaths) {
+  return extractMarkdownTargets(text)
+    .filter((target) =>
+      relatedPaths.some((relatedPath) => target.includes(relatedPath)),
+    )
+    .map((target) => {
+      const [relativeTarget] = target.split('#', 1);
+
+      return {
+        target,
+        resolvedPath: path.resolve(path.dirname(basePath), relativeTarget),
+      };
+    })
+    .filter(({ resolvedPath }) => fs.existsSync(resolvedPath));
+}
+
 function verifyDeprecatedAlias(expectation, lines, failures) {
   const token = `\`${expectation.alias}\``;
   const lineIndexes = findLineIndexesContaining(lines, token);
@@ -64,6 +85,21 @@ function verifyDeprecatedAlias(expectation, lines, failures) {
   if (migrationWindows.length === 0) {
     failures.push(
       `${expectation.alias}: deprecated marker exists, but no explicit migration pointer to ${expectation.target} was found near the alias.\n${formatWindows(deprecatedWindows)}`,
+    );
+    return;
+  }
+
+  const linkedTargets = migrationWindows.flatMap((window) =>
+    resolveExistingRelatedTargets(
+      teammateConfigsPath,
+      window.text,
+      expectation.relatedPaths,
+    ),
+  );
+
+  if (linkedTargets.length === 0) {
+    failures.push(
+      `${expectation.alias}: deprecated migration text exists, but none of the expected guide/example links resolve on disk.\n${formatWindows(migrationWindows)}`,
     );
   }
 }
