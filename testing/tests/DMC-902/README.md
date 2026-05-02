@@ -1,6 +1,6 @@
 # DMC-902 automated test
 
-This test validates that the user-visible `Upgrading from legacy installs` sections in `README.md` and `dmtools-ai-docs/references/installation/README.md` include the required migration safeguards: backup, EPAM release replacement, config preservation, path update guidance, verification commands, and rollback.
+This test validates that every discovered `Upgrading from legacy installs` section in the tracked installation documentation includes the required migration safeguards: backup, EPAM release replacement, config preservation, path update guidance, verification commands, and rollback.
 
 ## Install dependencies
 
