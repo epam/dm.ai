@@ -50,6 +50,30 @@ class SkillSelectionAuditResult:
 
 
 @dataclass(frozen=True)
+class InvalidSkillReinstallAuditResult:
+    installer_command_result: CommandResult
+    workspace_root: str
+    installer_path: str
+    skills_root: str
+    metadata_path: str
+    retained_skill: str
+    invalid_skill: str
+    requested_skills_csv: str
+    initial_retained_state: SkillDirectoryState
+    initial_invalid_state: SkillDirectoryState
+    initial_metadata_exists: bool
+    initial_metadata_raw: str | None
+    initial_metadata: InstalledSkillsMetadata | None
+    initial_parse_error: str | None
+    final_retained_state: SkillDirectoryState
+    final_invalid_state: SkillDirectoryState
+    final_metadata_exists: bool
+    final_metadata_raw: str | None
+    final_metadata: InstalledSkillsMetadata | None
+    final_parse_error: str | None
+
+
+@dataclass(frozen=True)
 class SkillSelectionAuditFailure:
     step: int
     summary: str
@@ -114,7 +138,7 @@ class SkillInstallerService:
                     installer_path=installer_path,
                     fake_bin_dir=sandbox.workspace.parent / "fake-bin",
                     fake_release_dir=sandbox.workspace.parent / "fake-releases",
-                    selected_skill=retained_skill,
+                    selected_skills_csv=retained_skill,
                 )
             )
 
@@ -236,6 +260,224 @@ class SkillInstallerService:
 
         return failures
 
+    def run_invalid_skill_reinstall(
+        self,
+        *,
+        retained_skill: str = "jira",
+        invalid_skill: str = "unknown_skill_xyz",
+    ) -> InvalidSkillReinstallAuditResult:
+        sandbox = self._sandbox_factory(self.repository_root)
+        try:
+            installer_path = sandbox.workspace / self.INSTALLER_RELATIVE_PATH
+            skills_root = sandbox.workspace / self.SKILLS_ROOT_RELATIVE_PATH
+            metadata_path = skills_root / "installed-skills.json"
+            requested_skills_csv = f"{retained_skill},{invalid_skill}"
+
+            self._prepare_fake_release_environment(sandbox, retained_skill)
+            self._seed_selected_skills(
+                skills_root=skills_root,
+                selected_skills=(retained_skill,),
+            )
+
+            (
+                initial_metadata_exists,
+                initial_metadata_raw,
+                initial_metadata,
+                initial_parse_error,
+            ) = self._read_metadata(metadata_path)
+            initial_retained_state = self._directory_state(
+                skills_root / self.skill_install_name(retained_skill)
+            )
+            initial_invalid_state = self._directory_state(
+                skills_root / self.skill_install_name(invalid_skill)
+            )
+
+            installer_command_result = sandbox.run(
+                self._build_installer_command(
+                    installer_path=installer_path,
+                    fake_bin_dir=sandbox.workspace.parent / "fake-bin",
+                    fake_release_dir=sandbox.workspace.parent / "fake-releases",
+                    selected_skills_csv=requested_skills_csv,
+                )
+            )
+
+            (
+                final_metadata_exists,
+                final_metadata_raw,
+                final_metadata,
+                final_parse_error,
+            ) = self._read_metadata(metadata_path)
+
+            return InvalidSkillReinstallAuditResult(
+                installer_command_result=installer_command_result,
+                workspace_root=sandbox.workspace.as_posix(),
+                installer_path=installer_path.as_posix(),
+                skills_root=skills_root.as_posix(),
+                metadata_path=metadata_path.as_posix(),
+                retained_skill=retained_skill,
+                invalid_skill=invalid_skill,
+                requested_skills_csv=requested_skills_csv,
+                initial_retained_state=initial_retained_state,
+                initial_invalid_state=initial_invalid_state,
+                initial_metadata_exists=initial_metadata_exists,
+                initial_metadata_raw=initial_metadata_raw,
+                initial_metadata=initial_metadata,
+                initial_parse_error=initial_parse_error,
+                final_retained_state=self._directory_state(
+                    skills_root / self.skill_install_name(retained_skill)
+                ),
+                final_invalid_state=self._directory_state(
+                    skills_root / self.skill_install_name(invalid_skill)
+                ),
+                final_metadata_exists=final_metadata_exists,
+                final_metadata_raw=final_metadata_raw,
+                final_metadata=final_metadata,
+                final_parse_error=final_parse_error,
+            )
+        finally:
+            sandbox.cleanup()
+
+    def validate_invalid_skill_reinstall(
+        self,
+        result: InvalidSkillReinstallAuditResult,
+    ) -> list[SkillSelectionAuditFailure]:
+        failures: list[SkillSelectionAuditFailure] = []
+
+        failures.extend(
+            self._validate_skill_directory(
+                step=1,
+                state=result.initial_retained_state,
+                expected_exists=True,
+                required_files=("SKILL.md", "artifact.txt"),
+                expectation="The precondition must include the installed Jira skill artifacts.",
+            )
+        )
+        if result.initial_invalid_state.exists:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=1,
+                    summary="The precondition must not contain artifacts for the invalid skill.",
+                    details=(
+                        f"{result.initial_invalid_state.path} already exists with files "
+                        f"{result.initial_invalid_state.files}."
+                    ),
+                )
+            )
+        failures.extend(
+            self._validate_metadata(
+                step=1,
+                metadata_exists=result.initial_metadata_exists,
+                metadata=result.initial_metadata,
+                parse_error=result.initial_parse_error,
+                metadata_path=result.metadata_path,
+                expected_skills=(result.retained_skill,),
+            )
+        )
+
+        combined_output = result.installer_command_result.combined_output
+        expected_error = (
+            f"Unknown skills: {result.invalid_skill}. Use --skip-unknown to continue."
+        )
+        if result.installer_command_result.returncode == 0:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=2,
+                    summary="Selective reinstall with an unknown skill must fail.",
+                    details=(
+                        "The installer exited with code 0.\n"
+                        f"Command: {result.installer_command_result.command}"
+                    ),
+                )
+            )
+        if expected_error not in combined_output:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=2,
+                    summary="The installer must report the exact invalid skill name to the user.",
+                    details=(
+                        f"Expected to find {expected_error!r} in output.\n"
+                        f"Observed output:\n{combined_output or '<empty>'}"
+                    ),
+                )
+            )
+        if "Warning: Skipping unknown skills:" in combined_output:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=2,
+                    summary="The installer must not downgrade the invalid skill to a warning.",
+                    details=f"Observed output:\n{combined_output or '<empty>'}",
+                )
+            )
+        if "Removed deselected skill:" in combined_output:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=2,
+                    summary="The installer must fail before removing any existing skill artifacts.",
+                    details=f"Observed output:\n{combined_output or '<empty>'}",
+                )
+            )
+        if "Updated " in combined_output and "installed-skills.json" in combined_output:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=2,
+                    summary="The installer must fail before rewriting installed-skills.json.",
+                    details=f"Observed output:\n{combined_output or '<empty>'}",
+                )
+            )
+
+        failures.extend(
+            self._validate_skill_directory(
+                step=3,
+                state=result.final_retained_state,
+                expected_exists=True,
+                required_files=("SKILL.md", "artifact.txt"),
+                expectation="The Jira skill artifacts should remain untouched after the failed rerun.",
+            )
+        )
+        if result.final_retained_state.files != result.initial_retained_state.files:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=3,
+                    summary="The retained Jira skill directory should keep the same files.",
+                    details=(
+                        f"Initial files: {result.initial_retained_state.files}; "
+                        f"final files: {result.final_retained_state.files}."
+                    ),
+                )
+            )
+        failures.extend(
+            self._validate_skill_directory(
+                step=3,
+                state=result.final_invalid_state,
+                expected_exists=False,
+                required_files=(),
+                expectation="No artifacts should be created for the invalid skill.",
+            )
+        )
+        failures.extend(
+            self._validate_metadata(
+                step=3,
+                metadata_exists=result.final_metadata_exists,
+                metadata=result.final_metadata,
+                parse_error=result.final_parse_error,
+                metadata_path=result.metadata_path,
+                expected_skills=(result.retained_skill,),
+            )
+        )
+        if result.initial_metadata_raw != result.final_metadata_raw:
+            failures.append(
+                SkillSelectionAuditFailure(
+                    step=3,
+                    summary="installed-skills.json should stay byte-for-byte unchanged after the failure.",
+                    details=(
+                        f"Initial metadata:\n{result.initial_metadata_raw or '<missing>'}\n\n"
+                        f"Final metadata:\n{result.final_metadata_raw or '<missing>'}"
+                    ),
+                )
+            )
+
+        return failures
+
     def format_failures(
         self,
         result: SkillSelectionAuditResult,
@@ -324,6 +566,93 @@ class SkillInstallerService:
         )
         return "\n".join(lines)
 
+    def format_invalid_skill_reinstall_failures(
+        self,
+        result: InvalidSkillReinstallAuditResult,
+        failures: list[SkillSelectionAuditFailure],
+    ) -> str:
+        lines = [
+            "Invalid selective reinstall verification failed.",
+            "",
+            "Steps to reproduce:",
+            (
+                "1. Start from a workspace where .claude/skills already contains "
+                "dmtools-jira and installed-skills.json lists only jira."
+            ),
+            (
+                f"2. Re-run {self.INSTALLER_RELATIVE_PATH} with "
+                f"DMTOOLS_SKILLS={result.requested_skills_csv!r}."
+            ),
+            (
+                "3. Observe the console error, then verify the Jira skill directory and "
+                "installed-skills.json stayed unchanged."
+            ),
+            "",
+            "Observed state:",
+            f"- Installer: {result.installer_path}",
+            f"- Workspace: {result.workspace_root}",
+            f"- Skills root: {result.skills_root}",
+            f"- Metadata: {result.metadata_path}",
+            (
+                f"- Initial retained dir: {result.initial_retained_state.path} | "
+                f"exists={result.initial_retained_state.exists} | "
+                f"files={', '.join(result.initial_retained_state.files) or '<empty>'}"
+            ),
+            (
+                f"- Initial invalid dir: {result.initial_invalid_state.path} | "
+                f"exists={result.initial_invalid_state.exists} | "
+                f"files={', '.join(result.initial_invalid_state.files) or '<empty>'}"
+            ),
+            (
+                f"- Final retained dir: {result.final_retained_state.path} | "
+                f"exists={result.final_retained_state.exists} | "
+                f"files={', '.join(result.final_retained_state.files) or '<empty>'}"
+            ),
+            (
+                f"- Final invalid dir: {result.final_invalid_state.path} | "
+                f"exists={result.final_invalid_state.exists} | "
+                f"files={', '.join(result.final_invalid_state.files) or '<empty>'}"
+            ),
+            (
+                f"- Initial metadata exists={result.initial_metadata_exists} "
+                f"parse_error={result.initial_parse_error or '<none>'}"
+            ),
+            (
+                f"- Final metadata exists={result.final_metadata_exists} "
+                f"parse_error={result.final_parse_error or '<none>'}"
+            ),
+            "",
+            "Initial metadata:",
+            result.initial_metadata_raw.rstrip() if result.initial_metadata_raw is not None else "<missing>",
+            "",
+            "Final metadata:",
+            result.final_metadata_raw.rstrip() if result.final_metadata_raw is not None else "<missing>",
+        ]
+
+        if failures:
+            lines.extend(
+                [
+                    "",
+                    "Failures:",
+                    *[
+                        f"- Step {failure.step}: {failure.summary} {failure.details}"
+                        for failure in failures
+                    ],
+                ]
+            )
+
+        lines.extend(
+            [
+                "",
+                "Installer stdout:",
+                result.installer_command_result.stdout.rstrip() or "<empty>",
+                "",
+                "Installer stderr:",
+                result.installer_command_result.stderr.rstrip() or "<empty>",
+            ]
+        )
+        return "\n".join(lines)
+
     @staticmethod
     def skill_install_name(skill: str) -> str:
         return "dmtools" if skill == "dmtools" else f"dmtools-{skill}"
@@ -367,15 +696,23 @@ class SkillInstallerService:
         retained_skill: str,
         removed_skill: str,
     ) -> None:
+        self._seed_selected_skills(
+            skills_root=skills_root,
+            selected_skills=(retained_skill, removed_skill),
+        )
+
+    def _seed_selected_skills(
+        self,
+        *,
+        skills_root: Path,
+        selected_skills: tuple[str, ...],
+    ) -> None:
         skills_root.mkdir(parents=True, exist_ok=True)
-        self._seed_skill_directory(skills_root / self.skill_install_name(retained_skill), retained_skill)
-        self._seed_skill_directory(skills_root / self.skill_install_name(removed_skill), removed_skill)
+        for skill in selected_skills:
+            self._seed_skill_directory(skills_root / self.skill_install_name(skill), skill)
         metadata = {
-            "installed_skills": [retained_skill, removed_skill],
-            "active_commands": [
-                self.skill_command_name(retained_skill),
-                self.skill_command_name(removed_skill),
-            ],
+            "installed_skills": list(selected_skills),
+            "active_commands": [self.skill_command_name(skill) for skill in selected_skills],
         }
         (skills_root / "installed-skills.json").write_text(
             json.dumps(metadata, indent=2),
@@ -546,14 +883,14 @@ class SkillInstallerService:
         installer_path: Path,
         fake_bin_dir: Path,
         fake_release_dir: Path,
-        selected_skill: str,
+        selected_skills_csv: str,
     ) -> str:
         return textwrap.dedent(
             f"""\
             set -e
             export PATH={shlex.quote(fake_bin_dir.as_posix())}:$PATH
             export SKILL_INSTALLER_FAKE_RELEASES={shlex.quote(fake_release_dir.as_posix())}
-            export DMTOOLS_SKILLS={shlex.quote(selected_skill)}
+            export DMTOOLS_SKILLS={shlex.quote(selected_skills_csv)}
             bash {shlex.quote(installer_path.as_posix())}
             """
         ).strip()
