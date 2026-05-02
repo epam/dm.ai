@@ -69,26 +69,25 @@ class DmtoolsCliService {
   }
 
   resolveJarFile() {
-    const candidatePatterns = [
+    const candidateDirectories = [
       path.join(this.repositoryRoot, 'build', 'libs'),
-      path.join(this.repositoryRoot),
-      path.join(this.repositoryRoot, '..', 'build', 'libs'),
+      path.join(this.repositoryRoot, 'dmtools-core', 'build', 'libs'),
     ];
 
-    for (const directory of candidatePatterns) {
+    for (const directory of candidateDirectories) {
       const jarFile = findFirstFatJar(directory);
       if (jarFile) {
         return jarFile;
       }
     }
 
-    const installedJar = path.join(process.env.HOME || '', '.dmtools', 'dmtools.jar');
-    if (installedJar && fs.existsSync(installedJar)) {
-      return installedJar;
-    }
-
     throw new Error(
-      `Could not find a DMTools JAR for ${this.repositoryRoot}. Build the project first with ./gradlew :dmtools-core:shadowJar.`,
+      [
+        `Could not find a checkout-built DMTools JAR for ${this.repositoryRoot}.`,
+        `Searched: ${candidateDirectories.join(', ')}`,
+        'Build the current checkout first with ./gradlew :dmtools-core:shadowJar.',
+        'Global ~/.dmtools/dmtools.jar fallback is intentionally disabled for this test.',
+      ].join(' '),
     );
   }
 }

@@ -28,6 +28,7 @@ No additional dependencies are required. Use the repository-provided Node.js run
 - Run from the repository root: `/home/runner/work/dm.ai/dm.ai`
 - Java available for `./dmtools.sh`
 - A built DMTools fat JAR from the current checkout (`./gradlew :dmtools-core:shadowJar`)
+- The test intentionally rejects `~/.dmtools/dmtools.jar`; it only uses an artifact built from this checkout
 
 ## Run this test
 
