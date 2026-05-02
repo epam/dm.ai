@@ -28,10 +28,9 @@ This script will:
 ```bash
 # Latest stable version
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
-
-# Specific version
-curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
 ```
+
+If you need a tagged reinstall for rollback or migration validation, use the example in [Upgrading from legacy installs](#upgrading-from-legacy-installs).
 
 ## Install Only the Skills You Need
 
@@ -77,6 +76,14 @@ irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | i
 4. Remove stale aliases, wrapper scripts, or PATH entries that bypass `~/.dmtools/bin/dmtools`, and confirm `which dmtools` / `Get-Command dmtools` resolve to the new install.
 5. Verify the migrated installation with `dmtools --version` and `dmtools list`, and update CI cache keys that still reference legacy install URLs.
 6. If anything fails, roll back by restoring the backup copy of `~/.dmtools` and reactivating the previous wrapper or PATH configuration.
+
+#### Tagged reinstall example
+
+Use a tagged installer only when you need to validate or roll back to a previously deployed release during migration work:
+
+```bash
+curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
+```
 
 ### Method 2: Local Development Installation
 
@@ -384,10 +391,7 @@ docker run -it dmtools --version
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
-### Update to Specific Version
-```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
-```
+For tagged reinstall or rollback guidance, use the example in [Upgrading from legacy installs](#upgrading-from-legacy-installs).
 
 ### Check Current Version
 ```bash

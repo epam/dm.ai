@@ -52,18 +52,6 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
 ```
 
-**Specific Version (e.g., v1.7.179):**
-
-**macOS / Linux / Git Bash:**
-```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install | bash -s -- v1.7.179
-```
-
-**Windows:**
-```cmd
-set DMTOOLS_VERSION=v1.7.179 && curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
-```
-
 **Verify installation:**
 ```bash
 dmtools --version
@@ -80,6 +68,18 @@ See the [installation guide](dmtools-ai-docs/references/installation/README.md) 
 4. If `which dmtools` or `Get-Command dmtools` resolves outside `~/.dmtools/bin`, remove stale aliases, wrapper scripts, and outdated PATH entries from your shell profile or CI bootstrap steps.
 5. Verify the migrated install with `dmtools --version` and `dmtools list`, and refresh CI cache keys that still reference legacy install URLs.
 6. If the migration fails, roll back by restoring the backup copy of `~/.dmtools` and re-enabling the previous wrapper or PATH entry.
+
+   Tagged reinstall example for rollback or migration validation:
+
+   **macOS / Linux / Git Bash:**
+   ```bash
+   curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install | bash -s -- v1.7.179
+   ```
+
+   **Windows:**
+   ```cmd
+   set DMTOOLS_VERSION=v1.7.179 && curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+   ```
 
 ### Deprecated compatibility shims
 
