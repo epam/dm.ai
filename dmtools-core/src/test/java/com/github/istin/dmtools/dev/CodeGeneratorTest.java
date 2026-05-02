@@ -20,16 +20,16 @@ public class CodeGeneratorTest {
     @Test
     public void testRunJobReturnsCompatibilityResponseAndLogsDeprecationWarning() {
         Logger logger = mock(Logger.class);
-        CodeGenerator codeGenerator = new CodeGenerator(logger);
+        CodeGeneratorCompatibilityJob codeGenerator = new CodeGeneratorCompatibilityJob(logger);
 
         List<ResultItem> resultItems = codeGenerator.runJob(null);
 
         assertEquals(1, resultItems.size());
         assertEquals("CodeGenerator", resultItems.get(0).getKey());
-        assertEquals(CodeGenerator.getCompatibilityResponse(), resultItems.get(0).getResult());
+        assertEquals(CodeGeneratorCompatibilityJob.getCompatibilityResponse(), resultItems.get(0).getResult());
         assertNull(codeGenerator.getAi());
-        assertTrue(CodeGenerator.getDeprecationMessage().contains("deprecated"));
-        assertTrue(CodeGenerator.getDeprecationMessage().contains(CodeGenerator.REMOVAL_VERSION));
-        verify(logger).warn(CodeGenerator.getDeprecationMessage());
+        assertTrue(CodeGeneratorCompatibilityJob.getDeprecationMessage().contains("deprecated"));
+        assertTrue(CodeGeneratorCompatibilityJob.getDeprecationMessage().contains(CodeGeneratorCompatibilityJob.REMOVAL_VERSION));
+        verify(logger).warn(CodeGeneratorCompatibilityJob.getDeprecationMessage());
     }
 }
