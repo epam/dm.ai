@@ -69,10 +69,10 @@ def test_dmc_899_service_requires_real_table_of_contents_block(tmp_path: Path) -
             > ```
             >
             > Windows: https://github.com/epam/dm.ai/releases/latest/download/install.ps1
-
-            ## Quick Links
-            - [Installation](#Installation)
-
+            
+            ## Documentation Links
+            - [Getting Started](dmtools-ai-docs/references/installation/README.md)
+            
             ## Installation
             Use the latest release page:
             <https://github.com/epam/dm.ai/releases/latest>
@@ -90,3 +90,39 @@ def test_dmc_899_service_requires_real_table_of_contents_block(tmp_path: Path) -
     assert failures[0].summary == (
         "README is missing a Table of Contents section for Installation discovery."
     )
+
+
+def test_dmc_899_service_accepts_semantic_navigation_block_for_installation(
+    tmp_path: Path,
+) -> None:
+    readme_path = tmp_path / "README.md"
+    readme_path.write_text(
+        textwrap.dedent(
+            """
+            # DMTools
+            Delivery Management Tools
+            
+            > Quick install
+            >
+            > ```bash
+            > curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+            > ```
+            >
+            > PowerShell: https://github.com/epam/dm.ai/releases/latest/download/install.ps1
+            
+            ## Quick Links
+            - [Installation](#installation)
+            - [Configuration](#configuration)
+            
+            ## Installation
+            Browse the latest releases page:
+            <https://github.com/epam/dm.ai/releases/latest>
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    service = ReadmeInstallationEntryPointsService(tmp_path)
+
+    assert service.validate() == []
