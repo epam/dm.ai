@@ -4,6 +4,8 @@
 
 DMtools provides 8 MCP tools for GitHub integration, focused on pull request management: listing PRs, getting details, reading comments and review conversations, adding comments/labels, and getting diffs.
 
+If you only need the GitHub-focused AI assistant package, install `/dmtools-github` with the instructions in [../../installation/README.md#install-only-the-skills-you-need](../../installation/README.md#install-only-the-skills-you-need).
+
 ## Authentication
 
 ### Generate a Personal Access Token
