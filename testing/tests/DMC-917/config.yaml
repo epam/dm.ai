@@ -1,0 +1,6 @@
+test_id: DMC-917
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+doc_path: dmtools-ai-docs/references/installation/README.md
