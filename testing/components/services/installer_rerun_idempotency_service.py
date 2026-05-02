@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from testing.core.utils.repo_sandbox import CommandResult, RepoSandbox
 
@@ -41,13 +43,28 @@ class InstallerRerunObservation:
         return changed
 
 
+class Sandbox(Protocol):
+    home: Path
+
+    def cleanup(self) -> None: ...
+
+    def run(self, command: str, timeout: int = 1800) -> CommandResult: ...
+
+
 class InstallerRerunIdempotencyService:
-    def __init__(self, repository_root: Path, *, skills_csv: str = "jira,github") -> None:
+    def __init__(
+        self,
+        repository_root: Path,
+        *,
+        skills_csv: str = "jira,github",
+        sandbox_factory: Callable[[Path], Sandbox] = RepoSandbox,
+    ) -> None:
         self._repository_root = repository_root
         self._skills_csv = skills_csv
+        self._sandbox_factory = sandbox_factory
 
     def exercise(self) -> InstallerRerunObservation:
-        sandbox = RepoSandbox(self._repository_root)
+        sandbox = self._sandbox_factory(self._repository_root)
         try:
             first_run = self._run_installer(sandbox)
             second_run = self._run_installer(sandbox)
@@ -59,7 +76,7 @@ class InstallerRerunIdempotencyService:
         finally:
             sandbox.cleanup()
 
-    def _run_installer(self, sandbox: RepoSandbox) -> InstallerRunSnapshot:
+    def _run_installer(self, sandbox: Sandbox) -> InstallerRunSnapshot:
         install_dir = sandbox.home / ".dmtools"
         bin_dir = install_dir / "bin"
         installer_env_path = bin_dir / "dmtools-installer.env"
@@ -113,4 +130,3 @@ class InstallerRerunIdempotencyService:
                 size=stat_result.st_size,
             )
         return snapshots
-

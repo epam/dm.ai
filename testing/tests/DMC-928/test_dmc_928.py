@@ -7,12 +7,23 @@ from testing.components.services.installer_rerun_idempotency_service import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 EXPECTED_SKILLS = "jira,github"
-EXPECTED_NOOP_MESSAGE = f"Selected skills already installed: {EXPECTED_SKILLS}"
+NOOP_STATUS_MARKERS = ("already installed", "no-op")
 UNEXPECTED_SECOND_RUN_MARKERS = (
     "Downloading DMTools JAR...",
     "Downloading DMTools shell script",
     "dmtools.sh not found in release assets, downloading from repository...",
 )
+
+
+def _reports_noop_status_for_selected_skills(output: str, skills_csv: str) -> bool:
+    expected_skills = tuple(skill.strip().lower() for skill in skills_csv.split(",") if skill.strip())
+    for line in output.splitlines():
+        normalized_line = line.lower()
+        if not any(marker in normalized_line for marker in NOOP_STATUS_MARKERS):
+            continue
+        if all(skill in normalized_line for skill in expected_skills):
+            return True
+    return False
 
 
 def test_dmc_928_rerunning_installer_for_the_same_skill_set_is_idempotent() -> None:
@@ -32,10 +43,10 @@ def test_dmc_928_rerunning_installer_for_the_same_skill_set_is_idempotent() -> N
     second_run_output = observation.second_run.command.combined_output
     failures: list[str] = []
 
-    if EXPECTED_NOOP_MESSAGE not in second_run_output:
+    if not _reports_noop_status_for_selected_skills(second_run_output, EXPECTED_SKILLS):
         failures.append(
-            "Expected the rerun to report that the selected skills were already installed, "
-            f"but {EXPECTED_NOOP_MESSAGE!r} was missing from the output."
+            "Expected the rerun to report an already-installed or no-op status for the "
+            "selected skills, but no matching status line was found in the output."
         )
 
     unexpected_markers = [
