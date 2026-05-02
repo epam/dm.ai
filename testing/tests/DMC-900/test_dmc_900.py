@@ -44,3 +44,27 @@ def test_dmc_900_scans_install_guidance_anywhere_in_dmtools_docs(tmp_path: Path)
     assert [(finding.file_path, finding.line_number) for finding in findings] == [
         ("dmtools-ai-docs/README.md", 3)
     ]
+
+
+def test_dmc_900_allows_version_pinned_examples_in_deprecated_legacy_section(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    (repository_root / "dmtools-ai-docs").mkdir(parents=True)
+
+    (repository_root / "README.md").write_text(
+        "# Overview\n"
+        "## Upgrading from legacy installs\n"
+        "curl -fsSL https://github.com/owner/repo/releases/download/v1.2.3/install.sh | bash -s -- v1.2.3\n"
+        "## Quick Install\n"
+        "curl -fsSL https://github.com/owner/repo/releases/download/v2.0.0/install.sh | bash -s -- v2.0.0\n",
+        encoding="utf-8",
+    )
+
+    service = LegacyInstallReferenceService(repository_root)
+
+    findings = service.version_pinned_install_findings()
+
+    assert [(finding.file_path, finding.line_number) for finding in findings] == [
+        ("README.md", 5)
+    ]

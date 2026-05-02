@@ -53,7 +53,7 @@ class LegacyInstallReferenceService:
             category="version-pinned-install",
             reason="Version-pinned install guidance is present where the latest flow should be used.",
             patterns=VERSION_PINNED_INSTALL_PATTERNS,
-            allow_deprecated_legacy_section=False,
+            allow_deprecated_legacy_section=True,
         )
 
     def all_findings(self) -> list[DocumentationFinding]:
