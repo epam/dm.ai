@@ -96,6 +96,11 @@ public class RunCommandProcessor {
         }
 
         try {
+            if (JobRunner.isKnownJobName(filePath) && !Files.exists(Paths.get(filePath))) {
+                logger.info("Detected known job name for run command: {}", filePath);
+                return buildDirectJobParams(filePath, encodedConfig, cliOverrides);
+            }
+
             // Load JSON from file
             String fileJson = loadJsonFromFile(filePath);
 
@@ -103,37 +108,7 @@ public class RunCommandProcessor {
             JSONObject resolvedConfig = parentConfigResolver.resolve(new JSONObject(fileJson), Paths.get(filePath));
             fileJson = resolvedConfig.toString();
 
-            // Process encoded configuration if provided
-            String finalConfigJson;
-            if (encodedConfig != null && !encodedConfig.trim().isEmpty()) {
-                String decodedJson = encodingDetector.autoDetectAndDecode(encodedConfig);
-                finalConfigJson = configurationMerger.mergeConfigurations(fileJson, decodedJson);
-                logger.info("Configuration merged successfully from file and encoded parameter");
-            } else {
-                finalConfigJson = fileJson;
-                logger.info("Using file configuration only");
-            }
-
-            // Apply --key value CLI overrides into the "params" block
-            if (!cliOverrides.isEmpty()) {
-                JSONObject root = new JSONObject(finalConfigJson);
-                JSONObject params = root.optJSONObject(JobParams.PARAMS);
-                if (params == null) {
-                    params = new JSONObject();
-                    root.put(JobParams.PARAMS, params);
-                }
-                for (Map.Entry<String, String> entry : cliOverrides.entrySet()) {
-                    params.put(entry.getKey(), entry.getValue());
-                }
-                finalConfigJson = root.toString();
-                logger.info("Applied {} CLI override(s) to params block: {}", cliOverrides.size(), cliOverrides.keySet());
-            }
-
-            // Create JobParams with final merged configuration
-            JobParams jobParams = new JobParams(finalConfigJson);
-            logger.info("JobParams created successfully for job: {}", jobParams.getName());
-
-            return jobParams;
+            return createJobParams(fileJson, encodedConfig, cliOverrides);
 
         } catch (Exception e) {
             logger.error("Failed to process run command: {}", e.getMessage());
@@ -200,5 +175,51 @@ public class RunCommandProcessor {
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to build JSRunner JobParams: " + e.getMessage(), e);
         }
+    }
+
+    private JobParams buildDirectJobParams(String jobName, String encodedConfig, Map<String, String> cliOverrides) {
+        JSONObject root = new JSONObject();
+        root.put("name", jobName);
+        root.put(JobParams.PARAMS, new JSONObject());
+        return createJobParams(root.toString(), encodedConfig, cliOverrides);
+    }
+
+    private JobParams createJobParams(String baseConfigJson, String encodedConfig, Map<String, String> cliOverrides) {
+        String finalConfigJson = mergeEncodedConfig(baseConfigJson, encodedConfig);
+        finalConfigJson = applyCliOverrides(finalConfigJson, cliOverrides);
+
+        JobParams jobParams = new JobParams(finalConfigJson);
+        logger.info("JobParams created successfully for job: {}", jobParams.getName());
+        return jobParams;
+    }
+
+    private String mergeEncodedConfig(String baseConfigJson, String encodedConfig) {
+        if (encodedConfig == null || encodedConfig.trim().isEmpty()) {
+            logger.info("Using file/job configuration only");
+            return baseConfigJson;
+        }
+
+        String decodedJson = encodingDetector.autoDetectAndDecode(encodedConfig);
+        String mergedJson = configurationMerger.mergeConfigurations(baseConfigJson, decodedJson);
+        logger.info("Configuration merged successfully from base configuration and encoded parameter");
+        return mergedJson;
+    }
+
+    private String applyCliOverrides(String configJson, Map<String, String> cliOverrides) {
+        if (cliOverrides.isEmpty()) {
+            return configJson;
+        }
+
+        JSONObject root = new JSONObject(configJson);
+        JSONObject params = root.optJSONObject(JobParams.PARAMS);
+        if (params == null) {
+            params = new JSONObject();
+            root.put(JobParams.PARAMS, params);
+        }
+        for (Map.Entry<String, String> entry : cliOverrides.entrySet()) {
+            params.put(entry.getKey(), entry.getValue());
+        }
+        logger.info("Applied {} CLI override(s) to params block: {}", cliOverrides.size(), cliOverrides.keySet());
+        return root.toString();
     }
 }
