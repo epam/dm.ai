@@ -6,22 +6,33 @@
 # and to global ~/.claude/skills if ~/.claude exists (Claude Code / GitHub Copilot CLI)
 #
 # Usage:
-#   curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.129/skill-install.sh | bash
+#   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
 #   # When piped (non-interactive): installs to ALL detected locations automatically
 #
+#   DMTOOLS_SKILLS=jira,github bash install.sh  # Install focused skills only
 #   INSTALL_LOCATION=1 bash install.sh          # Install to first detected location only
 #   bash install.sh --all                       # Install to all detected locations
+#   bash install.sh --skills jira,github        # Select packages explicitly
 #   bash install.sh                             # Interactive mode: ask user to choose
 
 set -e
 
-# Parse command line arguments
 INSTALL_ALL=false
-for arg in "$@"; do
-    case $arg in
+SELECTED_SKILLS="${DMTOOLS_SKILLS:-}"
+POSITIONAL_ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
         --all|-a)
             INSTALL_ALL=true
             shift
+            ;;
+        --skills|-s)
+            if [ -z "${2:-}" ]; then
+                echo "Missing value for $1" >&2
+                exit 1
+            fi
+            SELECTED_SKILLS="$2"
+            shift 2
             ;;
         --help|-h)
             echo "DMtools Agent Skill Installer"
@@ -31,14 +42,19 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --all, -a     Install to all detected locations"
+            echo "  --skills, -s  Comma-separated package list (dmtools,jira,github,ado,testrail)"
             echo "  --help, -h    Show this help message"
             echo ""
             echo "Environment Variables:"
             echo "  INSTALL_LOCATION  Set to number (1,2,3...) to select specific location"
+            echo "  DMTOOLS_SKILLS   Comma-separated package list for non-interactive installs"
             echo ""
             echo "Examples:"
-            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.129/skill-install.sh | bash"
+            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash"
             echo "    → Non-interactive mode: installs to ALL detected locations automatically"
+            echo ""
+            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github"
+            echo "    → Install only /dmtools-jira and /dmtools-github"
             echo ""
             echo "  bash install.sh"
             echo "    → Interactive mode: shows menu to choose location"
@@ -49,34 +65,31 @@ for arg in "$@"; do
             echo "  bash install.sh --all"
             echo "    → Install to all locations"
             echo ""
+            echo "  bash install.sh --skills jira,github"
+            echo "    → Install only focused Jira and GitHub packages"
+            echo ""
             echo "Note: Installs to project-level and global (~/.claude/skills) directories"
             echo "      Run this command from your project root directory."
             exit 0
             ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
     esac
 done
+set -- "${POSITIONAL_ARGS[@]}"
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Configuration
-SKILL_NAME="dmtools"
 GITHUB_REPO="epam/dm.ai"
 TEMP_DIR=$(mktemp -d)
 
-# Skill directories to check
-SKILL_DIRS=(
-    ".cursor/skills"
-    ".claude/skills"
-    ".codex/skills"
-)
-
-# Functions
 print_header() {
     echo "" >&2
     echo -e "${CYAN}╔════════════════════════════════════════════╗${NC}" >&2
@@ -97,11 +110,75 @@ print_info() {
     echo -e "${YELLOW}ℹ${NC} $1" >&2
 }
 
-# Detect available skill directories (project-level + global ~/.claude)
+skill_asset_name() {
+    case "$1" in
+        dmtools) echo "dmtools-skill.zip" ;;
+        jira) echo "dmtools-jira-skill.zip" ;;
+        github) echo "dmtools-github-skill.zip" ;;
+        ado) echo "dmtools-ado-skill.zip" ;;
+        testrail) echo "dmtools-testrail-skill.zip" ;;
+        *)
+            print_error "Unsupported skill package: $1"
+            return 1
+            ;;
+    esac
+}
+
+skill_install_name() {
+    case "$1" in
+        dmtools) echo "dmtools" ;;
+        jira) echo "dmtools-jira" ;;
+        github) echo "dmtools-github" ;;
+        ado) echo "dmtools-ado" ;;
+        testrail) echo "dmtools-testrail" ;;
+        *)
+            print_error "Unsupported skill package: $1"
+            return 1
+            ;;
+    esac
+}
+
+skill_command_name() {
+    case "$1" in
+        dmtools) echo "/dmtools" ;;
+        jira) echo "/dmtools-jira" ;;
+        github) echo "/dmtools-github" ;;
+        ado) echo "/dmtools-ado" ;;
+        testrail) echo "/dmtools-testrail" ;;
+        *)
+            print_error "Unsupported skill package: $1"
+            return 1
+            ;;
+    esac
+}
+
+normalize_skills() {
+    local raw="${1:-dmtools}"
+    local normalized=()
+    IFS=',' read -r -a requested <<< "$raw"
+    for skill in "${requested[@]}"; do
+        local trimmed
+        trimmed=$(echo "$skill" | tr '[:upper:]' '[:lower:]' | xargs)
+        [ -z "$trimmed" ] && continue
+        case "$trimmed" in
+            dmtools|jira|github|ado|testrail)
+                normalized+=("$trimmed")
+                ;;
+            *)
+                print_error "Unsupported skill package: $trimmed"
+                return 1
+                ;;
+        esac
+    done
+    if [ ${#normalized[@]} -eq 0 ]; then
+        normalized=("dmtools")
+    fi
+    printf '%s\n' "${normalized[@]}"
+}
+
 detect_skill_dirs() {
     local found_dirs=()
 
-    # Check project-level directories
     if [ -d ".cursor/skills" ] || [ -d ".cursor" ]; then
         found_dirs+=(".cursor/skills")
     fi
@@ -112,10 +189,8 @@ detect_skill_dirs() {
         found_dirs+=(".codex/skills")
     fi
 
-    # Check global directories (e.g. ~/.claude used by Claude Code / Copilot CLI)
     local home_claude="$HOME/.claude"
     if [ -d "$home_claude/skills" ] || [ -d "$home_claude" ]; then
-        # Only add if not already covered by project-level .claude
         local already_added=false
         for d in "${found_dirs[@]}"; do
             if [ "$d" = ".claude/skills" ]; then
@@ -128,209 +203,213 @@ detect_skill_dirs() {
         fi
     fi
 
-    # If no directories found, default to .cursor/skills in current directory
     if [ ${#found_dirs[@]} -eq 0 ]; then
         found_dirs+=(".cursor/skills")
     fi
 
-    # Return found directories via stdout (not stderr!)
     echo "${found_dirs[@]}"
 }
 
-# Download skill package
 download_skill() {
-    print_info "Downloading DMtools skill..."
+    local skill_key="$1"
+    local asset_name
+    asset_name=$(skill_asset_name "$skill_key") || return 1
+    local asset_path="$TEMP_DIR/$asset_name"
+    local extract_dir="$TEMP_DIR/$skill_key"
 
-    # Get latest release download URL from GitHub API
-    local API_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-    local DOWNLOAD_URL=$(curl -s "$API_URL" | grep "browser_download_url.*\.zip" | head -1 | cut -d '"' -f 4)
-    local FALLBACK_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/main.zip"
+    print_info "Downloading $(skill_install_name "$skill_key") package..."
 
-    # Try latest release first
-    if [ -n "$DOWNLOAD_URL" ] && curl -L -f -o "$TEMP_DIR/dmtools-skill.zip" "$DOWNLOAD_URL" 2>/dev/null; then
-        print_success "Downloaded latest release"
-    else
-        # Fallback to main branch
-        print_info "Downloading from main branch..."
-        if curl -L -f -o "$TEMP_DIR/dmtools-skill.zip" "$FALLBACK_URL" 2>/dev/null; then
-            print_success "Downloaded from repository"
+    local release_url="https://github.com/$GITHUB_REPO/releases/latest/download/$asset_name"
+    if curl -L -f -o "$asset_path" "$release_url" 2>/dev/null; then
+        print_success "Downloaded $asset_name"
+    elif [ "$skill_key" = "dmtools" ]; then
+        local fallback_url="https://github.com/$GITHUB_REPO/archive/refs/heads/main.zip"
+        print_info "Falling back to repository archive for dmtools..."
+        if curl -L -f -o "$asset_path" "$fallback_url" 2>/dev/null; then
+            print_success "Downloaded dmtools from repository"
         else
-            print_error "Failed to download skill"
+            print_error "Failed to download $asset_name"
             return 1
         fi
-    fi
-
-    # Extract
-    print_info "Extracting skill package..."
-    unzip -q "$TEMP_DIR/dmtools-skill.zip" -d "$TEMP_DIR"
-
-    # Find the skill directory
-    local SKILL_SOURCE=""
-    if [ -f "$TEMP_DIR/SKILL.md" ]; then
-        # Direct extraction (from release ZIP)
-        SKILL_SOURCE="$TEMP_DIR"
-    elif [ -f "$TEMP_DIR/dmtools-main/dmtools-ai-docs/SKILL.md" ]; then
-        # From GitHub main branch archive
-        SKILL_SOURCE="$TEMP_DIR/dmtools-main/dmtools-ai-docs"
-    elif [ -f "$TEMP_DIR/dmtools-ai-docs/SKILL.md" ]; then
-        # Legacy: direct dmtools-ai-docs folder
-        SKILL_SOURCE="$TEMP_DIR/dmtools-ai-docs"
     else
-        # Debug: show what we found
-        print_error "SKILL.md not found in package"
-        print_info "Contents of temp dir:"
-        ls -la "$TEMP_DIR" >&2 | head -10
+        print_error "Failed to download $asset_name"
+        print_info "Focused skill packages are published from release assets only."
         return 1
     fi
 
-    # Return the skill source path via stdout (not stderr!)
-    echo "$SKILL_SOURCE"
-}
+    print_info "Extracting $asset_name..."
+    mkdir -p "$extract_dir"
+    unzip -q "$asset_path" -d "$extract_dir"
 
-# Install skill to a directory
-install_to_directory() {
-    local SKILL_SOURCE="$1"
-    local TARGET_DIR="$2"
-
-    # Create target directory
-    mkdir -p "$TARGET_DIR"
-
-    # Remove old version if exists
-    if [ -d "$TARGET_DIR/$SKILL_NAME" ]; then
-        print_info "Removing old version..."
-        rm -rf "$TARGET_DIR/$SKILL_NAME"
+    local skill_source=""
+    if [ -f "$extract_dir/SKILL.md" ]; then
+        skill_source="$extract_dir"
+    elif [ -f "$extract_dir/dmtools-main/dmtools-ai-docs/SKILL.md" ]; then
+        skill_source="$extract_dir/dmtools-main/dmtools-ai-docs"
+    elif [ -f "$extract_dir/dmtools-ai-docs/SKILL.md" ]; then
+        skill_source="$extract_dir/dmtools-ai-docs"
+    else
+        print_error "SKILL.md not found in $asset_name"
+        print_info "Contents of extract dir:"
+        ls -la "$extract_dir" >&2 | head -10
+        return 1
     fi
 
-    # Copy skill files (exclude installation artifacts)
-    mkdir -p "$TARGET_DIR/$SKILL_NAME"
-
-    # Copy only necessary files
-    for item in "$SKILL_SOURCE"/*; do
-        item_name=$(basename "$item")
-        # Skip installation artifacts
-        if [ "$item_name" = "install.sh" ] || [ "$item_name" = "dmtools-skill.zip" ] || [[ "$item_name" == *.tar.gz ]]; then
-            continue
-        fi
-        cp -r "$item" "$TARGET_DIR/$SKILL_NAME/"
-    done
-
-    print_success "Installed to $TARGET_DIR/$SKILL_NAME"
+    echo "$skill_source"
 }
 
-# Main installation
+install_to_directory() {
+    local skill_source="$1"
+    local target_dir="$2"
+    local skill_name="$3"
+
+    mkdir -p "$target_dir"
+
+    if [ -d "$target_dir/$skill_name" ]; then
+        print_info "Removing old version..."
+        rm -rf "$target_dir/$skill_name"
+    fi
+
+    mkdir -p "$target_dir/$skill_name"
+
+    for item in "$skill_source"/*; do
+        local item_name
+        item_name=$(basename "$item")
+        if [ "$item_name" = "install.sh" ] || [ "$item_name" = "skill-install.ps1" ] || [[ "$item_name" == *.zip ]] || [[ "$item_name" == *.tar.gz ]]; then
+            continue
+        fi
+        cp -r "$item" "$target_dir/$skill_name/"
+    done
+
+    print_success "Installed to $target_dir/$skill_name"
+}
+
 main() {
     print_header
 
-    # Download skill
-    local SKILL_SOURCE=$(download_skill)
-    if [ -z "$SKILL_SOURCE" ]; then
-        print_error "Failed to download skill"
-        exit 1
+    local requested_skills=()
+    while IFS= read -r skill_key; do
+        requested_skills+=("$skill_key")
+    done < <(normalize_skills "$SELECTED_SKILLS")
+    if [ ${#requested_skills[@]} -eq 0 ]; then
+        requested_skills=("dmtools")
     fi
 
-    # Detect available directories
     print_info "Detecting skill directories..."
-    local DIRS=($(detect_skill_dirs))
+    local dirs
+    dirs=($(detect_skill_dirs))
 
-    if [ ${#DIRS[@]} -eq 0 ]; then
+    if [ ${#dirs[@]} -eq 0 ]; then
         print_error "No skill directories found"
         exit 1
     fi
 
-    # Show found directories
     echo "" >&2
     echo "Found skill directories:" >&2
-    for i in "${!DIRS[@]}"; do
-        echo "  $((i+1)). ${DIRS[$i]}" >&2
+    for i in "${!dirs[@]}"; do
+        echo "  $((i+1)). ${dirs[$i]}" >&2
+    done
+    echo "" >&2
+    echo "Selected skill packages:" >&2
+    for skill_key in "${requested_skills[@]}"; do
+        echo "  - $(skill_install_name "$skill_key") ($(skill_command_name "$skill_key"))" >&2
     done
 
-    # Determine installation choice
     echo "" >&2
-    local CHOICE=""
+    local choice=""
+    local selected_dir=""
 
-    if [ ${#DIRS[@]} -eq 1 ]; then
-        # Only one option, install directly
-        local SELECTED_DIR="${DIRS[0]}"
-        echo "Installing to: $SELECTED_DIR" >&2
-        install_to_directory "$SKILL_SOURCE" "$SELECTED_DIR"
+    if [ ${#dirs[@]} -eq 1 ]; then
+        selected_dir="${dirs[0]}"
+        echo "Installing to: $selected_dir" >&2
     else
-        # Multiple options - check for non-interactive mode
         if [ "$INSTALL_ALL" = true ] || [ "${INSTALL_LOCATION}" = "all" ] || [ "${INSTALL_LOCATION}" = "ALL" ]; then
-            CHOICE="all"
+            choice="all"
         elif [ -n "${INSTALL_LOCATION}" ]; then
-            # Use environment variable
-            CHOICE="${INSTALL_LOCATION}"
+            choice="${INSTALL_LOCATION}"
         elif [ ! -t 0 ]; then
-            # Non-interactive (piped input) - install to all locations
             print_info "Non-interactive mode detected, installing to all detected locations"
-            CHOICE="all"
+            choice="all"
         else
-            # Interactive mode - ask user
             echo "Where would you like to install? (Enter number or 'all' for all locations)" >&2
-            read -r CHOICE
+            read -r choice
         fi
 
-        if [ "$CHOICE" = "all" ] || [ "$CHOICE" = "ALL" ]; then
-            # Install to all directories
+        if [ "$choice" = "all" ] || [ "$choice" = "ALL" ]; then
             echo "Installing to all locations..." >&2
-            for DIR in "${DIRS[@]}"; do
-                install_to_directory "$SKILL_SOURCE" "$DIR"
-            done
-            SELECTED_DIR="multiple locations"
+            selected_dir="multiple locations"
         else
-            # Install to selected directory
-            local INDEX=$((CHOICE - 1))
-            if [ $INDEX -ge 0 ] && [ $INDEX -lt ${#DIRS[@]} ]; then
-                SELECTED_DIR="${DIRS[$INDEX]}"
-                # Create directory if needed
-                mkdir -p "$SELECTED_DIR"
-                install_to_directory "$SKILL_SOURCE" "$SELECTED_DIR"
+            local index=$((choice - 1))
+            if [ $index -ge 0 ] && [ $index -lt ${#dirs[@]} ]; then
+                selected_dir="${dirs[$index]}"
+                mkdir -p "$selected_dir"
             else
-                print_error "Invalid choice: $CHOICE"
+                print_error "Invalid choice: $choice"
                 exit 1
             fi
         fi
     fi
 
-    # Cleanup
+    local target_dirs=()
+    if [ "$selected_dir" = "multiple locations" ]; then
+        target_dirs=("${dirs[@]}")
+    else
+        target_dirs=("$selected_dir")
+    fi
+
+    local installed_commands=()
+    for skill_key in "${requested_skills[@]}"; do
+        local skill_source
+        skill_source=$(download_skill "$skill_key")
+        if [ -z "$skill_source" ]; then
+            print_error "Failed to download $(skill_install_name "$skill_key")"
+            exit 1
+        fi
+        local install_name
+        install_name=$(skill_install_name "$skill_key")
+        installed_commands+=("$(skill_command_name "$skill_key")")
+        for dir in "${target_dirs[@]}"; do
+            install_to_directory "$skill_source" "$dir" "$install_name"
+        done
+    done
+
     rm -rf "$TEMP_DIR"
 
-    # Success message
     echo "" >&2
     echo -e "${GREEN}════════════════════════════════════════════════════${NC}" >&2
     echo -e "${GREEN}        DMtools Skill Installed Successfully!       ${NC}" >&2
     echo -e "${GREEN}════════════════════════════════════════════════════${NC}" >&2
     echo "" >&2
-    echo "The DMtools skill is now available in your AI assistant!" >&2
+    echo "The selected DMtools skills are now available in your AI assistant!" >&2
     echo "" >&2
     echo -e "${CYAN}You can now:${NC}" >&2
-    echo "  • Type /dmtools in chat to invoke the skill" >&2
-    echo "  • Ask about DMtools and the assistant will use the skill automatically" >&2
+    for command_name in "${installed_commands[@]}"; do
+        echo "  • Type $command_name in chat to invoke the skill" >&2
+    done
+    echo "  • Ask about the installed DMtools areas and the assistant will use the matching skill automatically" >&2
     echo "" >&2
     echo -e "${BLUE}Example questions:${NC}" >&2
     echo "  • How do I install DMtools?" >&2
     echo "  • Help me configure Jira integration" >&2
-    echo "  • Show me how to create JavaScript agents" >&2
+    echo "  • Review GitHub pull requests with DMtools" >&2
     echo "  • Generate test cases from user story PROJ-123" >&2
     echo "" >&2
 
-    # Platform-specific instructions
-    if [[ "$SELECTED_DIR" == *"cursor"* ]]; then
+    if [[ "$selected_dir" == *"cursor"* ]]; then
         echo -e "${YELLOW}For Cursor:${NC}" >&2
         echo "  • Open Cursor Settings (Cmd+Shift+J or Ctrl+Shift+J)" >&2
         echo "  • Navigate to Rules → Agent Decides" >&2
-        echo "  • You should see 'dmtools' in the skills list" >&2
-    elif [[ "$SELECTED_DIR" == *"claude"* ]]; then
+        echo "  • You should see the selected dmtools skills in the skills list" >&2
+    elif [[ "$selected_dir" == *"claude"* ]]; then
         echo -e "${YELLOW}For Claude:${NC}" >&2
-        echo "  • The skill is available in your Claude desktop app" >&2
-        echo "  • Type /dmtools or mention DMtools in your questions" >&2
+        echo "  • The selected skills are available in your Claude desktop app" >&2
+        echo "  • Type the installed /dmtools* command or mention the matching integration in your questions" >&2
     fi
 
     echo "" >&2
     echo "For more information: https://github.com/epam/dm.ai" >&2
 }
 
-# Handle arguments
 case "${1:-install}" in
     install)
         main
@@ -338,19 +417,20 @@ case "${1:-install}" in
     --help|-h)
         echo "DMtools Agent Skill Installer"
         echo ""
-        echo "Usage: $0 [install|--help]"
+        echo "Usage: $0 [install] [--all] [--skills jira,github]"
         echo ""
         echo "This script installs the DMtools skill for AI assistants that"
         echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
         echo ""
         echo "The installer will:"
         echo "  1. Detect skill directories (.cursor, .claude, .codex, ~/.claude)"
-        echo "  2. Download the latest DMtools skill"
+        echo "  2. Download the selected DMtools skill package(s)"
         echo "  3. Install to ALL detected locations (when piped) or ask you to choose"
         echo ""
         echo "Behavior:"
         echo "  - Piped (curl | bash): Installs to ALL detected locations automatically"
         echo "  - Interactive: Shows menu to choose specific location(s)"
+        echo "  - Focused installs: pass --skills jira,github or set DMTOOLS_SKILLS=jira,github"
         echo ""
         echo "      Run from your project root directory."
         echo ""

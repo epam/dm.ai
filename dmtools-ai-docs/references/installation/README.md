@@ -5,8 +5,10 @@
 The fastest way to install DMtools:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
+
+If you only need focused AI assistant skills, see [Install Only the Skills You Need](#install-only-the-skills-you-need).
 
 This script will:
 1. ✅ Check for Java 17+ (install if missing)
@@ -23,11 +25,56 @@ This script will:
 
 ```bash
 # Latest stable version
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
 # Specific version
-DMTOOLS_VERSION=1.2.3 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
 ```
+
+## Install Only the Skills You Need
+
+Use the focused skill packages when you want integration-specific slash commands in your AI assistant instead of the full `/dmtools` bundle.
+
+| Skill | Slash command | Latest ZIP | Latest TAR |
+|------|------|------|------|
+| Full DMtools | `/dmtools` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.tar.gz` |
+| Jira | `/dmtools-jira` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.tar.gz` |
+| GitHub | `/dmtools-github` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.tar.gz` |
+| Azure DevOps | `/dmtools-ado` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.tar.gz` |
+| TestRail | `/dmtools-testrail` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.tar.gz` |
+
+### Skill Installer Examples
+
+```bash
+# Install only Jira
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira
+
+# Install Jira + GitHub together
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github
+
+# Run the installer locally and pass the package list directly
+bash install.sh --skills ado,testrail
+```
+
+```powershell
+$env:DMTOOLS_SKILLS = "jira,github"
+irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | iex
+```
+
+### Manual Focused Package Installation
+
+1. Download the ZIP or TAR for the skill you need.
+2. Extract it into `.cursor/skills/`, `.claude/skills/`, or `.codex/skills/`.
+3. The extracted folder name becomes the slash command, for example `dmtools-jira` → `/dmtools-jira`.
+
+### Upgrading from legacy installs
+
+1. Back up `~/.dmtools` before starting so you can restore the current installation, local cache, and wrapper scripts if the migration needs to be rolled back.
+2. Replace any `IstiN/dmtools` or `raw.githubusercontent.com/.../main/install.sh` bootstrap commands with `https://github.com/epam/dm.ai/releases/latest/download/install.sh` so the install points to the EPAM release asset path.
+3. Preserve or merge your existing `dmtools.env`, `dmtools-local.env`, and other local configuration files instead of replacing them blindly during reinstall.
+4. Remove stale aliases, wrapper scripts, or PATH entries that bypass `~/.dmtools/bin/dmtools`, and confirm `which dmtools` / `Get-Command dmtools` resolve to the new install.
+5. Verify the migrated installation with `dmtools --version` and `dmtools list`, and update CI cache keys that still reference legacy install URLs.
+6. If anything fails, roll back by restoring the backup copy of `~/.dmtools` and reactivating the previous wrapper or PATH configuration.
 
 ### Method 2: Local Development Installation
 
@@ -35,8 +82,8 @@ For developers working on DMtools:
 
 ```bash
 # Clone the repository
-git clone https://github.com/IstiN/dmtools.git
-cd dmtools/dmtools-core
+git clone https://github.com/epam/dm.ai.git
+cd dm.ai
 
 # Build and install locally
 ./buildInstallLocal.sh
@@ -51,9 +98,9 @@ cd dmtools/dmtools-core
 
 ```bash
 # Download the JAR directly
-DMTOOLS_VERSION=1.0.8  # Replace with desired version
+DMTOOLS_VERSION=1.7.179  # Replace with desired version
 wget -O ~/.dmtools/dmtools.jar \
-  "https://github.com/IstiN/dmtools/releases/download/v${DMTOOLS_VERSION}/dmtools-v${DMTOOLS_VERSION}-all.jar"
+  "https://github.com/epam/dm.ai/releases/download/v${DMTOOLS_VERSION}/dmtools-v${DMTOOLS_VERSION}-all.jar"
 
 # Create the wrapper script
 cat > ~/bin/dmtools << 'EOF'
@@ -128,7 +175,7 @@ After installation, verify DMtools is working:
 ```bash
 # Check version
 dmtools --version
-# Output: DMtools version v1.0.8 (or your installed version)
+# Output: DMtools version v1.7.179 (or your installed version)
 
 # List all available MCP tools
 dmtools list
@@ -310,7 +357,7 @@ FROM openjdk:17-slim
 
 # Install DMtools
 RUN apt-get update && apt-get install -y curl bash \
-    && curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash \
+    && curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash \
     && apt-get clean
 
 # Set up environment
@@ -332,12 +379,12 @@ docker run -it dmtools --version
 ### Update to Latest Version
 ```bash
 # Re-run the installer
-curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
 ### Update to Specific Version
 ```bash
-DMTOOLS_VERSION=1.2.3 curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
 ```
 
 ### Check Current Version
@@ -375,4 +422,4 @@ After installation:
 
 ---
 
-*Need help? Report issues at [github.com/IstiN/dmtools/issues](https://github.com/IstiN/dmtools/issues)*
+*Need help? Report issues at [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)*

@@ -44,17 +44,13 @@ class JobReference:
         return cls(
             job=_clean_markdown_cell(job),
             summary=_clean_markdown_cell(summary),
-            accepted_names=tuple(
-                _clean_markdown_cell(name)
-                for name in accepted_names.split("/")
-                if _clean_markdown_cell(name)
-            ),
+            accepted_names=_extract_markdown_names(accepted_names),
             example=_clean_markdown_cell(example),
         )
 
     @property
     def all_names(self) -> tuple[str, ...]:
-        return (self.job, *self.accepted_names)
+        return _unique_names((self.job, *self.accepted_names))
 
     @property
     def summary_keywords(self) -> frozenset[str]:
@@ -69,3 +65,19 @@ class JobReference:
 
 def _clean_markdown_cell(value: str) -> str:
     return value.strip().strip("`").strip()
+
+
+def _extract_markdown_names(value: str) -> tuple[str, ...]:
+    backticked_names = re.findall(r"`([^`]+)`", value)
+    if backticked_names:
+        return _unique_names(_clean_markdown_cell(name) for name in backticked_names)
+
+    return _unique_names(
+        _clean_markdown_cell(name)
+        for name in re.split(r"[;/]", value)
+        if _clean_markdown_cell(name)
+    )
+
+
+def _unique_names(names) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(names))

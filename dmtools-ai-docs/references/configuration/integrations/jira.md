@@ -4,6 +4,8 @@
 
 DMtools provides 52 MCP tools for Jira integration, enabling automated ticket management, test case generation, and workflow automation.
 
+If you only need the Jira-focused AI assistant package, install `/dmtools-jira` with the instructions in [../../installation/README.md#install-only-the-skills-you-need](../../installation/README.md#install-only-the-skills-you-need).
+
 ## 🔑 API Token Generation
 
 ### Step 1: Create Atlassian API Token

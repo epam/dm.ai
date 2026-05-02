@@ -95,7 +95,7 @@ java -jar dmtools-appengine.jar
 - **Base**: `AbstractJob<Params, Result>` - Thread-local context support
 - **Runner**: `JobRunner` - Factory-based instantiation, prevents race conditions
 - **Context**: `JobContext` - Thread-local configuration and attributes
-- 20+ specialized jobs: BA (RequirementsCollector, UserStoryGenerator), Dev (CodeGenerator, UnitTestsGenerator), QA (TestCasesGenerator), Reporting (DevProductivityReport)
+- 20+ specialized jobs: BA (RequirementsCollector, UserStoryGenerator), Dev (CodeGenerator compatibility shim, UnitTestsGenerator), QA (TestCasesGenerator), Reporting (DevProductivityReport)
 
 #### 2. MCP Tools System
 Three-component architecture:
@@ -153,7 +153,7 @@ com.github.istin.dmtools/
 ├── di/              # Dagger dependency injection (46+ components)
 ├── ba/              # Business Analysis jobs
 ├── qa/              # QA jobs (TestCasesGenerator)
-├── dev/             # Development jobs (CodeGenerator, UnitTestsGenerator)
+├── dev/             # Development jobs (CodeGenerator compatibility shim, UnitTestsGenerator)
 ├── report/          # Productivity reporting
 ├── documentation/   # Documentation generation
 ├── diagram/         # Mermaid diagram generation
@@ -605,7 +605,7 @@ function action(params) {
 | Size | Small (~100-200 lines) | Can be larger |
 | AI Interaction | One prompt, one call | Multiple agent calls |
 | Reusability | High - used by multiple jobs | Lower - specific workflow |
-| Examples | TestCaseGeneratorAgent, RequestDecompositionAgent | TestCasesGenerator, CodeGenerator |
+| Examples | TestCaseGeneratorAgent, RequestDecompositionAgent | TestCasesGenerator, CodeGenerator compatibility shim |
 
 **Example Flow**:
 ```
@@ -660,7 +660,7 @@ Job: TestCasesGenerator
 - **Core CLI**: `build/libs/dmtools-v{version}-all.jar` (Main-Class: `JobRunner`)
 - **Server**: `dmtools-appengine.jar` (Spring Boot executable)
 - **Automation**: `dmtools-automation-v{version}-all.jar`
-- **Installation**: `curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-cli/main/install.sh | bash`
+- **Installation**: `curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash`
 
 ## Skill Documentation (`dmtools-ai-docs/`)
 

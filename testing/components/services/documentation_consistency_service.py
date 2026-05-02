@@ -62,10 +62,16 @@ TEXT_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
 class DocumentationConsistencyService(DocumentationConsistencyChecker):
     def __init__(self, repository_root: Path) -> None:
         self.repository_root = repository_root
-        self.teammate_configs_path = repository_root / "dmtools-ai-docs/references/agents/teammate-configs.md"
+        self.teammate_configs_path = (
+            repository_root / "dmtools-ai-docs/references/agents/teammate-configs.md"
+        )
         self.jobs_readme_path = repository_root / "dmtools-ai-docs/references/jobs/README.md"
-        self.javascript_agents_path = repository_root / "dmtools-ai-docs/references/agents/javascript-agents.md"
-        self.cli_integration_path = repository_root / "dmtools-ai-docs/references/agents/cli-integration.md"
+        self.javascript_agents_path = (
+            repository_root / "dmtools-ai-docs/references/agents/javascript-agents.md"
+        )
+        self.cli_integration_path = (
+            repository_root / "dmtools-ai-docs/references/agents/cli-integration.md"
+        )
 
     @property
     def canonical_paths(self) -> tuple[Path, Path]:
@@ -114,7 +120,9 @@ class DocumentationConsistencyService(DocumentationConsistencyChecker):
     ) -> list[str]:
         findings: list[str] = []
         paragraphs = extract_markdown_paragraphs(path)
-        canonical_references = {reference.job: reference for reference in references_by_name.values()}
+        canonical_references = {
+            reference.job: reference for reference in references_by_name.values()
+        }
 
         for reference in canonical_references.values():
             matching_paragraphs = [
