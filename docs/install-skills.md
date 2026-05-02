@@ -7,9 +7,11 @@ DMTools keeps runtime routing out of the core CLI. The installer can still persi
 Use either the environment variable or the CLI flag:
 
 ```bash
-DMTOOLS_SKILLS=jira,github curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | DMTOOLS_SKILLS=jira,github bash
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash -s -- --skills=jira,github
 ```
+
+When piping the installer into `bash`, set `DMTOOLS_SKILLS` on the `bash` process (the right side of the pipe) or export it before running the command.
 
 The installer normalizes values to lowercase, trims whitespace, and skips unknown names with a warning. Empty input or `all` keeps the default full install.
 

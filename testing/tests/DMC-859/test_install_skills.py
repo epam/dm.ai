@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 INSTALL_SCRIPT = REPOSITORY_ROOT / "install.sh"
+INSTALL_ENTRYPOINTS = (REPOSITORY_ROOT / "install.sh", REPOSITORY_ROOT / "install")
 DOC_PATH = REPOSITORY_ROOT / "docs" / "install-skills.md"
 ALL_SKILLS = (
     "dmtools,jira,confluence,github,gitlab,figma,teams,"
@@ -41,6 +42,24 @@ source "{INSTALL_SCRIPT}"
         ["bash", "-lc", script],
         cwd=REPOSITORY_ROOT,
         env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
+def run_installer_via_stdin(
+    commands: str, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["DMTOOLS_INSTALLER_TEST_MODE"] = "true"
+    if extra_env:
+        env.update(extra_env)
+    script = INSTALL_SCRIPT.read_text(encoding="utf-8")
+    return subprocess.run(
+        ["bash", "-s", "--"],
+        cwd=REPOSITORY_ROOT,
+        env=env,
+        input=f"{script}\n{commands}\n",
         capture_output=True,
         text=True,
     )
@@ -84,6 +103,23 @@ printf 'all=%s\\n' "$INSTALL_ALL_SKILLS"
         self.assertIn(f"skills={ALL_SKILLS}", result.stdout)
         self.assertIn("source=env", result.stdout)
         self.assertIn("all=true", result.stdout)
+
+    def test_env_selection_via_bash_stdin_matches_supported_pipe_flow(self) -> None:
+        result = run_installer_via_stdin(
+            """
+parse_installer_args
+resolve_skill_selection
+printf 'skills=%s\\n' "$EFFECTIVE_SKILLS_CSV"
+printf 'source=%s\\n' "$SKILLS_SOURCE"
+printf 'integrations=%s\\n' "$EFFECTIVE_INTEGRATIONS_CSV"
+""",
+            {"DMTOOLS_SKILLS": "jira,github"},
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("skills=jira,github", result.stdout)
+        self.assertIn("source=env", result.stdout)
+        self.assertIn("integrations=ai,cli,file,kb,mermaid,jira,github", result.stdout)
 
     def test_unknown_skills_warn_and_known_skills_continue(self) -> None:
         result = run_installer_functions(
@@ -190,6 +226,13 @@ class TestInstallerSkillDocumentation(unittest.TestCase):
         self.assertIn("/dmtools/{skill}", content)
         self.assertIn("GET /dmtools/endpoints", content)
         self.assertIn("location ~ ^/dmtools/(?<skill>[a-z0-9_-]+)$", content)
+
+    def test_env_based_examples_target_the_installer_process(self) -> None:
+        for path in (*INSTALL_ENTRYPOINTS, DOC_PATH):
+            with self.subTest(path=path.name):
+                content = path.read_text(encoding="utf-8")
+                self.assertIn("| DMTOOLS_SKILLS=jira,github bash", content)
+                self.assertNotIn("DMTOOLS_SKILLS=jira,github curl", content)
 
 
 if __name__ == "__main__":

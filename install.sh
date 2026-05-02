@@ -3,7 +3,7 @@
 # Usage:
 #   Latest version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash
 #   Specific version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- <version>
-#   Select skills: DMTOOLS_SKILLS=jira,github curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash
+#   Select skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | DMTOOLS_SKILLS=jira,github bash
 #   CLI skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira,github
 # Requirements: Java 17+ (will attempt automatic installation on macOS/Linux)
 
