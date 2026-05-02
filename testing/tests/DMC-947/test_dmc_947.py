@@ -17,6 +17,7 @@ def test_dmc_947_runtime_supports_required_skill_selection_contract() -> None:
     single_skill_output = installer_script.normalized_combined_output(single_skill)
     assert single_skill.returncode == 0, single_skill_output
     assert "Effective skills: jira (source: cli)" in single_skill_output
+    assert installer_script.side_effect_marker in single_skill_output
 
     multi_skill = installer_script.run_main(args=("--skills=jira,github",))
     multi_skill_output = installer_script.normalized_combined_output(multi_skill)

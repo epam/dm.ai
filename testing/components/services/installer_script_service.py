@@ -36,12 +36,13 @@ class InstallerScriptService(InstallerScript):
             return textwrap.dedent(
                 f"""
                 detect_skill_dirs() {{
-                    printf '.cursor/skills\\n'
+                    printf '%s\\n' "$DMTOOLS_INSTALL_DIR/.cursor/skills"
                 }}
 
                 download_skill() {{
                     local skill_key="$1"
                     local skill_source="$DMTOOLS_INSTALL_DIR/stub-skill-$skill_key"
+                    printf '{self.SIDE_EFFECT_MARKER}download_skill %s\\n' "$skill_key" >&2
                     mkdir -p "$skill_source"
                     printf '# %s\\n' "$skill_key" > "$skill_source/SKILL.md"
                     printf '%s\\n' "$skill_source"
@@ -51,6 +52,7 @@ class InstallerScriptService(InstallerScript):
                     local skill_source="$1"
                     local target_dir="$2"
                     local skill_name="$3"
+                    printf '{self.SIDE_EFFECT_MARKER}install_to_directory %s %s\\n' "$target_dir" "$skill_name" >&2
                     mkdir -p "$target_dir/$skill_name"
                     cp -r "$skill_source"/. "$target_dir/$skill_name/"
                 }}
