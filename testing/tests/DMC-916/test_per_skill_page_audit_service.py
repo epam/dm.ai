@@ -74,6 +74,21 @@ def write_page_fixture(repository_root: Path, skill_name: str, package_name: str
     return page_path
 
 
+def write_all_page_fixtures(
+    repository_root: Path,
+    excluded_skills: set[str] | None = None,
+) -> None:
+    excluded_skills = excluded_skills or set()
+    for expectation in PerSkillCatalogService.EXPECTED_SKILLS:
+        if expectation.skill_name in excluded_skills:
+            continue
+        write_page_fixture(
+            repository_root,
+            expectation.skill_name,
+            expectation.java_package,
+        )
+
+
 @pytest.mark.parametrize(
     ("skill_name", "package_name"),
     [
@@ -149,20 +164,32 @@ def test_repository_exposes_child_pages_for_each_canonical_skill() -> None:
     assert service.child_pages() == expected_pages
 
 
-def test_audit_reports_missing_expected_skill_page(tmp_path: Path) -> None:
+def test_audit_reports_missing_expected_child_page(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
-    per_skill_root = repository_root / "dmtools-ai-docs" / "per-skill-packages"
-    per_skill_root.mkdir(parents=True)
-    (per_skill_root / "index.md").write_text("# Canonical index\n", encoding="utf-8")
-
-    for expectation in PerSkillCatalogService.EXPECTED_SKILLS:
-        if expectation.skill_name == "dmtools-github":
-            continue
-        write_page_fixture(repository_root, expectation.skill_name, expectation.java_package)
+    write_all_page_fixtures(repository_root, excluded_skills={"dmtools-github"})
 
     service = PerSkillPageAuditService(repository_root)
 
     assert service.audit() == [
-        "Expected mandatory skill pages under dmtools-ai-docs/per-skill-packages are missing: "
-        "dmtools-github.md."
+        "Expected canonical skill child page "
+        "dmtools-ai-docs/per-skill-packages/dmtools-github.md to exist, but it is missing."
+    ]
+
+
+def test_audit_requires_canonical_child_page_filename(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    write_all_page_fixtures(repository_root, excluded_skills={"dmtools-github"})
+    write_page_fixture(
+        repository_root,
+        "github",
+        "com.github.istin.dmtools.github",
+    )
+
+    service = PerSkillPageAuditService(repository_root)
+
+    assert service.audit() == [
+        "Expected canonical skill child page "
+        "dmtools-ai-docs/per-skill-packages/dmtools-github.md to exist, but it is missing.",
+        "dmtools-ai-docs/per-skill-packages/github.md is not listed in the canonical "
+        "per-skill catalogue mapping.",
     ]
