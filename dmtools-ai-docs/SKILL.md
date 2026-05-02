@@ -38,6 +38,8 @@ curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/dmtools-ai-docs/set
 
 **OR follow manual steps below:**
 
+**Focused skill packages:** install only the integrations you need with `DMTOOLS_SKILLS=jira,github` and the skill installer described in [references/installation/README.md#install-only-the-skills-you-need](references/installation/README.md#install-only-the-skills-you-need).
+
 ### Step 1: Check if DMtools is installed
 ```bash
 # Check if dmtools command is available
