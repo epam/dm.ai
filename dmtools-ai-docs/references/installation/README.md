@@ -30,6 +30,8 @@ This script will:
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
+The `latest` release alias is mutable. For reusable automation snippets, pinned release-tags are the authoritative reference, so prefer `${DMTOOLS_RELEASE_TAG}` and `${DMTOOLS_VERSION}` when documenting a repeatable install flow.
+
 If you need a tagged reinstall for rollback or migration validation, use the example in [Upgrading from legacy installs](#upgrading-from-legacy-installs).
 
 ## Install Only the Skills You Need
@@ -82,7 +84,9 @@ irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | i
 Use a tagged installer only when you need to validate or roll back to a previously deployed release during migration work:
 
 ```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
+export DMTOOLS_VERSION=1.7.179
+export DMTOOLS_RELEASE_TAG=v${DMTOOLS_VERSION}
+curl -fsSL https://github.com/epam/dm.ai/releases/download/${DMTOOLS_RELEASE_TAG}/install.sh | bash -s -- ${DMTOOLS_RELEASE_TAG}
 ```
 
 ### Method 2: Local Development Installation
