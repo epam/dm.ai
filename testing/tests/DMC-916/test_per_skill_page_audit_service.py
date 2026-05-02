@@ -174,3 +174,22 @@ def test_audit_reports_missing_expected_child_page(tmp_path: Path) -> None:
         "Expected canonical skill child page "
         "dmtools-ai-docs/per-skill-packages/dmtools-github.md to exist, but it is missing."
     ]
+
+
+def test_audit_requires_canonical_child_page_filename(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    write_all_page_fixtures(repository_root, excluded_skills={"dmtools-github"})
+    write_page_fixture(
+        repository_root,
+        "github",
+        "com.github.istin.dmtools.github",
+    )
+
+    service = PerSkillPageAuditService(repository_root)
+
+    assert service.audit() == [
+        "Expected canonical skill child page "
+        "dmtools-ai-docs/per-skill-packages/dmtools-github.md to exist, but it is missing.",
+        "dmtools-ai-docs/per-skill-packages/github.md is not listed in the canonical "
+        "per-skill catalogue mapping.",
+    ]

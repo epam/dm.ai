@@ -8,6 +8,7 @@ import org.apache.logging.log4j.Logger;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -20,7 +21,8 @@ public class CodeGeneratorTest {
     @Test
     public void testRunJobReturnsCompatibilityResponseAndLogsDeprecationWarning() {
         Logger logger = mock(Logger.class);
-        CodeGeneratorCompatibilityJob codeGenerator = new CodeGeneratorCompatibilityJob(logger);
+        AtomicReference<String> visibleWarning = new AtomicReference<>();
+        CodeGeneratorCompatibilityJob codeGenerator = new CodeGeneratorCompatibilityJob(logger, visibleWarning::set);
 
         List<ResultItem> resultItems = codeGenerator.runJob(null);
 
@@ -30,6 +32,7 @@ public class CodeGeneratorTest {
         assertNull(codeGenerator.getAi());
         assertTrue(CodeGeneratorCompatibilityJob.getDeprecationMessage().contains("deprecated"));
         assertTrue(CodeGeneratorCompatibilityJob.getDeprecationMessage().contains(CodeGeneratorCompatibilityJob.REMOVAL_VERSION));
+        assertEquals(CodeGeneratorCompatibilityJob.getDeprecationMessage(), visibleWarning.get());
         verify(logger).warn(CodeGeneratorCompatibilityJob.getDeprecationMessage());
     }
 }
