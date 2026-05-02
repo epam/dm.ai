@@ -8,7 +8,6 @@ from typing import Any
 
 from testing.core.interfaces.process_runner import ProcessRunner
 from testing.core.models.process_execution_result import ProcessExecutionResult
-from testing.frameworks.api.rest.subprocess_process_runner import SubprocessProcessRunner
 
 
 class DmtoolsCliService:
@@ -21,10 +20,10 @@ class DmtoolsCliService:
     def __init__(
         self,
         repository_root: Path,
-        runner: ProcessRunner | None = None,
+        runner: ProcessRunner,
     ) -> None:
         self.repository_root = repository_root
-        self.runner = runner or SubprocessProcessRunner()
+        self.runner = runner
         self.gradlew_path = repository_root / "gradlew"
         self.shadow_jar_directory = repository_root / "build" / "libs"
 
