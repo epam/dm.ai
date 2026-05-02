@@ -20,6 +20,7 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
 SELECTED_SKILLS = tuple(str(skill) for skill in CONFIG["selected_skills"])
+SELECTED_SKILLS_DISPLAY = ", ".join(SELECTED_SKILLS)
 EXPECTED_ENDPOINTS = tuple(f"/dmtools/{skill}" for skill in SELECTED_SKILLS)
 FAILED_COMMAND_TEST_WARNING = "Installation completed but dmtools command test failed"
 SUCCESSFUL_COMMAND_TEST_MESSAGE = "DMTools CLI installed successfully!"
@@ -46,7 +47,7 @@ def test_dmc_948_selective_install_completes_without_post_install_dmtools_warnin
         "The installer should show its normal startup banner to the user.\n"
         f"stdout:\n{run.execution.stdout}\n\nstderr:\n{run.execution.stderr}"
     )
-    assert "Effective skills: jira,confluence (source: env)" in run.execution.stdout, (
+    assert f"Effective skills: {SELECTED_SKILLS_DISPLAY} (source: env)" in run.execution.stdout, (
         "The installer did not report the selected skills in its user-visible output.\n"
         f"stdout:\n{run.execution.stdout}\n\nstderr:\n{run.execution.stderr}"
     )
