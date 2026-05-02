@@ -90,6 +90,31 @@ def test_dmc_914_service_accepts_equivalent_markdown_table_format(
     assert service.validate() == []
 
 
+def test_dmc_914_service_accepts_equivalent_catalogue_table_headers(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    catalog_path = repository_root / "dmtools-ai-docs/per-skill-packages/index.md"
+    catalog_path.parent.mkdir(parents=True)
+
+    rows = [
+        "| Package | CLI entrypoint | Java package | Maven coordinate |",
+        "| --- | --- | --- | --- |",
+        *[
+            (
+                f"| [`{skill.skill_name}`]({skill.skill_name}.md) | `{skill.slash_command}` | "
+                f"`{skill.java_package}` | `{skill.artifact_alias}` |"
+            )
+            for skill in PerSkillCatalogService.EXPECTED_SKILLS
+        ],
+    ]
+    catalog_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    service = PerSkillCatalogService(repository_root)
+
+    assert service.validate() == []
+
+
 def test_dmc_914_service_rejects_skill_mentions_outside_canonical_table(
     tmp_path: Path,
 ) -> None:
@@ -124,7 +149,7 @@ def test_dmc_914_service_rejects_skill_mentions_outside_canonical_table(
 
     assert [failure.step for failure in failures] == [2]
     assert "canonical table" in failures[0].summary
-    assert PerSkillCatalogService.TABLE_HEADER in failures[0].actual
+    assert "No 4-column markdown table" in failures[0].actual
 
 
 def test_dmc_914_service_rejects_single_row_that_mentions_multiple_skills(
@@ -169,7 +194,9 @@ def test_dmc_914_service_rejects_single_row_that_mentions_multiple_skills(
     assert "Found 1 data row" in failures[0].actual
 
 
-def test_dmc_914_service_rejects_multiple_canonical_tables(tmp_path: Path) -> None:
+def test_dmc_914_service_selects_canonical_skill_table_among_other_tables(
+    tmp_path: Path,
+) -> None:
     repository_root = tmp_path / "repo"
     catalog_path = repository_root / "dmtools-ai-docs/per-skill-packages/index.md"
     catalog_path.parent.mkdir(parents=True)
@@ -179,24 +206,19 @@ def test_dmc_914_service_rejects_multiple_canonical_tables(tmp_path: Path) -> No
     catalog_path.write_text(
         "\n".join(
             [
-                "| Skill | Slash command | Java package | Artifact alias |",
+                "| Name | Summary | Status | Owner |",
                 "| --- | --- | --- | --- |",
-                *[
-                    (
-                        f"| `{skill.skill_name}` | `{skill.slash_command}` | "
-                        f"`{skill.java_package}` | `{skill.artifact_alias}` |"
-                    )
-                    for skill in first_half
-                ],
+                "| docs | unrelated table | done | ai-teammate |",
                 "",
-                "| Skill | Slash command | Java package | Artifact alias |",
+                "| Package | CLI entrypoint | Java package | Maven coordinate |",
                 "| --- | --- | --- | --- |",
                 *[
                     (
-                        f"| `{skill.skill_name}` | `{skill.slash_command}` | "
-                        f"`{skill.java_package}` | `{skill.artifact_alias}` |"
+                        f"| [`{skill.skill_name}`]({skill.skill_name}.md) | "
+                        f"`{skill.slash_command}` | `{skill.java_package}` | "
+                        f"`{skill.artifact_alias}` |"
                     )
-                    for skill in second_half
+                    for skill in (*first_half, *second_half)
                 ],
                 "",
             ]
@@ -206,8 +228,4 @@ def test_dmc_914_service_rejects_multiple_canonical_tables(tmp_path: Path) -> No
 
     service = PerSkillCatalogService(repository_root)
 
-    failures = service.validate()
-
-    assert [failure.step for failure in failures] == [2]
-    assert "canonical table" in failures[0].summary
-    assert "Expected exactly one canonical catalogue table" in failures[0].actual
+    assert service.validate() == []

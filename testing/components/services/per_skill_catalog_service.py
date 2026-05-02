@@ -36,14 +36,9 @@ class ValidationFailure:
 
 class PerSkillCatalogService:
     CATALOG_RELATIVE_PATH = "dmtools-ai-docs/per-skill-packages/index.md"
-    TABLE_HEADER = "| Skill | Slash command | Java package | Artifact alias |"
-    EXPECTED_HEADER_CELLS = (
-        "skill",
-        "slash command",
-        "java package",
-        "artifact alias",
-    )
+    REQUIRED_COLUMN_COUNT = 4
     SEPARATOR_CELL_PATTERN = re.compile(r"^:?-{3,}:?$")
+    MARKDOWN_LINK_PATTERN = re.compile(r"^\[([^\]]+)\]\([^)]+\)$")
     EXPECTED_SKILLS: tuple[SkillCatalogExpectation, ...] = (
         SkillCatalogExpectation(
             "dmtools-jira",
@@ -129,8 +124,8 @@ class PerSkillCatalogService:
                     step=2,
                     summary="The catalogue does not present the required canonical table.",
                     expected=(
-                        "A markdown table with the header "
-                        f"{self.TABLE_HEADER} and one row per approved skill."
+                        "A user-visible 4-column markdown catalogue table with one row "
+                        "per approved skill."
                     ),
                     actual=str(error),
                 )
@@ -139,7 +134,7 @@ class PerSkillCatalogService:
 
         row_preview = self._row_preview(rows)
         expected_skill_names = {skill.skill_name for skill in self.EXPECTED_SKILLS}
-        documented_skill_names = {row.cells[0].strip("`") for row in rows}
+        documented_skill_names = {self._display_text(row.cells[0]) for row in rows}
 
         if len(rows) != len(self.EXPECTED_SKILLS):
             failures.append(
@@ -147,8 +142,8 @@ class PerSkillCatalogService:
                     step=2,
                     summary="The catalogue does not provide exactly one canonical row per approved skill.",
                     expected=(
-                        f"Exactly {len(self.EXPECTED_SKILLS)} data rows in the canonical "
-                        f"table headed by {self.TABLE_HEADER}."
+                        f"Exactly {len(self.EXPECTED_SKILLS)} data rows in the visible "
+                        "4-column catalogue table."
                     ),
                     actual=f"Found {len(rows)} data row(s): {row_preview}",
                 )
@@ -191,7 +186,7 @@ class PerSkillCatalogService:
                     (skill.slash_command, row.cells[1]),
                     (skill.java_package, row.cells[2]),
                 )
-                if value not in cell
+                if self._display_text(cell) != value
             ]
             if missing_mapping_parts:
                 mapping_issues.append(
@@ -200,7 +195,7 @@ class PerSkillCatalogService:
                     + f" | row: {row.text}"
                 )
 
-            if skill.artifact_alias not in row.cells[3]:
+            if self._display_text(row.cells[3]) != skill.artifact_alias:
                 alias_issues.append(
                     f"line {row.line_number} for {skill.skill_name} is missing "
                     f"{skill.artifact_alias} | row: {row.text}"
@@ -236,52 +231,17 @@ class PerSkillCatalogService:
 
     def catalog_rows(self) -> list[CatalogRow]:
         lines = self.catalog_path.read_text(encoding="utf-8").splitlines()
-        header_indexes = [
-            index
-            for index, line in enumerate(lines)
-            if self._is_header_row(line)
-        ]
-        if not header_indexes:
+        tables = self._candidate_tables(lines)
+        if not tables:
             raise ValueError(
-                "Catalogue table with the visible header "
-                f"{self.TABLE_HEADER!r} not found in {self.catalog_path}."
+                f"No 4-column markdown table was found in {self.catalog_path}."
             )
-        if len(header_indexes) > 1:
+        rows = max(tables, key=self._table_match_score)
+        if self._table_match_score(rows) == 0:
             raise ValueError(
-                "Expected exactly one canonical catalogue table with the visible header "
-                f"{self.TABLE_HEADER!r} in {self.catalog_path}, but found {len(header_indexes)}."
+                f"No 4-column markdown table in {self.catalog_path} exposes approved "
+                "skill names in its first column."
             )
-
-        index = header_indexes[0]
-        if index + 1 >= len(lines) or not self._is_separator_row(lines[index + 1]):
-            raise ValueError(
-                f"Malformed catalogue table in {self.catalog_path}: expected a valid markdown "
-                "separator row after the canonical header."
-            )
-
-        rows: list[CatalogRow] = []
-        for row_index, row in enumerate(lines[index + 2 :], start=index + 3):
-            cells = self._parse_table_row(row)
-            if cells is None:
-                break
-            if len(cells) != 4:
-                raise ValueError(
-                    f"Unexpected catalogue row in {self.catalog_path} at line "
-                    f"{row_index}: {row.strip()}"
-                )
-            rows.append(
-                CatalogRow(
-                    line_number=row_index,
-                    text=row.strip(),
-                    cells=cells,
-                )
-            )
-
-        if not rows:
-            raise ValueError(
-                f"Catalogue table in {self.catalog_path} is empty after header {self.TABLE_HEADER!r}."
-            )
-
         return rows
 
     @staticmethod
@@ -291,21 +251,90 @@ class PerSkillCatalogService:
     ) -> CatalogRow | None:
         normalized_skill_name = skill_name.strip("`")
         return next(
-            (row for row in rows if row.cells[0].strip("`") == normalized_skill_name),
+            (
+                row
+                for row in rows
+                if PerSkillCatalogService._display_text(row.cells[0]) == normalized_skill_name
+            ),
             None,
         )
 
-    def _is_header_row(self, line: str) -> bool:
-        cells = self._parse_table_row(line)
-        return cells is not None and tuple(
-            self._normalize_header_cell(cell) for cell in cells
-        ) == self.EXPECTED_HEADER_CELLS
+    def _candidate_tables(self, lines: list[str]) -> list[list[CatalogRow]]:
+        tables: list[list[CatalogRow]] = []
+        index = 0
+        in_code_block = False
+        while index < len(lines):
+            line = lines[index]
+            if self._is_fenced_code_delimiter(line):
+                in_code_block = not in_code_block
+                index += 1
+                continue
+            if in_code_block:
+                index += 1
+                continue
 
-    def _is_separator_row(self, line: str) -> bool:
-        cells = self._parse_table_row(line)
-        return cells is not None and len(cells) == 4 and all(
+            header_cells = self._parse_table_row(line)
+            separator_cells = (
+                self._parse_table_row(lines[index + 1])
+                if index + 1 < len(lines)
+                else None
+            )
+            if (
+                header_cells is None
+                or len(header_cells) != self.REQUIRED_COLUMN_COUNT
+                or not self._is_separator_row(
+                    separator_cells,
+                    expected_count=len(header_cells),
+                )
+            ):
+                index += 1
+                continue
+
+            table_rows: list[CatalogRow] = []
+            row_index = index + 2
+            while row_index < len(lines):
+                row = lines[row_index]
+                if self._is_fenced_code_delimiter(row):
+                    break
+                cells = self._parse_table_row(row)
+                if cells is None or len(cells) != len(header_cells):
+                    break
+                table_rows.append(
+                    CatalogRow(
+                        line_number=row_index + 1,
+                        text=row.strip(),
+                        cells=cells,
+                    )
+                )
+                row_index += 1
+
+            if table_rows:
+                tables.append(table_rows)
+            index = row_index
+
+        return tables
+
+    def _is_separator_row(
+        self,
+        cells: tuple[str, ...] | None,
+        *,
+        expected_count: int,
+    ) -> bool:
+        return cells is not None and len(cells) == expected_count and all(
             self.SEPARATOR_CELL_PATTERN.fullmatch(cell) for cell in cells
         )
+
+    def _table_match_score(self, rows: list[CatalogRow]) -> int:
+        expected_skill_names = {skill.skill_name for skill in self.EXPECTED_SKILLS}
+        return sum(
+            1
+            for row in rows
+            if self._display_text(row.cells[0]) in expected_skill_names
+        )
+
+    @staticmethod
+    def _is_fenced_code_delimiter(line: str) -> bool:
+        return line.lstrip().startswith("```")
 
     @staticmethod
     def _parse_table_row(line: str) -> tuple[str, ...] | None:
@@ -324,8 +353,23 @@ class PerSkillCatalogService:
         return tuple(cells)
 
     @staticmethod
-    def _normalize_header_cell(cell: str) -> str:
-        return " ".join(cell.strip().lower().split())
+    def _display_text(cell: str) -> str:
+        normalized = " ".join(cell.strip().split())
+        link_match = PerSkillCatalogService.MARKDOWN_LINK_PATTERN.fullmatch(normalized)
+        if link_match:
+            normalized = link_match.group(1).strip()
+
+        wrappers = ("`", "**", "*", "__", "_")
+        changed = True
+        while changed:
+            changed = False
+            for wrapper in wrappers:
+                if normalized.startswith(wrapper) and normalized.endswith(wrapper):
+                    normalized = normalized[len(wrapper) : -len(wrapper)].strip()
+                    changed = True
+                    break
+
+        return normalized
 
     @staticmethod
     def format_failures(failures: list[ValidationFailure]) -> str:
