@@ -1,0 +1,6 @@
+test_id: DMC-908
+type: cli
+framework: node
+platform: linux
+dependencies: []
+command: node testing/tests/DMC-908/deprecated-codegenerator-run-compatibility.test.js
