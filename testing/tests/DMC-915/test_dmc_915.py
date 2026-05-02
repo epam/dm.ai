@@ -16,7 +16,7 @@ def test_dmc_915_installation_docs_match_supported_skill_selection_syntax() -> N
     assert not findings, service.format_findings(findings)
 
 
-def test_dmc_915_accepts_supported_installer_skill_selection_docs(tmp_path: Path) -> None:
+def test_dmc_915_accepts_ticket_required_installer_docs(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     installation_path = (
         repository_root / "dmtools-ai-docs/references/installation/README.md"
@@ -29,15 +29,15 @@ def test_dmc_915_accepts_supported_installer_skill_selection_docs(tmp_path: Path
                 "",
                 "## Install Only the Skills You Need",
                 "",
-                "Use the supported `--skills <name[,name]>` syntax to install focused packages.",
-                "",
                 "```bash",
-                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira",
-                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github",
-                "bash install.sh --skills ado,testrail",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skill jira",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,github",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --all-skills",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,unknown --skip-unknown",
                 "```",
                 "",
-                "Set `DMTOOLS_SKILLS=jira,github` for non-interactive installs.",
+                "Unknown skill names cause a non-zero exit and list the invalid names.",
+                "When `--skip-unknown` is provided, invalid skill names are downgraded to warnings.",
             )
         ),
         encoding="utf-8",
@@ -48,7 +48,7 @@ def test_dmc_915_accepts_supported_installer_skill_selection_docs(tmp_path: Path
     assert service.audit_installation_readme() == []
 
 
-def test_dmc_915_flags_unsupported_installer_syntax_and_behavior_docs(
+def test_dmc_915_flags_missing_ticket_required_installer_docs(
     tmp_path: Path,
 ) -> None:
     repository_root = tmp_path / "repo"
@@ -63,10 +63,12 @@ def test_dmc_915_flags_unsupported_installer_syntax_and_behavior_docs(
                 "",
                 "## Install Only the Skills You Need",
                 "",
-                "`--skill <name>` is the canonical way to select one package.",
-                "`--skills=<name,name>` is an allowed alias for multi-skill installs.",
-                "Use `--all-skills` to install everything.",
-                "Use `--skip-unknown` to downgrade unknown skill names to warnings.",
+                "```bash",
+                "bash install.sh --skills jira",
+                "bash install.sh --skills jira,github",
+                "```",
+                "",
+                "Set `DMTOOLS_SKILLS=jira,github` for non-interactive installs.",
             )
         ),
         encoding="utf-8",
@@ -81,7 +83,12 @@ def test_dmc_915_flags_unsupported_installer_syntax_and_behavior_docs(
     assert any("`--all-skills`" in finding for finding in findings)
     assert any("`--skip-unknown`" in finding for finding in findings)
     assert any(
-        "unsupported invalid-skill handling" in finding for finding in findings
+        "non-zero exit and list the invalid names" in finding for finding in findings
+    )
+    assert any(
+        "`--skip-unknown` downgrades invalid skill names to warnings"
+        in finding
+        for finding in findings
     )
 
 
@@ -107,6 +114,7 @@ def test_dmc_915_format_findings_handles_missing_section(tmp_path: Path) -> None
     ]
     assert "Observed 'Install Only the Skills You Need' section:" in formatted
     assert "  (section missing)" in formatted
+    assert "Expected the installation guide to document the DMC-915 installer" in formatted
 
 
 def test_dmc_915_keeps_code_block_comments_inside_extracted_section(

@@ -6,14 +6,29 @@ from pathlib import Path
 
 class InstallerCliDocumentationService:
     SECTION_HEADING = "Install Only the Skills You Need"
-    SINGLE_SKILL_PATTERN = re.compile(r"--skills\s+[a-z0-9-]+\b")
-    MULTI_SKILL_PATTERN = re.compile(r"--skills\s+[a-z0-9-]+(?:,[a-z0-9-]+)+\b")
-    UNSUPPORTED_FLAG_PATTERNS = {
-        "`--skill <name>`": re.compile(r"--skill(?=[\s`=]|$)"),
-        "`--skills=<name,name>`": re.compile(r"--skills="),
-        "`--all-skills`": re.compile(r"--all-skills"),
-        "`--skip-unknown`": re.compile(r"--skip-unknown"),
-    }
+    PRIMARY_SKILL_PATTERN = re.compile(r"--skill\s+[a-z0-9-]+\b")
+    ALIAS_SKILLS_PATTERN = re.compile(r"--skills=[a-z0-9-]+(?:,[a-z0-9-]+)+\b")
+    ALL_SKILLS_PATTERN = re.compile(r"--all-skills\b")
+    SKIP_UNKNOWN_PATTERN = re.compile(r"--skip-unknown\b")
+    INVALID_SKILL_TERMS = ("unknown skill", "unknown skills", "invalid skill", "invalid skills")
+    NON_ZERO_EXIT_TERMS = (
+        "non-zero exit",
+        "non zero exit",
+        "exit non-zero",
+        "exit 1",
+        "exits 1",
+        "exit code 1",
+        "non-zero status",
+    )
+    INVALID_NAME_LISTING_TERMS = (
+        "list invalid names",
+        "lists invalid names",
+        "invalid names listed",
+        "invalid names are listed",
+        "list the invalid names",
+        "lists the invalid names",
+    )
+    WARNING_TERMS = ("warning", "warnings", "warn", "warns")
 
     def __init__(self, repository_root: Path) -> None:
         self.repository_root = repository_root
@@ -40,34 +55,46 @@ class InstallerCliDocumentationService:
 
         section = sections[0]
         normalized_section = self._normalize(section)
-
         findings: list[str] = []
-        if not self._has_supported_skill_examples(section):
+
+        if not self.PRIMARY_SKILL_PATTERN.search(section):
             findings.append(
-                "The installer usage section does not show the supported "
-                "`--skills <name[,name]>` syntax with copy-pasteable examples for "
-                "focused skill installs."
+                "The installer usage section does not document `--skill <name>` as "
+                "the primary skill-selection form with a copy-pasteable example."
             )
-        if "DMTOOLS_SKILLS" not in section:
+        if not self.ALIAS_SKILLS_PATTERN.search(section):
             findings.append(
-                "The installer usage section does not mention the supported "
-                "`DMTOOLS_SKILLS` environment variable for non-interactive skill "
-                "selection."
+                "The installer usage section does not document "
+                "`--skills=<name,name>` as an allowed alias with a copy-pasteable "
+                "example."
             )
-        findings.extend(self._unsupported_flag_findings(section))
-        if self._has_unsupported_invalid_skill_behavior(normalized_section):
+        if not self.ALL_SKILLS_PATTERN.search(section):
             findings.append(
-                "The installer usage section describes unsupported invalid-skill "
-                "handling. The current installer exits with `Unsupported skill package: "
-                "<name>` and does not support warning downgrades or `--skip-unknown`."
+                "The installer usage section does not document the `--all-skills` "
+                "flag."
+            )
+        if not self.SKIP_UNKNOWN_PATTERN.search(section):
+            findings.append(
+                "The installer usage section does not document the "
+                "`--skip-unknown` flag."
+            )
+        if not self._documents_invalid_skill_failure(normalized_section):
+            findings.append(
+                "The installer usage section does not explain that unknown skill "
+                "names cause a non-zero exit and list the invalid names."
+            )
+        if not self._documents_skip_unknown_warning_behavior(normalized_section):
+            findings.append(
+                "The installer usage section does not explain that `--skip-unknown` "
+                "downgrades invalid skill names to warnings."
             )
         return findings
 
     def format_findings(self, findings: list[str]) -> str:
         observed_section = self._observed_section()
         lines = [
-            "Expected the installation guide to match the supported installer skill "
-            "selection syntax and avoid unsupported flags or error-handling claims.",
+            "Expected the installation guide to document the DMC-915 installer "
+            "selection flags and invalid-skill behavior.",
             f"Checked file: {self.installation_readme_path.relative_to(self.repository_root)}",
             "",
             "Missing or incomplete expectations:",
@@ -120,36 +147,33 @@ class InstallerCliDocumentationService:
     def _normalize(content: str) -> str:
         return re.sub(r"\s+", " ", content).lower()
 
-    @staticmethod
-    def _has_supported_skill_examples(section: str) -> bool:
-        return bool(
-            InstallerCliDocumentationService.SINGLE_SKILL_PATTERN.search(section)
-            and InstallerCliDocumentationService.MULTI_SKILL_PATTERN.search(section)
+    @classmethod
+    def _documents_invalid_skill_failure(cls, normalized_section: str) -> bool:
+        mentions_invalid_skills = any(
+            token in normalized_section for token in cls.INVALID_SKILL_TERMS
+        )
+        mentions_non_zero_exit = any(
+            token in normalized_section for token in cls.NON_ZERO_EXIT_TERMS
+        )
+        mentions_invalid_name_listing = any(
+            token in normalized_section for token in cls.INVALID_NAME_LISTING_TERMS
+        )
+        return (
+            mentions_invalid_skills
+            and mentions_non_zero_exit
+            and mentions_invalid_name_listing
         )
 
     @classmethod
-    def _unsupported_flag_findings(cls, section: str) -> list[str]:
-        findings: list[str] = []
-        for label, pattern in cls.UNSUPPORTED_FLAG_PATTERNS.items():
-            if pattern.search(section):
-                findings.append(
-                    "The installer usage section documents unsupported syntax "
-                    f"{label}; the current installer supports `--skills <name[,name]>` "
-                    "for focused installs instead."
-                )
-        return findings
-
-    @staticmethod
-    def _has_unsupported_invalid_skill_behavior(normalized_section: str) -> bool:
-        mentions_warning_downgrade = any(
-            token in normalized_section
-            for token in ("warning", "warnings", "warn instead", "downgrade")
+    def _documents_skip_unknown_warning_behavior(cls, normalized_section: str) -> bool:
+        mentions_skip_unknown = "--skip-unknown" in normalized_section
+        mentions_invalid_skills = any(
+            token in normalized_section for token in cls.INVALID_SKILL_TERMS
         )
-        mentions_unknown_skills = any(
-            token in normalized_section
-            for token in ("unknown skill", "unknown skills", "invalid skill", "invalid skills")
+        mentions_warnings = any(
+            token in normalized_section for token in cls.WARNING_TERMS
         )
-        return mentions_warning_downgrade and mentions_unknown_skills
+        return mentions_skip_unknown and mentions_invalid_skills and mentions_warnings
 
     @staticmethod
     def _indented_section(section: str) -> str:
