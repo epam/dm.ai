@@ -4,8 +4,11 @@
 #   Latest version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash
 #   Specific version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- <version>
 #   Select skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | DMTOOLS_SKILLS=jira,github bash
+#   Single skill: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skill jira
 #   CLI skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira,github
-#   Strict validation: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira --strict
+#   All skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --all-skills
+#   Ignore invalid names: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira,unknown --skip-unknown
+#   Legacy strict alias: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira --strict
 # Requirements: Java 17+ (will attempt automatic installation on macOS/Linux)
 
 set -e
@@ -33,6 +36,7 @@ AVAILABLE_SKILLS=(
 ALWAYS_ON_INTEGRATIONS=(ai cli file kb mermaid)
 INSTALLER_SKILLS_WAS_SET=false
 INSTALLER_SKILLS_ARG=""
+INSTALLER_ALL_SKILLS_WAS_SET=false
 INSTALLER_VERSION_ARG=""
 INSTALLER_POSITIONAL_ARGS=()
 SKILLS_SOURCE="default"
@@ -44,6 +48,7 @@ EFFECTIVE_SKILLS_CSV=""
 INVALID_SKILLS_CSV=""
 EFFECTIVE_INTEGRATIONS_CSV=""
 STRICT_INSTALL_MODE=false
+SKIP_UNKNOWN_SKILLS=false
 
 # Helper functions
 error() {
@@ -187,6 +192,22 @@ append_unique() {
     eval "${array_name}+=(\"\$candidate\")"
 }
 
+append_requested_skills_arg() {
+    local value
+    value=$(strip_optional_quotes "$1")
+    value=$(trim_value "$value")
+    if [ -z "$value" ]; then
+        return 0
+    fi
+
+    if [ -n "$INSTALLER_SKILLS_ARG" ]; then
+        INSTALLER_SKILLS_ARG="${INSTALLER_SKILLS_ARG},${value}"
+    else
+        INSTALLER_SKILLS_ARG="$value"
+    fi
+    INSTALLER_SKILLS_WAS_SET=true
+}
+
 is_known_skill() {
     case "$1" in
         dmtools|jira|confluence|github|gitlab|figma|teams|sharepoint|ado|testrail|xray)
@@ -248,9 +269,11 @@ build_effective_integrations() {
 parse_installer_args() {
     INSTALLER_SKILLS_WAS_SET=false
     INSTALLER_SKILLS_ARG=""
+    INSTALLER_ALL_SKILLS_WAS_SET=false
     INSTALLER_VERSION_ARG=""
     INSTALLER_POSITIONAL_ARGS=()
     STRICT_INSTALL_MODE=false
+    SKIP_UNKNOWN_SKILLS=false
 
     local strict_mode_value
     strict_mode_value=$(to_lower "$(strip_optional_quotes "${DMTOOLS_STRICT_INSTALL:-false}")")
@@ -269,17 +292,34 @@ parse_installer_args() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --skill)
+                if [ $# -lt 2 ]; then
+                    error "Missing value for --skill. Use --skill jira"
+                fi
+                append_requested_skills_arg "$2"
+                shift 2
+                ;;
+            --skill=*)
+                append_requested_skills_arg "${1#--skill=}"
+                shift
+                ;;
             --skills)
                 if [ $# -lt 2 ]; then
                     error "Missing value for --skills. Use --skills=jira,github or --skills jira,github"
                 fi
-                INSTALLER_SKILLS_ARG="$2"
-                INSTALLER_SKILLS_WAS_SET=true
+                append_requested_skills_arg "$2"
                 shift 2
                 ;;
             --skills=*)
-                INSTALLER_SKILLS_ARG="${1#--skills=}"
-                INSTALLER_SKILLS_WAS_SET=true
+                append_requested_skills_arg "${1#--skills=}"
+                shift
+                ;;
+            --all-skills)
+                INSTALLER_ALL_SKILLS_WAS_SET=true
+                shift
+                ;;
+            --skip-unknown)
+                SKIP_UNKNOWN_SKILLS=true
                 shift
                 ;;
             --strict)
@@ -287,9 +327,12 @@ parse_installer_args() {
                 shift
                 ;;
             --help|-h)
-                echo "Usage: install.sh [--skills=jira,github] [--strict] [version]"
-                echo "  --skills  Comma-separated skills to configure after installation."
-                echo "  --strict  Fail when any unknown skills are supplied."
+                echo "Usage: install.sh [--skill <name>] [--skills=<name,name>] [--all-skills] [--skip-unknown] [--strict] [version]"
+                echo "  --skill <name>      Select a single skill. Repeat to add more skills."
+                echo "  --skills=<csv>      Allowed alias for comma-separated skill selection."
+                echo "  --all-skills        Install every supported skill."
+                echo "  --skip-unknown      Warn and continue when unknown skill names are supplied."
+                echo "  --strict            Legacy alias for strict invalid-skill handling."
                 echo "  version   Optional DMTools version (vX.Y.Z or X.Y.Z)."
                 exit 0
                 ;;
@@ -318,7 +361,10 @@ resolve_skill_selection() {
     INVALID_SKILLS=()
     INSTALL_ALL_SKILLS=false
 
-    if [ "$INSTALLER_SKILLS_WAS_SET" = true ]; then
+    if [ "$INSTALLER_ALL_SKILLS_WAS_SET" = true ]; then
+        raw_skills="all"
+        SKILLS_SOURCE="cli"
+    elif [ "$INSTALLER_SKILLS_WAS_SET" = true ]; then
         raw_skills="$INSTALLER_SKILLS_ARG"
         SKILLS_SOURCE="cli"
     elif [ "${DMTOOLS_SKILLS+x}" = x ]; then
@@ -370,15 +416,22 @@ resolve_skill_selection() {
     EFFECTIVE_SKILLS_CSV=$(join_by_comma "${EFFECTIVE_SKILLS[@]}")
     INVALID_SKILLS_CSV=$(join_by_comma "${INVALID_SKILLS[@]}")
 
+    if [ ${#INVALID_SKILLS[@]} -gt 0 ] && [ "$SKILLS_SOURCE" != "cli" ] && [ "$SKIP_UNKNOWN_SKILLS" != true ]; then
+        warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
+    fi
+
     if [ ${#EFFECTIVE_SKILLS[@]} -eq 0 ]; then
         error "No valid skills selected. Unknown skills: ${INVALID_SKILLS_CSV:-none}. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
     fi
 
     if [ ${#INVALID_SKILLS[@]} -gt 0 ]; then
-        if [ "$STRICT_INSTALL_MODE" = true ]; then
+        if [ "$SKIP_UNKNOWN_SKILLS" = true ]; then
+            warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
+        elif [ "$STRICT_INSTALL_MODE" = true ]; then
             error "Unknown skills are not allowed in strict mode: $INVALID_SKILLS_CSV. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+        elif [ "$SKILLS_SOURCE" = "cli" ]; then
+            error "Unknown skills: $INVALID_SKILLS_CSV. Use --skip-unknown to continue."
         fi
-        warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
     fi
 
     build_effective_integrations
