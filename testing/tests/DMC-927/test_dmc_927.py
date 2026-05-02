@@ -41,3 +41,4 @@ def test_dmc_927_strict_mode_rejects_invalid_skills_with_invalid_skill_error(
     assert execution.returncode != 0, "Strict installer mode must fail for invalid skills."
     assert "No valid skills selected. Unknown skills: invalid." in execution.stderr
     assert "Allowed skills:" in execution.stderr
+    assert "Unknown installer option: --strict" not in execution.stderr
