@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,10 @@ class InstallerMetadataRun:
 
 class InstallerMetadataService:
     DEFAULT_INSTALLER_URL = "https://raw.githubusercontent.com/epam/dm.ai/main/install"
+    _ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+    _EFFECTIVE_SKILLS_PATTERN = re.compile(
+        r"(?m)^Effective skills:\s*(?P<skills>.+?)\s+\(source:\s*(?P<source>[^)]+)\)$"
+    )
     _POST_METADATA_STEP_MARKER = "UNEXPECTED post_metadata_step"
     _SKILL_COLLECTION_KEYS = frozenset(
         {
@@ -175,6 +180,29 @@ class InstallerMetadataService:
         observed_skills = self.declared_skills(payload)
         return set(skill.lower() for skill in expected_skills).issubset(observed_skills)
 
+    def normalized_stdout(self, execution: ProcessExecutionResult) -> str:
+        return self._strip_ansi(execution.stdout)
+
+    def output_reports_selected_skills(
+        self,
+        execution: ProcessExecutionResult,
+        expected_skills: Sequence[str],
+        expected_source: str,
+    ) -> bool:
+        match = self._EFFECTIVE_SKILLS_PATTERN.search(self.normalized_stdout(execution))
+        if not match:
+            return False
+
+        observed_skills = tuple(
+            skill.strip().lower()
+            for skill in match.group("skills").split(",")
+            if skill.strip()
+        )
+        observed_source = match.group("source").strip().lower()
+        return observed_skills == tuple(skill.lower() for skill in expected_skills) and (
+            observed_source == expected_source.lower()
+        )
+
     def declared_skills(self, payload: Any) -> set[str]:
         if not isinstance(payload, dict):
             return set()
@@ -291,6 +319,10 @@ class InstallerMetadataService:
 
     def _normalize_key(self, value: str) -> str:
         return value.replace("-", "_").lower()
+
+    @classmethod
+    def _strip_ansi(cls, text: str) -> str:
+        return cls._ANSI_ESCAPE_PATTERN.sub("", text)
 
     def _walk_key_values(self, payload: Any) -> Iterable[tuple[str, Any]]:
         if isinstance(payload, dict):

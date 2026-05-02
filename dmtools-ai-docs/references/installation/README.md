@@ -49,20 +49,29 @@ Use the focused skill packages when you want integration-specific slash commands
 ### Skill Installer Examples
 
 ```bash
-# Install only Jira
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira
+# Primary form: install only Jira
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skill jira
 
-# Install Jira + GitHub together
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github
+# Allowed alias: install Jira + GitHub together
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,github
 
-# Run the installer locally and pass the package list directly
-bash install.sh --skills ado,testrail
+# Install every supported skill package
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --all-skills
+
+# Invalid skill names cause a non-zero exit and list the invalid names
+bash install.sh --skills=jira,unknown
+
+# Use --skip-unknown to downgrade invalid skill names to warnings
+bash install.sh --skills=jira,unknown --skip-unknown
 ```
 
 ```powershell
 $env:DMTOOLS_SKILLS = "jira,github"
 irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | iex
 ```
+
+Unknown skill names cause a non-zero exit and list the invalid names.
+When `--skip-unknown` is provided, invalid skill names are downgraded to warnings.
 
 ### Manual Focused Package Installation
 

@@ -4,7 +4,7 @@ const { RepositoryConfig } = require('../../core/config/repositoryConfig');
 const { NodeFileSystemRepository } = require('../../frameworks/api/rest/nodeFileSystemRepository');
 const {
   TeammateConfigExampleUsageAuditService,
-} = require('../../components/services/teammateConfigExampleUsageAuditService');
+} = require('./teammateConfigExampleUsageAuditService');
 
 function createExampleUsageAuditService() {
   const repoRoot = path.resolve(__dirname, '../../..');
