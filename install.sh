@@ -5,6 +5,7 @@
 #   Specific version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- <version>
 #   Select skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | DMTOOLS_SKILLS=jira,github bash
 #   CLI skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira,github
+#   Strict validation: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira --strict
 # Requirements: Java 17+ (will attempt automatic installation on macOS/Linux)
 
 set -e
@@ -23,6 +24,8 @@ BIN_DIR="${DMTOOLS_BIN_DIR:-$INSTALL_DIR/bin}"
 JAR_PATH="$INSTALL_DIR/dmtools.jar"
 SCRIPT_PATH="$BIN_DIR/dmtools"
 INSTALLER_ENV_PATH="${DMTOOLS_INSTALLER_ENV_PATH:-$BIN_DIR/dmtools-installer.env}"
+INSTALLED_SKILLS_JSON_PATH="${DMTOOLS_INSTALLED_SKILLS_JSON_PATH:-$INSTALL_DIR/installed-skills.json}"
+ENDPOINTS_JSON_PATH="${DMTOOLS_ENDPOINTS_JSON_PATH:-$INSTALL_DIR/endpoints.json}"
 AVAILABLE_SKILLS=(
     dmtools jira confluence github gitlab figma teams
     sharepoint ado testrail xray
@@ -40,6 +43,7 @@ EFFECTIVE_INTEGRATIONS=()
 EFFECTIVE_SKILLS_CSV=""
 INVALID_SKILLS_CSV=""
 EFFECTIVE_INTEGRATIONS_CSV=""
+STRICT_INSTALL_MODE=false
 
 # Helper functions
 error() {
@@ -86,6 +90,76 @@ to_lower() {
 join_by_comma() {
     local IFS=","
     printf '%s' "$*"
+}
+
+json_escape() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//$'\n'/\\n}"
+    value="${value//$'\r'/\\r}"
+    value="${value//$'\t'/\\t}"
+    printf '%s' "$value"
+}
+
+json_string_array() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="\"$escaped\""
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+json_skill_objects() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="{\"name\":\"$escaped\"}"
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+json_endpoint_objects() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="{\"name\":\"$escaped\",\"path\":\"/dmtools/$escaped\"}"
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
 }
 
 append_unique() {
@@ -164,6 +238,22 @@ parse_installer_args() {
     INSTALLER_SKILLS_ARG=""
     INSTALLER_VERSION_ARG=""
     INSTALLER_POSITIONAL_ARGS=()
+    STRICT_INSTALL_MODE=false
+
+    local strict_mode_value
+    strict_mode_value=$(to_lower "$(strip_optional_quotes "${DMTOOLS_STRICT_INSTALL:-false}")")
+    strict_mode_value=$(trim_value "$strict_mode_value")
+    case "$strict_mode_value" in
+        ""|false|0|no|off)
+            STRICT_INSTALL_MODE=false
+            ;;
+        true|1|yes|on)
+            STRICT_INSTALL_MODE=true
+            ;;
+        *)
+            error "Invalid DMTOOLS_STRICT_INSTALL value: ${DMTOOLS_STRICT_INSTALL}. Use true or false."
+            ;;
+    esac
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -180,9 +270,14 @@ parse_installer_args() {
                 INSTALLER_SKILLS_WAS_SET=true
                 shift
                 ;;
+            --strict)
+                STRICT_INSTALL_MODE=true
+                shift
+                ;;
             --help|-h)
-                echo "Usage: install.sh [--skills=jira,github] [version]"
+                echo "Usage: install.sh [--skills=jira,github] [--strict] [version]"
                 echo "  --skills  Comma-separated skills to configure after installation."
+                echo "  --strict  Fail when any unknown skills are supplied."
                 echo "  version   Optional DMTools version (vX.Y.Z or X.Y.Z)."
                 exit 0
                 ;;
@@ -263,12 +358,15 @@ resolve_skill_selection() {
     EFFECTIVE_SKILLS_CSV=$(join_by_comma "${EFFECTIVE_SKILLS[@]}")
     INVALID_SKILLS_CSV=$(join_by_comma "${INVALID_SKILLS[@]}")
 
-    if [ ${#INVALID_SKILLS[@]} -gt 0 ]; then
-        warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
-    fi
-
     if [ ${#EFFECTIVE_SKILLS[@]} -eq 0 ]; then
         error "No valid skills selected. Unknown skills: ${INVALID_SKILLS_CSV:-none}. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+    fi
+
+    if [ ${#INVALID_SKILLS[@]} -gt 0 ]; then
+        if [ "$STRICT_INSTALL_MODE" = true ]; then
+            error "Unknown skills are not allowed in strict mode: $INVALID_SKILLS_CSV. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+        fi
+        warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
     fi
 
     build_effective_integrations
@@ -303,6 +401,41 @@ EOF
 
     printf '%s\n' "$new_content" > "$INSTALLER_ENV_PATH"
     info "Configured installer-managed skills at $INSTALLER_ENV_PATH"
+}
+
+write_installer_metadata() {
+    local version="$1"
+    if [ -z "$version" ]; then
+        error "Installer version is required to write machine-readable metadata."
+    fi
+
+    mkdir -p "$INSTALL_DIR"
+
+    local escaped_version
+    escaped_version=$(json_escape "$version")
+    local skills_json
+    skills_json=$(json_skill_objects "${EFFECTIVE_SKILLS[@]}")
+    local integrations_json
+    integrations_json=$(json_string_array "${EFFECTIVE_INTEGRATIONS[@]}")
+    local endpoints_json
+    endpoints_json=$(json_endpoint_objects "${EFFECTIVE_SKILLS[@]}")
+
+    cat > "$INSTALLED_SKILLS_JSON_PATH" <<EOF
+{
+  "version": "$escaped_version",
+  "installed_skills": $skills_json,
+  "integrations": $integrations_json
+}
+EOF
+
+    cat > "$ENDPOINTS_JSON_PATH" <<EOF
+{
+  "version": "$escaped_version",
+  "endpoints": $endpoints_json
+}
+EOF
+
+    info "Generated machine-readable installer metadata at $INSTALLED_SKILLS_JSON_PATH and $ENDPOINTS_JSON_PATH"
 }
 
 # Detect platform
@@ -1212,6 +1345,9 @@ main() {
     
     # Download DMTools
     download_dmtools "$version"
+
+    # Persist machine-readable metadata for state tracking and endpoint discovery
+    write_installer_metadata "$version"
     
     # Update shell configuration
     update_shell_config
