@@ -8,7 +8,10 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_dmc_947_runtime_supports_required_skill_selection_contract() -> None:
-    installer_script: InstallerScript = create_installer_script(REPOSITORY_ROOT)
+    installer_script: InstallerScript = create_installer_script(
+        REPOSITORY_ROOT,
+        "dmtools-ai-docs/install.sh",
+    )
 
     single_skill = installer_script.run_main(args=("--skill", "jira"))
     single_skill_output = installer_script.normalized_combined_output(single_skill)

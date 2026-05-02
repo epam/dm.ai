@@ -379,9 +379,11 @@ main() {
     fi
 
     local requested_skills=()
+    local normalized_skills_output
+    normalized_skills_output=$(normalize_skills "$SELECTED_SKILLS") || return 1
     while IFS= read -r skill_key; do
-        requested_skills+=("$skill_key")
-    done < <(normalize_skills "$SELECTED_SKILLS")
+        [ -n "$skill_key" ] && requested_skills+=("$skill_key")
+    done <<< "$normalized_skills_output"
     if [ ${#requested_skills[@]} -eq 0 ]; then
         requested_skills=("dmtools")
     fi
@@ -506,37 +508,39 @@ main() {
     echo "For more information: https://github.com/epam/dm.ai" >&2
 }
 
-case "${1:-install}" in
-    install)
-        main
-        ;;
-    --help|-h)
-        echo "DMtools Agent Skill Installer"
-        echo ""
-        echo "Usage: $0 [install] [--all] [--skill <name>] [--skills=<name,name>] [--all-skills] [--skip-unknown]"
-        echo ""
-        echo "This script installs the DMtools skill for AI assistants that"
-        echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
-        echo ""
-        echo "The installer will:"
-        echo "  1. Detect skill directories (.cursor, .claude, .codex, ~/.claude)"
-        echo "  2. Download the selected DMtools skill package(s)"
-        echo "  3. Install to ALL detected locations (when piped) or ask you to choose"
-        echo ""
-        echo "Behavior:"
-        echo "  - Piped (curl | bash): Installs to ALL detected locations automatically"
-        echo "  - Interactive: Shows menu to choose specific location(s)"
-        echo "  - Focused installs: pass --skill jira or --skills=jira,github"
-        echo "  - Invalid skill names cause a non-zero exit and list the invalid names"
-        echo "  - --skip-unknown downgrades invalid skill names to warnings"
-        echo ""
-        echo "      Run from your project root directory."
-        echo ""
-        echo "Learn more: https://agentskills.io"
-        ;;
-    *)
-        print_error "Unknown command: $1"
-        echo "Use --help for usage information"
-        exit 1
-        ;;
-esac
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    case "${1:-install}" in
+        install)
+            main
+            ;;
+        --help|-h)
+            echo "DMtools Agent Skill Installer"
+            echo ""
+            echo "Usage: $0 [install] [--all] [--skill <name>] [--skills=<name,name>] [--all-skills] [--skip-unknown]"
+            echo ""
+            echo "This script installs the DMtools skill for AI assistants that"
+            echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
+            echo ""
+            echo "The installer will:"
+            echo "  1. Detect skill directories (.cursor, .claude, .codex, ~/.claude)"
+            echo "  2. Download the selected DMtools skill package(s)"
+            echo "  3. Install to ALL detected locations (when piped) or ask you to choose"
+            echo ""
+            echo "Behavior:"
+            echo "  - Piped (curl | bash): Installs to ALL detected locations automatically"
+            echo "  - Interactive: Shows menu to choose specific location(s)"
+            echo "  - Focused installs: pass --skill jira or --skills=jira,github"
+            echo "  - Invalid skill names cause a non-zero exit and list the invalid names"
+            echo "  - --skip-unknown downgrades invalid skill names to warnings"
+            echo ""
+            echo "      Run from your project root directory."
+            echo ""
+            echo "Learn more: https://agentskills.io"
+            ;;
+        *)
+            print_error "Unknown command: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+fi

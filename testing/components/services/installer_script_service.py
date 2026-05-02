@@ -23,10 +23,75 @@ class InstallerScriptService(InstallerScript):
         self,
         repository_root: Path,
         runner: ProcessRunner,
+        install_script_relative_path: str | Path = "install.sh",
     ) -> None:
         self.repository_root = repository_root
-        self.install_script_path = repository_root / "install.sh"
+        self.install_script_path = repository_root / Path(install_script_relative_path)
         self.runner = runner
+
+    def _runtime_stub_script(self) -> str:
+        if self.install_script_path.relative_to(self.repository_root) == Path(
+            "dmtools-ai-docs/install.sh"
+        ):
+            return textwrap.dedent(
+                f"""
+                detect_skill_dirs() {{
+                    printf '.cursor/skills\\n'
+                }}
+
+                download_skill() {{
+                    local skill_key="$1"
+                    local skill_source="$DMTOOLS_INSTALL_DIR/stub-skill-$skill_key"
+                    mkdir -p "$skill_source"
+                    printf '# %s\\n' "$skill_key" > "$skill_source/SKILL.md"
+                    printf '%s\\n' "$skill_source"
+                }}
+
+                install_to_directory() {{
+                    local skill_source="$1"
+                    local target_dir="$2"
+                    local skill_name="$3"
+                    mkdir -p "$target_dir/$skill_name"
+                    cp -r "$skill_source"/. "$target_dir/$skill_name/"
+                }}
+                """
+            ).strip()
+
+        return textwrap.dedent(
+            """
+            check_java() {
+                info "stubbed check_java"
+            }
+
+            get_latest_version() {
+                echo "v0.0.0-test"
+            }
+
+            download_dmtools() {
+                local version="$1"
+                info "stubbed download_dmtools $version"
+                mkdir -p "$(dirname "$JAR_PATH")" "$BIN_DIR"
+                printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
+                cat > "$SCRIPT_PATH" <<'EOF'
+            #!/bin/bash
+            echo "dmtools stub"
+            EOF
+                chmod +x "$SCRIPT_PATH"
+            }
+
+            update_shell_config() {
+                info "stubbed update_shell_config"
+            }
+
+            verify_installation() {
+                info "stubbed verify_installation"
+            }
+
+            print_instructions() {
+                info "stubbed print_instructions"
+            }
+            """
+        ).strip()
 
     def run_main(
         self,
@@ -49,42 +114,12 @@ class InstallerScriptService(InstallerScript):
             if extra_env:
                 env.update(extra_env)
 
+            stubs = self._runtime_stub_script()
             command = textwrap.dedent(
                 f"""
                 set -e
                 source "{self.install_script_path}"
-
-                check_java() {{
-                    info "stubbed check_java"
-                }}
-
-                get_latest_version() {{
-                    echo "v0.0.0-test"
-                }}
-
-                download_dmtools() {{
-                    local version="$1"
-                    info "stubbed download_dmtools $version"
-                    mkdir -p "$(dirname "$JAR_PATH")" "$BIN_DIR"
-                    printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
-                    cat > "$SCRIPT_PATH" <<'EOF'
-#!/bin/bash
-echo "dmtools stub"
-EOF
-                    chmod +x "$SCRIPT_PATH"
-                }}
-
-                update_shell_config() {{
-                    info "stubbed update_shell_config"
-                }}
-
-                verify_installation() {{
-                    info "stubbed verify_installation"
-                }}
-
-                print_instructions() {{
-                    info "stubbed print_instructions"
-                }}
+                {stubs}
 
                 main "$@"
                 {post_script}
@@ -106,10 +141,12 @@ EOF
         return self.SIDE_EFFECT_MARKER
 
     def run_main_with_env_skills(self, skills_csv: str) -> ProcessExecutionResult:
+        stubs = self._runtime_stub_script()
         command = textwrap.dedent(
             f"""\
             set -e
             source "{self.install_script_path}"
+            {stubs}
             check_java() {{ :; }}
             detect_version() {{ printf 'v0.0.0'; }}
             get_latest_version() {{ printf 'v0.0.0'; }}
