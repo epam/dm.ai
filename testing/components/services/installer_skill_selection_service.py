@@ -41,6 +41,21 @@ class InstallerSkillSelectionService(InstallerSkillSelection):
             extra_env={"DMTOOLS_SKILLS": skills_csv},
         )
 
+    def resolve_with_env_and_cli(
+        self,
+        env_skills_csv: str,
+        cli_skills_csv: str,
+    ) -> InstallerSkillSelectionObservation:
+        return self._run(
+            command_label="env+cli",
+            raw_skills_input=f"env={env_skills_csv!r}; cli={cli_skills_csv!r}",
+            commands=(
+                f"parse_installer_args --skills={shlex.quote(cli_skills_csv)}",
+                "resolve_skill_selection",
+            ),
+            extra_env={"DMTOOLS_SKILLS": env_skills_csv},
+        )
+
     def resolve_with_cli(self, skills_csv: str) -> InstallerSkillSelectionObservation:
         return self._run(
             command_label="cli",

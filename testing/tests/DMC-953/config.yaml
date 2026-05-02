@@ -1,0 +1,15 @@
+test_id: DMC-953
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+env_skills:
+  - jira
+  - github
+cli_skills:
+  - confluence
+  - teams
+expected_effective_skills:
+  - confluence
+  - teams
+expected_skills_source: cli
