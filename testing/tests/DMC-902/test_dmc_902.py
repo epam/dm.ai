@@ -18,4 +18,4 @@ def test_dmc_902_upgrade_guidance_is_complete() -> None:
     )
 
     incomplete_audits = [audit for audit in audits if audit.missing_requirements]
-    assert not incomplete_audits, service.format_missing_requirements(audits)
+    assert not incomplete_audits, service.format_missing_requirements(incomplete_audits)

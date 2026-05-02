@@ -4,7 +4,7 @@
 
 ## Overview
 
-Teammate supports integration with external CLI agents (Cursor, Claude, Copilot, Codex, Gemini CLI, etc.) for advanced code generation and analysis tasks that require full workspace context.
+Teammate orchestrates ticket context, AI instructions, and optional CLI or JS hooks for end-to-end workflow automation.
 
 ## ⚠️ CRITICAL: When to Use CLI Integration
 
