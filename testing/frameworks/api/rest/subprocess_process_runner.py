@@ -15,14 +15,18 @@ class SubprocessProcessRunner:
         self,
         args: Sequence[str],
         cwd: Path,
-        env: Mapping[str, str] | None = None,
+        env: Mapping[str, str | None] | None = None,
         trace_network: bool = False,
     ) -> ProcessExecutionResult:
         trace_path: Path | None = None
         command = list(args)
         merged_env = os.environ.copy()
         if env:
-            merged_env.update(env)
+            for key, value in env.items():
+                if value is None:
+                    merged_env.pop(key, None)
+                else:
+                    merged_env[key] = value
 
         if trace_network:
             strace_path = shutil.which("strace")

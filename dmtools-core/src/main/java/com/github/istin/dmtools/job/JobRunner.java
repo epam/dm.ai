@@ -10,7 +10,7 @@ import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.ba.BusinessAnalyticDORGeneration;
 import com.github.istin.dmtools.ba.RequirementsCollector;
 import com.github.istin.dmtools.ba.UserStoryGenerator;
-import com.github.istin.dmtools.dev.CodeGenerator;
+import com.github.istin.dmtools.dev.CodeGeneratorCompatibilityJob;
 import com.github.istin.dmtools.dev.CommitsTriage;
 import com.github.istin.dmtools.dev.UnitTestsGenerator;
 import com.github.istin.dmtools.diagram.DiagramsCreator;
@@ -66,7 +66,7 @@ public class JobRunner {
             case "instructionsgenerator": return new InstructionsGenerator();
             case "solutionarchitecturecreator": return new SolutionArchitectureCreator();
             case "diagramscreator", "diagramcreator": return new DiagramsCreator();
-            case "codegenerator": return new CodeGenerator();
+            case "codegenerator": return new CodeGeneratorCompatibilityJob();
             case "devproductivityreport": return new DevProductivityReport();
             case "baproductivityreport": return new BAProductivityReport();
             case "businessanalyticdorgeneration": return new BusinessAnalyticDORGeneration();
@@ -88,6 +88,13 @@ public class JobRunner {
             case "kbprocessingjob": return new KBProcessingJob();
             default: return null;
         }
+    }
+
+    static boolean isKnownJobName(String jobName) {
+        if (jobName == null || jobName.trim().isEmpty()) {
+            return false;
+        }
+        return createJobInstance(jobName.trim()) != null;
     }
 
     /**
@@ -118,7 +125,7 @@ public class JobRunner {
                             new InstructionsGenerator(),
                             new SolutionArchitectureCreator(),
                             new DiagramsCreator(),
-                            new CodeGenerator(),
+                            new CodeGeneratorCompatibilityJob(),
                             new DevProductivityReport(),
                             new BAProductivityReport(),
                             new BusinessAnalyticDORGeneration(),
@@ -272,6 +279,7 @@ public class JobRunner {
         System.out.println("Usage:");
         System.out.println("  dmtools list                           # List available MCP tools");
         System.out.println("  dmtools run <json-file>                # Execute job with JSON config file");
+        System.out.println("  dmtools run <job-name> [--key value]   # Execute a registered job without a config file");
         System.out.println("  dmtools run <json-file> <encoded>      # Execute job with file + encoded overrides");
         System.out.println("  dmtools <tool> [args...]              # Execute MCP tool with args");
         System.out.println("  dmtools <tool> --data '{\"json\"}'      # Execute with inline JSON");
@@ -285,6 +293,7 @@ public class JobRunner {
         System.out.println("Examples:");
         System.out.println("  dmtools list");
         System.out.println("  dmtools run job-config.json");
+        System.out.println("  dmtools run codegenerator --param1 test");
         System.out.println("  dmtools run job-config.json \"eyJvdmVycmlkZSI6InZhbHVlIn0=\"  # base64 encoded");
         System.out.println("  dmtools run job-config.json \"%7B%22override%22%3A%22value%22%7D\"  # URL encoded");
         System.out.println("  dmtools jira_get_ticket DMC-479 summary,description");
