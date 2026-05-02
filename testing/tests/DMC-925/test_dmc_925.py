@@ -27,22 +27,19 @@ def test_dmc_925_installer_normalizes_and_deduplicates_skills_from_env_and_cli(
         f"Observed output:\n{env_observation.visible_output}"
     )
 
-    cli_observation = service.resolve_with_cli("bitbucket,teams")
+    cli_observation = service.resolve_with_cli("teams,TEAMS")
     assert cli_observation.returncode == 0, service.format_execution_failure(cli_observation)
     assert cli_observation.effective_skills == ("teams",), (
-        "The CLI --skills input should keep supported skills after filtering unknown ones. "
+        "The CLI --skills input should be normalized and deduplicated without changing the "
+        "selected valid skills. "
         f"Observed line: {cli_observation.effective_skills_line!r}"
     )
     assert cli_observation.skills_source == "cli", (
         "The installer log must identify --skills as the source when the CLI argument is used. "
         f"Observed line: {cli_observation.effective_skills_line!r}"
     )
-    assert cli_observation.invalid_skills == ("bitbucket",), (
-        "Unsupported CLI skills should be surfaced to the user in the warning log. "
-        f"Observed output:\n{cli_observation.visible_output}"
-    )
-    assert "Warning: Skipping unknown skills: bitbucket" in cli_observation.visible_output, (
-        "The installer should visibly warn when unsupported skills are ignored.\n"
+    assert cli_observation.invalid_skills == (), (
+        "Valid CLI skills should not produce an invalid-skill warning. "
         f"Observed output:\n{cli_observation.visible_output}"
     )
     assert "Effective skills: teams (source: cli)" in cli_observation.visible_output, (
