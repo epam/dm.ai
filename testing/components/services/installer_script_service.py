@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import re
+import tempfile
 import textwrap
 from pathlib import Path
+from typing import Mapping, Sequence
 
+from testing.core.interfaces.installer_script import InstallerScript
 from testing.core.interfaces.process_runner import ProcessRunner
 from testing.core.models.process_execution_result import ProcessExecutionResult
 
 
-class InstallerScriptService:
+class InstallerScriptService(InstallerScript):
     AVAILABLE_SKILLS_CSV = (
         "dmtools,jira,confluence,github,gitlab,figma,teams,"
         "sharepoint,ado,testrail,xray"
@@ -22,8 +25,79 @@ class InstallerScriptService:
         runner: ProcessRunner,
     ) -> None:
         self.repository_root = repository_root
-        self.runner = runner
         self.install_script_path = repository_root / "install.sh"
+        self.runner = runner
+
+    def run_main(
+        self,
+        args: Sequence[str] = (),
+        extra_env: Mapping[str, str] | None = None,
+        post_script: str = "",
+    ) -> ProcessExecutionResult:
+        with tempfile.TemporaryDirectory(prefix="dmtools-installer-") as temp_dir:
+            install_dir = Path(temp_dir) / "home" / ".dmtools"
+            bin_dir = install_dir / "bin"
+            installer_env_path = bin_dir / "dmtools-installer.env"
+
+            env = {
+                "DMTOOLS_INSTALLER_TEST_MODE": "true",
+                "DMTOOLS_INSTALL_DIR": str(install_dir),
+                "DMTOOLS_BIN_DIR": str(bin_dir),
+                "DMTOOLS_INSTALLER_ENV_PATH": str(installer_env_path),
+            }
+            if extra_env:
+                env.update(extra_env)
+
+            command = textwrap.dedent(
+                f"""
+                set -e
+                source "{self.install_script_path}"
+
+                check_java() {{
+                    info "stubbed check_java"
+                }}
+
+                get_latest_version() {{
+                    echo "v0.0.0-test"
+                }}
+
+                download_dmtools() {{
+                    local version="$1"
+                    info "stubbed download_dmtools $version"
+                    mkdir -p "$(dirname "$JAR_PATH")"
+                    printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
+                }}
+
+                update_shell_config() {{
+                    info "stubbed update_shell_config"
+                }}
+
+                verify_installation() {{
+                    info "stubbed verify_installation"
+                }}
+
+                print_instructions() {{
+                    info "stubbed print_instructions"
+                }}
+
+                main "$@"
+                {post_script}
+                """
+            ).strip()
+
+            return self.runner.run(
+                ["bash", "-lc", command, "bash", *args],
+                cwd=self.repository_root,
+                env=env,
+            )
+
+    @property
+    def available_skills_csv(self) -> str:
+        return self.AVAILABLE_SKILLS_CSV
+
+    @property
+    def side_effect_marker(self) -> str:
+        return self.SIDE_EFFECT_MARKER
 
     def run_main_with_env_skills(self, skills_csv: str) -> ProcessExecutionResult:
         command = textwrap.dedent(
