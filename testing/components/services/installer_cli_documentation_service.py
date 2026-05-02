@@ -161,17 +161,31 @@ class InstallerCliDocumentationService:
                 "The installer runtime does not accept the `--all-skills` flag."
             )
 
+        mixed_selection_result = installer_script.run_main(args=("--skills=jira,unknown",))
+        if not self._command_failed(
+            mixed_selection_result,
+            "Unknown skills: unknown",
+        ):
+            findings.append(
+                "The installer runtime does not fail for mixed valid+invalid skill "
+                "selections without `--skip-unknown` while listing invalid names."
+            )
+
         skip_unknown_result = installer_script.run_main(
             args=("--skills=jira,unknown", "--skip-unknown")
         )
-        if not self._command_succeeded(
-            skip_unknown_result,
-            "Warning: Skipping unknown skills: unknown",
-            "Effective skills: jira (source: cli)",
+        if (
+            mixed_selection_result.returncode == 0
+            or not self._command_succeeded(
+                skip_unknown_result,
+                "Warning: Skipping unknown skills: unknown",
+                "Effective skills: jira (source: cli)",
+            )
         ):
             findings.append(
-                "The installer runtime does not downgrade invalid skill names to "
-                "warnings when `--skip-unknown` is used."
+                "The installer runtime does not prove that `--skip-unknown` changes "
+                "a mixed valid+invalid selection from a non-zero failure into a "
+                "warning-backed success."
             )
 
         invalid_skill_result = installer_script.run_main(args=("--skill", "unknown"))
@@ -200,6 +214,10 @@ class InstallerCliDocumentationService:
             (
                 "bash install.sh --all-skills",
                 installer_script.run_main(args=("--all-skills",)),
+            ),
+            (
+                "bash install.sh --skills=jira,unknown",
+                installer_script.run_main(args=("--skills=jira,unknown",)),
             ),
             (
                 "bash install.sh --skills=jira,unknown --skip-unknown",

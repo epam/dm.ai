@@ -72,6 +72,11 @@ def _ticket_compliant_installer() -> FakeInstallerScript:
                 returncode=0,
                 stdout="Installing all skills (source: cli)\n",
             ),
+            ("--skills=jira,unknown",): _result(
+                "--skills=jira,unknown",
+                returncode=1,
+                stderr="Error: Unknown skills: unknown. Use --skip-unknown to continue.\n",
+            ),
             ("--skills=jira,unknown", "--skip-unknown"): _result(
                 "--skills=jira,unknown",
                 "--skip-unknown",
@@ -112,6 +117,14 @@ def _runtime_without_ticket_flags() -> FakeInstallerScript:
                 "--all-skills",
                 returncode=1,
                 stderr="Error: Unknown installer option: --all-skills\n",
+            ),
+            ("--skills=jira,unknown",): _result(
+                "--skills=jira,unknown",
+                returncode=0,
+                stdout=(
+                    "Warning: Skipping unknown skills: unknown\n"
+                    "Effective skills: jira (source: cli)\n"
+                ),
             ),
             ("--skills=jira,unknown", "--skip-unknown"): _result(
                 "--skills=jira,unknown",
@@ -217,7 +230,15 @@ def test_dmc_915_flags_docs_that_describe_commands_the_runtime_rejects(
     assert (
         "The installer runtime does not accept the `--all-skills` flag."
     ) in findings
-    assert any("`--skip-unknown`" in finding for finding in findings)
+    assert (
+        "The installer runtime does not fail for mixed valid+invalid skill "
+        "selections without `--skip-unknown` while listing invalid names."
+    ) in findings
+    assert (
+        "The installer runtime does not prove that `--skip-unknown` changes a "
+        "mixed valid+invalid selection from a non-zero failure into a "
+        "warning-backed success."
+    ) in findings
 
 
 def test_dmc_915_flags_missing_ticket_required_installer_docs(
