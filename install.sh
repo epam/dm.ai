@@ -5,6 +5,7 @@
 #   Specific version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- <version>
 #   Select skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | DMTOOLS_SKILLS=jira,github bash
 #   CLI skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira,github
+#   Strict validation: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira --strict
 # Requirements: Java 17+ (will attempt automatic installation on macOS/Linux)
 
 set -e
@@ -40,6 +41,7 @@ EFFECTIVE_INTEGRATIONS=()
 EFFECTIVE_SKILLS_CSV=""
 INVALID_SKILLS_CSV=""
 EFFECTIVE_INTEGRATIONS_CSV=""
+STRICT_INSTALL_MODE=false
 
 # Helper functions
 error() {
@@ -164,6 +166,22 @@ parse_installer_args() {
     INSTALLER_SKILLS_ARG=""
     INSTALLER_VERSION_ARG=""
     INSTALLER_POSITIONAL_ARGS=()
+    STRICT_INSTALL_MODE=false
+
+    local strict_mode_value
+    strict_mode_value=$(to_lower "$(strip_optional_quotes "${DMTOOLS_STRICT_INSTALL:-false}")")
+    strict_mode_value=$(trim_value "$strict_mode_value")
+    case "$strict_mode_value" in
+        ""|false|0|no|off)
+            STRICT_INSTALL_MODE=false
+            ;;
+        true|1|yes|on)
+            STRICT_INSTALL_MODE=true
+            ;;
+        *)
+            error "Invalid DMTOOLS_STRICT_INSTALL value: ${DMTOOLS_STRICT_INSTALL}. Use true or false."
+            ;;
+    esac
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -180,9 +198,14 @@ parse_installer_args() {
                 INSTALLER_SKILLS_WAS_SET=true
                 shift
                 ;;
+            --strict)
+                STRICT_INSTALL_MODE=true
+                shift
+                ;;
             --help|-h)
-                echo "Usage: install.sh [--skills=jira,github] [version]"
+                echo "Usage: install.sh [--skills=jira,github] [--strict] [version]"
                 echo "  --skills  Comma-separated skills to configure after installation."
+                echo "  --strict  Fail when any unknown skills are supplied."
                 echo "  version   Optional DMTools version (vX.Y.Z or X.Y.Z)."
                 exit 0
                 ;;
@@ -263,12 +286,15 @@ resolve_skill_selection() {
     EFFECTIVE_SKILLS_CSV=$(join_by_comma "${EFFECTIVE_SKILLS[@]}")
     INVALID_SKILLS_CSV=$(join_by_comma "${INVALID_SKILLS[@]}")
 
-    if [ ${#INVALID_SKILLS[@]} -gt 0 ]; then
-        warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
-    fi
-
     if [ ${#EFFECTIVE_SKILLS[@]} -eq 0 ]; then
         error "No valid skills selected. Unknown skills: ${INVALID_SKILLS_CSV:-none}. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+    fi
+
+    if [ ${#INVALID_SKILLS[@]} -gt 0 ]; then
+        if [ "$STRICT_INSTALL_MODE" = true ]; then
+            error "Unknown skills are not allowed in strict mode: $INVALID_SKILLS_CSV. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+        fi
+        warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
     fi
 
     build_effective_integrations

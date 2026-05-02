@@ -15,6 +15,13 @@ When piping the installer into `bash`, set `DMTOOLS_SKILLS` on the `bash` proces
 
 The installer normalizes values to lowercase, trims whitespace, and skips unknown names with a warning. Empty input or `all` keeps the default full install.
 
+To make unknown skill names fail the run instead of being skipped, enable strict mode:
+
+```bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash -s -- --skills=jira --strict
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | DMTOOLS_SKILLS=jira DMTOOLS_STRICT_INSTALL=true bash
+```
+
 ## Routing convention
 
 Expose skill-specific adapters under `/dmtools/{skill}`. Examples:
