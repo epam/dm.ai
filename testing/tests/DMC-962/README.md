@@ -3,7 +3,7 @@
 This test verifies the real Claude skill installer flow in `dmtools-ai-docs/install.sh`
 for a mixed selective reinstall. It starts from the ticket precondition where
 `.claude/skills` already contains `dmtools-jira` and `dmtools-github` plus
-`installed-skills.json`, then reruns the installer with `DMTOOLS_SKILLS='jira,confluence'`
+`installed-skills.json`, then reruns the installer with `DMTOOLS_SKILLS='jira,ado'`
 and checks the user-visible output plus the resulting artifacts and metadata.
 
 ## Install dependencies
@@ -25,5 +25,5 @@ repository sandbox, stubs the release downloads with local zip assets, and verif
 
 - `dmtools-jira` remains installed
 - `dmtools-github` is removed
-- `dmtools-confluence` is added
-- `.claude/skills/installed-skills.json` lists only Jira and Confluence
+- `dmtools-ado` is added
+- `.claude/skills/installed-skills.json` lists only Jira and ADO

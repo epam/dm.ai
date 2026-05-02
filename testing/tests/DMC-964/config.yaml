@@ -1,8 +1,7 @@
-test_id: DMC-962
+test_id: DMC-964
 type: api
 framework: pytest
 platform: linux
 dependencies: []
 retained_skill: jira
-removed_skill: github
-added_skill: ado
+invalid_skill: unknown_skill_xyz
