@@ -145,7 +145,7 @@ class InstallerCliDocumentationService:
         multi_skill_result = installer_script.run_main(args=("--skills=jira,github",))
         if not self._command_succeeded(
             multi_skill_result,
-            "Effective skills: jira,github (source: cli)",
+            "Effective skills: jira, github (source: cli)",
         ):
             findings.append(
                 "The installer runtime does not accept `--skills=<name,name>` as a "
