@@ -108,10 +108,12 @@ load_env_files() {
         # Current working directory (highest priority)
         ".env"
         "dmtools.env"
+        "dmtools-installer.env"
         "dmtools-local.env"
         # Script directory (lower priority)
         "$SCRIPT_DIR/.env"
         "$SCRIPT_DIR/dmtools.env"
+        "$SCRIPT_DIR/dmtools-installer.env"
         "$SCRIPT_DIR/dmtools-local.env"
     )
     
