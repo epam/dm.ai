@@ -1,0 +1,7 @@
+test_id: DMC-959
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+valid_skill: jira
+invalid_skill: unknown_skill_abc
