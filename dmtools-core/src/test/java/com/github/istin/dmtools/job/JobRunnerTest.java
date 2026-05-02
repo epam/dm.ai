@@ -3,7 +3,7 @@
 
 package com.github.istin.dmtools.job;
 
-import com.github.istin.dmtools.dev.CodeGenerator;
+import com.github.istin.dmtools.dev.CodeGeneratorCompatibilityJob;
 import com.github.istin.dmtools.kb.KBProcessingJob;
 import com.github.istin.dmtools.reporting.ReportGeneratorJob;
 import com.github.istin.dmtools.reporting.ReportVisualizerJob;
@@ -60,8 +60,8 @@ public class JobRunnerTest {
 
     @Test
     public void testCodeGeneratorCompatibilityShimRemainsRegistered() throws Exception {
-        assertTrue(invokeCreateJobInstance("CodeGenerator") instanceof CodeGenerator);
-        assertTrue(invokeCreateJobInstance("codegenerator") instanceof CodeGenerator);
+        assertTrue(invokeCreateJobInstance("CodeGenerator") instanceof CodeGeneratorCompatibilityJob);
+        assertTrue(invokeCreateJobInstance("codegenerator") instanceof CodeGeneratorCompatibilityJob);
         assertTrue(invokeListJobs().contains("- CodeGenerator"));
     }
 
@@ -96,7 +96,7 @@ public class JobRunnerTest {
         assertEquals(1, items.size());
         ResultItem item = (ResultItem) items.get(0);
         assertEquals("CodeGenerator", item.getKey());
-        assertEquals(CodeGenerator.getCompatibilityResponse(), item.getResult());
+        assertEquals(CodeGeneratorCompatibilityJob.getCompatibilityResponse(), item.getResult());
     }
 
     private Object invokeCreateJobInstance(String jobName) throws Exception {
