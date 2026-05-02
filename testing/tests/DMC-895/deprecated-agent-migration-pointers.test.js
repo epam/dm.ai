@@ -9,7 +9,9 @@ const {
   readText,
   splitLines,
 } = require('../../core/utils/documentAudit');
-const { createExampleUsageAuditService } = require('../DMC-894/createExampleUsageAuditService');
+const {
+  createExampleUsageAuditService,
+} = require('../../components/services/createExampleUsageAuditService');
 
 const ticketKey = 'DMC-895';
 const teammateConfigsPath = path.resolve(
