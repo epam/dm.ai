@@ -19,6 +19,7 @@ INSTALLER_ARGS = tuple(str(argument) for argument in CONFIG["installer_args"])
 EXPECTED_EFFECTIVE_SKILLS = tuple(str(skill) for skill in CONFIG["expected_effective_skills"])
 EXPECTED_SKILLS_SOURCE = str(CONFIG["expected_skills_source"])
 EXPECTED_BANNER_FRAGMENT = str(CONFIG["expected_banner_fragment"])
+EXPECTED_CONTINUATION_FRAGMENT = str(CONFIG["expected_continuation_fragment"])
 FORBIDDEN_OUTPUT_FRAGMENTS = tuple(str(fragment) for fragment in CONFIG["forbidden_output_fragments"])
 EXPECTED_EFFECTIVE_SKILLS_LINE = (
     f"Effective skills: {', '.join(EXPECTED_EFFECTIVE_SKILLS)} "
@@ -47,6 +48,12 @@ def test_dmc_958_installer_accepts_skills_equals_alias() -> None:
     assert EXPECTED_EFFECTIVE_SKILLS_LINE in stdout, (
         "The user-visible effective skills line should list both skills parsed from "
         "the equals-sign alias in the original order.\n"
+        f"stdout:\n{stdout}"
+    )
+    assert EXPECTED_CONTINUATION_FRAGMENT in stdout, (
+        "The installer should continue into the real installation flow after "
+        "accepting --skills=<name,name>, which proves the alias was processed "
+        "instead of printing the banner and exiting early.\n"
         f"stdout:\n{stdout}"
     )
     normalized_output = combined_output.lower()

@@ -10,6 +10,7 @@ expected_effective_skills:
   - github
 expected_skills_source: cli
 expected_banner_fragment: Installing DMTools CLI...
+expected_continuation_fragment: Configured installer-managed skills at
 forbidden_output_fragments:
   - Unknown installer option
   - invalid option
