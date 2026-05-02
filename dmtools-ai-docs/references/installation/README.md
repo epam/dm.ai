@@ -1,5 +1,7 @@
 # DMtools Installation Guide
 
+[Back to README installation](../../../README.md#installation)
+
 ## 🚀 Quick Installation
 
 The fastest way to install DMtools:
