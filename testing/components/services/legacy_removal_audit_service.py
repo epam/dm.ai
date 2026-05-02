@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import os
-import subprocess
-import tempfile
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Protocol
 
-from testing.core.utils.repo_sandbox import CommandResult
+from testing.core.utils.repo_sandbox import CommandResult, RepoSandbox
 
 
 @dataclass(frozen=True)
@@ -30,29 +28,45 @@ class LegacyRemovalAudit:
         return tuple(audit.relative_path for audit in self.file_audits if audit.exists)
 
 
+class Sandbox(Protocol):
+    workspace: Path
+
+    def cleanup(self) -> None: ...
+
+    def run(self, command: str, timeout: int = 1800) -> CommandResult: ...
+
+
 class LegacyRemovalAuditService:
     def __init__(
         self,
         repository_root: Path,
         removed_paths: Iterable[str],
         build_command: str,
-        build_executor: Callable[[Path, str, int], CommandResult] | None = None,
+        sandbox_factory: Callable[[Path], Sandbox] | None = None,
     ) -> None:
         self.repository_root = repository_root
         self.removed_paths = tuple(removed_paths)
         self.build_command = build_command
-        self._build_executor = build_executor or self._run_build
+        self._sandbox_factory = sandbox_factory or self._create_sandbox
 
     def run_audit(self, timeout: int = 1800) -> LegacyRemovalAudit:
-        file_audits = tuple(self._audit_paths(self.repository_root))
-        build_result = self._build_executor(self.repository_root, self.build_command, timeout)
-        return LegacyRemovalAudit(
-            file_audits=file_audits,
-            build_result=build_result,
-        )
+        sandbox = self._sandbox_factory(self.repository_root)
+        try:
+            file_audits = tuple(self._audit_paths(sandbox.workspace))
+            build_result = sandbox.run(self.build_command, timeout=timeout)
+            return LegacyRemovalAudit(
+                file_audits=file_audits,
+                build_result=build_result,
+            )
+        finally:
+            sandbox.cleanup()
 
     def observe_repository_state(self) -> tuple[RemovalTargetAudit, ...]:
-        return tuple(self._audit_paths(self.repository_root))
+        sandbox = self._sandbox_factory(self.repository_root)
+        try:
+            return tuple(self._audit_paths(sandbox.workspace))
+        finally:
+            sandbox.cleanup()
 
     def format_failures(self, audit: LegacyRemovalAudit) -> str:
         lines = ["Legacy CodeGenerator cleanup verification failed."]
@@ -94,28 +108,9 @@ class LegacyRemovalAuditService:
         ]
 
     @staticmethod
-    def _run_build(workspace: Path, command: str, timeout: int) -> CommandResult:
-        env = os.environ.copy()
-        with tempfile.TemporaryDirectory(prefix="dmc-909-") as temp_dir:
-            temp_home = Path(temp_dir)
-            env["HOME"] = str(temp_home)
-            env.setdefault("GRADLE_USER_HOME", str(temp_home / ".gradle"))
-            env.setdefault("XDG_CACHE_HOME", str(temp_home / ".cache"))
-            env.setdefault("PYTHONUNBUFFERED", "1")
-
-            completed = subprocess.run(
-                ["bash", "-lc", command],
-                cwd=workspace,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-
-        return CommandResult(
-            command=command,
-            returncode=completed.returncode,
-            stdout=completed.stdout,
-            stderr=completed.stderr,
+    def _create_sandbox(repository_root: Path) -> Sandbox:
+        return RepoSandbox(
+            repository_root,
+            initialize_git_repo=True,
+            base_dir=repository_root / ".repo-sandboxes",
         )
