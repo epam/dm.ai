@@ -14,17 +14,17 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
-SEEDED_SKILLS = tuple(str(skill) for skill in CONFIG["seeded_skills"])
-DEFAULT_SKILL = str(CONFIG["default_skill"])
+RETAINED_SKILL = str(CONFIG["retained_skill"])
+INVALID_SKILL = str(CONFIG["invalid_skill"])
 
 
-def test_dmc_963_empty_skill_selection_falls_back_to_dmtools_and_rewrites_metadata() -> None:
+def test_dmc_964_invalid_skill_reinstall_reports_error_and_preserves_existing_state() -> None:
     service = SkillInstallerService(REPOSITORY_ROOT)
 
-    result = service.run_default_skill_reinstall(
-        seeded_skills=SEEDED_SKILLS,
-        default_skill=DEFAULT_SKILL,
+    result = service.run_invalid_skill_reinstall(
+        retained_skill=RETAINED_SKILL,
+        invalid_skill=INVALID_SKILL,
     )
-    failures = service.validate_default_skill_reinstall(result)
+    failures = service.validate_invalid_skill_reinstall(result)
 
-    assert not failures, service.format_default_skill_reinstall_failures(result, failures)
+    assert not failures, service.format_invalid_skill_reinstall_failures(result, failures)

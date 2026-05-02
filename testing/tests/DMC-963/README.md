@@ -4,12 +4,13 @@ This test verifies the Claude skill installer flow in `dmtools-ai-docs/install.s
 when `DMTOOLS_SKILLS` is explicitly set to an empty string.
 
 It starts from the ticket precondition where `.claude/skills` already contains an
-installed skill plus `installed-skills.json` and `endpoints.json`, reruns the
-installer with an empty skill selection, and checks that:
+installed skill plus `installed-skills.json`, reruns the installer with an empty
+skill selection, and checks that:
 
-- no `dmtools*` skill folders remain under `.claude/skills`
-- `installed-skills.json` is present and contains no installed skills or commands
-- `endpoints.json` is present and contains no active `/dmtools*` command entries
+- the installer reports the effective fallback selection as `dmtools`
+- previously selected non-default skill folders are removed
+- `.claude/skills/dmtools` is installed
+- `installed-skills.json` is rewritten to contain only `dmtools` and `/dmtools`
 
 ## Install dependencies
 
