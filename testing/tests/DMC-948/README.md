@@ -32,7 +32,7 @@ It uses a temp directory for `HOME` so the installer writes to an isolated
 
 - `pytest` reports `1 passed`
 - The installer output includes `Installing DMTools CLI...`
-- The installer output includes `Effective skills: jira,confluence (source: env)`
+- The installer output includes `Effective skills: jira, confluence (source: env)`
 - The installer output includes `DMTools CLI installed successfully!`
 - The installer output does not include `Installation completed but dmtools command test failed`
 - The isolated `~/.dmtools` directory contains `installed-skills.json` and `endpoints.json`

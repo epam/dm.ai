@@ -65,7 +65,7 @@ def _ticket_compliant_installer() -> FakeInstallerScript:
             ("--skills=jira,github",): _result(
                 "--skills=jira,github",
                 returncode=0,
-                stdout="Effective skills: jira,github (source: cli)\n",
+                stdout="Effective skills: jira, github (source: cli)\n",
             ),
             ("--all-skills",): _result(
                 "--all-skills",
@@ -111,7 +111,7 @@ def _runtime_without_ticket_flags() -> FakeInstallerScript:
             ("--skills=jira,github",): _result(
                 "--skills=jira,github",
                 returncode=0,
-                stdout="Effective skills: jira,github (source: cli)\n",
+                stdout="Effective skills: jira, github (source: cli)\n",
             ),
             ("--all-skills",): _result(
                 "--all-skills",
