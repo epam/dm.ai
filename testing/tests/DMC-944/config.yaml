@@ -1,0 +1,7 @@
+test_id: DMC-944
+type: web
+framework: playwright
+platform: linux
+dependencies:
+  - playwright
+command: node testing/tests/DMC-944/test_dmc_944.js
