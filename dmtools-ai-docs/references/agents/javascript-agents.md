@@ -516,7 +516,7 @@ function action(params) {
 
 ### The Recommended Approach: JSRunner
 
-**JSRunner is the primary way to test JS agents** — it runs the script inside the real GraalJS environment with live MCP tools, real Jira/Confluence connections, and the exact same `params` structure your agent will receive in production.
+JSRunner executes one GraalJS script with DMtools context for isolated automation, debugging, and JS agent testing.
 
 ```bash
 # Run agent with no params (useful for scripts that read their own config)
