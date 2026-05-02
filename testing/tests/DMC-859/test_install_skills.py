@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import tempfile
@@ -6,7 +7,6 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-INSTALL_SCRIPT = REPOSITORY_ROOT / "install.sh"
 INSTALL_ENTRYPOINTS = (REPOSITORY_ROOT / "install.sh", REPOSITORY_ROOT / "install")
 DOC_PATH = REPOSITORY_ROOT / "docs" / "install-skills.md"
 ALL_SKILLS = (
@@ -28,14 +28,19 @@ RUNTIME_SKILL_INTEGRATIONS = {
 }
 
 
-def run_installer_functions(commands: str, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def run_installer_functions(
+    commands: str,
+    extra_env: dict[str, str] | None = None,
+    installer_script: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["DMTOOLS_INSTALLER_TEST_MODE"] = "true"
     if extra_env:
         env.update(extra_env)
+    target_script = installer_script or INSTALL_ENTRYPOINTS[0]
     script = f"""
 set -e
-source "{INSTALL_SCRIPT}"
+source "{target_script}"
 {commands}
 """
     return subprocess.run(
@@ -48,13 +53,16 @@ source "{INSTALL_SCRIPT}"
 
 
 def run_installer_via_stdin(
-    commands: str, extra_env: dict[str, str] | None = None
+    commands: str,
+    extra_env: dict[str, str] | None = None,
+    installer_script: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["DMTOOLS_INSTALLER_TEST_MODE"] = "true"
     if extra_env:
         env.update(extra_env)
-    script = INSTALL_SCRIPT.read_text(encoding="utf-8")
+    target_script = installer_script or INSTALL_ENTRYPOINTS[0]
+    script = target_script.read_text(encoding="utf-8")
     return subprocess.run(
         ["bash", "-s", "--"],
         cwd=REPOSITORY_ROOT,
@@ -66,6 +74,41 @@ def run_installer_via_stdin(
 
 
 class TestInstallerSkillSelection(unittest.TestCase):
+    def test_entrypoints_accept_strict_flag_and_reject_unknown_skills(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                result = run_installer_functions(
+                    """
+parse_installer_args --skills jira,unknown --strict
+resolve_skill_selection
+""",
+                    installer_script=installer_script,
+                )
+
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(
+                    "Unknown skills are not allowed in strict mode: unknown.", result.stderr
+                )
+                self.assertIn("Allowed skills:", result.stderr)
+
+    def test_entrypoints_accept_strict_env_and_reject_unknown_skills(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                result = run_installer_functions(
+                    """
+parse_installer_args --skills jira,unknown
+resolve_skill_selection
+""",
+                    {"DMTOOLS_STRICT_INSTALL": "true"},
+                    installer_script=installer_script,
+                )
+
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(
+                    "Unknown skills are not allowed in strict mode: unknown.", result.stderr
+                )
+                self.assertIn("Allowed skills:", result.stderr)
+
     def test_cli_flag_parsing_normalizes_and_preserves_version_argument(self) -> None:
         result = run_installer_functions(
             """
@@ -121,10 +164,41 @@ printf 'integrations=%s\\n' "$EFFECTIVE_INTEGRATIONS_CSV"
         self.assertIn("source=env", result.stdout)
         self.assertIn("integrations=ai,cli,file,kb,mermaid,jira,github", result.stdout)
 
-    def test_unknown_skills_warn_and_known_skills_continue(self) -> None:
+    def test_env_selection_logs_effective_skills_with_comma_space_formatting(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                result = run_installer_functions(
+                    """
+parse_installer_args
+resolve_skill_selection
+""",
+                    {"DMTOOLS_SKILLS": " Jira, github, JIRA, , confluence "},
+                    installer_script=installer_script,
+                )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn(
+                    "Effective skills: jira, github, confluence (source: env)",
+                    result.stdout,
+                )
+
+    def test_cli_unknown_skills_fail_without_skip_unknown(self) -> None:
         result = run_installer_functions(
             """
-parse_installer_args --skills jira,unknown,GITHUB
+            parse_installer_args --skills jira,unknown,GITHUB
+            resolve_skill_selection
+            """
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(
+            "Unknown skills: unknown. Use --skip-unknown to continue.", result.stderr
+        )
+
+    def test_cli_skip_unknown_warns_and_keeps_known_skills(self) -> None:
+        result = run_installer_functions(
+            """
+parse_installer_args --skills=jira,unknown,GITHUB --skip-unknown
 resolve_skill_selection
 printf 'skills=%s\\n' "$EFFECTIVE_SKILLS_CSV"
 printf 'invalid=%s\\n' "$INVALID_SKILLS_CSV"
@@ -187,9 +261,11 @@ cat "$INSTALLER_ENV_PATH"
         self.assertIn('DMTOOLS_INTEGRATIONS="ai,cli,file,kb,mermaid,jira"', result.stdout)
 
     def test_repeated_main_run_skips_download_when_configuration_and_artifacts_match(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            result = run_installer_functions(
-                """
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    result = run_installer_functions(
+                        """
 check_java() { printf 'stub check_java\\n'; }
 get_latest_version() { printf 'v0.0.0-test'; }
 download_dmtools() {
@@ -209,20 +285,124 @@ print_instructions() { printf 'SIDE print_instructions\\n'; }
 main --skills jira,github
 main --skills jira,github
 """,
+                        {
+                            "DMTOOLS_INSTALL_DIR": temp_dir,
+                            "DMTOOLS_BIN_DIR": f"{temp_dir}/bin",
+                            "DMTOOLS_INSTALLER_ENV_PATH": f"{temp_dir}/bin/dmtools-installer.env",
+                        },
+                        installer_script=installer_script,
+                    )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(
+                    1, result.stdout.count("SIDE download_dmtools v0.0.0-test"), result.stdout
+                )
+                self.assertIn("Selected skills already installed: jira,github", result.stdout)
+                self.assertIn(
+                    "Installer-managed artifacts already present for version v0.0.0-test; "
+                    "skipping DMTools download.",
+                    result.stdout,
+                )
+                self.assertIn(
+                    "Installer metadata already present for version v0.0.0-test; "
+                    "skipping metadata rewrite.",
+                    result.stdout,
+                )
+
+    def test_repeated_main_run_redownloads_when_requested_version_changes(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    result = run_installer_functions(
+                        """
+check_java() { printf 'stub check_java\\n'; }
+download_dmtools() {
+    local version="$1"
+    printf 'SIDE download_dmtools %s\\n' "$version"
+    mkdir -p "$(dirname "$JAR_PATH")" "$BIN_DIR"
+    printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
+    cat > "$SCRIPT_PATH" <<'EOF'
+#!/bin/bash
+echo "dmtools stub"
+EOF
+    chmod +x "$SCRIPT_PATH"
+}
+update_shell_config() { printf 'SIDE update_shell_config\\n'; }
+verify_installation() { printf 'SIDE verify_installation\\n'; }
+print_instructions() { printf 'SIDE print_instructions\\n'; }
+main --skills jira,github v1.2.3
+main --skills jira,github v2.0.0
+cat "$INSTALLED_SKILLS_JSON_PATH"
+""",
+                        {
+                            "DMTOOLS_INSTALL_DIR": temp_dir,
+                            "DMTOOLS_BIN_DIR": f"{temp_dir}/bin",
+                            "DMTOOLS_INSTALLER_ENV_PATH": f"{temp_dir}/bin/dmtools-installer.env",
+                        },
+                        installer_script=installer_script,
+                    )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(1, result.stdout.count("SIDE download_dmtools v1.2.3"), result.stdout)
+                self.assertEqual(1, result.stdout.count("SIDE download_dmtools v2.0.0"), result.stdout)
+                self.assertIn("Selected skills already installed: jira,github", result.stdout)
+                self.assertNotIn(
+                    "Installer-managed artifacts already present for version v2.0.0; "
+                    "skipping DMTools download.",
+                    result.stdout,
+                )
+                self.assertIn('"version": "v2.0.0"', result.stdout)
+
+    def test_main_writes_machine_readable_metadata_files_for_selected_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            install_dir = Path(temp_dir)
+            installed_skills_path = install_dir / "installed-skills.json"
+            endpoints_path = install_dir / "endpoints.json"
+            result = run_installer_functions(
+                """
+check_java() { :; }
+download_dmtools() {
+    mkdir -p "$(dirname "$JAR_PATH")" "$(dirname "$SCRIPT_PATH")"
+    printf 'jar' > "$JAR_PATH"
+    printf '#!/bin/bash\nexit 0\n' > "$SCRIPT_PATH"
+    chmod +x "$SCRIPT_PATH"
+}
+update_shell_config() { :; }
+verify_installation() { :; }
+print_instructions() { :; }
+main --skills jira,confluence v1.2.3
+""",
                 {
-                    "DMTOOLS_INSTALL_DIR": temp_dir,
-                    "DMTOOLS_BIN_DIR": f"{temp_dir}/bin",
-                    "DMTOOLS_INSTALLER_ENV_PATH": f"{temp_dir}/bin/dmtools-installer.env",
+                    "DMTOOLS_INSTALL_DIR": str(install_dir),
+                    "DMTOOLS_BIN_DIR": str(install_dir / "bin"),
+                    "DMTOOLS_INSTALLER_ENV_PATH": str(install_dir / "bin" / "dmtools-installer.env"),
                 },
             )
 
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(1, result.stdout.count("SIDE download_dmtools v0.0.0-test"), result.stdout)
-        self.assertIn("Selected skills already installed: jira,github", result.stdout)
-        self.assertIn(
-            "Installer-managed artifacts already present; skipping DMTools download.",
-            result.stdout,
-        )
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertTrue(installed_skills_path.exists(), result.stdout)
+            self.assertTrue(endpoints_path.exists(), result.stdout)
+
+            installed_skills_payload = json.loads(installed_skills_path.read_text(encoding="utf-8"))
+            self.assertEqual("v1.2.3", installed_skills_payload["version"])
+            self.assertEqual(
+                [{"name": "jira"}, {"name": "confluence"}],
+                installed_skills_payload["installed_skills"],
+            )
+            self.assertEqual(
+                ["ai", "cli", "file", "kb", "mermaid", "jira", "confluence"],
+                installed_skills_payload["integrations"],
+            )
+
+            endpoints_payload = json.loads(endpoints_path.read_text(encoding="utf-8"))
+            self.assertEqual("v1.2.3", endpoints_payload["version"])
+            self.assertEqual(
+                [
+                    {"name": "jira", "path": "/dmtools/jira"},
+                    {"name": "confluence", "path": "/dmtools/confluence"},
+                ],
+                endpoints_payload["endpoints"],
+            )
 
     def test_runtime_backed_skills_add_expected_integrations(self) -> None:
         command_lines = []

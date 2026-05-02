@@ -67,6 +67,17 @@ class PerSkillPageAuditService:
             )
             return findings
 
+        actual_child_page_paths = set(child_pages)
+        missing_child_page_paths = sorted(
+            self.expected_child_page_paths() - actual_child_page_paths
+        )
+        for missing_child_page_path in missing_child_page_paths:
+            findings.append(
+                "Expected canonical skill child page "
+                f"{self.relative_path(missing_child_page_path)} to exist, "
+                f"but it is missing."
+            )
+
         for page_path in child_pages:
             findings.extend(self.audit_page(page_path))
 
@@ -78,6 +89,12 @@ class PerSkillPageAuditService:
             for path in self.per_skill_root.glob("*.md")
             if path.name.lower() not in self.PER_SKILL_INDEX_ALIASES
         )
+
+    def expected_child_page_paths(self) -> set[Path]:
+        return {
+            self.per_skill_root / f"{skill_name}.md"
+            for skill_name in self.skill_expectations
+        }
 
     def audit_page(self, page_path: Path) -> list[str]:
         findings: list[str] = []
@@ -145,7 +162,7 @@ class PerSkillPageAuditService:
         return re.sub(r"\s+", " ", normalized).strip()
 
     def expected_skill(self, page_path: Path) -> SkillCatalogExpectation | None:
-        return self.skill_expectations.get(self.canonical_skill_name(page_path))
+        return self.skill_expectations.get(page_path.stem)
 
     def has_link_to(self, source_path: Path, links: list, expected_target: Path) -> bool:
         expected_resolved = expected_target.resolve()
@@ -154,12 +171,6 @@ class PerSkillPageAuditService:
             == expected_resolved
             for link in links
         )
-
-    @staticmethod
-    def canonical_skill_name(page_path: Path) -> str:
-        if page_path.stem.startswith("dmtools-"):
-            return page_path.stem
-        return f"dmtools-{page_path.stem}"
 
     def relative_path(self, path: Path) -> str:
         return path.relative_to(self.repository_root).as_posix()

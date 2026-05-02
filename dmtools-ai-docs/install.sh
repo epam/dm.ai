@@ -9,21 +9,56 @@
 #   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
 #   # When piped (non-interactive): installs to ALL detected locations automatically
 #
-#   DMTOOLS_SKILLS=jira,github bash install.sh  # Install focused skills only
-#   INSTALL_LOCATION=1 bash install.sh          # Install to first detected location only
-#   bash install.sh --all                       # Install to all detected locations
-#   bash install.sh --skills jira,github        # Select packages explicitly
+#   DMTOOLS_SKILLS=jira,github bash install.sh      # Install focused skills only
+#   INSTALL_LOCATION=1 bash install.sh              # Install to first detected location only
+#   bash install.sh --all                           # Install to all detected locations
+#   bash install.sh --skill jira                    # Select one package explicitly
+#   bash install.sh --skills=jira,github            # Allowed alias for multi-skill selection
+#   bash install.sh --all-skills                    # Select every supported package
+#   bash install.sh --skills=jira,unknown           # Fails and lists invalid names
+#   bash install.sh --skills=jira,unknown --skip-unknown  # Warns and keeps valid skills
 #   bash install.sh                             # Interactive mode: ask user to choose
 
 set -e
 
 INSTALL_ALL=false
 SELECTED_SKILLS="${DMTOOLS_SKILLS:-}"
+SKILLS_SOURCE="default"
+INSTALL_ALL_SKILLS=false
+SKIP_UNKNOWN_SKILLS=false
 POSITIONAL_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --all|-a)
             INSTALL_ALL=true
+            shift
+            ;;
+        --all-skills)
+            SELECTED_SKILLS="all"
+            INSTALL_ALL_SKILLS=true
+            SKILLS_SOURCE="cli"
+            shift
+            ;;
+        --skill)
+            if [ -z "${2:-}" ]; then
+                echo "Missing value for $1" >&2
+                exit 1
+            fi
+            if [ -n "$SELECTED_SKILLS" ]; then
+                SELECTED_SKILLS="${SELECTED_SKILLS},$2"
+            else
+                SELECTED_SKILLS="$2"
+            fi
+            SKILLS_SOURCE="cli"
+            shift 2
+            ;;
+        --skill=*)
+            if [ -n "$SELECTED_SKILLS" ]; then
+                SELECTED_SKILLS="${SELECTED_SKILLS},${1#--skill=}"
+            else
+                SELECTED_SKILLS="${1#--skill=}"
+            fi
+            SKILLS_SOURCE="cli"
             shift
             ;;
         --skills|-s)
@@ -32,7 +67,17 @@ while [ $# -gt 0 ]; do
                 exit 1
             fi
             SELECTED_SKILLS="$2"
+            SKILLS_SOURCE="cli"
             shift 2
+            ;;
+        --skills=*)
+            SELECTED_SKILLS="${1#--skills=}"
+            SKILLS_SOURCE="cli"
+            shift
+            ;;
+        --skip-unknown)
+            SKIP_UNKNOWN_SKILLS=true
+            shift
             ;;
         --help|-h)
             echo "DMtools Agent Skill Installer"
@@ -41,19 +86,25 @@ while [ $# -gt 0 ]; do
             echo "  $0 [options]"
             echo ""
             echo "Options:"
-            echo "  --all, -a     Install to all detected locations"
-            echo "  --skills, -s  Comma-separated package list (dmtools,jira,github,ado,testrail)"
-            echo "  --help, -h    Show this help message"
+            echo "  --all, -a         Install to all detected locations"
+            echo "  --skill <name>    Select a single skill package"
+            echo "  --skills=<csv>    Allowed alias for comma-separated packages"
+            echo "  --all-skills      Select all supported skill packages"
+            echo "  --skip-unknown    Warn and continue when unknown skill names are supplied"
+            echo "  --help, -h        Show this help message"
             echo ""
             echo "Environment Variables:"
-            echo "  INSTALL_LOCATION  Set to number (1,2,3...) to select specific location"
-            echo "  DMTOOLS_SKILLS   Comma-separated package list for non-interactive installs"
+            echo "  INSTALL_LOCATION   Set to number (1,2,3...) to select specific location"
+            echo "  DMTOOLS_SKILLS     Comma-separated package list for non-interactive installs"
             echo ""
             echo "Examples:"
             echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash"
             echo "    → Non-interactive mode: installs to ALL detected locations automatically"
             echo ""
-            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github"
+            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skill jira"
+            echo "    → Install only /dmtools-jira"
+            echo ""
+            echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,github"
             echo "    → Install only /dmtools-jira and /dmtools-github"
             echo ""
             echo "  bash install.sh"
@@ -65,8 +116,14 @@ while [ $# -gt 0 ]; do
             echo "  bash install.sh --all"
             echo "    → Install to all locations"
             echo ""
-            echo "  bash install.sh --skills jira,github"
-            echo "    → Install only focused Jira and GitHub packages"
+            echo "  bash install.sh --all-skills"
+            echo "    → Select every supported skill package"
+            echo ""
+            echo "  bash install.sh --skills=jira,unknown"
+            echo "    → Fails with a non-zero exit and lists the invalid names"
+            echo ""
+            echo "  bash install.sh --skills=jira,unknown --skip-unknown"
+            echo "    → Downgrades invalid skill names to warnings and installs Jira"
             echo ""
             echo "Note: Installs to project-level and global (~/.claude/skills) directories"
             echo "      Run this command from your project root directory."
@@ -155,25 +212,139 @@ skill_command_name() {
 normalize_skills() {
     local raw="${1:-dmtools}"
     local normalized=()
+    local invalid=()
+    local include_all=false
     IFS=',' read -r -a requested <<< "$raw"
     for skill in "${requested[@]}"; do
         local trimmed
         trimmed=$(echo "$skill" | tr '[:upper:]' '[:lower:]' | xargs)
         [ -z "$trimmed" ] && continue
         case "$trimmed" in
+            all)
+                include_all=true
+                ;;
             dmtools|jira|github|ado|testrail)
                 normalized+=("$trimmed")
                 ;;
             *)
-                print_error "Unsupported skill package: $trimmed"
-                return 1
+                invalid+=("$trimmed")
                 ;;
         esac
     done
+    if [ "$include_all" = true ] || [ "$INSTALL_ALL_SKILLS" = true ]; then
+        normalized=(dmtools jira github ado testrail)
+    fi
+    if [ ${#invalid[@]} -gt 0 ]; then
+        local invalid_csv
+        invalid_csv=$(IFS=,; echo "${invalid[*]}")
+        if [ "$SKIP_UNKNOWN_SKILLS" = true ]; then
+            print_info "Warning: Skipping unknown skills: $invalid_csv"
+        else
+            if [ ${#normalized[@]} -eq 0 ]; then
+                print_error "No valid skills selected. Unknown skills: $invalid_csv. Allowed skills: dmtools,jira,github,ado,testrail"
+            else
+                print_error "Unknown skills: $invalid_csv. Use --skip-unknown to continue."
+            fi
+            return 1
+        fi
+    fi
     if [ ${#normalized[@]} -eq 0 ]; then
         normalized=("dmtools")
     fi
     printf '%s\n' "${normalized[@]}"
+}
+
+join_by_comma() {
+    local IFS=","
+    printf '%s' "$*"
+}
+
+json_escape() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//$'\n'/\\n}"
+    value="${value//$'\r'/\\r}"
+    value="${value//$'\t'/\\t}"
+    printf '%s' "$value"
+}
+
+json_string_array() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="\"$escaped\""
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+array_contains() {
+    local needle="$1"
+    shift
+    local item
+    for item in "$@"; do
+        if [ "$item" = "$needle" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+remove_deselected_skills() {
+    local target_dir="$1"
+    shift
+    local selected_skills=("$@")
+    local known_skill
+
+    for known_skill in dmtools jira github ado testrail; do
+        if array_contains "$known_skill" "${selected_skills[@]}"; then
+            continue
+        fi
+
+        local install_name
+        install_name=$(skill_install_name "$known_skill") || return 1
+        if [ -d "$target_dir/$install_name" ]; then
+            rm -rf "$target_dir/$install_name"
+            print_info "Removed deselected skill: $target_dir/$install_name"
+        fi
+    done
+}
+
+write_installed_skills_metadata() {
+    local target_dir="$1"
+    shift
+    local selected_skills=("$@")
+    local active_commands=()
+    local skill_key
+
+    for skill_key in "${selected_skills[@]}"; do
+        active_commands+=("$(skill_command_name "$skill_key")")
+    done
+
+    local installed_skills_json
+    local active_commands_json
+    installed_skills_json=$(json_string_array "${selected_skills[@]}")
+    active_commands_json=$(json_string_array "${active_commands[@]}")
+
+    cat > "$target_dir/installed-skills.json" <<EOF
+{
+  "installed_skills": $installed_skills_json,
+  "active_commands": $active_commands_json
+}
+EOF
+
+    print_success "Updated $target_dir/installed-skills.json"
 }
 
 detect_skill_dirs() {
@@ -287,13 +458,28 @@ install_to_directory() {
 main() {
     print_header
 
+    if [ "$SKILLS_SOURCE" != "cli" ]; then
+        if [ -n "${DMTOOLS_SKILLS:-}" ]; then
+            SKILLS_SOURCE="env"
+        else
+            SKILLS_SOURCE="default"
+        fi
+    fi
+
     local requested_skills=()
+    local normalized_skills_output
+    normalized_skills_output=$(normalize_skills "$SELECTED_SKILLS") || return 1
     while IFS= read -r skill_key; do
-        requested_skills+=("$skill_key")
-    done < <(normalize_skills "$SELECTED_SKILLS")
+        [ -n "$skill_key" ] && requested_skills+=("$skill_key")
+    done <<< "$normalized_skills_output"
     if [ ${#requested_skills[@]} -eq 0 ]; then
         requested_skills=("dmtools")
     fi
+
+    if [ "$INSTALL_ALL_SKILLS" = true ]; then
+        print_info "Installing all skills (source: $SKILLS_SOURCE)"
+    fi
+    print_info "Effective skills: $(join_by_comma "${requested_skills[@]}") (source: $SKILLS_SOURCE)"
 
     print_info "Detecting skill directories..."
     local dirs
@@ -373,6 +559,11 @@ main() {
         done
     done
 
+    for dir in "${target_dirs[@]}"; do
+        remove_deselected_skills "$dir" "${requested_skills[@]}"
+        write_installed_skills_metadata "$dir" "${requested_skills[@]}"
+    done
+
     rm -rf "$TEMP_DIR"
 
     echo "" >&2
@@ -410,35 +601,39 @@ main() {
     echo "For more information: https://github.com/epam/dm.ai" >&2
 }
 
-case "${1:-install}" in
-    install)
-        main
-        ;;
-    --help|-h)
-        echo "DMtools Agent Skill Installer"
-        echo ""
-        echo "Usage: $0 [install] [--all] [--skills jira,github]"
-        echo ""
-        echo "This script installs the DMtools skill for AI assistants that"
-        echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
-        echo ""
-        echo "The installer will:"
-        echo "  1. Detect skill directories (.cursor, .claude, .codex, ~/.claude)"
-        echo "  2. Download the selected DMtools skill package(s)"
-        echo "  3. Install to ALL detected locations (when piped) or ask you to choose"
-        echo ""
-        echo "Behavior:"
-        echo "  - Piped (curl | bash): Installs to ALL detected locations automatically"
-        echo "  - Interactive: Shows menu to choose specific location(s)"
-        echo "  - Focused installs: pass --skills jira,github or set DMTOOLS_SKILLS=jira,github"
-        echo ""
-        echo "      Run from your project root directory."
-        echo ""
-        echo "Learn more: https://agentskills.io"
-        ;;
-    *)
-        print_error "Unknown command: $1"
-        echo "Use --help for usage information"
-        exit 1
-        ;;
-esac
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    case "${1:-install}" in
+        install)
+            main
+            ;;
+        --help|-h)
+            echo "DMtools Agent Skill Installer"
+            echo ""
+            echo "Usage: $0 [install] [--all] [--skill <name>] [--skills=<name,name>] [--all-skills] [--skip-unknown]"
+            echo ""
+            echo "This script installs the DMtools skill for AI assistants that"
+            echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
+            echo ""
+            echo "The installer will:"
+            echo "  1. Detect skill directories (.cursor, .claude, .codex, ~/.claude)"
+            echo "  2. Download the selected DMtools skill package(s)"
+            echo "  3. Install to ALL detected locations (when piped) or ask you to choose"
+            echo ""
+            echo "Behavior:"
+            echo "  - Piped (curl | bash): Installs to ALL detected locations automatically"
+            echo "  - Interactive: Shows menu to choose specific location(s)"
+            echo "  - Focused installs: pass --skill jira or --skills=jira,github"
+            echo "  - Invalid skill names cause a non-zero exit and list the invalid names"
+            echo "  - --skip-unknown downgrades invalid skill names to warnings"
+            echo ""
+            echo "      Run from your project root directory."
+            echo ""
+            echo "Learn more: https://agentskills.io"
+            ;;
+        *)
+            print_error "Unknown command: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+fi

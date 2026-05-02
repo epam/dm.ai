@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,11 @@ class InstallerMetadataRun:
 
 class InstallerMetadataService:
     DEFAULT_INSTALLER_URL = "https://raw.githubusercontent.com/epam/dm.ai/main/install"
+    _ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+    _EFFECTIVE_SKILLS_PATTERN = re.compile(
+        r"(?m)^Effective skills:\s*(?P<skills>.+?)\s+\(source:\s*(?P<source>[^)]+)\)$"
+    )
+    _POST_METADATA_STEP_MARKER = "UNEXPECTED post_metadata_step"
     _SKILL_COLLECTION_KEYS = frozenset(
         {
             "skills",
@@ -57,16 +63,21 @@ class InstallerMetadataService:
         self.runner = runner
         self.installer_url = installer_url
 
-    def run_selective_install(self, skills: Sequence[str]) -> InstallerMetadataRun:
+    def run_selective_install(
+        self,
+        skills: Sequence[str],
+        *,
+        use_default_home_install_dir: bool = False,
+    ) -> InstallerMetadataRun:
         normalized_skills = tuple(skill.strip().lower() for skill in skills if skill.strip())
         if not normalized_skills:
             raise ValueError("At least one skill must be provided.")
 
         temp_root = Path(tempfile.mkdtemp(prefix="dmtools-installer-metadata-"))
-        install_dir = temp_root / "install"
-        bin_dir = install_dir / "bin"
         home_dir = temp_root / "home"
         installer_path = temp_root / "install_script"
+        install_dir = home_dir / ".dmtools" if use_default_home_install_dir else temp_root / "install"
+        bin_dir = install_dir / "bin"
 
         script = "\n".join(
             [
@@ -77,14 +88,76 @@ class InstallerMetadataService:
                 'bash "$INSTALLER_PATH"',
             ]
         )
+        execution_env = {
+            "HOME": str(home_dir),
+            "SHELL": "/bin/bash",
+            "INSTALLER_URL": self.installer_url,
+            "INSTALLER_PATH": str(installer_path),
+            "DMTOOLS_SKILLS": ",".join(normalized_skills),
+        }
+        if not use_default_home_install_dir:
+            execution_env["DMTOOLS_INSTALL_DIR"] = str(install_dir)
+            execution_env["DMTOOLS_BIN_DIR"] = str(bin_dir)
+
         execution = self.runner.run(
             ["bash", "-c", script],
+            cwd=self.repository_root,
+            env=execution_env,
+        )
+
+        return InstallerMetadataRun(
+            installer_url=self.installer_url,
+            temp_root=temp_root,
+            install_dir=install_dir,
+            bin_dir=bin_dir,
+            requested_skills=normalized_skills,
+            execution=execution,
+        )
+
+    @property
+    def post_metadata_step_marker(self) -> str:
+        return self._POST_METADATA_STEP_MARKER
+
+    def run_local_selective_install_with_write_protected_install_dir(
+        self,
+        skills: Sequence[str],
+    ) -> InstallerMetadataRun:
+        normalized_skills = tuple(skill.strip().lower() for skill in skills if skill.strip())
+        if not normalized_skills:
+            raise ValueError("At least one skill must be provided.")
+
+        temp_root = Path(tempfile.mkdtemp(prefix="dmtools-installer-metadata-readonly-"))
+        install_dir = temp_root / "install"
+        bin_dir = install_dir / "bin"
+        home_dir = temp_root / "home"
+
+        install_dir.mkdir(parents=True, exist_ok=True)
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        install_dir.chmod(0o555)
+        bin_dir.chmod(0o555)
+
+        script = "\n".join(
+            [
+                "set -e",
+                f'source "{self.repository_root / "install.sh"}"',
+                "check_java() { :; }",
+                "get_latest_version() { printf 'v0.0.0-test'; }",
+                "create_install_dir() { :; }",
+                "write_installer_skill_config() { :; }",
+                "download_dmtools() { :; }",
+                f'update_shell_config() {{ printf "{self._POST_METADATA_STEP_MARKER}\\n"; }}',
+                f'verify_installation() {{ printf "{self._POST_METADATA_STEP_MARKER}\\n"; }}',
+                f'print_instructions() {{ printf "{self._POST_METADATA_STEP_MARKER}\\n"; }}',
+                "main",
+            ]
+        )
+        execution = self.runner.run(
+            ["bash", "-lc", script],
             cwd=self.repository_root,
             env={
                 "HOME": str(home_dir),
                 "SHELL": "/bin/bash",
-                "INSTALLER_URL": self.installer_url,
-                "INSTALLER_PATH": str(installer_path),
+                "DMTOOLS_INSTALLER_TEST_MODE": "true",
                 "DMTOOLS_INSTALL_DIR": str(install_dir),
                 "DMTOOLS_BIN_DIR": str(bin_dir),
                 "DMTOOLS_SKILLS": ",".join(normalized_skills),
@@ -92,7 +165,7 @@ class InstallerMetadataService:
         )
 
         return InstallerMetadataRun(
-            installer_url=self.installer_url,
+            installer_url=str(self.repository_root / "install.sh"),
             temp_root=temp_root,
             install_dir=install_dir,
             bin_dir=bin_dir,
@@ -106,6 +179,29 @@ class InstallerMetadataService:
     def payload_contains_skills(self, payload: Any, expected_skills: Sequence[str]) -> bool:
         observed_skills = self.declared_skills(payload)
         return set(skill.lower() for skill in expected_skills).issubset(observed_skills)
+
+    def normalized_stdout(self, execution: ProcessExecutionResult) -> str:
+        return self._strip_ansi(execution.stdout)
+
+    def output_reports_selected_skills(
+        self,
+        execution: ProcessExecutionResult,
+        expected_skills: Sequence[str],
+        expected_source: str,
+    ) -> bool:
+        match = self._EFFECTIVE_SKILLS_PATTERN.search(self.normalized_stdout(execution))
+        if not match:
+            return False
+
+        observed_skills = tuple(
+            skill.strip().lower()
+            for skill in match.group("skills").split(",")
+            if skill.strip()
+        )
+        observed_source = match.group("source").strip().lower()
+        return observed_skills == tuple(skill.lower() for skill in expected_skills) and (
+            observed_source == expected_source.lower()
+        )
 
     def declared_skills(self, payload: Any) -> set[str]:
         if not isinstance(payload, dict):
@@ -223,6 +319,10 @@ class InstallerMetadataService:
 
     def _normalize_key(self, value: str) -> str:
         return value.replace("-", "_").lower()
+
+    @classmethod
+    def _strip_ansi(cls, text: str) -> str:
+        return cls._ANSI_ESCAPE_PATTERN.sub("", text)
 
     def _walk_key_values(self, payload: Any) -> Iterable[tuple[str, Any]]:
         if isinstance(payload, dict):

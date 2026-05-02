@@ -17,3 +17,10 @@ python3 -m pytest testing/tests/DMC-925/test_dmc_925.py -q
 ## Environment
 
 The test runs against the checked-out `install.sh` script and enables `DMTOOLS_INSTALLER_TEST_MODE=true` so it can exercise the real argument parsing and logging flow without performing a full installation.
+
+## Expected output
+
+```text
+.
+1 passed
+```

@@ -1,7 +1,7 @@
 #!/bin/bash
 # DMTools CLI Wrapper
 # Usage: ./dmtools.sh [command] [args...]
-# Supports: STDIN, heredoc, file input, and inline JSON
+# Supports: STDIN, heredoc, file input, inline JSON, and direct job-name execution for `run`
 
 set -e
 
@@ -299,21 +299,12 @@ case "$COMMAND" in
         exit 0
         ;;
     "run")
-        # Handle new run command with JSON file + optional encoded parameter
+        # Handle run command with JSON file, JS file, or direct job name + optional encoded parameter
         if [ ${#ARGS[@]} -lt 1 ]; then
-            error "Run command requires at least one argument: json-file-path"
+            error "Run command requires at least one argument: json-file-path or job-name"
         fi
         
         JSON_FILE="${ARGS[0]}"
-
-        # Validate file exists and is readable
-        if [ ! -f "$JSON_FILE" ]; then
-            error "Configuration file not found: $JSON_FILE"
-        fi
-        
-        if [ ! -r "$JSON_FILE" ]; then
-            error "Configuration file is not readable: $JSON_FILE"
-        fi
         
         # Extra args after ARGS[0] (file) — includes optional encoded param and --key value pairs (e.g. --ciRunUrl)
         EXTRA_RUN_ARGS=("${ARGS[@]:1}")

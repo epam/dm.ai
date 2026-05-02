@@ -314,7 +314,7 @@ def test_dmc_915_format_findings_handles_missing_section(tmp_path: Path) -> None
     assert "Observed 'Install Only the Skills You Need' section:" in formatted
     assert "  (section missing)" in formatted
     assert "Observed installer behavior:" in formatted
-    assert "bash install.sh --skill jira -> exit 0;" in formatted
+    assert "bash dmtools-ai-docs/install.sh --skill jira -> exit 0;" in formatted
 
 
 def test_dmc_915_keeps_code_block_comments_inside_extracted_section(
