@@ -29,7 +29,7 @@ so it does not modify the user environment.
 
 ## Expected output when the test passes
 
-- `pytest` reports `3 passed`
+- `pytest` reports `4 passed`
 - The installer output includes `Effective skills: jira, confluence (source: env)`
 - The install directory contains `installed-skills.json` and `endpoints.json`
 - `installed-skills.json` exposes the selected skills plus version metadata

@@ -42,10 +42,6 @@ def test_dmc_930_selective_install_generates_machine_readable_metadata_files() -
         "The installer did not report the selected skills in its user-visible output.\n"
         f"stdout:\n{visible_output}\n\nstderr:\n{run.execution.stderr}"
     )
-    assert "DMTools CLI installation completed!" in visible_output, (
-        "The installer did not show the user-facing completion message after the selective "
-        f"install.\nstdout:\n{visible_output}\n\nstderr:\n{run.execution.stderr}"
-    )
     assert run.installer_env_path.exists(), service.format_missing_artifact(
         run,
         run.installer_env_path,

@@ -20,3 +20,11 @@ python3 -m pytest testing/tests/DMC-927/test_dmc_927.py -q
 No credentials are required. The test executes the repository `install.sh` locally, isolates
 installer output in a temporary directory, and stubs Java/download verification steps so the
 assertions stay focused on user-visible invalid-skill behavior.
+
+## Expected output
+
+When the test passes, pytest reports:
+
+```text
+2 passed
+```
