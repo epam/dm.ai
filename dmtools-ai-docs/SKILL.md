@@ -49,7 +49,7 @@ which dmtools || echo "DMtools not installed"
 **If NOT installed:**
 ```bash
 # Offer to install DMtools automatically
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
 ### Step 2: Check for dmtools.env configuration
@@ -159,7 +159,7 @@ If automated setup didn't work, follow these manual steps:
 
 #### 1. Install DMtools CLI
 ```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
 #### 2. Create dmtools.env
