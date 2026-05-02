@@ -1,6 +1,6 @@
 # DMC-933 automated test
 
-This test validates that a disposable summary change in the canonical Teammate reference breaks the documentation audit, while the secondary-document audit still reports the resulting `cli-integration.md` drift that a user would need to review.
+This test validates that a disposable summary change in the canonical Teammate references makes the audited `DMC-898` pytest rerun fail on the resulting `cli-integration.md` drift that a user would need to review.
 
 ## Install dependencies
 
