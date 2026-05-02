@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import re
 import zipfile
 from dataclasses import dataclass
@@ -200,18 +199,14 @@ class DocumentationPublicationGateService:
         self,
         repository_root: Path,
         ticket_key: str,
-        github_client: GitHubRestClient | None = None,
+        github_client: GitHubRestClient,
         target_pull_request_number: int | None = None,
         technical_writer_logins: list[str] | tuple[str, ...] | set[str] | None = None,
     ) -> None:
         self.repository_root = repository_root
         self.ticket_key = ticket_key
         self.comments_path = repository_root / "input" / ticket_key / "comments.md"
-        self.github_client = github_client or GitHubRestClient(
-            owner="epam",
-            repo="dm.ai",
-            token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
-        )
+        self.github_client = github_client
         self.target_pull_request_number = target_pull_request_number
         self.technical_writer_logins = {
             self._normalize_text(str(login))
@@ -555,9 +550,14 @@ class DocumentationPublicationGateService:
     ) -> bool:
         body = self._normalize_text(record.body)
         normalized_login = self._normalize_text(record.login)
+        has_explicit_signoff = (
+            (record.source == "review" and record.state.upper() == "APPROVED")
+            or any(marker in body for marker in self.SIGNOFF_MARKERS)
+        )
         return (
             record.login
             and record.login != pull_request_author
+            and has_explicit_signoff
             and (
                 normalized_login in self.technical_writer_logins
                 or (

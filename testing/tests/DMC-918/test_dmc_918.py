@@ -1,7 +1,9 @@
 from pathlib import Path
+import os
 
 from testing.components.services.documentation_publication_gate_service import (
     DocumentationPublicationGateService,
+    GitHubRestClient,
 )
 from testing.core.utils.ticket_config_loader import load_ticket_config
 
@@ -291,10 +293,108 @@ def test_dmc_918_service_reports_complete_publication_gate_evidence(tmp_path: Pa
     ]
 
 
+def test_dmc_918_configured_technical_writer_requires_explicit_signoff(tmp_path: Path) -> None:
+    ticket_dir = tmp_path / "input" / "DMC-918"
+    ticket_dir.mkdir(parents=True)
+    ticket_dir.joinpath("comments.md").write_text(
+        (
+            "Duplicate-check entry\n"
+            "JQL: project = DMC AND summary ~ \"publication gates\"\n"
+            "Repo search: repo:epam/dm.ai \"documentation smoke\"\n"
+        ),
+        encoding="utf-8",
+    )
+
+    fake_client = FakeGitHubClient(
+        pull_requests=[
+            {
+                "number": 18,
+                "title": "Documentation gates PR",
+                "body": "Duplicate-check: completed — see ticket comment",
+                "html_url": "https://example.com/pr/18",
+                "merged_at": "2026-05-02T00:08:51Z",
+                "head": {"sha": "sha-docs"},
+                "user": {"login": "ai-teammate"},
+            }
+        ],
+        files_by_pr={18: [{"filename": "README.md"}]},
+        reviews_by_pr={
+            18: [
+                {
+                    "user": {"login": "core-maintainer"},
+                    "state": "APPROVED",
+                    "author_association": "COLLABORATOR",
+                    "body": "Approved.",
+                }
+            ]
+        },
+        comments_by_pr={
+            18: [
+                {
+                    "user": {"login": "writer-reviewer"},
+                    "author_association": "CONTRIBUTOR",
+                    "body": "I noticed a wording nit in the intro paragraph.",
+                }
+            ]
+        },
+        checks_by_sha={"sha-docs": []},
+        workflow_runs_by_sha={
+            "sha-docs": [
+                {
+                    "id": 601,
+                    "name": "Documentation checks",
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+            ]
+        },
+        jobs_by_run_id={
+            601: [
+                {
+                    "id": 901,
+                    "name": "Doc validation",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": "https://example.com/jobs/901",
+                },
+                {
+                    "id": 902,
+                    "name": "Doc smoke",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": "https://example.com/jobs/902",
+                },
+            ]
+        },
+        logs_by_job_id={
+            901: "Link validation result: success. 0 broken links.",
+            902: "Documentation smoke check result: success.",
+        },
+    )
+
+    service = DocumentationPublicationGateService(
+        tmp_path,
+        "DMC-918",
+        github_client=fake_client,
+        technical_writer_logins={"writer-reviewer"},
+    )
+
+    audit = service.audit()
+
+    assert [failure.step for failure in audit.validation_failures] == [4]
+    assert audit.technical_writer_signoffs == ()
+
+
 def test_dmc_918_documentation_publication_gates_are_recorded() -> None:
+    github_client = GitHubRestClient(
+        owner="epam",
+        repo="dm.ai",
+        token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
+    )
     service = DocumentationPublicationGateService(
         REPOSITORY_ROOT,
         "DMC-918",
+        github_client=github_client,
         target_pull_request_number=int(str(CONFIG["target_pr_number"])),
         technical_writer_logins=CONFIG.get("technical_writer_logins", []),
     )
