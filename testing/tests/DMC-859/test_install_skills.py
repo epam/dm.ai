@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import tempfile
@@ -227,6 +228,57 @@ cat "$INSTALLER_ENV_PATH"
         self.assertIn("Selected skills already installed: jira", result.stdout)
         self.assertIn('DMTOOLS_SKILLS="jira"', result.stdout)
         self.assertIn('DMTOOLS_INTEGRATIONS="ai,cli,file,kb,mermaid,jira"', result.stdout)
+
+    def test_main_writes_machine_readable_metadata_files_for_selected_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            install_dir = Path(temp_dir)
+            installed_skills_path = install_dir / "installed-skills.json"
+            endpoints_path = install_dir / "endpoints.json"
+            result = run_installer_functions(
+                """
+check_java() { :; }
+download_dmtools() {
+    mkdir -p "$(dirname "$JAR_PATH")" "$(dirname "$SCRIPT_PATH")"
+    printf 'jar' > "$JAR_PATH"
+    printf '#!/bin/bash\nexit 0\n' > "$SCRIPT_PATH"
+    chmod +x "$SCRIPT_PATH"
+}
+update_shell_config() { :; }
+verify_installation() { :; }
+print_instructions() { :; }
+main --skills jira,confluence v1.2.3
+""",
+                {
+                    "DMTOOLS_INSTALL_DIR": str(install_dir),
+                    "DMTOOLS_BIN_DIR": str(install_dir / "bin"),
+                    "DMTOOLS_INSTALLER_ENV_PATH": str(install_dir / "bin" / "dmtools-installer.env"),
+                },
+            )
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertTrue(installed_skills_path.exists(), result.stdout)
+            self.assertTrue(endpoints_path.exists(), result.stdout)
+
+            installed_skills_payload = json.loads(installed_skills_path.read_text(encoding="utf-8"))
+            self.assertEqual("v1.2.3", installed_skills_payload["version"])
+            self.assertEqual(
+                [{"name": "jira"}, {"name": "confluence"}],
+                installed_skills_payload["installed_skills"],
+            )
+            self.assertEqual(
+                ["ai", "cli", "file", "kb", "mermaid", "jira", "confluence"],
+                installed_skills_payload["integrations"],
+            )
+
+            endpoints_payload = json.loads(endpoints_path.read_text(encoding="utf-8"))
+            self.assertEqual("v1.2.3", endpoints_payload["version"])
+            self.assertEqual(
+                [
+                    {"name": "jira", "path": "/dmtools/jira"},
+                    {"name": "confluence", "path": "/dmtools/confluence"},
+                ],
+                endpoints_payload["endpoints"],
+            )
 
     def test_runtime_backed_skills_add_expected_integrations(self) -> None:
         command_lines = []
