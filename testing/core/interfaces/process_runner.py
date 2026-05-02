@@ -11,7 +11,7 @@ class ProcessRunner(Protocol):
         self,
         args: Sequence[str],
         cwd: Path,
-        env: Mapping[str, str] | None = None,
+        env: Mapping[str, str | None] | None = None,
         trace_network: bool = False,
     ) -> ProcessExecutionResult:
         raise NotImplementedError
