@@ -1,6 +1,14 @@
 # DMTools
 Delivery Management Tools
 
+> Quick install
+>
+> ```bash
+> curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+> ```
+>
+> PowerShell: https://github.com/epam/dm.ai/releases/latest/download/install.ps1
+
 [![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest) [![codecov](https://codecov.io/gh/epam/dm.ai/branch/main/graph/badge.svg)](https://codecov.io/gh/epam/dm.ai) [![](https://jitpack.io/v/epam/dm.ai.svg)](https://jitpack.io/#epam/dm.ai)
 
 > 🚀 **Latest DMTools release: [v1.7.179](https://github.com/epam/dm.ai/releases/tag/v1.7.179)** — installer assets are published under `https://github.com/epam/dm.ai/releases/latest/download/`.
@@ -36,32 +44,26 @@ Delivery Management Tools
 
 ---
 
+## Table of Contents
+
+- [Installation](#installation)
+
+---
+
 ## Quick Start
 
 ### Installation
 
-**Latest Version:** ![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=)
+**Latest Version:** [![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=)](https://github.com/epam/dm.ai/releases/latest) — browse the [latest releases page](https://github.com/epam/dm.ai/releases/latest) for all installer assets.
 
 **macOS / Linux / Git Bash:**
 ```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
-**Windows (cmd.exe, PowerShell, Windows Terminal):**
-```cmd
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
-```
-
-**Specific Version (e.g., v1.7.179):**
-
-**macOS / Linux / Git Bash:**
-```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install | bash -s -- v1.7.179
-```
-
-**Windows:**
-```cmd
-set DMTOOLS_VERSION=v1.7.179 && curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+**Windows PowerShell:**
+```powershell
+irm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex
 ```
 
 **Verify installation:**
@@ -80,6 +82,18 @@ See the [installation guide](dmtools-ai-docs/references/installation/README.md) 
 4. If `which dmtools` or `Get-Command dmtools` resolves outside `~/.dmtools/bin`, remove stale aliases, wrapper scripts, and outdated PATH entries from your shell profile or CI bootstrap steps.
 5. Verify the migrated install with `dmtools --version` and `dmtools list`, and refresh CI cache keys that still reference legacy install URLs.
 6. If the migration fails, roll back by restoring the backup copy of `~/.dmtools` and re-enabling the previous wrapper or PATH entry.
+
+   Tagged reinstall example for rollback or migration validation:
+
+   **macOS / Linux / Git Bash:**
+   ```bash
+   curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
+   ```
+
+   **Windows:**
+   ```cmd
+   set DMTOOLS_VERSION=v1.7.179 && curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+   ```
 
 ### Deprecated compatibility shims
 

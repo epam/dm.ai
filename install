@@ -3,6 +3,12 @@
 # Usage:
 #   Latest version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash
 #   Specific version: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- <version>
+#   Select skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | DMTOOLS_SKILLS=jira,github bash
+#   Single skill: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skill jira
+#   CLI skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira,github
+#   All skills: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --all-skills
+#   Ignore invalid names: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira,unknown --skip-unknown
+#   Legacy strict alias: curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash -s -- --skills=jira --strict
 # Requirements: Java 17+ (will attempt automatic installation on macOS/Linux)
 
 set -e
@@ -16,10 +22,33 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO="epam/dm.ai"
-INSTALL_DIR="$HOME/.dmtools"
-BIN_DIR="$INSTALL_DIR/bin"
+INSTALL_DIR="${DMTOOLS_INSTALL_DIR:-$HOME/.dmtools}"
+BIN_DIR="${DMTOOLS_BIN_DIR:-$INSTALL_DIR/bin}"
 JAR_PATH="$INSTALL_DIR/dmtools.jar"
 SCRIPT_PATH="$BIN_DIR/dmtools"
+INSTALLER_ENV_PATH="${DMTOOLS_INSTALLER_ENV_PATH:-$BIN_DIR/dmtools-installer.env}"
+INSTALLED_SKILLS_JSON_PATH="${DMTOOLS_INSTALLED_SKILLS_JSON_PATH:-$INSTALL_DIR/installed-skills.json}"
+ENDPOINTS_JSON_PATH="${DMTOOLS_ENDPOINTS_JSON_PATH:-$INSTALL_DIR/endpoints.json}"
+AVAILABLE_SKILLS=(
+    dmtools jira confluence github gitlab figma teams
+    sharepoint ado testrail xray
+)
+ALWAYS_ON_INTEGRATIONS=(ai cli file kb mermaid)
+INSTALLER_SKILLS_WAS_SET=false
+INSTALLER_SKILLS_ARG=""
+INSTALLER_ALL_SKILLS_WAS_SET=false
+INSTALLER_VERSION_ARG=""
+INSTALLER_POSITIONAL_ARGS=()
+SKILLS_SOURCE="default"
+INSTALL_ALL_SKILLS=false
+EFFECTIVE_SKILLS=()
+INVALID_SKILLS=()
+EFFECTIVE_INTEGRATIONS=()
+EFFECTIVE_SKILLS_CSV=""
+INVALID_SKILLS_CSV=""
+EFFECTIVE_INTEGRATIONS_CSV=""
+STRICT_INSTALL_MODE=false
+SKIP_UNKNOWN_SKILLS=false
 
 # Helper functions
 error() {
@@ -37,6 +66,445 @@ warn() {
 
 progress() {
     echo -e "${BLUE}$1${NC}"
+}
+
+trim_value() {
+    local value="$1"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s' "$value"
+}
+
+strip_optional_quotes() {
+    local value
+    value=$(trim_value "$1")
+    if [ "${#value}" -ge 2 ]; then
+        if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+            value="${value:1:${#value}-2}"
+        elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+            value="${value:1:${#value}-2}"
+        fi
+    fi
+    printf '%s' "$value"
+}
+
+to_lower() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+join_by_comma() {
+    local IFS=","
+    printf '%s' "$*"
+}
+
+join_by_comma_space() {
+    local result=""
+    local item
+    for item in "$@"; do
+        if [ -n "$result" ]; then
+            result="$result, "
+        fi
+        result="$result$item"
+    done
+    printf '%s' "$result"
+}
+
+json_escape() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//$'\n'/\\n}"
+    value="${value//$'\r'/\\r}"
+    value="${value//$'\t'/\\t}"
+    printf '%s' "$value"
+}
+
+json_string_array() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="\"$escaped\""
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+json_skill_objects() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="{\"name\":\"$escaped\"}"
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+json_endpoint_objects() {
+    local values=("$@")
+    local json="["
+    local first=true
+    local value
+    local escaped
+
+    for value in "${values[@]}"; do
+        escaped=$(json_escape "$value")
+        if [ "$first" = false ]; then
+            json+=", "
+        fi
+        json+="{\"name\":\"$escaped\",\"path\":\"/dmtools/$escaped\"}"
+        first=false
+    done
+
+    json+="]"
+    printf '%s' "$json"
+}
+
+append_unique() {
+    local array_name="$1"
+    local candidate="$2"
+    eval "local current=(\"\${${array_name}[@]}\")"
+    local existing
+    for existing in "${current[@]}"; do
+        if [ "$existing" = "$candidate" ]; then
+            return 0
+        fi
+    done
+    eval "${array_name}+=(\"\$candidate\")"
+}
+
+append_requested_skills_arg() {
+    local value
+    value=$(strip_optional_quotes "$1")
+    value=$(trim_value "$value")
+    if [ -z "$value" ]; then
+        return 0
+    fi
+
+    if [ -n "$INSTALLER_SKILLS_ARG" ]; then
+        INSTALLER_SKILLS_ARG="${INSTALLER_SKILLS_ARG},${value}"
+    else
+        INSTALLER_SKILLS_ARG="$value"
+    fi
+    INSTALLER_SKILLS_WAS_SET=true
+}
+
+is_known_skill() {
+    case "$1" in
+        dmtools|jira|confluence|github|gitlab|figma|teams|sharepoint|ado|testrail|xray)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+append_skill_integrations() {
+    local skill="$1"
+    case "$skill" in
+        jira)
+            append_unique EFFECTIVE_INTEGRATIONS "jira"
+            ;;
+        confluence)
+            append_unique EFFECTIVE_INTEGRATIONS "confluence"
+            ;;
+        github)
+            append_unique EFFECTIVE_INTEGRATIONS "github"
+            ;;
+        gitlab)
+            append_unique EFFECTIVE_INTEGRATIONS "gitlab"
+            ;;
+        figma)
+            append_unique EFFECTIVE_INTEGRATIONS "figma"
+            ;;
+        teams)
+            append_unique EFFECTIVE_INTEGRATIONS "teams"
+            append_unique EFFECTIVE_INTEGRATIONS "teams_auth"
+            ;;
+        sharepoint)
+            append_unique EFFECTIVE_INTEGRATIONS "sharepoint"
+            append_unique EFFECTIVE_INTEGRATIONS "teams_auth"
+            ;;
+        ado)
+            append_unique EFFECTIVE_INTEGRATIONS "ado"
+            ;;
+        testrail)
+            append_unique EFFECTIVE_INTEGRATIONS "testrail"
+            ;;
+        xray)
+            append_unique EFFECTIVE_INTEGRATIONS "jira_xray"
+            ;;
+    esac
+}
+
+build_effective_integrations() {
+    EFFECTIVE_INTEGRATIONS=("${ALWAYS_ON_INTEGRATIONS[@]}")
+    local skill
+    for skill in "${EFFECTIVE_SKILLS[@]}"; do
+        append_skill_integrations "$skill"
+    done
+    EFFECTIVE_INTEGRATIONS_CSV=$(join_by_comma "${EFFECTIVE_INTEGRATIONS[@]}")
+}
+
+parse_installer_args() {
+    INSTALLER_SKILLS_WAS_SET=false
+    INSTALLER_SKILLS_ARG=""
+    INSTALLER_ALL_SKILLS_WAS_SET=false
+    INSTALLER_VERSION_ARG=""
+    INSTALLER_POSITIONAL_ARGS=()
+    STRICT_INSTALL_MODE=false
+    SKIP_UNKNOWN_SKILLS=false
+
+    local strict_mode_value
+    strict_mode_value=$(to_lower "$(strip_optional_quotes "${DMTOOLS_STRICT_INSTALL:-false}")")
+    strict_mode_value=$(trim_value "$strict_mode_value")
+    case "$strict_mode_value" in
+        ""|false|0|no|off)
+            STRICT_INSTALL_MODE=false
+            ;;
+        true|1|yes|on)
+            STRICT_INSTALL_MODE=true
+            ;;
+        *)
+            error "Invalid DMTOOLS_STRICT_INSTALL value: ${DMTOOLS_STRICT_INSTALL}. Use true or false."
+            ;;
+    esac
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --skill)
+                if [ $# -lt 2 ]; then
+                    error "Missing value for --skill. Use --skill jira"
+                fi
+                append_requested_skills_arg "$2"
+                shift 2
+                ;;
+            --skill=*)
+                append_requested_skills_arg "${1#--skill=}"
+                shift
+                ;;
+            --skills)
+                if [ $# -lt 2 ]; then
+                    error "Missing value for --skills. Use --skills=jira,github or --skills jira,github"
+                fi
+                append_requested_skills_arg "$2"
+                shift 2
+                ;;
+            --skills=*)
+                append_requested_skills_arg "${1#--skills=}"
+                shift
+                ;;
+            --all-skills)
+                INSTALLER_ALL_SKILLS_WAS_SET=true
+                shift
+                ;;
+            --skip-unknown)
+                SKIP_UNKNOWN_SKILLS=true
+                shift
+                ;;
+            --strict)
+                STRICT_INSTALL_MODE=true
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: install.sh [--skill <name>] [--skills=<name,name>] [--all-skills] [--skip-unknown] [--strict] [version]"
+                echo "  --skill <name>      Select a single skill. Repeat to add more skills."
+                echo "  --skills=<csv>      Allowed alias for comma-separated skill selection."
+                echo "  --all-skills        Install every supported skill."
+                echo "  --skip-unknown      Warn and continue when unknown skill names are supplied."
+                echo "  --strict            Legacy alias for strict invalid-skill handling."
+                echo "  version   Optional DMTools version (vX.Y.Z or X.Y.Z)."
+                exit 0
+                ;;
+            --*)
+                error "Unknown installer option: $1"
+                ;;
+            *)
+                INSTALLER_POSITIONAL_ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    if [ ${#INSTALLER_POSITIONAL_ARGS[@]} -gt 1 ]; then
+        error "Only one version argument is supported. Received: ${INSTALLER_POSITIONAL_ARGS[*]}"
+    fi
+
+    if [ ${#INSTALLER_POSITIONAL_ARGS[@]} -eq 1 ]; then
+        INSTALLER_VERSION_ARG="${INSTALLER_POSITIONAL_ARGS[0]}"
+    fi
+}
+
+resolve_skill_selection() {
+    local raw_skills=""
+    EFFECTIVE_SKILLS=()
+    INVALID_SKILLS=()
+    INSTALL_ALL_SKILLS=false
+
+    if [ "$INSTALLER_ALL_SKILLS_WAS_SET" = true ]; then
+        raw_skills="all"
+        SKILLS_SOURCE="cli"
+    elif [ "$INSTALLER_SKILLS_WAS_SET" = true ]; then
+        raw_skills="$INSTALLER_SKILLS_ARG"
+        SKILLS_SOURCE="cli"
+    elif [ "${DMTOOLS_SKILLS+x}" = x ]; then
+        raw_skills="${DMTOOLS_SKILLS:-}"
+        SKILLS_SOURCE="env"
+    else
+        raw_skills="all"
+        SKILLS_SOURCE="default"
+    fi
+
+    raw_skills=$(strip_optional_quotes "$raw_skills")
+    local normalized_raw
+    normalized_raw=$(to_lower "$raw_skills")
+    local compact_input
+    compact_input=$(trim_value "${normalized_raw//,/}")
+
+    if [ -z "$compact_input" ] || [ "$normalized_raw" = "all" ]; then
+        INSTALL_ALL_SKILLS=true
+    else
+        local saw_all=false
+        local token
+        IFS=',' read -r -a skill_tokens <<< "$raw_skills"
+        for token in "${skill_tokens[@]}"; do
+            token=$(to_lower "$(strip_optional_quotes "$token")")
+            token=$(trim_value "$token")
+            if [ -z "$token" ]; then
+                continue
+            fi
+            if [ "$token" = "all" ]; then
+                saw_all=true
+                continue
+            fi
+            if is_known_skill "$token"; then
+                append_unique EFFECTIVE_SKILLS "$token"
+            else
+                append_unique INVALID_SKILLS "$token"
+            fi
+        done
+
+        if [ "$saw_all" = true ]; then
+            INSTALL_ALL_SKILLS=true
+        fi
+    fi
+
+    if [ "$INSTALL_ALL_SKILLS" = true ]; then
+        EFFECTIVE_SKILLS=("${AVAILABLE_SKILLS[@]}")
+    fi
+
+    EFFECTIVE_SKILLS_CSV=$(join_by_comma "${EFFECTIVE_SKILLS[@]}")
+    INVALID_SKILLS_CSV=$(join_by_comma "${INVALID_SKILLS[@]}")
+
+    if [ ${#INVALID_SKILLS[@]} -gt 0 ] && [ "$SKILLS_SOURCE" != "cli" ] && [ "$SKIP_UNKNOWN_SKILLS" != true ]; then
+        warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
+    fi
+
+    if [ ${#EFFECTIVE_SKILLS[@]} -eq 0 ]; then
+        error "No valid skills selected. Unknown skills: ${INVALID_SKILLS_CSV:-none}. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+    fi
+
+    if [ ${#INVALID_SKILLS[@]} -gt 0 ]; then
+        if [ "$SKIP_UNKNOWN_SKILLS" = true ]; then
+            warn "Skipping unknown skills: $INVALID_SKILLS_CSV"
+        elif [ "$STRICT_INSTALL_MODE" = true ]; then
+            error "Unknown skills are not allowed in strict mode: $INVALID_SKILLS_CSV. Allowed skills: $(join_by_comma "${AVAILABLE_SKILLS[@]}")"
+        elif [ "$SKILLS_SOURCE" = "cli" ]; then
+            error "Unknown skills: $INVALID_SKILLS_CSV. Use --skip-unknown to continue."
+        fi
+    fi
+
+    build_effective_integrations
+
+    if [ "$INSTALL_ALL_SKILLS" = true ]; then
+        info "Installing all skills (source: $SKILLS_SOURCE)"
+    fi
+    local effective_skills_display="$EFFECTIVE_SKILLS_CSV"
+    if [ "$INSTALL_ALL_SKILLS" != true ]; then
+        effective_skills_display=$(join_by_comma_space "${EFFECTIVE_SKILLS[@]}")
+    fi
+    info "Effective skills: $effective_skills_display (source: $SKILLS_SOURCE)"
+    info "Effective integrations: $EFFECTIVE_INTEGRATIONS_CSV"
+}
+
+write_installer_skill_config() {
+    local new_content
+    new_content=$(cat <<EOF
+# Generated by the DMTools installer.
+DMTOOLS_SKILLS="$EFFECTIVE_SKILLS_CSV"
+DMTOOLS_INTEGRATIONS="$EFFECTIVE_INTEGRATIONS_CSV"
+EOF
+)
+
+    mkdir -p "$(dirname "$INSTALLER_ENV_PATH")"
+
+    local existing_content=""
+    if [ -f "$INSTALLER_ENV_PATH" ]; then
+        existing_content=$(cat "$INSTALLER_ENV_PATH")
+    fi
+
+    if [ "$existing_content" = "$new_content" ]; then
+        info "Selected skills already installed: $EFFECTIVE_SKILLS_CSV"
+        return 0
+    fi
+
+    printf '%s\n' "$new_content" > "$INSTALLER_ENV_PATH"
+    info "Configured installer-managed skills at $INSTALLER_ENV_PATH"
+}
+
+write_installer_metadata() {
+    local version="$1"
+    if [ -z "$version" ]; then
+        error "Installer version is required to write machine-readable metadata."
+    fi
+
+    mkdir -p "$INSTALL_DIR"
+
+    local escaped_version
+    escaped_version=$(json_escape "$version")
+    local skills_json
+    skills_json=$(json_skill_objects "${EFFECTIVE_SKILLS[@]}")
+    local integrations_json
+    integrations_json=$(json_string_array "${EFFECTIVE_INTEGRATIONS[@]}")
+    local endpoints_json
+    endpoints_json=$(json_endpoint_objects "${EFFECTIVE_SKILLS[@]}")
+
+    cat > "$INSTALLED_SKILLS_JSON_PATH" <<EOF
+{
+  "version": "$escaped_version",
+  "installed_skills": $skills_json,
+  "integrations": $integrations_json
+}
+EOF
+
+    cat > "$ENDPOINTS_JSON_PATH" <<EOF
+{
+  "version": "$escaped_version",
+  "endpoints": $endpoints_json
+}
+EOF
+
+    info "Generated machine-readable installer metadata at $INSTALLED_SKILLS_JSON_PATH and $ENDPOINTS_JSON_PATH"
 }
 
 # Detect platform
@@ -871,6 +1339,10 @@ print_instructions() {
     echo "     export JIRA_API_TOKEN=your-jira-api-token"
     echo "     export JIRA_BASE_PATH=https://your-domain.atlassian.net"
     echo ""
+    echo "Installer-managed skill configuration:"
+    echo "  - Skills: $EFFECTIVE_SKILLS_CSV"
+    echo "  - Runtime config: $INSTALLER_ENV_PATH"
+    echo ""
     echo "System Requirements:"
     if java_cmd=$(get_java_command 2>/dev/null); then
         local java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
@@ -885,10 +1357,12 @@ print_instructions() {
 # Main installation function
 main() {
     info "🚀 Installing DMTools CLI..."
-    
+    parse_installer_args "$@"
+    resolve_skill_selection
+
     # Check prerequisites
     check_java
-    
+
     # Get version to install (detects from URL/args/env or falls back to latest)
     local version
     local version_source="latest"
@@ -902,9 +1376,9 @@ main() {
         fi
         version_source="specified"
         info "Using specified version from DMTOOLS_VERSION env: $version"
-    elif [ $# -gt 0 ] && [ -n "$1" ]; then
+    elif [ -n "$INSTALLER_VERSION_ARG" ]; then
         # Version provided as command line argument
-        version="$1"
+        version="$INSTALLER_VERSION_ARG"
         # Ensure version has 'v' prefix
         if [[ ! "$version" =~ ^v ]]; then
             version="v${version}"
@@ -913,7 +1387,7 @@ main() {
         info "Using specified version from argument: $version"
     else
         # Try to detect from script source
-        if version=$(detect_version "$@"); then
+        if version=$(detect_version "$INSTALLER_VERSION_ARG"); then
             if [ -n "$version" ]; then
                 version_source="detected from URL"
                 info "Detected version from URL: $version"
@@ -934,9 +1408,15 @@ main() {
     
     # Create directories
     create_install_dir
+
+    # Persist installer-managed skill selection
+    write_installer_skill_config
     
     # Download DMTools
     download_dmtools "$version"
+
+    # Persist machine-readable metadata for state tracking and endpoint discovery
+    write_installer_metadata "$version"
     
     # Update shell configuration
     update_shell_config
@@ -949,4 +1429,6 @@ main() {
 }
 
 # Run main function
-main "$@"
+if [ "${DMTOOLS_INSTALLER_TEST_MODE:-false}" != "true" ]; then
+    main "$@"
+fi

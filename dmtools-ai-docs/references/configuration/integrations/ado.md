@@ -4,6 +4,8 @@
 
 DMtools provides 23+ MCP tools for Azure DevOps integration, enabling work item management, sprint planning, and cross-platform synchronization with Jira.
 
+If you only need the Azure DevOps-focused AI assistant package, install `/dmtools-ado` with the instructions in [../../installation/README.md#install-only-the-skills-you-need](../../installation/README.md#install-only-the-skills-you-need).
+
 ## 🔑 Personal Access Token (PAT) Setup
 
 ### Step 1: Create Personal Access Token

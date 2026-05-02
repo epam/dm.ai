@@ -17,6 +17,7 @@ HTML_LINK_PATTERN = re.compile(r"""<a\s+[^>]*href=["']([^"']+)["']""", re.IGNORE
 AUTO_LINK_PATTERN = re.compile(r"<(https?://[^>]+)>")
 BARE_URL_PATTERN = re.compile(r"(?<![<(])https?://[^\s)>]+")
 INSTALLATION_ANCHOR = "installation"
+TABLE_OF_CONTENTS_HEADING_HINTS = ("table of contents", "contents", "quick links")
 
 
 @dataclass(frozen=True)
@@ -184,16 +185,23 @@ class ReadmeInstallationEntryPointsService:
         )
 
     def _table_of_contents_region(self) -> str:
-        toc_heading = self._heading_by_title("Table of Contents")
         installation_heading = self._heading_by_title("Installation")
-        if toc_heading is None or installation_heading is None:
+        if installation_heading is None:
             return ""
-        if toc_heading.line_index >= installation_heading.line_index:
-            return ""
-        return self._body_between(
-            toc_heading.line_index + 1,
-            self._next_heading_line(toc_heading.line_index, max_level=toc_heading.level),
-        )
+
+        for heading in self._headings:
+            if heading.line_index >= installation_heading.line_index:
+                break
+            if not self._is_table_of_contents_heading(heading.title):
+                continue
+
+            region = self._body_between(
+                heading.line_index + 1,
+                self._next_heading_line(heading.line_index, max_level=heading.level),
+            )
+            if self._has_local_anchor_links(region):
+                return region
+        return ""
 
     def _parse_headings(self) -> list[Heading]:
         headings: list[Heading] = []
@@ -319,6 +327,20 @@ class ReadmeInstallationEntryPointsService:
     @staticmethod
     def _normalize_heading_title(title: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
+
+    @classmethod
+    def _is_table_of_contents_heading(cls, title: str) -> bool:
+        normalized_title = cls._normalize_heading_title(title)
+        return any(hint in normalized_title for hint in TABLE_OF_CONTENTS_HEADING_HINTS)
+
+    def _has_local_anchor_links(self, text: str) -> bool:
+        return any(
+            self._is_local_anchor_link(target) for target in self._link_targets(text)
+        )
+
+    @staticmethod
+    def _is_local_anchor_link(target: str) -> bool:
+        return target.strip().startswith("#")
 
     @staticmethod
     def _preview(value: str, limit: int = 240) -> str:

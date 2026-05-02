@@ -20,23 +20,25 @@ Comprehensive knowledge base for DMtools - an AI-powered development toolkit tha
 
 **When a user mentions DMtools or asks to use it, IMMEDIATELY perform these checks:**
 
-### 🚀 Quick Automated Setup (Recommended)
+### 🚀 Quick Installation Bootstrap (Recommended)
 
-Run the automated setup helper that checks and configures everything:
+Install or refresh DMtools from the latest release first, then continue with the configuration checks below:
 
 ```bash
-# Download and run setup helper
-curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/dmtools-ai-docs/setup-dmtools.sh | bash
+# Install or update DMtools from the latest release
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
-**This script will:**
-1. ✓ Check if DMtools is installed (and install if missing)
-2. ✓ Create dmtools.env template if missing
-3. ✓ Add dmtools files to .gitignore
+**Then make sure to:**
+1. ✓ Check whether `dmtools` is available
+2. ✓ Create `dmtools.env` if missing
+3. ✓ Add DMtools files to `.gitignore`
 4. ✓ Verify Java installation
-5. ✓ Test DMtools functionality
+5. ✓ Test DMtools functionality with `dmtools list`
 
 **OR follow manual steps below:**
+
+**Focused skill packages:** install only the integrations you need with `DMTOOLS_SKILLS=jira,github` and the skill installer described in [references/installation/README.md#install-only-the-skills-you-need](references/installation/README.md#install-only-the-skills-you-need).
 
 ### Step 1: Check if DMtools is installed
 ```bash
@@ -47,7 +49,7 @@ which dmtools || echo "DMtools not installed"
 **If NOT installed:**
 ```bash
 # Offer to install DMtools automatically
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
 ### Step 2: Check for dmtools.env configuration
@@ -157,7 +159,7 @@ If automated setup didn't work, follow these manual steps:
 
 #### 1. Install DMtools CLI
 ```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
 #### 2. Create dmtools.env
@@ -460,8 +462,8 @@ I'll help you configure it. First, which integrations do you need?
 ### Example: Automated Setup Flow
 
 ```bash
-# Step 1: Run automated setup
-curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/dmtools-ai-docs/setup-dmtools.sh | bash
+# Step 1: Install or update DMtools
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 
 # Step 2: If dmtools.env needs credentials, guide user:
 # "I've created dmtools.env. You need to add your credentials:

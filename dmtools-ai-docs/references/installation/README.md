@@ -1,5 +1,7 @@
 # DMtools Installation Guide
 
+[Back to README installation](../../../README.md#installation)
+
 ## 🚀 Quick Installation
 
 The fastest way to install DMtools:
@@ -7,6 +9,8 @@ The fastest way to install DMtools:
 ```bash
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
+
+If you only need focused AI assistant skills, see [Install Only the Skills You Need](#install-only-the-skills-you-need).
 
 This script will:
 1. ✅ Check for Java 17+ (install if missing)
@@ -24,10 +28,56 @@ This script will:
 ```bash
 # Latest stable version
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
-
-# Specific version
-curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
 ```
+
+The `latest` release alias is mutable. For reusable automation snippets, pinned release-tags are the authoritative reference, so prefer `${DMTOOLS_RELEASE_TAG}` and `${DMTOOLS_VERSION}` when documenting a repeatable install flow.
+
+If you need a tagged reinstall for rollback or migration validation, use the example in [Upgrading from legacy installs](#upgrading-from-legacy-installs).
+
+## Install Only the Skills You Need
+
+Use the focused skill packages when you want integration-specific slash commands in your AI assistant instead of the full `/dmtools` bundle.
+
+| Skill | Slash command | Latest ZIP | Latest TAR |
+|------|------|------|------|
+| Full DMtools | `/dmtools` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-skill.tar.gz` |
+| Jira | `/dmtools-jira` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-jira-skill.tar.gz` |
+| GitHub | `/dmtools-github` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-github-skill.tar.gz` |
+| Azure DevOps | `/dmtools-ado` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-ado-skill.tar.gz` |
+| TestRail | `/dmtools-testrail` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.zip` | `https://github.com/epam/dm.ai/releases/latest/download/dmtools-testrail-skill.tar.gz` |
+
+### Skill Installer Examples
+
+```bash
+# Primary form: install only Jira
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skill jira
+
+# Allowed alias: install Jira + GitHub together
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,github
+
+# Install every supported skill package
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --all-skills
+
+# Invalid skill names cause a non-zero exit and list the invalid names
+bash install.sh --skills=jira,unknown
+
+# Use --skip-unknown to downgrade invalid skill names to warnings
+bash install.sh --skills=jira,unknown --skip-unknown
+```
+
+```powershell
+$env:DMTOOLS_SKILLS = "jira,github"
+irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | iex
+```
+
+Unknown skill names cause a non-zero exit and list the invalid names.
+When `--skip-unknown` is provided, invalid skill names are downgraded to warnings.
+
+### Manual Focused Package Installation
+
+1. Download the ZIP or TAR for the skill you need.
+2. Extract it into `.cursor/skills/`, `.claude/skills/`, or `.codex/skills/`.
+3. The extracted folder name becomes the slash command, for example `dmtools-jira` → `/dmtools-jira`.
 
 ### Upgrading from legacy installs
 
@@ -37,6 +87,16 @@ curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh |
 4. Remove stale aliases, wrapper scripts, or PATH entries that bypass `~/.dmtools/bin/dmtools`, and confirm `which dmtools` / `Get-Command dmtools` resolve to the new install.
 5. Verify the migrated installation with `dmtools --version` and `dmtools list`, and update CI cache keys that still reference legacy install URLs.
 6. If anything fails, roll back by restoring the backup copy of `~/.dmtools` and reactivating the previous wrapper or PATH configuration.
+
+#### Tagged reinstall example
+
+Use a tagged installer only when you need to validate or roll back to a previously deployed release during migration work:
+
+```bash
+export DMTOOLS_VERSION=1.7.179
+export DMTOOLS_RELEASE_TAG=v${DMTOOLS_VERSION}
+curl -fsSL https://github.com/epam/dm.ai/releases/download/${DMTOOLS_RELEASE_TAG}/install.sh | bash -s -- ${DMTOOLS_RELEASE_TAG}
+```
 
 ### Method 2: Local Development Installation
 
@@ -344,10 +404,7 @@ docker run -it dmtools --version
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
-### Update to Specific Version
-```bash
-curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
-```
+For tagged reinstall or rollback guidance, use the example in [Upgrading from legacy installs](#upgrading-from-legacy-installs).
 
 ### Check Current Version
 ```bash

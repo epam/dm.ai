@@ -1,0 +1,13 @@
+test_id: DMC-950
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+installer_url: https://raw.githubusercontent.com/epam/dm.ai/main/install
+requested_skills:
+  - jira
+  - non_existent_skill_xyz
+expected_valid_skills:
+  - jira
+expected_invalid_skills:
+  - non_existent_skill_xyz

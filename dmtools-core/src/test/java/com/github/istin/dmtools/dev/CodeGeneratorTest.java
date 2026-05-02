@@ -8,6 +8,7 @@ import org.apache.logging.log4j.Logger;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -20,16 +21,18 @@ public class CodeGeneratorTest {
     @Test
     public void testRunJobReturnsCompatibilityResponseAndLogsDeprecationWarning() {
         Logger logger = mock(Logger.class);
-        CodeGenerator codeGenerator = new CodeGenerator(logger);
+        AtomicReference<String> visibleWarning = new AtomicReference<>();
+        CodeGeneratorCompatibilityJob codeGenerator = new CodeGeneratorCompatibilityJob(logger, visibleWarning::set);
 
         List<ResultItem> resultItems = codeGenerator.runJob(null);
 
         assertEquals(1, resultItems.size());
         assertEquals("CodeGenerator", resultItems.get(0).getKey());
-        assertEquals(CodeGenerator.getCompatibilityResponse(), resultItems.get(0).getResult());
+        assertEquals(CodeGeneratorCompatibilityJob.getCompatibilityResponse(), resultItems.get(0).getResult());
         assertNull(codeGenerator.getAi());
-        assertTrue(CodeGenerator.getDeprecationMessage().contains("deprecated"));
-        assertTrue(CodeGenerator.getDeprecationMessage().contains(CodeGenerator.REMOVAL_VERSION));
-        verify(logger).warn(CodeGenerator.getDeprecationMessage());
+        assertTrue(CodeGeneratorCompatibilityJob.getDeprecationMessage().contains("deprecated"));
+        assertTrue(CodeGeneratorCompatibilityJob.getDeprecationMessage().contains(CodeGeneratorCompatibilityJob.REMOVAL_VERSION));
+        assertEquals(CodeGeneratorCompatibilityJob.getDeprecationMessage(), visibleWarning.get());
+        verify(logger).warn(CodeGeneratorCompatibilityJob.getDeprecationMessage());
     }
 }

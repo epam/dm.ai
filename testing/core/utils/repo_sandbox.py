@@ -22,15 +22,29 @@ class CommandResult:
 
 
 class RepoSandbox:
-    def __init__(self, repository_root: Path) -> None:
+    def __init__(
+        self,
+        repository_root: Path,
+        *,
+        initialize_git_repo: bool = False,
+        base_dir: Path | None = None,
+    ) -> None:
         self.repository_root = repository_root
-        self._temp_dir = tempfile.TemporaryDirectory(prefix="dmc-897-")
+        self._initialize_git_repo = initialize_git_repo
+        if base_dir is not None:
+            base_dir.mkdir(parents=True, exist_ok=True)
+        self._temp_dir = tempfile.TemporaryDirectory(
+            prefix="dmc-897-",
+            dir=str(base_dir) if base_dir is not None else None,
+        )
         self.root = Path(self._temp_dir.name)
         self.workspace = self.root / "workspace"
         self.home = self.root / "home"
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.home.mkdir(parents=True, exist_ok=True)
         self._copy_repository()
+        if self._initialize_git_repo:
+            self._bootstrap_git_repository()
 
     def cleanup(self) -> None:
         self._temp_dir.cleanup()
@@ -73,6 +87,7 @@ class RepoSandbox:
             ".gradle",
             ".idea",
             ".pytest_cache",
+            ".repo-sandboxes",
             ".venv",
             "__pycache__",
             "build",
@@ -91,3 +106,57 @@ class RepoSandbox:
             ignore=ignore,
             symlinks=False,
         )
+
+    def _bootstrap_git_repository(self) -> None:
+        if (self.workspace / ".git").exists():
+            return
+
+        branch_name = self._read_git_value(
+            ["git", "branch", "--show-current"],
+            cwd=self.repository_root,
+        ) or "main"
+        remote_url = self._read_git_value(
+            ["git", "remote", "get-url", "origin"],
+            cwd=self.repository_root,
+        )
+
+        commands = [
+            ["git", "init", f"--initial-branch={branch_name}"],
+            ["git", "config", "user.name", "RepoSandbox"],
+            ["git", "config", "user.email", "repo-sandbox@example.invalid"],
+        ]
+        if remote_url:
+            commands.append(["git", "remote", "add", "origin", remote_url])
+        commands.extend(
+            [
+                ["git", "add", "."],
+                ["git", "commit", "--no-gpg-sign", "-m", "Sandbox snapshot"],
+            ]
+        )
+
+        for command in commands:
+            completed = subprocess.run(
+                command,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    "Failed to bootstrap git metadata in RepoSandbox with command "
+                    f"{' '.join(command)}:\n{completed.stdout}{completed.stderr}"
+                )
+
+    @staticmethod
+    def _read_git_value(command: list[str], cwd: Path) -> str:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            return ""
+        return completed.stdout.strip()

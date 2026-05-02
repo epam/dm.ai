@@ -1,0 +1,16 @@
+test_id: DMC-958
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+installer_args:
+  - --skills=jira,github
+expected_effective_skills:
+  - jira
+  - github
+expected_skills_source: cli
+expected_banner_fragment: Installing DMTools CLI...
+expected_continuation_fragment: Configured installer-managed skills at
+forbidden_output_fragments:
+  - Unknown installer option
+  - invalid option
