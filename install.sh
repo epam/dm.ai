@@ -25,7 +25,7 @@ SCRIPT_PATH="$BIN_DIR/dmtools"
 INSTALLER_ENV_PATH="${DMTOOLS_INSTALLER_ENV_PATH:-$BIN_DIR/dmtools-installer.env}"
 AVAILABLE_SKILLS=(
     dmtools jira confluence github gitlab figma teams
-    sharepoint ado testrail xray report expert teammate
+    sharepoint ado testrail xray
 )
 ALWAYS_ON_INTEGRATIONS=(ai cli file kb mermaid)
 INSTALLER_SKILLS_WAS_SET=false
@@ -103,7 +103,7 @@ append_unique() {
 
 is_known_skill() {
     case "$1" in
-        dmtools|jira|confluence|github|gitlab|figma|teams|sharepoint|ado|testrail|xray|report|expert|teammate)
+        dmtools|jira|confluence|github|gitlab|figma|teams|sharepoint|ado|testrail|xray)
             return 0
             ;;
         *)

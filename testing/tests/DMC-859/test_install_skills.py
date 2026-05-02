@@ -10,8 +10,9 @@ INSTALL_SCRIPT = REPOSITORY_ROOT / "install.sh"
 DOC_PATH = REPOSITORY_ROOT / "docs" / "install-skills.md"
 ALL_SKILLS = (
     "dmtools,jira,confluence,github,gitlab,figma,teams,"
-    "sharepoint,ado,testrail,xray,report,expert,teammate"
+    "sharepoint,ado,testrail,xray"
 )
+BASE_INTEGRATIONS = {"ai", "cli", "file", "kb", "mermaid"}
 RUNTIME_SKILL_INTEGRATIONS = {
     "jira": {"jira"},
     "confluence": {"confluence"},
@@ -99,19 +100,21 @@ printf 'invalid=%s\\n' "$INVALID_SKILLS_CSV"
         self.assertIn("skills=jira,github", result.stdout)
         self.assertIn("invalid=unknown", result.stdout)
 
-    def test_bitbucket_is_rejected_until_runtime_support_exists(self) -> None:
-        result = run_installer_functions(
-            """
-printf 'available=%s\\n' "$(join_by_comma "${AVAILABLE_SKILLS[@]}")"
-parse_installer_args --skills bitbucket
+    def test_unsupported_skills_are_rejected_until_runtime_support_exists(self) -> None:
+        for skill in ("bitbucket", "report", "expert", "teammate"):
+            with self.subTest(skill=skill):
+                result = run_installer_functions(
+                    f"""
+printf 'available=%s\\n' "$(join_by_comma "${{AVAILABLE_SKILLS[@]}}")"
+parse_installer_args --skills {skill}
 resolve_skill_selection
 """
-        )
+                )
 
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn(f"available={ALL_SKILLS}", result.stdout)
-        self.assertIn("No valid skills selected", result.stderr)
-        self.assertIn("Unknown skills: bitbucket", result.stderr)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(f"available={ALL_SKILLS}", result.stdout)
+                self.assertIn("No valid skills selected", result.stderr)
+                self.assertIn(f"Unknown skills: {skill}", result.stderr)
 
     def test_all_invalid_skills_fail_with_non_zero_exit(self) -> None:
         result = run_installer_functions(
@@ -168,6 +171,16 @@ cat "$INSTALLER_ENV_PATH"
             actual_integrations = set(matching_lines[0].split("=", 1)[1].split(","))
             for integration in expected_integrations:
                 self.assertIn(integration, actual_integrations, matching_lines[0])
+            self.assertTrue(BASE_INTEGRATIONS.issubset(actual_integrations), matching_lines[0])
+
+    def test_advertised_skills_match_runtime_backed_selection(self) -> None:
+        result = run_installer_functions(
+            'printf "available=%s\\n" "$(join_by_comma "${AVAILABLE_SKILLS[@]}")"'
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        advertised_skills = set(result.stdout.strip().split("=", 1)[1].split(","))
+        self.assertEqual({"dmtools", *RUNTIME_SKILL_INTEGRATIONS.keys()}, advertised_skills)
 
 
 class TestInstallerSkillDocumentation(unittest.TestCase):
