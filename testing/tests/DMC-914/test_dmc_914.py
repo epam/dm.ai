@@ -100,3 +100,45 @@ def test_dmc_914_service_rejects_skill_mentions_outside_canonical_table(
     assert [failure.step for failure in failures] == [2]
     assert "canonical table" in failures[0].summary
     assert PerSkillCatalogService.TABLE_HEADER in failures[0].actual
+
+
+def test_dmc_914_service_rejects_single_row_that_mentions_multiple_skills(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    catalog_path = repository_root / "dmtools-ai-docs/per-skill-packages/index.md"
+    catalog_path.parent.mkdir(parents=True)
+
+    first_skill = PerSkillCatalogService.EXPECTED_SKILLS[0]
+    combined_artifacts = ", ".join(
+        f"`{skill.artifact_alias}`" for skill in PerSkillCatalogService.EXPECTED_SKILLS
+    )
+    combined_mapping = "; ".join(
+        (
+            f"`{skill.skill_name}` -> `{skill.slash_command}` -> "
+            f"`{skill.java_package}`"
+        )
+        for skill in PerSkillCatalogService.EXPECTED_SKILLS
+    )
+    catalog_path.write_text(
+        "\n".join(
+            [
+                "| Skill | Slash command | Java package | Artifact alias |",
+                "| --- | --- | --- | --- |",
+                (
+                    f"| `{first_skill.skill_name}` | `{first_skill.slash_command}` | "
+                    f"{combined_mapping} | {combined_artifacts} |"
+                ),
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    service = PerSkillCatalogService(repository_root)
+
+    failures = service.validate()
+
+    assert [failure.step for failure in failures] == [2, 2]
+    assert "exactly one canonical row per approved skill" in failures[0].summary
+    assert "Found 1 data row" in failures[0].actual

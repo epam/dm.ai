@@ -17,6 +17,7 @@ class SkillCatalogExpectation:
 class CatalogRow:
     line_number: int
     text: str
+    cells: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -134,11 +135,20 @@ class PerSkillCatalogService:
 
         row_preview = self._row_preview(rows)
         expected_skill_names = {skill.skill_name for skill in self.EXPECTED_SKILLS}
-        documented_skill_names = {
-            match.group(0)
-            for row in rows
-            for match in self.SKILL_NAME_PATTERN.finditer(row.text)
-        }
+        documented_skill_names = {row.cells[0].strip("`") for row in rows}
+
+        if len(rows) != len(self.EXPECTED_SKILLS):
+            failures.append(
+                ValidationFailure(
+                    step=2,
+                    summary="The catalogue does not provide exactly one canonical row per approved skill.",
+                    expected=(
+                        f"Exactly {len(self.EXPECTED_SKILLS)} data rows in the canonical "
+                        f"table headed by {self.TABLE_HEADER}."
+                    ),
+                    actual=f"Found {len(rows)} data row(s): {row_preview}",
+                )
+            )
 
         missing_skill_names = sorted(expected_skill_names - documented_skill_names)
         unexpected_skill_names = sorted(documented_skill_names - expected_skill_names)
@@ -159,6 +169,9 @@ class PerSkillCatalogService:
                 )
             )
 
+        if failures:
+            return failures
+
         mapping_issues: list[str] = []
         alias_issues: list[str] = []
         for skill in self.EXPECTED_SKILLS:
@@ -170,8 +183,11 @@ class PerSkillCatalogService:
 
             missing_mapping_parts = [
                 value
-                for value in (skill.slash_command, skill.java_package)
-                if value not in row.text
+                for value, cell in (
+                    (skill.slash_command, row.cells[1]),
+                    (skill.java_package, row.cells[2]),
+                )
+                if value not in cell
             ]
             if missing_mapping_parts:
                 mapping_issues.append(
@@ -180,7 +196,7 @@ class PerSkillCatalogService:
                     + f" | row: {row.text}"
                 )
 
-            if skill.artifact_alias not in row.text:
+            if skill.artifact_alias not in row.cells[3]:
                 alias_issues.append(
                     f"line {row.line_number} for {skill.skill_name} is missing "
                     f"{skill.artifact_alias} | row: {row.text}"
@@ -231,7 +247,13 @@ class PerSkillCatalogService:
                 normalized = row.strip()
                 if not normalized.startswith("|"):
                     break
-                rows.append(CatalogRow(line_number=row_index, text=normalized))
+                cells = tuple(cell.strip() for cell in normalized.strip("|").split("|"))
+                if len(cells) != 4:
+                    raise ValueError(
+                        f"Unexpected catalogue row in {self.catalog_path} at line "
+                        f"{row_index}: {normalized}"
+                    )
+                rows.append(CatalogRow(line_number=row_index, text=normalized, cells=cells))
 
             if not rows:
                 raise ValueError(
@@ -249,7 +271,11 @@ class PerSkillCatalogService:
         skill_name: str,
         rows: list[CatalogRow],
     ) -> CatalogRow | None:
-        return next((row for row in rows if skill_name in row.text), None)
+        normalized_skill_name = skill_name.strip("`")
+        return next(
+            (row for row in rows if row.cells[0].strip("`") == normalized_skill_name),
+            None,
+        )
 
     @staticmethod
     def format_failures(failures: list[ValidationFailure]) -> str:
