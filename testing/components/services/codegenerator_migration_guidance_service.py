@@ -15,7 +15,11 @@ class MigrationGuidanceAudit:
 
 
 class CodeGeneratorMigrationGuidanceService:
-    README_SECTION_HEADING = "Deprecated compatibility shims"
+    README_SECTION_HEADINGS = (
+        "Deprecated compatibility shims",
+        "Breaking changes",
+        "Removed/Deprecated features",
+    )
 
     def __init__(self, repository_root: Path) -> None:
         self.repository_root = repository_root
@@ -61,7 +65,7 @@ class CodeGeneratorMigrationGuidanceService:
         return "\n".join(lines)
 
     def _audit_root_readme_section(self) -> MigrationGuidanceAudit:
-        section = self._extract_named_section(self.readme_path, self.README_SECTION_HEADING)
+        location, section = self._extract_root_readme_section()
         normalized_section = self._normalize(section)
         missing_requirements = tuple(
             requirement
@@ -76,9 +80,9 @@ class CodeGeneratorMigrationGuidanceService:
             if token not in normalized_section
         )
         return MigrationGuidanceAudit(
-            label="root README deprecated compatibility shims section",
+            label="root README migration guidance section",
             path=self.readme_path,
-            location=self.README_SECTION_HEADING,
+            location=location,
             content=section,
             missing_requirements=missing_requirements,
         )
@@ -111,13 +115,34 @@ class CodeGeneratorMigrationGuidanceService:
             missing_requirements=missing_requirements,
         )
 
+    def _extract_root_readme_section(self) -> tuple[str, str]:
+        allowed_headings = {
+            self._normalize(heading) for heading in self.README_SECTION_HEADINGS
+        }
+        for heading, section in self._extract_markdown_sections(self.readme_path):
+            normalized_heading = self._normalize(heading)
+            normalized_section = self._normalize(section)
+            if "`codegenerator`" not in normalized_section:
+                continue
+            if normalized_heading in allowed_headings or any(
+                token in normalized_heading for token in ("deprecated", "breaking", "removed")
+            ):
+                return heading, section
+
+        expected_headings = ", ".join(f"'{heading}'" for heading in self.README_SECTION_HEADINGS)
+        raise AssertionError(
+            "Could not find a README migration section for CodeGenerator under an equivalent "
+            f"deprecated-feature heading ({expected_headings}) in {self.readme_path.as_posix()}"
+        )
+
     @staticmethod
-    def _extract_named_section(path: Path, heading: str) -> str:
+    def _extract_markdown_sections(path: Path) -> list[tuple[str, str]]:
         lines = path.read_text(encoding="utf-8").splitlines()
-        heading_pattern = re.compile(rf"^(?P<hashes>#+)\s+{re.escape(heading)}\s*$")
+        sections: list[tuple[str, str]] = []
 
         for index, line in enumerate(lines):
-            match = heading_pattern.match(line.strip())
+            stripped_line = line.strip()
+            match = re.match(r"^(?P<hashes>#+)\s+(?P<title>.+?)\s*$", stripped_line)
             if not match:
                 continue
 
@@ -130,9 +155,9 @@ class CodeGeneratorMigrationGuidanceService:
                     if next_heading_match and len(next_heading_match.group("hashes")) <= level:
                         break
                 collected_lines.append(candidate_line)
-            return "\n".join(collected_lines).strip()
+            sections.append((match.group("title"), "\n".join(collected_lines).strip()))
 
-        raise AssertionError(f"Could not find heading '{heading}' in {path.as_posix()}")
+        return sections
 
     @staticmethod
     def _extract_first_blockquote(path: Path) -> str:
