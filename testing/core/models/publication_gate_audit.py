@@ -51,12 +51,23 @@ class CheckRunRecord:
     status: str
     conclusion: str
     html_url: str
+    workflow_name: str = ""
+    log_excerpt: str = ""
+    log_text: str = ""
 
     def describe(self) -> str:
+        display_name = (
+            f"{self.workflow_name} / {self.name}"
+            if self.workflow_name and self.workflow_name != self.name
+            else self.name
+        )
         suffix = f"{self.status}/{self.conclusion}".strip("/")
+        details = f"{display_name} [{suffix}]"
         if self.html_url:
-            return f"{self.name} [{suffix}] {self.html_url}"
-        return f"{self.name} [{suffix}]"
+            details = f"{details} {self.html_url}"
+        if self.log_excerpt:
+            return f"{details} | log: {self.log_excerpt}"
+        return details
 
 
 @dataclass(frozen=True)
@@ -68,4 +79,3 @@ class PublicationGateAudit:
     maintainer_signoffs: tuple[SignOffRecord, ...]
     technical_writer_signoffs: tuple[SignOffRecord, ...]
     observed_signoff_records: tuple[SignOffRecord, ...]
-

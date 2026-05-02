@@ -3,9 +3,12 @@ from pathlib import Path
 from testing.components.services.documentation_publication_gate_service import (
     DocumentationPublicationGateService,
 )
+from testing.core.utils.ticket_config_loader import load_ticket_config
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+TEST_DIRECTORY = Path(__file__).resolve().parent
+CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
 
 
 class FakeGitHubClient:
@@ -16,15 +19,27 @@ class FakeGitHubClient:
         reviews_by_pr: dict[int, list[dict]],
         comments_by_pr: dict[int, list[dict]],
         checks_by_sha: dict[str, list[dict]],
+        workflow_runs_by_sha: dict[str, list[dict]] | None = None,
+        jobs_by_run_id: dict[int, list[dict]] | None = None,
+        logs_by_job_id: dict[int, str] | None = None,
     ) -> None:
         self._pull_requests = pull_requests
         self._files_by_pr = files_by_pr
         self._reviews_by_pr = reviews_by_pr
         self._comments_by_pr = comments_by_pr
         self._checks_by_sha = checks_by_sha
+        self._workflow_runs_by_sha = workflow_runs_by_sha or {}
+        self._jobs_by_run_id = jobs_by_run_id or {}
+        self._logs_by_job_id = logs_by_job_id or {}
 
     def list_recent_pull_requests(self, limit: int = 20) -> list[dict]:
         return self._pull_requests[:limit]
+
+    def pull_request(self, number: int) -> dict:
+        for pull_request in self._pull_requests:
+            if int(pull_request["number"]) == number:
+                return pull_request
+        raise KeyError(number)
 
     def pull_request_files(self, number: int) -> list[dict]:
         return self._files_by_pr[number]
@@ -38,8 +53,17 @@ class FakeGitHubClient:
     def commit_check_runs(self, commit_sha: str) -> list[dict]:
         return self._checks_by_sha.get(commit_sha, [])
 
+    def workflow_runs_for_head_sha(self, head_sha: str) -> list[dict]:
+        return self._workflow_runs_by_sha.get(head_sha, [])
 
-def test_dmc_918_service_prefers_latest_merged_documentation_pull_request(tmp_path: Path) -> None:
+    def workflow_jobs(self, run_id: int) -> list[dict]:
+        return self._jobs_by_run_id.get(run_id, [])
+
+    def workflow_job_logs(self, job_id: int) -> str:
+        return self._logs_by_job_id.get(job_id, "")
+
+
+def test_dmc_918_service_uses_configured_target_pull_request(tmp_path: Path) -> None:
     ticket_dir = tmp_path / "input" / "DMC-918"
     ticket_dir.mkdir(parents=True)
     ticket_dir.joinpath("comments.md").write_text(
@@ -111,12 +135,42 @@ def test_dmc_918_service_prefers_latest_merged_documentation_pull_request(tmp_pa
                 },
             ]
         },
+        workflow_runs_by_sha={
+            "sha-docs": [
+                {
+                    "id": 501,
+                    "name": "Documentation checks",
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+            ]
+        },
+        jobs_by_run_id={
+            501: [
+                {
+                    "id": 801,
+                    "name": "Docs verification",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": "https://example.com/jobs/801",
+                }
+            ]
+        },
+        logs_by_job_id={
+            801: (
+                "Duplicate-check completed. "
+                "Link validation passed for all docs links. "
+                "Documentation smoke check passed."
+            )
+        },
     )
 
     service = DocumentationPublicationGateService(
         tmp_path,
         "DMC-918",
         github_client=fake_client,
+        target_pull_request_number=19,
+        technical_writer_logins={"docs-reviewer"},
     )
 
     audit = service.audit()
@@ -166,7 +220,7 @@ def test_dmc_918_service_reports_complete_publication_gate_evidence(tmp_path: Pa
                 {
                     "user": {"login": "writer-reviewer"},
                     "author_association": "CONTRIBUTOR",
-                    "body": "Technical writer sign-off: approved after reading the PR description and checks.",
+                    "body": "Approved after reviewing the PR and workflow evidence.",
                 }
             ]
         },
@@ -186,12 +240,45 @@ def test_dmc_918_service_reports_complete_publication_gate_evidence(tmp_path: Pa
                 },
             ]
         },
+        workflow_runs_by_sha={
+            "sha-docs": [
+                {
+                    "id": 601,
+                    "name": "Documentation checks",
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+            ]
+        },
+        jobs_by_run_id={
+            601: [
+                {
+                    "id": 901,
+                    "name": "Doc validation",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": "https://example.com/jobs/901",
+                },
+                {
+                    "id": 902,
+                    "name": "Doc smoke",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": "https://example.com/jobs/902",
+                },
+            ]
+        },
+        logs_by_job_id={
+            901: "Link validation result: success. 0 broken links.",
+            902: "Documentation smoke check result: success.",
+        },
     )
 
     service = DocumentationPublicationGateService(
         tmp_path,
         "DMC-918",
         github_client=fake_client,
+        technical_writer_logins={"writer-reviewer"},
     )
 
     audit = service.audit()
@@ -199,13 +286,18 @@ def test_dmc_918_service_reports_complete_publication_gate_evidence(tmp_path: Pa
     assert audit.validation_failures == ()
     assert audit.ticket_comment_preview.startswith("Duplicate-check entry")
     assert [check.name for check in audit.successful_checks] == [
-        "Markdown Link Validation",
-        "Documentation Smoke Check",
+        "Doc validation",
+        "Doc smoke",
     ]
 
 
 def test_dmc_918_documentation_publication_gates_are_recorded() -> None:
-    service = DocumentationPublicationGateService(REPOSITORY_ROOT, "DMC-918")
+    service = DocumentationPublicationGateService(
+        REPOSITORY_ROOT,
+        "DMC-918",
+        target_pull_request_number=int(str(CONFIG["target_pr_number"])),
+        technical_writer_logins=CONFIG.get("technical_writer_logins", []),
+    )
 
     audit = service.audit()
 

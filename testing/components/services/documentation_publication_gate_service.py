@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from testing.core.models.publication_gate_audit import (
     CheckRunRecord,
@@ -83,6 +86,12 @@ class GitHubRestClient:
             raise AssertionError(f"Expected a list of issue comments, got: {type(response)!r}")
         return response
 
+    def pull_request(self, number: int) -> dict[str, Any]:
+        response = self._get_json(f"/repos/{self.owner}/{self.repo}/pulls/{number}")
+        if not isinstance(response, dict):
+            raise AssertionError(f"Expected a pull request payload dict, got: {type(response)!r}")
+        return response
+
     def commit_check_runs(self, commit_sha: str) -> list[dict[str, Any]]:
         response = self._get_json(
             f"/repos/{self.owner}/{self.repo}/commits/{commit_sha}/check-runs",
@@ -95,11 +104,80 @@ class GitHubRestClient:
             raise AssertionError(f"Expected a list of check runs, got: {type(check_runs)!r}")
         return check_runs
 
+    def workflow_runs_for_head_sha(self, head_sha: str) -> list[dict[str, Any]]:
+        response = self._get_json(
+            f"/repos/{self.owner}/{self.repo}/actions/runs",
+            {"head_sha": head_sha, "status": "completed", "per_page": 100},
+        )
+        if not isinstance(response, dict):
+            raise AssertionError(f"Expected a workflow-runs payload dict, got: {type(response)!r}")
+        workflow_runs = response.get("workflow_runs", [])
+        if not isinstance(workflow_runs, list):
+            raise AssertionError(f"Expected a list of workflow runs, got: {type(workflow_runs)!r}")
+        return workflow_runs
+
+    def workflow_jobs(self, run_id: int) -> list[dict[str, Any]]:
+        response = self._get_json(
+            f"/repos/{self.owner}/{self.repo}/actions/runs/{run_id}/jobs",
+            {"per_page": 100},
+        )
+        if not isinstance(response, dict):
+            raise AssertionError(f"Expected a workflow-jobs payload dict, got: {type(response)!r}")
+        jobs = response.get("jobs", [])
+        if not isinstance(jobs, list):
+            raise AssertionError(f"Expected a list of workflow jobs, got: {type(jobs)!r}")
+        return jobs
+
+    def workflow_job_logs(self, job_id: int) -> str:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "dm-ai-testing-publication-gates",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+
+        class _NoRedirect(HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, response_headers, newurl):  # type: ignore[override]
+                return None
+
+        request = Request(
+            f"{self.API_ROOT}/repos/{self.owner}/{self.repo}/actions/jobs/{job_id}/logs",
+            headers=headers,
+        )
+
+        try:
+            with build_opener(_NoRedirect).open(request, timeout=30) as response:
+                payload = response.read()
+        except HTTPError as error:
+            redirect_url = error.headers.get("location")
+            if not redirect_url:
+                return f"log download unavailable: HTTP {error.code}"
+            redirected_request = Request(
+                redirect_url,
+                headers={"User-Agent": "dm-ai-testing-publication-gates"},
+            )
+            try:
+                with urlopen(redirected_request, timeout=30) as response:
+                    payload = response.read()
+            except HTTPError as redirected_error:
+                return f"log download unavailable: HTTP {redirected_error.code}"
+
+        if payload.startswith(b"PK\x03\x04"):
+            with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                contents: list[str] = []
+                for name in sorted(archive.namelist()):
+                    with archive.open(name) as log_file:
+                        contents.append(log_file.read().decode("utf-8", errors="replace"))
+                return "\n".join(contents)
+
+        return payload.decode("utf-8", errors="replace")
+
 
 class DocumentationPublicationGateService:
     REQUIRED_PR_LINE = "Duplicate-check: completed — see ticket comment"
     MAINTAINER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
-    LINK_VALIDATION_MARKERS = ("link validation", "link check", "links")
+    LINK_VALIDATION_MARKERS = ("link validation", "link check", "markdown link")
     SMOKE_CHECK_MARKERS = ("documentation smoke", "docs smoke", "smoke")
     TECHNICAL_WRITER_MARKERS = (
         "technical writer",
@@ -123,6 +201,8 @@ class DocumentationPublicationGateService:
         repository_root: Path,
         ticket_key: str,
         github_client: GitHubRestClient | None = None,
+        target_pull_request_number: int | None = None,
+        technical_writer_logins: list[str] | tuple[str, ...] | set[str] | None = None,
     ) -> None:
         self.repository_root = repository_root
         self.ticket_key = ticket_key
@@ -132,6 +212,12 @@ class DocumentationPublicationGateService:
             repo="dm.ai",
             token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
         )
+        self.target_pull_request_number = target_pull_request_number
+        self.technical_writer_logins = {
+            self._normalize_text(str(login))
+            for login in (technical_writer_logins or ())
+            if str(login).strip()
+        }
 
     def audit(self) -> PublicationGateAudit:
         failures: list[PublicationGateFailure] = []
@@ -156,7 +242,7 @@ class DocumentationPublicationGateService:
                 )
             )
 
-        pull_request = self._latest_documentation_pull_request()
+        pull_request = self._target_documentation_pull_request()
         successful_checks: tuple[CheckRunRecord, ...] = ()
         maintainer_signoffs: tuple[SignOffRecord, ...] = ()
         technical_writer_signoffs: tuple[SignOffRecord, ...] = ()
@@ -168,10 +254,18 @@ class DocumentationPublicationGateService:
                     step=2,
                     summary="No merged documentation pull request could be identified for verification.",
                     expected=(
-                        "At least one merged pull request that changes README.md or dmtools-ai-docs/** "
-                        "so the publication-gate evidence can be audited."
+                        "The configured target pull request must be merged and change README.md or "
+                        "dmtools-ai-docs/** so the publication-gate evidence can be audited."
+                        if self.target_pull_request_number is not None
+                        else "At least one merged pull request that changes README.md or "
+                        "dmtools-ai-docs/** so the publication-gate evidence can be audited."
                     ),
-                    actual="The recent merged pull requests did not include any documentation changes.",
+                    actual=(
+                        f"Pull request #{self.target_pull_request_number} was not a merged "
+                        "documentation PR."
+                        if self.target_pull_request_number is not None
+                        else "The recent merged pull requests did not include any documentation changes."
+                    ),
                 )
             )
         else:
@@ -196,12 +290,12 @@ class DocumentationPublicationGateService:
                     PublicationGateFailure(
                         step=3,
                         summary=(
-                            "The documentation PR does not show successful link-validation and "
-                            "documentation smoke-check results."
+                            "The documentation PR does not expose successful GitHub Actions job logs "
+                            "for both link validation and the documentation smoke check."
                         ),
                         expected=(
-                            "Completed successful checks whose names make the link validation and "
-                            "documentation smoke-check results visible from the PR."
+                            "Successful GitHub Actions jobs whose logs explicitly show the link "
+                            "validation result and the documentation smoke-check result."
                         ),
                         actual=self._checks_observation(successful_checks),
                     )
@@ -273,12 +367,12 @@ class DocumentationPublicationGateService:
             return observations
 
         observations.append(
-            f"Latest merged documentation PR visible to a reviewer: #{audit.pull_request.number} "
+            f"Target documentation PR visible to a reviewer: #{audit.pull_request.number} "
             f"{audit.pull_request.title} ({audit.pull_request.html_url})."
         )
         observations.append(f"PR description preview: {self._preview_text(audit.pull_request.body)}")
         observations.append(
-            "Visible successful checks: "
+            "Visible successful Actions job evidence: "
             + (
                 ", ".join(check.describe() for check in audit.successful_checks)
                 if audit.successful_checks
@@ -298,35 +392,48 @@ class DocumentationPublicationGateService:
     def _latest_documentation_pull_request(self) -> PullRequestCandidate | None:
         merged_candidates: list[PullRequestCandidate] = []
         for pull_request in self.github_client.list_recent_pull_requests():
-            merged_at = pull_request.get("merged_at")
-            if not merged_at:
+            candidate = self._pull_request_candidate_from_payload(pull_request)
+            if candidate is None:
                 continue
-
-            number = int(pull_request["number"])
-            changed_files = tuple(
-                str(file_info.get("filename", ""))
-                for file_info in self.github_client.pull_request_files(number)
-            )
-            if not any(self._is_documentation_file(path) for path in changed_files):
-                continue
-
-            merged_candidates.append(
-                PullRequestCandidate(
-                    number=number,
-                    title=str(pull_request.get("title", "")),
-                    html_url=str(pull_request.get("html_url", "")),
-                    body=str(pull_request.get("body", "")),
-                    head_sha=str((pull_request.get("head") or {}).get("sha", "")),
-                    author_login=str((pull_request.get("user") or {}).get("login", "")),
-                    merged_at=str(merged_at),
-                    changed_files=changed_files,
-                )
-            )
+            merged_candidates.append(candidate)
 
         if not merged_candidates:
             return None
 
         return max(merged_candidates, key=lambda candidate: candidate.merged_at)
+
+    def _target_documentation_pull_request(self) -> PullRequestCandidate | None:
+        if self.target_pull_request_number is not None:
+            payload = self.github_client.pull_request(self.target_pull_request_number)
+            return self._pull_request_candidate_from_payload(payload)
+        return self._latest_documentation_pull_request()
+
+    def _pull_request_candidate_from_payload(
+        self,
+        pull_request: dict[str, Any],
+    ) -> PullRequestCandidate | None:
+        merged_at = pull_request.get("merged_at")
+        if not merged_at:
+            return None
+
+        number = int(pull_request["number"])
+        changed_files = tuple(
+            str(file_info.get("filename", ""))
+            for file_info in self.github_client.pull_request_files(number)
+        )
+        if not any(self._is_documentation_file(path) for path in changed_files):
+            return None
+
+        return PullRequestCandidate(
+            number=number,
+            title=str(pull_request.get("title", "")),
+            html_url=str(pull_request.get("html_url", "")),
+            body=str(pull_request.get("body", "")),
+            head_sha=str((pull_request.get("head") or {}).get("sha", "")),
+            author_login=str((pull_request.get("user") or {}).get("login", "")),
+            merged_at=str(merged_at),
+            changed_files=changed_files,
+        )
 
     @staticmethod
     def _is_documentation_file(path: str) -> bool:
@@ -353,19 +460,39 @@ class DocumentationPublicationGateService:
         pull_request: PullRequestCandidate,
     ) -> tuple[CheckRunRecord, ...]:
         checks = []
-        for check_run in self.github_client.commit_check_runs(pull_request.head_sha):
-            status = str(check_run.get("status", ""))
-            conclusion = str(check_run.get("conclusion", ""))
-            if status != "completed" or conclusion != "success":
+        for workflow_run in self.github_client.workflow_runs_for_head_sha(pull_request.head_sha):
+            workflow_status = str(workflow_run.get("status", ""))
+            workflow_conclusion = str(workflow_run.get("conclusion", ""))
+            if workflow_status != "completed" or workflow_conclusion != "success":
                 continue
-            checks.append(
-                CheckRunRecord(
-                    name=str(check_run.get("name", "")),
-                    status=status,
-                    conclusion=conclusion,
-                    html_url=str(check_run.get("html_url", "") or check_run.get("details_url", "")),
+            workflow_name = str(workflow_run.get("name", ""))
+            run_id = workflow_run.get("id")
+            if run_id is None:
+                continue
+
+            for job in self.github_client.workflow_jobs(int(run_id)):
+                status = str(job.get("status", ""))
+                conclusion = str(job.get("conclusion", ""))
+                if status != "completed" or conclusion != "success":
+                    continue
+
+                job_id = job.get("id")
+                log_text = (
+                    self.github_client.workflow_job_logs(int(job_id))
+                    if job_id is not None
+                    else ""
                 )
-            )
+                checks.append(
+                    CheckRunRecord(
+                        name=str(job.get("name", "")) or workflow_name,
+                        status=status,
+                        conclusion=conclusion,
+                        html_url=str(job.get("html_url", "")),
+                        workflow_name=workflow_name,
+                        log_excerpt=self._log_excerpt(log_text),
+                        log_text=self._normalize_text(log_text),
+                    )
+                )
         return tuple(checks)
 
     @staticmethod
@@ -374,7 +501,7 @@ class DocumentationPublicationGateService:
         markers: tuple[str, ...],
     ) -> bool:
         return any(
-            any(marker in check.name.lower() for marker in markers)
+            any(marker in check.log_text for marker in markers)
             for check in checks
         )
 
@@ -427,11 +554,17 @@ class DocumentationPublicationGateService:
         pull_request_author: str,
     ) -> bool:
         body = self._normalize_text(record.body)
+        normalized_login = self._normalize_text(record.login)
         return (
             record.login
             and record.login != pull_request_author
-            and any(marker in body for marker in self.TECHNICAL_WRITER_MARKERS)
-            and any(marker in body for marker in self.SIGNOFF_MARKERS)
+            and (
+                normalized_login in self.technical_writer_logins
+                or (
+                    any(marker in body for marker in self.TECHNICAL_WRITER_MARKERS)
+                    and any(marker in body for marker in self.SIGNOFF_MARKERS)
+                )
+            )
         )
 
     @staticmethod
@@ -466,8 +599,24 @@ class DocumentationPublicationGateService:
     @staticmethod
     def _checks_observation(checks: tuple[CheckRunRecord, ...]) -> str:
         if not checks:
-            return "No successful check runs were visible on the pull request head commit."
-        return "Visible successful checks: " + ", ".join(check.describe() for check in checks)
+            return "No successful GitHub Actions jobs were visible for the pull request head commit."
+        return "Visible successful Actions jobs: " + ", ".join(check.describe() for check in checks)
+
+    def _log_excerpt(self, log_text: str, limit: int = 240) -> str:
+        compact = " ".join(log_text.split())
+        if not compact:
+            return "no visible log output"
+
+        normalized = self._normalize_text(compact)
+        markers = self.LINK_VALIDATION_MARKERS + self.SMOKE_CHECK_MARKERS
+        for marker in markers:
+            index = normalized.find(marker)
+            if index == -1:
+                continue
+            end = min(len(compact), index + limit)
+            return compact[index:end]
+
+        return self._preview_text(compact, limit=limit)
 
     @staticmethod
     def _signoff_observation(
@@ -501,4 +650,3 @@ class DocumentationPublicationGateService:
             )
         )
         return " ".join(details)
-
