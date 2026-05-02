@@ -10,6 +10,9 @@ from testing.components.services.per_skill_page_audit_service import (
 )
 
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+
 def write_page_fixture(repository_root: Path, skill_name: str, package_name: str) -> Path:
     installation_guide = (
         repository_root / "dmtools-ai-docs" / "references" / "installation" / "README.md"
@@ -133,3 +136,14 @@ def test_child_pages_excludes_per_skill_index_aliases(tmp_path: Path) -> None:
     service = PerSkillPageAuditService(repository_root)
 
     assert service.child_pages() == [skill_page]
+
+
+def test_repository_exposes_child_pages_for_each_canonical_skill() -> None:
+    service = PerSkillPageAuditService(REPOSITORY_ROOT)
+
+    expected_pages = sorted(
+        REPOSITORY_ROOT / "dmtools-ai-docs" / "per-skill-packages" / f"{skill.skill_name}.md"
+        for skill in PerSkillCatalogService.EXPECTED_SKILLS
+    )
+
+    assert service.child_pages() == expected_pages
