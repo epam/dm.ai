@@ -1,0 +1,7 @@
+test_id: DMC-963
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+seeded_skills:
+  - jira
