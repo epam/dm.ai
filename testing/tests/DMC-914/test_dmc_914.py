@@ -142,3 +142,47 @@ def test_dmc_914_service_rejects_single_row_that_mentions_multiple_skills(
     assert [failure.step for failure in failures] == [2, 2]
     assert "exactly one canonical row per approved skill" in failures[0].summary
     assert "Found 1 data row" in failures[0].actual
+
+
+def test_dmc_914_service_rejects_multiple_canonical_tables(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    catalog_path = repository_root / "dmtools-ai-docs/per-skill-packages/index.md"
+    catalog_path.parent.mkdir(parents=True)
+
+    first_half = PerSkillCatalogService.EXPECTED_SKILLS[:5]
+    second_half = PerSkillCatalogService.EXPECTED_SKILLS[5:]
+    catalog_path.write_text(
+        "\n".join(
+            [
+                "| Skill | Slash command | Java package | Artifact alias |",
+                "| --- | --- | --- | --- |",
+                *[
+                    (
+                        f"| `{skill.skill_name}` | `{skill.slash_command}` | "
+                        f"`{skill.java_package}` | `{skill.artifact_alias}` |"
+                    )
+                    for skill in first_half
+                ],
+                "",
+                "| Skill | Slash command | Java package | Artifact alias |",
+                "| --- | --- | --- | --- |",
+                *[
+                    (
+                        f"| `{skill.skill_name}` | `{skill.slash_command}` | "
+                        f"`{skill.java_package}` | `{skill.artifact_alias}` |"
+                    )
+                    for skill in second_half
+                ],
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    service = PerSkillCatalogService(repository_root)
+
+    failures = service.validate()
+
+    assert [failure.step for failure in failures] == [2]
+    assert "canonical table" in failures[0].summary
+    assert "Expected exactly one canonical catalogue table" in failures[0].actual
