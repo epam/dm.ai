@@ -40,6 +40,7 @@ EFFECTIVE_INTEGRATIONS=()
 EFFECTIVE_SKILLS_CSV=""
 INVALID_SKILLS_CSV=""
 EFFECTIVE_INTEGRATIONS_CSV=""
+INSTALLER_SKILL_CONFIG_UNCHANGED=false
 
 # Helper functions
 error() {
@@ -297,12 +298,18 @@ EOF
     fi
 
     if [ "$existing_content" = "$new_content" ]; then
+        INSTALLER_SKILL_CONFIG_UNCHANGED=true
         info "Selected skills already installed: $EFFECTIVE_SKILLS_CSV"
         return 0
     fi
 
+    INSTALLER_SKILL_CONFIG_UNCHANGED=false
     printf '%s\n' "$new_content" > "$INSTALLER_ENV_PATH"
     info "Configured installer-managed skills at $INSTALLER_ENV_PATH"
+}
+
+installer_managed_artifacts_present() {
+    [ -s "$JAR_PATH" ] && [ -s "$SCRIPT_PATH" ]
 }
 
 # Detect platform
@@ -1210,8 +1217,12 @@ main() {
     # Persist installer-managed skill selection
     write_installer_skill_config
     
-    # Download DMTools
-    download_dmtools "$version"
+    if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] && installer_managed_artifacts_present; then
+        info "Installer-managed artifacts already present; skipping DMTools download."
+    else
+        # Download DMTools
+        download_dmtools "$version"
+    fi
     
     # Update shell configuration
     update_shell_config
