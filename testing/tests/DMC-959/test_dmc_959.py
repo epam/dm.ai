@@ -11,6 +11,11 @@ CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
 VALID_SKILL = str(CONFIG["valid_skill"])
 INVALID_SKILL = str(CONFIG["invalid_skill"])
 EXPECTED_INVALID_FRAGMENT = f"Unknown skills: {INVALID_SKILL}"
+DOWNSTREAM_INSTALL_SIGNALS = (
+    "Creating installation directory...",
+    "Configured installer-managed skills at",
+    "stubbed download_dmtools",
+)
 
 
 def test_dmc_959_mixed_valid_and_invalid_cli_skills_fail_with_invalid_names_listed() -> None:
@@ -42,9 +47,14 @@ def test_dmc_959_mixed_valid_and_invalid_cli_skills_fail_with_invalid_names_list
         "The failure message should tell the user how to opt into warning-only behavior.\n"
         f"output:\n{combined_output}"
     )
-    assert installer_script.side_effect_marker not in combined_output, (
-        "The installer should stop before any stubbed install side effects run so a "
-        "failed mixed-skill request cannot continue into a partial installation.\n"
+    unexpected_downstream_signals = [
+        signal for signal in DOWNSTREAM_INSTALL_SIGNALS if signal in combined_output
+    ]
+    assert not unexpected_downstream_signals, (
+        "The installer should stop at skill validation before any repository installer "
+        "signals for directory creation, persisted skill state, or download stubs appear, "
+        "so a failed mixed-skill request cannot continue into a partial installation.\n"
+        f"unexpected signals: {unexpected_downstream_signals}\n\n"
         f"output:\n{combined_output}"
     )
     assert "Effective skills:" not in stdout, (
