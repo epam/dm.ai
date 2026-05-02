@@ -136,6 +136,31 @@ printf 'invalid=%s\\n' "$INVALID_SKILLS_CSV"
         self.assertIn("skills=jira,github", result.stdout)
         self.assertIn("invalid=unknown", result.stdout)
 
+    def test_strict_flag_rejects_unknown_skills_even_when_known_skills_exist(self) -> None:
+        result = run_installer_functions(
+            """
+parse_installer_args --skills jira,unknown --strict
+resolve_skill_selection
+"""
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Unknown skills are not allowed in strict mode: unknown.", result.stderr)
+        self.assertIn("Allowed skills:", result.stderr)
+
+    def test_strict_env_rejects_unknown_skills_even_when_known_skills_exist(self) -> None:
+        result = run_installer_functions(
+            """
+parse_installer_args --skills jira,unknown
+resolve_skill_selection
+""",
+            {"DMTOOLS_STRICT_INSTALL": "true"},
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Unknown skills are not allowed in strict mode: unknown.", result.stderr)
+        self.assertIn("Allowed skills:", result.stderr)
+
     def test_unsupported_skills_are_rejected_until_runtime_support_exists(self) -> None:
         for skill in ("bitbucket", "report", "expert", "teammate"):
             with self.subTest(skill=skill):
