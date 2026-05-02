@@ -35,6 +35,13 @@ def test_dmc_901_version_pinned_installation_docs_use_epam_release_artifact_patt
         "dmtools-ai-docs/references/installation/README.md."
     )
 
+    non_canonical_installer_references = service.non_canonical_installer_references()
+    assert not non_canonical_installer_references, (
+        service.format_non_canonical_installer_references(
+            non_canonical_installer_references
+        )
+    )
+
     mismatched_installer_examples = service.mismatched_installer_examples(installer_examples)
     assert not mismatched_installer_examples, service.format_installer_example_mismatches(
         mismatched_installer_examples
@@ -78,6 +85,41 @@ def test_dmc_901_flags_non_canonical_version_pinned_artifact_urls() -> None:
     ), findings
     assert any(
         "non-canonical version-pinned DMTools artifact URL" in finding
+        and "downloads.example.com" in finding
+        for finding in findings
+    ), findings
+
+
+def test_dmc_901_flags_non_canonical_version_pinned_installer_urls() -> None:
+    installation_readme = textwrap.dedent(
+        """
+        Canonical:
+        curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
+
+        Wrong repository:
+        curl -fsSL https://github.com/example/dm.ai/releases/download/v1.7.179/install.sh | bash -s -- v1.7.179
+
+        Non-canonical host:
+        curl -fsSL https://downloads.example.com/releases/v1.7.179/install.sh | bash -s -- v1.7.179
+        """
+    ).strip()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        repository_root = Path(temp_dir)
+        installation_path = (
+            repository_root / "dmtools-ai-docs/references/installation/README.md"
+        )
+        installation_path.parent.mkdir(parents=True)
+        installation_path.write_text(installation_readme, encoding="utf-8")
+        (repository_root / "README.md").write_text("", encoding="utf-8")
+
+        service = InstallationReferenceService(repository_root)
+        findings = service.non_canonical_installer_references()
+
+    assert len(findings) == 2, findings
+    assert any("example/dm.ai" in finding for finding in findings), findings
+    assert any(
+        "non-canonical version-pinned DMTools installer URL" in finding
         and "downloads.example.com" in finding
         for finding in findings
     ), findings

@@ -25,7 +25,11 @@ class InstallationReferenceService:
         rf"dmtools-v(?P<file_version>{_VERSION_TOKEN})-all\.jar"
     )
     _VERSIONED_INSTALLER_PATTERN = re.compile(
-        r"https://github\.com/epam/dm\.ai/releases/download/"
+        r"https?://[^\s\"'`)<>\]]+/v(?P<url_version>\d+\.\d+\.\d+)/"
+        r"install(?:\.(?:sh|bat|ps1))?\b"
+    )
+    _GITHUB_RELEASE_INSTALLER_PATTERN = re.compile(
+        r"https://github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/releases/download/"
         r"v(?P<url_version>\d+\.\d+\.\d+)/install(?:\.(?:sh|bat|ps1))?\b"
     )
     _BASH_FLAG_PATTERN = re.compile(r"\bbash -s -- v(?P<flag_version>\d+\.\d+\.\d+)\b")
@@ -119,20 +123,53 @@ class InstallationReferenceService:
         examples: list[VersionedInstallReference] = []
         for path in self.installer_reference_paths:
             for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-                url_match = self._VERSIONED_INSTALLER_PATTERN.search(line)
-                if not url_match:
-                    continue
                 flag_match = self._BASH_FLAG_PATTERN.search(line) or self._ENV_FLAG_PATTERN.search(line)
-                examples.append(
-                    VersionedInstallReference(
-                        path=path,
-                        line_number=line_number,
-                        line=line.strip(),
-                        url_version=url_match.group("url_version"),
-                        flag_version=flag_match.group("flag_version") if flag_match else None,
+                for url_match in self._VERSIONED_INSTALLER_PATTERN.finditer(line):
+                    url = url_match.group(0)
+                    github_release_match = self._GITHUB_RELEASE_INSTALLER_PATTERN.fullmatch(url)
+                    examples.append(
+                        VersionedInstallReference(
+                            path=path,
+                            line_number=line_number,
+                            line=line.strip(),
+                            url=url,
+                            url_version=url_match.group("url_version"),
+                            flag_version=flag_match.group("flag_version") if flag_match else None,
+                            owner=(
+                                github_release_match.group("owner")
+                                if github_release_match
+                                else None
+                            ),
+                            repo=(
+                                github_release_match.group("repo")
+                                if github_release_match
+                                else None
+                            ),
+                        )
                     )
-                )
         return examples
+
+    def non_canonical_installer_references(self) -> list[str]:
+        findings: list[str] = []
+        for reference in self.versioned_installer_examples():
+            if reference.owner is None or reference.repo is None:
+                findings.append(
+                    f"{reference.path.relative_to(self.repository_root)}:{reference.line_number} "
+                    f"uses a non-canonical version-pinned DMTools installer URL: {reference.url}"
+                )
+                continue
+
+            if (
+                reference.owner != self.EXPECTED_GITHUB_OWNER
+                or reference.repo != self.EXPECTED_GITHUB_REPOSITORY
+            ):
+                findings.append(
+                    f"{reference.path.relative_to(self.repository_root)}:{reference.line_number} "
+                    f"uses GitHub repository {reference.owner}/{reference.repo} instead of "
+                    f"{self.EXPECTED_GITHUB_OWNER}/{self.EXPECTED_GITHUB_REPOSITORY}: "
+                    f"{reference.url}"
+                )
+        return findings
 
     @staticmethod
     def mismatched_installer_examples(
@@ -168,6 +205,16 @@ class InstallationReferenceService:
         return "\n".join(
             (
                 "Found non-canonical version-pinned DMTools artifact references in the",
+                "installation documentation:",
+                *[f"- {finding}" for finding in findings],
+            )
+        )
+
+    @staticmethod
+    def format_non_canonical_installer_references(findings: list[str]) -> str:
+        return "\n".join(
+            (
+                "Found non-canonical version-pinned DMTools installer references in the",
                 "installation documentation:",
                 *[f"- {finding}" for finding in findings],
             )

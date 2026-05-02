@@ -9,8 +9,11 @@ class VersionedInstallReference:
     path: Path
     line_number: int
     line: str
+    url: str
     url_version: str
     flag_version: str | None = None
+    owner: str | None = None
+    repo: str | None = None
 
     @property
     def location(self) -> str:
