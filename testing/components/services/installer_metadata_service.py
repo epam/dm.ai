@@ -57,16 +57,21 @@ class InstallerMetadataService:
         self.runner = runner
         self.installer_url = installer_url
 
-    def run_selective_install(self, skills: Sequence[str]) -> InstallerMetadataRun:
+    def run_selective_install(
+        self,
+        skills: Sequence[str],
+        *,
+        use_default_home_install_dir: bool = False,
+    ) -> InstallerMetadataRun:
         normalized_skills = tuple(skill.strip().lower() for skill in skills if skill.strip())
         if not normalized_skills:
             raise ValueError("At least one skill must be provided.")
 
         temp_root = Path(tempfile.mkdtemp(prefix="dmtools-installer-metadata-"))
-        install_dir = temp_root / "install"
-        bin_dir = install_dir / "bin"
         home_dir = temp_root / "home"
         installer_path = temp_root / "install_script"
+        install_dir = home_dir / ".dmtools" if use_default_home_install_dir else temp_root / "install"
+        bin_dir = install_dir / "bin"
 
         script = "\n".join(
             [
@@ -77,18 +82,21 @@ class InstallerMetadataService:
                 'bash "$INSTALLER_PATH"',
             ]
         )
+        execution_env = {
+            "HOME": str(home_dir),
+            "SHELL": "/bin/bash",
+            "INSTALLER_URL": self.installer_url,
+            "INSTALLER_PATH": str(installer_path),
+            "DMTOOLS_SKILLS": ",".join(normalized_skills),
+        }
+        if not use_default_home_install_dir:
+            execution_env["DMTOOLS_INSTALL_DIR"] = str(install_dir)
+            execution_env["DMTOOLS_BIN_DIR"] = str(bin_dir)
+
         execution = self.runner.run(
             ["bash", "-c", script],
             cwd=self.repository_root,
-            env={
-                "HOME": str(home_dir),
-                "SHELL": "/bin/bash",
-                "INSTALLER_URL": self.installer_url,
-                "INSTALLER_PATH": str(installer_path),
-                "DMTOOLS_INSTALL_DIR": str(install_dir),
-                "DMTOOLS_BIN_DIR": str(bin_dir),
-                "DMTOOLS_SKILLS": ",".join(normalized_skills),
-            },
+            env=execution_env,
         )
 
         return InstallerMetadataRun(
