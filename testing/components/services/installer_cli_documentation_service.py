@@ -3,6 +3,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from testing.components.factories.installer_script_factory import create_installer_script
+from testing.core.interfaces.installer_script import InstallerScript
+from testing.core.models.process_execution_result import ProcessExecutionResult
+
 
 class InstallerCliDocumentationService:
     SECTION_HEADING = "Install Only the Skills You Need"
@@ -30,13 +34,44 @@ class InstallerCliDocumentationService:
     )
     WARNING_TERMS = ("warning", "warnings", "warn", "warns")
 
-    def __init__(self, repository_root: Path) -> None:
+    def __init__(
+        self,
+        repository_root: Path,
+        installer_script: InstallerScript | None = None,
+    ) -> None:
         self.repository_root = repository_root
         self.installation_readme_path = (
             repository_root / "dmtools-ai-docs/references/installation/README.md"
         )
+        self.install_script_path = repository_root / "install.sh"
+        self.installer_script = installer_script
 
     def audit_installation_readme(self) -> list[str]:
+        findings: list[str] = []
+        findings.extend(self._audit_documentation())
+        findings.extend(self._audit_installer_runtime())
+        return findings
+
+    def format_findings(self, findings: list[str]) -> str:
+        observed_section = self._observed_section()
+        lines = [
+            "Expected the installation guide to document the DMC-915 installer "
+            "selection flags and invalid-skill behavior, and for the installer to "
+            "actually support the documented contract.",
+            f"Checked file: {self.installation_readme_path.relative_to(self.repository_root)}",
+            "",
+            "Missing or incomplete expectations:",
+            *[f"- {finding}" for finding in findings],
+            "",
+            "Observed 'Install Only the Skills You Need' section:",
+            self._indented_section(observed_section) if observed_section else "  (section missing)",
+            "",
+            "Observed installer behavior:",
+            *self._format_runtime_observations(),
+        ]
+        return "\n".join(lines)
+
+    def _audit_documentation(self) -> list[str]:
         if not self.installation_readme_path.exists():
             return [
                 "Missing installation guide: "
@@ -90,20 +125,103 @@ class InstallerCliDocumentationService:
             )
         return findings
 
-    def format_findings(self, findings: list[str]) -> str:
-        observed_section = self._observed_section()
-        lines = [
-            "Expected the installation guide to document the DMC-915 installer "
-            "selection flags and invalid-skill behavior.",
-            f"Checked file: {self.installation_readme_path.relative_to(self.repository_root)}",
-            "",
-            "Missing or incomplete expectations:",
-            *[f"- {finding}" for finding in findings],
-            "",
-            "Observed 'Install Only the Skills You Need' section:",
-            self._indented_section(observed_section) if observed_section else "  (section missing)",
+    def _audit_installer_runtime(self) -> list[str]:
+        installer_script = self._installer_script()
+        if installer_script is None:
+            return [f"Missing installer script: {self.install_script_path.name}"]
+
+        findings: list[str] = []
+
+        single_skill_result = installer_script.run_main(args=("--skill", "jira"))
+        if not self._command_succeeded(
+            single_skill_result,
+            "Effective skills: jira (source: cli)",
+        ):
+            findings.append(
+                "The installer runtime does not accept `--skill <name>` as a working "
+                "skill-selection command."
+            )
+
+        multi_skill_result = installer_script.run_main(args=("--skills=jira,github",))
+        if not self._command_succeeded(
+            multi_skill_result,
+            "Effective skills: jira,github (source: cli)",
+        ):
+            findings.append(
+                "The installer runtime does not accept `--skills=<name,name>` as a "
+                "working alias."
+            )
+
+        all_skills_result = installer_script.run_main(args=("--all-skills",))
+        if not self._command_succeeded(
+            all_skills_result,
+            "Installing all skills (source: cli)",
+        ):
+            findings.append(
+                "The installer runtime does not accept the `--all-skills` flag."
+            )
+
+        skip_unknown_result = installer_script.run_main(
+            args=("--skills=jira,unknown", "--skip-unknown")
+        )
+        if not self._command_succeeded(
+            skip_unknown_result,
+            "Warning: Skipping unknown skills: unknown",
+            "Effective skills: jira (source: cli)",
+        ):
+            findings.append(
+                "The installer runtime does not downgrade invalid skill names to "
+                "warnings when `--skip-unknown` is used."
+            )
+
+        invalid_skill_result = installer_script.run_main(args=("--skill", "unknown"))
+        if not self._command_failed(
+            invalid_skill_result,
+            "Unknown skills: unknown",
+        ):
+            findings.append(
+                "The installer runtime does not fail with a non-zero exit while "
+                "listing invalid skill names for unknown selections."
+            )
+
+        return findings
+
+    def _format_runtime_observations(self) -> list[str]:
+        installer_script = self._installer_script()
+        if installer_script is None:
+            return [f"  install.sh missing at {self.install_script_path}"]
+
+        observations = [
+            ("bash install.sh --skill jira", installer_script.run_main(args=("--skill", "jira"))),
+            (
+                "bash install.sh --skills=jira,github",
+                installer_script.run_main(args=("--skills=jira,github",)),
+            ),
+            (
+                "bash install.sh --all-skills",
+                installer_script.run_main(args=("--all-skills",)),
+            ),
+            (
+                "bash install.sh --skills=jira,unknown --skip-unknown",
+                installer_script.run_main(args=("--skills=jira,unknown", "--skip-unknown")),
+            ),
+            (
+                "bash install.sh --skill unknown",
+                installer_script.run_main(args=("--skill", "unknown")),
+            ),
         ]
-        return "\n".join(lines)
+        return [
+            self._format_runtime_observation(command, result)
+            for command, result in observations
+        ]
+
+    def _installer_script(self) -> InstallerScript | None:
+        if self.installer_script is not None:
+            return self.installer_script
+        if not self.install_script_path.exists():
+            return None
+        self.installer_script = create_installer_script(self.repository_root)
+        return self.installer_script
 
     def _observed_section(self) -> str | None:
         if not self.installation_readme_path.exists():
@@ -174,6 +292,41 @@ class InstallerCliDocumentationService:
             token in normalized_section for token in cls.WARNING_TERMS
         )
         return mentions_skip_unknown and mentions_invalid_skills and mentions_warnings
+
+    @staticmethod
+    def _command_succeeded(
+        result: ProcessExecutionResult,
+        *expected_fragments: str,
+    ) -> bool:
+        if result.returncode != 0:
+            return False
+        return all(fragment in result.combined_output for fragment in expected_fragments)
+
+    @staticmethod
+    def _command_failed(
+        result: ProcessExecutionResult,
+        *expected_fragments: str,
+    ) -> bool:
+        if result.returncode == 0:
+            return False
+        return all(fragment in result.combined_output for fragment in expected_fragments)
+
+    @staticmethod
+    def _format_runtime_observation(
+        command: str,
+        result: ProcessExecutionResult,
+    ) -> str:
+        summary = InstallerCliDocumentationService._single_line_output(result)
+        return f"  {command} -> exit {result.returncode}; {summary}"
+
+    @staticmethod
+    def _single_line_output(result: ProcessExecutionResult) -> str:
+        output = " | ".join(
+            line.strip()
+            for line in result.combined_output.splitlines()
+            if line.strip()
+        )
+        return output if output else "(no output)"
 
     @staticmethod
     def _indented_section(section: str) -> str:

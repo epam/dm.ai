@@ -1,14 +1,135 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping, Sequence
 
 from testing.components.services.installer_cli_documentation_service import (
     InstallerCliDocumentationService,
 )
+from testing.core.interfaces.installer_script import InstallerScript
+from testing.core.models.process_execution_result import ProcessExecutionResult
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_dmc_915_installation_docs_match_supported_skill_selection_syntax() -> None:
+@dataclass
+class FakeInstallerScript(InstallerScript):
+    responses: Mapping[tuple[str, ...], ProcessExecutionResult]
+
+    def run_main(
+        self,
+        args: Sequence[str] = (),
+        extra_env: Mapping[str, str] | None = None,
+        post_script: str = "",
+    ) -> ProcessExecutionResult:
+        del extra_env, post_script
+        key = tuple(args)
+        response = self.responses.get(key)
+        if response is not None:
+            return response
+        return ProcessExecutionResult(
+            args=tuple(args),
+            cwd=Path("/tmp/fake-installer"),
+            returncode=1,
+            stdout="",
+            stderr=f"Unhandled fake installer command: {' '.join(args)}",
+        )
+
+
+def _result(
+    *args: str,
+    returncode: int,
+    stdout: str = "",
+    stderr: str = "",
+) -> ProcessExecutionResult:
+    return ProcessExecutionResult(
+        args=args,
+        cwd=Path("/tmp/fake-installer"),
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def _ticket_compliant_installer() -> FakeInstallerScript:
+    return FakeInstallerScript(
+        responses={
+            ("--skill", "jira"): _result(
+                "--skill",
+                "jira",
+                returncode=0,
+                stdout="Effective skills: jira (source: cli)\n",
+            ),
+            ("--skills=jira,github",): _result(
+                "--skills=jira,github",
+                returncode=0,
+                stdout="Effective skills: jira,github (source: cli)\n",
+            ),
+            ("--all-skills",): _result(
+                "--all-skills",
+                returncode=0,
+                stdout="Installing all skills (source: cli)\n",
+            ),
+            ("--skills=jira,unknown", "--skip-unknown"): _result(
+                "--skills=jira,unknown",
+                "--skip-unknown",
+                returncode=0,
+                stdout=(
+                    "Warning: Skipping unknown skills: unknown\n"
+                    "Effective skills: jira (source: cli)\n"
+                ),
+            ),
+            ("--skill", "unknown"): _result(
+                "--skill",
+                "unknown",
+                returncode=1,
+                stderr=(
+                    "Error: No valid skills selected. Unknown skills: unknown. "
+                    "Allowed skills: jira,github\n"
+                ),
+            ),
+        }
+    )
+
+
+def _runtime_without_ticket_flags() -> FakeInstallerScript:
+    return FakeInstallerScript(
+        responses={
+            ("--skill", "jira"): _result(
+                "--skill",
+                "jira",
+                returncode=1,
+                stderr="Error: Unknown installer option: --skill\n",
+            ),
+            ("--skills=jira,github",): _result(
+                "--skills=jira,github",
+                returncode=0,
+                stdout="Effective skills: jira,github (source: cli)\n",
+            ),
+            ("--all-skills",): _result(
+                "--all-skills",
+                returncode=1,
+                stderr="Error: Unknown installer option: --all-skills\n",
+            ),
+            ("--skills=jira,unknown", "--skip-unknown"): _result(
+                "--skills=jira,unknown",
+                "--skip-unknown",
+                returncode=1,
+                stderr="Error: Unknown installer option: --skip-unknown\n",
+            ),
+            ("--skill", "unknown"): _result(
+                "--skill",
+                "unknown",
+                returncode=1,
+                stderr="Error: Unknown installer option: --skill\n",
+            ),
+        }
+    )
+
+
+def test_dmc_915_installation_docs_and_runtime_match_ticket_contract() -> None:
     service = InstallerCliDocumentationService(REPOSITORY_ROOT)
 
     findings = service.audit_installation_readme()
@@ -16,7 +137,9 @@ def test_dmc_915_installation_docs_match_supported_skill_selection_syntax() -> N
     assert not findings, service.format_findings(findings)
 
 
-def test_dmc_915_accepts_ticket_required_installer_docs(tmp_path: Path) -> None:
+def test_dmc_915_accepts_ticket_required_docs_when_runtime_supports_same_contract(
+    tmp_path: Path,
+) -> None:
     repository_root = tmp_path / "repo"
     installation_path = (
         repository_root / "dmtools-ai-docs/references/installation/README.md"
@@ -43,9 +166,58 @@ def test_dmc_915_accepts_ticket_required_installer_docs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    service = InstallerCliDocumentationService(repository_root)
+    service = InstallerCliDocumentationService(
+        repository_root,
+        installer_script=_ticket_compliant_installer(),
+    )
 
     assert service.audit_installation_readme() == []
+
+
+def test_dmc_915_flags_docs_that_describe_commands_the_runtime_rejects(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    installation_path = (
+        repository_root / "dmtools-ai-docs/references/installation/README.md"
+    )
+    installation_path.parent.mkdir(parents=True)
+    installation_path.write_text(
+        "\n".join(
+            (
+                "# DMtools Installation Guide",
+                "",
+                "## Install Only the Skills You Need",
+                "",
+                "```bash",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skill jira",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,github",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --all-skills",
+                "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,unknown --skip-unknown",
+                "```",
+                "",
+                "Unknown skill names cause a non-zero exit and list the invalid names.",
+                "When `--skip-unknown` is provided, invalid skill names are downgraded to warnings.",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    service = InstallerCliDocumentationService(
+        repository_root,
+        installer_script=_runtime_without_ticket_flags(),
+    )
+
+    findings = service.audit_installation_readme()
+
+    assert (
+        "The installer runtime does not accept `--skill <name>` as a working "
+        "skill-selection command."
+    ) in findings
+    assert (
+        "The installer runtime does not accept the `--all-skills` flag."
+    ) in findings
+    assert any("`--skip-unknown`" in finding for finding in findings)
 
 
 def test_dmc_915_flags_missing_ticket_required_installer_docs(
@@ -74,7 +246,10 @@ def test_dmc_915_flags_missing_ticket_required_installer_docs(
         encoding="utf-8",
     )
 
-    service = InstallerCliDocumentationService(repository_root)
+    service = InstallerCliDocumentationService(
+        repository_root,
+        installer_script=_ticket_compliant_installer(),
+    )
 
     findings = service.audit_installation_readme()
 
@@ -103,7 +278,10 @@ def test_dmc_915_format_findings_handles_missing_section(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    service = InstallerCliDocumentationService(repository_root)
+    service = InstallerCliDocumentationService(
+        repository_root,
+        installer_script=_ticket_compliant_installer(),
+    )
 
     findings = service.audit_installation_readme()
     formatted = service.format_findings(findings)
@@ -114,7 +292,8 @@ def test_dmc_915_format_findings_handles_missing_section(tmp_path: Path) -> None
     ]
     assert "Observed 'Install Only the Skills You Need' section:" in formatted
     assert "  (section missing)" in formatted
-    assert "Expected the installation guide to document the DMC-915 installer" in formatted
+    assert "Observed installer behavior:" in formatted
+    assert "bash install.sh --skill jira -> exit 0;" in formatted
 
 
 def test_dmc_915_keeps_code_block_comments_inside_extracted_section(
@@ -149,7 +328,10 @@ def test_dmc_915_keeps_code_block_comments_inside_extracted_section(
         encoding="utf-8",
     )
 
-    service = InstallerCliDocumentationService(repository_root)
+    service = InstallerCliDocumentationService(
+        repository_root,
+        installer_script=_ticket_compliant_installer(),
+    )
 
     section = service._extract_named_sections(
         installation_path,
