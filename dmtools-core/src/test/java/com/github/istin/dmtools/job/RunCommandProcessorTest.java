@@ -361,6 +361,17 @@ class RunCommandProcessorTest {
     }
 
     @Test
+    void testProcessRunCommand_knownJobNameWithCliOverrides() {
+        String[] args = {"run", "codegenerator", "--param1", "test"};
+
+        JobParams result = runCommandProcessor.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("codegenerator", result.getName());
+        assertEquals("test", result.getParams().getString("param1"));
+    }
+
+    @Test
     void testProcessRunCommand_jsonFileUnaffected() throws IOException {
         String jsonContent = "{\"name\":\"expert\",\"params\":{\"question\":\"test\"}}";
         Path jsonFile = tempDir.resolve("job.json");

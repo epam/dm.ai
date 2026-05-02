@@ -37,7 +37,7 @@ def test_dmc_930_selective_install_generates_machine_readable_metadata_files() -
     run = service.run_selective_install(SELECTED_SKILLS)
 
     assert run.execution.returncode == 0, service.format_execution_failure(run)
-    assert "Effective skills: jira,confluence (source: env)" in run.execution.stdout, (
+    assert "Effective skills: jira, confluence (source: env)" in run.execution.stdout, (
         "The installer did not report the selected skills in its user-visible output.\n"
         f"stdout:\n{run.execution.stdout}\n\nstderr:\n{run.execution.stderr}"
     )
