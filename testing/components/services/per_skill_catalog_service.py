@@ -36,6 +36,8 @@ class ValidationFailure:
 
 class PerSkillCatalogService:
     CATALOG_RELATIVE_PATH = "dmtools-ai-docs/per-skill-packages/index.md"
+    TABLE_HEADER = "| Skill | Slash command | Java package | Artifact alias |"
+    TABLE_SEPARATOR = "| --- | --- | --- | --- |"
     SKILL_NAME_PATTERN = re.compile(r"\bdmtools-[a-z0-9-]+\b")
     EXPECTED_SKILLS: tuple[SkillCatalogExpectation, ...] = (
         SkillCatalogExpectation(
@@ -114,7 +116,22 @@ class PerSkillCatalogService:
             )
             return failures
 
-        rows = self.catalog_rows()
+        try:
+            rows = self.catalog_rows()
+        except ValueError as error:
+            failures.append(
+                ValidationFailure(
+                    step=2,
+                    summary="The catalogue does not present the required canonical table.",
+                    expected=(
+                        "A markdown table with the header "
+                        f"{self.TABLE_HEADER} and one row per approved skill."
+                    ),
+                    actual=str(error),
+                )
+            )
+            return failures
+
         row_preview = self._row_preview(rows)
         expected_skill_names = {skill.skill_name for skill in self.EXPECTED_SKILLS}
         documented_skill_names = {
@@ -198,19 +215,34 @@ class PerSkillCatalogService:
         return failures
 
     def catalog_rows(self) -> list[CatalogRow]:
-        rows: list[CatalogRow] = []
-        for line_number, line in enumerate(
-            self.catalog_path.read_text(encoding="utf-8").splitlines(),
-            start=1,
-        ):
-            normalized = line.strip()
-            if "dmtools-" not in normalized:
+        lines = self.catalog_path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if line.strip() != self.TABLE_HEADER:
                 continue
-            if normalized.startswith("|") or normalized.startswith("-"):
-                rows.append(CatalogRow(line_number=line_number, text=normalized))
-                continue
-            rows.append(CatalogRow(line_number=line_number, text=normalized))
-        return rows
+
+            if index + 1 >= len(lines) or lines[index + 1].strip() != self.TABLE_SEPARATOR:
+                raise ValueError(
+                    f"Malformed catalogue table in {self.catalog_path}: expected separator "
+                    f"{self.TABLE_SEPARATOR!r} after header."
+                )
+
+            rows: list[CatalogRow] = []
+            for row_index, row in enumerate(lines[index + 2 :], start=index + 3):
+                normalized = row.strip()
+                if not normalized.startswith("|"):
+                    break
+                rows.append(CatalogRow(line_number=row_index, text=normalized))
+
+            if not rows:
+                raise ValueError(
+                    f"Catalogue table in {self.catalog_path} is empty after header {self.TABLE_HEADER!r}."
+                )
+
+            return rows
+
+        raise ValueError(
+            f"Catalogue table header {self.TABLE_HEADER!r} not found in {self.catalog_path}."
+        )
 
     @staticmethod
     def row_for_skill(
