@@ -38,12 +38,14 @@ class InstallerCliDocumentationService:
         self,
         repository_root: Path,
         installer_script: InstallerScript | None = None,
+        install_script_relative_path: str | Path = "dmtools-ai-docs/install.sh",
     ) -> None:
         self.repository_root = repository_root
         self.installation_readme_path = (
             repository_root / "dmtools-ai-docs/references/installation/README.md"
         )
-        self.install_script_path = repository_root / "install.sh"
+        self.install_script_relative_path = Path(install_script_relative_path)
+        self.install_script_path = repository_root / self.install_script_relative_path
         self.installer_script = installer_script
 
     def audit_installation_readme(self) -> list[str]:
@@ -59,6 +61,7 @@ class InstallerCliDocumentationService:
             "selection flags and invalid-skill behavior, and for the installer to "
             "actually support the documented contract.",
             f"Checked file: {self.installation_readme_path.relative_to(self.repository_root)}",
+            f"Checked installer: {self.install_script_relative_path.as_posix()}",
             "",
             "Missing or incomplete expectations:",
             *[f"- {finding}" for finding in findings],
@@ -145,7 +148,7 @@ class InstallerCliDocumentationService:
         multi_skill_result = installer_script.run_main(args=("--skills=jira,github",))
         if not self._command_succeeded(
             multi_skill_result,
-            "Effective skills: jira, github (source: cli)",
+            "Effective skills: jira,github (source: cli)",
         ):
             findings.append(
                 "The installer runtime does not accept `--skills=<name,name>` as a "
@@ -203,28 +206,32 @@ class InstallerCliDocumentationService:
     def _format_runtime_observations(self) -> list[str]:
         installer_script = self._installer_script()
         if installer_script is None:
-            return [f"  install.sh missing at {self.install_script_path}"]
+            return [
+                f"  {self.install_script_relative_path.as_posix()} missing at "
+                f"{self.install_script_path}"
+            ]
 
+        install_command = f"bash {self.install_script_relative_path.as_posix()}"
         observations = [
-            ("bash install.sh --skill jira", installer_script.run_main(args=("--skill", "jira"))),
+            (f"{install_command} --skill jira", installer_script.run_main(args=("--skill", "jira"))),
             (
-                "bash install.sh --skills=jira,github",
+                f"{install_command} --skills=jira,github",
                 installer_script.run_main(args=("--skills=jira,github",)),
             ),
             (
-                "bash install.sh --all-skills",
+                f"{install_command} --all-skills",
                 installer_script.run_main(args=("--all-skills",)),
             ),
             (
-                "bash install.sh --skills=jira,unknown",
+                f"{install_command} --skills=jira,unknown",
                 installer_script.run_main(args=("--skills=jira,unknown",)),
             ),
             (
-                "bash install.sh --skills=jira,unknown --skip-unknown",
+                f"{install_command} --skills=jira,unknown --skip-unknown",
                 installer_script.run_main(args=("--skills=jira,unknown", "--skip-unknown")),
             ),
             (
-                "bash install.sh --skill unknown",
+                f"{install_command} --skill unknown",
                 installer_script.run_main(args=("--skill", "unknown")),
             ),
         ]
@@ -238,7 +245,10 @@ class InstallerCliDocumentationService:
             return self.installer_script
         if not self.install_script_path.exists():
             return None
-        self.installer_script = create_installer_script(self.repository_root)
+        self.installer_script = create_installer_script(
+            self.repository_root,
+            self.install_script_relative_path,
+        )
         return self.installer_script
 
     def _observed_section(self) -> str | None:
