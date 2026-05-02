@@ -17,3 +17,9 @@ python3 -m pytest testing/tests/DMC-903/test_dmc_903.py -q
 ## Environment
 
 No environment variables are required. The test reads markdown files directly from this repository checkout.
+
+## Expected passing output
+
+```text
+1 passed
+```
