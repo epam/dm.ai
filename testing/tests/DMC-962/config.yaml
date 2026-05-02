@@ -1,0 +1,8 @@
+test_id: DMC-962
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+retained_skill: jira
+removed_skill: github
+added_skill: confluence
