@@ -5,13 +5,14 @@ import shlex
 from pathlib import Path
 from typing import Mapping
 
+from testing.core.interfaces.installer_skill_selection import InstallerSkillSelection
 from testing.core.interfaces.process_runner import ProcessRunner
 from testing.core.models.installer_skill_selection_observation import (
     InstallerSkillSelectionObservation,
 )
 
 
-class InstallerSkillSelectionService:
+class InstallerSkillSelectionService(InstallerSkillSelection):
     _ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
     _EFFECTIVE_SKILLS_PATTERN = re.compile(
         r"(?m)^(?P<line>Effective skills:\s*(?P<skills>.+?)\s+\(source:\s*(?P<source>[^)]+)\))$"

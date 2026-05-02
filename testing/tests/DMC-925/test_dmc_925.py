@@ -1,9 +1,8 @@
-from testing.components.services.installer_skill_selection_service import (
-    InstallerSkillSelectionService,
-)
+from testing.core.interfaces.installer_skill_selection import InstallerSkillSelection
+
 
 def test_dmc_925_installer_normalizes_and_deduplicates_skills_from_env_and_cli(
-    installer_skill_selection_service: InstallerSkillSelectionService,
+    installer_skill_selection_service: InstallerSkillSelection,
 ) -> None:
     service = installer_skill_selection_service
     env_observation = service.resolve_with_env(" Jira, github, JIRA, , confluence ")
