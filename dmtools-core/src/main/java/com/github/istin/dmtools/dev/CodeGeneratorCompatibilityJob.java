@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class CodeGeneratorCompatibilityJob extends AbstractJob<BaseJobParams, List<ResultItem>> {
 
@@ -19,18 +20,26 @@ public class CodeGeneratorCompatibilityJob extends AbstractJob<BaseJobParams, Li
     public static final String REMOVAL_VERSION = "v1.8.0";
 
     private final Logger logger;
+    private final Consumer<String> warningSink;
 
     public CodeGeneratorCompatibilityJob() {
-        this(LogManager.getLogger(CodeGeneratorCompatibilityJob.class));
+        this(LogManager.getLogger(CodeGeneratorCompatibilityJob.class), System.err::println);
     }
 
     CodeGeneratorCompatibilityJob(Logger logger) {
+        this(logger, System.err::println);
+    }
+
+    CodeGeneratorCompatibilityJob(Logger logger, Consumer<String> warningSink) {
         this.logger = logger;
+        this.warningSink = warningSink;
     }
 
     @Override
     public List<ResultItem> runJob(BaseJobParams params) {
-        logger.warn(getDeprecationMessage());
+        String deprecationMessage = getDeprecationMessage();
+        logger.warn(deprecationMessage);
+        warningSink.accept(deprecationMessage);
         return Collections.singletonList(new ResultItem(getName(), getCompatibilityResponse()));
     }
 
