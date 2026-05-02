@@ -1,0 +1,11 @@
+test_id: DMC-909
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+build_command: ./gradlew --no-daemon :dmtools-core:build
+removed_files:
+  - dmtools-core/src/main/java/com/github/istin/dmtools/dev/CodeGenerator.java
+  - dmtools-core/src/main/java/com/github/istin/dmtools/dev/CodeGeneratorParams.java
+  - dmtools-core/src/test/java/com/github/istin/dmtools/dev/CodeGeneratorTest.java
+  - dmtools-core/src/test/java/com/github/istin/dmtools/dev/CodeGeneratorParamsTest.java
