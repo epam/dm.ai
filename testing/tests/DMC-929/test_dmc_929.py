@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -15,7 +12,7 @@ from testing.components.services.skill_installer_service import SkillInstallerSe
 from testing.core.utils.repo_sandbox import CommandResult  # noqa: E402
 
 
-def test_dmc_929_rerunning_root_installer_with_only_jira_rewrites_installer_skill_config() -> None:
+def test_dmc_929_rerunning_skill_installer_with_only_jira_removes_github_and_updates_metadata() -> None:
     service = SkillInstallerService(REPOSITORY_ROOT)
 
     result = service.run_selective_skill_uninstall(
@@ -28,12 +25,11 @@ def test_dmc_929_rerunning_root_installer_with_only_jira_rewrites_installer_skil
 
 
 class FakeSandbox:
-    def __init__(self, repository_root: Path, sandbox_root: Path) -> None:
+    def __init__(self, sandbox_root: Path) -> None:
         self.workspace = sandbox_root / "workspace"
         self.home = sandbox_root / "home"
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.home.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(repository_root / "install.sh", self.workspace / "install.sh")
         self.commands: list[tuple[str, int]] = []
         self.cleaned_up = False
 
@@ -42,29 +38,29 @@ class FakeSandbox:
 
     def run(self, command: str, timeout: int = 1800) -> CommandResult:
         self.commands.append((command, timeout))
-        completed = subprocess.run(
-            ["bash", "-lc", command],
-            cwd=self.workspace,
-            env={
-                **os.environ,
-                "HOME": str(self.home),
-                "PYTHONUNBUFFERED": "1",
-            },
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
+        skills_root = self.workspace / ".claude" / "skills"
+        github_dir = skills_root / "dmtools-github"
+        if github_dir.exists():
+            for child in github_dir.iterdir():
+                child.unlink()
+            github_dir.rmdir()
+        (skills_root / "installed-skills.json").write_text(
+            '{\n'
+            '  "installed_skills": ["jira"],\n'
+            '  "active_commands": ["/dmtools-jira"]\n'
+            '}\n',
+            encoding="utf-8",
         )
         return CommandResult(
             command=command,
-            returncode=completed.returncode,
-            stdout=completed.stdout,
-            stderr=completed.stderr,
+            returncode=0,
+            stdout="stubbed rerun\n",
+            stderr="",
         )
 
 
-def test_dmc_929_service_uses_injected_sandbox_and_parses_exact_skill_config(tmp_path: Path) -> None:
-    sandbox = FakeSandbox(REPOSITORY_ROOT, tmp_path)
+def test_dmc_929_service_uses_injected_sandbox_and_parses_exact_metadata(tmp_path: Path) -> None:
+    sandbox = FakeSandbox(tmp_path)
     service = SkillInstallerService(
         REPOSITORY_ROOT,
         sandbox_factory=lambda _: sandbox,
@@ -76,21 +72,15 @@ def test_dmc_929_service_uses_injected_sandbox_and_parses_exact_skill_config(tmp
     )
     failures = service.validate_selective_uninstall(result)
 
-    assert len(sandbox.commands) == 2
+    assert len(sandbox.commands) == 1
+    assert "dmtools-ai-docs/install.sh" in sandbox.commands[0][0]
+    assert "--skills jira" in sandbox.commands[0][0]
     assert sandbox.cleaned_up is True
-    assert result.initial_config is not None
-    assert result.initial_config.skills == ("jira", "github")
-    assert result.initial_config.integrations == (
-        "ai",
-        "cli",
-        "file",
-        "kb",
-        "mermaid",
-        "jira",
-        "github",
-    )
-    assert result.updated_config is not None
-    assert result.updated_config.skills == ("jira",)
-    assert result.updated_config.integrations == ("ai", "cli", "file", "kb", "mermaid", "jira")
-    assert "github" not in result.updated_config.raw
+    assert result.initial_metadata is not None
+    assert result.initial_metadata.installed_skills == ("jira", "github")
+    assert result.initial_metadata.active_commands == ("/dmtools-jira", "/dmtools-github")
+    assert result.final_metadata is not None
+    assert result.final_metadata.installed_skills == ("jira",)
+    assert result.final_metadata.active_commands == ("/dmtools-jira",)
+    assert result.final_removed_state.exists is False
     assert not failures, service.format_failures(result, failures)
