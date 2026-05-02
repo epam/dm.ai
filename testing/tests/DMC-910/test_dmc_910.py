@@ -18,5 +18,10 @@ def test_dmc_910_codegenerator_migration_guidance_is_visible_and_actionable() ->
         "jobs reference deprecation notice",
     }
 
+    assert service.jobs_reference_notice_appears_near_top(), (
+        "Expected the jobs reference deprecation notice to appear within the first few "
+        "non-empty lines near the top of the page."
+    )
+
     incomplete_audits = [audit for audit in audits if audit.missing_requirements]
     assert not incomplete_audits, service.format_missing_requirements(audits)

@@ -28,6 +28,21 @@ class CodeGeneratorMigrationGuidanceService:
             self._audit_jobs_reference_notice(),
         ]
 
+    def jobs_reference_notice_appears_near_top(self) -> bool:
+        lines = self.jobs_reference_path.read_text(encoding="utf-8").splitlines()
+        non_empty_lines = [line.strip() for line in lines if line.strip()]
+        first_blockquote_index = next(
+            (index for index, line in enumerate(non_empty_lines) if line.startswith(">")),
+            None,
+        )
+
+        return (
+            len(non_empty_lines) >= 3
+            and non_empty_lines[0].startswith("# ")
+            and first_blockquote_index is not None
+            and first_blockquote_index <= 2
+        )
+
     @staticmethod
     def format_missing_requirements(audits: list[MigrationGuidanceAudit]) -> str:
         lines = [
@@ -71,23 +86,27 @@ class CodeGeneratorMigrationGuidanceService:
     def _audit_jobs_reference_notice(self) -> MigrationGuidanceAudit:
         notice = self._extract_first_blockquote(self.jobs_reference_path)
         normalized_notice = self._normalize(notice)
+        placement_is_valid = self.jobs_reference_notice_appears_near_top()
         missing_requirements = tuple(
             requirement
-            for requirement, token in {
-                "CodeGenerator mention": "`codegenerator`",
-                "unsupported workflow wording": "no longer a supported development workflow",
-                "compatibility shim wording": "compatibility shim",
-                "deprecation warning wording": "logs a deprecation warning",
-                "no-generation wording": "performs no generation",
-                "alternative points to Teammate": "`teammate`-driven development flows",
-                "version target v1.8.0": "v1.8.0",
+            for requirement, is_missing in {
+                "CodeGenerator mention": "`codegenerator`" not in normalized_notice,
+                "unsupported workflow wording": "no longer a supported development workflow"
+                not in normalized_notice,
+                "compatibility shim wording": "compatibility shim" not in normalized_notice,
+                "deprecation warning wording": "logs a deprecation warning" not in normalized_notice,
+                "no-generation wording": "performs no generation" not in normalized_notice,
+                "alternative points to Teammate": "`teammate`-driven development flows"
+                not in normalized_notice,
+                "version target v1.8.0": "v1.8.0" not in normalized_notice,
+                "leading placement near top of page": not placement_is_valid,
             }.items()
-            if token not in normalized_notice
+            if is_missing
         )
         return MigrationGuidanceAudit(
             label="jobs reference deprecation notice",
             path=self.jobs_reference_path,
-            location="leading blockquote notice",
+            location="blockquote notice near the top of the page",
             content=notice,
             missing_requirements=missing_requirements,
         )
