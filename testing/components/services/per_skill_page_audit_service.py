@@ -6,6 +6,10 @@ from pathlib import Path
 from testing.components.services.documentation_cross_link_service import (
     DocumentationCrossLinkService,
 )
+from testing.components.services.per_skill_catalog_service import (
+    PerSkillCatalogService,
+    SkillCatalogExpectation,
+)
 
 
 MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
@@ -33,6 +37,10 @@ class PerSkillPageAuditService:
             self.docs_root / "references" / "installation" / "README.md"
         )
         self.cross_link_service = DocumentationCrossLinkService(repository_root)
+        self.skill_expectations = {
+            expectation.skill_name: expectation
+            for expectation in PerSkillCatalogService.EXPECTED_SKILLS
+        }
 
     def audit(self) -> list[str]:
         findings: list[str] = []
@@ -87,19 +95,24 @@ class PerSkillPageAuditService:
                 + "."
             )
 
-        expected_package_identifier = self.expected_package_identifier(page_path)
-        if expected_package_identifier not in content:
+        expected_skill = self.expected_skill(page_path)
+        if expected_skill is None:
             findings.append(
-                f"{self.relative_path(page_path)} does not include expected Java package "
-                f"identifier {expected_package_identifier!r}."
+                f"{self.relative_path(page_path)} is not listed in the canonical per-skill "
+                "catalogue mapping."
             )
+        else:
+            if expected_skill.java_package not in content:
+                findings.append(
+                    f"{self.relative_path(page_path)} does not include expected Java package "
+                    f"identifier {expected_skill.java_package!r}."
+                )
 
-        expected_endpoint = self.expected_endpoint(page_path)
-        if expected_endpoint not in content:
-            findings.append(
-                f"{self.relative_path(page_path)} does not include expected slash-command "
-                f"identifier {expected_endpoint!r}."
-            )
+            if expected_skill.slash_command not in content:
+                findings.append(
+                    f"{self.relative_path(page_path)} does not include expected slash-command "
+                    f"identifier {expected_skill.slash_command!r}."
+                )
 
         links = self.cross_link_service.parse_markdown_links(content)
         if not self.has_link_to(page_path, links, self.installation_guide_path):
@@ -130,12 +143,8 @@ class PerSkillPageAuditService:
         normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
         return re.sub(r"\s+", " ", normalized).strip()
 
-    def expected_package_identifier(self, page_path: Path) -> str:
-        skill_name = self.skill_name(page_path)
-        return f"com.github.istin.dmtools.{skill_name.replace('-', '.')}"
-
-    def expected_endpoint(self, page_path: Path) -> str:
-        return f"/{page_path.stem}"
+    def expected_skill(self, page_path: Path) -> SkillCatalogExpectation | None:
+        return self.skill_expectations.get(self.canonical_skill_name(page_path))
 
     def has_link_to(self, source_path: Path, links: list, expected_target: Path) -> bool:
         expected_resolved = expected_target.resolve()
@@ -146,10 +155,10 @@ class PerSkillPageAuditService:
         )
 
     @staticmethod
-    def skill_name(page_path: Path) -> str:
+    def canonical_skill_name(page_path: Path) -> str:
         if page_path.stem.startswith("dmtools-"):
-            return page_path.stem[len("dmtools-") :]
-        return page_path.stem
+            return page_path.stem
+        return f"dmtools-{page_path.stem}"
 
     def relative_path(self, path: Path) -> str:
         return path.relative_to(self.repository_root).as_posix()
