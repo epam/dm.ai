@@ -34,6 +34,7 @@ class InstallerMetadataRun:
 
 class InstallerMetadataService:
     DEFAULT_INSTALLER_URL = "https://raw.githubusercontent.com/epam/dm.ai/main/install"
+    _POST_METADATA_STEP_MARKER = "UNEXPECTED post_metadata_step"
     _SKILL_COLLECTION_KEYS = frozenset(
         {
             "skills",
@@ -101,6 +102,65 @@ class InstallerMetadataService:
 
         return InstallerMetadataRun(
             installer_url=self.installer_url,
+            temp_root=temp_root,
+            install_dir=install_dir,
+            bin_dir=bin_dir,
+            requested_skills=normalized_skills,
+            execution=execution,
+        )
+
+    @property
+    def post_metadata_step_marker(self) -> str:
+        return self._POST_METADATA_STEP_MARKER
+
+    def run_local_selective_install_with_write_protected_install_dir(
+        self,
+        skills: Sequence[str],
+    ) -> InstallerMetadataRun:
+        normalized_skills = tuple(skill.strip().lower() for skill in skills if skill.strip())
+        if not normalized_skills:
+            raise ValueError("At least one skill must be provided.")
+
+        temp_root = Path(tempfile.mkdtemp(prefix="dmtools-installer-metadata-readonly-"))
+        install_dir = temp_root / "install"
+        bin_dir = install_dir / "bin"
+        home_dir = temp_root / "home"
+
+        install_dir.mkdir(parents=True, exist_ok=True)
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        install_dir.chmod(0o555)
+        bin_dir.chmod(0o555)
+
+        script = "\n".join(
+            [
+                "set -e",
+                f'source "{self.repository_root / "install.sh"}"',
+                "check_java() { :; }",
+                "get_latest_version() { printf 'v0.0.0-test'; }",
+                "create_install_dir() { :; }",
+                "write_installer_skill_config() { :; }",
+                "download_dmtools() { :; }",
+                f'update_shell_config() {{ printf "{self._POST_METADATA_STEP_MARKER}\\n"; }}',
+                f'verify_installation() {{ printf "{self._POST_METADATA_STEP_MARKER}\\n"; }}',
+                f'print_instructions() {{ printf "{self._POST_METADATA_STEP_MARKER}\\n"; }}',
+                "main",
+            ]
+        )
+        execution = self.runner.run(
+            ["bash", "-lc", script],
+            cwd=self.repository_root,
+            env={
+                "HOME": str(home_dir),
+                "SHELL": "/bin/bash",
+                "DMTOOLS_INSTALLER_TEST_MODE": "true",
+                "DMTOOLS_INSTALL_DIR": str(install_dir),
+                "DMTOOLS_BIN_DIR": str(bin_dir),
+                "DMTOOLS_SKILLS": ",".join(normalized_skills),
+            },
+        )
+
+        return InstallerMetadataRun(
+            installer_url=str(self.repository_root / "install.sh"),
             temp_root=temp_root,
             install_dir=install_dir,
             bin_dir=bin_dir,
