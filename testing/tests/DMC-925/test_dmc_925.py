@@ -1,16 +1,11 @@
-from pathlib import Path
-
 from testing.components.services.installer_skill_selection_service import (
     InstallerSkillSelectionService,
 )
 
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-
-
-def test_dmc_925_installer_normalizes_and_deduplicates_skills_from_env_and_cli() -> None:
-    service = InstallerSkillSelectionService(REPOSITORY_ROOT)
-
+def test_dmc_925_installer_normalizes_and_deduplicates_skills_from_env_and_cli(
+    installer_skill_selection_service: InstallerSkillSelectionService,
+) -> None:
+    service = installer_skill_selection_service
     env_observation = service.resolve_with_env(" Jira, github, JIRA, , confluence ")
     assert env_observation.returncode == 0, service.format_execution_failure(env_observation)
     assert env_observation.effective_skills == ("jira", "github", "confluence"), (
@@ -25,8 +20,11 @@ def test_dmc_925_installer_normalizes_and_deduplicates_skills_from_env_and_cli()
         "The normalized DMTOOLS_SKILLS input should not leave behind invalid entries. "
         f"Observed output:\n{env_observation.visible_output}"
     )
-    assert "Effective skills:" in env_observation.visible_output, (
-        "A user must be able to see the effective skill list in the installer log.\n"
+    assert env_observation.effective_skills_line == (
+        "Effective skills: jira, github, confluence (source: env)"
+    ), (
+        "The env flow must preserve the exact user-facing installer line required by the "
+        "ticket, including comma-and-space formatting.\n"
         f"Observed output:\n{env_observation.visible_output}"
     )
 

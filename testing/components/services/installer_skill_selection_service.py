@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
 import re
 import shlex
-import subprocess
 from pathlib import Path
+from typing import Mapping
 
+from testing.core.interfaces.process_runner import ProcessRunner
 from testing.core.models.installer_skill_selection_observation import (
     InstallerSkillSelectionObservation,
 )
@@ -20,9 +20,14 @@ class InstallerSkillSelectionService:
         r"(?m)^Warning:\s*Skipping unknown skills:\s*(?P<skills>[^\n\r]+)$"
     )
 
-    def __init__(self, repository_root: Path) -> None:
+    def __init__(
+        self,
+        repository_root: Path,
+        runner: ProcessRunner,
+    ) -> None:
         self.repository_root = repository_root
         self.install_script_path = repository_root / "install.sh"
+        self.runner = runner
 
     def resolve_with_env(self, skills_csv: str) -> InstallerSkillSelectionObservation:
         return self._run(
@@ -62,11 +67,12 @@ class InstallerSkillSelectionService:
         command_label: str,
         raw_skills_input: str,
         commands: tuple[str, ...],
-        extra_env: dict[str, str] | None = None,
+        extra_env: Mapping[str, str] | None = None,
     ) -> InstallerSkillSelectionObservation:
-        env = os.environ.copy()
-        env["DMTOOLS_INSTALLER_TEST_MODE"] = "true"
-        if extra_env:
+        env: dict[str, str] = {
+            "DMTOOLS_INSTALLER_TEST_MODE": "true",
+        }
+        if extra_env is not None:
             env.update(extra_env)
 
         script = "\n".join(
@@ -76,13 +82,10 @@ class InstallerSkillSelectionService:
                 *commands,
             )
         )
-        completed = subprocess.run(
+        completed = self.runner.run(
             ["bash", "-lc", script],
             cwd=self.repository_root,
             env=env,
-            capture_output=True,
-            text=True,
-            check=False,
         )
         visible_output = self._strip_ansi(completed.stdout)
         effective_skills_match = self._EFFECTIVE_SKILLS_PATTERN.search(visible_output)
