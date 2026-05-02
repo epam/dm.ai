@@ -440,7 +440,7 @@ resolve_skill_selection() {
         info "Installing all skills (source: $SKILLS_SOURCE)"
     fi
     local effective_skills_display="$EFFECTIVE_SKILLS_CSV"
-    if [ "$SKILLS_SOURCE" = "env" ] && [ "$INSTALL_ALL_SKILLS" != true ]; then
+    if [ "$INSTALL_ALL_SKILLS" != true ]; then
         effective_skills_display=$(join_by_comma_space "${EFFECTIVE_SKILLS[@]}")
     fi
     info "Effective skills: $effective_skills_display (source: $SKILLS_SOURCE)"
