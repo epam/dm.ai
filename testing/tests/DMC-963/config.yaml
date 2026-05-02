@@ -3,6 +3,5 @@ type: api
 framework: pytest
 platform: linux
 dependencies: []
-default_skill: dmtools
 seeded_skills:
   - jira

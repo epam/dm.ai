@@ -15,16 +15,12 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
 SEEDED_SKILLS = tuple(str(skill) for skill in CONFIG["seeded_skills"])
-DEFAULT_SKILL = str(CONFIG["default_skill"])
 
 
-def test_dmc_963_empty_skill_selection_falls_back_to_dmtools_and_rewrites_metadata() -> None:
+def test_dmc_963_empty_skill_selection_removes_all_artifacts_and_clears_metadata() -> None:
     service = SkillInstallerService(REPOSITORY_ROOT)
 
-    result = service.run_default_skill_reinstall(
-        seeded_skills=SEEDED_SKILLS,
-        default_skill=DEFAULT_SKILL,
-    )
-    failures = service.validate_default_skill_reinstall(result)
+    result = service.run_deselect_all_skills(seeded_skills=SEEDED_SKILLS)
+    failures = service.validate_deselect_all_skills(result)
 
-    assert not failures, service.format_default_skill_reinstall_failures(result, failures)
+    assert not failures, service.format_deselect_all_failures(result, failures)
