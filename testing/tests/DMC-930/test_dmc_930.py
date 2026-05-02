@@ -35,11 +35,12 @@ def build_service() -> InstallerMetadataService:
 def test_dmc_930_selective_install_generates_machine_readable_metadata_files() -> None:
     service = build_service()
     run = service.run_selective_install(SELECTED_SKILLS)
+    visible_output = service.normalized_stdout(run.execution)
 
     assert run.execution.returncode == 0, service.format_execution_failure(run)
-    assert "Effective skills: jira, confluence (source: env)" in run.execution.stdout, (
+    assert service.output_reports_selected_skills(run.execution, SELECTED_SKILLS, "env"), (
         "The installer did not report the selected skills in its user-visible output.\n"
-        f"stdout:\n{run.execution.stdout}\n\nstderr:\n{run.execution.stderr}"
+        f"stdout:\n{visible_output}\n\nstderr:\n{run.execution.stderr}"
     )
     assert run.installer_env_path.exists(), service.format_missing_artifact(
         run,
@@ -119,3 +120,19 @@ def test_dmc_930_payload_contains_skills_ignores_unrelated_nested_name_and_id_fi
     }
 
     assert not service.payload_contains_skills(payload, SELECTED_SKILLS)
+
+
+def test_dmc_930_output_reports_selected_skills_ignores_ansi_and_spacing() -> None:
+    service = InstallerMetadataService(REPOSITORY_ROOT, runner=_UnusedRunner())
+    execution = ProcessExecutionResult(
+        args=("bash",),
+        cwd=REPOSITORY_ROOT,
+        returncode=0,
+        stdout=(
+            "\x1b[0;32m🚀 Installing DMTools CLI...\x1b[0m\n"
+            "\x1b[0;32mEffective skills: jira, confluence (source: env)\x1b[0m\n"
+        ),
+        stderr="",
+    )
+
+    assert service.output_reports_selected_skills(execution, SELECTED_SKILLS, "env")
