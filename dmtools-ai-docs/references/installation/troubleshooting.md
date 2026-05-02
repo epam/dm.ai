@@ -1,5 +1,7 @@
 # DMtools Installation Troubleshooting
 
+[Back to README installation](../../../README.md#installation)
+
 ## 🔍 Common Installation Issues
 
 ### Issue: "Java version not found" or "Java 17+ required"
