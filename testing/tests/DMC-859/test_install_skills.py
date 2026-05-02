@@ -163,6 +163,20 @@ printf 'integrations=%s\\n' "$EFFECTIVE_INTEGRATIONS_CSV"
         self.assertIn("source=env", result.stdout)
         self.assertIn("integrations=ai,cli,file,kb,mermaid,jira,github", result.stdout)
 
+    def test_env_selection_logs_effective_skills_with_comma_space_formatting(self) -> None:
+        result = run_installer_functions(
+            """
+parse_installer_args
+resolve_skill_selection
+""",
+            {"DMTOOLS_SKILLS": " Jira, github, JIRA, , confluence "},
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn(
+            "Effective skills: jira, github, confluence (source: env)", result.stdout
+        )
+
     def test_unknown_skills_warn_and_known_skills_continue(self) -> None:
         result = run_installer_functions(
             """

@@ -90,6 +90,18 @@ join_by_comma() {
     printf '%s' "$*"
 }
 
+join_by_comma_space() {
+    local result=""
+    local item
+    for item in "$@"; do
+        if [ -n "$result" ]; then
+            result="$result, "
+        fi
+        result="$result$item"
+    done
+    printf '%s' "$result"
+}
+
 append_unique() {
     local array_name="$1"
     local candidate="$2"
@@ -302,7 +314,9 @@ resolve_skill_selection() {
     if [ "$INSTALL_ALL_SKILLS" = true ]; then
         info "Installing all skills (source: $SKILLS_SOURCE)"
     fi
-    info "Effective skills: $EFFECTIVE_SKILLS_CSV (source: $SKILLS_SOURCE)"
+    local effective_skills_display
+    effective_skills_display=$(join_by_comma_space "${EFFECTIVE_SKILLS[@]}")
+    info "Effective skills: $effective_skills_display (source: $SKILLS_SOURCE)"
     info "Effective integrations: $EFFECTIVE_INTEGRATIONS_CSV"
 }
 
