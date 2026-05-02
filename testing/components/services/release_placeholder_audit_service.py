@@ -3,8 +3,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from testing.core.interfaces.release_placeholder_audit import ReleasePlaceholderAudit
 
-class ReleasePlaceholderAuditService:
+
+class ReleasePlaceholderAuditService(ReleasePlaceholderAudit):
     _DEFAULT_DOC_RELATIVE_PATH = "dmtools-ai-docs/references/installation/README.md"
     _RELEASE_TAG_PLACEHOLDER_PATTERN = re.compile(
         r"https://github\.com/epam/dm\.ai/releases/download/\$\{DMTOOLS_RELEASE_TAG\}/"
@@ -19,6 +21,35 @@ class ReleasePlaceholderAuditService:
         r"https://github\.com/epam/dm\.ai/releases/latest/download/"
     )
     _RELEASE_TAG_REFERENCE_PATTERN = re.compile(r"release[- ]tags?", re.IGNORECASE)
+    _PINNED_REFERENCE_PATTERNS = (
+        re.compile(r"\bpinned\b"),
+        re.compile(r"\bpin(?:ned)?\s+(?:to|with)\b"),
+        re.compile(r"\bfixed\b"),
+        re.compile(r"\bspecific\b"),
+        re.compile(r"\bversion-pinned\b"),
+    )
+    _MUTABILITY_PATTERNS = (
+        re.compile(r"\bmutable\b"),
+        re.compile(r"\bfloating\b"),
+        re.compile(r"\bmoving target\b"),
+        re.compile(r"\b(?:can|may|will)\s+change\b"),
+        re.compile(r"\b(?:can|may|will)\s+move\b"),
+        re.compile(r"\b(?:changes|moves)\s+over\s+time\b"),
+        re.compile(r"\b(?:is|are)\s+not\s+(?:fixed|pinned|immutable|stable)\b"),
+        re.compile(r"\bisn['’]t\s+(?:fixed|pinned|immutable|stable)\b"),
+    )
+    _AUTHORITY_PATTERNS = (
+        re.compile(r"\bauthoritative\b"),
+        re.compile(r"\bsource of truth\b"),
+        re.compile(r"\bcanonical\b"),
+        re.compile(r"\bpreferred reference\b"),
+        re.compile(r"\brecommended reference\b"),
+        re.compile(r"\bstable reference\b"),
+    )
+    _PIN_TARGET_PATTERNS = (
+        _RELEASE_TAG_REFERENCE_PATTERN,
+        re.compile(r"\bversion(?:s)?\b"),
+    )
 
     def __init__(
         self,
@@ -161,11 +192,15 @@ class ReleasePlaceholderAuditService:
         normalized = " ".join(paragraph.casefold().split())
         return (
             "latest" in normalized
-            and "mutable" in normalized
-            and "pinned" in normalized
-            and "authoritative" in normalized
-            and self._RELEASE_TAG_REFERENCE_PATTERN.search(normalized) is not None
+            and self._matches_any(normalized, self._MUTABILITY_PATTERNS)
+            and self._matches_any(normalized, self._PINNED_REFERENCE_PATTERNS)
+            and self._matches_any(normalized, self._PIN_TARGET_PATTERNS)
+            and self._matches_any(normalized, self._AUTHORITY_PATTERNS)
         )
+
+    @staticmethod
+    def _matches_any(text: str, patterns: tuple[re.Pattern[str], ...]) -> bool:
+        return any(pattern.search(text) is not None for pattern in patterns)
 
     def _format_line_matches(
         self,
