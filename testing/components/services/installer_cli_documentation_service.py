@@ -6,6 +6,14 @@ from pathlib import Path
 
 class InstallerCliDocumentationService:
     SECTION_HEADING = "Install Only the Skills You Need"
+    SINGLE_SKILL_PATTERN = re.compile(r"--skills\s+[a-z0-9-]+\b")
+    MULTI_SKILL_PATTERN = re.compile(r"--skills\s+[a-z0-9-]+(?:,[a-z0-9-]+)+\b")
+    UNSUPPORTED_FLAG_PATTERNS = {
+        "`--skill <name>`": re.compile(r"--skill(?=[\s`=]|$)"),
+        "`--skills=<name,name>`": re.compile(r"--skills="),
+        "`--all-skills`": re.compile(r"--all-skills"),
+        "`--skip-unknown`": re.compile(r"--skip-unknown"),
+    }
 
     def __init__(self, repository_root: Path) -> None:
         self.repository_root = repository_root
@@ -34,48 +42,52 @@ class InstallerCliDocumentationService:
         normalized_section = self._normalize(section)
 
         findings: list[str] = []
-        if not self._has_primary_skill_flag(section, normalized_section):
+        if not self._has_supported_skill_examples(section):
             findings.append(
-                "The installer usage section does not document `--skill <name>` as the "
-                "primary or canonical skill-selection form."
+                "The installer usage section does not show the supported "
+                "`--skills <name[,name]>` syntax with copy-pasteable examples for "
+                "focused skill installs."
             )
-        if not self._has_skills_alias(section, normalized_section):
+        if "DMTOOLS_SKILLS" not in section:
             findings.append(
-                "The installer usage section does not document `--skills=<name,name>` "
-                "as an allowed alias for multi-skill selection."
+                "The installer usage section does not mention the supported "
+                "`DMTOOLS_SKILLS` environment variable for non-interactive skill "
+                "selection."
             )
-        if "--all-skills" not in section:
+        findings.extend(self._unsupported_flag_findings(section))
+        if self._has_unsupported_invalid_skill_behavior(normalized_section):
             findings.append(
-                "The installer usage section does not mention the `--all-skills` flag."
-            )
-        if "--skip-unknown" not in section:
-            findings.append(
-                "The installer usage section does not mention the `--skip-unknown` flag."
-            )
-        if not self._has_invalid_skill_behavior(section, normalized_section):
-            findings.append(
-                "The installer usage section does not explicitly describe invalid-skill "
-                "behavior: non-zero exit with invalid names listed, and warnings when "
-                "`--skip-unknown` is used."
+                "The installer usage section describes unsupported invalid-skill "
+                "handling. The current installer exits with `Unsupported skill package: "
+                "<name>` and does not support warning downgrades or `--skip-unknown`."
             )
         return findings
 
     def format_findings(self, findings: list[str]) -> str:
+        observed_section = self._observed_section()
         lines = [
-            "Expected the installation guide to describe the canonical installer "
-            "selection flags and invalid-skill behavior.",
+            "Expected the installation guide to match the supported installer skill "
+            "selection syntax and avoid unsupported flags or error-handling claims.",
             f"Checked file: {self.installation_readme_path.relative_to(self.repository_root)}",
             "",
             "Missing or incomplete expectations:",
             *[f"- {finding}" for finding in findings],
             "",
             "Observed 'Install Only the Skills You Need' section:",
-            self._indented_section(self._extract_named_sections(
-                self.installation_readme_path,
-                self.SECTION_HEADING,
-            )[0]),
+            self._indented_section(observed_section) if observed_section else "  (section missing)",
         ]
         return "\n".join(lines)
+
+    def _observed_section(self) -> str | None:
+        if not self.installation_readme_path.exists():
+            return None
+        sections = self._extract_named_sections(
+            self.installation_readme_path,
+            self.SECTION_HEADING,
+        )
+        if not sections:
+            return None
+        return sections[0]
 
     @staticmethod
     def _extract_named_sections(path: Path, heading: str) -> list[str]:
@@ -90,9 +102,12 @@ class InstallerCliDocumentationService:
 
             level = len(match.group("hashes"))
             collected_lines = [line]
+            in_code_block = False
             for candidate_line in lines[index + 1 :]:
                 stripped_candidate = candidate_line.strip()
-                if stripped_candidate.startswith("#"):
+                if stripped_candidate.startswith("```"):
+                    in_code_block = not in_code_block
+                if not in_code_block and stripped_candidate.startswith("#"):
                     next_heading_match = re.match(r"^(?P<hashes>#+)\s+", stripped_candidate)
                     if next_heading_match and len(next_heading_match.group("hashes")) <= level:
                         break
@@ -106,52 +121,35 @@ class InstallerCliDocumentationService:
         return re.sub(r"\s+", " ", content).lower()
 
     @staticmethod
-    def _has_primary_skill_flag(section: str, normalized_section: str) -> bool:
-        mentions_flag = bool(
-            re.search(r"--skill(?:\s+<name>|(?:=|\s+)[a-z0-9-]+)", section)
+    def _has_supported_skill_examples(section: str) -> bool:
+        return bool(
+            InstallerCliDocumentationService.SINGLE_SKILL_PATTERN.search(section)
+            and InstallerCliDocumentationService.MULTI_SKILL_PATTERN.search(section)
         )
-        mentions_primary = any(
-            token in normalized_section
-            for token in ("primary", "canonical", "preferred", "recommended")
-        )
-        return mentions_flag and mentions_primary
+
+    @classmethod
+    def _unsupported_flag_findings(cls, section: str) -> list[str]:
+        findings: list[str] = []
+        for label, pattern in cls.UNSUPPORTED_FLAG_PATTERNS.items():
+            if pattern.search(section):
+                findings.append(
+                    "The installer usage section documents unsupported syntax "
+                    f"{label}; the current installer supports `--skills <name[,name]>` "
+                    "for focused installs instead."
+                )
+        return findings
 
     @staticmethod
-    def _has_skills_alias(section: str, normalized_section: str) -> bool:
-        mentions_flag = bool(
-            re.search(r"--skills=(?:<name,name>|[a-z0-9-]+(?:,[a-z0-9-]+)+)", section)
-        )
-        mentions_alias = any(
-            token in normalized_section
-            for token in (
-                "alias",
-                "also supported",
-                "still supported",
-                "allowed alias",
-            )
-        )
-        return mentions_flag and mentions_alias
-
-    @staticmethod
-    def _has_invalid_skill_behavior(section: str, normalized_section: str) -> bool:
-        mentions_invalid_names = (
-            "invalid names" in normalized_section
-            or "invalid name" in normalized_section
-            or "unknown skill names" in normalized_section
-        )
-        mentions_non_zero_exit = any(
-            token in normalized_section
-            for token in ("non-zero exit", "nonzero exit", "exit 1", "status 1")
-        )
-        mentions_warning_downgrade = "--skip-unknown" in section and any(
+    def _has_unsupported_invalid_skill_behavior(normalized_section: str) -> bool:
+        mentions_warning_downgrade = any(
             token in normalized_section
             for token in ("warning", "warnings", "warn instead", "downgrade")
         )
-        return (
-            mentions_invalid_names
-            and mentions_non_zero_exit
-            and mentions_warning_downgrade
+        mentions_unknown_skills = any(
+            token in normalized_section
+            for token in ("unknown skill", "unknown skills", "invalid skill", "invalid skills")
         )
+        return mentions_warning_downgrade and mentions_unknown_skills
 
     @staticmethod
     def _indented_section(section: str) -> str:

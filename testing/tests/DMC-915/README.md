@@ -1,6 +1,6 @@
 # DMC-915 automated test
 
-This test validates that `dmtools-ai-docs/references/installation/README.md` documents the canonical installer skill-selection syntax and the observable behavior for invalid skill names.
+This test validates that `dmtools-ai-docs/references/installation/README.md` matches the installer syntax that is actually supported today for focused skill installation and does not promise unsupported flags or warning-based error handling.
 
 ## Install dependencies
 
