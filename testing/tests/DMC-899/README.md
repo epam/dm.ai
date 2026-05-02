@@ -21,5 +21,5 @@ No environment variables are required. The test reads `README.md` directly from 
 ## Expected passing output
 
 ```text
-1 passed
+4 passed
 ```
