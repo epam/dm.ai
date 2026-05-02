@@ -164,10 +164,23 @@ printf 'integrations=%s\\n' "$EFFECTIVE_INTEGRATIONS_CSV"
         self.assertIn("source=env", result.stdout)
         self.assertIn("integrations=ai,cli,file,kb,mermaid,jira,github", result.stdout)
 
-    def test_unknown_skills_warn_and_known_skills_continue(self) -> None:
+    def test_cli_unknown_skills_fail_without_skip_unknown(self) -> None:
         result = run_installer_functions(
             """
 parse_installer_args --skills jira,unknown,GITHUB
+resolve_skill_selection
+"""
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(
+            "Unknown skills: unknown. Use --skip-unknown to continue.", result.stderr
+        )
+
+    def test_cli_skip_unknown_warns_and_keeps_known_skills(self) -> None:
+        result = run_installer_functions(
+            """
+parse_installer_args --skills=jira,unknown,GITHUB --skip-unknown
 resolve_skill_selection
 printf 'skills=%s\\n' "$EFFECTIVE_SKILLS_CSV"
 printf 'invalid=%s\\n' "$INVALID_SKILLS_CSV"
