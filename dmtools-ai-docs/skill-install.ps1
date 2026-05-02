@@ -7,18 +7,15 @@
 #   irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | iex
 #   # When piped (non-interactive): installs to ALL detected locations automatically
 #
-#   $env:INSTALL_LOCATION = "1"; irm .../skill-install.ps1 | iex   # Install to first location only
-#   # Interactive: runs menu to choose location
+#   $env:DMTOOLS_SKILLS = "jira,github"; irm .../skill-install.ps1 | iex
+#   $env:INSTALL_LOCATION = "1"; irm .../skill-install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
-# Configuration
-$SKILL_NAME   = "dmtools"
-$GITHUB_REPO  = "epam/dm.ai"
-$TEMP_DIR     = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.Guid]::NewGuid().ToString())
+$GITHUB_REPO = "epam/dm.ai"
+$TEMP_DIR = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.Guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $TEMP_DIR | Out-Null
 
-# ── Output helpers ────────────────────────────────────────────────────────────
 function Write-Header {
     Write-Host ""
     Write-Host "╔════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -26,90 +23,161 @@ function Write-Header {
     Write-Host "╚════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
 }
-function Write-Ok($msg)   { Write-Host "✓ $msg" -ForegroundColor Green  }
-function Write-Err($msg)  { Write-Host "✗ $msg" -ForegroundColor Red    }
-function Write-Info($msg) { Write-Host "ℹ $msg" -ForegroundColor Yellow }
 
-# ── Detect skill directories ──────────────────────────────────────────────────
+function Write-Ok($msg) {
+    Write-Host "✓ $msg" -ForegroundColor Green
+}
+
+function Write-Err($msg) {
+    Write-Host "✗ $msg" -ForegroundColor Red
+}
+
+function Write-Info($msg) {
+    Write-Host "ℹ $msg" -ForegroundColor Yellow
+}
+
+function Get-SkillAssetName($skillKey) {
+    switch ($skillKey.ToLowerInvariant()) {
+        "dmtools" { "dmtools-skill.zip" }
+        "jira" { "dmtools-jira-skill.zip" }
+        "github" { "dmtools-github-skill.zip" }
+        "ado" { "dmtools-ado-skill.zip" }
+        "testrail" { "dmtools-testrail-skill.zip" }
+        default { throw "Unsupported skill package: $skillKey" }
+    }
+}
+
+function Get-SkillInstallName($skillKey) {
+    switch ($skillKey.ToLowerInvariant()) {
+        "dmtools" { "dmtools" }
+        "jira" { "dmtools-jira" }
+        "github" { "dmtools-github" }
+        "ado" { "dmtools-ado" }
+        "testrail" { "dmtools-testrail" }
+        default { throw "Unsupported skill package: $skillKey" }
+    }
+}
+
+function Get-SkillCommandName($skillKey) {
+    switch ($skillKey.ToLowerInvariant()) {
+        "dmtools" { "/dmtools" }
+        "jira" { "/dmtools-jira" }
+        "github" { "/dmtools-github" }
+        "ado" { "/dmtools-ado" }
+        "testrail" { "/dmtools-testrail" }
+        default { throw "Unsupported skill package: $skillKey" }
+    }
+}
+
+function Get-RequestedSkills {
+    $raw = $env:DMTOOLS_SKILLS
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        return @("dmtools")
+    }
+
+    $normalized = @()
+    foreach ($skill in $raw.Split(",")) {
+        $name = $skill.Trim().ToLowerInvariant()
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            continue
+        }
+
+        switch ($name) {
+            "dmtools" { $normalized += $name }
+            "jira" { $normalized += $name }
+            "github" { $normalized += $name }
+            "ado" { $normalized += $name }
+            "testrail" { $normalized += $name }
+            default { throw "Unsupported skill package: $name" }
+        }
+    }
+
+    if ($normalized.Count -eq 0) {
+        return @("dmtools")
+    }
+    return $normalized
+}
+
 function Get-SkillDirs {
     $dirs = @()
-    $cwd  = (Get-Location).Path
+    $cwd = (Get-Location).Path
 
     foreach ($sub in @(".cursor", ".claude", ".codex")) {
         $path = Join-Path $cwd $sub
-        if (Test-Path $path) { $dirs += Join-Path $path "skills" }
+        if (Test-Path $path) {
+            $dirs += Join-Path $path "skills"
+        }
     }
 
     $globalClaude = Join-Path $env:USERPROFILE ".claude"
     if (Test-Path $globalClaude) {
         $globalSkills = Join-Path $globalClaude "skills"
-        # Add only if not already covered by project-level .claude
         $alreadyAdded = $dirs | Where-Object { $_ -eq (Join-Path $cwd ".claude\skills") }
-        if (-not $alreadyAdded) { $dirs += $globalSkills }
+        if (-not $alreadyAdded) {
+            $dirs += $globalSkills
+        }
     }
 
-    if ($dirs.Count -eq 0) { $dirs += Join-Path $cwd ".cursor\skills" }
+    if ($dirs.Count -eq 0) {
+        $dirs += Join-Path $cwd ".cursor\skills"
+    }
     return $dirs
 }
 
-# ── Download skill package ────────────────────────────────────────────────────
-function Get-SkillPackage {
-    Write-Info "Fetching latest release information..."
+function Get-SkillPackage($skillKey) {
+    $assetName = Get-SkillAssetName $skillKey
+    $zipPath = Join-Path $TEMP_DIR $assetName
+    $extractPath = Join-Path $TEMP_DIR $skillKey
+    New-Item -ItemType Directory -Path $extractPath | Out-Null
 
-    $zipPath = Join-Path $TEMP_DIR "dmtools-skill.zip"
+    Write-Info "Downloading $(Get-SkillInstallName $skillKey) package..."
 
     try {
-        $apiUrl   = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-        $release  = Invoke-RestMethod -Uri $apiUrl -TimeoutSec 30
-        $asset    = $release.assets | Where-Object { $_.name -like "dmtools-skill-*.zip" } | Select-Object -First 1
-        if ($asset) {
-            Write-Info "Downloading $($asset.name)..."
-            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
-            Write-Ok "Downloaded latest release"
-        } else {
-            throw "No skill ZIP found in release assets"
-        }
+        $releaseUrl = "https://github.com/$GITHUB_REPO/releases/latest/download/$assetName"
+        Invoke-WebRequest -Uri $releaseUrl -OutFile $zipPath -UseBasicParsing
+        Write-Ok "Downloaded $assetName"
     } catch {
-        Write-Info "Falling back to main branch archive..."
+        if ($skillKey -ne "dmtools") {
+            Write-Err "Failed to download $assetName"
+            throw "Focused skill packages are published from release assets only."
+        }
+
+        Write-Info "Falling back to main branch archive for dmtools..."
         $fallback = "https://github.com/$GITHUB_REPO/archive/refs/heads/main.zip"
         Invoke-WebRequest -Uri $fallback -OutFile $zipPath -UseBasicParsing
-        Write-Ok "Downloaded from main branch"
+        Write-Ok "Downloaded dmtools from main branch"
     }
 
-    Write-Info "Extracting skill package..."
-    Expand-Archive -Path $zipPath -DestinationPath $TEMP_DIR -Force
+    Write-Info "Extracting $assetName..."
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
 
-    # Locate SKILL.md
-    $skillMd = Get-ChildItem -Path $TEMP_DIR -Recurse -Filter "SKILL.md" | Select-Object -First 1
+    $skillMd = Get-ChildItem -Path $extractPath -Recurse -Filter "SKILL.md" | Select-Object -First 1
     if (-not $skillMd) {
         Write-Err "SKILL.md not found in package"
-        throw "Invalid skill package"
+        throw "Invalid skill package: $assetName"
     }
     return $skillMd.DirectoryName
 }
 
-# ── Install to a single directory ────────────────────────────────────────────
-function Install-ToDirectory($skillSource, $targetDir) {
-    $dest = Join-Path $targetDir $SKILL_NAME
+function Install-ToDirectory($skillSource, $targetDir, $skillName) {
+    $dest = Join-Path $targetDir $skillName
     if (Test-Path $dest) {
         Write-Info "Removing old version..."
         Remove-Item -Recurse -Force $dest
     }
     New-Item -ItemType Directory -Path $dest | Out-Null
 
-    # Copy everything except installer artifacts
-    $skip = @("install.sh", "skill-install.ps1", "dmtools-skill.zip")
+    $skip = @("install.sh", "skill-install.ps1")
     Get-ChildItem -Path $skillSource | Where-Object { $_.Name -notin $skip } | ForEach-Object {
         Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
     }
     Write-Ok "Installed to $dest"
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 function Main {
     Write-Header
 
-    $skillSource = Get-SkillPackage
+    $requestedSkills = Get-RequestedSkills
     Write-Info "Detecting skill directories..."
     $dirs = Get-SkillDirs
 
@@ -119,8 +187,12 @@ function Main {
         Write-Host "  $($i+1). $($dirs[$i])"
     }
     Write-Host ""
+    Write-Host "Selected skill packages:" -ForegroundColor Cyan
+    foreach ($skill in $requestedSkills) {
+        Write-Host "  - $(Get-SkillInstallName $skill) ($(Get-SkillCommandName $skill))"
+    }
+    Write-Host ""
 
-    # Determine choice
     $choice = $env:INSTALL_LOCATION
     if (-not $choice) {
         if ($dirs.Count -eq 1) {
@@ -133,21 +205,31 @@ function Main {
         }
     }
 
+    $targetDirs = @()
     if ($choice -eq "all" -or $choice -eq "ALL") {
-        foreach ($dir in $dirs) { Install-ToDirectory $skillSource $dir }
+        $targetDirs = $dirs
     } else {
         $idx = [int]$choice - 1
         if ($idx -ge 0 -and $idx -lt $dirs.Count) {
             $selectedDir = $dirs[$idx]
             New-Item -ItemType Directory -Path $selectedDir -Force | Out-Null
-            Install-ToDirectory $skillSource $selectedDir
+            $targetDirs = @($selectedDir)
         } else {
             Write-Err "Invalid choice: $choice"
             exit 1
         }
     }
 
-    # Cleanup
+    $installedCommands = @()
+    foreach ($skill in $requestedSkills) {
+        $skillSource = Get-SkillPackage $skill
+        $skillName = Get-SkillInstallName $skill
+        $installedCommands += Get-SkillCommandName $skill
+        foreach ($dir in $targetDirs) {
+            Install-ToDirectory $skillSource $dir $skillName
+        }
+    }
+
     Remove-Item -Recurse -Force $TEMP_DIR -ErrorAction SilentlyContinue
 
     Write-Host ""
@@ -155,16 +237,18 @@ function Main {
     Write-Host "        DMtools Skill Installed Successfully!       " -ForegroundColor Green
     Write-Host "════════════════════════════════════════════════════" -ForegroundColor Green
     Write-Host ""
-    Write-Host "The DMtools skill is now available in your AI assistant!" -ForegroundColor White
+    Write-Host "The selected DMtools skills are now available in your AI assistant!" -ForegroundColor White
     Write-Host ""
     Write-Host "You can now:" -ForegroundColor Cyan
-    Write-Host "  • Type /dmtools in chat to invoke the skill"
-    Write-Host "  • Ask about DMtools and the assistant will use the skill automatically"
+    foreach ($commandName in $installedCommands) {
+        Write-Host "  • Type $commandName in chat to invoke the skill"
+    }
+    Write-Host "  • Ask about the installed DMtools areas and the assistant will use the matching skill automatically"
     Write-Host ""
     Write-Host "Example questions:" -ForegroundColor Blue
     Write-Host "  • How do I install DMtools?"
     Write-Host "  • Help me configure Jira integration"
-    Write-Host "  • Show me how to create JavaScript agents"
+    Write-Host "  • Review GitHub pull requests with DMtools"
     Write-Host "  • Generate test cases from user story PROJ-123"
     Write-Host ""
     Write-Host "For more information: https://github.com/epam/dm.ai" -ForegroundColor DarkGray
