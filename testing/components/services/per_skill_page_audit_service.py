@@ -67,6 +67,19 @@ class PerSkillPageAuditService:
             )
             return findings
 
+        expected_child_page_paths = {
+            skill_name: self.per_skill_root / f"{skill_name}.md"
+            for skill_name in self.skill_expectations
+        }
+        actual_skill_names = {self.canonical_skill_name(page_path) for page_path in child_pages}
+        missing_skill_names = sorted(expected_child_page_paths.keys() - actual_skill_names)
+        for skill_name in missing_skill_names:
+            findings.append(
+                "Expected canonical skill child page "
+                f"{self.relative_path(expected_child_page_paths[skill_name])} to exist, "
+                f"but it is missing."
+            )
+
         for page_path in child_pages:
             findings.extend(self.audit_page(page_path))
 
