@@ -13,3 +13,15 @@ This page is the canonical catalogue for the approved focused DMtools skill pack
 | `dmtools-testrail` | `/dmtools-testrail` | `com.github.istin.dmtools.testrail` | `com.github.istin:dmtools-testrail` |
 | `dmtools-teams` | `/dmtools-teams` | `com.github.istin.dmtools.microsoft.teams` | `com.github.istin:dmtools-teams` |
 | `dmtools-report` | `/dmtools-report` | `com.github.istin.dmtools.report` | `com.github.istin:dmtools-report` |
+
+## Child pages
+
+- [dmtools-jira](dmtools-jira.md)
+- [dmtools-confluence](dmtools-confluence.md)
+- [dmtools-github](dmtools-github.md)
+- [dmtools-gitlab](dmtools-gitlab.md)
+- [dmtools-ado](dmtools-ado.md)
+- [dmtools-figma](dmtools-figma.md)
+- [dmtools-testrail](dmtools-testrail.md)
+- [dmtools-teams](dmtools-teams.md)
+- [dmtools-report](dmtools-report.md)
