@@ -23,7 +23,7 @@ function formatResultDetails(label, result) {
 }
 
 function verifyUserFacingRuntimeCommand(service, failures) {
-  const result = service.runDmtools(['run', 'codegenerator', '--param1', 'test']);
+  const result = service.runDmtools(['run', 'codegenerator', '--param1=test']);
   const visibleOutput = service.combinedOutput(result);
 
   expectEqual(
