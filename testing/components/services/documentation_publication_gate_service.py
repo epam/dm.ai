@@ -18,7 +18,12 @@ class DocumentationPublicationGateService:
     REQUIRED_PR_LINE = "Duplicate-check: completed — see ticket comment"
     MAINTAINER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
     LINK_VALIDATION_MARKERS = ("link validation", "link check", "markdown link")
-    SMOKE_CHECK_MARKERS = ("documentation smoke", "docs smoke", "smoke")
+    SMOKE_CHECK_MARKERS = (
+        "documentation smoke",
+        "documentation smoke check",
+        "docs smoke",
+        "docs smoke check",
+    )
     TECHNICAL_WRITER_MARKERS = (
         "technical writer",
         "tech writer",

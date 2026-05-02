@@ -23,5 +23,5 @@ If available, `GH_TOKEN` or `GITHUB_TOKEN` can be set to increase GitHub API rat
 ## Expected passing output
 
 ```text
-4 passed
+7 passed
 ```
