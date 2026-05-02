@@ -90,6 +90,13 @@ public class JobRunner {
         }
     }
 
+    static boolean isKnownJobName(String jobName) {
+        if (jobName == null || jobName.trim().isEmpty()) {
+            return false;
+        }
+        return createJobInstance(jobName.trim()) != null;
+    }
+
     /**
      * Static job instances used only for job listing and name lookup.
      * These should NOT be used for execution to avoid race conditions.
@@ -272,6 +279,7 @@ public class JobRunner {
         System.out.println("Usage:");
         System.out.println("  dmtools list                           # List available MCP tools");
         System.out.println("  dmtools run <json-file>                # Execute job with JSON config file");
+        System.out.println("  dmtools run <job-name> [--key value]   # Execute a registered job without a config file");
         System.out.println("  dmtools run <json-file> <encoded>      # Execute job with file + encoded overrides");
         System.out.println("  dmtools <tool> [args...]              # Execute MCP tool with args");
         System.out.println("  dmtools <tool> --data '{\"json\"}'      # Execute with inline JSON");
@@ -285,6 +293,7 @@ public class JobRunner {
         System.out.println("Examples:");
         System.out.println("  dmtools list");
         System.out.println("  dmtools run job-config.json");
+        System.out.println("  dmtools run codegenerator --param1 test");
         System.out.println("  dmtools run job-config.json \"eyJvdmVycmlkZSI6InZhbHVlIn0=\"  # base64 encoded");
         System.out.println("  dmtools run job-config.json \"%7B%22override%22%3A%22value%22%7D\"  # URL encoded");
         System.out.println("  dmtools jira_get_ticket DMC-479 summary,description");
