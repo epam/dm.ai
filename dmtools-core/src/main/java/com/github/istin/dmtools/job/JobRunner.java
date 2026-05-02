@@ -10,7 +10,7 @@ import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.ba.BusinessAnalyticDORGeneration;
 import com.github.istin.dmtools.ba.RequirementsCollector;
 import com.github.istin.dmtools.ba.UserStoryGenerator;
-import com.github.istin.dmtools.dev.CodeGenerator;
+import com.github.istin.dmtools.dev.CodeGeneratorCompatibilityJob;
 import com.github.istin.dmtools.dev.CommitsTriage;
 import com.github.istin.dmtools.dev.UnitTestsGenerator;
 import com.github.istin.dmtools.diagram.DiagramsCreator;
@@ -66,7 +66,7 @@ public class JobRunner {
             case "instructionsgenerator": return new InstructionsGenerator();
             case "solutionarchitecturecreator": return new SolutionArchitectureCreator();
             case "diagramscreator", "diagramcreator": return new DiagramsCreator();
-            case "codegenerator": return new CodeGenerator();
+            case "codegenerator": return new CodeGeneratorCompatibilityJob();
             case "devproductivityreport": return new DevProductivityReport();
             case "baproductivityreport": return new BAProductivityReport();
             case "businessanalyticdorgeneration": return new BusinessAnalyticDORGeneration();
@@ -118,7 +118,7 @@ public class JobRunner {
                             new InstructionsGenerator(),
                             new SolutionArchitectureCreator(),
                             new DiagramsCreator(),
-                            new CodeGenerator(),
+                            new CodeGeneratorCompatibilityJob(),
                             new DevProductivityReport(),
                             new BAProductivityReport(),
                             new BusinessAnalyticDORGeneration(),
