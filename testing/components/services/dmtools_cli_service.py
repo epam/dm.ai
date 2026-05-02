@@ -6,11 +6,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from testing.core.interfaces.dmtools_cli import DmtoolsCli
 from testing.core.interfaces.process_runner import ProcessRunner
 from testing.core.models.process_execution_result import ProcessExecutionResult
 
 
-class DmtoolsCliService:
+class DmtoolsCliService(DmtoolsCli):
     COMPATIBILITY_RESPONSE = (
         "CodeGenerator compatibility shim executed successfully. "
         "No action was taken and no code artifacts were produced."
@@ -26,6 +27,10 @@ class DmtoolsCliService:
         self.runner = runner
         self.gradlew_path = repository_root / "gradlew"
         self.shadow_jar_directory = repository_root / "build" / "libs"
+
+    @property
+    def compatibility_response(self) -> str:
+        return self.COMPATIBILITY_RESPONSE
 
     def build_shadow_jar(self) -> Path:
         result = self.runner.run(
@@ -87,8 +92,7 @@ class DmtoolsCliService:
                 trace_network=True,
             )
 
-    @staticmethod
-    def parse_result(execution: ProcessExecutionResult) -> list[dict[str, Any]]:
+    def parse_result(self, execution: ProcessExecutionResult) -> list[dict[str, Any]]:
         return json.loads(execution.stdout)
 
     def outbound_network_lines(

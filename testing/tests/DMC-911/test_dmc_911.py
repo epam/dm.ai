@@ -8,11 +8,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from testing.components.services.dmtools_cli_service import DmtoolsCliService  # noqa: E402
+from testing.core.interfaces.dmtools_cli import DmtoolsCli  # noqa: E402
 
 
 def test_dmc_911_codegenerator_shim_has_no_external_side_effects(
-    dmtools_cli_service: DmtoolsCliService,
+    dmtools_cli_service: DmtoolsCli,
 ) -> None:
     execution = dmtools_cli_service.run_job("CodeGenerator")
 
@@ -27,7 +27,7 @@ def test_dmc_911_codegenerator_shim_has_no_external_side_effects(
     assert payload == [
         {
             "key": "CodeGenerator",
-            "result": DmtoolsCliService.COMPATIBILITY_RESPONSE,
+            "result": dmtools_cli_service.compatibility_response,
         }
     ], f"Unexpected CLI payload:\n{execution.stdout}"
 
