@@ -1,6 +1,6 @@
 # DMC-980 automated test
 
-This test validates that the README navigation surfaces point users to maintained repository documentation hubs for installation, configuration, integrations, MCP tools, teammate workflows, and AI skill packages.
+This test validates that the README navigation surfaces point users to maintained repository documentation hubs for jobs/agents workflows, installation, configuration, integrations, MCP tools, teammate workflows, and AI skill packages.
 
 ## Install dependencies
 
@@ -21,5 +21,5 @@ No environment variables are required. The test reads `README.md` and repository
 ## Expected passing output
 
 ```text
-3 passed
+4 passed
 ```

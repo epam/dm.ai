@@ -50,6 +50,7 @@ class ReadmeDocumentationNavigationService:
     DOCUMENTATION_MAP_HEADING = "## Documentation map"
     QUICK_START_HEADING = "## Quick start"
 
+    JOBS_REFERENCE_TARGET = "dmtools-ai-docs/references/jobs/README.md"
     INSTALLATION_TARGET = "dmtools-ai-docs/references/installation/README.md"
     CONFIGURATION_TARGET = "dmtools-ai-docs/references/configuration/README.md"
     INTEGRATIONS_TARGET = "dmtools-ai-docs/references/configuration/integrations/"
@@ -60,6 +61,7 @@ class ReadmeDocumentationNavigationService:
     ALLOWED_TARGET_PREFIXES = ("dmtools-ai-docs/", ".github/workflows/")
 
     REQUIRED_TARGETS = (
+        JOBS_REFERENCE_TARGET,
         INSTALLATION_TARGET,
         CONFIGURATION_TARGET,
         INTEGRATIONS_TARGET,
@@ -69,6 +71,11 @@ class ReadmeDocumentationNavigationService:
     )
 
     REQUIRED_LINE_FRAGMENTS = {
+        JOBS_REFERENCE_TARGET: (
+            "Jobs reference",
+            "Jobs + agents",
+            "Jobs and workflow orchestration",
+        ),
         INSTALLATION_TARGET: ("Installation and upgrade",),
         CONFIGURATION_TARGET: ("Configuration overview",),
         INTEGRATIONS_TARGET: ("Integration setup guides",),
@@ -144,8 +151,9 @@ class ReadmeDocumentationNavigationService:
                     step=2,
                     summary="README navigation is missing one or more required maintained documentation links.",
                     expected=(
-                        "Navigation should include Installation, Configuration, Integrations, "
-                        "MCP tools, AI teammate workflow, and AI skill package links."
+                        "Navigation should include Jobs/agents workflows, Installation, "
+                        "Configuration, Integrations, MCP tools, AI teammate workflow, "
+                        "and AI skill package links."
                     ),
                     actual="Missing targets: " + ", ".join(missing_targets),
                 )
