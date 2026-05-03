@@ -132,6 +132,10 @@ normalize_csv_set() {
     printf '%s\n' "${values[@]}" | LC_ALL=C sort | paste -sd, -
 }
 
+normalize_structured_content() {
+    printf '%s' "$1" | tr -d '[:space:]'
+}
+
 read_env_assignment_value() {
     local file_path="$1"
     local key="$2"
@@ -516,6 +520,12 @@ EOF
         return 0
     fi
 
+    if [ -n "$normalized_existing_skills" ] && [ -n "$normalized_existing_integrations" ]; then
+        INSTALLER_SKILL_CONFIG_UNCHANGED=false
+        info "Preserving existing installer runtime config at $INSTALLER_ENV_PATH"
+        return 0
+    fi
+
     INSTALLER_SKILL_CONFIG_UNCHANGED=false
     printf '%s\n' "$new_content" > "$INSTALLER_ENV_PATH"
     info "Configured installer-managed skills at $INSTALLER_ENV_PATH"
@@ -561,6 +571,58 @@ installer_metadata_matches_version() {
     [ "$installed_skills_version" = "$requested_version" ] && [ "$endpoints_version" = "$requested_version" ]
 }
 
+build_installed_skills_metadata_content() {
+    local version="$1"
+    local escaped_version
+    escaped_version=$(json_escape "$version")
+    local skills_json
+    skills_json=$(json_skill_objects "${EFFECTIVE_SKILLS[@]}")
+    local integrations_json
+    integrations_json=$(json_string_array "${EFFECTIVE_INTEGRATIONS[@]}")
+
+    cat <<EOF
+{
+  "version": "$escaped_version",
+  "installed_skills": $skills_json,
+  "integrations": $integrations_json
+}
+EOF
+}
+
+build_endpoints_metadata_content() {
+    local version="$1"
+    local escaped_version
+    escaped_version=$(json_escape "$version")
+    local endpoints_json
+    endpoints_json=$(json_endpoint_objects "${EFFECTIVE_SKILLS[@]}")
+
+    cat <<EOF
+{
+  "version": "$escaped_version",
+  "endpoints": $endpoints_json
+}
+EOF
+}
+
+installer_metadata_matches_requested_state() {
+    local requested_version="$1"
+    local expected_installed_skills
+    local expected_endpoints
+    local existing_installed_skills
+    local existing_endpoints
+
+    expected_installed_skills=$(build_installed_skills_metadata_content "$requested_version")
+    expected_endpoints=$(build_endpoints_metadata_content "$requested_version")
+    existing_installed_skills=$(cat "$INSTALLED_SKILLS_JSON_PATH" 2>/dev/null || true)
+    existing_endpoints=$(cat "$ENDPOINTS_JSON_PATH" 2>/dev/null || true)
+
+    [ -n "$existing_installed_skills" ] || return 1
+    [ -n "$existing_endpoints" ] || return 1
+
+    [ "$(normalize_structured_content "$existing_installed_skills")" = "$(normalize_structured_content "$expected_installed_skills")" ] \
+        && [ "$(normalize_structured_content "$existing_endpoints")" = "$(normalize_structured_content "$expected_endpoints")" ]
+}
+
 write_installer_metadata() {
     local version="$1"
     if [ -z "$version" ]; then
@@ -569,29 +631,14 @@ write_installer_metadata() {
 
     mkdir -p "$INSTALL_DIR"
 
-    local escaped_version
-    escaped_version=$(json_escape "$version")
-    local skills_json
-    skills_json=$(json_skill_objects "${EFFECTIVE_SKILLS[@]}")
-    local integrations_json
-    integrations_json=$(json_string_array "${EFFECTIVE_INTEGRATIONS[@]}")
-    local endpoints_json
-    endpoints_json=$(json_endpoint_objects "${EFFECTIVE_SKILLS[@]}")
+    local installed_skills_metadata
+    local endpoints_metadata
+    installed_skills_metadata=$(build_installed_skills_metadata_content "$version")
+    endpoints_metadata=$(build_endpoints_metadata_content "$version")
 
-    cat > "$INSTALLED_SKILLS_JSON_PATH" <<EOF
-{
-  "version": "$escaped_version",
-  "installed_skills": $skills_json,
-  "integrations": $integrations_json
-}
-EOF
+    printf '%s\n' "$installed_skills_metadata" > "$INSTALLED_SKILLS_JSON_PATH"
 
-    cat > "$ENDPOINTS_JSON_PATH" <<EOF
-{
-  "version": "$escaped_version",
-  "endpoints": $endpoints_json
-}
-EOF
+    printf '%s\n' "$endpoints_metadata" > "$ENDPOINTS_JSON_PATH"
 
     info "Generated machine-readable installer metadata at $INSTALLED_SKILLS_JSON_PATH and $ENDPOINTS_JSON_PATH"
 }
@@ -1514,14 +1561,12 @@ main() {
     write_installer_skill_config
 
     local skip_dmtools_download=false
-    local jar_matches_version=false
-    if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] \
-        && installer_managed_jar_present \
-        && installed_artifact_version_matches "$version"; then
-        jar_matches_version=true
+    local installed_artifacts_match_version=false
+    if installer_managed_jar_present && installed_artifact_version_matches "$version"; then
+        installed_artifacts_match_version=true
     fi
 
-    if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] && [ "$jar_matches_version" = true ]; then
+    if [ "$installed_artifacts_match_version" = true ]; then
         if installer_managed_script_present; then
             skip_dmtools_download=true
             info "Installer-managed artifacts already present for version $version; skipping DMTools download."
@@ -1536,7 +1581,7 @@ main() {
         download_dmtools "$version"
     fi
 
-    if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] && installer_metadata_matches_version "$version"; then
+    if installer_metadata_matches_requested_state "$version"; then
         info "Installer metadata already present for version $version; skipping metadata rewrite."
     else
         # Persist machine-readable metadata for state tracking and endpoint discovery
