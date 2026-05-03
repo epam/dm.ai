@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from testing.components.services.skill_docs_sync_service import SkillDocsSyncService
+from testing.components.services.skill_docs_sync_support import SkillDocsSyncSupport
 from testing.core.utils.repo_sandbox import CommandResult, RepoSandbox
 
 
@@ -57,16 +57,17 @@ class McpDocsRecoveryService:
         self,
         repository_root: Path,
         sandbox_factory: Callable[[Path], Sandbox] = RepoSandbox,
+        sync_support: SkillDocsSyncSupport | None = None,
     ) -> None:
         self.repository_root = repository_root
         self._sandbox_factory = sandbox_factory
+        self._sync_support = sync_support or SkillDocsSyncSupport()
 
     def run(self, ticket_config: McpDocsRecoveryConfig) -> McpDocsRecoveryResult:
         sandbox = self._sandbox_factory(self.repository_root)
-        helper = SkillDocsSyncService(self.repository_root, sandbox_factory=lambda _: sandbox)
         try:
-            helper._apply_manual_edits(sandbox, ticket_config)
-            helper._mark_generated_index_as_stale(sandbox)
+            self._sync_support.apply_manual_edits(sandbox, ticket_config)
+            self._sync_support.mark_generated_index_as_stale(sandbox)
 
             bootstrap_docs = sandbox.run("./buildInstallLocal.sh")
             update_docs = sandbox.run(ticket_config.scripts[0])
@@ -76,11 +77,10 @@ class McpDocsRecoveryService:
 
             generate_docs = sandbox.run(ticket_config.scripts[1])
 
-            generated_index = self._read_text_if_present(sandbox, helper.GENERATED_INDEX_PATH)
+            generated_index = self._read_text_if_present(sandbox, self._sync_support.GENERATED_INDEX_PATH)
             changelog = self._read_text_if_present(sandbox, "dmtools-ai-docs/CHANGELOG.md")
             skill_markdown = self._read_text_if_present(sandbox, "dmtools-ai-docs/SKILL.md")
             skill_reference_row = self._find_skill_reference_row_or_empty(
-                helper,
                 skill_markdown,
                 ticket_config.audited_document.skill_reference_path,
             )
@@ -91,7 +91,7 @@ class McpDocsRecoveryService:
                 generate_docs=generate_docs,
                 docs_directory_recreated=docs_directory.is_dir(),
                 generated_index_refreshed=generated_index is not None
-                and helper._generated_index_was_refreshed(generated_index),
+                and self._sync_support.generated_index_was_refreshed(generated_index),
                 changelog_mentions_correction=changelog is not None
                 and ticket_config.audited_document.changelog_marker in changelog,
                 skill_reference_title_synced=ticket_config.audited_document.updated_title in skill_reference_row,
@@ -110,13 +110,12 @@ class McpDocsRecoveryService:
 
     @staticmethod
     def _find_skill_reference_row_or_empty(
-        helper: SkillDocsSyncService,
         skill_markdown: str | None,
         skill_reference_path: str,
     ) -> str:
         if skill_markdown is None:
             return ""
         try:
-            return helper._find_skill_reference_row(skill_markdown, skill_reference_path)
+            return SkillDocsSyncSupport.find_skill_reference_row(skill_markdown, skill_reference_path)
         except AssertionError:
             return ""
