@@ -1,6 +1,6 @@
 # DMC-972
 
-Automates the MCP documentation generation regression for punctuation-heavy names after a teammate guide edit.
+Automates the MCP documentation generation regression for punctuation-heavy integration names by mutating the sandboxed `MCPToolRegistry.java` before regenerating docs.
 
 ## Install dependencies
 
@@ -11,7 +11,7 @@ python3 -m pip install -r testing/requirements.txt
 ## Run this test
 
 ```bash
-PYTHONPATH=. python3 -m pytest testing/tests/DMC-972/test_dmc_972.py -q
+PYTHONPATH=. python3 -m pytest testing/tests/DMC-972/test_dmc_972.py -q -r a
 ```
 
 ## Required environment
