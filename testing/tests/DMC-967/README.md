@@ -3,7 +3,8 @@
 This regression test validates the live installer flow for an existing `jira`
 installation upgraded to `jira,github`. It checks the user-visible second-run
 output and the installed artifact timestamps to ensure the new skill can be
-added without redownloading or rewriting the shared core CLI artifacts.
+added without redownloading or rewriting the shared core CLI artifacts, and
+that `dmtools-installer.env` remains unchanged.
 
 ## Install dependencies
 
@@ -28,4 +29,3 @@ re-running the live installer with `jira,github`.
 ```text
 1 passed
 ```
-

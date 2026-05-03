@@ -8,7 +8,7 @@ from testing.components.services.installer_rerun_idempotency_service import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 INITIAL_SKILLS = "jira"
 FOLLOW_UP_SKILLS = "jira,github"
-CORE_ARTIFACTS = ("dmtools.jar", "dmtools")
+UNCHANGED_INSTALLER_ARTIFACTS = ("dmtools.jar", "dmtools", "dmtools-installer.env")
 UNEXPECTED_SECOND_RUN_MARKERS = (
     "Downloading DMTools JAR...",
     "Downloading DMTools shell script",
@@ -53,11 +53,12 @@ def test_dmc_967_adding_a_skill_keeps_core_artifacts_idempotent() -> None:
             + ", ".join(repr(marker) for marker in unexpected_markers)
         )
 
-    changed_core_artifacts = observation.changed_artifacts(CORE_ARTIFACTS)
-    if changed_core_artifacts:
+    changed_installer_artifacts = observation.changed_artifacts(*UNCHANGED_INSTALLER_ARTIFACTS)
+    if changed_installer_artifacts:
         failures.append(
-            "Expected the follow-up run to leave the shared core artifacts unchanged, "
-            "but these files were rewritten:\n" + "\n".join(changed_core_artifacts)
+            "Expected the follow-up run to leave the shared core artifacts and "
+            "dmtools-installer.env unchanged, but these files were rewritten:\n"
+            + "\n".join(changed_installer_artifacts)
         )
 
     assert not failures, (

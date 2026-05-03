@@ -24,18 +24,20 @@ class InstallerRunSnapshot:
 @dataclass(frozen=True)
 class InstallerRerunObservation:
     initial_skills_csv: str
-    follow_up_skills_csv: str
+    rerun_skills_csv: str
     first_run: InstallerRunSnapshot
     second_run: InstallerRunSnapshot
 
-    def changed_artifacts(
-        self,
-        artifact_names: tuple[str, ...] | None = None,
-    ) -> list[str]:
+    def changed_artifacts(self, *relative_paths: str) -> list[str]:
+        selected_paths = relative_paths
+        if len(selected_paths) == 1 and isinstance(selected_paths[0], tuple):
+            selected_paths = selected_paths[0]
+
+        expected_paths = set(selected_paths)
         changed: list[str] = []
-        selected_artifact_names = artifact_names or tuple(self.first_run.artifacts)
-        for relative_path in selected_artifact_names:
-            first_snapshot = self.first_run.artifacts[relative_path]
+        for relative_path, first_snapshot in self.first_run.artifacts.items():
+            if expected_paths and relative_path not in expected_paths:
+                continue
             second_snapshot = self.second_run.artifacts[relative_path]
             if (
                 first_snapshot.mtime_ns != second_snapshot.mtime_ns
@@ -57,6 +59,17 @@ class Sandbox(Protocol):
     def run(self, command: str, timeout: int = 1800) -> CommandResult: ...
 
 
+def reports_noop_status_for_selected_skills(output: str, skills_csv: str) -> bool:
+    expected_skills = tuple(skill.strip().lower() for skill in skills_csv.split(",") if skill.strip())
+    for line in output.splitlines():
+        normalized_line = line.lower()
+        if "already installed" not in normalized_line and "no-op" not in normalized_line:
+            continue
+        if all(skill in normalized_line for skill in expected_skills):
+            return True
+    return False
+
+
 class InstallerRerunIdempotencyService:
     def __init__(
         self,
@@ -64,34 +77,42 @@ class InstallerRerunIdempotencyService:
         *,
         skills_csv: str | None = None,
         initial_skills_csv: str = "jira,github",
+        rerun_skills_csv: str | None = None,
         follow_up_skills_csv: str | None = None,
         sandbox_factory: Callable[[Path], Sandbox] = RepoSandbox,
     ) -> None:
+        if (
+            rerun_skills_csv is not None
+            and follow_up_skills_csv is not None
+            and rerun_skills_csv != follow_up_skills_csv
+        ):
+            raise ValueError(
+                "rerun_skills_csv and follow_up_skills_csv must match when both are provided."
+            )
+
         self._repository_root = repository_root
         selected_initial_skills = skills_csv or initial_skills_csv
         self._initial_skills_csv = selected_initial_skills
-        self._follow_up_skills_csv = follow_up_skills_csv or selected_initial_skills
+        self._rerun_skills_csv = (
+            follow_up_skills_csv or rerun_skills_csv or selected_initial_skills
+        )
         self._sandbox_factory = sandbox_factory
 
     def exercise(self) -> InstallerRerunObservation:
         sandbox = self._sandbox_factory(self._repository_root)
         try:
             first_run = self._run_installer(sandbox, self._initial_skills_csv)
-            second_run = self._run_installer(sandbox, self._follow_up_skills_csv)
+            second_run = self._run_installer(sandbox, self._rerun_skills_csv)
             return InstallerRerunObservation(
                 initial_skills_csv=self._initial_skills_csv,
-                follow_up_skills_csv=self._follow_up_skills_csv,
+                rerun_skills_csv=self._rerun_skills_csv,
                 first_run=first_run,
                 second_run=second_run,
             )
         finally:
             sandbox.cleanup()
 
-    def _run_installer(
-        self,
-        sandbox: Sandbox,
-        skills_csv: str,
-    ) -> InstallerRunSnapshot:
+    def _run_installer(self, sandbox: Sandbox, skills_csv: str) -> InstallerRunSnapshot:
         install_dir = sandbox.home / ".dmtools"
         bin_dir = install_dir / "bin"
         installer_env_path = bin_dir / "dmtools-installer.env"

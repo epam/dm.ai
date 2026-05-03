@@ -1,0 +1,6 @@
+test_id: DMC-966
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+
