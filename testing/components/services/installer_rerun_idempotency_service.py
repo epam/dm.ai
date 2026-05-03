@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from testing.core.utils.repo_sandbox import CommandResult, RepoSandbox
 
@@ -36,6 +37,14 @@ class InstallerManagedPaths:
     installer_env_path: Path
     jar_path: Path
     script_path: Path
+    installed_skills_path: Path
+    endpoints_path: Path
+
+
+@dataclass(frozen=True)
+class InstallerMetadataSnapshot:
+    installed_skills_payload: Any | None = None
+    endpoints_payload: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -45,9 +54,14 @@ class InstallerRerunObservation:
     first_run: InstallerRunSnapshot
     second_run: InstallerRunSnapshot
     inter_run_artifacts: dict[str, InstallerArtifactState] | None = None
+    second_run_metadata: InstallerMetadataSnapshot | None = None
 
     def changed_artifacts(self, *relative_paths: str) -> list[str]:
-        expected_paths = set(relative_paths)
+        selected_paths = relative_paths
+        if len(selected_paths) == 1 and isinstance(selected_paths[0], tuple):
+            selected_paths = selected_paths[0]
+
+        expected_paths = set(selected_paths)
         changed: list[str] = []
         for relative_path, first_snapshot in self.first_run.artifacts.items():
             if expected_paths and relative_path not in expected_paths:
@@ -89,13 +103,27 @@ class InstallerRerunIdempotencyService:
         self,
         repository_root: Path,
         *,
+        skills_csv: str | None = None,
         initial_skills_csv: str = "jira,github",
         rerun_skills_csv: str | None = None,
+        follow_up_skills_csv: str | None = None,
         sandbox_factory: Callable[[Path], Sandbox] = RepoSandbox,
     ) -> None:
+        if (
+            rerun_skills_csv is not None
+            and follow_up_skills_csv is not None
+            and rerun_skills_csv != follow_up_skills_csv
+        ):
+            raise ValueError(
+                "rerun_skills_csv and follow_up_skills_csv must match when both are provided."
+            )
+
         self._repository_root = repository_root
-        self._initial_skills_csv = initial_skills_csv
-        self._rerun_skills_csv = rerun_skills_csv or initial_skills_csv
+        selected_initial_skills = skills_csv or initial_skills_csv
+        self._initial_skills_csv = selected_initial_skills
+        self._rerun_skills_csv = (
+            follow_up_skills_csv or rerun_skills_csv or selected_initial_skills
+        )
         self._sandbox_factory = sandbox_factory
 
     def exercise(
@@ -119,12 +147,14 @@ class InstallerRerunIdempotencyService:
                 self._rerun_skills_csv,
                 managed_paths,
             )
+            second_run_metadata = self._snapshot_metadata(managed_paths)
             return InstallerRerunObservation(
                 initial_skills_csv=self._initial_skills_csv,
                 rerun_skills_csv=self._rerun_skills_csv,
                 first_run=first_run,
                 second_run=second_run,
                 inter_run_artifacts=inter_run_artifacts,
+                second_run_metadata=second_run_metadata,
             )
         finally:
             sandbox.cleanup()
@@ -168,6 +198,19 @@ class InstallerRerunIdempotencyService:
             installer_env_path=bin_dir / "dmtools-installer.env",
             jar_path=install_dir / "dmtools.jar",
             script_path=bin_dir / "dmtools",
+            installed_skills_path=install_dir / "installed-skills.json",
+            endpoints_path=install_dir / "endpoints.json",
+        )
+
+    @staticmethod
+    def _snapshot_metadata(managed_paths: InstallerManagedPaths) -> InstallerMetadataSnapshot:
+        return InstallerMetadataSnapshot(
+            installed_skills_payload=InstallerRerunIdempotencyService._read_json_artifact(
+                managed_paths.installed_skills_path
+            ),
+            endpoints_payload=InstallerRerunIdempotencyService._read_json_artifact(
+                managed_paths.endpoints_path
+            ),
         )
 
     @staticmethod
@@ -224,3 +267,9 @@ class InstallerRerunIdempotencyService:
                 size=stat_result.st_size,
             )
         return snapshots
+
+    @staticmethod
+    def _read_json_artifact(path: Path) -> Any:
+        if not path.exists():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
