@@ -146,6 +146,8 @@ NC='\033[0m'
 
 GITHUB_REPO="epam/dm.ai"
 TEMP_DIR=$(mktemp -d)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 print_header() {
     echo "" >&2
@@ -202,6 +204,18 @@ skill_command_name() {
         github) echo "/dmtools-github" ;;
         ado) echo "/dmtools-ado" ;;
         testrail) echo "/dmtools-testrail" ;;
+        *)
+            print_error "Unsupported skill package: $1"
+            return 1
+            ;;
+    esac
+}
+
+skill_endpoint_path() {
+    case "$1" in
+        dmtools|jira|github|ado|testrail)
+            echo "/dmtools/$1"
+            ;;
         *)
             print_error "Unsupported skill package: $1"
             return 1
@@ -329,6 +343,10 @@ write_installed_skills_metadata() {
         active_commands+=("$(skill_command_name "$skill_key")")
     done
 
+    local metadata_version
+    metadata_version=$(resolve_metadata_version "$target_dir")
+    local escaped_version
+    escaped_version=$(json_escape "$metadata_version")
     local installed_skills_json
     local active_commands_json
     installed_skills_json=$(json_string_array "${selected_skills[@]}")
@@ -336,6 +354,7 @@ write_installed_skills_metadata() {
 
     cat > "$target_dir/installed-skills.json" <<EOF
 {
+  "version": "$escaped_version",
   "installed_skills": $installed_skills_json,
   "active_commands": $active_commands_json
 }
@@ -348,19 +367,23 @@ write_endpoints_metadata() {
     local target_dir="$1"
     shift
     local selected_skills=("$@")
+    local metadata_version
+    metadata_version=$(resolve_metadata_version "$target_dir")
+    local escaped_version
+    escaped_version=$(json_escape "$metadata_version")
     local endpoints_json="["
     local first=true
     local skill_key
 
     for skill_key in "${selected_skills[@]}"; do
         local escaped_skill
-        local escaped_command
+        local escaped_endpoint
         escaped_skill=$(json_escape "$skill_key")
-        escaped_command=$(json_escape "$(skill_command_name "$skill_key")")
+        escaped_endpoint=$(json_escape "$(skill_endpoint_path "$skill_key")")
         if [ "$first" = false ]; then
             endpoints_json+=", "
         fi
-        endpoints_json+="{\"name\":\"$escaped_skill\",\"path\":\"$escaped_command\"}"
+        endpoints_json+="{\"name\":\"$escaped_skill\",\"path\":\"$escaped_endpoint\"}"
         first=false
     done
 
@@ -368,11 +391,52 @@ write_endpoints_metadata() {
 
     cat > "$target_dir/endpoints.json" <<EOF
 {
+  "version": "$escaped_version",
   "endpoints": $endpoints_json
 }
 EOF
 
     print_success "Updated $target_dir/endpoints.json"
+}
+
+read_metadata_version() {
+    local metadata_path="$1"
+    [ -s "$metadata_path" ] || return 1
+
+    local version
+    version=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata_path" | head -n 1)
+    [ -n "$version" ] || return 1
+    printf '%s' "$version"
+}
+
+resolve_metadata_version() {
+    local target_dir="$1"
+    local version=""
+    local version_file="$REPO_ROOT/gradle.properties"
+
+    if version=$(read_metadata_version "$target_dir/endpoints.json"); then
+        printf '%s' "$version"
+        return 0
+    fi
+
+    if version=$(read_metadata_version "$target_dir/installed-skills.json"); then
+        printf '%s' "$version"
+        return 0
+    fi
+
+    if [ -f "$version_file" ]; then
+        version=$(sed -n 's/^version=\(.*\)$/\1/p' "$version_file" | head -n 1 | tr -d '[:space:]')
+        if [ -n "$version" ]; then
+            case "$version" in
+                v*) ;;
+                *) version="v$version" ;;
+            esac
+            printf '%s' "$version"
+            return 0
+        fi
+    fi
+
+    printf '%s' "latest"
 }
 
 detect_skill_dirs() {
