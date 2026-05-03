@@ -1,7 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createExampleUsageAuditService } = require('./createExampleUsageAuditService');
+const {
+  createExampleUsageAuditService,
+} = require('../../components/services/createExampleUsageAuditService');
 
 test('DMC-894 validates teammate example usage links', () => {
   const auditService = createExampleUsageAuditService();
@@ -17,7 +19,7 @@ test('DMC-894 validates teammate example usage links', () => {
     'QAProductivityReport',
     'ReportGenerator',
     'ReportVisualizer',
-    'KBProcessingJob',
+    'KBProcessing',
   ];
 
   assert.ok(

@@ -47,6 +47,7 @@ EFFECTIVE_INTEGRATIONS=()
 EFFECTIVE_SKILLS_CSV=""
 INVALID_SKILLS_CSV=""
 EFFECTIVE_INTEGRATIONS_CSV=""
+INSTALLER_SKILL_CONFIG_UNCHANGED=false
 STRICT_INSTALL_MODE=false
 SKIP_UNKNOWN_SKILLS=false
 
@@ -464,12 +465,46 @@ EOF
     fi
 
     if [ "$existing_content" = "$new_content" ]; then
+        INSTALLER_SKILL_CONFIG_UNCHANGED=true
         info "Selected skills already installed: $EFFECTIVE_SKILLS_CSV"
         return 0
     fi
 
+    INSTALLER_SKILL_CONFIG_UNCHANGED=false
     printf '%s\n' "$new_content" > "$INSTALLER_ENV_PATH"
     info "Configured installer-managed skills at $INSTALLER_ENV_PATH"
+}
+
+installer_managed_artifacts_present() {
+    [ -s "$JAR_PATH" ] && [ -s "$SCRIPT_PATH" ]
+}
+
+read_installer_metadata_version() {
+    local metadata_path="$1"
+    [ -s "$metadata_path" ] || return 1
+
+    local version
+    version=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata_path" | head -n 1)
+    [ -n "$version" ] || return 1
+    printf '%s' "$version"
+}
+
+installed_artifact_version_matches() {
+    local requested_version="$1"
+    local installed_version
+    installed_version=$(read_installer_metadata_version "$INSTALLED_SKILLS_JSON_PATH") || return 1
+    [ "$installed_version" = "$requested_version" ]
+}
+
+installer_metadata_matches_version() {
+    local requested_version="$1"
+    local installed_skills_version
+    local endpoints_version
+
+    installed_skills_version=$(read_installer_metadata_version "$INSTALLED_SKILLS_JSON_PATH") || return 1
+    endpoints_version=$(read_installer_metadata_version "$ENDPOINTS_JSON_PATH") || return 1
+
+    [ "$installed_skills_version" = "$requested_version" ] && [ "$endpoints_version" = "$requested_version" ]
 }
 
 write_installer_metadata() {
@@ -1411,12 +1446,25 @@ main() {
 
     # Persist installer-managed skill selection
     write_installer_skill_config
-    
-    # Download DMTools
-    download_dmtools "$version"
 
-    # Persist machine-readable metadata for state tracking and endpoint discovery
-    write_installer_metadata "$version"
+    local skip_dmtools_download=false
+    if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] \
+        && installer_managed_artifacts_present \
+        && installed_artifact_version_matches "$version"; then
+        skip_dmtools_download=true
+        info "Installer-managed artifacts already present for version $version; skipping DMTools download."
+    fi
+
+    if [ "$skip_dmtools_download" != true ]; then
+        download_dmtools "$version"
+    fi
+
+    if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] && installer_metadata_matches_version "$version"; then
+        info "Installer metadata already present for version $version; skipping metadata rewrite."
+    else
+        # Persist machine-readable metadata for state tracking and endpoint discovery
+        write_installer_metadata "$version"
+    fi
     
     # Update shell configuration
     update_shell_config

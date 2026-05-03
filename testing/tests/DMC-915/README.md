@@ -2,7 +2,7 @@
 
 This test validates both sides of the DMC-915 contract:
 1. `dmtools-ai-docs/references/installation/README.md` documents `--skill <name>` as the primary form, `--skills=<name,name>` as an alias, `--all-skills`, `--skip-unknown`, and explicit invalid-skill behavior.
-2. `install.sh` actually supports the same commands and failure/warning behavior so the documentation cannot pass while describing unsupported syntax.
+2. `dmtools-ai-docs/install.sh` actually supports the same commands and failure/warning behavior so the documentation cannot pass while describing unsupported syntax.
 
 ## Install dependencies
 

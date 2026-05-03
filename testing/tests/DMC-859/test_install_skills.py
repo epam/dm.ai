@@ -260,6 +260,99 @@ cat "$INSTALLER_ENV_PATH"
         self.assertIn('DMTOOLS_SKILLS="jira"', result.stdout)
         self.assertIn('DMTOOLS_INTEGRATIONS="ai,cli,file,kb,mermaid,jira"', result.stdout)
 
+    def test_repeated_main_run_skips_download_when_configuration_and_artifacts_match(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    result = run_installer_functions(
+                        """
+check_java() { printf 'stub check_java\\n'; }
+get_latest_version() { printf 'v0.0.0-test'; }
+download_dmtools() {
+    local version="$1"
+    printf 'SIDE download_dmtools %s\\n' "$version"
+    mkdir -p "$(dirname "$JAR_PATH")" "$BIN_DIR"
+    printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
+    cat > "$SCRIPT_PATH" <<'EOF'
+#!/bin/bash
+echo "dmtools stub"
+EOF
+    chmod +x "$SCRIPT_PATH"
+}
+update_shell_config() { printf 'SIDE update_shell_config\\n'; }
+verify_installation() { printf 'SIDE verify_installation\\n'; }
+print_instructions() { printf 'SIDE print_instructions\\n'; }
+main --skills jira,github
+main --skills jira,github
+""",
+                        {
+                            "DMTOOLS_INSTALL_DIR": temp_dir,
+                            "DMTOOLS_BIN_DIR": f"{temp_dir}/bin",
+                            "DMTOOLS_INSTALLER_ENV_PATH": f"{temp_dir}/bin/dmtools-installer.env",
+                        },
+                        installer_script=installer_script,
+                    )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(
+                    1, result.stdout.count("SIDE download_dmtools v0.0.0-test"), result.stdout
+                )
+                self.assertIn("Selected skills already installed: jira,github", result.stdout)
+                self.assertIn(
+                    "Installer-managed artifacts already present for version v0.0.0-test; "
+                    "skipping DMTools download.",
+                    result.stdout,
+                )
+                self.assertIn(
+                    "Installer metadata already present for version v0.0.0-test; "
+                    "skipping metadata rewrite.",
+                    result.stdout,
+                )
+
+    def test_repeated_main_run_redownloads_when_requested_version_changes(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    result = run_installer_functions(
+                        """
+check_java() { printf 'stub check_java\\n'; }
+download_dmtools() {
+    local version="$1"
+    printf 'SIDE download_dmtools %s\\n' "$version"
+    mkdir -p "$(dirname "$JAR_PATH")" "$BIN_DIR"
+    printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
+    cat > "$SCRIPT_PATH" <<'EOF'
+#!/bin/bash
+echo "dmtools stub"
+EOF
+    chmod +x "$SCRIPT_PATH"
+}
+update_shell_config() { printf 'SIDE update_shell_config\\n'; }
+verify_installation() { printf 'SIDE verify_installation\\n'; }
+print_instructions() { printf 'SIDE print_instructions\\n'; }
+main --skills jira,github v1.2.3
+main --skills jira,github v2.0.0
+cat "$INSTALLED_SKILLS_JSON_PATH"
+""",
+                        {
+                            "DMTOOLS_INSTALL_DIR": temp_dir,
+                            "DMTOOLS_BIN_DIR": f"{temp_dir}/bin",
+                            "DMTOOLS_INSTALLER_ENV_PATH": f"{temp_dir}/bin/dmtools-installer.env",
+                        },
+                        installer_script=installer_script,
+                    )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(1, result.stdout.count("SIDE download_dmtools v1.2.3"), result.stdout)
+                self.assertEqual(1, result.stdout.count("SIDE download_dmtools v2.0.0"), result.stdout)
+                self.assertIn("Selected skills already installed: jira,github", result.stdout)
+                self.assertNotIn(
+                    "Installer-managed artifacts already present for version v2.0.0; "
+                    "skipping DMTools download.",
+                    result.stdout,
+                )
+                self.assertIn('"version": "v2.0.0"', result.stdout)
+
     def test_main_writes_machine_readable_metadata_files_for_selected_skills(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             install_dir = Path(temp_dir)
