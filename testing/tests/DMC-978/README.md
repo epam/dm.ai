@@ -20,7 +20,7 @@ python3 -m pytest testing/tests/DMC-978/test_dmc_978.py -q
 ## Environment
 
 No environment variables are required. The test reads `README.md` directly from
-this repository checkout and validates the visible opening content.
+this repository checkout, and the ticket metadata is defined in `config.yaml`.
 
 ## Expected passing output
 
