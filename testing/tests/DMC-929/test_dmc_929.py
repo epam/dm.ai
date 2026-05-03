@@ -46,8 +46,18 @@ class FakeSandbox:
             github_dir.rmdir()
         (skills_root / "installed-skills.json").write_text(
             '{\n'
+            '  "version": "test-seed",\n'
             '  "installed_skills": ["jira"],\n'
             '  "active_commands": ["/dmtools-jira"]\n'
+            '}\n',
+            encoding="utf-8",
+        )
+        (skills_root / "endpoints.json").write_text(
+            '{\n'
+            '  "version": "test-seed",\n'
+            '  "endpoints": [\n'
+            '    {"name": "jira", "path": "/dmtools/jira"}\n'
+            '  ]\n'
             '}\n',
             encoding="utf-8",
         )

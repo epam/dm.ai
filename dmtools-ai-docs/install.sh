@@ -146,6 +146,8 @@ NC='\033[0m'
 
 GITHUB_REPO="epam/dm.ai"
 TEMP_DIR=$(mktemp -d)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 print_header() {
     echo "" >&2
@@ -209,8 +211,20 @@ skill_command_name() {
     esac
 }
 
+skill_endpoint_path() {
+    case "$1" in
+        dmtools|jira|github|ado|testrail)
+            echo "/dmtools/$1"
+            ;;
+        *)
+            print_error "Unsupported skill package: $1"
+            return 1
+            ;;
+    esac
+}
+
 normalize_skills() {
-    local raw="${1:-dmtools}"
+    local raw="${1-}"
     local normalized=()
     local invalid=()
     local include_all=false
@@ -247,9 +261,6 @@ normalize_skills() {
             fi
             return 1
         fi
-    fi
-    if [ ${#normalized[@]} -eq 0 ]; then
-        normalized=("dmtools")
     fi
     printf '%s\n' "${normalized[@]}"
 }
@@ -332,6 +343,10 @@ write_installed_skills_metadata() {
         active_commands+=("$(skill_command_name "$skill_key")")
     done
 
+    local metadata_version
+    metadata_version=$(resolve_metadata_version "$target_dir")
+    local escaped_version
+    escaped_version=$(json_escape "$metadata_version")
     local installed_skills_json
     local active_commands_json
     installed_skills_json=$(json_string_array "${selected_skills[@]}")
@@ -339,12 +354,89 @@ write_installed_skills_metadata() {
 
     cat > "$target_dir/installed-skills.json" <<EOF
 {
+  "version": "$escaped_version",
   "installed_skills": $installed_skills_json,
   "active_commands": $active_commands_json
 }
 EOF
 
     print_success "Updated $target_dir/installed-skills.json"
+}
+
+write_endpoints_metadata() {
+    local target_dir="$1"
+    shift
+    local selected_skills=("$@")
+    local metadata_version
+    metadata_version=$(resolve_metadata_version "$target_dir")
+    local escaped_version
+    escaped_version=$(json_escape "$metadata_version")
+    local endpoints_json="["
+    local first=true
+    local skill_key
+
+    for skill_key in "${selected_skills[@]}"; do
+        local escaped_skill
+        local escaped_endpoint
+        escaped_skill=$(json_escape "$skill_key")
+        escaped_endpoint=$(json_escape "$(skill_endpoint_path "$skill_key")")
+        if [ "$first" = false ]; then
+            endpoints_json+=", "
+        fi
+        endpoints_json+="{\"name\":\"$escaped_skill\",\"path\":\"$escaped_endpoint\"}"
+        first=false
+    done
+
+    endpoints_json+="]"
+
+    cat > "$target_dir/endpoints.json" <<EOF
+{
+  "version": "$escaped_version",
+  "endpoints": $endpoints_json
+}
+EOF
+
+    print_success "Updated $target_dir/endpoints.json"
+}
+
+read_metadata_version() {
+    local metadata_path="$1"
+    [ -s "$metadata_path" ] || return 1
+
+    local version
+    version=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata_path" | head -n 1)
+    [ -n "$version" ] || return 1
+    printf '%s' "$version"
+}
+
+resolve_metadata_version() {
+    local target_dir="$1"
+    local version=""
+    local version_file="$REPO_ROOT/gradle.properties"
+
+    if version=$(read_metadata_version "$target_dir/endpoints.json"); then
+        printf '%s' "$version"
+        return 0
+    fi
+
+    if version=$(read_metadata_version "$target_dir/installed-skills.json"); then
+        printf '%s' "$version"
+        return 0
+    fi
+
+    if [ -f "$version_file" ]; then
+        version=$(sed -n 's/^version=\(.*\)$/\1/p' "$version_file" | head -n 1 | tr -d '[:space:]')
+        if [ -n "$version" ]; then
+            case "$version" in
+                v*) ;;
+                *) version="v$version" ;;
+            esac
+            printf '%s' "$version"
+            return 0
+        fi
+    fi
+
+    printf '%s' "latest"
 }
 
 detect_skill_dirs() {
@@ -459,7 +551,7 @@ main() {
     print_header
 
     if [ "$SKILLS_SOURCE" != "cli" ]; then
-        if [ -n "${DMTOOLS_SKILLS:-}" ]; then
+        if [ "${DMTOOLS_SKILLS+x}" = x ]; then
             SKILLS_SOURCE="env"
         else
             SKILLS_SOURCE="default"
@@ -472,14 +564,19 @@ main() {
     while IFS= read -r skill_key; do
         [ -n "$skill_key" ] && requested_skills+=("$skill_key")
     done <<< "$normalized_skills_output"
-    if [ ${#requested_skills[@]} -eq 0 ]; then
+    if [ ${#requested_skills[@]} -eq 0 ] && [ "$SKILLS_SOURCE" = "default" ]; then
         requested_skills=("dmtools")
     fi
 
     if [ "$INSTALL_ALL_SKILLS" = true ]; then
         print_info "Installing all skills (source: $SKILLS_SOURCE)"
     fi
-    print_info "Effective skills: $(join_by_comma "${requested_skills[@]}") (source: $SKILLS_SOURCE)"
+    local effective_skills_display
+    effective_skills_display=$(join_by_comma "${requested_skills[@]}")
+    if [ -z "$effective_skills_display" ]; then
+        effective_skills_display="<none>"
+    fi
+    print_info "Effective skills: $effective_skills_display (source: $SKILLS_SOURCE)"
 
     print_info "Detecting skill directories..."
     local dirs
@@ -497,9 +594,13 @@ main() {
     done
     echo "" >&2
     echo "Selected skill packages:" >&2
-    for skill_key in "${requested_skills[@]}"; do
-        echo "  - $(skill_install_name "$skill_key") ($(skill_command_name "$skill_key"))" >&2
-    done
+    if [ ${#requested_skills[@]} -eq 0 ]; then
+        echo "  - <none>" >&2
+    else
+        for skill_key in "${requested_skills[@]}"; do
+            echo "  - $(skill_install_name "$skill_key") ($(skill_command_name "$skill_key"))" >&2
+        done
+    fi
 
     echo "" >&2
     local choice=""
@@ -562,6 +663,7 @@ main() {
     for dir in "${target_dirs[@]}"; do
         remove_deselected_skills "$dir" "${requested_skills[@]}"
         write_installed_skills_metadata "$dir" "${requested_skills[@]}"
+        write_endpoints_metadata "$dir" "${requested_skills[@]}"
     done
 
     rm -rf "$TEMP_DIR"
@@ -571,22 +673,37 @@ main() {
     echo -e "${GREEN}        DMtools Skill Installed Successfully!       ${NC}" >&2
     echo -e "${GREEN}════════════════════════════════════════════════════${NC}" >&2
     echo "" >&2
-    echo "The selected DMtools skills are now available in your AI assistant!" >&2
+    if [ ${#installed_commands[@]} -eq 0 ]; then
+        echo "All DMtools skills were removed from the selected install location(s)." >&2
+    else
+        echo "The selected DMtools skills are now available in your AI assistant!" >&2
+    fi
     echo "" >&2
     echo -e "${CYAN}You can now:${NC}" >&2
-    for command_name in "${installed_commands[@]}"; do
-        echo "  • Type $command_name in chat to invoke the skill" >&2
-    done
-    echo "  • Ask about the installed DMtools areas and the assistant will use the matching skill automatically" >&2
+    if [ ${#installed_commands[@]} -eq 0 ]; then
+        echo "  • Re-run the installer with DMTOOLS_SKILLS=<skill list> to install a focused package again" >&2
+    else
+        for command_name in "${installed_commands[@]}"; do
+            echo "  • Type $command_name in chat to invoke the skill" >&2
+        done
+        echo "  • Ask about the installed DMtools areas and the assistant will use the matching skill automatically" >&2
+    fi
     echo "" >&2
     echo -e "${BLUE}Example questions:${NC}" >&2
-    echo "  • How do I install DMtools?" >&2
-    echo "  • Help me configure Jira integration" >&2
-    echo "  • Review GitHub pull requests with DMtools" >&2
-    echo "  • Generate test cases from user story PROJ-123" >&2
+    if [ ${#installed_commands[@]} -eq 0 ]; then
+        echo "  • How do I reinstall only the Jira DMtools skill?" >&2
+        echo "  • Which DMtools skills are available to install?" >&2
+    else
+        echo "  • How do I install DMtools?" >&2
+        echo "  • Help me configure Jira integration" >&2
+        echo "  • Review GitHub pull requests with DMtools" >&2
+        echo "  • Generate test cases from user story PROJ-123" >&2
+    fi
     echo "" >&2
 
-    if [[ "$selected_dir" == *"cursor"* ]]; then
+    if [ ${#installed_commands[@]} -eq 0 ]; then
+        :
+    elif [[ "$selected_dir" == *"cursor"* ]]; then
         echo -e "${YELLOW}For Cursor:${NC}" >&2
         echo "  • Open Cursor Settings (Cmd+Shift+J or Ctrl+Shift+J)" >&2
         echo "  • Navigate to Rules → Agent Decides" >&2
