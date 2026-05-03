@@ -16,6 +16,24 @@ UNEXPECTED_SECOND_RUN_MARKERS = (
 )
 
 
+def extract_installed_skill_names(payload: object) -> set[str]:
+    if not isinstance(payload, dict):
+        return set()
+
+    observed_skills: set[str] = set()
+    for item in payload.get("installed_skills", ()):
+        if isinstance(item, str) and item.strip():
+            observed_skills.add(item.strip().lower())
+            continue
+        if not isinstance(item, dict):
+            continue
+        for key in ("skill", "slug", "name", "id"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                observed_skills.add(value.strip().lower())
+    return observed_skills
+
+
 def test_dmc_967_adding_a_skill_keeps_core_artifacts_idempotent() -> None:
     service = InstallerRerunIdempotencyService(
         REPOSITORY_ROOT,
@@ -41,6 +59,18 @@ def test_dmc_967_adding_a_skill_keeps_core_artifacts_idempotent() -> None:
         failures.append(
             "Expected the follow-up installer run to report the requested jira,github "
             "selection in its visible output."
+        )
+
+    second_run_metadata = observation.second_run_metadata
+    installed_skill_names = (
+        extract_installed_skill_names(second_run_metadata.installed_skills_payload)
+        if second_run_metadata is not None
+        else set()
+    )
+    if "github" not in installed_skill_names:
+        failures.append(
+            "Expected the follow-up run to persist github in installed-skills.json, "
+            f"but observed skills were: {sorted(installed_skill_names)!r}"
         )
 
     unexpected_markers = [
