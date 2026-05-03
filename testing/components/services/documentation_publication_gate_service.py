@@ -60,6 +60,11 @@ class DocumentationPublicationGateService:
         "new test result",
         "processing started",
     )
+    HUMAN_VERIFICATION_MARKERS = (
+        "human-style verification",
+        "what was tested",
+        "test automation result",
+    )
 
     def __init__(
         self,
@@ -250,6 +255,15 @@ class DocumentationPublicationGateService:
         )
         return observations
 
+    def human_verification_report_preview(self) -> str:
+        comments_text = (
+            self.comments_path.read_text(encoding="utf-8") if self.comments_path.exists() else ""
+        )
+        for block in self._comment_blocks(comments_text):
+            if self._is_human_verification_report(block):
+                return self._preview_text(block, limit=480)
+        return ""
+
     def _latest_documentation_pull_request(self) -> PullRequestCandidate | None:
         merged_candidates: list[PullRequestCandidate] = []
         for pull_request in self.github_client.list_recent_pull_requests():
@@ -330,6 +344,27 @@ class DocumentationPublicationGateService:
     def _is_automation_comment_block(self, block: str) -> bool:
         normalized = self._normalize_text(block)
         return any(marker in normalized for marker in self.AUTOMATION_COMMENT_MARKERS)
+
+    def _is_human_verification_report(self, block: str) -> bool:
+        normalized = self._normalize_text(block)
+        required_topics = (
+            "duplicate-check",
+            "pr description",
+            "link-validation",
+            "documentation-smoke",
+            "sign-off",
+        )
+        has_result = (
+            "status:" in normalized
+            or "result" in normalized
+            or "passed" in normalized
+            or "failed" in normalized
+        )
+        return (
+            any(marker in normalized for marker in self.HUMAN_VERIFICATION_MARKERS)
+            and all(topic in normalized for topic in required_topics)
+            and has_result
+        )
 
     def _successful_checks_for_pull_request(
         self,

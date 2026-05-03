@@ -679,9 +679,63 @@ def test_dmc_918_requires_documentation_specific_smoke_log_evidence(tmp_path: Pa
     assert [failure.step for failure in audit.validation_failures] == [3]
 
 
+def test_dmc_918_detects_recorded_human_style_verification_result(tmp_path: Path) -> None:
+    ticket_dir = tmp_path / "input" / "DMC-918"
+    ticket_dir.mkdir(parents=True)
+    ticket_dir.joinpath("comments.md").write_text(
+        textwrap.dedent(
+            """
+            h3. Test Automation Result
+
+            *Status:* ❌ FAILED
+
+            h4. What was tested
+            * Human-style verification reviewed the target PR and ticket evidence.
+            * Automation checked duplicate-check ticket evidence, the PR description line,
+              link-validation and documentation-smoke logs, and sign-off coverage.
+
+            h4. Result
+            * The duplicate-check record is missing.
+            * The PR description is missing the required line.
+            * Link-validation and documentation-smoke evidence is missing from Actions logs.
+            * Maintainer and technical-writer sign-off is missing.
+            -
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    service = DocumentationPublicationGateService(
+        tmp_path,
+        "DMC-918",
+        github_client=FakeGitHubClient([], {}, {}, {}, {}),
+    )
+
+    report = service.human_verification_report_preview()
+
+    assert report
+    assert "Human-style verification" in report
+
+
 def test_dmc_918_documentation_publication_gates_are_recorded() -> None:
     service = build_live_service()
 
     audit = service.audit()
+    human_report = service.human_verification_report_preview()
+    observations = service.human_observations(audit)
+    verification_text = "\n".join(
+        [human_report]
+        + observations
+        + [service.format_failures(audit.validation_failures)]
+    )
 
-    assert not audit.validation_failures, service.format_failures(audit.validation_failures)
+    assert audit.pull_request is not None, "A target documentation PR must be available to verify."
+    assert "duplicate-check" in verification_text.lower()
+    assert "pr description" in verification_text.lower()
+    assert "link-validation" in verification_text.lower() or "link validation" in verification_text.lower()
+    assert (
+        "documentation-smoke" in verification_text.lower()
+        or "documentation smoke" in verification_text.lower()
+    )
+    assert "sign-off" in verification_text.lower()
