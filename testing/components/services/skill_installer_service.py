@@ -33,6 +33,7 @@ class SkillSelectionAuditResult:
     installer_path: str
     skills_root: str
     metadata_path: str
+    endpoints_path: str
     retained_skill: str
     removed_skill: str
     selected_skills: tuple[str, ...]
@@ -44,6 +45,10 @@ class SkillSelectionAuditResult:
     initial_metadata_raw: str | None
     initial_metadata: InstalledSkillsMetadata | None
     initial_parse_error: str | None
+    initial_endpoints_exists: bool
+    initial_endpoints_raw: str | None
+    initial_endpoints: SkillEndpointsMetadata | None
+    initial_endpoints_parse_error: str | None
     final_retained_state: SkillDirectoryState
     final_removed_state: SkillDirectoryState
     final_added_state: SkillDirectoryState | None
@@ -51,6 +56,10 @@ class SkillSelectionAuditResult:
     final_metadata_raw: str | None
     final_metadata: InstalledSkillsMetadata | None
     final_parse_error: str | None
+    final_endpoints_exists: bool
+    final_endpoints_raw: str | None
+    final_endpoints: SkillEndpointsMetadata | None
+    final_endpoints_parse_error: str | None
 
 
 @dataclass(frozen=True)
@@ -180,6 +189,7 @@ class SkillInstallerService:
             installer_path = sandbox.workspace / self.INSTALLER_RELATIVE_PATH
             skills_root = sandbox.workspace / self.SKILLS_ROOT_RELATIVE_PATH
             metadata_path = skills_root / "installed-skills.json"
+            endpoints_path = skills_root / "endpoints.json"
 
             self._prepare_fake_release_environment(sandbox, selected_skills)
             self._seed_installed_skills(
@@ -194,6 +204,12 @@ class SkillInstallerService:
                 initial_metadata,
                 initial_parse_error,
             ) = self._read_metadata(metadata_path)
+            (
+                initial_endpoints_exists,
+                initial_endpoints_raw,
+                initial_endpoints,
+                initial_endpoints_parse_error,
+            ) = self._read_endpoints_metadata(endpoints_path)
             initial_retained_state = self._directory_state(
                 skills_root / self.skill_install_name(retained_skill)
             )
@@ -221,6 +237,12 @@ class SkillInstallerService:
                 final_metadata,
                 final_parse_error,
             ) = self._read_metadata(metadata_path)
+            (
+                final_endpoints_exists,
+                final_endpoints_raw,
+                final_endpoints,
+                final_endpoints_parse_error,
+            ) = self._read_endpoints_metadata(endpoints_path)
 
             return SkillSelectionAuditResult(
                 installer_command_result=installer_command_result,
@@ -228,6 +250,7 @@ class SkillInstallerService:
                 installer_path=installer_path.as_posix(),
                 skills_root=skills_root.as_posix(),
                 metadata_path=metadata_path.as_posix(),
+                endpoints_path=endpoints_path.as_posix(),
                 retained_skill=retained_skill,
                 removed_skill=removed_skill,
                 selected_skills=selected_skills,
@@ -239,6 +262,10 @@ class SkillInstallerService:
                 initial_metadata_raw=initial_metadata_raw,
                 initial_metadata=initial_metadata,
                 initial_parse_error=initial_parse_error,
+                initial_endpoints_exists=initial_endpoints_exists,
+                initial_endpoints_raw=initial_endpoints_raw,
+                initial_endpoints=initial_endpoints,
+                initial_endpoints_parse_error=initial_endpoints_parse_error,
                 final_retained_state=self._directory_state(
                     skills_root / self.skill_install_name(retained_skill)
                 ),
@@ -254,6 +281,10 @@ class SkillInstallerService:
                 final_metadata_raw=final_metadata_raw,
                 final_metadata=final_metadata,
                 final_parse_error=final_parse_error,
+                final_endpoints_exists=final_endpoints_exists,
+                final_endpoints_raw=final_endpoints_raw,
+                final_endpoints=final_endpoints,
+                final_endpoints_parse_error=final_endpoints_parse_error,
             )
         finally:
             sandbox.cleanup()
@@ -323,6 +354,19 @@ class SkillInstallerService:
                 expected_skills=(result.retained_skill, result.removed_skill),
             )
         )
+        failures.extend(
+            self._validate_endpoints_metadata(
+                step=1,
+                endpoints_exists=result.initial_endpoints_exists,
+                endpoints=result.initial_endpoints,
+                parse_error=result.initial_endpoints_parse_error,
+                endpoints_path=result.endpoints_path,
+                expected_commands=tuple(
+                    self.skill_endpoint_path(skill)
+                    for skill in (result.retained_skill, result.removed_skill)
+                ),
+            )
+        )
 
         if result.installer_command_result.returncode != 0:
             failures.append(
@@ -385,6 +429,18 @@ class SkillInstallerService:
                 parse_error=result.final_parse_error,
                 metadata_path=result.metadata_path,
                 expected_skills=result.selected_skills,
+            )
+        )
+        failures.extend(
+            self._validate_endpoints_metadata(
+                step=5,
+                endpoints_exists=result.final_endpoints_exists,
+                endpoints=result.final_endpoints,
+                parse_error=result.final_endpoints_parse_error,
+                endpoints_path=result.endpoints_path,
+                expected_commands=tuple(
+                    self.skill_endpoint_path(skill) for skill in result.selected_skills
+                ),
             )
         )
 
@@ -508,7 +564,7 @@ class SkillInstallerService:
                 parse_error=result.initial_endpoints_parse_error,
                 endpoints_path=result.endpoints_path,
                 expected_commands=tuple(
-                    self.skill_command_name(skill) for skill in result.seeded_skills
+                    self.skill_endpoint_path(skill) for skill in result.seeded_skills
                 ),
             )
         )
@@ -792,7 +848,7 @@ class SkillInstallerService:
             "Steps to reproduce:",
             (
                 "1. Start from a workspace where .claude/skills contains the retained and "
-                "removed skill folders plus installed-skills.json metadata."
+                "removed skill folders plus installed-skills.json and endpoints.json metadata."
             ),
             (
                 f"2. Re-run {self.INSTALLER_RELATIVE_PATH} with "
@@ -814,6 +870,7 @@ class SkillInstallerService:
             f"- Workspace: {result.workspace_root}",
             f"- Skills root: {result.skills_root}",
             f"- Metadata: {result.metadata_path}",
+            f"- Endpoints: {result.endpoints_path}",
             (
                 f"- Initial retained dir: {result.initial_retained_state.path} | "
                 f"exists={result.initial_retained_state.exists} | "
@@ -865,12 +922,30 @@ class SkillInstallerService:
                 f"- Final metadata exists={result.final_metadata_exists} "
                 f"parse_error={result.final_parse_error or '<none>'}"
             ),
+            (
+                f"- Initial endpoints exists={result.initial_endpoints_exists} "
+                f"parse_error={result.initial_endpoints_parse_error or '<none>'}"
+            ),
+            (
+                f"- Final endpoints exists={result.final_endpoints_exists} "
+                f"parse_error={result.final_endpoints_parse_error or '<none>'}"
+            ),
             "",
             "Initial metadata:",
             result.initial_metadata_raw.rstrip() if result.initial_metadata_raw is not None else "<missing>",
             "",
             "Final metadata:",
             result.final_metadata_raw.rstrip() if result.final_metadata_raw is not None else "<missing>",
+            "",
+            "Initial endpoints:",
+            result.initial_endpoints_raw.rstrip()
+            if result.initial_endpoints_raw is not None
+            else "<missing>",
+            "",
+            "Final endpoints:",
+            result.final_endpoints_raw.rstrip()
+            if result.final_endpoints_raw is not None
+            else "<missing>",
             ]
         )
 
@@ -1097,6 +1172,10 @@ class SkillInstallerService:
         return "/dmtools" if skill == "dmtools" else f"/dmtools-{skill}"
 
     @staticmethod
+    def skill_endpoint_path(skill: str) -> str:
+        return f"/dmtools/{skill}"
+
+    @staticmethod
     def skill_asset_name(skill: str) -> str:
         return "dmtools-skill.zip" if skill == "dmtools" else f"dmtools-{skill}-skill.zip"
 
@@ -1140,10 +1219,12 @@ class SkillInstallerService:
         retained_skill: str,
         removed_skill: str,
     ) -> None:
+        selected_skills = (retained_skill, removed_skill)
         self._seed_selected_skills(
             skills_root=skills_root,
-            selected_skills=(retained_skill, removed_skill),
+            selected_skills=selected_skills,
         )
+        self._write_endpoints_metadata(skills_root, selected_skills)
 
     def _seed_skill_selection_state(
         self,
@@ -1167,6 +1248,7 @@ class SkillInstallerService:
         for skill in selected_skills:
             self._seed_skill_directory(skills_root / self.skill_install_name(skill), skill)
         metadata = {
+            "version": "test-seed",
             "installed_skills": list(selected_skills),
             "active_commands": [self.skill_command_name(skill) for skill in selected_skills],
         }
@@ -1185,7 +1267,7 @@ class SkillInstallerService:
             "endpoints": [
                 {
                     "name": skill,
-                    "path": self.skill_command_name(skill),
+                    "path": self.skill_endpoint_path(skill),
                 }
                 for skill in skills
             ],
@@ -1526,7 +1608,7 @@ class SkillInstallerService:
             failures.append(
                 SkillSelectionAuditFailure(
                     step=step,
-                    summary="endpoints.json must match the selected command entries exactly.",
+                    summary="endpoints.json must match the selected endpoint entries exactly.",
                     details=(
                         f"Expected {expected_commands}, observed {endpoints.command_entries} "
                         f"in {endpoints_path}."
