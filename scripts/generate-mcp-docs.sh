@@ -45,15 +45,17 @@ public class GenerateMCPDocs {
         // Parse tool definitions
         Map<String, List<ToolDef>> toolsByIntegration = new LinkedHashMap<>();
         Pattern toolPattern = Pattern.compile(
-            "tools\\.put\\(\"([^\"]+)\",\\s*new MCPToolDefinition\\(\"([^\"]+)\",\\s*\"([^\"]+)\",\\s*\"([^\"]*)\",\\s*\"([^\"]*)\""
+            "tools\\.put\\(\"([^\"]+)\",\\s*new MCPToolDefinition\\(\"([^\"]+)\",\\s*\"([^\"]+)\",\\s*\"([^\"]+)\",\\s*\"([^\"]*)\""
         );
 
         Matcher matcher = toolPattern.matcher(content);
         while (matcher.find()) {
-            String name = matcher.group(1);
-            String description = matcher.group(2);
-            String integration = matcher.group(3);
-            String category = matcher.group(4);
+            String key = matcher.group(1);
+            String registryName = matcher.group(2);
+            String description = matcher.group(3);
+            String integration = matcher.group(4);
+            String category = matcher.group(5);
+            String name = key.isEmpty() ? registryName : key;
 
             ToolDef tool = new ToolDef(name, description, integration, category);
             toolsByIntegration.computeIfAbsent(integration, k -> new ArrayList<>()).add(tool);
@@ -68,7 +70,8 @@ public class GenerateMCPDocs {
                 integration = "misc";
             }
 
-            String filename = outputDir + "/" + integration + "-tools.md";
+            String fileSlug = sanitizeFilename(integration);
+            String filename = outputDir + "/" + fileSlug + "-tools.md";
             try (PrintWriter out = new PrintWriter(new FileWriter(filename))) {
                 out.println("# " + capitalizeFirst(integration) + " MCP Tools");
                 out.println();
@@ -115,9 +118,10 @@ public class GenerateMCPDocs {
                 String integration = entry.getKey();
                 if (integration.isEmpty()) integration = "misc";
                 int count = entry.getValue().size();
+                String fileSlug = sanitizeFilename(integration);
                 out.printf("- [%s](%s-tools.md) - %d tools%n",
                     capitalizeFirst(integration),
-                    integration,
+                    fileSlug,
                     count
                 );
             }
@@ -134,6 +138,17 @@ public class GenerateMCPDocs {
     private static String capitalizeFirst(String str) {
         if (str == null || str.isEmpty()) return str;
         return Character.toUpperCase(str.charAt(0)) + str.substring(1);
+    }
+
+    private static String sanitizeFilename(String str) {
+        if (str == null || str.isEmpty()) return "misc";
+
+        String sanitized = str
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9._-]+", "-")
+            .replaceAll("^-+|-+$", "");
+
+        return sanitized.isEmpty() ? "misc" : sanitized;
     }
 
     static class ToolDef {
@@ -157,7 +172,7 @@ javac /tmp/GenerateMCPDocs.java
 java -cp /tmp GenerateMCPDocs "$REGISTRY_FILE" "$OUTPUT_DIR"
 
 # Cleanup
-rm /tmp/GenerateMCPDocs.class /tmp/GenerateMCPDocs.java
+rm -f /tmp/GenerateMCPDocs*.class /tmp/GenerateMCPDocs.java
 
 echo "✅ MCP tools documentation generated in: $OUTPUT_DIR"
 echo "📄 Files created:"
