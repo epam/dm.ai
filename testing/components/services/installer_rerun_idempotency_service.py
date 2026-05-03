@@ -45,6 +45,7 @@ class InstallerManagedPaths:
 class InstallerMetadataSnapshot:
     installed_skills_payload: Any | None = None
     endpoints_payload: Any | None = None
+    runtime_env_assignments: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +212,9 @@ class InstallerRerunIdempotencyService:
             endpoints_payload=InstallerRerunIdempotencyService._read_json_artifact(
                 managed_paths.endpoints_path
             ),
+            runtime_env_assignments=InstallerRerunIdempotencyService._read_env_assignments(
+                managed_paths.installer_env_path
+            ),
         )
 
     @staticmethod
@@ -273,3 +277,17 @@ class InstallerRerunIdempotencyService:
         if not path.exists():
             return None
         return json.loads(path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _read_env_assignments(path: Path) -> dict[str, str] | None:
+        if not path.exists():
+            return None
+
+        assignments: dict[str, str] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            assignments[key.strip()] = value.strip().strip("\"'")
+        return assignments

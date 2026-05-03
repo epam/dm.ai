@@ -520,12 +520,6 @@ EOF
         return 0
     fi
 
-    if [ -n "$normalized_existing_skills" ] && [ -n "$normalized_existing_integrations" ]; then
-        INSTALLER_SKILL_CONFIG_UNCHANGED=false
-        info "Preserving existing installer runtime config at $INSTALLER_ENV_PATH"
-        return 0
-    fi
-
     INSTALLER_SKILL_CONFIG_UNCHANGED=false
     printf '%s\n' "$new_content" > "$INSTALLER_ENV_PATH"
     info "Configured installer-managed skills at $INSTALLER_ENV_PATH"

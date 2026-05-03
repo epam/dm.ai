@@ -365,7 +365,7 @@ main --skills jira,github
                 )
                 self.assertIn("Selected skills already installed: jira,github", result.stdout)
 
-    def test_main_run_with_added_skill_reuses_core_artifacts_and_preserves_runtime_env(self) -> None:
+    def test_main_run_with_added_skill_reuses_core_artifacts_and_updates_runtime_env(self) -> None:
         for installer_script in INSTALL_ENTRYPOINTS:
             with self.subTest(installer_script=installer_script.name):
                 with tempfile.TemporaryDirectory() as temp_dir:
@@ -380,7 +380,11 @@ download_dmtools() {
     printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
     cat > "$SCRIPT_PATH" <<'EOF'
 #!/bin/bash
-echo "dmtools stub"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/dmtools-installer.env" ]; then
+    . "$SCRIPT_DIR/dmtools-installer.env"
+fi
+printf '%s\\n' "${DMTOOLS_INTEGRATIONS:-}"
 EOF
     chmod +x "$SCRIPT_PATH"
 }
@@ -397,6 +401,8 @@ printf '%s\\n' '---ENV-AFTER-SECOND---'
 cat "$INSTALLER_ENV_PATH"
 printf '%s\\n' '---INSTALLED-SKILLS-AFTER-SECOND---'
 cat "$INSTALLED_SKILLS_JSON_PATH"
+printf '%s\\n' '---WRAPPER-INTEGRATIONS-AFTER-SECOND---'
+"$SCRIPT_PATH"
 """,
                         {
                             "DMTOOLS_INSTALL_DIR": temp_dir,
@@ -421,11 +427,22 @@ cat "$INSTALLED_SKILLS_JSON_PATH"
                     .split("\n---INSTALLED-SKILLS-AFTER-SECOND---\n", 1)[0]
                     .strip()
                 )
+                wrapper_integrations = (
+                    result.stdout.split("---WRAPPER-INTEGRATIONS-AFTER-SECOND---\n", 1)[1].strip()
+                )
                 second_metadata = json.loads(
-                    result.stdout.split("---INSTALLED-SKILLS-AFTER-SECOND---\n", 1)[1].strip()
+                    result.stdout.split("\n---WRAPPER-INTEGRATIONS-AFTER-SECOND---\n", 1)[0]
+                    .split("---INSTALLED-SKILLS-AFTER-SECOND---\n", 1)[1]
+                    .strip()
                 )
 
-                self.assertEqual(first_env, second_env)
+                self.assertNotEqual(first_env, second_env)
+                self.assertIn('DMTOOLS_SKILLS="jira,github"', second_env)
+                self.assertIn(
+                    'DMTOOLS_INTEGRATIONS="ai,cli,file,kb,mermaid,jira,github"',
+                    second_env,
+                )
+                self.assertEqual("ai,cli,file,kb,mermaid,jira,github", wrapper_integrations)
                 self.assertEqual(
                     [{"name": "jira"}, {"name": "github"}],
                     second_metadata["installed_skills"],

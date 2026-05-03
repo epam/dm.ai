@@ -8,7 +8,7 @@ from testing.components.services.installer_rerun_idempotency_service import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 INITIAL_SKILLS = "jira"
 FOLLOW_UP_SKILLS = "jira,github"
-UNCHANGED_INSTALLER_ARTIFACTS = ("dmtools.jar", "dmtools", "dmtools-installer.env")
+UNCHANGED_INSTALLER_ARTIFACTS = ("dmtools.jar", "dmtools")
 UNEXPECTED_SECOND_RUN_MARKERS = (
     "Downloading DMTools JAR...",
     "Downloading DMTools shell script",
@@ -67,10 +67,25 @@ def test_dmc_967_adding_a_skill_keeps_core_artifacts_idempotent() -> None:
         if second_run_metadata is not None
         else set()
     )
+    runtime_env_assignments = (
+        second_run_metadata.runtime_env_assignments if second_run_metadata is not None else {}
+    )
     if "github" not in installed_skill_names:
         failures.append(
             "Expected the follow-up run to persist github in installed-skills.json, "
             f"but observed skills were: {sorted(installed_skill_names)!r}"
+        )
+    if runtime_env_assignments.get("DMTOOLS_SKILLS") != FOLLOW_UP_SKILLS:
+        failures.append(
+            "Expected the follow-up run to update DMTOOLS_SKILLS in dmtools-installer.env "
+            f"to {FOLLOW_UP_SKILLS!r}, but observed: "
+            f"{runtime_env_assignments.get('DMTOOLS_SKILLS')!r}"
+        )
+    if runtime_env_assignments.get("DMTOOLS_INTEGRATIONS") != "ai,cli,file,kb,mermaid,jira,github":
+        failures.append(
+            "Expected the follow-up run to update DMTOOLS_INTEGRATIONS in "
+            "dmtools-installer.env for the added github skill, but observed: "
+            f"{runtime_env_assignments.get('DMTOOLS_INTEGRATIONS')!r}"
         )
 
     unexpected_markers = [
@@ -86,8 +101,8 @@ def test_dmc_967_adding_a_skill_keeps_core_artifacts_idempotent() -> None:
     changed_installer_artifacts = observation.changed_artifacts(*UNCHANGED_INSTALLER_ARTIFACTS)
     if changed_installer_artifacts:
         failures.append(
-            "Expected the follow-up run to leave the shared core artifacts and "
-            "dmtools-installer.env unchanged, but these files were rewritten:\n"
+            "Expected the follow-up run to leave the shared core CLI artifacts unchanged, "
+            "but these files were rewritten:\n"
             + "\n".join(changed_installer_artifacts)
         )
 
