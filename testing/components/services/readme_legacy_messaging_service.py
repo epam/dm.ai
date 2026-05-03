@@ -42,6 +42,7 @@ class ReadmeLegacyMessagingService:
         "simple run (legacy)",
     )
     PRIMARY_USAGE_PATHS_HEADING = "Primary usage paths"
+    UPGRADING_FROM_LEGACY_INSTALLS_HEADING = "Upgrading from legacy installs"
     BUILD_FROM_SOURCE_HEADING = "Build from source"
     REQUIRED_PRIMARY_USAGE_ROW = "CLI + MCP tools"
     CLI_FIRST_SIGNAL_PHRASES = (
@@ -64,14 +65,15 @@ class ReadmeLegacyMessagingService:
     def validate(self) -> list[ValidationFailure]:
         failures: list[ValidationFailure] = []
 
-        forbidden_matches = self.forbidden_phrase_matches(self.readme_text)
+        primary_narrative = self.primary_narrative()
+        forbidden_matches = self.forbidden_phrase_matches(primary_narrative)
         if forbidden_matches:
             failures.append(
                 ValidationFailure(
                     step=1,
                     summary="README still contains legacy OAuth/web-app/Swagger entry-point language.",
                     expected=(
-                        "README.md should not contain the legacy framing phrases: "
+                        "The README primary entry-point narrative should not contain the legacy framing phrases: "
                         + ", ".join(repr(phrase) for phrase in self.FORBIDDEN_PRIMARY_PHRASES)
                     ),
                     actual=self._format_matches(forbidden_matches),
@@ -103,7 +105,6 @@ class ReadmeLegacyMessagingService:
                 )
             )
 
-        primary_narrative = self.primary_narrative()
         normalized_primary_narrative = self._normalize(primary_narrative)
         if not any(
             signal_phrase in normalized_primary_narrative
@@ -160,9 +161,7 @@ class ReadmeLegacyMessagingService:
         return labels
 
     def primary_narrative(self) -> str:
-        stop_line = self._heading_line(self.BUILD_FROM_SOURCE_HEADING)
-        if stop_line is None:
-            stop_line = len(self.lines)
+        stop_line = self._primary_narrative_stop_line()
         return "\n".join(self.lines[:stop_line]).strip()
 
     @staticmethod
@@ -188,6 +187,19 @@ class ReadmeLegacyMessagingService:
             ),
             None,
         )
+
+    def _primary_narrative_stop_line(self) -> int:
+        stop_line_candidates = [
+            line_number
+            for line_number in (
+                self._heading_line(self.UPGRADING_FROM_LEGACY_INSTALLS_HEADING),
+                self._heading_line(self.BUILD_FROM_SOURCE_HEADING),
+            )
+            if line_number is not None
+        ]
+        if stop_line_candidates:
+            return min(stop_line_candidates)
+        return len(self.lines)
 
     def _section_body(self, title: str) -> str:
         normalized_title = self._normalize(title)

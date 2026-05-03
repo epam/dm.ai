@@ -48,3 +48,39 @@ def test_dmc_979_reports_legacy_keywords_and_non_cli_primary_entry_point(tmp_pat
     assert "'live application' at README.md:3" in failure_message
     assert "'swagger ui' at README.md:9" in failure_message
     assert "Observed usage path order: Browser UI, CLI + MCP tools" in failure_message
+
+
+def test_dmc_979_allows_legacy_terms_in_later_migration_context(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    (repository_root / "README.md").write_text(
+        "\n".join(
+            [
+                "# DMTools",
+                "",
+                "CLI orchestration for enterprise delivery teams.",
+                "",
+                "## Primary usage paths",
+                "",
+                "| Usage path | What you do with it | Start here |",
+                "|---|---|---|",
+                "| CLI + MCP tools | Execute direct tool calls and integration operations from the terminal | docs |",
+                "| Jobs + agents | Run reusable orchestration flows | agents |",
+                "",
+                "## Quick start",
+                "",
+                "Run DMTools from the terminal with MCP tools and jobs.",
+                "",
+                "## Upgrading from legacy installs",
+                "",
+                "Older migration notes may still reference OAuth, Swagger UI, or a live application.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    service = ReadmeLegacyMessagingService(repository_root)
+
+    failures = service.validate()
+
+    assert not failures, service.format_failures(failures)
