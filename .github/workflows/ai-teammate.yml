@@ -111,9 +111,9 @@ jobs:
           fi
           echo "Using Copilot model: ${COPILOT_MODEL}"
 
-      - name: Install DMTools CLI v1.7.179
+      - name: Install DMTools CLI v1.7.180
         run: |
-          curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/v1.7.179/install.sh | bash -s v1.7.179
+          curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/v1.7.180/install.sh | bash -s v1.7.180
 
       - name: Add DMTools to PATH
         run: echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
