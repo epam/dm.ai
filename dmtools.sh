@@ -114,6 +114,7 @@ load_env_files() {
         "$SCRIPT_DIR/.env"
         "$SCRIPT_DIR/dmtools.env"
         "$SCRIPT_DIR/dmtools-installer.env"
+        "$SCRIPT_DIR/dmtools-runtime.env"
         "$SCRIPT_DIR/dmtools-local.env"
     )
     

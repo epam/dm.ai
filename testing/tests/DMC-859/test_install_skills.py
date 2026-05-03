@@ -365,6 +365,125 @@ main --skills jira,github
                 )
                 self.assertIn("Selected skills already installed: jira,github", result.stdout)
 
+    def test_main_run_with_added_skill_reuses_core_artifacts_and_preserves_installer_env(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    result = run_installer_functions(
+                        """
+check_java() { printf 'stub check_java\\n'; }
+get_latest_version() { printf 'v0.0.0-test'; }
+download_dmtools() {
+    local version="$1"
+    printf 'SIDE download_dmtools %s\\n' "$version"
+    mkdir -p "$(dirname "$JAR_PATH")" "$BIN_DIR"
+    printf 'stub jar for %s\\n' "$version" > "$JAR_PATH"
+    cat > "$SCRIPT_PATH" <<'EOF'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/dmtools-installer.env" ]; then
+    . "$SCRIPT_DIR/dmtools-installer.env"
+fi
+if [ -f "$SCRIPT_DIR/dmtools-runtime.env" ]; then
+    . "$SCRIPT_DIR/dmtools-runtime.env"
+fi
+printf '%s\\n' "${DMTOOLS_INTEGRATIONS:-}"
+EOF
+    chmod +x "$SCRIPT_PATH"
+}
+update_shell_config() { printf 'SIDE update_shell_config\\n'; }
+verify_installation() { printf 'SIDE verify_installation\\n'; }
+print_instructions() { printf 'SIDE print_instructions\\n'; }
+main --skills jira
+printf '%s\\n' '---ENV-AFTER-FIRST---'
+cat "$INSTALLER_ENV_PATH"
+printf '%s\\n' '---RUNTIME-ENV-AFTER-FIRST---'
+if [ -f "$RUNTIME_OVERRIDE_ENV_PATH" ]; then
+    cat "$RUNTIME_OVERRIDE_ENV_PATH"
+else
+    printf '%s\\n' '<missing>'
+fi
+printf '%s\\n' '---INSTALLED-SKILLS-AFTER-FIRST---'
+cat "$INSTALLED_SKILLS_JSON_PATH"
+main --skills jira,github
+printf '%s\\n' '---ENV-AFTER-SECOND---'
+cat "$INSTALLER_ENV_PATH"
+printf '%s\\n' '---RUNTIME-ENV-AFTER-SECOND---'
+if [ -f "$RUNTIME_OVERRIDE_ENV_PATH" ]; then
+    cat "$RUNTIME_OVERRIDE_ENV_PATH"
+else
+    printf '%s\\n' '<missing>'
+fi
+printf '%s\\n' '---INSTALLED-SKILLS-AFTER-SECOND---'
+cat "$INSTALLED_SKILLS_JSON_PATH"
+printf '%s\\n' '---WRAPPER-INTEGRATIONS-AFTER-SECOND---'
+"$SCRIPT_PATH"
+""",
+                        {
+                            "DMTOOLS_INSTALL_DIR": temp_dir,
+                            "DMTOOLS_BIN_DIR": f"{temp_dir}/bin",
+                            "DMTOOLS_INSTALLER_ENV_PATH": f"{temp_dir}/bin/dmtools-installer.env",
+                            "DMTOOLS_RUNTIME_ENV_PATH": f"{temp_dir}/bin/dmtools-runtime.env",
+                        },
+                        installer_script=installer_script,
+                    )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(
+                    1, result.stdout.count("SIDE download_dmtools v0.0.0-test"), result.stdout
+                )
+
+                first_env = (
+                    result.stdout.split("---ENV-AFTER-FIRST---\n", 1)[1]
+                    .split("\n---RUNTIME-ENV-AFTER-FIRST---\n", 1)[0]
+                    .strip()
+                )
+                first_runtime_env = (
+                    result.stdout.split("---RUNTIME-ENV-AFTER-FIRST---\n", 1)[1]
+                    .split("\n---INSTALLED-SKILLS-AFTER-FIRST---\n", 1)[0]
+                    .strip()
+                )
+                second_env = (
+                    result.stdout.split("---ENV-AFTER-SECOND---\n", 1)[1]
+                    .split("\n---RUNTIME-ENV-AFTER-SECOND---\n", 1)[0]
+                    .strip()
+                )
+                second_runtime_env = (
+                    result.stdout.split("---RUNTIME-ENV-AFTER-SECOND---\n", 1)[1]
+                    .split("\n---INSTALLED-SKILLS-AFTER-SECOND---\n", 1)[0]
+                    .strip()
+                )
+                wrapper_integrations = (
+                    result.stdout.split("---WRAPPER-INTEGRATIONS-AFTER-SECOND---\n", 1)[1].strip()
+                )
+                second_metadata = json.loads(
+                    result.stdout.split("\n---WRAPPER-INTEGRATIONS-AFTER-SECOND---\n", 1)[0]
+                    .split("---INSTALLED-SKILLS-AFTER-SECOND---\n", 1)[1]
+                    .strip()
+                )
+
+                self.assertEqual("<missing>", first_runtime_env)
+                self.assertEqual(first_env, second_env)
+                self.assertIn('DMTOOLS_SKILLS="jira"', second_env)
+                self.assertIn(
+                    'DMTOOLS_INTEGRATIONS="ai,cli,file,kb,mermaid,jira"',
+                    second_env,
+                )
+                self.assertIn('DMTOOLS_SKILLS="jira,github"', second_runtime_env)
+                self.assertIn(
+                    'DMTOOLS_INTEGRATIONS="ai,cli,file,kb,mermaid,jira,github"',
+                    second_runtime_env,
+                )
+                self.assertEqual("ai,cli,file,kb,mermaid,jira,github", wrapper_integrations)
+                self.assertEqual(
+                    [{"name": "jira"}, {"name": "github"}],
+                    second_metadata["installed_skills"],
+                )
+                self.assertEqual(
+                    ["ai", "cli", "file", "kb", "mermaid", "jira", "github"],
+                    second_metadata["integrations"],
+                )
+
     def test_repeated_main_run_redownloads_when_requested_version_changes(self) -> None:
         for installer_script in INSTALL_ENTRYPOINTS:
             with self.subTest(installer_script=installer_script.name):

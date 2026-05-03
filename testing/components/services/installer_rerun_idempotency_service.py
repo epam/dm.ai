@@ -35,6 +35,7 @@ class InstallerManagedPaths:
     install_dir: Path
     bin_dir: Path
     installer_env_path: Path
+    runtime_override_env_path: Path
     jar_path: Path
     script_path: Path
     installed_skills_path: Path
@@ -45,6 +46,8 @@ class InstallerManagedPaths:
 class InstallerMetadataSnapshot:
     installed_skills_payload: Any | None = None
     endpoints_payload: Any | None = None
+    installer_env_assignments: dict[str, str] | None = None
+    runtime_override_env_assignments: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +199,7 @@ class InstallerRerunIdempotencyService:
             install_dir=install_dir,
             bin_dir=bin_dir,
             installer_env_path=bin_dir / "dmtools-installer.env",
+            runtime_override_env_path=bin_dir / "dmtools-runtime.env",
             jar_path=install_dir / "dmtools.jar",
             script_path=bin_dir / "dmtools",
             installed_skills_path=install_dir / "installed-skills.json",
@@ -210,6 +214,12 @@ class InstallerRerunIdempotencyService:
             ),
             endpoints_payload=InstallerRerunIdempotencyService._read_json_artifact(
                 managed_paths.endpoints_path
+            ),
+            installer_env_assignments=InstallerRerunIdempotencyService._read_env_assignments(
+                managed_paths.installer_env_path
+            ),
+            runtime_override_env_assignments=InstallerRerunIdempotencyService._read_env_assignments(
+                managed_paths.runtime_override_env_path
             ),
         )
 
@@ -273,3 +283,17 @@ class InstallerRerunIdempotencyService:
         if not path.exists():
             return None
         return json.loads(path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _read_env_assignments(path: Path) -> dict[str, str] | None:
+        if not path.exists():
+            return None
+
+        assignments: dict[str, str] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            assignments[key.strip()] = value.strip().strip("\"'")
+        return assignments
