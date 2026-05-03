@@ -38,7 +38,10 @@ def _delete_only_shell_script(paths: InstallerManagedPaths) -> None:
 
 
 def test_dmc_968_rerun_restores_only_missing_shell_script() -> None:
-    service = InstallerRerunIdempotencyService(REPOSITORY_ROOT, skills_csv=EXPECTED_SKILLS)
+    service = InstallerRerunIdempotencyService(
+        REPOSITORY_ROOT,
+        initial_skills_csv=EXPECTED_SKILLS,
+    )
 
     observation = service.exercise(before_second_run=_delete_only_shell_script)
 
