@@ -476,7 +476,15 @@ EOF
 }
 
 installer_managed_artifacts_present() {
-    [ -s "$JAR_PATH" ] && [ -s "$SCRIPT_PATH" ]
+    installer_managed_jar_present && installer_managed_script_present
+}
+
+installer_managed_jar_present() {
+    [ -s "$JAR_PATH" ]
+}
+
+installer_managed_script_present() {
+    [ -s "$SCRIPT_PATH" ] && [ -x "$SCRIPT_PATH" ]
 }
 
 read_installer_metadata_version() {
@@ -1238,15 +1246,19 @@ download_script_from_repo() {
     return 1
 }
 
-# Download DMTools JAR and script
-download_dmtools() {
+# Download DMTools JAR
+download_dmtools_jar() {
     local version="$1"
     local jar_url="https://github.com/${REPO}/releases/download/${version}/dmtools-${version}-all.jar"
-    local script_url="https://github.com/${REPO}/releases/download/${version}/dmtools.sh"
-    
-    # Download JAR
+
     download_file "$jar_url" "$JAR_PATH" "DMTools JAR"
-    
+}
+
+# Download DMTools shell script
+download_dmtools_shell_script() {
+    local version="$1"
+    local script_url="https://github.com/${REPO}/releases/download/${version}/dmtools.sh"
+
     # Download shell script - try multiple methods
     # Method 1: Try redirect-based URL (standard GitHub release URL)
     if download_file "$script_url" "$SCRIPT_PATH" "DMTools shell script" "true"; then
@@ -1289,6 +1301,14 @@ Please try again later or download manually from:
   https://raw.githubusercontent.com/${REPO}/main/dmtools.sh
   
 And place it at: $SCRIPT_PATH"
+}
+
+# Download DMTools JAR and script
+download_dmtools() {
+    local version="$1"
+
+    download_dmtools_jar "$version"
+    download_dmtools_shell_script "$version"
 }
 
 # Update shell configuration
@@ -1448,11 +1468,22 @@ main() {
     write_installer_skill_config
 
     local skip_dmtools_download=false
+    local jar_matches_version=false
     if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] \
-        && installer_managed_artifacts_present \
+        && installer_managed_jar_present \
         && installed_artifact_version_matches "$version"; then
-        skip_dmtools_download=true
-        info "Installer-managed artifacts already present for version $version; skipping DMTools download."
+        jar_matches_version=true
+    fi
+
+    if [ "$INSTALLER_SKILL_CONFIG_UNCHANGED" = true ] && [ "$jar_matches_version" = true ]; then
+        if installer_managed_script_present; then
+            skip_dmtools_download=true
+            info "Installer-managed artifacts already present for version $version; skipping DMTools download."
+        else
+            skip_dmtools_download=true
+            info "Installer-managed DMTools JAR already present for version $version; skipping JAR download."
+            download_dmtools_shell_script "$version"
+        fi
     fi
 
     if [ "$skip_dmtools_download" != true ]; then

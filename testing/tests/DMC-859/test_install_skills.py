@@ -309,6 +309,62 @@ main --skills jira,github
                     result.stdout,
                 )
 
+    def test_repeated_main_run_restores_only_missing_shell_script(self) -> None:
+        for installer_script in INSTALL_ENTRYPOINTS:
+            with self.subTest(installer_script=installer_script.name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    result = run_installer_functions(
+                        """
+check_java() { printf 'stub check_java\\n'; }
+get_latest_version() { printf 'v0.0.0-test'; }
+download_file() {
+    local url="$1"
+    local output="$2"
+    local desc="$3"
+    printf 'SIDE download_file %s\\n' "$desc"
+    mkdir -p "$(dirname "$output")" "$BIN_DIR"
+    case "$desc" in
+        "DMTools JAR")
+            printf 'stub jar for %s\\n' "$url" > "$output"
+            ;;
+        *)
+            cat > "$output" <<'EOF'
+#!/bin/bash
+echo "dmtools stub"
+EOF
+            ;;
+    esac
+    return 0
+}
+download_script_from_repo() { printf 'SIDE download_script_from_repo\\n'; return 1; }
+update_shell_config() { printf 'SIDE update_shell_config\\n'; }
+verify_installation() { printf 'SIDE verify_installation\\n'; }
+print_instructions() { printf 'SIDE print_instructions\\n'; }
+main --skills jira,github
+rm -f "$SCRIPT_PATH"
+main --skills jira,github
+""",
+                        {
+                            "DMTOOLS_INSTALL_DIR": temp_dir,
+                            "DMTOOLS_BIN_DIR": f"{temp_dir}/bin",
+                            "DMTOOLS_INSTALLER_ENV_PATH": f"{temp_dir}/bin/dmtools-installer.env",
+                        },
+                        installer_script=installer_script,
+                    )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(
+                    1,
+                    result.stdout.count("SIDE download_file DMTools JAR"),
+                    result.stdout,
+                )
+                self.assertEqual(
+                    2,
+                    result.stdout.count("SIDE download_file DMTools shell script"),
+                    result.stdout,
+                )
+                self.assertIn("Selected skills already installed: jira,github", result.stdout)
+
     def test_repeated_main_run_redownloads_when_requested_version_changes(self) -> None:
         for installer_script in INSTALL_ENTRYPOINTS:
             with self.subTest(installer_script=installer_script.name):
