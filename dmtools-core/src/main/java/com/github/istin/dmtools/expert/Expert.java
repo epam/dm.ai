@@ -41,6 +41,7 @@ import com.github.istin.dmtools.search.AbstractSearchOrchestrator;
 import com.github.istin.dmtools.search.CodebaseSearchOrchestrator;
 import com.github.istin.dmtools.search.ConfluenceSearchOrchestrator;
 import com.github.istin.dmtools.search.TrackerSearchOrchestrator;
+import com.github.istin.dmtools.common.utils.IOUtils;
 import lombok.Getter;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
@@ -396,7 +397,7 @@ public class Expert extends AbstractJob<ExpertParams, List<ResultItem>> {
                 tempFileResult
         );
         // Clean up temp file
-        FileUtils.deleteQuietly(tempFileResult);
+        IOUtils.deleteFileIfExists(tempFileResult);
     }
 
 

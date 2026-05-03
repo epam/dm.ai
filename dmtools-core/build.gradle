@@ -62,7 +62,7 @@ dependencies {
     //api 'org.jboss.logging:jboss-logging:3.6.1.Final'
 
     // Apache Commons
-    //api 'commons-io:commons-io:2.18.0'
+    api 'commons-io:commons-io:2.18.0'
     //api 'commons-codec:commons-codec:1.17.1'
     api 'org.freemarker:freemarker:2.3.34'
     //api 'org.apache.commons:commons-collections4:4.4'
@@ -147,6 +147,7 @@ dependencies {
         force "org.jboss.logging:jboss-logging:3.6.1.Final"
         force "org.apache.poi:poi:${versions.poi}"
         force "org.apache.poi:poi-ooxml:${versions.poi}"
+        force "commons-io:commons-io:2.18.0"
 
         // Handle transitive dependencies
         eachDependency { DependencyResolveDetails details ->
@@ -173,6 +174,9 @@ dependencies {
                 if (details.requested.name in ['poi', 'poi-ooxml', 'poi-ooxml-lite']) {
                     details.useVersion versions.poi
                 }
+            }
+            if (details.requested.group == 'commons-io' && details.requested.name == 'commons-io') {
+                details.useVersion '2.18.0'
             }
         }
     }

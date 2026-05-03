@@ -29,6 +29,7 @@ import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import com.github.istin.dmtools.search.CodebaseSearchOrchestrator;
 import com.github.istin.dmtools.search.ConfluenceSearchOrchestrator;
 import com.github.istin.dmtools.search.TrackerSearchOrchestrator;
+import com.github.istin.dmtools.common.utils.IOUtils;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import dagger.Component;
@@ -689,7 +690,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 tempFileResult
         );
         // Clean up temp file
-        FileUtils.deleteQuietly(tempFileResult);
+        IOUtils.deleteFileIfExists(tempFileResult);
     }
 
     /**

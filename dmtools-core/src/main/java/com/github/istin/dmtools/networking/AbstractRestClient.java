@@ -5,6 +5,7 @@ package com.github.istin.dmtools.networking;
 
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.networking.RestClient;
+import com.github.istin.dmtools.common.utils.IOUtils;
 import okhttp3.*;
 import org.apache.commons.codec.digest.DigestUtils;
 import java.util.Arrays;
@@ -128,7 +129,7 @@ public abstract class AbstractRestClient implements RestClient {
         logger.info("cache folder: {}", cache.getAbsolutePath());
         if (isClearCache) {
             cache.mkdirs();
-            FileUtils.deleteDirectory(cache);
+            IOUtils.deleteRecursively(cache);
         }
     }
 

@@ -7,7 +7,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -62,10 +66,35 @@ public class IOUtils {
             return;
         }
         for (File file : files) {
-            if (file != null && file.exists()) {
-                if (!file.delete()) {
-                    logger.error("Failed to delete temporary file: " + file.getAbsolutePath());
-                }
+            deleteFileIfExists(file);
+        }
+    }
+
+    public static void deleteFileIfExists(File file) {
+        if (file == null || !file.exists()) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file.toPath());
+        } catch (IOException e) {
+            logger.error("Failed to delete file: {}", file.getAbsolutePath(), e);
+        }
+    }
+
+    public static void deleteRecursively(File file) throws IOException {
+        if (file == null) {
+            return;
+        }
+        deleteRecursively(file.toPath());
+    }
+
+    public static void deleteRecursively(Path path) throws IOException {
+        if (path == null || !Files.exists(path)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(path)) {
+            for (Path current : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(current);
             }
         }
     }
