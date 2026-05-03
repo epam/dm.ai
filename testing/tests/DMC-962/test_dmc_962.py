@@ -78,8 +78,19 @@ class FakeSandbox:
         )
         (skills_root / "installed-skills.json").write_text(
             '{\n'
+            '  "version": "test-seed",\n'
             f'  "installed_skills": ["{RETAINED_SKILL}", "{ADDED_SKILL}"],\n'
             f'  "active_commands": ["/dmtools-{RETAINED_SKILL}", "/dmtools-{ADDED_SKILL}"]\n'
+            '}\n',
+            encoding="utf-8",
+        )
+        (skills_root / "endpoints.json").write_text(
+            '{\n'
+            '  "version": "test-seed",\n'
+            '  "endpoints": [\n'
+            f'    {{"name": "{RETAINED_SKILL}", "path": "/dmtools/{RETAINED_SKILL}"}},\n'
+            f'    {{"name": "{ADDED_SKILL}", "path": "/dmtools/{ADDED_SKILL}"}}\n'
+            '  ]\n'
             '}\n',
             encoding="utf-8",
         )
