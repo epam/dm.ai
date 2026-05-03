@@ -1,6 +1,6 @@
 ---
 name: dmtools
-description: Comprehensive documentation and assistance for DMtools - AI-powered development toolkit with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMtools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows, or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator jobs.
+description: Comprehensive documentation and assistance for DMTools - an enterprise dark-factory orchestrator with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMTools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows, or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator jobs.
 license: Apache-2.0
 compatibility:
   - Java 17+
@@ -14,7 +14,7 @@ metadata:
 
 # DMtools Development Assistant
 
-Comprehensive knowledge base for DMtools - an AI-powered development toolkit that integrates with multiple platforms and provides 96+ MCP tools for automation.
+DMTools is an enterprise dark-factory orchestrator that integrates with multiple platforms and provides 96+ MCP tools for reusable delivery automation.
 
 ## 🔧 FIRST-TIME SETUP (DO THIS PROACTIVELY)
 
