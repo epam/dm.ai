@@ -110,6 +110,40 @@ join_by_comma_space() {
     printf '%s' "$result"
 }
 
+normalize_csv_set() {
+    local raw_csv="$1"
+    local values=()
+    local token
+
+    IFS=',' read -r -a csv_tokens <<< "$raw_csv"
+    for token in "${csv_tokens[@]}"; do
+        token=$(to_lower "$(strip_optional_quotes "$token")")
+        token=$(trim_value "$token")
+        if [ -z "$token" ]; then
+            continue
+        fi
+        append_unique values "$token"
+    done
+
+    if [ ${#values[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    printf '%s\n' "${values[@]}" | LC_ALL=C sort | paste -sd, -
+}
+
+read_env_assignment_value() {
+    local file_path="$1"
+    local key="$2"
+    [ -f "$file_path" ] || return 1
+
+    local raw_value
+    raw_value=$(sed -n "s/^${key}=//p" "$file_path" | head -n 1)
+    [ -n "$raw_value" ] || return 1
+
+    strip_optional_quotes "$raw_value"
+}
+
 json_escape() {
     local value="$1"
     value="${value//\\/\\\\}"
@@ -459,12 +493,24 @@ EOF
 
     mkdir -p "$(dirname "$INSTALLER_ENV_PATH")"
 
-    local existing_content=""
-    if [ -f "$INSTALLER_ENV_PATH" ]; then
-        existing_content=$(cat "$INSTALLER_ENV_PATH")
-    fi
+    local existing_skills
+    local existing_integrations
+    local normalized_existing_skills
+    local normalized_requested_skills
+    local normalized_existing_integrations
+    local normalized_requested_integrations
 
-    if [ "$existing_content" = "$new_content" ]; then
+    existing_skills=$(read_env_assignment_value "$INSTALLER_ENV_PATH" "DMTOOLS_SKILLS" || true)
+    existing_integrations=$(read_env_assignment_value "$INSTALLER_ENV_PATH" "DMTOOLS_INTEGRATIONS" || true)
+    normalized_existing_skills=$(normalize_csv_set "$existing_skills")
+    normalized_requested_skills=$(normalize_csv_set "$EFFECTIVE_SKILLS_CSV")
+    normalized_existing_integrations=$(normalize_csv_set "$existing_integrations")
+    normalized_requested_integrations=$(normalize_csv_set "$EFFECTIVE_INTEGRATIONS_CSV")
+
+    if [ -n "$normalized_existing_skills" ] \
+        && [ -n "$normalized_existing_integrations" ] \
+        && [ "$normalized_existing_skills" = "$normalized_requested_skills" ] \
+        && [ "$normalized_existing_integrations" = "$normalized_requested_integrations" ]; then
         INSTALLER_SKILL_CONFIG_UNCHANGED=true
         info "Selected skills already installed: $EFFECTIVE_SKILLS_CSV"
         return 0
