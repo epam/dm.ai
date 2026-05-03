@@ -18,3 +18,8 @@ python3 -m pytest testing/tests/DMC-928/test_dmc_928.py -q
 
 No external credentials are required. The test runs the real installer in a temporary isolated HOME directory and observes the generated files under that sandbox.
 
+## Expected passing output
+
+```text
+1 passed
+```
