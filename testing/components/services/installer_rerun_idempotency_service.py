@@ -22,11 +22,29 @@ class InstallerRunSnapshot:
 
 
 @dataclass(frozen=True)
+class InstallerArtifactState:
+    relative_path: str
+    exists: bool
+    mtime_ns: int | None = None
+    size: int | None = None
+
+
+@dataclass(frozen=True)
+class InstallerManagedPaths:
+    install_dir: Path
+    bin_dir: Path
+    installer_env_path: Path
+    jar_path: Path
+    script_path: Path
+
+
+@dataclass(frozen=True)
 class InstallerRerunObservation:
     initial_skills_csv: str
     rerun_skills_csv: str
     first_run: InstallerRunSnapshot
     second_run: InstallerRunSnapshot
+    inter_run_artifacts: dict[str, InstallerArtifactState] | None = None
 
     def changed_artifacts(self, *relative_paths: str) -> list[str]:
         expected_paths = set(relative_paths)
@@ -80,25 +98,44 @@ class InstallerRerunIdempotencyService:
         self._rerun_skills_csv = rerun_skills_csv or initial_skills_csv
         self._sandbox_factory = sandbox_factory
 
-    def exercise(self) -> InstallerRerunObservation:
+    def exercise(
+        self,
+        before_second_run: Callable[[InstallerManagedPaths], None] | None = None,
+    ) -> InstallerRerunObservation:
         sandbox = self._sandbox_factory(self._repository_root)
         try:
-            first_run = self._run_installer(sandbox, self._initial_skills_csv)
-            second_run = self._run_installer(sandbox, self._rerun_skills_csv)
+            managed_paths = self._managed_paths(sandbox)
+            inter_run_artifacts: dict[str, InstallerArtifactState] | None = None
+            first_run = self._run_installer(
+                sandbox,
+                self._initial_skills_csv,
+                managed_paths,
+            )
+            if before_second_run is not None:
+                before_second_run(managed_paths)
+                inter_run_artifacts = self._capture_artifact_states(managed_paths)
+            second_run = self._run_installer(
+                sandbox,
+                self._rerun_skills_csv,
+                managed_paths,
+            )
             return InstallerRerunObservation(
                 initial_skills_csv=self._initial_skills_csv,
                 rerun_skills_csv=self._rerun_skills_csv,
                 first_run=first_run,
                 second_run=second_run,
+                inter_run_artifacts=inter_run_artifacts,
             )
         finally:
             sandbox.cleanup()
 
-    def _run_installer(self, sandbox: Sandbox, skills_csv: str) -> InstallerRunSnapshot:
-        install_dir = sandbox.home / ".dmtools"
-        bin_dir = install_dir / "bin"
-        installer_env_path = bin_dir / "dmtools-installer.env"
-
+    def _run_installer(
+        self,
+        sandbox: Sandbox,
+        skills_csv: str,
+        managed_paths: InstallerManagedPaths | None = None,
+    ) -> InstallerRunSnapshot:
+        paths = managed_paths or self._managed_paths(sandbox)
         command = "\n".join(
             [
                 "set -e",
@@ -113,13 +150,52 @@ class InstallerRerunIdempotencyService:
         result = sandbox.run(command, timeout=1800)
 
         artifacts = self._snapshot_artifacts(
-            install_dir=install_dir,
-            bin_dir=bin_dir,
-            installer_env_path=installer_env_path,
+            install_dir=paths.install_dir,
+            bin_dir=paths.bin_dir,
+            installer_env_path=paths.installer_env_path,
             command_result=result,
         )
 
         return InstallerRunSnapshot(command=result, artifacts=artifacts)
+
+    @staticmethod
+    def _managed_paths(sandbox: Sandbox) -> InstallerManagedPaths:
+        install_dir = sandbox.home / ".dmtools"
+        bin_dir = install_dir / "bin"
+        return InstallerManagedPaths(
+            install_dir=install_dir,
+            bin_dir=bin_dir,
+            installer_env_path=bin_dir / "dmtools-installer.env",
+            jar_path=install_dir / "dmtools.jar",
+            script_path=bin_dir / "dmtools",
+        )
+
+    @staticmethod
+    def _capture_artifact_states(
+        managed_paths: InstallerManagedPaths,
+    ) -> dict[str, InstallerArtifactState]:
+        artifact_paths = (
+            managed_paths.jar_path,
+            managed_paths.script_path,
+            managed_paths.installer_env_path,
+        )
+        states: dict[str, InstallerArtifactState] = {}
+        for artifact_path in artifact_paths:
+            if not artifact_path.exists():
+                states[artifact_path.name] = InstallerArtifactState(
+                    relative_path=artifact_path.name,
+                    exists=False,
+                )
+                continue
+
+            stat_result = artifact_path.stat()
+            states[artifact_path.name] = InstallerArtifactState(
+                relative_path=artifact_path.name,
+                exists=True,
+                mtime_ns=stat_result.st_mtime_ns,
+                size=stat_result.st_size,
+            )
+        return states
 
     @staticmethod
     def _snapshot_artifacts(
