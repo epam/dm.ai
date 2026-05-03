@@ -1,6 +1,6 @@
 # DMtools Agent Skill
 
-Universal AI assistant skill for DMtools - works with Cursor, Claude, Codex, and any [Agent Skills](https://agentskills.io) compatible system.
+DMTools is an enterprise dark-factory orchestrator for project-level AI assistant workflows in Cursor, Claude, Codex, and other [Agent Skills](https://agentskills.io) compatible systems.
 
 ## 🚀 Quick Install
 
