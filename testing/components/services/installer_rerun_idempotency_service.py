@@ -23,13 +23,17 @@ class InstallerRunSnapshot:
 
 @dataclass(frozen=True)
 class InstallerRerunObservation:
-    skills_csv: str
+    initial_skills_csv: str
+    rerun_skills_csv: str
     first_run: InstallerRunSnapshot
     second_run: InstallerRunSnapshot
 
-    def changed_artifacts(self) -> list[str]:
+    def changed_artifacts(self, *relative_paths: str) -> list[str]:
+        expected_paths = set(relative_paths)
         changed: list[str] = []
         for relative_path, first_snapshot in self.first_run.artifacts.items():
+            if expected_paths and relative_path not in expected_paths:
+                continue
             second_snapshot = self.second_run.artifacts[relative_path]
             if (
                 first_snapshot.mtime_ns != second_snapshot.mtime_ns
@@ -51,32 +55,46 @@ class Sandbox(Protocol):
     def run(self, command: str, timeout: int = 1800) -> CommandResult: ...
 
 
+def reports_noop_status_for_selected_skills(output: str, skills_csv: str) -> bool:
+    expected_skills = tuple(skill.strip().lower() for skill in skills_csv.split(",") if skill.strip())
+    for line in output.splitlines():
+        normalized_line = line.lower()
+        if "already installed" not in normalized_line and "no-op" not in normalized_line:
+            continue
+        if all(skill in normalized_line for skill in expected_skills):
+            return True
+    return False
+
+
 class InstallerRerunIdempotencyService:
     def __init__(
         self,
         repository_root: Path,
         *,
-        skills_csv: str = "jira,github",
+        initial_skills_csv: str = "jira,github",
+        rerun_skills_csv: str | None = None,
         sandbox_factory: Callable[[Path], Sandbox] = RepoSandbox,
     ) -> None:
         self._repository_root = repository_root
-        self._skills_csv = skills_csv
+        self._initial_skills_csv = initial_skills_csv
+        self._rerun_skills_csv = rerun_skills_csv or initial_skills_csv
         self._sandbox_factory = sandbox_factory
 
     def exercise(self) -> InstallerRerunObservation:
         sandbox = self._sandbox_factory(self._repository_root)
         try:
-            first_run = self._run_installer(sandbox)
-            second_run = self._run_installer(sandbox)
+            first_run = self._run_installer(sandbox, self._initial_skills_csv)
+            second_run = self._run_installer(sandbox, self._rerun_skills_csv)
             return InstallerRerunObservation(
-                skills_csv=self._skills_csv,
+                initial_skills_csv=self._initial_skills_csv,
+                rerun_skills_csv=self._rerun_skills_csv,
                 first_run=first_run,
                 second_run=second_run,
             )
         finally:
             sandbox.cleanup()
 
-    def _run_installer(self, sandbox: Sandbox) -> InstallerRunSnapshot:
+    def _run_installer(self, sandbox: Sandbox, skills_csv: str) -> InstallerRunSnapshot:
         install_dir = sandbox.home / ".dmtools"
         bin_dir = install_dir / "bin"
         installer_env_path = bin_dir / "dmtools-installer.env"
@@ -88,7 +106,7 @@ class InstallerRerunIdempotencyService:
                 'export DMTOOLS_INSTALL_DIR="$HOME/.dmtools"',
                 'export DMTOOLS_BIN_DIR="$HOME/.dmtools/bin"',
                 'export DMTOOLS_INSTALLER_ENV_PATH="$HOME/.dmtools/bin/dmtools-installer.env"',
-                f'bash ./install.sh --skills "{self._skills_csv}"',
+                f'bash ./install.sh --skills "{skills_csv}"',
             ]
         )
 
