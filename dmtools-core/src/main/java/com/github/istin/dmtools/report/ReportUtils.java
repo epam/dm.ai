@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.report;
 
+import com.github.istin.dmtools.common.utils.IOUtils;
 import freemarker.cache.ClassTemplateLoader;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
@@ -38,7 +39,7 @@ public class ReportUtils {
             File file = new File("reports/" + reportName + ".html");
             if (writer == null) {
                 if (file.exists()) {
-                    FileUtils.forceDelete(file);
+                    IOUtils.deleteFileIfExists(file);
                 }
                 FileOutputStream fileOutputStream = FileUtils.openOutputStream(file);
                 writer = new OutputStreamWriter(fileOutputStream);

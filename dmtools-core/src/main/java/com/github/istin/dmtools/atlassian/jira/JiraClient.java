@@ -16,6 +16,7 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.tracker.model.Status;
 import com.github.istin.dmtools.common.utils.CacheManager;
 import com.github.istin.dmtools.common.utils.DateUtils;
+import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.context.UriToObject;
 import com.github.istin.dmtools.mcp.MCPParam;
@@ -198,7 +199,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         }
         if (isClearCache) {
             cache.mkdirs();
-            FileUtils.deleteDirectory(cache);
+            IOUtils.deleteRecursively(cache);
         }
     }
 

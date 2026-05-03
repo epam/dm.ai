@@ -9,8 +9,8 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
+import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
-import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -407,7 +407,7 @@ public class CliExecutionHelper {
         }
         
         try {
-            FileUtils.deleteDirectory(inputFolderPath.toFile());
+            IOUtils.deleteRecursively(inputFolderPath);
             logger.info("Cleaned up input folder: {}", inputFolderPath.toAbsolutePath());
         } catch (IOException e) {
             logger.warn("Failed to cleanup input folder {}: {}", 
