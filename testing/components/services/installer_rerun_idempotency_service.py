@@ -35,6 +35,7 @@ class InstallerManagedPaths:
     install_dir: Path
     bin_dir: Path
     installer_env_path: Path
+    runtime_override_env_path: Path
     jar_path: Path
     script_path: Path
     installed_skills_path: Path
@@ -45,7 +46,8 @@ class InstallerManagedPaths:
 class InstallerMetadataSnapshot:
     installed_skills_payload: Any | None = None
     endpoints_payload: Any | None = None
-    runtime_env_assignments: dict[str, str] | None = None
+    installer_env_assignments: dict[str, str] | None = None
+    runtime_override_env_assignments: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -197,6 +199,7 @@ class InstallerRerunIdempotencyService:
             install_dir=install_dir,
             bin_dir=bin_dir,
             installer_env_path=bin_dir / "dmtools-installer.env",
+            runtime_override_env_path=bin_dir / "dmtools-runtime.env",
             jar_path=install_dir / "dmtools.jar",
             script_path=bin_dir / "dmtools",
             installed_skills_path=install_dir / "installed-skills.json",
@@ -212,8 +215,11 @@ class InstallerRerunIdempotencyService:
             endpoints_payload=InstallerRerunIdempotencyService._read_json_artifact(
                 managed_paths.endpoints_path
             ),
-            runtime_env_assignments=InstallerRerunIdempotencyService._read_env_assignments(
+            installer_env_assignments=InstallerRerunIdempotencyService._read_env_assignments(
                 managed_paths.installer_env_path
+            ),
+            runtime_override_env_assignments=InstallerRerunIdempotencyService._read_env_assignments(
+                managed_paths.runtime_override_env_path
             ),
         )
 
