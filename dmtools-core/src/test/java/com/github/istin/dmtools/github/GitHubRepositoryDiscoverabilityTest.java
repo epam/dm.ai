@@ -30,8 +30,8 @@ public class GitHubRepositoryDiscoverabilityTest {
                 "Enterprise dark-factory orchestrator for automating delivery workflows across trackers, source control, documentation, design systems, AI providers, and CI/CD.",
                 metadata.getShortDescription()
         );
-        assertEquals(
-                "DMTools is the orchestration layer for enterprise dark factories: a self-hosted CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, GitHub, Azure DevOps, documentation, design systems, and CI/CD.",
+         assertEquals(
+                "DMTools is a CLI-first orchestration layer for enterprise dark factories: a self-hosted CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, GitHub, Azure DevOps, documentation, design systems, and CI/CD.",
                 metadata.getAboutText()
         );
     }
