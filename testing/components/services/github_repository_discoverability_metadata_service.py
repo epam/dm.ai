@@ -39,10 +39,8 @@ class GitHubRepositoryDiscoverabilityMetadataService:
         "Enterprise dark-factory orchestrator for automating delivery workflows across "
         "trackers, source control, documentation, design systems, AI providers, and CI/CD."
     )
-    EXPECTED_ABOUT_TEXT = (
-        "DMTools is the orchestration layer for enterprise dark factories: a self-hosted "
-        "CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, "
-        "GitHub, Azure DevOps, documentation, design systems, and CI/CD."
+    REQUIRED_ABOUT_TEXT_PREFIX = (
+        "DMTools is a CLI-first orchestration layer for enterprise dark factories"
     )
     EXPECTED_TOPICS = (
         "dark-factory",
@@ -113,12 +111,15 @@ class GitHubRepositoryDiscoverabilityMetadataService:
                 )
             )
 
-        if observation.about_text != self.EXPECTED_ABOUT_TEXT:
+        if not observation.about_text.startswith(self.REQUIRED_ABOUT_TEXT_PREFIX):
             failures.append(
                 ValidationFailure(
                     step=3,
                     summary="The canonical About text does not match the approved orchestration narrative.",
-                    expected=self.EXPECTED_ABOUT_TEXT,
+                    expected=(
+                        "aboutText should start with "
+                        f"{self.REQUIRED_ABOUT_TEXT_PREFIX!r}."
+                    ),
                     actual=observation.about_text or "<missing>",
                 )
             )

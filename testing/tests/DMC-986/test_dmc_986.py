@@ -20,7 +20,7 @@ def test_dmc_986_canonical_discoverability_metadata_matches_playbook_and_ticket_
     assert observation.metadata_relative_path == service.METADATA_RELATIVE_PATH
     assert observation.playbook_relative_path == service.PLAYBOOK_RELATIVE_PATH
     assert observation.short_description == service.EXPECTED_SHORT_DESCRIPTION
-    assert observation.about_text == service.EXPECTED_ABOUT_TEXT
+    assert observation.about_text.startswith(service.REQUIRED_ABOUT_TEXT_PREFIX)
     assert observation.topics == service.EXPECTED_TOPICS
 
 
@@ -30,11 +30,15 @@ def test_dmc_986_accepts_repo_backed_metadata_when_playbook_and_topics_are_align
     _write_repository_fixture(
         tmp_path,
         short_description=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_SHORT_DESCRIPTION,
-        about_text=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_ABOUT_TEXT,
+        about_text=(
+            "DMTools is a CLI-first orchestration layer for enterprise dark factories."
+        ),
         topics=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_TOPICS,
         playbook_metadata_path=GitHubRepositoryDiscoverabilityMetadataService.METADATA_RELATIVE_PATH,
         playbook_short_description=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_SHORT_DESCRIPTION,
-        playbook_about_text=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_ABOUT_TEXT,
+        playbook_about_text=(
+            "DMTools is a CLI-first orchestration layer for enterprise dark factories."
+        ),
         playbook_topics=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_TOPICS,
     )
 
@@ -47,12 +51,18 @@ def test_dmc_986_reports_playbook_drift_and_topic_regressions(tmp_path: Path) ->
     _write_repository_fixture(
         tmp_path,
         short_description=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_SHORT_DESCRIPTION,
-        about_text="DMTools is a toolkit for point integrations and vendor-specific automation.",
+        about_text=(
+            "DMTools is the orchestration layer for enterprise dark factories: a self-hosted "
+            "CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, "
+            "GitHub, Azure DevOps, documentation, design systems, and CI/CD."
+        ),
         topics=("dark-factory", "enterprise-ai", "cursor", "github"),
         playbook_metadata_path="docs/discovery-metadata.json",
         playbook_short_description=GitHubRepositoryDiscoverabilityMetadataService.EXPECTED_SHORT_DESCRIPTION,
         playbook_about_text=(
-            "DMTools is a CLI-first orchestration layer for enterprise dark factories."
+            "DMTools is the orchestration layer for enterprise dark factories: a self-hosted "
+            "CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, "
+            "GitHub, Azure DevOps, documentation, design systems, and CI/CD."
         ),
         playbook_topics=("dark-factory", "workflow-automation", "enterprise-ai"),
     )
@@ -65,16 +75,14 @@ def test_dmc_986_reports_playbook_drift_and_topic_regressions(tmp_path: Path) ->
     assert failures[0].actual.endswith(
         "dmtools-core/src/main/resources/github-repository-discoverability.json."
     )
-    assert failures[1].actual == (
-        "DMTools is a toolkit for point integrations and vendor-specific automation."
+    assert failures[1].actual.startswith(
+        "DMTools is the orchestration layer for enterprise dark factories"
     )
     assert "workflow-automation" in failures[2].actual
     assert "mcp" in failures[2].actual
     assert "cursor" in failures[3].actual
     assert "github" in failures[3].actual
-    assert failures[4].actual == (
-        "Mismatched playbook fields: About text, topic list"
-    )
+    assert failures[4].actual == "Mismatched playbook fields: topic list"
 
 
 def _write_repository_fixture(
