@@ -25,5 +25,5 @@ repository checkout.
 ## Expected passing output
 
 ```text
-6 passed
+7 passed
 ```
