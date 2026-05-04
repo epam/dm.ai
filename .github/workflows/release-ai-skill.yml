@@ -217,8 +217,8 @@ jobs:
           {
             "name": "@dm.ai/agent-skill",
             "version": "$VERSION",
-            "description": "Agent Skill for DMtools - AI-powered development toolkit (Cursor, Claude, Codex compatible)",
-            "keywords": ["dmtools", "agent-skills", "cursor", "claude", "ai", "jira", "azure-devops"],
+            "description": "DMTools agent skill for enterprise dark-factory orchestration with MCP tools, AI agents, and generative-ai-friendly delivery workflows",
+            "keywords": ["dmtools", "dark-factory", "delivery-automation", "workflow-orchestration", "mcp", "ai-agents", "generative-ai", "self-hosted", "cursor", "claude", "codex"],
             "author": "DMtools Team",
             "license": "Apache-2.0",
             "repository": {

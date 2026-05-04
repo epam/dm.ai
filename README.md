@@ -44,6 +44,7 @@ All maintained documentation lives under [dmtools-ai-docs/](dmtools-ai-docs/).
 | MCP tools reference | [references/mcp-tools/README.md](dmtools-ai-docs/references/mcp-tools/README.md) |
 | Jobs and workflow orchestration | [references/jobs/README.md](dmtools-ai-docs/references/jobs/README.md) |
 | GitHub workflow guidance | [references/workflows/github-actions-teammate.md](dmtools-ai-docs/references/workflows/github-actions-teammate.md) |
+| GitHub repository discoverability | [references/workflows/github-repository-discoverability-playbook.md](dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md) |
 | Examples | [references/examples/](dmtools-ai-docs/references/examples/) |
 | Documentation index | [dmtools-ai-docs/README.md](dmtools-ai-docs/README.md) |
 

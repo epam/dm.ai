@@ -378,7 +378,7 @@ jobs:
           cat > release_notes.md << EOF
           # 🚀 DMTools Release v${VERSION}
 
-          This release includes the **DMTools CLI** and **Agent Skill** for AI assistants.
+          This release includes the **DMTools CLI** and **Agent Skill** for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows.
 
           ## 📦 What's Included
 
@@ -389,8 +389,8 @@ jobs:
           - **Wrapper script** (\`dmtools.sh\`)
 
           ### 🤖 DMTools Agent Skill
-          - **Universal AI assistant skill** for Cursor, Claude, Codex, and other Agent Skills compatible systems
-          - **Complete DMtools documentation** (67+ MCP tools, JavaScript agent development, configuration guides)
+          - **AI assistant skill** for MCP, AI-agent, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems
+          - **Complete DMtools documentation** (67+ MCP tools, JavaScript agent development, and configuration guides)
           - **Cross-platform support** (works with all major AI coding assistants)
           
           ## 🎯 Quick Start

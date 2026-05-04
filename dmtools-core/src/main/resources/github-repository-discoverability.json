@@ -1,0 +1,42 @@
+{
+  "shortDescription": "Enterprise dark-factory orchestrator for automating delivery workflows across trackers, source control, documentation, design systems, AI providers, and CI/CD.",
+  "aboutText": "DMTools is the orchestration layer for enterprise dark factories: a self-hosted CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, GitHub, Azure DevOps, documentation, design systems, and CI/CD.",
+  "topics": [
+    "dark-factory",
+    "delivery-automation",
+    "workflow-orchestration",
+    "platform-engineering",
+    "self-hosted",
+    "enterprise-ai",
+    "mcp",
+    "ai-agents",
+    "generative-ai",
+    "workflow-automation"
+  ],
+  "supportingKeywords": [
+    "dmtools",
+    "dark-factory",
+    "delivery-automation",
+    "workflow-orchestration",
+    "mcp",
+    "ai-agents",
+    "generative-ai",
+    "self-hosted",
+    "cursor",
+    "claude",
+    "codex",
+    "jira",
+    "azure-devops",
+    "github"
+  ],
+  "socialPreview": {
+    "direction": "Dark hero card with the DMTools wordmark, one short value line, and a subtle orchestration or industrial background.",
+    "valueLine": "Enterprise dark-factory orchestrator",
+    "styleRules": [
+      "Use a dark, high-contrast base with light text and no dense UI screenshots.",
+      "Keep the composition minimal: product name plus one short positioning line only.",
+      "Prefer one restrained accent colour and preserve WCAG AA contrast for any text in the asset.",
+      "Do not use integration collages or feature-list text in the preview image."
+    ]
+  }
+}
