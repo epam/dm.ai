@@ -38,12 +38,15 @@ def test_dmc_988_issue_templates_match_discoverability_metadata_and_orchestrator
         "To Reproduce",
         "Expected behavior",
     )
-    assert "cli" in feature_observation.signal_hits
-    assert "mcp" in feature_observation.signal_hits
-    assert "github" in feature_observation.signal_hits
-    assert "cli" in bug_observation.signal_hits
-    assert "mcp" in bug_observation.signal_hits
-    assert "github" in bug_observation.signal_hits
+    assert "dmtools" in feature_observation.opening_prompt_body_text.casefold()
+    assert "workflow" in feature_observation.opening_prompt_signal_hits
+    assert "automation" in feature_observation.opening_prompt_signal_hits
+    assert "cli" in feature_observation.opening_prompt_signal_hits
+    assert "mcp" in feature_observation.opening_prompt_signal_hits
+    assert "github" in feature_observation.opening_prompt_signal_hits
+    assert "dmtools" in bug_observation.opening_prompt_body_text.casefold()
+    assert "workflow" in bug_observation.opening_prompt_signal_hits
+    assert "surface" in bug_observation.opening_prompt_signal_hits
 
 
 def test_dmc_988_service_accepts_dmtools_specific_issue_templates(tmp_path: Path) -> None:
@@ -140,10 +143,10 @@ def test_dmc_988_service_rejects_metadata_mismatch_and_generic_placeholders(
     )
     assert "Suggest an improvement for DMTools CLI workflows" in failures[0].expected
     assert failures[1].summary == (
-        "Feature request template does not visibly describe DMTools."
+        "Feature request template opening prompt copy does not visibly describe DMTools."
     )
     assert failures[2].summary == (
-        "Feature request template is not visibly CLI-first/orchestration focused."
+        "Feature request template opening prompt copy is not orchestration focused."
     )
     assert failures[3].summary == (
         "Feature request template still contains generic GitHub template placeholders."
@@ -152,14 +155,97 @@ def test_dmc_988_service_rejects_metadata_mismatch_and_generic_placeholders(
     assert failures[4].summary == (
         "Bug report template front-matter is not synced with the metadata source."
     )
-    assert failures[5].summary == "Bug report template does not visibly describe DMTools."
+    assert failures[5].summary == (
+        "Bug report template opening prompt copy does not visibly describe DMTools."
+    )
     assert failures[6].summary == (
-        "Bug report template is not visibly CLI-first/orchestration focused."
+        "Bug report template opening prompt copy is not orchestration focused."
     )
     assert failures[7].summary == (
         "Bug report template still contains generic GitHub template placeholders."
     )
     assert "Describe the bug" in failures[7].actual
+
+
+def test_dmc_988_service_does_not_let_later_sections_mask_generic_opening_prompts(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    _write_metadata(
+        repository_root,
+        bug_about="Report a bug in the DMTools CLI, MCP tools, jobs, integrations, or GitHub workflow automation",
+        feature_about="Suggest an improvement for DMTools CLI workflows, MCP tools, jobs, integrations, AI assistant skills, or GitHub surfaces",
+    )
+    _write_file(
+        repository_root / ".github/ISSUE_TEMPLATE/feature_request.md",
+        """
+        ---
+        name: DMTools feature request
+        about: Suggest an improvement for DMTools CLI workflows, MCP tools, jobs, integrations, AI assistant skills, or GitHub surfaces
+        ---
+
+        **What workflow are you trying to improve?**
+        Describe what you want to change.
+
+        **What outcome do you want?**
+        Describe the result you want.
+
+        **Describe the proposed solution**
+        Share the approach you prefer.
+
+        **Which DMTools surfaces are involved?**
+        - CLI or wrapper
+        - MCP tools or integrations
+        - Jobs or agents
+        - GitHub Actions or CI workflows
+        - AI assistant skills or docs
+        """,
+    )
+    _write_file(
+        repository_root / ".github/ISSUE_TEMPLATE/bug_report.md",
+        """
+        ---
+        name: DMTools bug report
+        about: Report a bug in the DMTools CLI, MCP tools, jobs, integrations, or GitHub workflow automation
+        ---
+
+        **What broke**
+        Describe the issue.
+
+        **To Reproduce**
+        1.
+        2.
+        3.
+
+        **Expected behavior**
+        Describe what you expected.
+
+        **Affected surface**
+        - CLI command or wrapper
+        - MCP tool or integration
+        - Job or agent configuration
+        - GitHub Actions or CI workflow
+        - Documentation or discoverability surface
+        """,
+    )
+
+    service = GitHubIssueTemplatePositioningService(repository_root)
+
+    feature_observation = service.observation_for_label(service.FEATURE_TEMPLATE_LABEL)
+    bug_observation = service.observation_for_label(service.BUG_TEMPLATE_LABEL)
+    failures = service.validate()
+    failure_summaries = {failure.summary for failure in failures}
+
+    assert "cli" in feature_observation.signal_hits
+    assert "github" in bug_observation.signal_hits
+    assert "dmtools" not in feature_observation.opening_prompt_body_text.casefold()
+    assert "dmtools" not in bug_observation.opening_prompt_body_text.casefold()
+    assert feature_observation.opening_prompt_signal_hits == ()
+    assert bug_observation.opening_prompt_signal_hits == ()
+    assert "Feature request template opening prompt copy does not visibly describe DMTools." in failure_summaries
+    assert "Feature request template opening prompt copy is not orchestration focused." in failure_summaries
+    assert "Bug report template opening prompt copy does not visibly describe DMTools." in failure_summaries
+    assert "Bug report template opening prompt copy is not orchestration focused." in failure_summaries
 
 
 def _write_metadata(repository_root: Path, *, bug_about: str, feature_about: str) -> None:

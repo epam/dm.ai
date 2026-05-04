@@ -30,12 +30,15 @@ class TemplateObservation:
     prompt_headings: tuple[str, ...]
     visible_text: str
     signal_hits: tuple[str, ...]
+    opening_prompt_body_text: str
+    opening_prompt_signal_hits: tuple[str, ...]
     generic_placeholder_matches: tuple[str, ...]
 
 
 class GitHubIssueTemplatePositioningService:
     FEATURE_TEMPLATE_LABEL = "feature request template"
     BUG_TEMPLATE_LABEL = "bug report template"
+    _OPENING_PROMPT_COUNT = 3
     _METADATA_RELATIVE_PATH = "dmtools-core/src/main/resources/github-repository-discoverability.json"
     _TEMPLATE_SPECS = {
         FEATURE_TEMPLATE_LABEL: (
@@ -76,7 +79,9 @@ class GitHubIssueTemplatePositioningService:
         ),
     }
     _SIGNAL_PATTERNS = {
+        "automation": re.compile(r"\bautomation\b", re.IGNORECASE),
         "workflow": re.compile(r"\bworkflow(?:s)?\b", re.IGNORECASE),
+        "surface": re.compile(r"\bsurface(?:s)?\b", re.IGNORECASE),
         "cli": re.compile(r"\bcli\b", re.IGNORECASE),
         "mcp": re.compile(r"\bmcp\b", re.IGNORECASE),
         "jobs_or_agents": re.compile(r"\b(?:job|jobs|agent|agents)\b", re.IGNORECASE),
@@ -116,31 +121,38 @@ class GitHubIssueTemplatePositioningService:
                     )
                 )
 
-            if "dmtools" not in observation.visible_text.casefold():
+            if "dmtools" not in observation.opening_prompt_body_text.casefold():
                 failures.append(
                     ValidationFailure(
                         step=3,
-                        summary=f"{label.capitalize()} does not visibly describe DMTools.",
+                        summary=f"{label.capitalize()} opening prompt copy does not visibly describe DMTools.",
                         expected=(
-                            "Contributor-facing prompts should name DMTools and frame the issue "
-                            "around DMTools workflows or surfaces."
+                            "The introductory prompt descriptions should name DMTools and frame "
+                            "the issue around DMTools workflows or surfaces."
                         ),
-                        actual=self._preview(observation.visible_text),
+                        actual=self._preview(observation.opening_prompt_body_text),
                     )
                 )
 
-            if "workflow" not in observation.signal_hits or len(observation.signal_hits) < 4:
+            if not {"automation", "workflow", "surface"} & set(
+                observation.opening_prompt_signal_hits
+            ):
                 failures.append(
                     ValidationFailure(
                         step=3,
-                        summary=f"{label.capitalize()} is not visibly CLI-first/orchestration focused.",
+                        summary=f"{label.capitalize()} opening prompt copy is not orchestration focused.",
                         expected=(
-                            "Visible prompts should emphasize workflows plus several DMTools entry "
-                            "surfaces such as CLI, MCP, jobs/agents, integrations, docs, or GitHub."
+                            "The introductory prompt descriptions should guide contributors toward "
+                            "DMTools workflows, automation, or affected surfaces rather than generic "
+                            "project wording."
                         ),
                         actual=(
-                            "Observed signal hits: "
-                            + (", ".join(observation.signal_hits) if observation.signal_hits else "none")
+                            "Observed opening-prompt signal hits: "
+                            + (
+                                ", ".join(observation.opening_prompt_signal_hits)
+                                if observation.opening_prompt_signal_hits
+                                else "none"
+                            )
                         ),
                     )
                 )
@@ -178,16 +190,22 @@ class GitHubIssueTemplatePositioningService:
         frontmatter, body_start_index = self._parse_frontmatter(lines, path)
         visible_lines = [line.strip() for line in lines[body_start_index:] if line.strip()]
         visible_text = " ".join(visible_lines)
-
-        prompt_headings = tuple(
-            match.group(1).strip()
-            for line in visible_lines
-            if (match := self._PROMPT_HEADING_PATTERN.match(line))
+        prompt_blocks = self._collect_prompt_blocks(visible_lines)
+        prompt_headings = tuple(heading for heading, _ in prompt_blocks)
+        opening_prompt_body_text = " ".join(
+            line
+            for _, block_lines in prompt_blocks[: self._OPENING_PROMPT_COUNT]
+            for line in block_lines
         )
         signal_hits = tuple(
             label_name
             for label_name, pattern in self._SIGNAL_PATTERNS.items()
             if pattern.search(visible_text) is not None
+        )
+        opening_prompt_signal_hits = tuple(
+            label_name
+            for label_name, pattern in self._SIGNAL_PATTERNS.items()
+            if pattern.search(opening_prompt_body_text) is not None
         )
         placeholder_matches = tuple(
             phrase
@@ -204,8 +222,35 @@ class GitHubIssueTemplatePositioningService:
             prompt_headings=prompt_headings,
             visible_text=visible_text,
             signal_hits=signal_hits,
+            opening_prompt_body_text=opening_prompt_body_text,
+            opening_prompt_signal_hits=opening_prompt_signal_hits,
             generic_placeholder_matches=placeholder_matches,
         )
+
+    def _collect_prompt_blocks(
+        self,
+        visible_lines: list[str],
+    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        prompt_blocks: list[tuple[str, tuple[str, ...]]] = []
+        current_heading: str | None = None
+        current_lines: list[str] = []
+
+        for line in visible_lines:
+            match = self._PROMPT_HEADING_PATTERN.match(line)
+            if match is not None:
+                if current_heading is not None:
+                    prompt_blocks.append((current_heading, tuple(current_lines)))
+                current_heading = match.group(1).strip()
+                current_lines = []
+                continue
+
+            if current_heading is not None:
+                current_lines.append(line)
+
+        if current_heading is not None:
+            prompt_blocks.append((current_heading, tuple(current_lines)))
+
+        return tuple(prompt_blocks)
 
     @staticmethod
     def _parse_frontmatter(
