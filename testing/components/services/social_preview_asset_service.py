@@ -58,6 +58,7 @@ class SocialPreviewAssetService:
         ".git",
         ".gradle",
         ".idea",
+        ".repo-sandboxes",
         ".pytest_cache",
         "__pycache__",
         "build",
