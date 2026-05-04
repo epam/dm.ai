@@ -1,6 +1,6 @@
 {
   "shortDescription": "Enterprise dark-factory orchestrator for automating delivery workflows across trackers, source control, documentation, design systems, AI providers, and CI/CD.",
-  "aboutText": "DMTools is the orchestration layer for enterprise dark factories: a self-hosted CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, GitHub, Azure DevOps, documentation, design systems, and CI/CD.",
+  "aboutText": "DMTools is a CLI-first orchestration layer for enterprise dark factories: a self-hosted CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, GitHub, Azure DevOps, documentation, design systems, and CI/CD.",
   "topics": [
     "dark-factory",
     "delivery-automation",
