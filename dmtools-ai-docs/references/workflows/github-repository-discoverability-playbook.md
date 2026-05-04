@@ -1,6 +1,6 @@
 # GitHub Repository Discoverability Playbook
 
-Use this page as the maintainer source of truth for repository discoverability updates. The canonical metadata values are versioned in `dmtools-core/src/main/resources/github-repository-discoverability.json` and covered by `GitHubRepositoryDiscoverabilityTest`.
+Use this page as the maintainer source of truth for repository discoverability updates. The canonical metadata values are versioned in `dmtools-core/src/main/resources/github-repository-discoverability.json`, and `GitHubRepositoryDiscoverabilityTest` fails when repo-backed GitHub surfaces drift from those values.
 
 ## Canonical repository metadata
 
@@ -9,7 +9,7 @@ Use this page as the maintainer source of truth for repository discoverability u
 | Short description | `Enterprise dark-factory orchestrator for automating delivery workflows across trackers, source control, documentation, design systems, AI providers, and CI/CD.` |
 | About text | `DMTools is the orchestration layer for enterprise dark factories: a self-hosted CLI with MCP tools, jobs, and AI agents for delivery workflows across Jira, GitHub, Azure DevOps, documentation, design systems, and CI/CD.` |
 | GitHub topics | `dark-factory`, `delivery-automation`, `workflow-orchestration`, `platform-engineering`, `self-hosted`, `enterprise-ai`, `mcp`, `ai-agents`, `generative-ai`, `workflow-automation` |
-| Supporting release/package keywords | `dmtools`, `dark-factory`, `delivery-automation`, `workflow-orchestration`, `mcp`, `ai-agents`, `generative-ai`, `self-hosted`, then vendor or connector terms such as `cursor`, `claude`, `codex`, `jira`, `azure-devops`, `github` |
+| Supporting release/package keywords | `dmtools`, `dark-factory`, `delivery-automation`, `workflow-orchestration`, `mcp`, `ai-agents`, `generative-ai`, `self-hosted`, `cursor`, `claude`, `codex`, `jira`, `azure-devops`, `github` |
 
 ### Topic strategy
 

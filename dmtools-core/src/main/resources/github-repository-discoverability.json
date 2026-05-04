@@ -29,6 +29,14 @@
     "azure-devops",
     "github"
   ],
+  "repoBackedSurfaces": {
+    "bugReportAbout": "Report a bug in the DMTools CLI, MCP tools, jobs, integrations, or GitHub workflow automation",
+    "featureRequestAbout": "Suggest an improvement for DMTools CLI workflows, MCP tools, jobs, integrations, AI assistant skills, or GitHub surfaces",
+    "releaseNotesLead": "This release includes the **DMTools CLI** and **Agent Skill** for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows.",
+    "releaseSkillBullet": "- **AI assistant skill** for MCP, AI agents, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems",
+    "releaseSkillPackageDescription": "DMTools agent skill for enterprise dark-factory orchestration with MCP tools, AI agents, and generative-ai-friendly delivery workflows",
+    "releaseSkillNotesLead": "DMTools agent skill for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems."
+  },
   "socialPreview": {
     "direction": "Dark hero card with the DMTools wordmark, one short value line, and a subtle orchestration or industrial background.",
     "valueLine": "Enterprise dark-factory orchestrator",

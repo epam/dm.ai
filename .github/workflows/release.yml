@@ -389,7 +389,7 @@ jobs:
           - **Wrapper script** (\`dmtools.sh\`)
 
           ### 🤖 DMTools Agent Skill
-          - **AI assistant skill** for MCP, AI-agent, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems
+          - **AI assistant skill** for MCP, AI agents, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems
           - **Complete DMtools documentation** (67+ MCP tools, JavaScript agent development, and configuration guides)
           - **Cross-platform support** (works with all major AI coding assistants)
           

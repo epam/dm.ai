@@ -5,12 +5,19 @@ package com.github.istin.dmtools.github;
 
 import org.junit.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class GitHubRepositoryDiscoverabilityTest {
@@ -89,5 +96,65 @@ public class GitHubRepositoryDiscoverabilityTest {
                 },
                 metadata.getSocialPreviewStyleRules()
         );
+    }
+
+    @Test
+    public void testRepoBackedGitHubSurfacesStayAlignedWithCanonicalMetadata() throws IOException {
+        GitHubRepositoryDiscoverability metadata = GitHubRepositoryDiscoverability.loadDefault();
+        Path repositoryRoot = findRepositoryRoot();
+
+        String readme = readRepositoryFile(repositoryRoot, "README.md");
+        String contributing = readRepositoryFile(repositoryRoot, "CONTRIBUTING.md");
+        String playbook = readRepositoryFile(
+                repositoryRoot,
+                "dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md"
+        );
+        String bugReportTemplate = readRepositoryFile(repositoryRoot, ".github/ISSUE_TEMPLATE/bug_report.md");
+        String featureRequestTemplate = readRepositoryFile(repositoryRoot, ".github/ISSUE_TEMPLATE/feature_request.md");
+        String releaseWorkflow = readRepositoryFile(repositoryRoot, ".github/workflows/release.yml");
+        String releaseAiSkillWorkflow = readRepositoryFile(repositoryRoot, ".github/workflows/release-ai-skill.yml");
+
+        assertTrue(readme.contains("\n" + metadata.getShortDescription() + "\n"));
+        assertTrue(contributing.contains("dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md"));
+
+        assertTrue(playbook.contains(metadata.getShortDescription()));
+        assertTrue(playbook.contains(metadata.getAboutText()));
+        assertTrue(playbook.contains(formatMarkdownList(metadata.getTopics())));
+        assertTrue(playbook.contains(formatMarkdownList(metadata.getSupportingKeywords())));
+
+        assertTrue(bugReportTemplate.contains("about: " + metadata.getBugReportAbout()));
+        assertTrue(featureRequestTemplate.contains("about: " + metadata.getFeatureRequestAbout()));
+
+        assertTrue(releaseWorkflow.contains(metadata.getReleaseNotesLead()));
+        assertTrue(releaseWorkflow.contains(metadata.getReleaseSkillBullet()));
+
+        assertTrue(releaseAiSkillWorkflow.contains("\"description\": \"" + metadata.getReleaseSkillPackageDescription() + "\""));
+        assertTrue(releaseAiSkillWorkflow.contains("\"keywords\": " + formatInlineJsonArray(metadata.getSupportingKeywords())));
+        assertTrue(releaseAiSkillWorkflow.contains(metadata.getReleaseSkillNotesLead()));
+    }
+
+    private Path findRepositoryRoot() {
+        Path current = Paths.get("").toAbsolutePath();
+        while (current != null && !Files.exists(current.resolve("settings.gradle"))) {
+            current = current.getParent();
+        }
+        assertNotNull("Repository root not found", current);
+        return current;
+    }
+
+    private String readRepositoryFile(Path repositoryRoot, String relativePath) throws IOException {
+        return Files.readString(repositoryRoot.resolve(relativePath), StandardCharsets.UTF_8);
+    }
+
+    private String formatMarkdownList(String[] values) {
+        return Arrays.stream(values)
+                .map(value -> "`" + value + "`")
+                .collect(Collectors.joining(", "));
+    }
+
+    private String formatInlineJsonArray(String[] values) {
+        return Arrays.stream(values)
+                .map(value -> "\"" + value + "\"")
+                .collect(Collectors.joining(", ", "[", "]"));
     }
 }

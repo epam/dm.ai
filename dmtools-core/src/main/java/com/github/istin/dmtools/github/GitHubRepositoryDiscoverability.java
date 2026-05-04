@@ -47,6 +47,30 @@ public class GitHubRepositoryDiscoverability extends JSONModel {
         return getStringArrayOrEmpty("supportingKeywords");
     }
 
+    public String getBugReportAbout() {
+        return getRepoBackedSurfaceString("bugReportAbout");
+    }
+
+    public String getFeatureRequestAbout() {
+        return getRepoBackedSurfaceString("featureRequestAbout");
+    }
+
+    public String getReleaseNotesLead() {
+        return getRepoBackedSurfaceString("releaseNotesLead");
+    }
+
+    public String getReleaseSkillBullet() {
+        return getRepoBackedSurfaceString("releaseSkillBullet");
+    }
+
+    public String getReleaseSkillPackageDescription() {
+        return getRepoBackedSurfaceString("releaseSkillPackageDescription");
+    }
+
+    public String getReleaseSkillNotesLead() {
+        return getRepoBackedSurfaceString("releaseSkillNotesLead");
+    }
+
     public String getSocialPreviewDirection() {
         return getNestedString("socialPreview", "direction");
     }
@@ -65,6 +89,10 @@ public class GitHubRepositoryDiscoverability extends JSONModel {
             return null;
         }
         return nestedObject.optString(valueKey, null);
+    }
+
+    private String getRepoBackedSurfaceString(String valueKey) {
+        return getNestedString("repoBackedSurfaces", valueKey);
     }
 
     private String[] getNestedStringArray(String objectKey, String arrayKey) {
