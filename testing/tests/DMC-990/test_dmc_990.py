@@ -31,6 +31,25 @@ def build_service(repository_root: Path = REPOSITORY_ROOT) -> RepositoryGovernan
     )
 
 
+def assert_validator_failed(
+    service: RepositoryGovernanceValidationService,
+    audit,
+    *expected_markers: str,
+) -> None:
+    assert audit.validator_result is not None
+    assert audit.validator_result.returncode != 0, service.format_failures(audit)
+    assert any(
+        failure.step == 1
+        and failure.summary == "Repository governance validation flow did not complete successfully."
+        for failure in audit.failures
+    ), service.format_failures(audit)
+
+    validator_output = audit.validator_result.combined_output
+    assert "GitHubRepositoryDiscoverabilityTest" in validator_output, service.format_failures(audit)
+    for expected_marker in expected_markers:
+        assert expected_marker in validator_output, service.format_failures(audit)
+
+
 def test_dmc_990_repository_governance_validation_confirms_metadata_integrity() -> None:
     service = build_service()
 
@@ -62,7 +81,13 @@ def test_dmc_990_reports_missing_metadata_source_and_broken_playbook_reference()
 
         service = build_service(sandbox.workspace)
 
-        audit = service.audit(run_validator=False)
+        audit = service.audit()
+
+        assert_validator_failed(
+            service,
+            audit,
+            "GitHub repository discoverability resource is missing: github-repository-discoverability.json",
+        )
 
         assert any(
             failure.step == 2 and "metadata source is missing" in failure.summary.lower()
@@ -88,7 +113,14 @@ def test_dmc_990_reports_topic_count_over_github_limit() -> None:
 
         service = build_service(sandbox.workspace)
 
-        audit = service.audit(run_validator=False)
+        audit = service.audit()
+
+        assert_validator_failed(
+            service,
+            audit,
+            "array lengths differed",
+            f"actual.length={TOPIC_LIMIT + 1}",
+        )
 
         assert any(
             failure.step == 3 and "exceed github's limit" in failure.summary.lower()
