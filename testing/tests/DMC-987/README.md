@@ -24,5 +24,5 @@ documentation directly.
 ## Expected passing output
 
 ```text
-3 passed
+5 passed
 ```

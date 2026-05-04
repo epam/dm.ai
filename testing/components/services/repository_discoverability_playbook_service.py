@@ -5,7 +5,6 @@ from pathlib import Path
 
 from testing.components.services.documentation_cross_link_service import (
     DocumentationCrossLinkService,
-    MarkdownLink,
 )
 
 
@@ -79,7 +78,7 @@ class RepositoryDiscoverabilityPlaybookService:
                         "playbook from the documentation map."
                     ),
                     actual=(
-                        f"No link to {self.PLAYBOOK_RELATIVE_PATH} was found under "
+                        f"No Markdown link to {self.PLAYBOOK_RELATIVE_PATH} was found under "
                         f"{self.README_SECTION_HEADING}."
                     ),
                 )
@@ -96,7 +95,7 @@ class RepositoryDiscoverabilityPlaybookService:
                         "playbook from the maintainer checklist section."
                     ),
                     actual=(
-                        f"No link to {self.PLAYBOOK_RELATIVE_PATH} was found under "
+                        f"No Markdown link to {self.PLAYBOOK_RELATIVE_PATH} was found under "
                         f"{self.CONTRIBUTING_SECTION_HEADING}."
                     ),
                 )
@@ -246,19 +245,6 @@ class RepositoryDiscoverabilityPlaybookService:
                     target=link.target,
                     line_number=link.line_number,
                     line_text=lines[link.line_number - 1],
-                )
-
-        body_lines = body.splitlines()
-        for offset, line in enumerate(body_lines, start=0):
-            line_number = start_line + offset
-            if self.PLAYBOOK_RELATIVE_PATH in line:
-                return PlaybookLinkObservation(
-                    source_path=source_path,
-                    section_heading=section_heading,
-                    text=self.PLAYBOOK_RELATIVE_PATH,
-                    target=self.PLAYBOOK_RELATIVE_PATH,
-                    line_number=line_number,
-                    line_text=line,
                 )
         return None
 

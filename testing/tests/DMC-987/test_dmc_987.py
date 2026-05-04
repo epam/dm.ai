@@ -26,10 +26,14 @@ def test_dmc_987_maintainer_playbook_entry_points_and_sections_are_kept_in_sync(
     assert readme_observation is not None
     assert readme_observation.section_heading == service.README_SECTION_HEADING
     assert readme_observation.text == "references/workflows/github-repository-discoverability-playbook.md"
+    assert "[references/workflows/github-repository-discoverability-playbook.md](" in (
+        readme_observation.line_text
+    )
     assert "GitHub repository discoverability" in readme_observation.line_text
 
     assert contributing_observation is not None
     assert contributing_observation.section_heading == service.CONTRIBUTING_SECTION_HEADING
+    assert "[github-repository-discoverability-playbook.md](" in contributing_observation.line_text
     assert "canonical playbook" in contributing_observation.line_text
 
     assert manual_section is not None
@@ -210,4 +214,63 @@ def test_dmc_987_service_reports_when_homepage_leaves_manual_settings_section(
     )
     assert failures[0].actual == (
         f"{service.MANUAL_SETTINGS_HEADING} is missing: homepage"
+    )
+
+
+def test_dmc_987_service_rejects_plain_text_playbook_paths_without_markdown_links(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    workflow_dir = repository_root / "dmtools-ai-docs/references/workflows"
+    workflow_dir.mkdir(parents=True)
+
+    (repository_root / "README.md").write_text(
+        "# DMTools\n\n"
+        "## Documentation map\n\n"
+        "| Topic | Link |\n"
+        "|---|---|\n"
+        "| GitHub repository discoverability | "
+        "dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md |\n"
+        "\n"
+        "## Quick start\n",
+        encoding="utf-8",
+    )
+    (repository_root / "CONTRIBUTING.md").write_text(
+        "# Contributing to DMTools\n\n"
+        "## Maintainer discoverability checklist\n\n"
+        "Use the canonical playbook in "
+        "dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md.\n",
+        encoding="utf-8",
+    )
+    (workflow_dir / "github-repository-discoverability-playbook.md").write_text(
+        "# GitHub Repository Discoverability Playbook\n\n"
+        "## Manual GitHub settings\n\n"
+        "1. Update About description and topics in the GitHub UI.\n"
+        "2. Refresh the homepage target if needed.\n"
+        "3. Replace the social preview hero card when positioning changes.\n\n"
+        "## Repo-backed files that must stay aligned\n\n"
+        "- `README.md`\n"
+        "- `.github/ISSUE_TEMPLATE/bug.yml`\n"
+        "- `.github/workflows/release.yml`\n\n"
+        "## Maintainer checklist\n\n"
+        "1. Review the canonical metadata.\n"
+        "2. Keep README and contributor links pointing to this playbook.\n"
+        "3. Update issue templates.\n"
+        "4. Refresh release copy.\n"
+        "5. Apply About, topics, homepage, and social preview updates in the GitHub UI.\n",
+        encoding="utf-8",
+    )
+
+    service = RepositoryDiscoverabilityPlaybookService(repository_root)
+
+    failures = service.validate()
+
+    assert [failure.step for failure in failures] == [1, 2]
+    assert failures[0].actual == (
+        f"No Markdown link to {service.PLAYBOOK_RELATIVE_PATH} was found under "
+        f"{service.README_SECTION_HEADING}."
+    )
+    assert failures[1].actual == (
+        f"No Markdown link to {service.PLAYBOOK_RELATIVE_PATH} was found under "
+        f"{service.CONTRIBUTING_SECTION_HEADING}."
     )
