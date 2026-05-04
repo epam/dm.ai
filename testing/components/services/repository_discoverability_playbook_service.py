@@ -121,7 +121,7 @@ class RepositoryDiscoverabilityPlaybookService:
         else:
             missing_manual_terms = self._missing_terms(
                 manual_section.body,
-                ("about", "topics", "social preview"),
+                ("about", "topics", "homepage", "social preview"),
             )
             if missing_manual_terms:
                 failures.append(
@@ -130,8 +130,8 @@ class RepositoryDiscoverabilityPlaybookService:
                         summary="The playbook manual-settings section does not cover the required GitHub UI surfaces.",
                         expected=(
                             "Manual GitHub settings guidance should mention About metadata, "
-                            "topics, and social preview so maintainers know which changes must "
-                            "be applied in the GitHub UI."
+                            "homepage, topics, and social preview so maintainers know which "
+                            "changes must be applied in the GitHub UI."
                         ),
                         actual=(
                             f"{self.MANUAL_SETTINGS_HEADING} is missing: "

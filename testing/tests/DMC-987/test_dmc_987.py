@@ -34,6 +34,7 @@ def test_dmc_987_maintainer_playbook_entry_points_and_sections_are_kept_in_sync(
 
     assert manual_section is not None
     assert "About description and topics" in manual_section.body
+    assert "homepage" in manual_section.body.lower()
     assert "Social preview" in manual_section.body
 
     assert repo_backed_section is not None
@@ -153,3 +154,60 @@ def test_dmc_987_service_reports_missing_manual_or_repo_backed_sections(tmp_path
         "The maintainer checklist is not repeatable enough for metadata refreshes."
     )
 
+
+def test_dmc_987_service_reports_when_homepage_leaves_manual_settings_section(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    workflow_dir = repository_root / "dmtools-ai-docs/references/workflows"
+    workflow_dir.mkdir(parents=True)
+
+    (repository_root / "README.md").write_text(
+        "# DMTools\n\n"
+        "## Documentation map\n\n"
+        "| Topic | Link |\n"
+        "|---|---|\n"
+        "| GitHub repository discoverability | "
+        "[references/workflows/github-repository-discoverability-playbook.md]"
+        "(dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md) |\n"
+        "\n"
+        "## Quick start\n",
+        encoding="utf-8",
+    )
+    (repository_root / "CONTRIBUTING.md").write_text(
+        "# Contributing to DMTools\n\n"
+        "## Maintainer discoverability checklist\n\n"
+        "Use the canonical playbook in "
+        "[github-repository-discoverability-playbook.md]"
+        "(dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md).\n",
+        encoding="utf-8",
+    )
+    (workflow_dir / "github-repository-discoverability-playbook.md").write_text(
+        "# GitHub Repository Discoverability Playbook\n\n"
+        "## Manual GitHub settings\n\n"
+        "1. Update About description and topics in the GitHub UI.\n"
+        "2. Refresh the social preview hero card when positioning changes.\n\n"
+        "## Repo-backed files that must stay aligned\n\n"
+        "- `README.md`\n"
+        "- `.github/ISSUE_TEMPLATE/bug.yml`\n"
+        "- `.github/workflows/release.yml`\n\n"
+        "## Maintainer checklist\n\n"
+        "1. Review the canonical metadata.\n"
+        "2. Keep README and contributor links pointing to this playbook.\n"
+        "3. Update issue templates.\n"
+        "4. Refresh release copy.\n"
+        "5. Apply About, topics, homepage, and social preview updates in the GitHub UI.\n",
+        encoding="utf-8",
+    )
+
+    service = RepositoryDiscoverabilityPlaybookService(repository_root)
+
+    failures = service.validate()
+
+    assert [failure.step for failure in failures] == [3]
+    assert failures[0].summary == (
+        "The playbook manual-settings section does not cover the required GitHub UI surfaces."
+    )
+    assert failures[0].actual == (
+        f"{service.MANUAL_SETTINGS_HEADING} is missing: homepage"
+    )
