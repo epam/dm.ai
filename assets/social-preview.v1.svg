@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">DMTools social preview</title>
+  <desc id="desc">Dark hero card with the DMTools wordmark and a subtle industrial background grid.</desc>
+  <rect width="1280" height="640" fill="#0F172A" />
+  <g stroke-width="4">
+    <path d="M88 132H1192" stroke="#38BDF8" opacity="0.18" />
+    <path d="M88 196H1192" stroke="#38BDF8" opacity="0.18" />
+    <path d="M980 104V536" stroke="#38BDF8" opacity="0.18" />
+  </g>
+  <g fill="#F8FAFC" font-family="Inter, Arial, sans-serif">
+    <text x="96" y="296" font-size="96" font-weight="700">DMTools</text>
+    <text x="96" y="372" font-size="40" fill="#E2E8F0">Enterprise dark-factory orchestrator</text>
+  </g>
+</svg>

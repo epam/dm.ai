@@ -145,6 +145,7 @@ node_modules
 package.json
 package-lock.json
 .agentic-config
+.repo-sandboxes/
 dmtools-core/temp
 dmtools-core/cacheTestableJiraClient
 .gradle-tmp
