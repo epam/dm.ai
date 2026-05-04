@@ -147,6 +147,7 @@ class SocialPreviewAssetService:
 
     def inspect_asset(self, asset_path: Path) -> SocialPreviewObservation:
         root = ElementTree.fromstring(asset_path.read_text(encoding="utf-8"))
+        parent_map = self._parent_map(root)
         hero_rect, hero_fill = self._hero_rect(root)
         hero_fill_hex = self._format_rgb(hero_fill) if hero_fill else None
 
@@ -163,7 +164,9 @@ class SocialPreviewAssetService:
             if "dmtools" in self._normalize(text):
                 wordmark_texts.append(text)
 
-            fill = self._parse_color(self._presentation_attribute(element, "fill"))
+            fill = self._parse_color(
+                self._effective_presentation_attribute(element, "fill", parent_map)
+            )
             if fill is None:
                 fill = (0, 0, 0)
             if hero_fill is None:
@@ -408,6 +411,24 @@ class SocialPreviewAssetService:
             if key == name:
                 return value
         return None
+
+    def _effective_presentation_attribute(
+        self,
+        element: ElementTree.Element,
+        name: str,
+        parent_map: dict[ElementTree.Element, ElementTree.Element],
+    ) -> str | None:
+        current: ElementTree.Element | None = element
+        while current is not None:
+            value = self._presentation_attribute(current, name)
+            if value is not None:
+                return value
+            current = parent_map.get(current)
+        return None
+
+    @staticmethod
+    def _parent_map(root: ElementTree.Element) -> dict[ElementTree.Element, ElementTree.Element]:
+        return {child: parent for parent in root.iter() for child in parent}
 
     @staticmethod
     def _tag_name(tag: ElementTree.Element | str) -> str:

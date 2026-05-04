@@ -19,7 +19,7 @@ def test_dmc_989_social_preview_svg_and_playbook_meet_repository_standards() -> 
 def test_dmc_989_service_accepts_a_compliant_social_preview_fixture(tmp_path: Path) -> None:
     repository_root = _build_fixture_repository(
         tmp_path,
-        svg_fill="#F8FAFC",
+        text_fill="#F8FAFC",
         include_export_sizes=True,
     )
 
@@ -43,7 +43,7 @@ def test_dmc_989_service_reports_missing_export_guidance_and_low_contrast_text(
 ) -> None:
     repository_root = _build_fixture_repository(
         tmp_path,
-        svg_fill="#475569",
+        text_fill="#475569",
         include_export_sizes=False,
     )
 
@@ -113,15 +113,39 @@ def test_dmc_989_service_requires_export_sizes_inside_social_preview_guidance_se
     assert "### Release checklist" not in failures[0].actual
 
 
+def test_dmc_989_service_resolves_inherited_text_fill_for_contrast(tmp_path: Path) -> None:
+    repository_root = _build_fixture_repository(
+        tmp_path,
+        text_fill="#F8FAFC",
+        include_export_sizes=True,
+        inherit_text_fill=True,
+    )
+
+    service = SocialPreviewAssetService(repository_root)
+
+    failures = service.validate()
+    asset_path = service.locate_social_preview_asset()
+
+    assert failures == [], service.format_failures(failures)
+    assert asset_path is not None
+    observation = service.inspect_asset(asset_path)
+    assert [item.fill_hex for item in observation.text_contrast_observations] == [
+        "#F8FAFC",
+        "#F8FAFC",
+    ]
+    assert all(item.contrast_ratio >= 4.5 for item in observation.text_contrast_observations)
+
+
 def _build_fixture_repository(
     tmp_path: Path,
     *,
-    svg_fill: str = "#F8FAFC",
+    text_fill: str = "#F8FAFC",
     include_export_sizes: bool,
     include_social_preview_asset: bool = True,
     social_preview_asset_path: str = "assets/social-preview.v1.svg",
     extra_svg_files: dict[str, list[str]] | None = None,
     playbook_extra_sections: list[str] | None = None,
+    inherit_text_fill: bool = False,
 ) -> Path:
     repository_root = tmp_path / "repo"
     repository_root.mkdir()
@@ -129,14 +153,24 @@ def _build_fixture_repository(
     if include_social_preview_asset:
         social_preview_path = repository_root / social_preview_asset_path
         social_preview_path.parent.mkdir(parents=True, exist_ok=True)
+        text_lines = [
+            f'  <text x="96" y="280" font-size="96" font-family="Inter, sans-serif">DMTools</text>',
+            '  <text x="96" y="360" font-size="40" font-family="Inter, sans-serif">Enterprise dark-factory orchestrator</text>',
+        ]
+        if inherit_text_fill:
+            text_block = [f'  <g fill="{text_fill}">', *[f"    {line.strip()}" for line in text_lines], "  </g>"]
+        else:
+            text_block = [
+                f'  <text x="96" y="280" fill="{text_fill}" font-size="96" font-family="Inter, sans-serif">DMTools</text>',
+                '  <text x="96" y="360" fill="#E2E8F0" font-size="40" font-family="Inter, sans-serif">Enterprise dark-factory orchestrator</text>',
+            ]
         social_preview_path.write_text(
             "\n".join(
                 [
                     '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">',
                     '  <rect width="1280" height="640" fill="#0F172A" />',
                     '  <path d="M96 112 H1184 M96 176 H1184" stroke="#94A3B8" stroke-width="4" opacity="0.18" />',
-                    f'  <text x="96" y="280" fill="{svg_fill}" font-size="96" font-family="Inter, sans-serif">DMTools</text>',
-                    '  <text x="96" y="360" fill="#E2E8F0" font-size="40" font-family="Inter, sans-serif">Enterprise dark-factory orchestrator</text>',
+                    *text_block,
                     "</svg>",
                     "",
                 ]
