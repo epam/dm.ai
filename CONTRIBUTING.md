@@ -48,7 +48,7 @@ cp dmtools.env.example dmtools.env
 
 ## Maintainer discoverability checklist
 
-For repository positioning, GitHub About metadata, release-facing keyword alignment, and the split between repo-backed updates and manual GitHub settings, use the canonical playbook in `dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md`.
+For repository positioning, GitHub About metadata, release-facing keyword alignment, and the split between repo-backed updates and manual GitHub settings, use the canonical playbook in [github-repository-discoverability-playbook.md](dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md).
 
 ## Adding a New MCP Tool
 
