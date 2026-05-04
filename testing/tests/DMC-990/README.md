@@ -26,5 +26,5 @@ repository, then inspects the versioned metadata and playbook files directly.
 ## Expected passing output
 
 ```text
-3 passed
+4 passed
 ```
