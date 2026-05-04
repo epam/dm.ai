@@ -54,17 +54,6 @@ class SocialPreviewAssetService:
         "social_preview",
         "socialpreview",
     )
-    SECONDARY_FILENAME_HINTS = (
-        "social",
-        "preview",
-        "open-graph",
-        "open_graph",
-        "opengraph",
-        "github-preview",
-        "github_preview",
-        "social-card",
-        "social_card",
-    )
     IGNORED_DIRECTORIES = {
         ".git",
         ".gradle",
@@ -94,12 +83,12 @@ class SocialPreviewAssetService:
                         step=1,
                         summary="The repository does not contain a versioned social-preview SVG source asset.",
                         expected=(
-                            "A committed SVG asset whose filename clearly identifies it as the "
-                            "repository social preview source."
+                            "A committed, versioned SVG asset whose filename clearly identifies "
+                            "it as the repository social preview source."
                         ),
                         actual=(
-                            "No matching SVG file was found for the social-preview naming hints "
-                            f"{self.PRIMARY_FILENAME_HINTS + self.SECONDARY_FILENAME_HINTS}."
+                            "No versioned SVG file matching the social-preview naming contract "
+                            "(for example, social-preview.v1.svg) was found."
                         ),
                     ),
                     ValidationFailure(
@@ -149,18 +138,12 @@ class SocialPreviewAssetService:
         return "\n\n".join(failure.format() for failure in failures)
 
     def locate_social_preview_asset(self) -> Path | None:
-        ranked_matches: list[tuple[int, Path]] = []
-        for candidate in self._svg_candidates():
-            rank = self._candidate_rank(candidate)
-            if rank is None:
-                continue
-            ranked_matches.append((rank, candidate))
-
-        if not ranked_matches:
+        matches = [
+            candidate for candidate in self._svg_candidates() if self._is_versioned_social_preview(candidate)
+        ]
+        if not matches:
             return None
-
-        ranked_matches.sort(key=lambda item: (item[0], item[1].as_posix()))
-        return ranked_matches[0][1]
+        return sorted(matches, key=lambda path: path.as_posix())[0]
 
     def inspect_asset(self, asset_path: Path) -> SocialPreviewObservation:
         root = ElementTree.fromstring(asset_path.read_text(encoding="utf-8"))
@@ -213,7 +196,7 @@ class SocialPreviewAssetService:
         )
 
     def playbook_documents_export_requirements(self) -> bool:
-        normalized = self._normalize(self.playbook_path.read_text(encoding="utf-8"))
+        normalized = self._normalize(self.playbook_social_preview_excerpt())
         return (
             "1280x640" in normalized
             and "2560x1280" in normalized
@@ -222,6 +205,9 @@ class SocialPreviewAssetService:
         )
 
     def playbook_social_preview_excerpt(self) -> str:
+        if not self.playbook_path.is_file():
+            return f"{self.PLAYBOOK_RELATIVE_PATH.as_posix()} is missing."
+
         lines = self.playbook_path.read_text(encoding="utf-8").splitlines()
         start_index = next(
             (
@@ -235,8 +221,10 @@ class SocialPreviewAssetService:
             return f"{self.PLAYBOOK_RELATIVE_PATH.as_posix()} is missing the social preview guidance section."
 
         collected: list[str] = []
-        for line in lines[start_index : start_index + 10]:
+        for line in lines[start_index:]:
             stripped = line.strip()
+            if collected and stripped.startswith("#"):
+                break
             if stripped:
                 collected.append(stripped)
         return " ".join(collected)
@@ -326,25 +314,16 @@ class SocialPreviewAssetService:
             candidates.append(path)
         return sorted(candidates)
 
-    def _candidate_rank(self, path: Path) -> int | None:
+    def _is_versioned_social_preview(self, path: Path) -> bool:
         raw_name = path.stem.casefold()
         normalized_name = self._normalize(path.stem)
-        if any(hint in raw_name for hint in self.PRIMARY_FILENAME_HINTS):
-            return 0
-        if all(hint in normalized_name for hint in ("social", "preview")):
-            return 1
-        if any(hint in raw_name for hint in self.SECONDARY_FILENAME_HINTS) or any(
-            hint in normalized_name for hint in ("open graph", "github preview", "social card")
-        ):
-            return 2
+        has_social_preview_name = any(hint in raw_name for hint in self.PRIMARY_FILENAME_HINTS) or (
+            "social preview" in normalized_name
+        )
+        if not has_social_preview_name:
+            return False
 
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        normalized_text = self._normalize(text)
-        if "dmtools" in normalized_text and "social" in normalized_text:
-            return 3
-        if "dmtools" in normalized_text and "dark factory orchestrator" in normalized_text:
-            return 4
-        return None
+        return bool(re.search(r"(^|[.\-_])v(?:ersion)?[0-9]+($|[.\-_])", raw_name))
 
     def _hero_rect(
         self, root: ElementTree.Element

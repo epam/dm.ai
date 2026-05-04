@@ -58,31 +58,97 @@ def test_dmc_989_service_reports_missing_export_guidance_and_low_contrast_text(
     assert "1280x640 minimum and 2560x1280 recommended" in failure_message
 
 
+def test_dmc_989_service_rejects_generic_svg_names_without_a_versioned_social_preview_source(
+    tmp_path: Path,
+) -> None:
+    repository_root = _build_fixture_repository(
+        tmp_path,
+        include_social_preview_asset=False,
+        include_export_sizes=True,
+        extra_svg_files={
+            "assets/social.svg": [
+                '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640">',
+                '  <rect width="1280" height="640" fill="#0F172A" />',
+                '  <text x="96" y="280" fill="#F8FAFC">DMTools</text>',
+                "</svg>",
+            ],
+            "assets/preview.svg": [
+                '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640">',
+                '  <rect width="1280" height="640" fill="#0F172A" />',
+                '  <text x="96" y="280" fill="#F8FAFC">DMTools</text>',
+                "</svg>",
+            ],
+        },
+    )
+
+    service = SocialPreviewAssetService(repository_root)
+
+    failures = service.validate()
+
+    assert [failure.step for failure in failures] == [1, 2, 3]
+    assert service.locate_social_preview_asset() is None
+    assert "versioned SVG file matching the social-preview naming contract" in failures[0].actual
+
+
+def test_dmc_989_service_requires_export_sizes_inside_social_preview_guidance_section(
+    tmp_path: Path,
+) -> None:
+    repository_root = _build_fixture_repository(
+        tmp_path,
+        include_export_sizes=False,
+        playbook_extra_sections=[
+            "### Release checklist",
+            "",
+            "- Export screenshots at 1280x640 minimum.",
+            "- Archive masters at 2560x1280 recommended.",
+        ],
+    )
+
+    service = SocialPreviewAssetService(repository_root)
+
+    failures = service.validate()
+
+    assert [failure.step for failure in failures] == [4]
+    assert "### Social preview asset guidance" in failures[0].actual
+    assert "### Release checklist" not in failures[0].actual
+
+
 def _build_fixture_repository(
     tmp_path: Path,
     *,
-    svg_fill: str,
+    svg_fill: str = "#F8FAFC",
     include_export_sizes: bool,
+    include_social_preview_asset: bool = True,
+    social_preview_asset_path: str = "assets/social-preview.v1.svg",
+    extra_svg_files: dict[str, list[str]] | None = None,
+    playbook_extra_sections: list[str] | None = None,
 ) -> Path:
     repository_root = tmp_path / "repo"
     repository_root.mkdir()
 
-    social_preview_path = repository_root / "assets/social-preview.v1.svg"
-    social_preview_path.parent.mkdir(parents=True, exist_ok=True)
-    social_preview_path.write_text(
-        "\n".join(
-            [
-                '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">',
-                '  <rect width="1280" height="640" fill="#0F172A" />',
-                '  <path d="M96 112 H1184 M96 176 H1184" stroke="#94A3B8" stroke-width="4" opacity="0.18" />',
-                f'  <text x="96" y="280" fill="{svg_fill}" font-size="96" font-family="Inter, sans-serif">DMTools</text>',
-                '  <text x="96" y="360" fill="#E2E8F0" font-size="40" font-family="Inter, sans-serif">Enterprise dark-factory orchestrator</text>',
-                "</svg>",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    if include_social_preview_asset:
+        social_preview_path = repository_root / social_preview_asset_path
+        social_preview_path.parent.mkdir(parents=True, exist_ok=True)
+        social_preview_path.write_text(
+            "\n".join(
+                [
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">',
+                    '  <rect width="1280" height="640" fill="#0F172A" />',
+                    '  <path d="M96 112 H1184 M96 176 H1184" stroke="#94A3B8" stroke-width="4" opacity="0.18" />',
+                    f'  <text x="96" y="280" fill="{svg_fill}" font-size="96" font-family="Inter, sans-serif">DMTools</text>',
+                    '  <text x="96" y="360" fill="#E2E8F0" font-size="40" font-family="Inter, sans-serif">Enterprise dark-factory orchestrator</text>',
+                    "</svg>",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    if extra_svg_files:
+        for relative_path, lines in extra_svg_files.items():
+            asset_path = repository_root / relative_path
+            asset_path.parent.mkdir(parents=True, exist_ok=True)
+            asset_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     playbook_path = (
         repository_root
@@ -107,5 +173,7 @@ def _build_fixture_repository(
                 "- Export a PNG at 2560x1280 recommended.",
             ]
         )
+    if playbook_extra_sections:
+        playbook_lines.extend(["", *playbook_extra_sections])
     playbook_path.write_text("\n".join(playbook_lines) + "\n", encoding="utf-8")
     return repository_root
