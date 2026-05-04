@@ -32,6 +32,8 @@ These settings are not stored in the repository and must be applied in the GitHu
 - Preferred value line: `Enterprise dark-factory orchestrator`.
 - Use at most one restrained accent colour.
 - Any text rendered into the image must meet WCAG AA contrast guidance.
+- Export a PNG at 1280x640 minimum.
+- Export a PNG at 2560x1280 recommended.
 - Do not use screenshots, integration collages, or feature-list text in the image.
 
 ## Repo-backed files that must stay aligned

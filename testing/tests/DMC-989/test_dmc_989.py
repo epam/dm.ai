@@ -136,6 +136,38 @@ def test_dmc_989_service_resolves_inherited_text_fill_for_contrast(tmp_path: Pat
     assert all(item.contrast_ratio >= 4.5 for item in observation.text_contrast_observations)
 
 
+def test_dmc_989_service_ignores_repo_sandbox_svg_candidates(tmp_path: Path) -> None:
+    repository_root = _build_fixture_repository(
+        tmp_path,
+        text_fill="#F8FAFC",
+        include_export_sizes=True,
+    )
+    sandbox_asset = (
+        repository_root
+        / ".repo-sandboxes/dmc-897-el4mhgbe/workspace/assets/social-preview.v1.svg"
+    )
+    sandbox_asset.parent.mkdir(parents=True, exist_ok=True)
+    sandbox_asset.write_text(
+        "\n".join(
+            [
+                '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640">',
+                '  <rect width="1280" height="640" fill="#0F172A" />',
+                '  <text x="96" y="280" fill="#F8FAFC">DMTools</text>',
+                "</svg>",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    service = SocialPreviewAssetService(repository_root)
+
+    asset_path = service.locate_social_preview_asset()
+
+    assert asset_path is not None
+    assert service.relative_path(asset_path) == "assets/social-preview.v1.svg"
+
+
 def _build_fixture_repository(
     tmp_path: Path,
     *,
