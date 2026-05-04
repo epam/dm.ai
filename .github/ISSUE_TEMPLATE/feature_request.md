@@ -1,20 +1,29 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
+name: DMTools feature request
+about: Suggest an improvement for DMTools CLI workflows, MCP tools, jobs, integrations, AI assistant skills, or GitHub surfaces
+title: '[Feature]: '
 labels: ''
 assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**What workflow are you trying to improve?**
+Describe the delivery, automation, or AI-assisted workflow that needs to improve.
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+**What outcome do you want?**
+Describe the result you want from DMTools.
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+**Describe the proposed solution**
+Explain the CLI, MCP tool, job, integration, docs, or GitHub-facing change you would like to see.
+
+**Which DMTools surfaces are involved?**
+- CLI or wrapper
+- MCP tools or integrations
+- Jobs or agents
+- GitHub Actions or CI workflows
+- AI assistant skills or docs
+- Repository discoverability or GitHub metadata
+- Other:
 
 **Additional context**
-Add any other context or screenshots about the feature request here.
+Add any other context, examples, linked workflows, or screenshots here.

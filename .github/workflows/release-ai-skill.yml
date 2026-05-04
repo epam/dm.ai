@@ -106,7 +106,7 @@ jobs:
           cat > dist/release-notes.md << 'EOF'
           # DMtools Agent Skill v$VERSION
 
-          Universal AI assistant skill for DMtools - works with Cursor, Claude, Codex, and any Agent Skills compatible system.
+          DMTools agent skill for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems.
 
           ## 📦 Installation
 
@@ -217,8 +217,8 @@ jobs:
           {
             "name": "@dm.ai/agent-skill",
             "version": "$VERSION",
-            "description": "Agent Skill for DMtools - AI-powered development toolkit (Cursor, Claude, Codex compatible)",
-            "keywords": ["dmtools", "agent-skills", "cursor", "claude", "ai", "jira", "azure-devops"],
+            "description": "DMTools agent skill for enterprise dark-factory orchestration with MCP tools, AI agents, and generative-ai-friendly delivery workflows",
+            "keywords": ["dmtools", "dark-factory", "delivery-automation", "workflow-orchestration", "mcp", "ai-agents", "generative-ai", "self-hosted", "cursor", "claude", "codex", "jira", "azure-devops", "github"],
             "author": "DMtools Team",
             "license": "Apache-2.0",
             "repository": {

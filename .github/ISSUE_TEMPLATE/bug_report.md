@@ -1,38 +1,40 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
+name: DMTools bug report
+about: Report a bug in the DMTools CLI, MCP tools, jobs, integrations, or GitHub workflow automation
+title: '[Bug]: '
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**What broke**
+Describe the problem and the affected DMTools workflow or surface.
 
 **To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. 
+2. 
+3. 
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+What should have happened instead?
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Affected surface**
+- CLI command or wrapper
+- MCP tool or integration
+- Job or agent configuration
+- GitHub Actions or CI workflow
+- Documentation or discoverability surface
+- Other:
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser: [e.g. chrome, safari]
- - Version: [e.g. 22]
+**Environment**
+- DMTools version (`dmtools --version` or release tag):
+- Java version:
+- Operating system / shell:
+- Integration(s) or provider(s) involved:
+- Workflow run / log link (if applicable):
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone 6]
- - OS: [e.g. iOS8.1]
- - Browser: [e.g. stock browser, safari]
- - Version: [e.g. 22]
+**Relevant output**
+Paste sanitized logs, stack traces, command output, or screenshots if they help.
 
 **Additional context**
 Add any other context about the problem here.

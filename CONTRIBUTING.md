@@ -46,6 +46,10 @@ cp dmtools.env.example dmtools.env
 4. Verify all tests pass: `./gradlew :dmtools-core:test`
 5. Open a pull request with a clear description of what you changed and why.
 
+## Maintainer discoverability checklist
+
+For repository positioning, GitHub About metadata, release-facing keyword alignment, and the split between repo-backed updates and manual GitHub settings, use the canonical playbook in `dmtools-ai-docs/references/workflows/github-repository-discoverability-playbook.md`.
+
 ## Adding a New MCP Tool
 
 See the step-by-step guide in `CLAUDE.md` under **"Adding a New MCP Tool"** and the full tool reference in `docs/README-MCP.md`.
