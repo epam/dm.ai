@@ -409,10 +409,11 @@ class BetaReleaseSummaryAuditService(BetaReleaseSummaryAuditServiceContract):
         release_notes_added = False
         for raw_line in raw_log_text.splitlines():
             line = self._normalize_log_line(raw_line)
+            is_group_wrapper = line.startswith("##[group]Run ")
             candidate = line.removeprefix("##[group]Run ").strip()
             if ">> $GITHUB_STEP_SUMMARY" not in candidate:
                 continue
-            match = self.SUMMARY_ECHO_PATTERN.search(line)
+            match = None if is_group_wrapper else self.SUMMARY_ECHO_PATTERN.search(candidate)
             if not match:
                 if (
                     not release_notes_added

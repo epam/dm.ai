@@ -207,3 +207,47 @@ def test_dmc_996_service_reads_release_notes_backed_step_summary_from_logs() -> 
     normalized_summary = " ".join(audit.release_job.step_summary_markdown.split())
     normalized_release_notes = " ".join(release_notes.split())
     assert normalized_summary == normalized_release_notes
+
+
+def test_dmc_996_service_does_not_double_count_echo_based_step_summary_logs() -> None:
+    tag = "v1.7.181-beta.43.1"
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    expected_summary = (
+        "## This is a pre-release / beta build\n"
+        "> Stable latest remains available for production installs.\n"
+        "### Install DMTools CLI\n"
+        "curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.181-beta.43.1/install.sh | bash\n"
+        "### Install DMTools Agent Skill\n"
+        "curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.181-beta.43.1/skill-install.sh | bash"
+    )
+    workflow_log_text = (
+        f"Release URL: https://github.com/epam/dm.ai/releases/tag/{tag}\n"
+        "##[group]Run echo \"## This is a pre-release / beta build\" >> $GITHUB_STEP_SUMMARY\n"
+        "2026-05-05T09:59:30Z echo \"## This is a pre-release / beta build\" >> $GITHUB_STEP_SUMMARY\n"
+        "2026-05-05T09:59:31Z echo \"> Stable latest remains available for production installs.\" >> $GITHUB_STEP_SUMMARY\n"
+        "2026-05-05T09:59:32Z echo \"### Install DMTools CLI\" >> $GITHUB_STEP_SUMMARY\n"
+        "2026-05-05T09:59:33Z echo \"curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.181-beta.43.1/install.sh | bash\" >> $GITHUB_STEP_SUMMARY\n"
+        "2026-05-05T09:59:34Z echo \"### Install DMTools Agent Skill\" >> $GITHUB_STEP_SUMMARY\n"
+        "2026-05-05T09:59:35Z echo \"curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.181-beta.43.1/skill-install.sh | bash\" >> $GITHUB_STEP_SUMMARY\n"
+        "2026-05-05T09:59:36Z ##[endgroup]\n"
+    )
+    service = BetaReleaseSummaryAuditServiceImpl(
+        github_client=FakeGitHubActionsReleaseClient(
+            workflow_log_text,
+            tag=tag,
+            created_at=created_at,
+        ),
+        workflow_file=str(CONFIG["workflow_file"]),
+        workflow_ref=str(CONFIG["workflow_ref"]),
+        workflow_name=str(CONFIG["workflow_name"]),
+        release_job_name=str(CONFIG["release_job_name"]),
+        dispatch_timeout_seconds=1,
+        completion_timeout_seconds=1,
+        poll_interval_seconds=1,
+    )
+
+    audit = service.audit()
+
+    assert audit.release_job is not None
+    assert not audit.failures, service.format_failures(audit.failures)
+    assert audit.release_job.step_summary_markdown == expected_summary
