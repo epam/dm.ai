@@ -11,6 +11,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from testing.components.factories.github_actions_release_client_factory import (  # noqa: E402
+    create_github_actions_release_client,
+)
 from testing.components.factories.deprecated_workflow_run_audit_service_factory import (  # noqa: E402
     create_deprecated_workflow_run_audit_service,
 )
@@ -24,9 +27,6 @@ from testing.core.models.deprecated_workflow_run_audit import (  # noqa: E402
     DeprecatedWorkflowRunAudit,
 )
 from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: E402
-from testing.frameworks.api.rest.github_actions_release_client import (  # noqa: E402
-    GitHubActionsReleaseRestClient,
-)
 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
@@ -40,7 +40,7 @@ REQUIRED_NOTICE_MARKERS = tuple(
 
 
 def build_github_client() -> GitHubActionsReleaseClient:
-    return GitHubActionsReleaseRestClient(
+    return create_github_actions_release_client(
         owner=str(CONFIG["owner"]),
         repo=str(CONFIG["repo"]),
         token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
@@ -50,12 +50,6 @@ def build_github_client() -> GitHubActionsReleaseClient:
 def _timestamped_standalone_release_tag(now: datetime | None = None) -> str:
     current = now or datetime.now(timezone.utc)
     return f"v{current.year}.{current.month:02d}{current.day:02d}.{current.hour:02d}{current.minute:02d}{current.second:02d}-standalone"
-
-
-def _auto_workflow_release_tag(head_sha: str, created_at: datetime | None = None) -> str:
-    current = created_at or datetime.now(timezone.utc)
-    return f"v{current:%Y.%m.%d}-standalone-{head_sha[:7]}"
-
 
 def _latest_stable_release_tag(client: GitHubActionsReleaseClient) -> str:
     stable_tag_pattern = re.compile(r"^v\d+\.\d+\.\d+$")
@@ -121,15 +115,12 @@ def test_dmc_1003_live_deprecated_workflow_outputs_remove_installer_scripts_and_
     )
     standalone_audit = standalone_service.audit()
 
-    auto_release_tag = _auto_workflow_release_tag(
-        client.branch_head_sha(str(CONFIG["workflow_ref"])),
-    )
     standalone_auto_service = _build_service(
         workflow_file=str(CONFIG["standalone_auto_workflow_file"]),
         workflow_name=str(CONFIG["standalone_auto_workflow_name"]),
         release_job_name=str(CONFIG["standalone_auto_release_job_name"]),
         require_step_summary=str(CONFIG["standalone_auto_require_step_summary"]).lower() == "true",
-        release_tag=auto_release_tag,
+        release_tag="",
         reuse_existing_release=str(CONFIG["standalone_auto_reuse_existing_release"]).lower()
         == "true",
     )

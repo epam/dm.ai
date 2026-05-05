@@ -23,6 +23,9 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
     SUMMARY_ECHO_PATTERN = re.compile(r'echo (?P<argument>.+?) >> \$GITHUB_STEP_SUMMARY$')
     ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
     TIMESTAMP_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T[^ ]+\s+")
+    RELEASE_URL_PATTERN = re.compile(r"/releases/tag/(?P<tag>[^)\s]+)")
+    RELEASE_TAG_OUTPUT_PATTERN = re.compile(r"(?:^|\b)tag_name=(?P<tag>v[0-9A-Za-z.\-]+)")
+    USING_TAG_PATTERN = re.compile(r"Using tag:\s*(?P<tag>v[0-9A-Za-z.\-]+)")
 
     def __init__(
         self,
@@ -125,6 +128,8 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         self,
         target_head_sha: str,
     ) -> DeprecatedWorkflowRunAudit | None:
+        if not self.release_tag:
+            return None
         try:
             release_payload = self.github_client.release_by_tag(self.release_tag)
         except HTTPError as error:
@@ -235,21 +240,22 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             )
 
         release = self._find_release_observation(
+            release_job=release_job,
             release_payload=release_payload,
             dispatch_started_at=dispatch_started_at,
         )
         if release is None:
+            expected_release = self.release_tag or "the release emitted by the completed workflow run"
             failures.append(
                 DeprecatedWorkflowAuditFailure(
                     step=4,
                     summary="The workflow release page was not discoverable after the workflow succeeded.",
                     expected=(
-                        f"A GitHub release tagged {self.release_tag!r} created by the completed "
-                        "workflow run."
+                        f"A GitHub release for {expected_release} created by the completed workflow run."
                     ),
                     actual=(
-                        f"Job {release_job.html_url} completed successfully, but release "
-                        f"{self.release_tag!r} was not discoverable."
+                        f"Job {release_job.html_url} completed successfully, but no matching release "
+                        "was discoverable from the emitted run outputs."
                     ),
                 )
             )
@@ -389,17 +395,27 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
     def _find_release_observation(
         self,
         *,
+        release_job: DeprecatedWorkflowJobObservation,
         release_payload: dict[str, Any] | None,
         dispatch_started_at: datetime,
     ) -> DeprecatedWorkflowReleaseObservation | None:
         payload = release_payload
+        candidate_tags = self._candidate_release_tags(release_job)
         lookup_deadline = self._deadline(self.poll_interval_seconds * 3)
         while datetime.now(timezone.utc) < lookup_deadline and payload is None:
-            try:
-                payload = self.github_client.release_by_tag(self.release_tag)
-            except HTTPError as error:
-                if error.code != 404:
-                    raise
+            for tag in candidate_tags:
+                try:
+                    payload = self.github_client.release_by_tag(tag)
+                except HTTPError as error:
+                    if error.code != 404:
+                        raise
+                if payload is not None:
+                    break
+            if payload is None:
+                payload = self._find_recent_release_payload(
+                    candidate_tags=candidate_tags,
+                    dispatch_started_at=dispatch_started_at,
+                )
             if payload is None:
                 self._waiter.wait(self.poll_interval_seconds)
 
@@ -415,6 +431,35 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             html_url=str(payload.get("html_url", "")),
             body=str(payload.get("body", "")),
         )
+
+    def _candidate_release_tags(self, release_job: DeprecatedWorkflowJobObservation) -> tuple[str, ...]:
+        candidates: list[str] = []
+        for value in (
+            self.release_tag,
+            self._release_tag_from_text(release_job.step_summary_markdown),
+            self._release_tag_from_text(release_job.log_excerpt),
+        ):
+            normalized = value.strip()
+            if normalized and normalized not in candidates:
+                candidates.append(normalized)
+        return tuple(candidates)
+
+    def _find_recent_release_payload(
+        self,
+        *,
+        candidate_tags: tuple[str, ...],
+        dispatch_started_at: datetime,
+    ) -> dict[str, Any] | None:
+        for release in self.github_client.list_releases(per_page=20):
+            tag_name = str(release.get("tag_name", "")).strip()
+            if candidate_tags and tag_name not in candidate_tags:
+                continue
+            created_at = self._parse_github_datetime(str(release.get("created_at", "")))
+            if created_at is None or created_at < dispatch_started_at - timedelta(minutes=5):
+                continue
+            if candidate_tags or self._release_looks_like_deprecated_workflow_output(release):
+                return release
+        return None
 
     def _extract_step_summary_markdown(self, raw_log_text: str) -> str:
         lines: list[str] = []
@@ -456,6 +501,20 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
     @staticmethod
     def _normalize_visible_text(value: str) -> str:
         return " ".join(value.lower().split())
+
+    @classmethod
+    def _release_tag_from_text(cls, text: str) -> str:
+        for pattern in (cls.RELEASE_URL_PATTERN, cls.RELEASE_TAG_OUTPUT_PATTERN, cls.USING_TAG_PATTERN):
+            match = pattern.search(text)
+            if match:
+                return match.group("tag")
+        return ""
+
+    def _release_looks_like_deprecated_workflow_output(self, payload: dict[str, Any]) -> bool:
+        body = self._normalize_visible_text(str(payload.get("body", "")))
+        if not body:
+            return False
+        return all(marker in body for marker in self.required_notice_markers)
 
     @staticmethod
     def _preview_text(value: str, *, limit: int) -> str:

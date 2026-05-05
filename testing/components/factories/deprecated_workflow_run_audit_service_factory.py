@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import os
-
+from testing.components.factories.github_actions_release_client_factory import (
+    create_github_actions_release_client,
+)
 from testing.components.services.deprecated_workflow_run_audit_service import (
     DeprecatedWorkflowRunAuditService as DeprecatedWorkflowRunAuditServiceImpl,
 )
 from testing.core.interfaces.deprecated_workflow_run_audit_service import (
     DeprecatedWorkflowRunAuditService,
-)
-from testing.frameworks.api.rest.github_actions_release_client import (
-    GitHubActionsReleaseRestClient,
 )
 
 
@@ -32,14 +30,11 @@ def create_deprecated_workflow_run_audit_service(
     reuse_existing_release: bool = False,
     token: str | None = None,
 ) -> DeprecatedWorkflowRunAuditService:
-    github_token = token if token is not None else os.environ.get("GH_TOKEN") or os.environ.get(
-        "GITHUB_TOKEN"
-    )
     return DeprecatedWorkflowRunAuditServiceImpl(
-        github_client=GitHubActionsReleaseRestClient(
+        github_client=create_github_actions_release_client(
             owner=owner,
             repo=repo,
-            token=github_token,
+            token=token,
         ),
         workflow_file=workflow_file,
         workflow_ref=workflow_ref,

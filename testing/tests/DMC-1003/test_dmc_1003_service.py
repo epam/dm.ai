@@ -233,3 +233,68 @@ def test_service_reports_removed_installer_strings_in_step_summary() -> None:
     assert audit.release_job is not None
     assert audit.failures
     assert any("install.sh" in failure.actual for failure in audit.failures)
+
+
+def test_service_discovers_release_tag_from_logs_when_not_predicted() -> None:
+    client = FakeGitHubActionsReleaseClient()
+    dispatched_run = [
+        {
+            "id": 19,
+            "html_url": "https://example.test/runs/19",
+            "event": "workflow_dispatch",
+            "status": "in_progress",
+            "conclusion": "",
+            "head_branch": "main",
+            "head_sha": client.head_sha,
+            "created_at": "2099-05-05T23:59:58Z",
+            "run_number": 19,
+        }
+    ]
+    client.workflow_runs_responses = [
+        [],
+        dispatched_run,
+    ]
+    client.run_by_id[19] = {
+        "id": 19,
+        "html_url": "https://example.test/runs/19",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": client.head_sha,
+        "created_at": "2099-05-05T23:59:58Z",
+        "run_number": 19,
+    }
+    client.jobs_by_run_id[19] = [
+        {
+            "id": 103,
+            "name": "auto-standalone-release",
+            "html_url": "https://example.test/jobs/103",
+            "status": "completed",
+            "conclusion": "success",
+        }
+    ]
+    client.logs_by_job_id[103] = (
+        "2099-05-06T00:00:01Z tag_name=v2099.05.06-standalone-abcdef1\n"
+        '2099-05-06T00:00:02Z echo "Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY\n'
+    )
+    client.release_by_tag_payload["v2099.05.06-standalone-abcdef1"] = {
+        "tag_name": "v2099.05.06-standalone-abcdef1",
+        "html_url": "https://example.test/releases/v2099.05.06-standalone-abcdef1",
+        "body": (
+            "> **Deprecated / internal-only workflow.**\n"
+            "Do not treat this release body as installation guidance."
+        ),
+        "created_at": "2099-05-06T00:00:03Z",
+    }
+
+    audit = _build_service(
+        client,
+        release_tag="",
+        require_step_summary=True,
+    ).audit()
+
+    assert client.dispatch_calls == [("standalone-release-auto.yml", "main", {})]
+    assert audit.release is not None
+    assert audit.release.tag_name == "v2099.05.06-standalone-abcdef1"
+    assert audit.failures == ()
