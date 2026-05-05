@@ -1,0 +1,19 @@
+test_id: DMC-1003
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+owner: epam
+repo: dm.ai
+ref: main
+workflow_paths:
+  - .github/workflows/standalone-release.yml
+  - .github/workflows/standalone-release-auto.yml
+forbidden_strings:
+  - install.sh
+  - install.ps1
+  - skill-install.sh
+  - supported public installation paths
+required_notice_markers:
+  - deprecated
+  - internal-only
