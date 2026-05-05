@@ -42,11 +42,17 @@ class GitHubActionsReleaseRestClient(GitHubPublicationGateRestClient, GitHubActi
         with urlopen(request, timeout=30) as response:
             return response.getcode(), response.read().decode("utf-8", errors="replace")
 
-    def dispatch_workflow(self, workflow_id: str, *, ref: str) -> None:
+    def dispatch_workflow(
+        self,
+        workflow_id: str,
+        *,
+        ref: str,
+        inputs: dict[str, object] | None = None,
+    ) -> None:
         status_code, _ = self._request(
             "POST",
             f"/repos/{self.owner}/{self.repo}/actions/workflows/{workflow_id}/dispatches",
-            payload={"ref": ref},
+            payload={"ref": ref, "inputs": inputs or {}},
         )
         if status_code != 204:
             raise AssertionError(f"Expected workflow dispatch to return 204, got {status_code}.")
