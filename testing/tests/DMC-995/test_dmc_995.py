@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -19,6 +20,17 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
+RELEASE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release.yml"
+
+
+def release_summary_step_text() -> str:
+    workflow_text = RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
+    summary_start = workflow_text.rfind("      - name: Summary")
+    assert summary_start != -1, "release.yml must define the create-unified-release Summary step."
+    summary_text = workflow_text[summary_start:]
+    match = re.search(r"run:\s*\|\n(?P<body>(?: {10,}.*\n?)*)", summary_text)
+    assert match is not None, "release.yml Summary step must use a multiline run block."
+    return match.group("body")
 
 
 class FakeGitHubClient:
@@ -271,6 +283,23 @@ def test_dmc_995_service_reports_raw_and_server_references() -> None:
     assert "unsupported raw or server paths" in audit.failures[1].summary.lower()
     assert "workflow summary does not expose a supported cli" in audit.failures[2].summary.lower()
     assert "workflow summary does not expose a supported skill" in audit.failures[3].summary.lower()
+
+
+def test_dmc_995_release_workflow_summary_step_uses_supported_install_urls() -> None:
+    summary_step_text = release_summary_step_text()
+
+    assert "https://github.com/${{ github.repository }}/releases/latest/download/install.sh" in summary_step_text
+    assert "https://github.com/${{ github.repository }}/releases/latest/download/install.ps1" in summary_step_text
+    assert (
+        "https://github.com/${{ github.repository }}/releases/download/"
+        "v${{ needs.version-and-tag.outputs.version }}/skill-install.sh"
+    ) in summary_step_text
+    assert (
+        "https://github.com/${{ github.repository }}/releases/download/"
+        "v${{ needs.version-and-tag.outputs.version }}/skill-install.ps1"
+    ) in summary_step_text
+    assert "raw.githubusercontent.com" not in summary_step_text
+    assert "dmtools-server" not in summary_step_text
 
 
 def test_dmc_995_live_stable_release_workflow_uses_only_supported_cli_and_skill_paths() -> None:
