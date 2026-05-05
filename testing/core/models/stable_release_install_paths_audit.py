@@ -45,6 +45,7 @@ class WorkflowJobRecord:
     html_url: str
     step_names: tuple[str, ...]
     log_text: str
+    summary_text: str
 
 
 @dataclass(frozen=True)
@@ -53,9 +54,11 @@ class StableReleaseInstallPathsAudit:
     workflow_run: WorkflowRunRecord | None
     workflow_job: WorkflowJobRecord | None
     release_urls: tuple[str, ...]
-    workflow_log_urls: tuple[str, ...]
+    workflow_summary_urls: tuple[str, ...]
     release_cli_urls: tuple[str, ...]
     release_skill_urls: tuple[str, ...]
+    workflow_summary_cli_urls: tuple[str, ...]
+    workflow_summary_skill_urls: tuple[str, ...]
     release_forbidden_lines: tuple[str, ...]
-    workflow_log_forbidden_lines: tuple[str, ...]
+    workflow_summary_forbidden_lines: tuple[str, ...]
     failures: tuple[StableReleaseInstallPathsFailure, ...]

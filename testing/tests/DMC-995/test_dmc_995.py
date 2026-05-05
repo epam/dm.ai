@@ -122,9 +122,24 @@ def test_dmc_995_service_accepts_supported_release_asset_paths_only() -> None:
         },
         workflow_logs={
             801: (
-                "2026-05-05T09:59:00Z Release notes generated with "
-                "https://github.com/epam/dm.ai/releases/latest/download/install.sh\n"
-                "2026-05-05T09:59:30Z Summary step completed successfully.\n"
+                "2026-05-05T09:59:00Z Release notes generated.\n"
+                "##[group]Run echo \"### Install DMTools CLI\" >> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-05T09:59:30Z echo \"### Install DMTools CLI\" >> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-05T09:59:31Z echo \"curl -fsSL "
+                "https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash\" "
+                ">> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-05T09:59:32Z echo \"irm "
+                "https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex\" "
+                ">> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-05T09:59:33Z echo \"### Install DMTools Agent Skill\" "
+                ">> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-05T09:59:34Z echo \"curl -fsSL "
+                "https://github.com/epam/dm.ai/releases/download/v1.7.200/skill-install.sh | bash\" "
+                ">> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-05T09:59:35Z echo \"irm "
+                "https://github.com/epam/dm.ai/releases/download/v1.7.200/skill-install.ps1 | iex\" "
+                ">> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-05T09:59:36Z ##[endgroup]\n"
             )
         },
     )
@@ -145,6 +160,14 @@ def test_dmc_995_service_accepts_supported_release_asset_paths_only() -> None:
     assert audit.release is not None
     assert audit.workflow_run is not None
     assert audit.workflow_job is not None
+    assert audit.workflow_job.summary_text == (
+        "### Install DMTools CLI\n"
+        "curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash\n"
+        "irm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex\n"
+        "### Install DMTools Agent Skill\n"
+        "curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.200/skill-install.sh | bash\n"
+        "irm https://github.com/epam/dm.ai/releases/download/v1.7.200/skill-install.ps1 | iex"
+    )
     assert audit.release_cli_urls == (
         "https://github.com/epam/dm.ai/releases/latest/download/install.sh",
         "https://github.com/epam/dm.ai/releases/latest/download/install.ps1",
@@ -153,6 +176,9 @@ def test_dmc_995_service_accepts_supported_release_asset_paths_only() -> None:
         "https://github.com/epam/dm.ai/releases/download/v1.7.200/skill-install.sh",
         "https://github.com/epam/dm.ai/releases/download/v1.7.200/skill-install.ps1",
     )
+    assert audit.workflow_summary_cli_urls == audit.release_cli_urls
+    assert audit.workflow_summary_skill_urls == audit.release_skill_urls
+    assert audit.workflow_summary_forbidden_lines == ()
 
 
 def test_dmc_995_service_reports_raw_and_server_references() -> None:
@@ -203,6 +229,12 @@ def test_dmc_995_service_reports_raw_and_server_references() -> None:
             74120196514: (
                 "curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/v${VERSION}/install.sh | bash\n"
                 "# API_MACOS_ARM_SIZE=$(du -h standalone/api-bundles/dmtools-server-api-macos-aarch64.zip | cut -f1)\n"
+                "##[group]Run echo \"**CLI Tools:**\" >> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-03T14:30:03.5720038Z echo \"**CLI Tools:**\" >> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-03T14:30:03.5721704Z echo \"- install.sh (macOS/Linux)\" >> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-03T14:30:03.5723491Z echo \"**Agent Skill:**\" >> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-03T14:30:03.5725940Z echo \"- skill-install.sh (automatic installer, macOS/Linux)\"  >> $GITHUB_STEP_SUMMARY\n"
+                "2026-05-03T14:30:03.5749190Z ##[endgroup]\n"
             )
         },
     )
@@ -219,18 +251,26 @@ def test_dmc_995_service_reports_raw_and_server_references() -> None:
 
     audit = service.audit()
 
-    assert len(audit.failures) == 3
+    assert len(audit.failures) == 4
     assert audit.failures[0].step == 2
+    assert audit.failures[1].step == 4
+    assert audit.failures[2].step == 9
+    assert audit.failures[3].step == 10
     assert audit.release_forbidden_lines == (
         "curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/main/install | bash",
     )
-    assert audit.workflow_log_forbidden_lines == (
-        "curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/v${VERSION}/install.sh | bash",
-        "# API_MACOS_ARM_SIZE=$(du -h standalone/api-bundles/dmtools-server-api-macos-aarch64.zip | cut -f1)",
+    assert audit.workflow_summary_forbidden_lines == ()
+    assert audit.workflow_job is not None
+    assert audit.workflow_job.summary_text == (
+        "**CLI Tools:**\n"
+        "- install.sh (macOS/Linux)\n"
+        "**Agent Skill:**\n"
+        "- skill-install.sh (automatic installer, macOS/Linux)"
     )
     assert "supported cli install path" in audit.failures[0].summary.lower()
     assert "unsupported raw or server paths" in audit.failures[1].summary.lower()
-    assert "workflow evidence" in audit.failures[2].summary.lower()
+    assert "workflow summary does not expose a supported cli" in audit.failures[2].summary.lower()
+    assert "workflow summary does not expose a supported skill" in audit.failures[3].summary.lower()
 
 
 def test_dmc_995_live_stable_release_workflow_uses_only_supported_cli_and_skill_paths() -> None:

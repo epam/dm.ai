@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from testing.core.models.stable_release_install_paths_audit import (
 
 
 class StableReleaseInstallPathsService:
+    ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
     RAW_GITHUB_PATTERN = re.compile(r"raw\.githubusercontent\.com", re.IGNORECASE)
     UNSUPPORTED_SERVER_PATTERN = re.compile(r"dmtools-server", re.IGNORECASE)
     STABLE_TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+$")
@@ -72,11 +74,13 @@ class StableReleaseInstallPathsService:
                 workflow_run=None,
                 workflow_job=None,
                 release_urls=(),
-                workflow_log_urls=(),
+                workflow_summary_urls=(),
                 release_cli_urls=(),
                 release_skill_urls=(),
+                workflow_summary_cli_urls=(),
+                workflow_summary_skill_urls=(),
                 release_forbidden_lines=(),
-                workflow_log_forbidden_lines=(),
+                workflow_summary_forbidden_lines=(),
                 failures=tuple(failures),
             )
 
@@ -145,11 +149,13 @@ class StableReleaseInstallPathsService:
                 workflow_run=None,
                 workflow_job=None,
                 release_urls=release_urls,
-                workflow_log_urls=(),
+                workflow_summary_urls=(),
                 release_cli_urls=release_cli_urls,
                 release_skill_urls=release_skill_urls,
+                workflow_summary_cli_urls=(),
+                workflow_summary_skill_urls=(),
                 release_forbidden_lines=release_forbidden_lines,
-                workflow_log_forbidden_lines=(),
+                workflow_summary_forbidden_lines=(),
                 failures=tuple(failures),
             )
 
@@ -173,11 +179,13 @@ class StableReleaseInstallPathsService:
                 workflow_run=workflow_run,
                 workflow_job=None,
                 release_urls=release_urls,
-                workflow_log_urls=(),
+                workflow_summary_urls=(),
                 release_cli_urls=release_cli_urls,
                 release_skill_urls=release_skill_urls,
+                workflow_summary_cli_urls=(),
+                workflow_summary_skill_urls=(),
                 release_forbidden_lines=release_forbidden_lines,
-                workflow_log_forbidden_lines=(),
+                workflow_summary_forbidden_lines=(),
                 failures=tuple(failures),
             )
 
@@ -191,32 +199,83 @@ class StableReleaseInstallPathsService:
                 )
             )
 
-        workflow_log_urls = tuple(self.RELEASE_URL_PATTERN.findall(workflow_job.log_text))
-        workflow_log_forbidden_lines = self._forbidden_lines(workflow_job.log_text)
+        workflow_summary_urls = tuple(self.RELEASE_URL_PATTERN.findall(workflow_job.summary_text))
+        workflow_summary_cli_urls = tuple(self.CLI_RELEASE_URL_PATTERN.findall(workflow_job.summary_text))
+        workflow_summary_skill_urls = tuple(
+            self.SKILL_RELEASE_URL_PATTERN.findall(workflow_job.summary_text)
+        )
+        workflow_summary_forbidden_lines = self._forbidden_lines(workflow_job.summary_text)
 
-        if workflow_log_forbidden_lines:
+        if "Summary" in workflow_job.step_names and not workflow_job.summary_text.strip():
             failures.append(
                 StableReleaseInstallPathsFailure(
                     step=8,
-                    summary="The live release workflow evidence still references unsupported raw or server paths.",
+                    summary="The live release workflow Summary output could not be reconstructed.",
                     expected=(
-                        "Workflow evidence for the release should not contain raw.githubusercontent.com "
-                        "or dmtools-server references."
+                        "A user-visible Summary step body showing the generated release copy for CLI "
+                        "and skill installs."
                     ),
-                    actual="\n".join(workflow_log_forbidden_lines),
+                    actual=self._preview(workflow_job.log_text),
                 )
             )
+        elif "Summary" in workflow_job.step_names:
+            if not workflow_summary_cli_urls:
+                failures.append(
+                    StableReleaseInstallPathsFailure(
+                        step=9,
+                        summary=(
+                            "The live release workflow Summary does not expose a supported CLI install path."
+                        ),
+                        expected=(
+                            "At least one GitHub Releases asset URL for the CLI install flow, such as "
+                            "https://github.com/epam/dm.ai/releases/latest/download/install.sh."
+                        ),
+                        actual=self._preview(workflow_job.summary_text),
+                    )
+                )
+
+            if not workflow_summary_skill_urls:
+                failures.append(
+                    StableReleaseInstallPathsFailure(
+                        step=10,
+                        summary=(
+                            "The live release workflow Summary does not expose a supported skill install path."
+                        ),
+                        expected=(
+                            "At least one GitHub Releases asset URL for the skill install flow, such as "
+                            "https://github.com/epam/dm.ai/releases/download/v1.2.3/skill-install.sh."
+                        ),
+                        actual=self._preview(workflow_job.summary_text),
+                    )
+                )
+
+            if workflow_summary_forbidden_lines:
+                failures.append(
+                    StableReleaseInstallPathsFailure(
+                        step=11,
+                        summary=(
+                            "The live release workflow Summary still references unsupported raw or server paths."
+                        ),
+                        expected=(
+                            "Workflow Summary output for the release should not contain "
+                            "raw.githubusercontent.com or dmtools-server references."
+                        ),
+                        actual="\n".join(workflow_summary_forbidden_lines),
+                    )
+                )
 
         return StableReleaseInstallPathsAudit(
             release=release,
             workflow_run=workflow_run,
             workflow_job=workflow_job,
             release_urls=release_urls,
-            workflow_log_urls=workflow_log_urls,
+            workflow_summary_urls=workflow_summary_urls,
             release_cli_urls=release_cli_urls,
             release_skill_urls=release_skill_urls,
+            workflow_summary_cli_urls=workflow_summary_cli_urls,
+            workflow_summary_skill_urls=workflow_summary_skill_urls,
             release_forbidden_lines=release_forbidden_lines,
-            workflow_log_forbidden_lines=workflow_log_forbidden_lines,
+            workflow_summary_forbidden_lines=workflow_summary_forbidden_lines,
             failures=tuple(failures),
         )
 
@@ -269,14 +328,14 @@ class StableReleaseInstallPathsService:
             f"Unified release job visible at {audit.workflow_job.html_url} with steps: "
             + ", ".join(audit.workflow_job.step_names)
         )
-        if audit.workflow_log_forbidden_lines:
+        if audit.workflow_summary_forbidden_lines:
             observations.append(
-                "Unified release job log still shows unsupported markers: "
-                + " | ".join(audit.workflow_log_forbidden_lines)
+                "Workflow Summary still shows unsupported markers: "
+                + " | ".join(audit.workflow_summary_forbidden_lines)
             )
         else:
             observations.append(
-                "Unified release job log did not show raw.githubusercontent.com or dmtools-server."
+                "Workflow Summary did not show raw.githubusercontent.com or dmtools-server."
             )
         return observations
 
@@ -358,12 +417,14 @@ class StableReleaseInstallPathsService:
                 if isinstance(step, dict) and str(step.get("name") or "").strip()
             )
             job_id = int(job_payload["id"])
+            log_text = self.github_client.workflow_job_logs(job_id)
             return WorkflowJobRecord(
                 job_id=job_id,
                 name=self.workflow_job_name,
                 html_url=str(job_payload.get("html_url") or "").strip(),
                 step_names=step_names,
-                log_text=self.github_client.workflow_job_logs(job_id),
+                log_text=log_text,
+                summary_text=self._extract_step_summary(log_text),
             )
         return None
 
@@ -383,6 +444,64 @@ class StableReleaseInstallPathsService:
         if len(collapsed) <= limit:
             return collapsed
         return collapsed[: limit - 3] + "..."
+
+    @staticmethod
+    def _strip_log_prefix(line: str) -> str:
+        without_prefix = re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s+", "", line)
+        return StableReleaseInstallPathsService.ANSI_ESCAPE_PATTERN.sub("", without_prefix)
+
+    @classmethod
+    def _extract_step_summary(cls, log_text: str) -> str:
+        summary_lines: list[str] = []
+        in_summary_group = False
+
+        for raw_line in log_text.splitlines():
+            stripped = cls._strip_log_prefix(raw_line).strip()
+            if not stripped:
+                continue
+
+            if stripped.startswith("##[group]Run ") and "$GITHUB_STEP_SUMMARY" in stripped:
+                in_summary_group = True
+                continue
+
+            if in_summary_group and stripped.startswith("##[endgroup]"):
+                break
+
+            if not in_summary_group or "$GITHUB_STEP_SUMMARY" not in stripped:
+                continue
+
+            content = cls._extract_summary_write_content(stripped)
+            if content is not None:
+                summary_lines.append(content)
+
+        if not summary_lines:
+            for raw_line in log_text.splitlines():
+                stripped = cls._strip_log_prefix(raw_line).strip()
+                if "$GITHUB_STEP_SUMMARY" not in stripped or stripped.startswith("##[group]Run "):
+                    continue
+                content = cls._extract_summary_write_content(stripped)
+                if content is not None:
+                    summary_lines.append(content)
+
+        return "\n".join(summary_lines)
+
+    @staticmethod
+    def _extract_summary_write_content(line: str) -> str | None:
+        normalized = re.sub(r'\s*>>\s*"?\$GITHUB_STEP_SUMMARY"?\s*$', "", line).strip()
+        if not normalized.startswith("echo "):
+            return None
+
+        try:
+            parts = shlex.split(normalized, posix=True)
+        except ValueError:
+            return None
+
+        if not parts or parts[0] != "echo":
+            return None
+
+        if len(parts) == 1:
+            return ""
+        return " ".join(parts[1:])
 
     @staticmethod
     def _parse_github_datetime(value: str) -> datetime:
