@@ -11,7 +11,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from testing.components.factories.beta_release_summary_audit_service_factory import (  # noqa: E402
     create_beta_release_summary_audit_service,
 )
-from testing.components.services.beta_release_summary_audit_service import (  # noqa: E402
+from testing.core.interfaces.beta_release_summary_audit_service import (  # noqa: E402
     BetaReleaseSummaryAuditService,
 )
 from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: E402

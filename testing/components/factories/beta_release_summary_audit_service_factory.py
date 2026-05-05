@@ -4,6 +4,9 @@ import os
 from pathlib import Path
 
 from testing.components.services.beta_release_summary_audit_service import (
+    BetaReleaseSummaryAuditService as BetaReleaseSummaryAuditServiceImpl,
+)
+from testing.core.interfaces.beta_release_summary_audit_service import (
     BetaReleaseSummaryAuditService,
 )
 from testing.frameworks.api.rest.github_actions_release_client import (
@@ -28,7 +31,7 @@ def create_beta_release_summary_audit_service(
     github_token = token if token is not None else os.environ.get("GH_TOKEN") or os.environ.get(
         "GITHUB_TOKEN"
     )
-    return BetaReleaseSummaryAuditService(
+    return BetaReleaseSummaryAuditServiceImpl(
         github_client=GitHubActionsReleaseRestClient(
             owner=owner,
             repo=repo,

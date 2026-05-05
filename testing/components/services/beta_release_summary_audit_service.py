@@ -6,6 +6,12 @@ from threading import Event
 from typing import Any
 from urllib.error import HTTPError
 
+from testing.core.interfaces.beta_release_summary_audit_service import (
+    BetaReleaseSummaryAuditService as BetaReleaseSummaryAuditServiceContract,
+)
+from testing.core.interfaces.github_actions_release_client import (
+    GitHubActionsReleaseClient,
+)
 from testing.core.models.beta_release_summary_audit import (
     BetaReleaseAuditFailure,
     BetaReleaseJobObservation,
@@ -13,12 +19,9 @@ from testing.core.models.beta_release_summary_audit import (
     BetaReleaseRunObservation,
     BetaReleaseSummaryAudit,
 )
-from testing.frameworks.api.rest.github_actions_release_client import (
-    GitHubActionsReleaseRestClient,
-)
 
 
-class BetaReleaseSummaryAuditService:
+class BetaReleaseSummaryAuditService(BetaReleaseSummaryAuditServiceContract):
     RELEASE_BODY_MARKERS = (
         "this is a pre-release / beta build",
         "dmtools cli",
@@ -54,7 +57,7 @@ class BetaReleaseSummaryAuditService:
 
     def __init__(
         self,
-        github_client: GitHubActionsReleaseRestClient,
+        github_client: GitHubActionsReleaseClient,
         *,
         workflow_file: str,
         workflow_ref: str,

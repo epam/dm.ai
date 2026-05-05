@@ -5,13 +5,14 @@ from dataclasses import dataclass
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from testing.core.interfaces.github_actions_release_client import GitHubActionsReleaseClient
 from testing.frameworks.api.rest.github_publication_gate_client import (
     GitHubPublicationGateRestClient,
 )
 
 
 @dataclass(frozen=True)
-class GitHubActionsReleaseRestClient(GitHubPublicationGateRestClient):
+class GitHubActionsReleaseRestClient(GitHubPublicationGateRestClient, GitHubActionsReleaseClient):
     def _request(
         self,
         method: str,
