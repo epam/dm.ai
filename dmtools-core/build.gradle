@@ -76,6 +76,8 @@ dependencies {
     api "org.apache.poi:poi-ooxml:${versions.poi}"
     api 'org.apache.pdfbox:pdfbox:3.0.5'
     api 'io.github.furstenheim:copy_down:1.1'
+    api 'org.apache.xmlgraphics:batik-transcoder:1.18'
+    api 'org.apache.xmlgraphics:batik-codec:1.18'
 
     // Guava and its dependencies
     api "com.google.guava:guava:${versions.guava}"
