@@ -1,0 +1,12 @@
+test_id: DMC-995
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+owner: epam
+repo: dm.ai
+workflow_file: release.yml
+workflow_job_name: create-unified-release
+release_limit: 10
+run_limit: 20
+max_run_match_seconds: 7200
