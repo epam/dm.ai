@@ -9,6 +9,7 @@ import org.apache.batik.transcoder.TranscoderOutput;
 import org.apache.batik.transcoder.image.PNGTranscoder;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 
@@ -72,7 +73,11 @@ public class MermaidToPngRenderer {
                 if (renderFunction == null || !renderFunction.canExecute()) {
                     throw new IllegalStateException("Mermaid renderer did not expose renderMermaidToSvg");
                 }
-                return renderFunction.execute(definition).asString();
+                try {
+                    return renderFunction.execute(definition).asString();
+                } catch (PolyglotException e) {
+                    throw new IllegalArgumentException(e.getMessage(), e);
+                }
             }
         }
     }
