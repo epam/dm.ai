@@ -52,6 +52,9 @@ class DeprecatedWorkflowOutputService:
     STEP_SUMMARY_ECHO_PATTERN = re.compile(
         r"""^\s*echo\s+("([^"\\]|\\.)*"|'[^']*')\s*>>\s*\$GITHUB_STEP_SUMMARY\s*$"""
     )
+    STEP_SUMMARY_RELEASE_NOTES_PATTERN = re.compile(
+        r"^\s*cat\s+release_notes\.md\s*>>\s*\$GITHUB_STEP_SUMMARY\s*$"
+    )
 
     def __init__(
         self,
@@ -226,11 +229,14 @@ class DeprecatedWorkflowOutputService:
 
     def _extract_step_summary(self, workflow_text: str) -> str:
         lines: list[str] = []
+        release_notes = self._extract_release_notes_heredoc(workflow_text)
         for workflow_line in workflow_text.splitlines():
             match = self.STEP_SUMMARY_ECHO_PATTERN.match(workflow_line)
-            if not match:
+            if match:
+                lines.append(self._decode_shell_string(match.group(1)))
                 continue
-            lines.append(self._decode_shell_string(match.group(1)))
+            if release_notes and self.STEP_SUMMARY_RELEASE_NOTES_PATTERN.match(workflow_line):
+                lines.append(release_notes)
         return "\n".join(lines).strip()
 
     @staticmethod
