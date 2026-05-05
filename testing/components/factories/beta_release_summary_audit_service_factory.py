@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
+from testing.components.factories.github_actions_release_client_factory import (
+    create_github_actions_release_client,
+)
 from testing.components.services.beta_release_summary_audit_service import (
     BetaReleaseSummaryAuditService as BetaReleaseSummaryAuditServiceImpl,
 )
 from testing.core.interfaces.beta_release_summary_audit_service import (
     BetaReleaseSummaryAuditService,
-)
-from testing.frameworks.api.rest.github_actions_release_client import (
-    GitHubActionsReleaseRestClient,
 )
 
 
@@ -28,14 +27,11 @@ def create_beta_release_summary_audit_service(
     poll_interval_seconds: int,
     token: str | None = None,
 ) -> BetaReleaseSummaryAuditService:
-    github_token = token if token is not None else os.environ.get("GH_TOKEN") or os.environ.get(
-        "GITHUB_TOKEN"
-    )
     return BetaReleaseSummaryAuditServiceImpl(
-        github_client=GitHubActionsReleaseRestClient(
+        github_client=create_github_actions_release_client(
             owner=owner,
             repo=repo,
-            token=github_token,
+            token=token,
         ),
         workflow_file=workflow_file,
         workflow_ref=workflow_ref,

@@ -6,7 +6,13 @@ from testing.core.interfaces.publication_gate_client import PublicationGateClien
 
 
 class GitHubActionsReleaseClient(PublicationGateClient, Protocol):
-    def dispatch_workflow(self, workflow_id: str, *, ref: str) -> None:
+    def dispatch_workflow(
+        self,
+        workflow_id: str,
+        *,
+        ref: str,
+        inputs: dict[str, object] | None = None,
+    ) -> None:
         raise NotImplementedError
 
     def branch_head_sha(self, branch: str) -> str:
