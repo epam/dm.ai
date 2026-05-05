@@ -25,8 +25,9 @@
       throw new Error('Unsupported flowchart node expression: ' + expression);
     }
     var id = match[1].trim().replace(/\s+/g, '_');
-    var label = match[2] || match[3] || match[4] || match[1].trim();
-    var shape = match[3] ? 'diamond' : 'rect';
+    var explicitLabel = match[2] || match[3] || match[4] || '';
+    var label = explicitLabel || match[1].trim();
+    var shape = match[3] ? 'diamond' : (explicitLabel ? 'rect' : null);
     return { id: id, label: label, shape: shape };
   }
 
@@ -42,6 +43,7 @@
       }
       return existing;
     }
+    parsed.shape = parsed.shape || 'rect';
     nodes[parsed.id] = parsed;
     return parsed;
   }
@@ -150,6 +152,26 @@
     return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
   }
 
+  function edgeAnchor(node, otherNode) {
+    var center = nodeCenter(node);
+    var otherCenter = nodeCenter(otherNode);
+    var dx = otherCenter.x - center.x;
+    var dy = otherCenter.y - center.y;
+    var horizontal = Math.abs(dx) / node.width > Math.abs(dy) / node.height;
+
+    if (horizontal) {
+      return {
+        x: center.x + (dx >= 0 ? node.width / 2 : -node.width / 2),
+        y: center.y
+      };
+    }
+
+    return {
+      x: center.x,
+      y: center.y + (dy >= 0 ? node.height / 2 : -node.height / 2)
+    };
+  }
+
   function renderNode(node) {
     var cx = node.x + node.width / 2;
     var cy = node.y + node.height / 2;
@@ -166,11 +188,26 @@
   }
 
   function renderEdge(edge, graph) {
-    var from = nodeCenter(graph.nodesById[edge.from]);
-    var to = nodeCenter(graph.nodesById[edge.to]);
-    var label = edge.label
-      ? '<text x="' + ((from.x + to.x) / 2) + '" y="' + (((from.y + to.y) / 2) - 8) + '" text-anchor="middle" class="edge-label">' + escapeXml(edge.label) + '</text>'
-      : '';
+    var fromNode = graph.nodesById[edge.from];
+    var toNode = graph.nodesById[edge.to];
+    var from = edgeAnchor(fromNode, toNode);
+    var to = edgeAnchor(toNode, fromNode);
+    var label = '';
+    if (edge.label) {
+      var dx = to.x - from.x;
+      var dy = to.y - from.y;
+      var length = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+      var normalX = -dy / length;
+      var normalY = dx / length;
+      var offset = 18;
+      var labelX = (from.x + to.x) / 2 + normalX * offset;
+      var labelY = (from.y + to.y) / 2 + normalY * offset;
+      var labelWidth = Math.max(34, edge.label.length * 8 + 14);
+      label = '<g class="edge-label">' +
+        '<rect x="' + (labelX - labelWidth / 2) + '" y="' + (labelY - 14) + '" width="' + labelWidth + '" height="20" rx="4"/>' +
+        '<text x="' + labelX + '" y="' + labelY + '" text-anchor="middle">' + escapeXml(edge.label) + '</text>' +
+        '</g>';
+    }
     return '<g class="edge"><line x1="' + from.x + '" y1="' + from.y + '" x2="' + to.x + '" y2="' + to.y + '" marker-end="url(#arrow)"/>' + label + '</g>';
   }
 
@@ -179,7 +216,8 @@
     return '<?xml version="1.0" encoding="UTF-8"?>' +
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + graph.width + '" height="' + graph.height + '" viewBox="0 0 ' + graph.width + ' ' + graph.height + '">' +
       '<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/></marker></defs>' +
-      '<style>.node-shape{fill:#fff;stroke:#333;stroke-width:1.5}.node text,text{font-family:Arial,sans-serif;font-size:14px;fill:#111}.edge line{stroke:#333;stroke-width:1.5}.edge-label{font-size:12px;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}</style>' +
+      '<style>.node-shape{fill:#fff;stroke:#333;stroke-width:1.5}.node text,text{font-family:Arial,sans-serif;font-size:14px;fill:#111}.edge line{stroke:#333;stroke-width:1.5}.edge-label rect{fill:#fff;stroke:#ddd;stroke-width:1}.edge-label text{font-size:12px;dominant-baseline:middle}</style>' +
+      '<rect width="100%" height="100%" fill="#fff"/>' +
       graph.edges.map(function (edge) { return renderEdge(edge, graph); }).join('') +
       graph.nodes.map(renderNode).join('') +
       '</svg>';
