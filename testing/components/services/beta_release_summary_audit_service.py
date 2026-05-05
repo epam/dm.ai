@@ -49,6 +49,9 @@ class BetaReleaseSummaryAuditService(BetaReleaseSummaryAuditServiceContract):
         "skill-checksums.sha256",
     )
     SUMMARY_ECHO_PATTERN = re.compile(r'echo (?P<argument>.+?) >> \$GITHUB_STEP_SUMMARY$')
+    SUMMARY_RELEASE_NOTES_PATTERN = re.compile(
+        r"cat\s+release_notes\.md\s*>>\s*\$GITHUB_STEP_SUMMARY$"
+    )
     ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
     TIMESTAMP_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T[^ ]+\s+")
     RELEASE_URL_PATTERN = re.compile(
@@ -402,17 +405,40 @@ class BetaReleaseSummaryAuditService(BetaReleaseSummaryAuditServiceContract):
 
     def _extract_step_summary_markdown(self, raw_log_text: str) -> str:
         lines: list[str] = []
+        release_notes_markdown = self._extract_release_notes_markdown(raw_log_text)
+        release_notes_added = False
         for raw_line in raw_log_text.splitlines():
             line = self._normalize_log_line(raw_line)
-            if line.startswith("##[group]Run "):
+            is_group_wrapper = line.startswith("##[group]Run ")
+            candidate = line.removeprefix("##[group]Run ").strip()
+            if ">> $GITHUB_STEP_SUMMARY" not in candidate:
                 continue
-            if ">> $GITHUB_STEP_SUMMARY" not in line:
-                continue
-            match = self.SUMMARY_ECHO_PATTERN.search(line)
+            match = None if is_group_wrapper else self.SUMMARY_ECHO_PATTERN.search(candidate)
             if not match:
+                if (
+                    not release_notes_added
+                    and release_notes_markdown
+                    and self.SUMMARY_RELEASE_NOTES_PATTERN.search(candidate)
+                ):
+                    lines.append(release_notes_markdown)
+                    release_notes_added = True
                 continue
             lines.append(self._decode_echo_argument(match.group("argument")))
         return "\n".join(lines).strip()
+
+    def _extract_release_notes_markdown(self, raw_log_text: str) -> str:
+        release_notes_lines: list[str] = []
+        in_release_notes_block = False
+        for raw_line in raw_log_text.splitlines():
+            line = self._normalize_log_line(raw_line)
+            if not in_release_notes_block:
+                if line == "cat > release_notes.md << EOF":
+                    in_release_notes_block = True
+                continue
+            if line == "EOF":
+                break
+            release_notes_lines.append(line)
+        return "\n".join(release_notes_lines).strip()
 
     def _log_excerpt(self, raw_log_text: str, limit: int = 6000) -> str:
         cleaned = "\n".join(self._normalize_log_line(line) for line in raw_log_text.splitlines())
