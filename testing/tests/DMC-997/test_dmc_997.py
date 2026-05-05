@@ -28,8 +28,23 @@ def build_live_service() -> DeprecatedWorkflowOutputService:
     )
 
 
+def build_repository_service() -> DeprecatedWorkflowOutputService:
+    return DeprecatedWorkflowOutputService(
+        workflow_paths=WORKFLOW_PATHS,
+        repository_root=REPOSITORY_ROOT,
+    )
+
+
 def test_dmc_997_live_deprecated_workflow_outputs_are_internal_only() -> None:
     service = build_live_service()
+
+    findings = service.audit()
+
+    assert not findings, service.format_findings(findings)
+
+
+def test_dmc_997_repository_workflow_outputs_are_internal_only() -> None:
+    service = build_repository_service()
 
     findings = service.audit()
 
