@@ -31,7 +31,7 @@ import com.github.istin.dmtools.sync.SourceCodeTrackerSyncJob;
 import com.github.istin.dmtools.teammate.Teammate;
 import com.github.istin.dmtools.js.JSRunner;
 import com.github.istin.dmtools.kb.KBProcessingJob;
-import com.github.istin.dmtools.mermaid.MermaidToPngCommand;
+import com.github.istin.dmtools.mermaid.MermaidRendererCli;
 import com.github.istin.dmtools.mcp.cli.McpCliHandler;
 
 import java.io.InputStream;
@@ -177,8 +177,8 @@ public class JobRunner {
                 System.out.println(result);
                 return;
             }
-            if ("mermaid_to_png".equals(firstArg)) {
-                System.out.println(MermaidToPngCommand.execute(args));
+            if ("mermaid_to_svg".equals(firstArg) || "mermaid_to_png".equals(firstArg)) {
+                System.out.println(MermaidRendererCli.execute(args));
                 return;
             }
             if ("run".equals(firstArg)) {
@@ -286,6 +286,7 @@ public class JobRunner {
         System.out.println("  dmtools run <json-file>                # Execute job with JSON config file");
         System.out.println("  dmtools run <job-name> [--key value]   # Execute a registered job without a config file");
         System.out.println("  dmtools run <json-file> <encoded>      # Execute job with file + encoded overrides");
+        System.out.println("  dmtools mermaid_to_svg \"diagram\"       # Render Mermaid text to an SVG file");
         System.out.println("  dmtools mermaid_to_png \"diagram\"       # Render Mermaid text to a PNG file");
         System.out.println("  dmtools <tool> [args...]              # Execute MCP tool with args");
         System.out.println("  dmtools <tool> --data '{\"json\"}'      # Execute with inline JSON");
@@ -300,6 +301,7 @@ public class JobRunner {
         System.out.println("  dmtools list");
         System.out.println("  dmtools run job-config.json");
         System.out.println("  dmtools run codegenerator --param1 test");
+        System.out.println("  dmtools mermaid_to_svg \"flowchart TD; A[Start] --> B[Done]\" --output diagram.svg");
         System.out.println("  dmtools mermaid_to_png \"flowchart TD; A[Start] --> B[Done]\"");
         System.out.println("  dmtools run job-config.json \"eyJvdmVycmlkZSI6InZhbHVlIn0=\"  # base64 encoded");
         System.out.println("  dmtools run job-config.json \"%7B%22override%22%3A%22value%22%7D\"  # URL encoded");
