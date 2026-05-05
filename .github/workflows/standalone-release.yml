@@ -676,50 +676,14 @@ jobs:
           # 🚧 DMTools Standalone Packaging ${{ github.event.inputs.release_tag }}
 
           > **Deprecated / internal-only workflow.**
-          > The supported user-facing distribution model in this repository is the **DMTools CLI** installer assets and **DMTools Agent Skill** assets published on the main GitHub Releases page.
-
-          ## ✅ Supported public installation paths
-
-          ### DMTools CLI
-
-          **Latest version (recommended)**
-
-          **macOS / Linux / Git Bash:**
-          \`\`\`bash
-          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
-          \`\`\`
-
-          **Windows (PowerShell):**
-          \`\`\`powershell
-          irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex
-          \`\`\`
-
-          **Pinned version (${{ github.event.inputs.release_tag }})**
-
-          **macOS / Linux / Git Bash:**
-          \`\`\`bash
-          curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash -s -- ${{ github.event.inputs.release_tag }}
-          \`\`\`
-
-          **Windows (PowerShell):**
-          \`\`\`powershell
-          \$env:DMTOOLS_VERSION = "${{ github.event.inputs.release_tag }}"
-          irm https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag }}/install.ps1 | iex
-          \`\`\`
-
-          ### DMTools Agent Skill
-
-          Install the maintained skill assets from the main releases flow:
-
-          \`\`\`bash
-          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/skill-install.sh | bash
-          \`\`\`
+          > This release exists only to package compatibility artifacts for internal validation and legacy troubleshooting.
+          > Do not treat this release body as installation guidance or public product documentation.
 
           ## 📦 Assets produced by this workflow
 
-          This release may still publish standalone/server-oriented bundles for compatibility or internal use, but they are **not part of the supported customer-facing install model** described in the README.
+          This release may still publish standalone/server/API-only bundles for compatibility or internal use, but they remain deprecated and are not a supported public distribution surface.
 
-          - CLI compatibility assets mirrored onto this release: \`install\`, \`install.sh\`, \`install.bat\`, \`install.ps1\`, \`dmtools.sh\`, and the CLI fat JAR
+          - CLI compatibility artifacts mirrored onto this release for internal validation and legacy troubleshooting
           - Deprecated/internal standalone artifacts: \`dmtools-standalone.jar\`, \`dmtools-standalone.war\`, portable bundle archives, and API-only bundle archives
 
           ## 📊 Build Information
@@ -738,7 +702,7 @@ jobs:
           ## 📝 Positioning notes
 
           - Treat standalone/server/API-only artifacts as deprecated or internal-only unless Product explicitly reintroduces them as supported offerings.
-          - Do not copy standalone bundle, local-auth, Swagger, or external Flutter repository guidance into customer-facing release communication from this workflow.
+          - Do not copy standalone bundle or legacy service guidance from this workflow into customer-facing release communication.
 
           ## 🐛 Support
 
@@ -798,22 +762,8 @@ jobs:
           echo "**Flutter SPA source tag:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> $GITHUB_STEP_SUMMARY
           echo "**CLI source:** FatJar Release [\`${{ steps.download_cli.outputs.fatjar_source_tag }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.download_cli.outputs.fatjar_source_tag }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ✅ Supported public install paths" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**DMTools CLI (latest):**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**DMTools CLI (pinned - ${{ github.event.inputs.release_tag }}):**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash -s -- ${{ github.event.inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**DMTools Agent Skill (latest):**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/skill-install.sh | bash" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "> Internal-only note: compatibility artifacts are published here for validation and legacy troubleshooting only." >> $GITHUB_STEP_SUMMARY
+          echo "> Do not reuse this workflow summary as customer-facing installation guidance." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Internal/deprecated assets produced by this workflow" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
