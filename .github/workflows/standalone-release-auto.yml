@@ -80,27 +80,65 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.extract_tag.outputs.tag_name }}
-          release_name: "DMTools Standalone ${{ steps.extract_tag.outputs.tag_name }}"
+          release_name: "DMTools Standalone (Deprecated/Internal) ${{ steps.extract_tag.outputs.tag_name }}"
           body: |
-            # 🚀 DMTools Standalone Release (Auto-Generated)
-            
-            Automatically created standalone release with the latest Flutter SPA.
-            
-            **Flutter SPA Version:** ${{ steps.flutter_release.outputs.flutter_tag }}
-            **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-            **Git Commit:** `${{ github.sha }}`
-            
-            ## Quick Start
+            # 🚧 DMTools Standalone Packaging ${{ steps.extract_tag.outputs.tag_name }}
+
+            > **Deprecated / internal-only workflow.**
+            > The supported user-facing distribution model in this repository is the **DMTools CLI** installer assets and **DMTools Agent Skill** assets published on the main GitHub Releases page.
+
+            ## ✅ Supported public installation paths
+
+            ### DMTools CLI
+
+            **Latest version (recommended)**
+
+            **macOS / Linux / Git Bash:**
             ```bash
-            java -jar dmtools-standalone-${{ steps.extract_tag.outputs.tag_name }}.jar
-            # Access at http://localhost:8080
-            # Login: admin / admin
+            curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
             ```
-            
-            ## Requirements
-            - Java 23+
-            - 2GB RAM minimum
-            - Port 8080 available
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex
+            ```
+
+            **Pinned version (${{ steps.extract_tag.outputs.tag_name }})**
+
+            **macOS / Linux / Git Bash:**
+            ```bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_tag.outputs.tag_name }}/install.sh | bash -s -- ${{ steps.extract_tag.outputs.tag_name }}
+            ```
+
+            **Windows (PowerShell):**
+            ```powershell
+            $env:DMTOOLS_VERSION = "${{ steps.extract_tag.outputs.tag_name }}"
+            irm https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_tag.outputs.tag_name }}/install.ps1 | iex
+            ```
+
+            ### DMTools Agent Skill
+
+            ```bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/skill-install.sh | bash
+            ```
+
+            ## 📦 Assets produced by this workflow
+
+            This release may still publish standalone/server-oriented artifacts for compatibility or internal use, but they are **not part of the supported customer-facing install model** described in the README.
+
+            - Deprecated/internal standalone artifacts: `dmtools-standalone-*.jar` and `dmtools-standalone-*.war`
+
+            ## 📊 Build Information
+
+            - **Standalone packaging tag:** ${{ steps.extract_tag.outputs.tag_name }}
+            - **Flutter SPA source tag:** ${{ steps.flutter_release.outputs.flutter_tag }}
+            - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            - **Git Commit:** `${{ github.sha }}`
+
+            ## 📝 Positioning notes
+
+            - Treat standalone/server artifacts as deprecated or internal-only unless Product explicitly reintroduces them as supported offerings.
+            - Do not reuse standalone bundle, local-auth, or local endpoint guidance from this workflow as customer-facing install documentation.
           draft: false
           prerelease: false
 
