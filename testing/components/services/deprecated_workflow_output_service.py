@@ -48,6 +48,14 @@ class DeprecatedWorkflowOutputService:
             "agent skill install command",
             re.compile(r"\bskill-install\.sh\b", re.IGNORECASE),
         ),
+        (
+            "customer-facing install documentation heading",
+            re.compile(r"\binstallation docs?\b", re.IGNORECASE),
+        ),
+        (
+            "public installation documentation link",
+            re.compile(r"https://github\.com/.+#quick-start\b", re.IGNORECASE),
+        ),
     )
     STEP_SUMMARY_ECHO_PATTERN = re.compile(
         r"""^\s*echo\s+("([^"\\]|\\.)*"|'[^']*')\s*>>\s*\$GITHUB_STEP_SUMMARY\s*$"""
@@ -173,7 +181,7 @@ class DeprecatedWorkflowOutputService:
                 self.CUSTOMER_FACING_INSTALL_PATTERNS,
                 expected=(
                     "The published output must not include customer-facing installation headings or "
-                    "actionable install commands."
+                    "actionable install commands, or public installation documentation links."
                 ),
             )
         )

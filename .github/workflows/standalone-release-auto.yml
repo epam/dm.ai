@@ -85,46 +85,12 @@ jobs:
             # 🚧 DMTools Standalone Packaging ${{ steps.extract_tag.outputs.tag_name }}
 
             > **Deprecated / internal-only workflow.**
-            > The supported user-facing distribution model in this repository is the **DMTools CLI** installer assets and **DMTools Agent Skill** assets published on the main GitHub Releases page.
-
-            ## ✅ Supported public installation paths
-
-            ### DMTools CLI
-
-            **Latest version (recommended)**
-
-            **macOS / Linux / Git Bash:**
-            ```bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
-            ```
-
-            **Windows (PowerShell):**
-            ```powershell
-            irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex
-            ```
-
-            **Pinned version (${{ steps.extract_tag.outputs.tag_name }})**
-
-            **macOS / Linux / Git Bash:**
-            ```bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_tag.outputs.tag_name }}/install.sh | bash -s -- ${{ steps.extract_tag.outputs.tag_name }}
-            ```
-
-            **Windows (PowerShell):**
-            ```powershell
-            $env:DMTOOLS_VERSION = "${{ steps.extract_tag.outputs.tag_name }}"
-            irm https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_tag.outputs.tag_name }}/install.ps1 | iex
-            ```
-
-            ### DMTools Agent Skill
-
-            ```bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/skill-install.sh | bash
-            ```
+            > This release exists only to package compatibility artifacts for internal validation and legacy troubleshooting.
+            > Do not treat this release body as installation guidance or public product documentation.
 
             ## 📦 Assets produced by this workflow
 
-            This release may still publish standalone/server-oriented artifacts for compatibility or internal use, but they are **not part of the supported customer-facing install model** described in the README.
+            This release may still publish standalone/server-oriented artifacts for compatibility or internal use, but they remain deprecated and are not a supported public distribution surface.
 
             - Deprecated/internal standalone artifacts: `dmtools-standalone-*.jar` and `dmtools-standalone-*.war`
 
@@ -138,7 +104,7 @@ jobs:
             ## 📝 Positioning notes
 
             - Treat standalone/server artifacts as deprecated or internal-only unless Product explicitly reintroduces them as supported offerings.
-            - Do not reuse standalone bundle, local-auth, or local endpoint guidance from this workflow as customer-facing install documentation.
+            - Do not reuse standalone bundle or legacy service guidance from this workflow as customer-facing install documentation.
           draft: false
           prerelease: false
 
