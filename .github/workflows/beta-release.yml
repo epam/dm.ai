@@ -172,18 +172,15 @@ jobs:
 
           ## 🎯 Quick Install (this beta)
 
-          **macOS / Linux:**
+          **macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fLo install.sh https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/install.sh
-          chmod +x install.sh
-          ./install.sh ${{ needs.version.outputs.tag }}
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/install.sh | bash -s -- ${{ needs.version.outputs.tag }}
           \`\`\`
 
           **Windows (PowerShell):**
           \`\`\`powershell
           \$env:DMTOOLS_VERSION = "${{ needs.version.outputs.tag }}"
-          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/install.ps1" -OutFile "install.ps1"
-          .\install.ps1
+          irm https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/install.ps1 | iex
           \`\`\`
 
           ## 📊 Build Info

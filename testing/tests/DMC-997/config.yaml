@@ -1,0 +1,12 @@
+test_id: DMC-997
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+owner: epam
+repo: dm.ai
+ref: main
+workflow_paths:
+  - .github/workflows/package-standalone.yml
+  - .github/workflows/standalone-release.yml
+  - .github/workflows/standalone-release-auto.yml

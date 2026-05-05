@@ -113,7 +113,7 @@ jobs:
 
       - name: Install DMTools CLI v1.7.180
         run: |
-          curl -fsSL https://raw.githubusercontent.com/epam/dm.ai/v1.7.180/install.sh | bash -s v1.7.180
+          curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.180/install.sh | bash -s -- v1.7.180
 
       - name: Add DMTools to PATH
         run: echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
