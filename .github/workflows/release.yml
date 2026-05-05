@@ -399,12 +399,12 @@ jobs:
 
           **macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install | bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
           \`\`\`
 
-          **Windows (cmd.exe, PowerShell, Windows Terminal):**
-          \`\`\`cmd
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          **Windows (PowerShell):**
+          \`\`\`powershell
+          irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex
           \`\`\`
 
           ### Install DMTools Agent Skill
@@ -442,18 +442,18 @@ jobs:
 
           **DMTools CLI - macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install.sh | bash -s v${VERSION}
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install.sh | bash -s -- v${VERSION}
           \`\`\`
 
           **DMTools CLI - Windows (cmd.exe):**
           \`\`\`cmd
-          set DMTOOLS_VERSION=v${VERSION} && curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          set DMTOOLS_VERSION=v${VERSION} && curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
           \`\`\`
 
           **DMTools CLI - Windows (PowerShell):**
           \`\`\`powershell
           \$env:DMTOOLS_VERSION = "v${VERSION}"
-          Invoke-RestMethod -Uri "https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install.ps1" | Invoke-Expression
+          irm https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install.ps1 | iex
           \`\`\`
           
           ## 📋 System Requirements
