@@ -673,257 +673,77 @@ jobs:
           API_WINDOWS_X64_SIZE="${{ steps.create_api_bundles.outputs.api_windows_x64_size }}"
           
           cat > release_notes.md << EOF
-          # 🚀 DMTools Complete Release
+          # 🚧 DMTools Standalone Packaging ${{ github.event.inputs.release_tag }}
 
-          This release includes both the **DMTools CLI** and **Standalone Server** with Flutter SPA.
+          > **Deprecated / internal-only workflow.**
+          > The supported user-facing distribution model in this repository is the **DMTools CLI** installer assets and **DMTools Agent Skill** assets published on the main GitHub Releases page.
 
-          ## 📦 What's Included
+          ## ✅ Supported public installation paths
 
-          ### 🖥️ DMTools CLI
-          - **Command-line interface** for DMTools operations
-          - **Java-based** automation and integration tools
-          - **Install script** for easy setup (\`install.sh\`)
-          - **Wrapper script** (\`dmtools.sh\`)
+          ### DMTools CLI
 
-          ### 🌐 Standalone Server
-          - **Complete DMTools Server** with embedded Flutter SPA
-          - **Self-contained** - no external database or OAuth setup required
-          - **Local authentication** with admin/admin credentials
-          - **H2 database** for local data storage
-          - **All AI agents and tools** available out of the box
-
-          ## 🎯 Quick Start
-
-          ### DMTools CLI Installation
-
-          **Latest version (recommended):**
+          **Latest version (recommended)**
 
           **macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install | bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
           \`\`\`
 
-          **Windows (cmd.exe, PowerShell, Windows Terminal):**
-          \`\`\`cmd
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          **Windows (PowerShell):**
+          \`\`\`powershell
+          irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex
           \`\`\`
 
-          **This specific version (${{ github.event.inputs.release_tag }}):**
+          **Pinned version (${{ github.event.inputs.release_tag }})**
 
           **macOS / Linux / Git Bash:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.release_tag }}/install.sh | bash -s ${{ github.event.inputs.release_tag }}
-          \`\`\`
-
-          **Windows (cmd.exe):**
-          \`\`\`cmd
-          set DMTOOLS_VERSION=${{ github.event.inputs.release_tag }} && curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.release_tag }}/install.bat -o "%TEMP%\dmtools-install.bat" && "%TEMP%\dmtools-install.bat"
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash -s -- ${{ github.event.inputs.release_tag }}
           \`\`\`
 
           **Windows (PowerShell):**
           \`\`\`powershell
           \$env:DMTOOLS_VERSION = "${{ github.event.inputs.release_tag }}"
-          Invoke-RestMethod -Uri "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.release_tag }}/install.ps1" | Invoke-Expression
+          irm https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag }}/install.ps1 | iex
           \`\`\`
-          
-          ### Standalone Server Options
-          
-          #### Option 1: Portable Bundles (No Java Required) ⭐ NEW!
-          
-          Download the bundle for your platform and run directly:
-          
-          **macOS Apple Silicon:**
+
+          ### DMTools Agent Skill
+
+          Install the maintained skill assets from the main releases flow:
+
           \`\`\`bash
-          # Download dmtools-standalone-macos-aarch64.zip
-          unzip dmtools-standalone-macos-aarch64.zip
-          cd dmtools-standalone-macos-aarch64
-          ./run.sh
+          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/skill-install.sh | bash
           \`\`\`
-          
-          **macOS Intel:**
-          \`\`\`bash
-          # Download dmtools-standalone-macos-x64.zip
-          unzip dmtools-standalone-macos-x64.zip
-          cd dmtools-standalone-macos-x64
-          ./run.sh
-          \`\`\`
-          
-          ⚠️ **macOS Security Note:** If you see '"java" Not Opened' security warning:
-          - **Option 1:** Click "Done", then run: \`xattr -dr com.apple.quarantine .\`
-          - **Option 2:** Go to System Preferences → Privacy & Security → Allow
-          - **Option 3:** Right-click \`run.sh\` → Open → Open (bypass Gatekeeper)
-          
-          **Windows:**
-          \`\`\`cmd
-          :: Download dmtools-standalone-windows-x64.zip
-          unzip dmtools-standalone-windows-x64.zip
-          cd dmtools-standalone-windows-x64
-          run.cmd
-          \`\`\`
-          
-          ⚠️ **Windows Security Note:** If Windows Defender blocks execution:
-          - Click "More info" → "Run anyway"
-          - Or add folder to Windows Defender exclusions
-          
-          #### Option 2: JAR (Requires Java 23+)
-          \`\`\`bash
-          # Download and run
-          java -jar dmtools-standalone.jar
-          
-          # Access at http://localhost:8080
-          # Login: admin / admin
-          \`\`\`
-          
-          #### Option 3: WAR (for application servers)
-          Deploy \`dmtools-standalone.war\` to your favorite servlet container (Tomcat, Jetty, etc.)
-          
-          ### API-Only Server Bundles (No UI)
-          
-          For headless deployments, custom frontends, or API-only usage, we provide server bundles without the Flutter UI:
-          
-          **macOS Apple Silicon:**
-          \`\`\`bash
-          # Download dmtools-server-api-macos-aarch64.zip
-          unzip dmtools-server-api-macos-aarch64.zip
-          cd dmtools-server-api-macos-aarch64
-          ./run.sh
-          \`\`\`
-          
-          **macOS Intel:**
-          \`\`\`bash
-          # Download dmtools-server-api-macos-x64.zip
-          unzip dmtools-server-api-macos-x64.zip
-          cd dmtools-server-api-macos-x64
-          ./run.sh
-          \`\`\`
-          
-          **Windows:**
-          \`\`\`cmd
-          :: Download dmtools-server-api-windows-x64.zip
-          unzip dmtools-server-api-windows-x64.zip
-          cd dmtools-server-api-windows-x64
-          run.cmd
-          \`\`\`
-          
-          **Use Cases:**
-          - Custom frontend development
-          - API-only integrations
-          - Headless automation servers
-          - CI/CD environments
-          - Microservices architecture
-          
-          **Note:** API-only bundles include embedded JRE (no Java required) but no web UI. Access the API at \`http://localhost:8080/api\` and Swagger UI at \`http://localhost:8080/swagger-ui.html\`.
-          
-          ## 📋 System Requirements
-          
-          ### Portable Bundles (Recommended)
-          - **No Java installation required** ✅
-          - **2GB RAM** minimum, 4GB recommended
-          - **1GB disk space** for application and data
-          - **Port 8080** available (configurable)
-          
-          ### JAR/WAR Options
-          - **Java 23+** (required)
-          - **2GB RAM** minimum, 4GB recommended
-          - **1GB disk space** for application and data
-          - **Port 8080** available (configurable)
-          
-          ## 🔧 Configuration
-          
-          The standalone version uses embedded configuration but can be customized:
-          
-          \`\`\`bash
-          # Custom port
-          java -jar dmtools-standalone.jar --server.port=9090
-          
-          # Custom database location
-          java -jar dmtools-standalone.jar --spring.datasource.url=jdbc:h2:./my-data/dmtools-db
-          
-          # Enable debug logging
-          java -jar dmtools-standalone.jar --logging.level.com.github.istin.dmtools=DEBUG
-          \`\`\`
-          
+
+          ## 📦 Assets produced by this workflow
+
+          This release may still publish standalone/server-oriented bundles for compatibility or internal use, but they are **not part of the supported customer-facing install model** described in the README.
+
+          - CLI compatibility assets mirrored onto this release: \`install\`, \`install.sh\`, \`install.bat\`, \`install.ps1\`, \`dmtools.sh\`, and the CLI fat JAR
+          - Deprecated/internal standalone artifacts: \`dmtools-standalone.jar\`, \`dmtools-standalone.war\`, portable bundle archives, and API-only bundle archives
+
           ## 📊 Build Information
-          
-          - **Flutter SPA Version:** ${FLUTTER_TAG}
-          - **CLI Source:** FatJar Release [\`${FATJAR_SOURCE}\`](https://github.com/${{ github.repository }}/releases/tag/${FATJAR_SOURCE})
+
+          - **Standalone packaging tag:** ${{ github.event.inputs.release_tag }}
+          - **Flutter SPA source tag:** ${FLUTTER_TAG}
+          - **CLI source release:** [\`${FATJAR_SOURCE}\`](https://github.com/${{ github.repository }}/releases/tag/${FATJAR_SOURCE})
           - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
           - **CLI JAR Size:** ${CLI_JAR_SIZE}
           - **Standalone JAR Size:** ${JAR_SIZE}
           - **Standalone WAR Size:** ${WAR_SIZE}
-          - **Standalone Bundles (with UI):**
-            - macOS Apple Silicon: ${MACOS_ARM_SIZE}
-            - macOS Intel: ${MACOS_X64_SIZE}
-            - Windows x64: ${WINDOWS_X64_SIZE}
-          - **API-Only Bundles (no UI):**
-            - macOS Apple Silicon: ${API_MACOS_ARM_SIZE}
-            - macOS Intel: ${API_MACOS_X64_SIZE}
-            - Windows x64: ${API_WINDOWS_X64_SIZE}
+          - **Standalone bundle sizes:** macOS Apple Silicon ${MACOS_ARM_SIZE}, macOS Intel ${MACOS_X64_SIZE}, Windows x64 ${WINDOWS_X64_SIZE}
+          - **API-only bundle sizes:** macOS Apple Silicon ${API_MACOS_ARM_SIZE}, macOS Intel ${API_MACOS_X64_SIZE}, Windows x64 ${API_WINDOWS_X64_SIZE}
           - **Git Commit:** \`${GITHUB_SHA:0:8}\`
-          
-          ## 🔒 Security Notes
-          
-          - Default credentials are **admin/admin** - change them in production
-          - Uses local H2 database with file storage
-          - JWT tokens for session management
-          - No external OAuth dependencies
-          
-          ## 📚 Documentation
-          
-          - **API Documentation:** Available at \`/swagger-ui.html\` after startup
-          - **H2 Console:** Available at \`/h2-console\` (development only)
-          - **Health Check:** \`/actuator/health\`
-          
-          ## 🐛 Troubleshooting
-          
-          ### Common Issues
-          
-          1. **Port already in use:** Use \`--server.port=XXXX\` to change port
-          2. **Java version (JAR only):** Ensure Java 23+ is installed (\`java -version\`)
-          3. **Memory issues:** Increase heap size with \`-Xmx4g\`
-          4. **Database locked:** Ensure no other instances are running
-          
-          ### Security Warnings (Portable Bundles)
-          
-          #### macOS "java Not Opened" Warning
-          This happens because the embedded Java runtime isn't code-signed by Apple.
-          
-          **Quick Fix:**
-          \`\`\`bash
-          # Navigate to the extracted bundle directory
-          cd dmtools-standalone-macos-*
-          # Remove quarantine attribute
-          xattr -dr com.apple.quarantine .
-          # Now run normally
-          ./run.sh
-          \`\`\`
-          
-          **Alternative Methods:**
-          - **System Preferences:** Go to System Preferences → Privacy & Security → Allow
-          - **Right-click method:** Right-click \`run.sh\` → Open → Open (bypasses Gatekeeper)
-          - **Terminal override:** \`sudo spctl --master-disable\` (not recommended)
-          
-          #### Windows Defender Warning
-          Windows may flag the Java executable as potentially harmful.
-          
-          **Quick Fix:**
-          1. Click "More info" when Windows Defender appears
-          2. Click "Run anyway"
-          
-          **Permanent Fix:**
-          1. Open Windows Security → Virus & threat protection
-          2. Add an exclusion for the DMTools folder
-          3. Choose "Folder" and select your \`dmtools-standalone-windows-x64\` directory
-          
-          ### Getting Help
-          
+
+          ## 📝 Positioning notes
+
+          - Treat standalone/server/API-only artifacts as deprecated or internal-only unless Product explicitly reintroduces them as supported offerings.
+          - Do not copy standalone bundle, local-auth, Swagger, or external Flutter repository guidance into customer-facing release communication from this workflow.
+
+          ## 🐛 Support
+
           - **Issues:** [GitHub Issues](https://github.com/${{ github.repository }}/issues)
-          - **Documentation:** [Main Repository](https://github.com/${{ github.repository }})
-          - **Flutter SPA:** [Flutter Repository](https://github.com/IstiN/dmtools-flutter)
-          
-          ---
-          
-          **Note:** This standalone release is perfect for local development, demos, and small team deployments. For production enterprise use, consider the full OAuth2-enabled deployment.
+          - **Installation docs:** [README](https://github.com/${{ github.repository }}#quick-start)
           EOF
           
           echo "Release notes generated"
@@ -935,7 +755,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
-          name: "DMTools Complete ${{ github.event.inputs.release_tag }}"
+          name: "DMTools Standalone (Deprecated/Internal) ${{ github.event.inputs.release_tag }}"
           body_path: release_notes.md
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
@@ -971,64 +791,36 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## 🎉 Complete Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚧 Deprecated Standalone Packaging Release Created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Release:** [${{ github.event.inputs.release_tag }}](${{ steps.create_release.outputs.url }})" >> $GITHUB_STEP_SUMMARY
-          echo "**Flutter SPA:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "**CLI Source:** FatJar Release [\`${{ steps.download_cli.outputs.fatjar_source_tag }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.download_cli.outputs.fatjar_source_tag }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Positioning:** Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY
+          echo "**Flutter SPA source tag:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI source:** FatJar Release [\`${{ steps.download_cli.outputs.fatjar_source_tag }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.download_cli.outputs.fatjar_source_tag }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Artifacts Created" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Supported public install paths" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**CLI Tools:**" >> $GITHUB_STEP_SUMMARY
-          echo "- **CLI JAR:** ${{ steps.download_cli.outputs.cli_jar_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **install.sh** (included)" >> $GITHUB_STEP_SUMMARY
-          echo "- **dmtools.sh** (included)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Standalone Server (with UI):**" >> $GITHUB_STEP_SUMMARY
-          echo "- **JAR:** ${{ steps.create_standalone.outputs.jar_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **WAR:** ${{ steps.create_standalone.outputs.war_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **macOS Apple Silicon Bundle:** ${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **macOS Intel Bundle:** ${{ steps.create_portable_bundles.outputs.macos_x64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Windows x64 Bundle:** ${{ steps.create_portable_bundles.outputs.windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**API-Only Server (no UI):**" >> $GITHUB_STEP_SUMMARY
-          echo "- **macOS Apple Silicon Bundle:** ${{ steps.create_api_bundles.outputs.api_macos_aarch64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **macOS Intel Bundle:** ${{ steps.create_api_bundles.outputs.api_macos_x64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Windows x64 Bundle:** ${{ steps.create_api_bundles.outputs.api_windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🚀 Quick Start Options" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**CLI Installation (Latest):**" >> $GITHUB_STEP_SUMMARY
+          echo "**DMTools CLI (latest):**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# macOS / Linux / Git Bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install | bash" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Windows" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.bat -o \"%TEMP%\\dmtools-install.bat\" && \"%TEMP%\\dmtools-install.bat\"" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**CLI Installation (This Version - ${{ github.event.inputs.release_tag }}):**" >> $GITHUB_STEP_SUMMARY
+          echo "**DMTools CLI (pinned - ${{ github.event.inputs.release_tag }}):**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# macOS / Linux / Git Bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.release_tag }}/install.sh | bash -s ${{ github.event.inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Windows cmd.exe" >> $GITHUB_STEP_SUMMARY
-          echo "set DMTOOLS_VERSION=${{ github.event.inputs.release_tag }} && curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.release_tag }}/install.bat -o \"%TEMP%\\dmtools-install.bat\" && \"%TEMP%\\dmtools-install.bat\"" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag }}/install.sh | bash -s -- ${{ github.event.inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Standalone Server - Option 1: Portable Bundle (No Java Required) ⭐**" >> $GITHUB_STEP_SUMMARY
+          echo "**DMTools Agent Skill (latest):**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# Download the appropriate bundle for your platform, then:" >> $GITHUB_STEP_SUMMARY
-          echo "unzip dmtools-standalone-<platform>.zip" >> $GITHUB_STEP_SUMMARY
-          echo "cd dmtools-standalone-<platform>" >> $GITHUB_STEP_SUMMARY
-          echo "./run.sh  # (macOS) or run.cmd (Windows)" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/skill-install.sh | bash" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ **Security Note:** If you see warnings, check the release notes for bypass instructions" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Internal/deprecated assets produced by this workflow" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Standalone Server - Option 2: JAR (Requires Java 23+)**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "java -jar dmtools-standalone.jar" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "- CLI compatibility assets mirrored onto this release" >> $GITHUB_STEP_SUMMARY
+          echo "- Standalone JAR: ${{ steps.create_standalone.outputs.jar_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Standalone WAR: ${{ steps.create_standalone.outputs.war_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Portable bundles: macOS Apple Silicon ${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}, macOS Intel ${{ steps.create_portable_bundles.outputs.macos_x64_size }}, Windows x64 ${{ steps.create_portable_bundles.outputs.windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- API-only bundles: macOS Apple Silicon ${{ steps.create_api_bundles.outputs.api_macos_aarch64_size }}, macOS Intel ${{ steps.create_api_bundles.outputs.api_macos_x64_size }}, Windows x64 ${{ steps.create_api_bundles.outputs.api_windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Access:** http://localhost:8080 | **Login:** admin / admin" >> $GITHUB_STEP_SUMMARY
+          echo "> Do not reuse standalone/server/API-only bundle guidance from this workflow as customer-facing install documentation." >> $GITHUB_STEP_SUMMARY

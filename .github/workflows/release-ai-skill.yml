@@ -149,10 +149,10 @@ jobs:
 
           ## 🔄 Updating
 
-          Re-run the installer to update:
-          ```bash
-          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
-          ```
+           This standalone skill-release workflow is deprecated. For ongoing updates, use the maintained unified release installer:
+           ```bash
+           curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/skill-install.sh | bash
+           ```
 
           ## 📝 Changelog
 
