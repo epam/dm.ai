@@ -50,6 +50,15 @@ class GitHubPublicationGateRestClient(PublicationGateClient):
             raise AssertionError(f"Expected a list of pull requests, got: {type(response)!r}")
         return response
 
+    def list_releases(self, limit: int = 20) -> list[dict[str, Any]]:
+        response = self._get_json(
+            f"/repos/{self.owner}/{self.repo}/releases",
+            {"per_page": limit},
+        )
+        if not isinstance(response, list):
+            raise AssertionError(f"Expected a list of releases, got: {type(response)!r}")
+        return response
+
     def pull_request_files(self, number: int) -> list[dict[str, Any]]:
         response = self._get_json(
             f"/repos/{self.owner}/{self.repo}/pulls/{number}/files",
@@ -87,6 +96,34 @@ class GitHubPublicationGateRestClient(PublicationGateClient):
         response = self._get_json(
             f"/repos/{self.owner}/{self.repo}/actions/runs",
             {"head_sha": head_sha, "status": "completed", "per_page": 100},
+        )
+        if not isinstance(response, dict):
+            raise AssertionError(f"Expected a workflow-runs payload dict, got: {type(response)!r}")
+        workflow_runs = response.get("workflow_runs", [])
+        if not isinstance(workflow_runs, list):
+            raise AssertionError(f"Expected a list of workflow runs, got: {type(workflow_runs)!r}")
+        return workflow_runs
+
+    def workflow_runs(
+        self,
+        workflow_file: str,
+        *,
+        branch: str | None = None,
+        event: str | None = None,
+        status: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        query: dict[str, str | int] = {"per_page": limit}
+        if branch:
+            query["branch"] = branch
+        if event:
+            query["event"] = event
+        if status:
+            query["status"] = status
+
+        response = self._get_json(
+            f"/repos/{self.owner}/{self.repo}/actions/workflows/{workflow_file}/runs",
+            query,
         )
         if not isinstance(response, dict):
             raise AssertionError(f"Expected a workflow-runs payload dict, got: {type(response)!r}")
