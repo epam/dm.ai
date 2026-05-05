@@ -534,22 +534,19 @@ jobs:
           echo "**Version:** v${{ needs.version-and-tag.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Previous Version:** ${{ needs.version-and-tag.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Artifacts Included" >> $GITHUB_STEP_SUMMARY
+          echo "### Install DMTools CLI" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**CLI Tools:**" >> $GITHUB_STEP_SUMMARY
-          echo "- CLI JAR (dmtools-v${{ needs.version-and-tag.outputs.version }}-all.jar)" >> $GITHUB_STEP_SUMMARY
-          echo "- install (cross-platform wrapper)" >> $GITHUB_STEP_SUMMARY
-          echo "- install.sh (macOS/Linux)" >> $GITHUB_STEP_SUMMARY
-          echo "- install.bat (Windows cmd.exe)" >> $GITHUB_STEP_SUMMARY
-          echo "- install.ps1 (Windows PowerShell)" >> $GITHUB_STEP_SUMMARY
-          echo "- dmtools.sh" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash" >> $GITHUB_STEP_SUMMARY
+          echo "irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Agent Skill:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Skill ZIP (dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.zip)" >> $GITHUB_STEP_SUMMARY
-          echo "- Skill TAR (dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz)" >> $GITHUB_STEP_SUMMARY
-          echo "- Focused packages: dmtools-jira-skill, dmtools-github-skill, dmtools-ado-skill, dmtools-testrail-skill" >> $GITHUB_STEP_SUMMARY
-          echo "- skill-install.sh (automatic installer, macOS/Linux)"  >> $GITHUB_STEP_SUMMARY
-          echo "- skill-install.ps1 (automatic installer, Windows PowerShell)" >> $GITHUB_STEP_SUMMARY
-          echo "- skill-checksums.sha256 (checksums)" >> $GITHUB_STEP_SUMMARY
+          echo "### Install DMTools Agent Skill" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ needs.version-and-tag.outputs.version }}/skill-install.sh | bash" >> $GITHUB_STEP_SUMMARY
+          echo "irm https://github.com/${{ github.repository }}/releases/download/v${{ needs.version-and-tag.outputs.version }}/skill-install.ps1 | iex" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Included Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**CLI Tools:** CLI JAR, install wrapper, install.sh, install.bat, install.ps1, dmtools.sh" >> $GITHUB_STEP_SUMMARY
+          echo "**Agent Skill:** Skill ZIP, Skill TAR, focused skill packages, skill-install.sh, skill-install.ps1, skill-checksums.sha256" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ All artifacts compiled, tested, and packaged successfully!" >> $GITHUB_STEP_SUMMARY
