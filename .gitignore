@@ -99,6 +99,7 @@ data/*.mv.db
 # Security files
 cookies.txt
 jwt_token.txt
+teams.token
 
 # ---------------------------------
 # IDE & Editor Configurations
