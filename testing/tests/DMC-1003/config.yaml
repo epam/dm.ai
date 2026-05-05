@@ -24,5 +24,5 @@ standalone_require_step_summary: true
 standalone_auto_workflow_file: standalone-release-auto.yml
 standalone_auto_workflow_name: Auto Standalone Release
 standalone_auto_release_job_name: auto-standalone-release
-standalone_auto_require_step_summary: false
-standalone_auto_reuse_existing_release: true
+standalone_auto_require_step_summary: true
+standalone_auto_reuse_existing_release: false
