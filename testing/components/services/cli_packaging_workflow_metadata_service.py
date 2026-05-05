@@ -57,14 +57,8 @@ class CliPackagingWorkflowMetadataService:
     FORBIDDEN_LEGACY_PHRASES = ("server", "api-only", "api only")
 
     _WORKFLOW_NAME_PATTERN = re.compile(r"^name:\s*(?P<value>.+?)\s*$", re.MULTILINE)
-    _OUTPUT_DESCRIPTION_PATTERN = re.compile(
-        r"(?ms)outputs:\s+artifact_name:\s+description:\s*['\"](?P<value>.+?)['\"]\s+value:"
-    )
-    _OUTPUT_VALUE_PATTERN = re.compile(
-        r"(?ms)outputs:\s+artifact_name:\s+description:\s*['\"].+?['\"]\s+value:\s*(?P<value>[^\n]+)"
-    )
     _STEP_NAME_PATTERN = re.compile(r"^\s*-\s+name:\s*(?P<value>.+?)\s*$", re.MULTILINE)
-    _ECHO_MESSAGE_PATTERN = re.compile(r'echo\s+"(?P<value>[^"]+)"')
+    _ECHO_MESSAGE_PATTERN = re.compile(r"""echo\s+(?P<quote>['"])(?P<value>.+?)(?P=quote)""")
     _COPY_COMMAND_PATTERN = re.compile(
         r"^\s*(?P<value>cp\s+build-artifacts/.+?)\s*$", re.MULTILINE
     )
@@ -75,11 +69,13 @@ class CliPackagingWorkflowMetadataService:
         self.workflow_text = self.workflow_path.read_text(encoding="utf-8")
 
     def observation(self) -> WorkflowMetadataObservation:
+        artifact_output_metadata = self._artifact_output_metadata()
+
         return WorkflowMetadataObservation(
             workflow_relative_path=self.WORKFLOW_RELATIVE_PATH,
-            workflow_name=self._first_match(self._WORKFLOW_NAME_PATTERN),
-            artifact_output_description=self._first_match(self._OUTPUT_DESCRIPTION_PATTERN),
-            artifact_output_value=self._first_match(self._OUTPUT_VALUE_PATTERN).strip(),
+            workflow_name=self._normalize_scalar(self._first_match(self._WORKFLOW_NAME_PATTERN)),
+            artifact_output_description=artifact_output_metadata["description"],
+            artifact_output_value=artifact_output_metadata["value"],
             step_names=tuple(self._all_matches(self._STEP_NAME_PATTERN)),
             surfaced_messages=tuple(self._all_matches(self._ECHO_MESSAGE_PATTERN)),
             packaged_artifact_commands=tuple(
@@ -216,3 +212,112 @@ class CliPackagingWorkflowMetadataService:
         raise AssertionError(
             f"Expected to find pattern {pattern.pattern!r} in {self.workflow_path}"
         )
+
+    def _artifact_output_metadata(self) -> dict[str, str]:
+        lines = self.workflow_text.splitlines()
+
+        on_index, on_indent = self._find_named_block(lines, "on")
+        workflow_call_index, workflow_call_indent = self._find_named_block(
+            lines,
+            "workflow_call",
+            start=on_index + 1,
+            parent_indent=on_indent,
+        )
+        outputs_index, outputs_indent = self._find_named_block(
+            lines,
+            "outputs",
+            start=workflow_call_index + 1,
+            parent_indent=workflow_call_indent,
+        )
+        artifact_index, artifact_indent = self._find_named_block(
+            lines,
+            "artifact_name",
+            start=outputs_index + 1,
+            parent_indent=outputs_indent,
+        )
+        artifact_lines = self._collect_child_lines(lines, artifact_index + 1, artifact_indent)
+        artifact_metadata = self._parse_mapping_block(artifact_lines)
+
+        missing_fields = [
+            field_name for field_name in ("description", "value") if field_name not in artifact_metadata
+        ]
+        if missing_fields:
+            raise AssertionError(
+                f"Expected artifact_name output metadata to define {', '.join(missing_fields)} in {self.workflow_path}"
+            )
+
+        return {
+            "description": artifact_metadata["description"],
+            "value": artifact_metadata["value"],
+        }
+
+    @staticmethod
+    def _find_named_block(
+        lines: list[str],
+        key: str,
+        *,
+        start: int = 0,
+        parent_indent: int | None = None,
+    ) -> tuple[int, int]:
+        prefix = f"{key}:"
+        for index in range(start, len(lines)):
+            line = lines[index]
+            stripped_line = line.strip()
+
+            if not stripped_line or stripped_line.startswith("#"):
+                continue
+
+            indent = len(line) - len(line.lstrip(" "))
+            if parent_indent is not None and indent <= parent_indent:
+                break
+
+            if stripped_line == prefix:
+                return index, indent
+
+        raise AssertionError(f"Expected to find {prefix!r} in {lines}")
+
+    @staticmethod
+    def _collect_child_lines(lines: list[str], start: int, parent_indent: int) -> list[str]:
+        block_lines: list[str] = []
+        for index in range(start, len(lines)):
+            line = lines[index]
+            stripped_line = line.strip()
+
+            if not stripped_line:
+                block_lines.append(line)
+                continue
+
+            indent = len(line) - len(line.lstrip(" "))
+            if indent <= parent_indent:
+                break
+
+            block_lines.append(line)
+
+        return block_lines
+
+    @classmethod
+    def _parse_mapping_block(cls, lines: list[str]) -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        for line in lines:
+            stripped_line = line.strip()
+            if not stripped_line or stripped_line.startswith("#") or stripped_line.startswith("- "):
+                continue
+
+            if ":" not in stripped_line:
+                continue
+
+            key, raw_value = stripped_line.split(":", 1)
+            value = raw_value.strip()
+            if not value:
+                continue
+
+            mapping[key.strip()] = cls._normalize_scalar(value)
+
+        return mapping
+
+    @staticmethod
+    def _normalize_scalar(value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {"'", '"'}:
+            return normalized[1:-1]
+        return normalized
