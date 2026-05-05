@@ -707,7 +707,6 @@ jobs:
           ## 🐛 Support
 
           - **Issues:** [GitHub Issues](https://github.com/${{ github.repository }}/issues)
-          - **Installation docs:** [README](https://github.com/${{ github.repository }}#quick-start)
           EOF
           
           echo "Release notes generated"
