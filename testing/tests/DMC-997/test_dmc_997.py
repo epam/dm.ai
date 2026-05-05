@@ -182,3 +182,34 @@ jobs:
     assert any("customer-facing install heading" in finding.summary for finding in findings)
     assert any("customer-facing install command" in finding.summary for finding in findings)
     assert any("Swagger guidance reference" in finding.summary for finding in findings)
+
+
+def test_dmc_997_service_reads_release_notes_backed_step_summary() -> None:
+    service = DeprecatedWorkflowOutputService(
+        workflow_paths=(".github/workflows/standalone-release.yml",),
+        workflow_text_by_path={
+            ".github/workflows/standalone-release.yml": """
+jobs:
+  release:
+    steps:
+      - name: Generate Release Notes
+        run: |
+          cat > release_notes.md << EOF
+          > **Deprecated / internal-only workflow.**
+          curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+          EOF
+      - name: Summarize release
+        run: |
+          cat release_notes.md >> $GITHUB_STEP_SUMMARY
+""".strip()
+        },
+    )
+
+    surfaces = service.output_surfaces()
+
+    assert any(
+        surface.surface_name == "step summary"
+        and "Deprecated / internal-only workflow." in surface.content
+        and "install.sh | bash" in surface.content
+        for surface in surfaces
+    )

@@ -225,9 +225,4 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## 🧪 Beta Release Created" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** \`${{ needs.version.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** \`${GITHUB_SHA:0:8}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> ℹ️ Marked as **pre-release** — stable \`latest\` is unaffected." >> $GITHUB_STEP_SUMMARY
+          cat release_notes.md >> $GITHUB_STEP_SUMMARY
