@@ -1,0 +1,14 @@
+test_id: DMC-996
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+owner: epam
+repo: dm.ai
+workflow_file: beta-release.yml
+workflow_ref: main
+workflow_name: Beta Release
+release_job_name: create-beta-release
+dispatch_timeout_seconds: 300
+completion_timeout_seconds: 3600
+poll_interval_seconds: 20
