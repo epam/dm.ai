@@ -104,6 +104,7 @@ dependencies {
     
     // MCP annotations from separate module
     api project(':dmtools-mcp-annotations')
+    api 'com.github.istin:dmtools-mermaid-renderer:0.1.0-SNAPSHOT'
     
     // MCP Tools annotation processor - now in separate module
     annotationProcessor project(':dmtools-annotation-processor')

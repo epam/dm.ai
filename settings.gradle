@@ -1,2 +1,3 @@
 rootProject.name = 'dmtools-cli'
 include 'dmtools-core', 'dmtools-mcp-annotations', 'dmtools-annotation-processor'
+includeBuild 'dmtools-mermaid-renderer'

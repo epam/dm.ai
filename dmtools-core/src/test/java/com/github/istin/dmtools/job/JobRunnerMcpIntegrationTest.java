@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.Permission;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -108,6 +111,45 @@ public class JobRunnerMcpIntegrationTest {
         // Both are valid responses for CLI
         assertTrue(output.contains("{") || errorOutput.contains("error") || 
                   output.contains("error") || output.contains("Issue does not exist"));
+    }
+
+    @Test
+    @DisplayName("Should render Mermaid SVG command")
+    void testMermaidToSvgCommand() throws Exception {
+        Path output = Files.createTempFile("dmtools-mermaid-", ".svg");
+        try {
+            JobRunner.main(new String[]{
+                    "mermaid_to_svg",
+                    "flowchart TD; A[Start] --> B[Done]",
+                    "--output",
+                    output.toString()
+            });
+
+            assertTrue(outContent.toString().contains(output.toAbsolutePath().normalize().toString()));
+            assertTrue(Files.readString(output, StandardCharsets.UTF_8).contains("<svg"));
+        } finally {
+            Files.deleteIfExists(output);
+        }
+    }
+
+    @Test
+    @DisplayName("Should render Mermaid PNG command")
+    void testMermaidToPngCommand() throws Exception {
+        Path output = Files.createTempFile("dmtools-mermaid-", ".png");
+        try {
+            JobRunner.main(new String[]{
+                    "mermaid_to_png",
+                    "flowchart TD; A[Start] --> B[Done]",
+                    "--output",
+                    output.toString()
+            });
+
+            assertTrue(outContent.toString().contains(output.toAbsolutePath().normalize().toString()));
+            byte[] header = Files.readAllBytes(output);
+            assertArrayEquals(new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47}, new byte[]{header[0], header[1], header[2], header[3]});
+        } finally {
+            Files.deleteIfExists(output);
+        }
     }
 
 }
