@@ -14,7 +14,7 @@ on:
         default: 'v1.0.0-standalone'
         type: string
       fatjar_release_tag:
-        description: 'FatJar release tag to use for CLI (optional, auto-detects from release_tag)'
+        description: 'FatJar release tag to reference in the deprecated release notes (optional)'
         required: false
         default: ''
         type: string
@@ -26,42 +26,36 @@ on:
 
 permissions:
   contents: write
-  checks: write
-  packages: write
 
 jobs:
   create-standalone-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
-      checks: write
 
     steps:
       - name: Validate Input Parameters
         run: |
           echo "Validating input parameters..."
-          
+
           RELEASE_TAG="${{ github.event.inputs.release_tag }}"
           FLUTTER_TAG="${{ github.event.inputs.flutter_release_tag }}"
-          
+
           echo "Release tag: ${RELEASE_TAG}"
           echo "Flutter tag: ${FLUTTER_TAG}"
-          
-          # Validate release tag format
+
           if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
             echo "ERROR: Invalid release tag format: ${RELEASE_TAG}"
             echo "Expected format: v1.0.0 or v1.0.0-standalone"
             exit 1
           fi
-          
-          # Check if tag starts with refs/ (GitHub fallback issue)
+
           if [[ "${RELEASE_TAG}" == refs/* ]]; then
             echo "ERROR: Release tag cannot start with 'refs/': ${RELEASE_TAG}"
             echo "Please provide a proper tag like 'v1.0.0-standalone'"
             exit 1
           fi
-          
+
           echo "✅ Input parameters validated successfully"
 
       - name: Checkout DMTools code
@@ -78,665 +72,92 @@ jobs:
           if [ "${{ github.event.inputs.flutter_release_tag }}" = "latest" ]; then
             echo "Getting latest Flutter SPA release..."
             LATEST_TAG=$(curl -s https://api.github.com/repos/IstiN/dmtools-flutter/releases/latest | jq -r '.tag_name')
-            echo "flutter_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+            if [ -z "${LATEST_TAG}" ] || [ "${LATEST_TAG}" = "null" ]; then
+              echo "ERROR: Could not resolve the latest Flutter SPA release tag"
+              exit 1
+            fi
+            echo "flutter_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
             echo "Using latest Flutter SPA release: ${LATEST_TAG}"
           else
-            echo "flutter_tag=${{ github.event.inputs.flutter_release_tag }}" >> $GITHUB_OUTPUT
+            echo "flutter_tag=${{ github.event.inputs.flutter_release_tag }}" >> "$GITHUB_OUTPUT"
             echo "Using specified Flutter SPA release: ${{ github.event.inputs.flutter_release_tag }}"
           fi
 
-      - name: Download Flutter SPA Release
-        id: download_spa
+      - name: Build deprecated compatibility artifact
         run: |
-          FLUTTER_TAG="${{ steps.flutter_tag.outputs.flutter_tag }}"
-          echo "Downloading Flutter SPA from release: ${FLUTTER_TAG}"
-          
-          # Get release information
-          RELEASE_INFO=$(curl -s "https://api.github.com/repos/IstiN/dmtools-flutter/releases/tags/${FLUTTER_TAG}")
-          
-          # Find the main app ZIP asset
-          DOWNLOAD_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name | test("dmtools-flutter-main-app-.*\\.zip$")) | .browser_download_url')
-          
-          if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
-            echo "ERROR: Could not find dmtools-flutter-main-app-*.zip asset in release ${FLUTTER_TAG}"
-            echo "Available assets:"
-            echo "${RELEASE_INFO}" | jq -r '.assets[].name'
+          ./gradlew clean :dmtools-core:test :dmtools-core:shadowJar -x integrationTest --no-daemon
+
+      - name: Capture compatibility artifact metadata
+        id: compatibility_artifact
+        run: |
+          JAR_PATH=$(ls dmtools-core/build/libs/dmtools-v*-all.jar | head -n 1)
+
+          if [ -z "${JAR_PATH}" ] || [ ! -f "${JAR_PATH}" ]; then
+            echo "ERROR: Expected dmtools-core shadow JAR was not produced"
             exit 1
           fi
-          
-          echo "Found SPA asset URL: ${DOWNLOAD_URL}"
-          
-          # Create temp directory and download
-          mkdir -p temp
-          SPA_ZIP_PATH="temp/dmtools-flutter-main-app.zip"
-          
-          echo "Downloading to: ${SPA_ZIP_PATH}"
-          curl -L -o "${SPA_ZIP_PATH}" "${DOWNLOAD_URL}"
-          
-          # Verify download
-          if [ ! -f "${SPA_ZIP_PATH}" ]; then
-            echo "ERROR: Failed to download SPA ZIP"
-            exit 1
-          fi
-          
-          echo "Downloaded SPA ZIP ($(du -h "${SPA_ZIP_PATH}" | cut -f1))"
-          echo "spa_zip_path=${SPA_ZIP_PATH}" >> $GITHUB_OUTPUT
 
-      - name: Build DMTools Server
-        id: gradle_build
-        continue-on-error: true
-        run: |
-          echo "Building DMTools server..."
-          ./gradlew clean build :dmtools-server:bootJar -x integrationTest -x :dmtools-automation:test --no-daemon --info
-        env:
-          GITHUB_USERNAME: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JAR_NAME=$(basename "${JAR_PATH}")
+          JAR_SIZE=$(du -h "${JAR_PATH}" | cut -f1)
 
-      - name: Test Report
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: JUnit Tests (Standalone Build)
-          path: '**/build/test-results/test/TEST-*.xml'
-          reporter: java-junit
-          fail-on-error: true
-
-      - name: Fail if build failed
-        if: steps.gradle_build.outcome == 'failure'
-        run: |
-          echo "ERROR: Gradle build failed. Cannot proceed with standalone release."
-          exit 1
-
-      - name: Download CLI Artifacts from FatJar Release
-        id: download_cli
-        run: |
-          echo "Downloading CLI artifacts from FatJar release..."
-          
-          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
-          FATJAR_TAG="${{ github.event.inputs.fatjar_release_tag }}"
-          
-          # Determine which fatjar release to use
-          if [ -n "${FATJAR_TAG}" ]; then
-            BASE_TAG="${FATJAR_TAG}"
-            echo "Using specified FatJar release tag: ${BASE_TAG}"
-          else
-            # Auto-detect: remove -standalone suffix from release tag
-            BASE_TAG="${RELEASE_TAG%-standalone}"
-            echo "Auto-detecting FatJar release tag: ${BASE_TAG}"
-          fi
-          
-          # Get release information
-          RELEASE_INFO=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/${BASE_TAG}")
-          
-          if [ "$(echo "${RELEASE_INFO}" | jq -r '.message')" = "Not Found" ]; then
-            echo "⚠️ FatJar release ${BASE_TAG} not found. Will build CLI locally instead."
-            echo "Building CLI JAR..."
-            ./gradlew :dmtools-core:shadowJar --no-daemon
-            
-            CLI_JAR_PATH="dmtools-core/build/libs/dmtools-core-*-all.jar"
-            ACTUAL_JAR=$(ls ${CLI_JAR_PATH} 2>/dev/null | head -1)
-            
-            if [ -z "${ACTUAL_JAR}" ]; then
-              echo "ERROR: CLI JAR not found at ${CLI_JAR_PATH}"
-              exit 1
-            fi
-            
-            CLI_JAR_RELEASE="build/libs/dmtools-${RELEASE_TAG}-all.jar"
-            mkdir -p build/libs
-            cp "${ACTUAL_JAR}" "${CLI_JAR_RELEASE}"
-            cp install.sh build/libs/
-            cp install build/libs/ 2>/dev/null || true
-            cp install.ps1 build/libs/ 2>/dev/null || true
-            cp dmtools.sh build/libs/
-          else
-            echo "✅ Found FatJar release: ${BASE_TAG}"
-            mkdir -p build/libs
-            
-            # Download CLI JAR
-            CLI_JAR_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name | test("dmtools-.*-all\\.jar$")) | .browser_download_url')
-            if [ -z "${CLI_JAR_URL}" ] || [ "${CLI_JAR_URL}" = "null" ]; then
-              echo "ERROR: Could not find CLI JAR in release ${BASE_TAG}"
-              exit 1
-            fi
-            
-            CLI_JAR_RELEASE="build/libs/dmtools-${RELEASE_TAG}-all.jar"
-            echo "Downloading CLI JAR from: ${CLI_JAR_URL}"
-            curl -L -o "${CLI_JAR_RELEASE}" "${CLI_JAR_URL}"
-            
-            # Download install.sh
-            INSTALL_SH_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name == "install.sh") | .browser_download_url')
-            if [ -n "${INSTALL_SH_URL}" ] && [ "${INSTALL_SH_URL}" != "null" ]; then
-              curl -L -o "build/libs/install.sh" "${INSTALL_SH_URL}"
-            else
-              cp install.sh build/libs/
-            fi
-            
-            # Copy new cross-platform install scripts (if they exist)
-            cp install build/libs/ 2>/dev/null || true
-            cp install.ps1 build/libs/ 2>/dev/null || true
-            
-            # Download dmtools.sh
-            DMTOOLS_SH_URL=$(echo "${RELEASE_INFO}" | jq -r '.assets[] | select(.name == "dmtools.sh") | .browser_download_url')
-            if [ -n "${DMTOOLS_SH_URL}" ] && [ "${DMTOOLS_SH_URL}" != "null" ]; then
-              curl -L -o "build/libs/dmtools.sh" "${DMTOOLS_SH_URL}"
-            else
-              cp dmtools.sh build/libs/
-            fi
-          fi
-          
-          chmod +x build/libs/install.sh
-          [ -f build/libs/install ] && chmod +x build/libs/install || true
-          chmod +x build/libs/dmtools.sh
-          
-          # Get CLI JAR size
-          CLI_JAR_SIZE=$(du -h "${CLI_JAR_RELEASE}" | cut -f1)
-          
-          echo "CLI artifacts prepared:"
-          echo "  JAR: ${CLI_JAR_SIZE}"
-          ls -la build/libs/
-          
-          echo "cli_jar_path=${CLI_JAR_RELEASE}" >> $GITHUB_OUTPUT
-          echo "cli_jar_size=${CLI_JAR_SIZE}" >> $GITHUB_OUTPUT
-          echo "install_sh_path=build/libs/install.sh" >> $GITHUB_OUTPUT
-          # Only set install_path if file exists
-          if [ -f build/libs/install ]; then
-            echo "install_path=build/libs/install" >> $GITHUB_OUTPUT
-          fi
-          # Only set install_ps1_path if file exists
-          if [ -f build/libs/install.ps1 ]; then
-            echo "install_ps1_path=build/libs/install.ps1" >> $GITHUB_OUTPUT
-          fi
-          echo "dmtools_sh_path=build/libs/dmtools.sh" >> $GITHUB_OUTPUT
-          echo "fatjar_source_tag=${BASE_TAG}" >> $GITHUB_OUTPUT
-
-      - name: Create Standalone Artifacts
-        id: create_standalone
-        run: |
-          echo "Creating standalone artifacts with Flutter SPA..."
-          
-          # Make script executable
-          chmod +x dmtools-server/scripts/prepare-standalone-war.sh
-          
-          # Run the standalone preparation script
-          SPA_ZIP_PATH="${{ steps.download_spa.outputs.spa_zip_path }}"
-          ./dmtools-server/scripts/prepare-standalone-war.sh "${PWD}/${SPA_ZIP_PATH}"
-          
-          # Verify artifacts were created
-          STANDALONE_DIR="dmtools-server/build/standalone"
-          if [ ! -f "${STANDALONE_DIR}/dmtools-standalone.jar" ]; then
-            echo "ERROR: Standalone JAR not created"
-            exit 1
-          fi
-          
-          if [ ! -f "${STANDALONE_DIR}/dmtools-standalone.war" ]; then
-            echo "ERROR: Standalone WAR not created"
-            exit 1
-          fi
-          
-          # Get file sizes for release notes
-          JAR_SIZE=$(du -h "${STANDALONE_DIR}/dmtools-standalone.jar" | cut -f1)
-          WAR_SIZE=$(du -h "${STANDALONE_DIR}/dmtools-standalone.war" | cut -f1)
-          
-          echo "Standalone artifacts created:"
-          echo "  JAR: ${JAR_SIZE}"
-          echo "  WAR: ${WAR_SIZE}"
-          
-          echo "jar_path=${STANDALONE_DIR}/dmtools-standalone.jar" >> $GITHUB_OUTPUT
-          echo "war_path=${STANDALONE_DIR}/dmtools-standalone.war" >> $GITHUB_OUTPUT
-          echo "jar_size=${JAR_SIZE}" >> $GITHUB_OUTPUT
-          echo "war_size=${WAR_SIZE}" >> $GITHUB_OUTPUT
-
-      - name: Create Portable Bundles with Embedded Java
-        id: create_portable_bundles
-        run: |
-          echo "Creating portable bundles with embedded Temurin Java 23..."
-          
-          STANDALONE_DIR="dmtools-server/build/standalone"
-          BUNDLES_DIR="${STANDALONE_DIR}/bundles"
-          mkdir -p "${BUNDLES_DIR}"
-          
-          # Define platforms and their JRE download URLs (process in order: macOS first, then Windows)
-          declare -A platforms=(
-            ["macos-aarch64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_mac_hotspot_23.0.1_11.tar.gz"
-            ["macos-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_mac_hotspot_23.0.1_11.tar.gz"
-            ["windows-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_windows_hotspot_23.0.1_11.zip"
-          )
-          
-          # Process platforms in specific order to ensure consistent behavior
-          platform_order=("macos-aarch64" "macos-x64" "windows-x64")
-          
-          # Create launcher scripts
-          create_unix_launcher() {
-            cat > "$1" << 'EOF'
-          #!/usr/bin/env bash
-          DIR="$(cd "$(dirname "$0")" && pwd)"
-          exec "$DIR/jre/bin/java" -jar "$DIR/dmtools-standalone.jar" "$@"
-          EOF
-            chmod +x "$1"
-          }
-          
-          create_windows_launcher() {
-            cat > "$1" << 'EOF'
-          @echo off
-          set DIR=%~dp0
-          "%DIR%jre\bin\java.exe" -jar "%DIR%dmtools-standalone.jar" %*
-          EOF
-          }
-          
-          # Create bundles for each platform in defined order
-          for platform in "${platform_order[@]}"; do
-            echo "Creating bundle for ${platform}..."
-            
-            BUNDLE_DIR="${BUNDLES_DIR}/dmtools-standalone-${platform}"
-            mkdir -p "${BUNDLE_DIR}"
-            
-            # Copy standalone JAR
-            cp "${STANDALONE_DIR}/dmtools-standalone.jar" "${BUNDLE_DIR}/"
-            
-            # Copy README for users
-            if [ -f "dmtools-server/src/main/resources/bundle-readme.md" ]; then
-              cp "dmtools-server/src/main/resources/bundle-readme.md" "${BUNDLE_DIR}/README.md"
-            fi
-            
-            # Download and extract JRE
-            JRE_URL="${platforms[$platform]}"
-            JRE_FILE="jre-${platform}.$(basename "${JRE_URL}" | sed 's/.*\.//')"
-            
-            echo "Downloading JRE for ${platform} from ${JRE_URL}"
-            curl -L -o "${JRE_FILE}" "${JRE_URL}"
-            
-            # Verify download
-            if [ ! -f "${JRE_FILE}" ]; then
-              echo "ERROR: Failed to download JRE for ${platform}"
-              exit 1
-            fi
-            JRE_SIZE=$(du -h "${JRE_FILE}" | cut -f1)
-            echo "Downloaded JRE (${JRE_SIZE})"
-            
-            # Extract JRE
-            if [[ "${platform}" == *"windows"* ]]; then
-              # Extract Windows ZIP
-              unzip -q "${JRE_FILE}" -d "${BUNDLE_DIR}/jre-temp"
-              
-              echo "Extracted Windows ZIP contents:"
-              ls -la "${BUNDLE_DIR}/jre-temp"
-              
-              # Find the actual JRE directory and move it to jre/
-              BIN_DIR=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1)
-              if [ -n "${BIN_DIR}" ]; then
-                JRE_ROOT=$(dirname "${BIN_DIR}")
-                echo "Found bin directory at: ${BIN_DIR}"
-                echo "Using JRE root: ${JRE_ROOT}"
-                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
-              else
-                echo "ERROR: Could not find bin directory in Windows ZIP for ${platform}"
-                echo "Directory structure:"
-                find "${BUNDLE_DIR}/jre-temp" -type d | head -20
-                echo "Looking for JRE patterns:"
-                find "${BUNDLE_DIR}/jre-temp" -type d -name "*jdk*" -o -name "*jre*" | head -10
-                exit 1
-              fi
-              rm -rf "${BUNDLE_DIR}/jre-temp"
-              
-              # Create Windows launcher
-              create_windows_launcher "${BUNDLE_DIR}/run.cmd"
-            else
-              # Extract macOS/Linux tar.gz
-              mkdir -p "${BUNDLE_DIR}/jre-temp"
-              echo "Extracting ${JRE_FILE} to ${BUNDLE_DIR}/jre-temp"
-              tar -xzf "${JRE_FILE}" -C "${BUNDLE_DIR}/jre-temp"
-              
-              echo "Extracted contents:"
-              ls -la "${BUNDLE_DIR}/jre-temp"
-              
-              # Find the actual JRE directory (usually has Contents/Home on macOS)
-              if [[ "${platform}" == *"macos"* ]]; then
-                echo "Looking for macOS JRE structure..."
-                # macOS JRE structure: jdk-*/Contents/Home/
-                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -path "*/Contents/Home" -type d | head -1)
-                echo "Found Contents/Home at: ${JRE_ROOT}"
-                
-                if [ -z "${JRE_ROOT}" ]; then
-                  echo "Contents/Home not found, looking for bin directory..."
-                  # Fallback: look for bin directory
-                  JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
-                  echo "Found bin directory parent at: ${JRE_ROOT}"
-                fi
-              else
-                echo "Looking for Linux JRE structure..."
-                # Linux JRE structure: jdk-*/
-                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
-                echo "Found bin directory parent at: ${JRE_ROOT}"
-              fi
-              
-              if [ -n "${JRE_ROOT}" ] && [ -d "${JRE_ROOT}" ]; then
-                echo "Moving JRE from ${JRE_ROOT} to ${BUNDLE_DIR}/jre"
-                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
-              else
-                echo "ERROR: Could not find JRE structure in tar.gz for ${platform}"
-                echo "Directory structure:"
-                find "${BUNDLE_DIR}/jre-temp" -type d | head -20
-                echo "Looking for specific patterns:"
-                find "${BUNDLE_DIR}/jre-temp" -type d -name "*jdk*" -o -name "*jre*" -o -name "bin" | head -10
-                exit 1
-              fi
-              rm -rf "${BUNDLE_DIR}/jre-temp"
-              
-              # Create Unix launcher
-              create_unix_launcher "${BUNDLE_DIR}/run.sh"
-            fi
-            
-            # Verify JRE was extracted correctly
-            if [[ "${platform}" == *"windows"* ]]; then
-              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java.exe"
-            else
-              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java"
-            fi
-            
-            if [ ! -f "${JAVA_EXEC}" ]; then
-              echo "ERROR: Java executable not found at ${JAVA_EXEC} for ${platform}"
-              echo "JRE directory contents:"
-              find "${BUNDLE_DIR}/jre" -type f -name "*java*" || echo "No java executables found"
-              exit 1
-            else
-              echo "✅ Java executable verified at ${JAVA_EXEC}"
-            fi
-            
-            # Clean up downloaded JRE archive
-            rm "${JRE_FILE}"
-            
-            # Show bundle directory size before zipping
-            BUNDLE_DIR_SIZE=$(du -sh "${BUNDLE_DIR}" | cut -f1)
-            JAR_SIZE_IN_BUNDLE=$(du -h "${BUNDLE_DIR}/dmtools-standalone.jar" | cut -f1)
-            JRE_SIZE_IN_BUNDLE=$(du -sh "${BUNDLE_DIR}/jre" | cut -f1)
-            echo "Bundle directory contents for ${platform}:"
-            echo "  JAR: ${JAR_SIZE_IN_BUNDLE}"
-            echo "  JRE: ${JRE_SIZE_IN_BUNDLE}"
-            echo "  Total directory: ${BUNDLE_DIR_SIZE}"
-            
-            # Create ZIP bundle
-            cd "${BUNDLES_DIR}"
-            ZIP_NAME="dmtools-standalone-${platform}.zip"
-            zip -r "${ZIP_NAME}" "dmtools-standalone-${platform}/"
-            
-            # Get bundle size
-            BUNDLE_SIZE=$(du -h "${ZIP_NAME}" | cut -f1)
-            echo "Created ${ZIP_NAME} (${BUNDLE_SIZE})"
-            
-            cd - > /dev/null
-          done
-          
-          # Set outputs with bundle paths and sizes
-          echo "macos_aarch64_bundle=${BUNDLES_DIR}/dmtools-standalone-macos-aarch64.zip" >> $GITHUB_OUTPUT
-          echo "macos_x64_bundle=${BUNDLES_DIR}/dmtools-standalone-macos-x64.zip" >> $GITHUB_OUTPUT
-          echo "windows_x64_bundle=${BUNDLES_DIR}/dmtools-standalone-windows-x64.zip" >> $GITHUB_OUTPUT
-          
-          # Get bundle sizes
-          MACOS_ARM_SIZE=$(du -h "${BUNDLES_DIR}/dmtools-standalone-macos-aarch64.zip" | cut -f1)
-          MACOS_X64_SIZE=$(du -h "${BUNDLES_DIR}/dmtools-standalone-macos-x64.zip" | cut -f1)
-          WINDOWS_X64_SIZE=$(du -h "${BUNDLES_DIR}/dmtools-standalone-windows-x64.zip" | cut -f1)
-          
-          echo "macos_aarch64_size=${MACOS_ARM_SIZE}" >> $GITHUB_OUTPUT
-          echo "macos_x64_size=${MACOS_X64_SIZE}" >> $GITHUB_OUTPUT
-          echo "windows_x64_size=${WINDOWS_X64_SIZE}" >> $GITHUB_OUTPUT
-          
-          echo "All portable bundles created successfully!"
-          echo "  macOS Apple Silicon: ${MACOS_ARM_SIZE}"
-          echo "  macOS Intel: ${MACOS_X64_SIZE}"
-          echo "  Windows x64: ${WINDOWS_X64_SIZE}"
-
-      - name: Create API-Only Portable Bundles
-        id: create_api_bundles
-        run: |
-          echo "Creating API-only portable bundles (no HTML frontend) with embedded Temurin Java 23..."
-          
-          STANDALONE_DIR="dmtools-server/build/standalone"
-          API_BUNDLES_DIR="${STANDALONE_DIR}/api-bundles"
-          mkdir -p "${API_BUNDLES_DIR}"
-          
-          # Define platforms and their JRE download URLs (same as standalone bundles)
-          declare -A platforms=(
-            ["macos-aarch64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_mac_hotspot_23.0.1_11.tar.gz"
-            ["macos-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_mac_hotspot_23.0.1_11.tar.gz"
-            ["windows-x64"]="https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_windows_hotspot_23.0.1_11.zip"
-          )
-          
-          # Process platforms in specific order to ensure consistent behavior
-          platform_order=("macos-aarch64" "macos-x64" "windows-x64")
-          
-          # Create launcher scripts for API-only bundles
-          create_unix_launcher_api() {
-            cat > "$1" << 'EOF'
-          #!/usr/bin/env bash
-          DIR="$(cd "$(dirname "$0")" && pwd)"
-          exec "$DIR/jre/bin/java" -jar "$DIR/dmtools-appengine.jar" "$@"
-          EOF
-            chmod +x "$1"
-          }
-          
-          create_windows_launcher_api() {
-            cat > "$1" << 'EOF'
-          @echo off
-          set DIR=%~dp0
-          "%DIR%jre\bin\java.exe" -jar "%DIR%dmtools-appengine.jar" %*
-          EOF
-          }
-          
-          # Create bundles for each platform in defined order
-          for platform in "${platform_order[@]}"; do
-            echo "Creating API-only bundle for ${platform}..."
-            
-            BUNDLE_DIR="${API_BUNDLES_DIR}/dmtools-server-api-${platform}"
-            mkdir -p "${BUNDLE_DIR}"
-            
-            # Copy API-only JAR (no HTML embedded)
-            cp "dmtools-appengine.jar" "${BUNDLE_DIR}/"
-            
-            # Download and extract JRE (reuse from cache if available)
-            JRE_URL="${platforms[$platform]}"
-            JRE_FILE="jre-api-${platform}.$(basename "${JRE_URL}" | sed 's/.*\.//')"
-            
-            # Check if we already downloaded this JRE for standalone bundles
-            EXISTING_JRE="jre-${platform}.$(basename "${JRE_URL}" | sed 's/.*\.//')"
-            if [ -f "${EXISTING_JRE}" ]; then
-              echo "Reusing existing JRE download for ${platform}"
-              JRE_FILE="${EXISTING_JRE}"
-            else
-              echo "Downloading JRE for ${platform} from ${JRE_URL}"
-              curl -L -o "${JRE_FILE}" "${JRE_URL}"
-              
-              # Verify download
-              if [ ! -f "${JRE_FILE}" ]; then
-                echo "ERROR: Failed to download JRE for ${platform}"
-                exit 1
-              fi
-              JRE_SIZE=$(du -h "${JRE_FILE}" | cut -f1)
-              echo "Downloaded JRE (${JRE_SIZE})"
-            fi
-            
-            # Extract JRE
-            if [[ "${platform}" == *"windows"* ]]; then
-              # Extract Windows ZIP
-              unzip -q "${JRE_FILE}" -d "${BUNDLE_DIR}/jre-temp"
-              
-              # Find the actual JRE directory and move it to jre/
-              BIN_DIR=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1)
-              if [ -n "${BIN_DIR}" ]; then
-                JRE_ROOT=$(dirname "${BIN_DIR}")
-                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
-              else
-                echo "ERROR: Could not find bin directory in Windows ZIP for ${platform}"
-                exit 1
-              fi
-              rm -rf "${BUNDLE_DIR}/jre-temp"
-              
-              # Create Windows launcher for API
-              create_windows_launcher_api "${BUNDLE_DIR}/run.cmd"
-            else
-              # Extract macOS/Linux tar.gz
-              mkdir -p "${BUNDLE_DIR}/jre-temp"
-              tar -xzf "${JRE_FILE}" -C "${BUNDLE_DIR}/jre-temp"
-              
-              # Find the actual JRE directory
-              if [[ "${platform}" == *"macos"* ]]; then
-                # macOS JRE structure: jdk-*/Contents/Home/
-                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -path "*/Contents/Home" -type d | head -1)
-                
-                if [ -z "${JRE_ROOT}" ]; then
-                  # Fallback: look for bin directory
-                  JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
-                fi
-              else
-                # Linux JRE structure: jdk-*/
-                JRE_ROOT=$(find "${BUNDLE_DIR}/jre-temp" -name "bin" -type d | head -1 | dirname)
-              fi
-              
-              if [ -n "${JRE_ROOT}" ] && [ -d "${JRE_ROOT}" ]; then
-                mv "${JRE_ROOT}" "${BUNDLE_DIR}/jre"
-              else
-                echo "ERROR: Could not find JRE structure in tar.gz for ${platform}"
-                exit 1
-              fi
-              rm -rf "${BUNDLE_DIR}/jre-temp"
-              
-              # Create Unix launcher for API
-              create_unix_launcher_api "${BUNDLE_DIR}/run.sh"
-            fi
-            
-            # Verify JRE was extracted correctly
-            if [[ "${platform}" == *"windows"* ]]; then
-              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java.exe"
-            else
-              JAVA_EXEC="${BUNDLE_DIR}/jre/bin/java"
-            fi
-            
-            if [ ! -f "${JAVA_EXEC}" ]; then
-              echo "ERROR: Java executable not found at ${JAVA_EXEC} for ${platform}"
-              exit 1
-            else
-              echo "✅ Java executable verified at ${JAVA_EXEC}"
-            fi
-            
-            # Show bundle directory size before zipping
-            BUNDLE_DIR_SIZE=$(du -sh "${BUNDLE_DIR}" | cut -f1)
-            JAR_SIZE_IN_BUNDLE=$(du -h "${BUNDLE_DIR}/dmtools-appengine.jar" | cut -f1)
-            JRE_SIZE_IN_BUNDLE=$(du -sh "${BUNDLE_DIR}/jre" | cut -f1)
-            echo "API-only bundle directory contents for ${platform}:"
-            echo "  JAR: ${JAR_SIZE_IN_BUNDLE}"
-            echo "  JRE: ${JRE_SIZE_IN_BUNDLE}"
-            echo "  Total directory: ${BUNDLE_DIR_SIZE}"
-            
-            # Create ZIP bundle
-            cd "${API_BUNDLES_DIR}"
-            ZIP_NAME="dmtools-server-api-${platform}.zip"
-            zip -r "${ZIP_NAME}" "dmtools-server-api-${platform}/"
-            
-            # Get bundle size
-            BUNDLE_SIZE=$(du -h "${ZIP_NAME}" | cut -f1)
-            echo "Created ${ZIP_NAME} (${BUNDLE_SIZE})"
-            
-            cd - > /dev/null
-          done
-          
-          # Set outputs with bundle paths and sizes
-          echo "api_macos_aarch64_bundle=${API_BUNDLES_DIR}/dmtools-server-api-macos-aarch64.zip" >> $GITHUB_OUTPUT
-          echo "api_macos_x64_bundle=${API_BUNDLES_DIR}/dmtools-server-api-macos-x64.zip" >> $GITHUB_OUTPUT
-          echo "api_windows_x64_bundle=${API_BUNDLES_DIR}/dmtools-server-api-windows-x64.zip" >> $GITHUB_OUTPUT
-          
-          # Get bundle sizes
-          API_MACOS_ARM_SIZE=$(du -h "${API_BUNDLES_DIR}/dmtools-server-api-macos-aarch64.zip" | cut -f1)
-          API_MACOS_X64_SIZE=$(du -h "${API_BUNDLES_DIR}/dmtools-server-api-macos-x64.zip" | cut -f1)
-          API_WINDOWS_X64_SIZE=$(du -h "${API_BUNDLES_DIR}/dmtools-server-api-windows-x64.zip" | cut -f1)
-          
-          echo "api_macos_aarch64_size=${API_MACOS_ARM_SIZE}" >> $GITHUB_OUTPUT
-          echo "api_macos_x64_size=${API_MACOS_X64_SIZE}" >> $GITHUB_OUTPUT
-          echo "api_windows_x64_size=${API_WINDOWS_X64_SIZE}" >> $GITHUB_OUTPUT
-          
-          echo "All API-only portable bundles created successfully!"
-          echo "  macOS Apple Silicon: ${API_MACOS_ARM_SIZE}"
-          echo "  macOS Intel: ${API_MACOS_X64_SIZE}"
-          echo "  Windows x64: ${API_WINDOWS_X64_SIZE}"
+          echo "jar_path=${JAR_PATH}" >> "$GITHUB_OUTPUT"
+          echo "jar_name=${JAR_NAME}" >> "$GITHUB_OUTPUT"
+          echo "jar_size=${JAR_SIZE}" >> "$GITHUB_OUTPUT"
 
       - name: Generate Release Notes
-        id: release_notes
         run: |
-          FLUTTER_TAG="${{ steps.flutter_tag.outputs.flutter_tag }}"
-          FATJAR_SOURCE="${{ steps.download_cli.outputs.fatjar_source_tag }}"
-          CLI_JAR_SIZE="${{ steps.download_cli.outputs.cli_jar_size }}"
-          JAR_SIZE="${{ steps.create_standalone.outputs.jar_size }}"
-          WAR_SIZE="${{ steps.create_standalone.outputs.war_size }}"
-          MACOS_ARM_SIZE="${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}"
-          MACOS_X64_SIZE="${{ steps.create_portable_bundles.outputs.macos_x64_size }}"
-          WINDOWS_X64_SIZE="${{ steps.create_portable_bundles.outputs.windows_x64_size }}"
-          API_MACOS_ARM_SIZE="${{ steps.create_api_bundles.outputs.api_macos_aarch64_size }}"
-          API_MACOS_X64_SIZE="${{ steps.create_api_bundles.outputs.api_macos_x64_size }}"
-          API_WINDOWS_X64_SIZE="${{ steps.create_api_bundles.outputs.api_windows_x64_size }}"
-          
-          cat > release_notes.md << EOF
-          # 🚧 DMTools Standalone Packaging ${{ github.event.inputs.release_tag }}
+          SOURCE_REFERENCE="${{ github.event.inputs.fatjar_release_tag }}"
+          if [ -z "${SOURCE_REFERENCE}" ]; then
+            SOURCE_REFERENCE="${{ github.sha }}"
+          fi
+
+          cat <<EOF > release_notes.md
+          # 🚧 DMTools Deprecated Standalone Compatibility Release ${{ github.event.inputs.release_tag }}
 
           > **Deprecated / internal-only workflow.**
-          > This release exists only to package compatibility artifacts for internal validation and legacy troubleshooting.
+          > This release exists only for internal validation of deprecated standalone automation paths.
           > Do not treat this release body as installation guidance or public product documentation.
 
           ## 📦 Assets produced by this workflow
 
-          This release may still publish standalone/server/API-only bundles for compatibility or internal use, but they remain deprecated and are not a supported public distribution surface.
-
-          - CLI compatibility artifacts mirrored onto this release for internal validation and legacy troubleshooting
-          - Deprecated/internal standalone artifacts: \`dmtools-standalone.jar\`, \`dmtools-standalone.war\`, portable bundle archives, and API-only bundle archives
+          - Deprecated compatibility CLI fat JAR: \`${{ steps.compatibility_artifact.outputs.jar_name }}\`
 
           ## 📊 Build Information
 
           - **Standalone packaging tag:** ${{ github.event.inputs.release_tag }}
-          - **Flutter SPA source tag:** ${FLUTTER_TAG}
-          - **CLI source release:** [\`${FATJAR_SOURCE}\`](https://github.com/${{ github.repository }}/releases/tag/${FATJAR_SOURCE})
+          - **Flutter SPA source tag:** ${{ steps.flutter_tag.outputs.flutter_tag }}
+          - **CLI source reference:** ${SOURCE_REFERENCE}
           - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-          - **CLI JAR Size:** ${CLI_JAR_SIZE}
-          - **Standalone JAR Size:** ${JAR_SIZE}
-          - **Standalone WAR Size:** ${WAR_SIZE}
-          - **Standalone bundle sizes:** macOS Apple Silicon ${MACOS_ARM_SIZE}, macOS Intel ${MACOS_X64_SIZE}, Windows x64 ${WINDOWS_X64_SIZE}
-          - **API-only bundle sizes:** macOS Apple Silicon ${API_MACOS_ARM_SIZE}, macOS Intel ${API_MACOS_X64_SIZE}, Windows x64 ${API_WINDOWS_X64_SIZE}
-          - **Git Commit:** \`${GITHUB_SHA:0:8}\`
+          - **Git Commit:** \`${{ github.sha }}\`
 
           ## 📝 Positioning notes
 
-          - Treat standalone/server/API-only artifacts as deprecated or internal-only unless Product explicitly reintroduces them as supported offerings.
-          - Do not copy standalone bundle or legacy service guidance from this workflow into customer-facing release communication.
-
-          ## 🐛 Support
-
-          - **Issues:** [GitHub Issues](https://github.com/${{ github.repository }}/issues)
+          - Treat deprecated standalone outputs as internal-only compatibility artifacts.
+          - Do not reuse this workflow output as customer-facing install documentation.
           EOF
-          
-          echo "Release notes generated"
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
-          name: "DMTools Standalone (Deprecated/Internal) ${{ github.event.inputs.release_tag }}"
+          release_name: "DMTools Standalone (Deprecated/Internal) ${{ github.event.inputs.release_tag }}"
           body_path: release_notes.md
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
-          files: |
-            ${{ steps.download_cli.outputs.cli_jar_path }}
-            ${{ steps.download_cli.outputs.install_sh_path }}
-            ${{ steps.download_cli.outputs.install_path }}
-            ${{ steps.download_cli.outputs.install_ps1_path }}
-            ${{ steps.download_cli.outputs.dmtools_sh_path }}
-            ${{ steps.create_standalone.outputs.jar_path }}
-            ${{ steps.create_standalone.outputs.war_path }}
-            ${{ steps.create_portable_bundles.outputs.macos_aarch64_bundle }}
-            ${{ steps.create_portable_bundles.outputs.macos_x64_bundle }}
-            ${{ steps.create_portable_bundles.outputs.windows_x64_bundle }}
-            ${{ steps.create_api_bundles.outputs.api_macos_aarch64_bundle }}
-            ${{ steps.create_api_bundles.outputs.api_macos_x64_bundle }}
-            ${{ steps.create_api_bundles.outputs.api_windows_x64_bundle }}
+          commitish: ${{ github.sha }}
 
+      - name: Upload deprecated compatibility JAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.compatibility_artifact.outputs.jar_path }}
+          asset_name: deprecated-${{ github.event.inputs.release_tag }}-${{ steps.compatibility_artifact.outputs.jar_name }}
+          asset_content_type: application/java-archive
 
       - name: Upload Test Results
         if: always()
@@ -748,28 +169,16 @@ jobs:
             build/test-results/test
             dmtools-core/build/reports/tests/test
             dmtools-core/build/test-results/test
-            dmtools-server/build/reports/tests/test
-            dmtools-server/build/test-results/test
           retention-days: 7
 
       - name: Summary
         run: |
-          echo "## 🚧 Deprecated Standalone Packaging Release Created" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Release:** [${{ github.event.inputs.release_tag }}](${{ steps.create_release.outputs.url }})" >> $GITHUB_STEP_SUMMARY
-          echo "**Positioning:** Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY
-          echo "**Flutter SPA source tag:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "**CLI source:** FatJar Release [\`${{ steps.download_cli.outputs.fatjar_source_tag }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.download_cli.outputs.fatjar_source_tag }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> Internal-only note: compatibility artifacts are published here for validation and legacy troubleshooting only." >> $GITHUB_STEP_SUMMARY
-          echo "> Do not reuse this workflow summary as customer-facing installation guidance." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Internal/deprecated assets produced by this workflow" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- CLI compatibility assets mirrored onto this release" >> $GITHUB_STEP_SUMMARY
-          echo "- Standalone JAR: ${{ steps.create_standalone.outputs.jar_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Standalone WAR: ${{ steps.create_standalone.outputs.war_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Portable bundles: macOS Apple Silicon ${{ steps.create_portable_bundles.outputs.macos_aarch64_size }}, macOS Intel ${{ steps.create_portable_bundles.outputs.macos_x64_size }}, Windows x64 ${{ steps.create_portable_bundles.outputs.windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "- API-only bundles: macOS Apple Silicon ${{ steps.create_api_bundles.outputs.api_macos_aarch64_size }}, macOS Intel ${{ steps.create_api_bundles.outputs.api_macos_x64_size }}, Windows x64 ${{ steps.create_api_bundles.outputs.api_windows_x64_size }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> Do not reuse standalone/server/API-only bundle guidance from this workflow as customer-facing install documentation." >> $GITHUB_STEP_SUMMARY
+          echo "## 🚧 Deprecated Standalone Packaging Release Created" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Release:** [${{ github.event.inputs.release_tag }}](${{ steps.create_release.outputs.html_url }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Positioning:** Deprecated/internal-only packaging workflow" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Flutter SPA source tag:** ${{ steps.flutter_tag.outputs.flutter_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Compatibility asset:** ${{ steps.compatibility_artifact.outputs.jar_name }} (${{ steps.compatibility_artifact.outputs.jar_size }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Internal-only note: compatibility artifacts are published here for validation and deprecated workflow coverage only." >> "$GITHUB_STEP_SUMMARY"
+          echo "> Do not reuse this workflow summary as customer-facing installation guidance." >> "$GITHUB_STEP_SUMMARY"
