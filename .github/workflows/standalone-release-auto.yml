@@ -47,7 +47,7 @@ jobs:
       - name: Capture compatibility artifact metadata
         id: compatibility_artifact
         run: |
-          JAR_PATH=$(ls dmtools-core/build/libs/dmtools-v*-all.jar | head -n 1)
+          JAR_PATH=$(ls build/libs/dmtools-v*-all.jar | head -n 1)
 
           if [ -z "${JAR_PATH}" ] || [ ! -f "${JAR_PATH}" ]; then
             echo "ERROR: Expected dmtools-core shadow JAR was not produced"
