@@ -258,10 +258,11 @@ public class CliCommandExecutorTest {
 
     @Test
     public void testExecuteCommand_CommandWithSpecialCharacters_Success() throws IOException, InterruptedException {
-        // Test command with quotes and special characters using a fast, reliable command
-        String result = executor.executeCommand("git config --get user.name", null);
+        // Use quotes and a wildcard so the command still exercises shell-sensitive characters
+        // without depending on optional git user config that may be absent on CI runners.
+        String result = executor.executeCommand("git branch --list \"*\"", null);
         
-        // Should execute without security issues (may return empty if user.name not set)
+        // Should execute without security issues and return the matching branch list.
         assertNotNull("Should handle command execution", result);
     }
 
@@ -541,4 +542,3 @@ public class CliCommandExecutorTest {
         }
     }
 }
-
