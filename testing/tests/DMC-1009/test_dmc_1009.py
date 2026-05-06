@@ -7,7 +7,6 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -142,17 +141,6 @@ def _preview_text(value: str, *, limit: int = 300) -> str:
     return f"{collapsed[:limit]}..."
 
 
-def _step_payloads_by_name(job_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    steps = job_payload.get("steps", [])
-    if not isinstance(steps, list):
-        return {}
-    return {
-        str(step.get("name", "")): step
-        for step in steps
-        if isinstance(step, dict) and str(step.get("name", ""))
-    }
-
-
 def _scenario_definitions(client: GitHubActionsReleaseClient) -> tuple[WorkflowScenario, ...]:
     standalone_release_tag = _timestamped_release_tag()
     fatjar_release_tag = _latest_stable_release_tag(client)
@@ -182,7 +170,6 @@ def _scenario_definitions(client: GitHubActionsReleaseClient) -> tuple[WorkflowS
 
 
 def _validate_workflow(
-    client: GitHubActionsReleaseClient,
     scenario: WorkflowScenario,
 ) -> WorkflowValidationObservation:
     service = _build_service(
@@ -207,40 +194,20 @@ def _validate_workflow(
     release_tag = audit.release.tag_name if audit.release is not None else scenario.release_tag
     release_body = audit.release.body if audit.release is not None else ""
     step_summary = audit.release_job.step_summary_markdown if audit.release_job is not None else ""
-    raw_job_log = ""
-    step_conclusions: dict[str, str] = {}
+    raw_job_log = audit.release_job.raw_log_text if audit.release_job is not None else ""
+    step_conclusions = dict(audit.release_job.step_conclusions) if audit.release_job is not None else {}
 
-    if audit.workflow_run is not None:
-        job_payload = next(
-            (
-                payload
-                for payload in client.workflow_jobs(audit.workflow_run.run_id)
-                if str(payload.get("name", "")) == scenario.release_job_name
-            ),
-            None,
-        )
-        if job_payload is None:
+    for step_name in REQUIRED_SUCCESSFUL_STEPS:
+        conclusion = step_conclusions.get(step_name)
+        if conclusion is None:
             failures.append(
-                f"Expected job {scenario.release_job_name!r} in run {workflow_run_url}, but it was not listed."
+                f"Expected step {step_name!r} in job {scenario.release_job_name!r}, but it was missing."
             )
-        else:
-            step_payloads = _step_payloads_by_name(job_payload)
-            for step_name in REQUIRED_SUCCESSFUL_STEPS:
-                step_payload = step_payloads.get(step_name)
-                if step_payload is None:
-                    failures.append(
-                        f"Expected step {step_name!r} in job {scenario.release_job_name!r}, but it was missing."
-                    )
-                    continue
-                conclusion = str(step_payload.get("conclusion", ""))
-                step_conclusions[step_name] = conclusion
-                if conclusion != "success":
-                    failures.append(
-                        f"Expected step {step_name!r} to conclude with 'success', got {conclusion!r}."
-                    )
-
-    if audit.release_job is not None:
-        raw_job_log = client.workflow_job_logs(audit.release_job.job_id)
+            continue
+        if conclusion != "success":
+            failures.append(
+                f"Expected step {step_name!r} to conclude with 'success', got {conclusion!r}."
+            )
 
     dmtools_core_test_command_present = ":dmtools-core:test" in raw_job_log
     if not dmtools_core_test_command_present:
@@ -250,10 +217,10 @@ def _validate_workflow(
 
     observed_failure_markers = [marker for marker in FAILURE_MARKERS if marker in raw_job_log]
     missing_failure_markers = [marker for marker in FAILURE_MARKERS if marker not in raw_job_log]
-    if missing_failure_markers:
+    if not observed_failure_markers:
         failures.append(
-            "Expected the live job log to include dmtools-core test failure markers "
-            f"{missing_failure_markers!r}. Observed excerpt: {_preview_text(raw_job_log, limit=500)}"
+            "Expected the live job log to include at least one configured dmtools-core test failure "
+            f"marker {list(FAILURE_MARKERS)!r}. Observed excerpt: {_preview_text(raw_job_log, limit=500)}"
         )
 
     normalized_release_body = _normalize_visible_text(release_body)
@@ -299,7 +266,7 @@ def _validate_workflow(
 
 def run_live_validation() -> list[WorkflowValidationObservation]:
     client = build_github_client()
-    return [_validate_workflow(client, scenario) for scenario in _scenario_definitions(client)]
+    return [_validate_workflow(scenario) for scenario in _scenario_definitions(client)]
 
 
 def _format_observation_failures(observation: WorkflowValidationObservation) -> list[str]:

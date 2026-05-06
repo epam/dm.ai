@@ -390,6 +390,8 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             conclusion=str(payload.get("conclusion", "")),
             step_summary_markdown=self._extract_step_summary_markdown(log_text),
             log_excerpt=self._log_excerpt(log_text),
+            step_conclusions=self._extract_step_conclusions(payload),
+            raw_log_text=log_text,
         )
 
     def _find_release_observation(
@@ -437,7 +439,7 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         for value in (
             self.release_tag,
             self._release_tag_from_text(release_job.step_summary_markdown),
-            self._release_tag_from_text(release_job.log_excerpt),
+            self._release_tag_from_text(release_job.raw_log_text or release_job.log_excerpt),
         ):
             normalized = value.strip()
             if normalized and normalized not in candidates:
@@ -474,6 +476,17 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
                 continue
             lines.append(self._decode_echo_argument(match.group("argument")))
         return "\n".join(lines).strip()
+
+    @staticmethod
+    def _extract_step_conclusions(job_payload: dict[str, Any]) -> dict[str, str]:
+        steps = job_payload.get("steps", [])
+        if not isinstance(steps, list):
+            return {}
+        return {
+            str(step.get("name", "")): str(step.get("conclusion", ""))
+            for step in steps
+            if isinstance(step, dict) and str(step.get("name", ""))
+        }
 
     def _log_excerpt(self, raw_log_text: str, limit: int = 6000) -> str:
         cleaned = "\n".join(self._normalize_log_line(line) for line in raw_log_text.splitlines())
