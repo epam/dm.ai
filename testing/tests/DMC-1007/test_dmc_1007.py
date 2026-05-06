@@ -29,14 +29,17 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
+
+
+def _normalized_config_list(key: str) -> tuple[str, ...]:
+    values = CONFIG.get(key, [])
+    if not isinstance(values, list):
+        raise TypeError(f"Expected {key!r} to be a list in {TEST_DIRECTORY / 'config.yaml'}.")
+    return tuple(" ".join(str(value).lower().split()) for value in values)
+
+
 FORBIDDEN_LOG_FRAGMENTS = tuple(
-    " ".join(str(value).lower().split()) for value in CONFIG["forbidden_log_fragments"]
-)
-FORBIDDEN_OUTPUT_STRINGS = tuple(
-    " ".join(str(value).lower().split()) for value in CONFIG["forbidden_strings"]
-)
-REQUIRED_NOTICE_MARKERS = tuple(
-    " ".join(str(value).lower().split()) for value in CONFIG["required_notice_markers"]
+    _normalized_config_list("forbidden_log_fragments")
 )
 
 
@@ -60,8 +63,8 @@ def build_service() -> DeprecatedWorkflowRunAuditService:
         dispatch_timeout_seconds=int(str(CONFIG["dispatch_timeout_seconds"])),
         completion_timeout_seconds=int(str(CONFIG["completion_timeout_seconds"])),
         poll_interval_seconds=int(str(CONFIG["poll_interval_seconds"])),
-        required_notice_markers=REQUIRED_NOTICE_MARKERS,
-        forbidden_strings=FORBIDDEN_OUTPUT_STRINGS,
+        required_notice_markers=_normalized_config_list("required_notice_markers"),
+        forbidden_strings=_normalized_config_list("forbidden_strings"),
         require_step_summary=str(CONFIG["standalone_auto_require_step_summary"]).lower() == "true",
     )
 
