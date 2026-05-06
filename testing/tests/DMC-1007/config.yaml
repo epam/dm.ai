@@ -1,0 +1,26 @@
+test_id: DMC-1007
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+owner: epam
+repo: dm.ai
+workflow_ref: main
+required_notice_markers:
+  - deprecated
+  - internal-only
+forbidden_strings:
+  - install.sh
+  - install.ps1
+  - skill-install.sh
+  - supported public installation paths
+forbidden_log_fragments:
+  - Cannot locate excluded tasks that match ':dmtools-automation:test'
+  - project 'dmtools-automation' not found in root project
+dispatch_timeout_seconds: 300
+completion_timeout_seconds: 7200
+poll_interval_seconds: 20
+standalone_auto_workflow_file: standalone-release-auto.yml
+standalone_auto_workflow_name: Auto Standalone Release
+standalone_auto_release_job_name: auto-standalone-release
+standalone_auto_require_step_summary: true
