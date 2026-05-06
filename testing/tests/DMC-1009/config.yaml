@@ -1,0 +1,34 @@
+test_id: DMC-1009
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+owner: epam
+repo: dm.ai
+workflow_ref: main
+dispatch_timeout_seconds: 300
+completion_timeout_seconds: 7200
+poll_interval_seconds: 20
+required_successful_steps:
+  - Build deprecated compatibility artifact
+  - Capture compatibility artifact metadata
+  - Generate Release Notes
+  - Create Release
+  - Summary
+failure_markers:
+  - Task :dmtools-core:test FAILED
+  - There were failing tests.
+user_visible_release_markers:
+  - deprecated / internal-only workflow
+  - do not treat this release body as installation guidance
+user_visible_summary_markers:
+  - deprecated/internal-only packaging workflow
+  - do not reuse this workflow summary as customer-facing installation guidance
+standalone_workflow_file: standalone-release.yml
+standalone_workflow_name: Create Standalone Release with Flutter SPA
+standalone_release_job_name: create-standalone-release
+standalone_require_step_summary: true
+standalone_auto_workflow_file: standalone-release-auto.yml
+standalone_auto_workflow_name: Auto Standalone Release
+standalone_auto_release_job_name: auto-standalone-release
+standalone_auto_require_step_summary: true
