@@ -1,0 +1,25 @@
+test_id: DMC-1006
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+owner: epam
+repo: dm.ai
+workflow_ref: main
+dispatch_timeout_seconds: 300
+completion_timeout_seconds: 7200
+poll_interval_seconds: 20
+workflow_file: standalone-release.yml
+workflow_name: Create Standalone Release with Flutter SPA
+release_job_name: create-standalone-release
+require_step_summary: true
+required_notice_markers:
+  - deprecated
+  - internal-only
+forbidden_strings:
+  - install.sh
+  - install.ps1
+  - skill-install.sh
+  - supported public installation paths
+test_reporter_failure_markers:
+  - No test report files were found
