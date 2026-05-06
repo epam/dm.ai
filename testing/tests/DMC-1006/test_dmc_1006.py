@@ -126,10 +126,10 @@ def test_dmc_1006_live_standalone_release_workflow_completes_without_test_report
     audit, raw_job_log = run_live_audit()
 
     service = build_service(release_tag=release_tag_for_run(), reuse_existing_release=True)
-    assert not audit.failures, service.format_failures(audit.failures)
     assert audit.workflow_run is not None
     assert audit.release_job is not None
+    assert_no_test_reporter_failure(raw_job_log)
+    assert not audit.failures, service.format_failures(audit.failures)
     assert audit.release is not None
     assert audit.release_job.step_summary_markdown.strip()
     assert audit.release.body.strip()
-    assert_no_test_reporter_failure(raw_job_log)
