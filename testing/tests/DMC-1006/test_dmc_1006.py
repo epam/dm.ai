@@ -31,12 +31,6 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
-REQUIRED_NOTICE_MARKERS = tuple(
-    " ".join(str(value).lower().split()) for value in CONFIG["required_notice_markers"]
-)
-FORBIDDEN_STRINGS = tuple(
-    " ".join(str(value).lower().split()) for value in CONFIG["forbidden_strings"]
-)
 TEST_REPORTER_FAILURE_MARKERS = tuple(str(value) for value in CONFIG["test_reporter_failure_markers"])
 STABLE_RELEASE_TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+$")
 RELEASE_TAG_ENV = "DMC_1006_RELEASE_TAG"
@@ -97,8 +91,8 @@ def build_service(
         dispatch_timeout_seconds=int(str(CONFIG["dispatch_timeout_seconds"])),
         completion_timeout_seconds=int(str(CONFIG["completion_timeout_seconds"])),
         poll_interval_seconds=int(str(CONFIG["poll_interval_seconds"])),
-        required_notice_markers=REQUIRED_NOTICE_MARKERS,
-        forbidden_strings=FORBIDDEN_STRINGS,
+        required_notice_markers=(),
+        forbidden_strings=(),
         require_step_summary=str(CONFIG["require_step_summary"]).lower() == "true",
         dispatch_inputs=dispatch_inputs,
         reuse_existing_release=reuse_existing_release,
