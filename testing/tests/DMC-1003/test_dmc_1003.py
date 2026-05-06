@@ -95,6 +95,22 @@ def _assert_successful_live_audit(audit: DeprecatedWorkflowRunAudit) -> None:
     assert audit.release is not None
 
 
+def _format_combined_failures(
+    workflow_results: tuple[
+        tuple[str, DeprecatedWorkflowRunAuditService, DeprecatedWorkflowRunAudit],
+        ...,
+    ],
+) -> str:
+    lines = ["Deprecated workflow run outputs did not match the expected live behavior:"]
+    for workflow_file, _, audit in workflow_results:
+        if not audit.failures:
+            continue
+        lines.append(f"Workflow {workflow_file}:")
+        for failure in audit.failures:
+            lines.append(failure.format())
+    return "\n".join(lines)
+
+
 def test_dmc_1003_live_deprecated_workflow_outputs_remove_installer_scripts_and_public_header() -> None:
     client = build_github_client()
     standalone_release_tag = _timestamped_standalone_release_tag()
@@ -126,9 +142,13 @@ def test_dmc_1003_live_deprecated_workflow_outputs_remove_installer_scripts_and_
     )
     standalone_auto_audit = standalone_auto_service.audit()
 
-    assert not standalone_audit.failures, standalone_service.format_failures(standalone_audit.failures)
-    assert not standalone_auto_audit.failures, standalone_auto_service.format_failures(
-        standalone_auto_audit.failures
+    workflow_results = (
+        (str(CONFIG["standalone_workflow_file"]), standalone_service, standalone_audit),
+        (str(CONFIG["standalone_auto_workflow_file"]), standalone_auto_service, standalone_auto_audit),
     )
+
+    combined_failures = _format_combined_failures(workflow_results)
+    assert all(not audit.failures for _, _, audit in workflow_results), combined_failures
+
     _assert_successful_live_audit(standalone_audit)
     _assert_successful_live_audit(standalone_auto_audit)
