@@ -17,6 +17,7 @@ required_successful_steps:
   - Summary
 failure_markers:
   - Task :dmtools-core:test FAILED
+  - Execution failed for task ':dmtools-core:test'.
   - There were failing tests.
 user_visible_release_markers:
   - deprecated / internal-only workflow

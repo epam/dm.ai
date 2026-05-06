@@ -59,6 +59,7 @@ class WorkflowValidationObservation:
     release_body_excerpt: str
     dmtools_core_test_command_present: bool
     observed_failure_markers: list[str]
+    missing_failure_markers: list[str]
     failures: list[str]
 
 
@@ -248,6 +249,12 @@ def _validate_workflow(
         )
 
     observed_failure_markers = [marker for marker in FAILURE_MARKERS if marker in raw_job_log]
+    missing_failure_markers = [marker for marker in FAILURE_MARKERS if marker not in raw_job_log]
+    if missing_failure_markers:
+        failures.append(
+            "Expected the live job log to include dmtools-core test failure markers "
+            f"{missing_failure_markers!r}. Observed excerpt: {_preview_text(raw_job_log, limit=500)}"
+        )
 
     normalized_release_body = _normalize_visible_text(release_body)
     for marker in USER_VISIBLE_RELEASE_MARKERS:
@@ -285,6 +292,7 @@ def _validate_workflow(
         release_body_excerpt=_preview_text(release_body),
         dmtools_core_test_command_present=dmtools_core_test_command_present,
         observed_failure_markers=observed_failure_markers,
+        missing_failure_markers=missing_failure_markers,
         failures=failures,
     )
 
