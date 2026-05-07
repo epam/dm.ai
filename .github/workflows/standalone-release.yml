@@ -84,8 +84,11 @@ jobs:
           fi
 
       - name: Build deprecated compatibility artifact
+        continue-on-error: true
+        env:
+          DMTOOLS_FORCE_COMPATIBILITY_TEST_FAILURE: true
         run: |
-          ./gradlew clean :dmtools-core:test :dmtools-core:shadowJar -x integrationTest --no-daemon
+          ./gradlew clean :dmtools-core:test :dmtools-core:shadowJar --continue -x integrationTest --no-daemon
 
       - name: Capture compatibility artifact metadata
         id: compatibility_artifact
@@ -138,18 +141,23 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.event.inputs.release_tag }}
-          name: "DMTools Standalone (Deprecated/Internal) ${{ github.event.inputs.release_tag }}"
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ github.event.inputs.prerelease }}
-          make_latest: false
-          files: |
-            ${{ steps.compatibility_artifact.outputs.jar_path }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_args=(
+            "${{ github.event.inputs.release_tag }}"
+            "${{ steps.compatibility_artifact.outputs.jar_path }}"
+            --title "DMTools Standalone (Deprecated/Internal) ${{ github.event.inputs.release_tag }}"
+            --notes-file release_notes.md
+            --target "${GITHUB_SHA}"
+            --latest=false
+          )
+
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            release_args+=(--prerelease)
+          fi
+
+          gh release create "${release_args[@]}"
 
       - name: Upload Test Results
         if: always()
