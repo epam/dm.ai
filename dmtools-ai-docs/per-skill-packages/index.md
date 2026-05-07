@@ -13,6 +13,7 @@ This page is the canonical catalogue for the approved focused DMtools skill pack
 | `dmtools-testrail` | `/dmtools-testrail` | `com.github.istin.dmtools.testrail` | `com.github.istin:dmtools-testrail` |
 | `dmtools-teams` | `/dmtools-teams` | `com.github.istin.dmtools.microsoft.teams` | `com.github.istin:dmtools-teams` |
 | `dmtools-report` | `/dmtools-report` | `com.github.istin.dmtools.report` | `com.github.istin:dmtools-report` |
+| `dmtools-mermaid` | `/dmtools-mermaid` | `com.github.istin.dmtools.mermaid` | `com.github.istin:dmtools-mermaid-renderer` |
 
 ## Child pages
 
@@ -25,3 +26,4 @@ This page is the canonical catalogue for the approved focused DMtools skill pack
 - [dmtools-testrail](dmtools-testrail.md)
 - [dmtools-teams](dmtools-teams.md)
 - [dmtools-report](dmtools-report.md)
+- [dmtools-mermaid](dmtools-mermaid.md)

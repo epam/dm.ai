@@ -1,3 +1,6 @@
 rootProject.name = 'dmtools-cli'
 include 'dmtools-core', 'dmtools-mcp-annotations', 'dmtools-annotation-processor'
-includeBuild 'dmtools-mermaid-renderer'
+def mermaidRendererBuild = new File(settingsDir, 'dmtools-mermaid-renderer')
+if (mermaidRendererBuild.isDirectory()) {
+    includeBuild mermaidRendererBuild
+}
