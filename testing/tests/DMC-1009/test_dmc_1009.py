@@ -96,7 +96,7 @@ def _timestamped_release_tag(now: datetime | None = None) -> str:
 
 
 def _latest_stable_release_tag(client: GitHubActionsReleaseClient) -> str:
-    for release in client.list_releases(per_page=20):
+    for release in client.list_releases(per_page=100):
         tag_name = str(release.get("tag_name", ""))
         if STABLE_RELEASE_TAG_PATTERN.match(tag_name):
             return tag_name

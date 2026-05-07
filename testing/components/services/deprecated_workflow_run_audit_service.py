@@ -20,7 +20,9 @@ from testing.core.models.deprecated_workflow_run_audit import (
 
 
 class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContract):
-    SUMMARY_ECHO_PATTERN = re.compile(r'echo (?P<argument>.+?) >> \$GITHUB_STEP_SUMMARY$')
+    SUMMARY_ECHO_PATTERN = re.compile(
+        r'echo (?P<argument>.+?) >> ["\']?\$GITHUB_STEP_SUMMARY["\']?$'
+    )
     ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
     TIMESTAMP_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T[^ ]+\s+")
     RELEASE_URL_PATTERN = re.compile(r"/releases/tag/(?P<tag>[^)\s]+)")
@@ -403,7 +405,7 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
     ) -> DeprecatedWorkflowReleaseObservation | None:
         payload = release_payload
         candidate_tags = self._candidate_release_tags(release_job)
-        lookup_deadline = self._deadline(self.poll_interval_seconds * 3)
+        lookup_deadline = self._deadline(max(self.poll_interval_seconds * 6, 120))
         while datetime.now(timezone.utc) < lookup_deadline and payload is None:
             for tag in candidate_tags:
                 try:
@@ -452,7 +454,7 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         candidate_tags: tuple[str, ...],
         dispatch_started_at: datetime,
     ) -> dict[str, Any] | None:
-        for release in self.github_client.list_releases(per_page=20):
+        for release in self.github_client.list_releases(per_page=100):
             tag_name = str(release.get("tag_name", "")).strip()
             if candidate_tags and tag_name not in candidate_tags:
                 continue
@@ -469,7 +471,7 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             line = self._normalize_log_line(raw_line)
             if line.startswith("##[group]Run "):
                 continue
-            if ">> $GITHUB_STEP_SUMMARY" not in line:
+            if "$GITHUB_STEP_SUMMARY" not in line:
                 continue
             match = self.SUMMARY_ECHO_PATTERN.search(line)
             if not match:
