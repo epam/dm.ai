@@ -19,9 +19,9 @@ on:
         default: ''
         type: string
       prerelease:
-        description: 'Mark as pre-release'
+        description: 'Mark as pre-release (defaults to true for standalone releases)'
         required: false
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -147,6 +147,7 @@ jobs:
           body_path: release_notes.md
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
+          make_latest: false
           files: |
             ${{ steps.compatibility_artifact.outputs.jar_path }}
 

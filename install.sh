@@ -787,7 +787,7 @@ get_latest_version() {
     local curl_exit_code
 
     # Get all releases (not just latest) to filter CLI releases
-    api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases" 2>&1)
+    api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases?per_page=100" 2>&1)
     curl_exit_code=$?
 
     if [ $curl_exit_code -eq 0 ] && [ -n "$api_response" ]; then

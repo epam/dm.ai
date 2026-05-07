@@ -109,7 +109,8 @@ jobs:
           name: "DMTools Standalone (Deprecated/Internal) ${{ steps.extract_tag.outputs.tag_name }}"
           body_path: release_notes.md
           draft: false
-          prerelease: false
+          prerelease: true
+          make_latest: false
           files: |
             ${{ steps.compatibility_artifact.outputs.jar_path }}
 
