@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -26,6 +27,7 @@ class FakeGitHubActionsReleaseClient(GitHubActionsReleaseClient):
         self.jobs_by_run_id: dict[int, list[dict[str, Any]]] = {}
         self.logs_by_job_id: dict[int, str] = {}
         self.release_by_tag_payload: dict[str, dict[str, Any]] = {}
+        self.list_release_payload: list[dict[str, Any]] = []
 
     def dispatch_workflow(
         self,
@@ -58,9 +60,17 @@ class FakeGitHubActionsReleaseClient(GitHubActionsReleaseClient):
 
     def list_releases(self, per_page: int = 20) -> list[dict[str, Any]]:
         del per_page
-        return []
+        return list(self.list_release_payload)
 
     def release_by_tag(self, tag: str) -> dict[str, Any]:
+        if tag not in self.release_by_tag_payload:
+            raise HTTPError(
+                url=f"https://example.test/releases/tags/{tag}",
+                code=404,
+                msg="Not Found",
+                hdrs=None,
+                fp=None,
+            )
         return dict(self.release_by_tag_payload[tag])
 
     def list_recent_pull_requests(self, limit: int = 20) -> list[dict[str, Any]]:
@@ -171,6 +181,77 @@ def test_service_accepts_release_published_after_dispatch_when_draft_was_created
         "created_at": "2099-05-07T17:05:10Z",
         "published_at": "2099-05-07T18:25:37Z",
     }
+
+    audit = _build_service(client, release_tag=release_tag).audit()
+
+    assert client.dispatch_calls == [
+        (
+            "standalone-release.yml",
+            "main",
+            {"release_tag": release_tag, "flutter_release_tag": "latest"},
+        )
+    ]
+    assert audit.release is not None
+    assert audit.release.tag_name == release_tag
+    assert audit.failures == ()
+
+
+def test_service_accepts_release_from_list_fallback_when_draft_was_created_earlier() -> None:
+    client = FakeGitHubActionsReleaseClient()
+    release_tag = "v2026.0507.182304-standalone"
+    dispatched_run = [
+        {
+            "id": 32,
+            "html_url": "https://example.test/runs/32",
+            "event": "workflow_dispatch",
+            "status": "in_progress",
+            "conclusion": "",
+            "head_branch": "main",
+            "head_sha": client.head_sha,
+            "created_at": "2099-05-07T18:23:39Z",
+            "run_number": 32,
+        }
+    ]
+    client.workflow_runs_responses = [
+        [],
+        dispatched_run,
+    ]
+    client.run_by_id[32] = {
+        "id": 32,
+        "html_url": "https://example.test/runs/32",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": client.head_sha,
+        "created_at": "2099-05-07T18:23:39Z",
+        "run_number": 32,
+    }
+    client.jobs_by_run_id[32] = [
+        {
+            "id": 132,
+            "name": "create-standalone-release",
+            "html_url": "https://example.test/jobs/132",
+            "status": "completed",
+            "conclusion": "success",
+        }
+    ]
+    client.logs_by_job_id[132] = (
+        f"2099-05-07T18:25:37Z tag_name={release_tag}\n"
+        '2099-05-07T18:26:07Z echo "Deprecated / internal-only workflow." >> $GITHUB_STEP_SUMMARY\n'
+    )
+    client.list_release_payload = [
+        {
+            "tag_name": release_tag,
+            "html_url": f"https://example.test/releases/{release_tag}",
+            "body": (
+                "> **Deprecated / internal-only workflow.**\n"
+                "Do not treat this release body as installation guidance."
+            ),
+            "created_at": "2099-05-07T17:05:10Z",
+            "published_at": "2099-05-07T18:25:37Z",
+        }
+    ]
 
     audit = _build_service(client, release_tag=release_tag).audit()
 

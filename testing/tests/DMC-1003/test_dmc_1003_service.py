@@ -436,3 +436,68 @@ def test_service_extracts_step_summary_lines_when_github_summary_path_is_quoted(
         "Deprecated/internal-only packaging workflow\n"
         "> Do not reuse this workflow summary as customer-facing installation guidance."
     )
+
+
+def test_service_accepts_release_published_after_dispatch_even_when_created_at_is_older() -> None:
+    client = FakeGitHubActionsReleaseClient()
+    dispatched_run = [
+        {
+            "id": 22,
+            "html_url": "https://example.test/runs/22",
+            "event": "workflow_dispatch",
+            "status": "in_progress",
+            "conclusion": "",
+            "head_branch": "main",
+            "head_sha": client.head_sha,
+            "created_at": "2099-05-06T12:00:00Z",
+            "run_number": 22,
+        }
+    ]
+    client.workflow_runs_responses = [
+        [],
+        dispatched_run,
+    ]
+    client.run_by_id[22] = {
+        "id": 22,
+        "html_url": "https://example.test/runs/22",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": client.head_sha,
+        "created_at": "2099-05-06T12:00:00Z",
+        "run_number": 22,
+    }
+    client.jobs_by_run_id[22] = [
+        {
+            "id": 106,
+            "name": "auto-standalone-release",
+            "html_url": "https://example.test/jobs/106",
+            "status": "completed",
+            "conclusion": "success",
+        }
+    ]
+    client.logs_by_job_id[106] = (
+        '2099-05-06T12:00:01Z echo "Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY\n'
+        "2099-05-06T12:00:02Z tag_name=v2099.05.06-standalone-abcdef4\n"
+    )
+    client.release_by_tag_payload["v2099.05.06-standalone-abcdef4"] = {
+        "tag_name": "v2099.05.06-standalone-abcdef4",
+        "html_url": "https://example.test/releases/v2099.05.06-standalone-abcdef4",
+        "body": (
+            "> **Deprecated / internal-only workflow.**\n"
+            "Do not treat this release body as installation guidance."
+        ),
+        "created_at": "2099-05-06T11:00:00Z",
+        "published_at": "2099-05-06T12:00:03Z",
+    }
+
+    audit = _build_service(
+        client,
+        release_tag="v2099.05.06-standalone-abcdef4",
+        require_step_summary=True,
+    ).audit()
+
+    assert audit.release is not None
+    assert audit.release.tag_name == "v2099.05.06-standalone-abcdef4"
+    assert audit.failures == ()
