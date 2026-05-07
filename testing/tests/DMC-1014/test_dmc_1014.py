@@ -38,6 +38,8 @@ RELEASE_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/releases/tag/(?P<tag>[^\s)\"']+)"
 )
 USING_TAG_PATTERN = re.compile(r"Using tag:\s*(?P<tag>v[0-9A-Za-z.\-]+)")
+TARGET_OWNER = str(CONFIG["owner"]).strip().lower()
+TARGET_REPO = str(CONFIG["repo"]).strip().lower()
 
 
 @dataclass(frozen=True)
@@ -189,16 +191,26 @@ def _published_release_asset_names(
 
 
 def _release_tag_from_text(text: str) -> str:
-    for pattern in (RELEASE_URL_PATTERN, USING_TAG_PATTERN):
-        match = pattern.search(text)
-        if match:
+    for match in RELEASE_URL_PATTERN.finditer(text):
+        if (
+            str(match.group("owner")).strip().lower() == TARGET_OWNER
+            and str(match.group("repo")).strip().lower() == TARGET_REPO
+        ):
             return str(match.group("tag"))
+    match = USING_TAG_PATTERN.search(text)
+    if match:
+        return str(match.group("tag"))
     return ""
 
 
 def _release_url_from_text(text: str) -> str:
-    match = RELEASE_URL_PATTERN.search(text)
-    return match.group(0) if match else ""
+    for match in RELEASE_URL_PATTERN.finditer(text):
+        if (
+            str(match.group("owner")).strip().lower() == TARGET_OWNER
+            and str(match.group("repo")).strip().lower() == TARGET_REPO
+        ):
+            return match.group(0)
+    return ""
 
 
 def _release_payload_from_tag(
