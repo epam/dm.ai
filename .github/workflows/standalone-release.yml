@@ -19,9 +19,9 @@ on:
         default: ''
         type: string
       prerelease:
-        description: 'Mark as pre-release'
+        description: 'Mark as pre-release (defaults to true for standalone releases)'
         required: false
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -44,9 +44,9 @@ jobs:
           echo "Release tag: ${RELEASE_TAG}"
           echo "Flutter tag: ${FLUTTER_TAG}"
 
-          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-standalone$ ]]; then
             echo "ERROR: Invalid release tag format: ${RELEASE_TAG}"
-            echo "Expected format: v1.0.0 or v1.0.0-standalone"
+            echo "Expected format: v1.0.0-standalone (the -standalone suffix is required)"
             exit 1
           fi
 
@@ -147,6 +147,7 @@ jobs:
           body_path: release_notes.md
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
+          make_latest: false
           files: |
             ${{ steps.compatibility_artifact.outputs.jar_path }}
 
