@@ -426,8 +426,8 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         if payload is None:
             return None
 
-        created_at = self._parse_github_datetime(str(payload.get("created_at", "")))
-        if created_at is not None and created_at < dispatch_started_at - timedelta(minutes=5):
+        visible_at = self._release_visibility_datetime(payload)
+        if visible_at is not None and visible_at < dispatch_started_at - timedelta(minutes=5):
             return None
 
         return DeprecatedWorkflowReleaseObservation(
@@ -458,8 +458,8 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             tag_name = str(release.get("tag_name", "")).strip()
             if candidate_tags and tag_name not in candidate_tags:
                 continue
-            created_at = self._parse_github_datetime(str(release.get("created_at", "")))
-            if created_at is None or created_at < dispatch_started_at - timedelta(minutes=5):
+            visible_at = self._release_visibility_datetime(release)
+            if visible_at is None or visible_at < dispatch_started_at - timedelta(minutes=5):
                 continue
             if candidate_tags or self._release_looks_like_deprecated_workflow_output(release):
                 return release
@@ -530,6 +530,13 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         if not body:
             return False
         return all(marker in body for marker in self.required_notice_markers)
+
+    def _release_visibility_datetime(self, payload: dict[str, Any]) -> datetime | None:
+        for field in ("published_at", "created_at", "updated_at"):
+            parsed = self._parse_github_datetime(str(payload.get(field, "")))
+            if parsed is not None:
+                return parsed
+        return None
 
     @staticmethod
     def _preview_text(value: str, *, limit: int) -> str:
