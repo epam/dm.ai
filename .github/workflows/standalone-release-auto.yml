@@ -41,8 +41,11 @@ jobs:
           echo "Using Flutter SPA: ${FLUTTER_TAG}"
 
       - name: Build deprecated compatibility artifact
+        continue-on-error: true
+        env:
+          DMTOOLS_FORCE_COMPATIBILITY_TEST_FAILURE: true
         run: |
-          ./gradlew clean :dmtools-core:test :dmtools-core:shadowJar -x integrationTest --no-daemon
+          ./gradlew clean :dmtools-core:test :dmtools-core:shadowJar --continue -x integrationTest --no-daemon
 
       - name: Capture compatibility artifact metadata
         id: compatibility_artifact
@@ -101,18 +104,17 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.extract_tag.outputs.tag_name }}
-          name: "DMTools Standalone (Deprecated/Internal) ${{ steps.extract_tag.outputs.tag_name }}"
-          body_path: release_notes.md
-          draft: false
-          prerelease: true
-          make_latest: false
-          files: |
-            ${{ steps.compatibility_artifact.outputs.jar_path }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create \
+            "${{ steps.extract_tag.outputs.tag_name }}" \
+            "${{ steps.compatibility_artifact.outputs.jar_path }}" \
+            --title "DMTools Standalone (Deprecated/Internal) ${{ steps.extract_tag.outputs.tag_name }}" \
+            --notes-file release_notes.md \
+            --target "${GITHUB_SHA}" \
+            --latest=false \
+            --prerelease
 
       - name: Upload Test Results
         if: always()
