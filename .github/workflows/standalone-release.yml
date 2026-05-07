@@ -151,13 +151,25 @@ jobs:
             --notes-file release_notes.md
             --target "${GITHUB_SHA}"
             --latest=false
+            --draft
+          )
+
+          gh release create "${release_args[@]}"
+
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          publish_args=(
+            "${{ github.event.inputs.release_tag }}"
+            --draft=false
           )
 
           if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
-            release_args+=(--prerelease)
+            publish_args+=(--prerelease)
           fi
 
-          gh release create "${release_args[@]}"
+          gh release edit "${publish_args[@]}"
 
       - name: Upload Test Results
         if: always()
