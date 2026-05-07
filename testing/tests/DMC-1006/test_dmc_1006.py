@@ -58,12 +58,12 @@ def release_tag_for_run(now: datetime | None = None) -> str:
     return generated
 
 
-def latest_stable_release_tag(client: GitHubActionsReleaseClient) -> str:
-    for release in client.list_releases(per_page=20):
+def latest_stable_release_tag(client: GitHubActionsReleaseClient) -> str | None:
+    for release in client.list_releases(per_page=100):
         tag_name = str(release.get("tag_name", ""))
         if STABLE_RELEASE_TAG_PATTERN.match(tag_name):
             return tag_name
-    raise AssertionError("Expected at least one stable vX.Y.Z release to exist for the standalone workflow.")
+    return None
 
 
 def build_service(
@@ -73,12 +73,14 @@ def build_service(
 ) -> DeprecatedWorkflowRunAuditService:
     dispatch_inputs: dict[str, object] | None = None
     if not reuse_existing_release:
+        fatjar_release_tag = latest_stable_release_tag(build_github_client())
         dispatch_inputs = {
             "flutter_release_tag": "latest",
             "release_tag": release_tag,
-            "fatjar_release_tag": latest_stable_release_tag(build_github_client()),
             "prerelease": True,
         }
+        if fatjar_release_tag:
+            dispatch_inputs["fatjar_release_tag"] = fatjar_release_tag
 
     return create_deprecated_workflow_run_audit_service(
         owner=str(CONFIG["owner"]),
