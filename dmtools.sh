@@ -39,7 +39,7 @@ find_java_command() {
 
 # Get Java command or error
 JAVA_CMD=$(find_java_command 2>/dev/null) || {
-    echo "Error: Java 23 is required but not found." >&2
+    echo "Error: Java 17+ is required but not found." >&2
     echo "Please install DMTools first:" >&2
     echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash" >&2
     exit 1
@@ -199,7 +199,7 @@ usage() {
 Or if you're developing locally, build the project first:
   ./gradlew build
 
-Note: Java 23 is required for DMTools to run."
+Note: Java 17+ is required for DMTools to run."
     fi
     execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner
     exit 0
@@ -325,7 +325,7 @@ if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
 Or if you're developing locally, build the project first:
   ./gradlew build
 
-Note: Java 23 is required for DMTools to run."
+Note: Java 17+ is required for DMTools to run."
 fi
 
 # Check if command starts with - or --, then proxy directly to JobRunner

@@ -1035,7 +1035,7 @@ is_windows() {
     return 1
 }
 
-# Download and install Java 23 locally
+# Download and install Java 17 locally
 install_local_java() {
     local platform="$1"
     local jre_dir="$INSTALL_DIR/jre"
@@ -1251,7 +1251,7 @@ check_java() {
     if ! command -v java >/dev/null 2>&1; then
         # First check if we're on Windows - don't try to install Java automatically
         if is_windows; then
-            error "Java 17+ is required but not installed. Please install Java 23 manually on Windows:
+            error "Java 17+ is required but not installed. Please install Java 17 manually on Windows:
   - Download from: https://adoptium.net/
   - Or use Chocolatey: choco install temurin17jdk
   - Or use Windows installer: https://adoptium.net/temurin/releases/?version=17
@@ -1273,11 +1273,11 @@ steps:
         elif [[ "$OSTYPE" == "darwin"* ]]; then
             warn "Java not found. Attempting to install via Homebrew..."
             if command -v brew >/dev/null 2>&1; then
-                progress "Installing OpenJDK 23 via Homebrew..."
+                progress "Installing OpenJDK 17 via Homebrew..."
                 brew install openjdk@17 || error "Failed to install Java via Homebrew"
                 info "Java installed successfully via Homebrew"
             else
-                error "Java 17+ is required but not installed. Please install Java 23:
+                error "Java 17+ is required but not installed. Please install Java 17:
   - Via Homebrew: brew install openjdk@17
   - Via Oracle: https://www.oracle.com/java/technologies/downloads/
   - Via Eclipse Temurin: https://adoptium.net/"
@@ -1286,25 +1286,25 @@ steps:
             # This is real Linux (not Windows/WSL)
             if command -v apt-get >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via apt..."
-                progress "Installing OpenJDK 23..."
-                sudo apt-get update && sudo apt-get install -y openjdk-17-jdk || error "Failed to install Java 23 via apt. Please install manually."
+                progress "Installing OpenJDK 17..."
+                sudo apt-get update && sudo apt-get install -y openjdk-17-jdk || error "Failed to install Java 17 via apt. Please install manually."
                 info "Java installed successfully"
             elif command -v yum >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via yum..."
-                sudo yum install -y java-17-openjdk-devel || error "Failed to install Java 23 via yum. Please install manually."
+                sudo yum install -y java-17-openjdk-devel || error "Failed to install Java 17 via yum. Please install manually."
                 info "Java installed successfully"
             elif command -v dnf >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via dnf..."
-                sudo dnf install -y java-17-openjdk-devel || error "Failed to install Java 23 via dnf. Please install manually."
+                sudo dnf install -y java-17-openjdk-devel || error "Failed to install Java 17 via dnf. Please install manually."
                 info "Java installed successfully"
             else
-                error "Java 17+ is required but not installed. Please install Java 23:
+                error "Java 17+ is required but not installed. Please install Java 17:
   - Ubuntu/Debian: sudo apt-get install openjdk-17-jdk
   - RHEL/CentOS: sudo yum install java-17-openjdk-devel
   - Fedora: sudo dnf install java-17-openjdk-devel"
             fi
         else
-            error "Java 17+ is required but not installed. Please install Java 23."
+            error "Java 17+ is required but not installed. Please install Java 17."
         fi
     fi
 
@@ -1321,7 +1321,7 @@ steps:
             error "Java $java_version is too old. DMTools requires Java 17+."
         fi
     else
-        error "Java installation failed. Please install Java 23 manually."
+        error "Java installation failed. Please install Java 17 manually."
     fi
 }
 

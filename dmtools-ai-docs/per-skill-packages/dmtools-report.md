@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills report
+bash skill-install.sh --skills report
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools run dmtools-ai-docs/references/examples/report-generator-job.json
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

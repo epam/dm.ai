@@ -9,15 +9,15 @@
 #   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
 #   # When piped (non-interactive): installs to ALL detected locations automatically
 #
-#   DMTOOLS_SKILLS=jira,github bash install.sh      # Install focused skills only
-#   INSTALL_LOCATION=1 bash install.sh              # Install to first detected location only
-#   bash install.sh --all                           # Install to all detected locations
-#   bash install.sh --skill jira                    # Select one package explicitly
-#   bash install.sh --skills=jira,github            # Allowed alias for multi-skill selection
-#   bash install.sh --all-skills                    # Select every supported package
-#   bash install.sh --skills=jira,unknown           # Fails and lists invalid names
-#   bash install.sh --skills=jira,unknown --skip-unknown  # Warns and keeps valid skills
-#   bash install.sh                             # Interactive mode: ask user to choose
+#   DMTOOLS_SKILLS=jira,github bash skill-install.sh      # Install focused skills only
+#   INSTALL_LOCATION=1 bash skill-install.sh              # Install to first detected location only
+#   bash skill-install.sh --all                           # Install to all detected locations
+#   bash skill-install.sh --skill jira                    # Select one package explicitly
+#   bash skill-install.sh --skills=jira,github            # Allowed alias for multi-skill selection
+#   bash skill-install.sh --all-skills                    # Select every supported package
+#   bash skill-install.sh --skills=jira,unknown           # Fails and lists invalid names
+#   bash skill-install.sh --skills=jira,unknown --skip-unknown  # Warns and keeps valid skills
+#   bash skill-install.sh                                 # Interactive mode: ask user to choose
 
 set -e
 
@@ -107,22 +107,22 @@ while [ $# -gt 0 ]; do
             echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,github"
             echo "    → Install only /dmtools-jira and /dmtools-github"
             echo ""
-            echo "  bash install.sh"
+            echo "  bash skill-install.sh"
             echo "    → Interactive mode: shows menu to choose location"
             echo ""
-            echo "  INSTALL_LOCATION=1 bash install.sh"
+            echo "  INSTALL_LOCATION=1 bash skill-install.sh"
             echo "    → Install to first location only"
             echo ""
-            echo "  bash install.sh --all"
+            echo "  bash skill-install.sh --all"
             echo "    → Install to all locations"
             echo ""
-            echo "  bash install.sh --all-skills"
+            echo "  bash skill-install.sh --all-skills"
             echo "    → Select every supported skill package"
             echo ""
-            echo "  bash install.sh --skills=jira,unknown"
+            echo "  bash skill-install.sh --skills=jira,unknown"
             echo "    → Fails with a non-zero exit and lists the invalid names"
             echo ""
-            echo "  bash install.sh --skills=jira,unknown --skip-unknown"
+            echo "  bash skill-install.sh --skills=jira,unknown --skip-unknown"
             echo "    → Downgrades invalid skill names to warnings and installs Jira"
             echo ""
             echo "Note: Installs to project-level and global (~/.claude/skills) directories"

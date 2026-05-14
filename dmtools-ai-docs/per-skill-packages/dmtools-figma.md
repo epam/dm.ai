@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills figma
+bash skill-install.sh --skills figma
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools figma_get_layers "https://www.figma.com/file/abc123/Product?node-id=1%3A
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

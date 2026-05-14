@@ -33,22 +33,22 @@ Non-interactive mode detected, installing to all detected locations
 ### Advanced Installation Options
 
 ```bash
-# Interactive mode: choose specific location
-bash install.sh
+# Interactive mode: choose specific location after downloading skill-install.sh
+bash skill-install.sh
 
 # Install to specific location only
-INSTALL_LOCATION=1 bash install.sh    # First location (.cursor)
-INSTALL_LOCATION=2 bash install.sh    # Second location (.claude)
+INSTALL_LOCATION=1 bash skill-install.sh    # First location (.cursor)
+INSTALL_LOCATION=2 bash skill-install.sh    # Second location (.claude)
 
 # Install to all locations (explicit)
-bash install.sh --all
+bash skill-install.sh --all
 
 # Install only selected focused skills
-DMTOOLS_SKILLS=jira,github bash install.sh
-bash install.sh --skills jira,github
+DMTOOLS_SKILLS=jira,github bash skill-install.sh
+bash skill-install.sh --skills jira,github
 
 # Show help
-bash install.sh --help
+bash skill-install.sh --help
 ```
 
 ## Install Only the Skills You Need
@@ -72,8 +72,9 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 # Install Jira + GitHub together
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github
 
-# Local installer usage
-bash install.sh --skills ado,testrail
+# Download the installer first, then reuse it locally
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh -o skill-install.sh
+bash skill-install.sh --skills ado,testrail
 ```
 
 ```powershell
@@ -94,6 +95,10 @@ irm https://github.com/epam/dm.ai/releases/latest/download/skill-install.ps1 | i
 | `.codex/skills/` | Codex | Project-specific skill for Codex |
 
 **Note**: The installer no longer supports global (user-level) installation. Each project should have its own skill installation to ensure version compatibility.
+
+## 🧬 Child Agent Config Inheritance
+
+When you need a base Agent Skill config plus specialized child configs, use the existing root-level `parent` block and deep-merge rules documented in [Config inheritance via `parent`](references/configuration/json-config-rules.md#config-inheritance-via-parent).
 
 ## 🎯 What's Included
 
