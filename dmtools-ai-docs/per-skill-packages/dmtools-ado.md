@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills ado
+bash skill-install.sh --skills ado
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools ado_get_work_item 12345
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills confluence
+bash skill-install.sh --skills confluence
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools confluence_content_by_title_and_space "Onboarding" "TEAM"
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-
