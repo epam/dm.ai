@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills github
+bash skill-install.sh --skills github
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools github_get_pr workspace=epam repository=dm.ai pullRequestId=42
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

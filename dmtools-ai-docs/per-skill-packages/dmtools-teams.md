@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills teams
+bash skill-install.sh --skills teams
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools teams_messages_since "Release Coordination" "2026-05-01T00:00:00Z"
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

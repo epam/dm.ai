@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills jira
+bash skill-install.sh --skills jira
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools jira_get_ticket PROJ-123
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

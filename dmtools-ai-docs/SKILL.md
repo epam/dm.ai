@@ -40,6 +40,8 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | b
 
 **Focused skill packages:** install only the integrations you need with `DMTOOLS_SKILLS=jira,github` and the skill installer described in [references/installation/README.md#install-only-the-skills-you-need](references/installation/README.md#install-only-the-skills-you-need).
 
+**Child agent configs:** define a shared base config and extend it with the existing [`parent` inheritance pattern](references/configuration/json-config-rules.md#config-inheritance-via-parent).
+
 ### Step 1: Check if DMtools is installed
 ```bash
 # Check if dmtools command is available

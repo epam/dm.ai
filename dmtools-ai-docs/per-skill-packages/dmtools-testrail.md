@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills testrail
+bash skill-install.sh --skills testrail
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools testrail_get_cases_by_refs PROJ-123 "Regression"
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

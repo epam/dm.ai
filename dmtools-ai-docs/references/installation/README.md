@@ -58,11 +58,15 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 # Install every supported skill package
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --all-skills
 
+# Download the installer first when you want to reuse it locally
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh -o skill-install.sh
+bash skill-install.sh --skills=jira,github
+
 # Invalid skill names cause a non-zero exit and list the invalid names
-bash install.sh --skills=jira,unknown
+bash skill-install.sh --skills=jira,unknown
 
 # Use --skip-unknown to downgrade invalid skill names to warnings
-bash install.sh --skills=jira,unknown --skip-unknown
+bash skill-install.sh --skills=jira,unknown --skip-unknown
 ```
 
 ```powershell
@@ -78,6 +82,10 @@ When `--skip-unknown` is provided, invalid skill names are downgraded to warning
 1. Download the ZIP or TAR for the skill you need.
 2. Extract it into `.cursor/skills/`, `.claude/skills/`, or `.codex/skills/`.
 3. The extracted folder name becomes the slash command, for example `dmtools-jira` → `/dmtools-jira`.
+
+### Child agent configs and shared defaults
+
+If you maintain a base config plus child agent variants, DMtools already supports root-level `parent` inheritance. See [Config inheritance via `parent`](../configuration/json-config-rules.md#config-inheritance-via-parent) for the merge and override rules.
 
 ### Upgrading from legacy installs
 
