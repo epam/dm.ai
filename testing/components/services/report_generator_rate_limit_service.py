@@ -4,8 +4,8 @@ import json
 import shutil
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from contextlib import AbstractContextManager
-from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock, Thread
@@ -13,47 +13,12 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from testing.core.interfaces.process_runner import ProcessRunner
-
-
-@dataclass(frozen=True)
-class MockRequestRecord:
-    path: str
-    query: dict[str, tuple[str, ...]]
-    status: int
-    timestamp: float
-
-
-@dataclass(frozen=True)
-class ReportGeneratorRateLimitAudit:
-    returncode: int
-    stdout: str
-    stderr: str
-    combined_output: str
-    output_json_path: str
-    output_html_path: str
-    observed_retry_seconds: float
-    retry_after_seconds: int
-    minimum_observed_retry_seconds: float
-    request_records: list[MockRequestRecord]
-    report_name: str
-    report_metrics: dict[str, dict[str, Any]]
-    html_excerpt: str
-    html_contains_report_name: bool
-    html_contains_pr_approvals: bool
-    html_contains_commits: bool
-
-    def to_summary(self) -> dict[str, Any]:
-        summary = asdict(self)
-        summary["request_records"] = [
-            {
-                "path": record.path,
-                "query": record.query,
-                "status": record.status,
-                "timestamp": record.timestamp,
-            }
-            for record in self.request_records
-        ]
-        return summary
+from testing.core.models.report_generator_rate_limit_audit import (
+    MockRequestRecord,
+    ReportGeneratorRateLimitAudit,
+    ReportGeneratorRateLimitCheck,
+    ReportGeneratorRateLimitFailure,
+)
 
 
 class _MockGitHubState:
@@ -202,22 +167,29 @@ class _MockGitHubApiServer(AbstractContextManager["_MockGitHubApiServer"]):
 
 
 class ReportGeneratorRateLimitService:
+    DEFAULT_TEST_CLASS = "com.github.istin.dmtools.reporting.ReportGeneratorTest"
+    DEFAULT_TEST_METHODS = (
+        "testCollectDataFromAllSources_retriesOnlyInterruptedGitHubMetric",
+        "testCalculateRateLimitDelayMs_usesGitHubResetHeaderBeyondDefaultRetryCap",
+    )
     REPORT_NAME = "DMC-1032 Partial Progress Report"
     PR_APPROVALS_LABEL = "PR Approvals"
     COMMITS_LABEL = "Commits"
 
     def __init__(
         self,
-        *,
         repository_root: Path,
         runner: ProcessRunner,
-        workspace: str,
-        repository: str,
-        branch: str,
-        start_date: str,
-        end_date: str,
-        retry_after_seconds: int,
-        minimum_observed_retry_seconds: float,
+        *,
+        workspace: str | None = None,
+        repository: str | None = None,
+        branch: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        retry_after_seconds: int | None = None,
+        minimum_observed_retry_seconds: float | None = None,
+        test_class: str = DEFAULT_TEST_CLASS,
+        test_methods: tuple[str, ...] = DEFAULT_TEST_METHODS,
     ) -> None:
         self.repository_root = repository_root
         self.runner = runner
@@ -228,21 +200,235 @@ class ReportGeneratorRateLimitService:
         self.end_date = end_date
         self.retry_after_seconds = retry_after_seconds
         self.minimum_observed_retry_seconds = minimum_observed_retry_seconds
+        self.test_class = test_class
+        self.test_methods = test_methods
         self.gradlew_path = repository_root / "gradlew"
         self.shadow_jar_directory = repository_root / "build" / "libs"
+        self.junit_report_path = (
+            repository_root / "dmtools-core" / "build" / "test-results" / "test" / f"TEST-{test_class}.xml"
+        )
+        self.gradle_command = self._build_gradle_command()
 
     def audit(self) -> ReportGeneratorRateLimitAudit:
+        if self._is_live_report_mode():
+            return self._audit_partial_progress_live_run()
+        return self._audit_gradle_regression_run()
+
+    def human_observations(self, audit: ReportGeneratorRateLimitAudit) -> list[str]:
+        if audit.observed_checks:
+            observations: list[str] = []
+            build_outcome = (
+                "BUILD SUCCESSFUL"
+                if "BUILD SUCCESSFUL" in audit.combined_output
+                else "BUILD FAILED"
+            )
+            observations.append(
+                "Maintainer flow: running "
+                f"`{' '.join(audit.gradle_command)}` exited {audit.returncode} and showed "
+                f"`{build_outcome}`."
+            )
+
+            retry_warning = self._first_matching_line(
+                audit.system_out,
+                "Rate limit interrupted metric 'PullRequestsApprovalsMetricSource'",
+            )
+            if retry_warning is not None:
+                observations.append(f"Observable retry evidence: `{retry_warning}`")
+
+            recovered_metric = self._first_matching_line(
+                audit.system_out,
+                "Metric 'PullRequestsApprovalsMetricSource': collected 1 items",
+            )
+            if recovered_metric is not None:
+                observations.append(f"Observable completion evidence: `{recovered_metric}`")
+
+            checks = {check.name: check for check in audit.observed_checks}
+            delay_check = checks.get(
+                "testCalculateRateLimitDelayMs_usesGitHubResetHeaderBeyondDefaultRetryCap"
+            )
+            if delay_check is not None:
+                observations.append(
+                    "Reset-header regression evidence: "
+                    f"`{self.test_class}.{delay_check.name}` finished with status `{delay_check.status}`."
+                )
+
+            if audit.junit_report_path is not None and audit.junit_report_path.exists():
+                observations.append(
+                    "JUnit evidence: "
+                    f"`{audit.junit_report_path.relative_to(self.repository_root).as_posix()}` was "
+                    "produced for the executed regression run."
+                )
+            return observations
+
+        observations = [
+            f"Live ReportGenerator run exited {audit.returncode} after observing "
+            f"{audit.observed_retry_seconds:.3f}s between the throttled and successful commits requests."
+        ]
+        if audit.output_json_path:
+            observations.append(f"Preserved JSON report artifact: `{audit.output_json_path}`.")
+        if audit.output_html_path:
+            observations.append(f"Preserved HTML report artifact: `{audit.output_html_path}`.")
+        return observations
+
+    def format_failures(self, audit: ReportGeneratorRateLimitAudit) -> str:
+        if audit.failures:
+            lines = [
+                "DMC-1030 ReportGenerator rate-limit regression failed.",
+                "",
+                *[failure.format() for failure in audit.failures],
+                "",
+                "Gradle stdout:",
+                audit.stdout.rstrip() or "<empty>",
+                "",
+                "Gradle stderr:",
+                audit.stderr.rstrip() or "<empty>",
+            ]
+            if audit.observed_checks:
+                lines.extend(
+                    [
+                        "",
+                        "Observed JUnit checks:",
+                        *[f"- {check.describe()}" for check in audit.observed_checks],
+                    ]
+                )
+            return "\n".join(lines)
+
+        if audit.request_records:
+            return "\n".join(
+                [
+                    "DMC-1032 ReportGenerator partial-progress retry validation failed.",
+                    "",
+                    f"Return code: {audit.returncode}",
+                    f"Observed retry delay: {audit.observed_retry_seconds:.3f}s",
+                    f"Expected minimum delay: {audit.minimum_observed_retry_seconds:.3f}s",
+                    "",
+                    "stdout:",
+                    audit.stdout.rstrip() or "<empty>",
+                    "",
+                    "stderr:",
+                    audit.stderr.rstrip() or "<empty>",
+                ]
+            )
+
+        return (
+            "ReportGenerator should preserve already collected data, honor the retry delay, "
+            "and finish the same report run successfully."
+        )
+
+    def _audit_gradle_regression_run(self) -> ReportGeneratorRateLimitAudit:
+        test_results_path = self.junit_report_path.parent
+        test_report_directory = self.repository_root / "dmtools-core" / "build" / "reports" / "tests" / "test"
+        if test_results_path.exists():
+            shutil.rmtree(test_results_path)
+        if test_report_directory.exists():
+            shutil.rmtree(test_report_directory)
+
+        execution = self.runner.run(self.gradle_command, cwd=self.repository_root)
+        observed_checks, system_out, system_err = self._load_junit_report()
+        failures: list[ReportGeneratorRateLimitFailure] = []
+        command_display = " ".join(self.gradle_command)
+        combined_output = execution.combined_output
+
+        if execution.returncode != 0:
+            failures.append(
+                ReportGeneratorRateLimitFailure(
+                    step=1,
+                    summary="The maintainer-visible ReportGenerator regression command failed.",
+                    expected=(
+                        f"`{command_display}` should exit 0 so the live implementation can prove the "
+                        "rate-limit recovery flow still passes."
+                    ),
+                    actual=(
+                        f"`{command_display}` exited {execution.returncode}.\n"
+                        f"{combined_output or '<no Gradle output>'}"
+                    ),
+                )
+            )
+        elif "BUILD SUCCESSFUL" not in combined_output:
+            failures.append(
+                ReportGeneratorRateLimitFailure(
+                    step=1,
+                    summary="The Gradle output did not visibly confirm a successful maintainer flow.",
+                    expected=(
+                        f"`{command_display}` should show `BUILD SUCCESSFUL` after the targeted "
+                        "ReportGenerator regression checks complete."
+                    ),
+                    actual=combined_output or "<no Gradle output>",
+                )
+            )
+
+        if not self.junit_report_path.exists():
+            failures.append(
+                ReportGeneratorRateLimitFailure(
+                    step=2,
+                    summary="The JUnit report for the targeted ReportGenerator regression was not produced.",
+                    expected=(
+                        "Gradle should write the ReportGenerator test report so the ticket automation can "
+                        "confirm which retry checks passed."
+                    ),
+                    actual=(
+                        f"`{self.junit_report_path.relative_to(self.repository_root).as_posix()}` "
+                        "does not exist."
+                    ),
+                )
+            )
+        else:
+            observed_by_name = {check.name: check for check in observed_checks}
+            for method_name in self.test_methods:
+                observed = observed_by_name.get(method_name)
+                if observed is None:
+                    failures.append(
+                        ReportGeneratorRateLimitFailure(
+                            step=3,
+                            summary="A required ReportGenerator regression check was not executed.",
+                            expected=(
+                                "The targeted Gradle run should report the exact JUnit method that "
+                                "proves the ticket scenario."
+                            ),
+                            actual=f"Missing JUnit testcase `{self.test_class}.{method_name}`.",
+                        )
+                    )
+                    continue
+                if observed.status != "passed":
+                    failures.append(
+                        ReportGeneratorRateLimitFailure(
+                            step=3,
+                            summary="A required ReportGenerator regression check did not pass.",
+                            expected=(
+                                f"`{self.test_class}.{method_name}` should pass to confirm the "
+                                "rate-limit retry behavior is still correct."
+                            ),
+                            actual=observed.describe(),
+                        )
+                    )
+
+        return ReportGeneratorRateLimitAudit(
+            gradle_command=self.gradle_command,
+            execution=execution,
+            junit_report_path=self.junit_report_path,
+            observed_checks=observed_checks,
+            system_out=system_out,
+            system_err=system_err,
+            failures=tuple(failures),
+            returncode=execution.returncode,
+            stdout=execution.stdout,
+            stderr=execution.stderr,
+        )
+
+    def _audit_partial_progress_live_run(self) -> ReportGeneratorRateLimitAudit:
+        self._validate_live_report_configuration()
+
         with tempfile.TemporaryDirectory(prefix="dmc-1032-report-") as temp_dir:
             temp_path = Path(temp_dir)
             output_dir = temp_path / "reports"
             output_dir.mkdir(parents=True)
 
-            with _MockGitHubApiServer(retry_after_seconds=self.retry_after_seconds) as server:
-                execution = self._run_report_job(
+            with _MockGitHubApiServer(retry_after_seconds=int(self.retry_after_seconds)) as server:
+                execution = self._run_live_report_job(
                     base_url=server.base_url,
                     output_dir=output_dir,
                 )
-                request_records = server.request_records()
+                request_records = tuple(server.request_records())
 
             output_json_path = output_dir / "DMC-1032_Partial_Progress_Report.json"
             output_html_path = output_dir / "DMC-1032_Partial_Progress_Report.html"
@@ -255,19 +441,18 @@ class ReportGeneratorRateLimitService:
 
         period = report["timePeriods"][0]
         metrics = period["metrics"]
-        retry_window = self._observed_retry_seconds(request_records)
+        retry_window = self._observed_retry_seconds(list(request_records))
         normalized_html = " ".join(html_text.split())
 
         return ReportGeneratorRateLimitAudit(
             returncode=execution.returncode,
             stdout=execution.stdout,
             stderr=execution.stderr,
-            combined_output=execution.combined_output,
             output_json_path=str(persisted_output_json_path),
             output_html_path=str(persisted_output_html_path),
             observed_retry_seconds=retry_window,
-            retry_after_seconds=self.retry_after_seconds,
-            minimum_observed_retry_seconds=self.minimum_observed_retry_seconds,
+            retry_after_seconds=int(self.retry_after_seconds),
+            minimum_observed_retry_seconds=float(self.minimum_observed_retry_seconds),
             request_records=request_records,
             report_name=str(report["reportName"]),
             report_metrics={
@@ -284,7 +469,7 @@ class ReportGeneratorRateLimitService:
             html_contains_commits=self.COMMITS_LABEL in normalized_html,
         )
 
-    def _run_report_job(self, *, base_url: str, output_dir: Path):
+    def _run_live_report_job(self, *, base_url: str, output_dir: Path):
         jar_path = self._find_shadow_jar() if any(self.shadow_jar_directory.glob("*-all.jar")) else self._build_shadow_jar()
         payload = {
             "name": "ReportGenerator",
@@ -397,7 +582,49 @@ class ReportGeneratorRateLimitService:
             )
         return jars[0]
 
+    def _build_gradle_command(self) -> tuple[str, ...]:
+        command = ["./gradlew", "--no-daemon", ":dmtools-core:test"]
+        for method_name in self.test_methods:
+            command.extend(["--tests", f"{self.test_class}.{method_name}"])
+        return tuple(command)
+
+    def _load_junit_report(
+        self,
+    ) -> tuple[tuple[ReportGeneratorRateLimitCheck, ...], str, str]:
+        if not self.junit_report_path.exists():
+            return (), "", ""
+
+        root = ET.fromstring(self.junit_report_path.read_text(encoding="utf-8"))
+        checks: list[ReportGeneratorRateLimitCheck] = []
+        for testcase in root.findall("testcase"):
+            status = "passed"
+            failure_message = ""
+            if testcase.find("failure") is not None:
+                status = "failed"
+                failure = testcase.find("failure")
+                failure_message = ((failure.text or "").strip() if failure is not None else "")
+            elif testcase.find("error") is not None:
+                status = "error"
+                error = testcase.find("error")
+                failure_message = ((error.text or "").strip() if error is not None else "")
+
+            checks.append(
+                ReportGeneratorRateLimitCheck(
+                    name=str(testcase.attrib.get("name", "")).removesuffix("()"),
+                    classname=str(testcase.attrib.get("classname", "")),
+                    time_seconds=float(testcase.attrib.get("time", "0") or 0.0),
+                    status=status,
+                    failure_message=failure_message,
+                )
+            )
+        system_out = (root.findtext("system-out") or "").strip()
+        system_err = (root.findtext("system-err") or "").strip()
+        return tuple(checks), system_out, system_err
+
     def _observed_retry_seconds(self, request_records: list[MockRequestRecord]) -> float:
+        if self.workspace is None or self.repository is None:
+            raise AssertionError("Live report configuration is incomplete.")
+
         first_attempt: float | None = None
         second_attempt: float | None = None
         for record in request_records:
@@ -419,16 +646,56 @@ class ReportGeneratorRateLimitService:
         return second_attempt - first_attempt
 
     def _persist_report_artifacts(self, *, output_json_path: Path, output_html_path: Path) -> tuple[Path, Path]:
-        artifacts_root = self.repository_root / "testing" / ".artifacts" / "DMC-1032"
-        artifacts_root.mkdir(parents=True, exist_ok=True)
-        artifact_dir = Path(tempfile.mkdtemp(prefix="report-", dir=artifacts_root))
+        artifact_dir = Path(tempfile.mkdtemp(prefix="dmc-1032-report-artifacts-"))
         persisted_output_json_path = artifact_dir / output_json_path.name
         persisted_output_html_path = artifact_dir / output_html_path.name
         shutil.copy2(output_json_path, persisted_output_json_path)
         shutil.copy2(output_html_path, persisted_output_html_path)
         return persisted_output_json_path, persisted_output_html_path
 
-    def _html_excerpt(self, normalized_html: str) -> str:
+    def _validate_live_report_configuration(self) -> None:
+        missing_values = [
+            name
+            for name, value in (
+                ("workspace", self.workspace),
+                ("repository", self.repository),
+                ("branch", self.branch),
+                ("start_date", self.start_date),
+                ("end_date", self.end_date),
+                ("retry_after_seconds", self.retry_after_seconds),
+                ("minimum_observed_retry_seconds", self.minimum_observed_retry_seconds),
+            )
+            if value is None
+        ]
+        if missing_values:
+            raise ValueError(
+                "Live ReportGenerator audit mode requires: " + ", ".join(missing_values)
+            )
+
+    def _is_live_report_mode(self) -> bool:
+        return any(
+            value is not None
+            for value in (
+                self.workspace,
+                self.repository,
+                self.branch,
+                self.start_date,
+                self.end_date,
+                self.retry_after_seconds,
+                self.minimum_observed_retry_seconds,
+            )
+        )
+
+    @staticmethod
+    def _first_matching_line(text: str, marker: str) -> str | None:
+        for line in text.splitlines():
+            normalized = line.strip()
+            if marker in normalized:
+                return normalized
+        return None
+
+    @staticmethod
+    def _html_excerpt(normalized_html: str) -> str:
         if len(normalized_html) <= 500:
             return normalized_html
         return normalized_html[:500] + "..."

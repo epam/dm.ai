@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
-if TYPE_CHECKING:
-    from testing.components.services.report_generator_rate_limit_service import (
-        ReportGeneratorRateLimitAudit,
-    )
+from testing.core.models.report_generator_rate_limit_audit import (
+    ReportGeneratorRateLimitAudit,
+)
 
 
 class ReportGeneratorRateLimitService(Protocol):
-    def audit(self) -> "ReportGeneratorRateLimitAudit":
+    def audit(self) -> ReportGeneratorRateLimitAudit:
+        raise NotImplementedError
+
+    def human_observations(self, audit: ReportGeneratorRateLimitAudit) -> list[str]:
+        raise NotImplementedError
+
+    def format_failures(self, audit: ReportGeneratorRateLimitAudit) -> str:
         raise NotImplementedError

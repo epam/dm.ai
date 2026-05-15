@@ -14,13 +14,15 @@ from testing.frameworks.api.rest.subprocess_process_runner import SubprocessProc
 def create_report_generator_rate_limit_service(
     repository_root: Path,
     *,
-    workspace: str,
-    repository: str,
-    branch: str,
-    start_date: str,
-    end_date: str,
-    retry_after_seconds: int,
-    minimum_observed_retry_seconds: float,
+    workspace: str | None = None,
+    repository: str | None = None,
+    branch: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    retry_after_seconds: int | None = None,
+    minimum_observed_retry_seconds: float | None = None,
+    test_class: str = ReportGeneratorRateLimitServiceImpl.DEFAULT_TEST_CLASS,
+    test_methods: tuple[str, ...] = ReportGeneratorRateLimitServiceImpl.DEFAULT_TEST_METHODS,
 ) -> ReportGeneratorRateLimitService:
     return ReportGeneratorRateLimitServiceImpl(
         repository_root=repository_root,
@@ -32,4 +34,6 @@ def create_report_generator_rate_limit_service(
         end_date=end_date,
         retry_after_seconds=retry_after_seconds,
         minimum_observed_retry_seconds=minimum_observed_retry_seconds,
+        test_class=test_class,
+        test_methods=test_methods,
     )

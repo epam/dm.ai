@@ -1,0 +1,9 @@
+test_id: DMC-1030
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+test_class: com.github.istin.dmtools.reporting.ReportGeneratorTest
+test_methods:
+  - testCollectDataFromAllSources_retriesOnlyInterruptedGitHubMetric
+  - testCalculateRateLimitDelayMs_usesGitHubResetHeaderBeyondDefaultRetryCap

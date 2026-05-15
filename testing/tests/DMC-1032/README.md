@@ -19,6 +19,6 @@ PYTHONPATH=. python3 -m pytest testing/tests/DMC-1032/test_dmc_1032.py -q -s
 ## Environment
 
 The test builds or reuses the local `dmtools` shadow JAR, starts an in-process
-mock GitHub API server, and writes preserved report artifacts under
-`testing/.artifacts/DMC-1032/` so the observation paths remain inspectable
-after the pytest run completes.
+mock GitHub API server, and copies the preserved report artifacts into a
+temporary system directory so the observation paths remain inspectable after the
+pytest run completes without leaving generated files under `testing/`.
