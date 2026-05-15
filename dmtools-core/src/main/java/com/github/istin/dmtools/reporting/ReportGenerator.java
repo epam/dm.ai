@@ -5,9 +5,11 @@ package com.github.istin.dmtools.reporting;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.istin.dmtools.common.code.SourceCode;
+import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.metrics.Metric;
+import com.github.istin.dmtools.networking.RetryPolicy;
 import com.github.istin.dmtools.report.model.KeyTime;
 import com.github.istin.dmtools.reporting.datasource.*;
 import com.github.istin.dmtools.reporting.formula.ComputedMetricsApplier;
@@ -18,8 +20,10 @@ import com.github.istin.dmtools.team.IEmployees;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
+import okhttp3.Response;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -35,10 +39,12 @@ import java.util.stream.Collectors;
  */
 public class ReportGenerator {
     private static final Logger logger = LogManager.getLogger(ReportGenerator.class);
+    private static final long RATE_LIMIT_FALLBACK_DELAY_MS = 60000L;
 
     private final TrackerClient trackerClient;
     private final SourceCode sourceCode;
     private final FigmaClient figmaClient;
+    private final RetryPolicy retryPolicy = new RetryPolicy(logger);
     private final Set<String> weightMetricLabels = new HashSet<>();
     private final Map<String, Double> metricDividers = new HashMap<>();
     private final Map<String, String> metricLinkTemplates = new HashMap<>();
@@ -245,16 +251,8 @@ public class ReportGenerator {
                     sourceConfig.getParams()
                 );
 
-                DataSourceResult result = new DataSourceResult();
-
-                // Collect KeyTimes
-                dataSource.performMetricCollection(metric, (keyTimes, rawMetadata, itemKey) -> {
-                    result.addKeyTimes(itemKey, keyTimes);
-                    result.addMetadata(itemKey, rawMetadata);
-                    logger.debug("Collected {} KeyTimes for item: {}", keyTimes.size(), itemKey);
-                });
-
                 String metricLabel = (String) metricConfig.getParams().getOrDefault("label", metricConfig.getName());
+                DataSourceResult result = collectMetricDataWithRetry(sourceConfig, metricLabel, dataSource, metric);
                 logger.info("Metric '{}': collected {} items", metricLabel, result.getAllKeyTimes().size());
                 sourceResults.put(metricLabel, result);
 
@@ -292,6 +290,129 @@ public class ReportGenerator {
         }
 
         return results;
+    }
+
+    private DataSourceResult collectMetricDataWithRetry(
+        DataSourceConfig sourceConfig,
+        String metricLabel,
+        DataSource dataSource,
+        Metric metric
+    ) throws Exception {
+        int attemptNumber = 1;
+        while (true) {
+            DataSourceResult result = new DataSourceResult();
+            try {
+                dataSource.performMetricCollection(metric, (keyTimes, rawMetadata, itemKey) -> {
+                    result.addKeyTimes(itemKey, keyTimes);
+                    result.addMetadata(itemKey, rawMetadata);
+                    logger.debug("Collected {} KeyTimes for item: {}", keyTimes.size(), itemKey);
+                });
+                return result;
+            } catch (IOException exception) {
+                if (!retryPolicy.isRetryable(exception) || attemptNumber >= retryPolicy.getMaxRetries()) {
+                    throw exception;
+                }
+
+                long delayMs = calculateRateLimitDelayMs(exception, attemptNumber);
+                logger.warn(
+                    "Rate limit interrupted metric '{}' for source '{}'. Waiting {} ms before retry attempt {}/{}.",
+                    metricLabel,
+                    sourceConfig.getName(),
+                    delayMs,
+                    attemptNumber,
+                    retryPolicy.getMaxRetries()
+                );
+                sleepBeforeRetry(delayMs);
+                attemptNumber++;
+            }
+        }
+    }
+
+    protected long calculateRateLimitDelayMs(IOException exception, int attemptNumber) {
+        Response response = exception instanceof RestClient.RateLimitException
+            ? ((RestClient.RateLimitException) exception).getResponse()
+            : null;
+        if (response != null) {
+            Long retryAfterDelay = parseRetryAfterDelay(response.header("Retry-After"));
+            if (retryAfterDelay != null) {
+                return retryAfterDelay;
+            }
+
+            Long rateLimitResetDelay = parseRateLimitResetDelay(response.header("X-RateLimit-Reset"));
+            if (rateLimitResetDelay != null) {
+                return rateLimitResetDelay;
+            }
+        }
+
+        if (isRateLimitError(exception)) {
+            logger.warn("Rate limit metadata unavailable or invalid. Falling back to {} ms before retry.", RATE_LIMIT_FALLBACK_DELAY_MS);
+            return RATE_LIMIT_FALLBACK_DELAY_MS;
+        }
+
+        try {
+            return retryPolicy.calculateDelayMs(attemptNumber, response);
+        } catch (IOException delayedException) {
+            logger.warn(
+                "Failed to calculate retry delay from rate limit metadata: {}. Falling back to {} ms.",
+                delayedException.getMessage(),
+                RATE_LIMIT_FALLBACK_DELAY_MS
+            );
+            return RATE_LIMIT_FALLBACK_DELAY_MS;
+        }
+    }
+
+    private boolean isRateLimitError(IOException exception) {
+        if (exception instanceof RestClient.RateLimitException) {
+            return true;
+        }
+        String message = exception.getMessage();
+        if (message == null) {
+            return false;
+        }
+        String lowerMessage = message.toLowerCase(Locale.ROOT);
+        return lowerMessage.contains("rate limit")
+            || lowerMessage.contains("too many requests")
+            || lowerMessage.contains("throttl")
+            || lowerMessage.contains("429");
+    }
+
+    protected void sleepBeforeRetry(long delayMs) throws InterruptedException {
+        retryPolicy.executeDelay(delayMs);
+    }
+
+    private Long parseRetryAfterDelay(String retryAfterHeader) {
+        if (retryAfterHeader == null || retryAfterHeader.isBlank()) {
+            return null;
+        }
+        try {
+            long retryAfterSeconds = Long.parseLong(retryAfterHeader.trim());
+            if (retryAfterSeconds > 0) {
+                return retryAfterSeconds * 1000L;
+            }
+        } catch (NumberFormatException e) {
+            logger.warn("Could not parse Retry-After header '{}', falling back to another retry strategy.", retryAfterHeader);
+        }
+        return null;
+    }
+
+    private Long parseRateLimitResetDelay(String rateLimitResetHeader) {
+        if (rateLimitResetHeader == null || rateLimitResetHeader.isBlank()) {
+            return null;
+        }
+        try {
+            long resetTimeMs = Long.parseLong(rateLimitResetHeader.trim()) * 1000L;
+            long currentTimeMs = System.currentTimeMillis();
+            if (resetTimeMs <= currentTimeMs) {
+                return 0L;
+            }
+            return (resetTimeMs - currentTimeMs) + 1000L;
+        } catch (NumberFormatException e) {
+            logger.warn(
+                "Could not parse X-RateLimit-Reset header '{}', falling back to another retry strategy.",
+                rateLimitResetHeader
+            );
+            return null;
+        }
     }
 
     private TimePeriodResult buildPeriodResult(
