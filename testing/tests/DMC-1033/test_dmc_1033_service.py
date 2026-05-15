@@ -17,8 +17,18 @@ from testing.core.models.recorded_request import RecordedRequest  # noqa: E402
 
 
 class FakeProcessRunner:
-    def __init__(self, job_output: str) -> None:
+    def __init__(
+        self,
+        job_output: str,
+        *,
+        bootstrap_returncode: int = 0,
+        bootstrap_stdout: str = "",
+        bootstrap_stderr: str = "",
+    ) -> None:
         self.job_output = job_output
+        self.bootstrap_returncode = bootstrap_returncode
+        self.bootstrap_stdout = bootstrap_stdout
+        self.bootstrap_stderr = bootstrap_stderr
         self.calls: list[tuple[tuple[str, ...], Path, dict[str, str | None] | None]] = []
 
     def run(
@@ -35,9 +45,9 @@ class FakeProcessRunner:
             return ProcessExecutionResult(
                 args=call_args,
                 cwd=cwd,
-                returncode=0,
-                stdout="",
-                stderr="",
+                returncode=self.bootstrap_returncode,
+                stdout=self.bootstrap_stdout,
+                stderr=self.bootstrap_stderr,
             )
 
         reports_dir = cwd / "reports"
@@ -94,8 +104,19 @@ class FakeHarnessFactory:
         return self.harness
 
 
-def _build_service(job_output: str) -> tuple[ReportGeneratorRateLimitLogService, FakeProcessRunner, FakeHarnessFactory]:
-    runner = FakeProcessRunner(job_output=job_output)
+def _build_service(
+    job_output: str,
+    *,
+    bootstrap_returncode: int = 0,
+    bootstrap_stdout: str = "",
+    bootstrap_stderr: str = "",
+) -> tuple[ReportGeneratorRateLimitLogService, FakeProcessRunner, FakeHarnessFactory]:
+    runner = FakeProcessRunner(
+        job_output=job_output,
+        bootstrap_returncode=bootstrap_returncode,
+        bootstrap_stdout=bootstrap_stdout,
+        bootstrap_stderr=bootstrap_stderr,
+    )
     harness_factory = FakeHarnessFactory(harness=FakeHarness())
     service = ReportGeneratorRateLimitLogService(
         repository_root=REPOSITORY_ROOT,
@@ -146,3 +167,21 @@ def test_service_accepts_retry_confirmation_with_clear_operator_wording() -> Non
     assert audit.retry_confirmation_line == (
         "[INFO] AbstractRestClient - Resuming request again after the rate-limit window"
     )
+
+
+def test_service_stops_before_live_run_when_bootstrap_fails() -> None:
+    service, runner, harness_factory = _build_service(
+        "",
+        bootstrap_returncode=1,
+        bootstrap_stderr="bootstrap failed",
+    )
+
+    audit = service.audit()
+
+    assert [call[0] for call in runner.calls] == [("bash", "./buildInstallLocal.sh")]
+    assert harness_factory.calls == []
+    assert audit.bootstrap_result.returncode == 1
+    assert audit.bootstrap_result.combined_output == "bootstrap failed"
+    assert audit.job_result.returncode == 0
+    assert audit.recorded_requests == ()
+    assert audit.report_json_path is None

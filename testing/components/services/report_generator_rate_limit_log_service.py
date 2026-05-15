@@ -9,6 +9,7 @@ from testing.core.interfaces.process_runner import ProcessRunner
 from testing.core.interfaces.report_generator_rate_limit_harness import (
     ReportGeneratorRateLimitHarnessFactory,
 )
+from testing.core.models.process_execution_result import ProcessExecutionResult
 from testing.core.models.report_generator_rate_limit_log_audit import (
     ReportGeneratorRateLimitLogAudit,
 )
@@ -61,6 +62,21 @@ class ReportGeneratorRateLimitLogService:
                 cwd=self.repository_root,
                 env=common_env,
             )
+
+            if bootstrap_result.returncode != 0:
+                return ReportGeneratorRateLimitLogAudit(
+                    bootstrap_result=bootstrap_result,
+                    job_result=self._skipped_job_result(work_dir),
+                    recorded_requests=(),
+                    report_json_path=None,
+                    report_json_text="",
+                    rate_limit_warning_line=None,
+                    wait_line=None,
+                    wait_duration_ms=None,
+                    retry_confirmation_line=None,
+                    metric_collection_line=None,
+                    request_gap_seconds=None,
+                )
 
             workspace = "rate-limit-owner"
             repository = "rate-limit-repo"
@@ -216,6 +232,15 @@ class ReportGeneratorRateLimitLogService:
                     metric_collection_line=metric_collection_line,
                     request_gap_seconds=request_gap_seconds,
                 )
+
+    def _skipped_job_result(self, cwd: Path) -> ProcessExecutionResult:
+        return ProcessExecutionResult(
+            args=(),
+            cwd=cwd,
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
 
     @classmethod
     def _find_retry_confirmation_line(
