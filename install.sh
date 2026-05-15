@@ -779,6 +779,37 @@ detect_version() {
     return 1
 }
 
+# Resolve the latest stable CLI tag without relying on the Releases API.
+get_latest_version_from_git_tags() {
+    local git_output
+    local git_exit_code
+    local version
+
+    if ! command -v git >/dev/null 2>&1; then
+        warn "Git is not available for tag-based fallback lookup." >&2
+        return 1
+    fi
+
+    progress "Falling back to git tag lookup..." >&2
+    git_output=$(git ls-remote --tags --refs "https://github.com/${REPO}.git" 'v*' 2>&1)
+    git_exit_code=$?
+
+    if [ $git_exit_code -ne 0 ] || [ -z "$git_output" ]; then
+        warn "Git tag lookup failed (exit code: $git_exit_code)." >&2
+        return 1
+    fi
+
+    version=$(printf '%s\n' "$git_output" | sed -nE 's#^[[:xdigit:]]+[[:space:]]+refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+)$#\1#p' | LC_ALL=C sort -V | tail -1)
+
+    if [ -z "$version" ]; then
+        warn "Git tag lookup did not return any stable CLI release tags." >&2
+        return 1
+    fi
+
+    progress "Found latest CLI release via git tags: $version" >&2
+    echo "$version"
+}
+
 # Get latest CLI release version (filters out skill/standalone releases, paginates if needed)
 get_latest_version() {
     progress "Fetching latest CLI release information..." >&2
@@ -786,11 +817,18 @@ get_latest_version() {
     local api_response
     local curl_exit_code
     local page=1
+    local releases_lookup_exit_code=0
+    local releases_lookup_response=""
+    local latest_lookup_exit_code=0
+    local latest_lookup_response=""
+    local git_lookup_status="not attempted"
 
     # Paginate through releases until a CLI release (^vX.Y.Z$) is found or no more pages
     while true; do
         api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases?per_page=100&page=${page}" 2>&1)
         curl_exit_code=$?
+        releases_lookup_exit_code=$curl_exit_code
+        releases_lookup_response="$api_response"
 
         if [ $curl_exit_code -ne 0 ] || [ -z "$api_response" ]; then
             break
@@ -826,6 +864,8 @@ get_latest_version() {
     # Try to get /releases/latest and check if it's a CLI release
     api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases/latest" 2>&1)
     curl_exit_code=$?
+    latest_lookup_exit_code=$curl_exit_code
+    latest_lookup_response="$api_response"
 
     if [ $curl_exit_code -eq 0 ] && [ -n "$api_response" ]; then
         version=$(echo "$api_response" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
@@ -840,7 +880,13 @@ get_latest_version() {
         fi
     fi
 
-    # Both methods failed - provide detailed error information
+    if version=$(get_latest_version_from_git_tags); then
+        echo "$version"
+        return 0
+    fi
+    git_lookup_status="failed"
+
+    # All methods failed - provide detailed error information
     error "Failed to find latest CLI release from GitHub API.
 
 Possible causes:
@@ -848,13 +894,17 @@ Possible causes:
   - GitHub API rate limiting
   - No CLI releases available (only skill/standalone releases found)
   - curl version incompatibility
+  - git tag fallback unavailable or returned no stable CLI tags
 
 Debug information:
-  - Last curl exit code: $curl_exit_code
-  - API response: ${api_response:-'(empty)'}
+  - /releases exit code: $releases_lookup_exit_code
+  - /releases response: ${releases_lookup_response:-'(empty)'}
+  - /releases/latest exit code: $latest_lookup_exit_code
+  - /releases/latest response: ${latest_lookup_response:-'(empty)'}
+  - git tag lookup: $git_lookup_status
 
 Please check your network connection and try again.
-If the issue persists, you can manually download from:
+If the issue persists, you can manually specify a version with DMTOOLS_VERSION or download from:
 https://github.com/${REPO}/releases/latest"
 }
 
