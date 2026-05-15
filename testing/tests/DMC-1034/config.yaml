@@ -1,0 +1,13 @@
+test_id: DMC-1034
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+gradle_task: :dmtools-core:test
+target_test: com.github.istin.dmtools.reporting.ReportGeneratorTest.testCollectDataFromAllSources_usesFallbackDelayWhenRateLimitMetadataMissing
+report_generator_path: dmtools-core/src/main/java/com/github/istin/dmtools/reporting/ReportGenerator.java
+report_generator_test_path: dmtools-core/src/test/java/com/github/istin/dmtools/reporting/ReportGeneratorTest.java
+expected_test_marker: testCollectDataFromAllSources_usesFallbackDelayWhenRateLimitMetadataMissing
+expected_invalid_reset_test_line: when(rateLimitResponse.header("X-RateLimit-Reset")).thenReturn("invalid");
+expected_invalid_reset_warning: Could not parse X-RateLimit-Reset header
+expected_fallback_warning: Rate limit metadata unavailable or invalid. Falling back to
