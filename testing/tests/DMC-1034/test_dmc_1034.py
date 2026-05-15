@@ -11,7 +11,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from testing.components.factories.report_generator_rate_limit_audit_service_factory import (  # noqa: E402
     create_report_generator_rate_limit_audit_service,
 )
-from testing.components.services.report_generator_rate_limit_audit_service import (  # noqa: E402
+from testing.core.interfaces.report_generator_rate_limit_audit_service import (  # noqa: E402
     ReportGeneratorRateLimitAuditService,
 )
 from testing.core.models.process_execution_result import ProcessExecutionResult  # noqa: E402
@@ -30,7 +30,8 @@ def create_service(*, repository_root: Path = REPOSITORY_ROOT) -> ReportGenerato
         report_generator_path=str(CONFIG["report_generator_path"]),
         report_generator_test_path=str(CONFIG["report_generator_test_path"]),
         expected_test_marker=str(CONFIG["expected_test_marker"]),
-        expected_invalid_reset_test_line=str(CONFIG["expected_invalid_reset_test_line"]),
+        expected_invalid_reset_header_name=str(CONFIG["expected_invalid_reset_header_name"]),
+        expected_invalid_reset_header_value=str(CONFIG["expected_invalid_reset_header_value"]),
         expected_invalid_reset_warning=str(CONFIG["expected_invalid_reset_warning"]),
         expected_fallback_warning=str(CONFIG["expected_fallback_warning"]),
     )
@@ -87,7 +88,8 @@ def test_dmc_1034_service_uses_configured_gradle_target_and_detects_expected_mar
         "\n".join(
             [
                 str(CONFIG["expected_test_marker"]),
-                str(CONFIG["expected_invalid_reset_test_line"]),
+                f'when(rateLimitResponse.header("{CONFIG["expected_invalid_reset_header_name"]}"))',
+                f'.thenReturn("{CONFIG["expected_invalid_reset_header_value"]}")',
             ]
         ),
         encoding="utf-8",
@@ -102,7 +104,7 @@ def test_dmc_1034_service_uses_configured_gradle_target_and_detects_expected_mar
             stderr="",
         )
     )
-    service = ReportGeneratorRateLimitAuditService(
+    service = create_report_generator_rate_limit_audit_service(
         repository_root=tmp_path,
         runner=fake_runner,
         gradle_task=str(CONFIG["gradle_task"]),
@@ -110,7 +112,8 @@ def test_dmc_1034_service_uses_configured_gradle_target_and_detects_expected_mar
         report_generator_path=str(CONFIG["report_generator_path"]),
         report_generator_test_path=str(CONFIG["report_generator_test_path"]),
         expected_test_marker=str(CONFIG["expected_test_marker"]),
-        expected_invalid_reset_test_line=str(CONFIG["expected_invalid_reset_test_line"]),
+        expected_invalid_reset_header_name=str(CONFIG["expected_invalid_reset_header_name"]),
+        expected_invalid_reset_header_value=str(CONFIG["expected_invalid_reset_header_value"]),
         expected_invalid_reset_warning=str(CONFIG["expected_invalid_reset_warning"]),
         expected_fallback_warning=str(CONFIG["expected_fallback_warning"]),
     )

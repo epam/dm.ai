@@ -8,6 +8,7 @@ target_test: com.github.istin.dmtools.reporting.ReportGeneratorTest.testCollectD
 report_generator_path: dmtools-core/src/main/java/com/github/istin/dmtools/reporting/ReportGenerator.java
 report_generator_test_path: dmtools-core/src/test/java/com/github/istin/dmtools/reporting/ReportGeneratorTest.java
 expected_test_marker: testCollectDataFromAllSources_usesFallbackDelayWhenRateLimitMetadataMissing
-expected_invalid_reset_test_line: when(rateLimitResponse.header("X-RateLimit-Reset")).thenReturn("invalid");
+expected_invalid_reset_header_name: X-RateLimit-Reset
+expected_invalid_reset_header_value: invalid
 expected_invalid_reset_warning: Could not parse X-RateLimit-Reset header
 expected_fallback_warning: Rate limit metadata unavailable or invalid. Falling back to
