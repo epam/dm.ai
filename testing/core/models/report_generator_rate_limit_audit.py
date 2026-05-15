@@ -44,4 +44,6 @@ class ReportGeneratorRateLimitAudit:
     execution: ProcessExecutionResult
     junit_report_path: Path
     observed_checks: tuple[ReportGeneratorRateLimitCheck, ...]
+    system_out: str
+    system_err: str
     failures: tuple[ReportGeneratorRateLimitFailure, ...]

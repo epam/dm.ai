@@ -44,7 +44,7 @@ class ReportGeneratorRateLimitService:
         if test_report_directory.exists():
             shutil.rmtree(test_report_directory)
         execution = self.runner.run(self.gradle_command, cwd=self.repository_root)
-        observed_checks = self._load_junit_checks()
+        observed_checks, system_out, system_err = self._load_junit_report()
         failures: list[ReportGeneratorRateLimitFailure] = []
         command_display = " ".join(self.gradle_command)
         combined_output = execution.combined_output
@@ -127,6 +127,8 @@ class ReportGeneratorRateLimitService:
             execution=execution,
             junit_report_path=self.junit_report_path,
             observed_checks=observed_checks,
+            system_out=system_out,
+            system_err=system_err,
             failures=tuple(failures),
         )
 
@@ -143,27 +145,33 @@ class ReportGeneratorRateLimitService:
             f"`{build_outcome}`."
         )
 
-        checks = {check.name: check for check in audit.observed_checks}
-        retry_check = checks.get(
-            "testCollectDataFromAllSources_retriesOnlyInterruptedGitHubMetric"
+        retry_warning = self._first_matching_line(
+            audit.system_out,
+            "Rate limit interrupted metric 'PullRequestsApprovalsMetricSource'",
         )
-        if retry_check is not None:
+        if retry_warning is not None:
             observations.append(
-                "Observable report outcome: "
-                f"`{retry_check.name}` was `{retry_check.status}`, confirming the "
-                "pull-request data source recovered the interrupted GitHub metric and the same "
-                "report run still completed with both pull-request metrics populated."
+                "Observable retry evidence: "
+                f"`{retry_warning}`"
             )
 
+        recovered_metric = self._first_matching_line(
+            audit.system_out,
+            "Metric 'PullRequestsApprovalsMetricSource': collected 1 items",
+        )
+        if recovered_metric is not None:
+            observations.append(
+                "Observable completion evidence: "
+                f"`{recovered_metric}`"
+            )
+        checks = {check.name: check for check in audit.observed_checks}
         delay_check = checks.get(
             "testCalculateRateLimitDelayMs_usesGitHubResetHeaderBeyondDefaultRetryCap"
         )
         if delay_check is not None:
             observations.append(
-                "Observable wait outcome: "
-                f"`{delay_check.name}` was `{delay_check.status}`, confirming the live "
-                "implementation honored `X-RateLimit-Reset` instead of falling back to the default "
-                "60-second cap."
+                "Reset-header regression evidence: "
+                f"`{self.test_class}.{delay_check.name}` finished with status `{delay_check.status}`."
             )
 
         if audit.junit_report_path.exists():
@@ -209,9 +217,11 @@ class ReportGeneratorRateLimitService:
             command.extend(["--tests", f"{self.test_class}.{method_name}"])
         return tuple(command)
 
-    def _load_junit_checks(self) -> tuple[ReportGeneratorRateLimitCheck, ...]:
+    def _load_junit_report(
+        self,
+    ) -> tuple[tuple[ReportGeneratorRateLimitCheck, ...], str, str]:
         if not self.junit_report_path.exists():
-            return ()
+            return (), "", ""
 
         root = ET.fromstring(self.junit_report_path.read_text(encoding="utf-8"))
         checks: list[ReportGeneratorRateLimitCheck] = []
@@ -244,4 +254,14 @@ class ReportGeneratorRateLimitService:
                     failure_message=failure_message,
                 )
             )
-        return tuple(checks)
+        system_out = (root.findtext("system-out") or "").strip()
+        system_err = (root.findtext("system-err") or "").strip()
+        return tuple(checks), system_out, system_err
+
+    @staticmethod
+    def _first_matching_line(text: str, marker: str) -> str | None:
+        for line in text.splitlines():
+            normalized = line.strip()
+            if marker in normalized:
+                return normalized
+        return None
