@@ -8,13 +8,13 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from testing.components.services.live_installer_github_api_failure_service import (  # noqa: E402
+from testing.components.factories.live_installer_github_api_failure_service_factory import (  # noqa: E402
+    create_live_installer_github_api_failure_service,
+)
+from testing.core.interfaces.live_installer_github_api_failure_service import (  # noqa: E402
     LiveInstallerGitHubApiFailureService,
 )
 from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: E402
-from testing.frameworks.api.rest.subprocess_process_runner import (  # noqa: E402
-    SubprocessProcessRunner,
-)
 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
@@ -23,9 +23,8 @@ EXPECTED_OUTPUT_FRAGMENTS = tuple(str(fragment) for fragment in CONFIG["expected
 
 
 def build_service() -> LiveInstallerGitHubApiFailureService:
-    return LiveInstallerGitHubApiFailureService(
+    return create_live_installer_github_api_failure_service(
         repository_root=REPOSITORY_ROOT,
-        runner=SubprocessProcessRunner(),
         release_installer_url=str(CONFIG["release_installer_url"]),
         repo=str(CONFIG["repo"]),
         api_failure_exit_code=int(str(CONFIG["api_failure_exit_code"])),
