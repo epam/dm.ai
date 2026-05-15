@@ -1,0 +1,8 @@
+test_id: DMC-1031
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+expected_fallback_delay_ms: 60000
+expected_warning_log: Rate limit metadata unavailable or invalid. Falling back to 60000 ms before retry.
+expected_retry_log: Waiting 60000 ms before retry attempt 1/5.
