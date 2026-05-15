@@ -11,7 +11,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from testing.components.factories.report_generator_rate_limit_service_factory import (  # noqa: E402
     create_report_generator_rate_limit_service,
 )
-from testing.components.services.report_generator_rate_limit_service import (  # noqa: E402
+from testing.core.interfaces.report_generator_rate_limit_service import (  # noqa: E402
     ReportGeneratorRateLimitService,
 )
 from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: E402
