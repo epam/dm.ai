@@ -7,25 +7,46 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+get_install_dir_candidates() {
+    local script_parent_dir=""
+    script_parent_dir="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
+
+    if [ -n "${DMTOOLS_INSTALL_DIR:-}" ]; then
+        printf '%s\n' "$DMTOOLS_INSTALL_DIR"
+    fi
+
+    if [ -n "$script_parent_dir" ] && [ "$script_parent_dir" != "${DMTOOLS_INSTALL_DIR:-}" ]; then
+        printf '%s\n' "$script_parent_dir"
+    fi
+
+    if [ "$HOME/.dmtools" != "${DMTOOLS_INSTALL_DIR:-}" ] && [ "$HOME/.dmtools" != "$script_parent_dir" ]; then
+        printf '%s\n' "$HOME/.dmtools"
+    fi
+}
+
 # Find Java command (bundled or system)
 find_java_command() {
-    # Check for bundled Java first (installed with dmtools)
-    # macOS has different JRE structure: Contents/Home/bin/java
-    local bundled_java_macos="$HOME/.dmtools/jre/Contents/Home/bin/java"
-    local bundled_java="$HOME/.dmtools/jre/bin/java"
-    local bundled_java_exe="$HOME/.dmtools/jre/bin/java.exe"
+    local install_dir=""
+    while IFS= read -r install_dir; do
+        [ -n "$install_dir" ] || continue
 
-    # Check for bundled Java (order matters: macOS, Windows, Linux)
-    if [ -x "$bundled_java_macos" ]; then
-        echo "$bundled_java_macos"
-        return 0
-    elif [ -x "$bundled_java_exe" ]; then
-        echo "$bundled_java_exe"
-        return 0
-    elif [ -x "$bundled_java" ]; then
-        echo "$bundled_java"
-        return 0
-    fi
+        # macOS has different JRE structure: Contents/Home/bin/java
+        local bundled_java_macos="$install_dir/jre/Contents/Home/bin/java"
+        local bundled_java="$install_dir/jre/bin/java"
+        local bundled_java_exe="$install_dir/jre/bin/java.exe"
+
+        # Check for bundled Java (order matters: macOS, Windows, Linux)
+        if [ -x "$bundled_java_macos" ]; then
+            echo "$bundled_java_macos"
+            return 0
+        elif [ -x "$bundled_java_exe" ]; then
+            echo "$bundled_java_exe"
+            return 0
+        elif [ -x "$bundled_java" ]; then
+            echo "$bundled_java"
+            return 0
+        fi
+    done < <(get_install_dir_candidates)
 
     # Fall back to system Java
     if command -v java >/dev/null 2>&1; then
@@ -150,17 +171,23 @@ load_env_files quiet
 # Try to find JAR file in multiple locations
 find_jar_file() {
     local jar_file=""
-    
-    # 1. Check if installed via installer (user's home directory)
-    if [ -f "$HOME/.dmtools/dmtools.jar" ]; then
-        jar_file="$HOME/.dmtools/dmtools.jar"
-    # 2. Check local build directory (development)
-    elif ls "$SCRIPT_DIR/build/libs"/*.jar >/dev/null 2>&1; then
+
+    local install_dir=""
+    while IFS= read -r install_dir; do
+        [ -n "$install_dir" ] || continue
+        if [ -f "$install_dir/dmtools.jar" ]; then
+            echo "$install_dir/dmtools.jar"
+            return 0
+        fi
+    done < <(get_install_dir_candidates)
+
+    # Check local build directory (development)
+    if ls "$SCRIPT_DIR/build/libs"/*.jar >/dev/null 2>&1; then
         jar_file=$(find "$SCRIPT_DIR/build/libs" -name "*-all.jar" | head -1)
-    # 3. Check for any JAR file in the script directory
+    # Check for any JAR file in the script directory
     elif ls "$SCRIPT_DIR"/*.jar >/dev/null 2>&1; then
         jar_file=$(find "$SCRIPT_DIR" -maxdepth 1 \( -name "dmtools*.jar" -o -name "*-all.jar" \) | head -1)
-    # 4. Check parent directory build folder (if script is in subdirectory)
+    # Check parent directory build folder (if script is in subdirectory)
     elif ls "$SCRIPT_DIR/../build/libs"/*.jar >/dev/null 2>&1; then
         jar_file=$(find "$SCRIPT_DIR/../build/libs" -name "*-all.jar" | head -1)
     fi
