@@ -178,3 +178,70 @@ def test_service_keeps_collecting_failed_run_step_and_log_evidence() -> None:
     assert all(failure.step != 5 for failure in audit.failures)
     assert all(failure.step != 7 for failure in audit.failures)
     assert "releases/latest/download/install.sh | bash" in audit.workflow_job.raw_log_text
+
+
+def test_service_selects_the_earliest_new_run_after_dispatch_even_when_head_sha_changes() -> None:
+    client = FakeGitHubActionsReleaseClient()
+    client.head_sha = "before-dispatch-sha"
+
+    dispatched_run = {
+        "id": 701,
+        "html_url": "https://example.test/actions/runs/701",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": "after-dispatch-sha",
+        "created_at": "2099-05-15T12:00:00Z",
+        "run_number": 70,
+    }
+    later_run = {
+        "id": 702,
+        "html_url": "https://example.test/actions/runs/702",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": "even-later-sha",
+        "created_at": "2099-05-15T12:00:02Z",
+        "run_number": 71,
+    }
+    client.workflow_runs_responses = [
+        [],
+        [later_run, dispatched_run],
+    ]
+    client.run_by_id[701] = dict(dispatched_run)
+    client.jobs_by_run_id[701] = [
+        {
+            "id": 801,
+            "name": "validate-latest-installer",
+            "html_url": "https://example.test/actions/runs/701/job/801",
+            "status": "completed",
+            "conclusion": "success",
+            "steps": [
+                {"name": "Set up Java 17", "conclusion": "success"},
+                {
+                    "name": "Install DMTools CLI from latest release",
+                    "conclusion": "success",
+                },
+                {
+                    "name": "Validate installed wrapper and metadata",
+                    "conclusion": "success",
+                },
+            ],
+        }
+    ]
+    client.logs_by_job_id[801] = (
+        "Run curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash\n"
+        'Run test -f "$DMTOOLS_INSTALL_DIR/dmtools.jar"\n'
+        'Run "$DMTOOLS_BIN_DIR/dmtools" --help >/dev/null\n'
+    )
+
+    audit = _build_service(client).audit()
+
+    assert audit.failures == ()
+    assert audit.workflow_run is not None
+    assert audit.workflow_job is not None
+    assert audit.workflow_run.run_id == 701
+    assert audit.workflow_run.head_sha == "after-dispatch-sha"
+    assert audit.workflow_job.conclusion == "success"

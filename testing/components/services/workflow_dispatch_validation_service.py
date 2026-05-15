@@ -46,7 +46,6 @@ class WorkflowDispatchValidationService(WorkflowDispatchValidationServiceContrac
     def audit(self) -> WorkflowDispatchValidationAudit:
         failures: list[WorkflowDispatchAuditFailure] = []
         dispatch_started_at = datetime.now(timezone.utc)
-        target_head_sha = self.github_client.branch_head_sha(self.workflow_ref)
         existing_run_ids = {
             int(run["id"])
             for run in self.github_client.workflow_runs_for_workflow(
@@ -60,7 +59,6 @@ class WorkflowDispatchValidationService(WorkflowDispatchValidationServiceContrac
         self.github_client.dispatch_workflow(self.workflow_file, ref=self.workflow_ref)
         workflow_run = self._wait_for_dispatched_run(
             existing_run_ids=existing_run_ids,
-            target_head_sha=target_head_sha,
             dispatch_started_at=dispatch_started_at,
         )
         if workflow_run is None:
@@ -222,10 +220,10 @@ class WorkflowDispatchValidationService(WorkflowDispatchValidationServiceContrac
         self,
         *,
         existing_run_ids: set[int],
-        target_head_sha: str,
         dispatch_started_at: datetime,
     ) -> WorkflowDispatchRunObservation | None:
         deadline = self._deadline(self.dispatch_timeout_seconds)
+        earliest_created_at = dispatch_started_at - timedelta(seconds=self.poll_interval_seconds)
         while datetime.now(timezone.utc) < deadline:
             runs = self.github_client.workflow_runs_for_workflow(
                 self.workflow_file,
@@ -233,16 +231,18 @@ class WorkflowDispatchValidationService(WorkflowDispatchValidationServiceContrac
                 event="workflow_dispatch",
                 per_page=20,
             )
+            candidates: list[tuple[datetime, int, dict[str, Any]]] = []
             for run in runs:
                 run_id = run.get("id")
                 if run_id is None or int(run_id) in existing_run_ids:
                     continue
-                if str(run.get("head_sha", "")) != target_head_sha:
-                    continue
                 created_at = self._parse_github_datetime(str(run.get("created_at", "")))
-                if created_at is None or created_at < dispatch_started_at - timedelta(minutes=1):
+                if created_at is None or created_at < earliest_created_at:
                     continue
-                return self._build_run_observation(run)
+                candidates.append((created_at, int(run_id), run))
+            if candidates:
+                _, _, earliest_run = min(candidates, key=lambda candidate: (candidate[0], candidate[1]))
+                return self._build_run_observation(earliest_run)
             self._waiter.wait(self.poll_interval_seconds)
         return None
 
