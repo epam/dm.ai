@@ -56,6 +56,11 @@ class ReportGeneratorRateLimitAudit:
     system_out: str = ""
     system_err: str = ""
     failures: tuple[ReportGeneratorRateLimitFailure, ...] = ()
+    missing_header_probe_execution: ProcessExecutionResult | None = None
+    invalid_reset_probe_execution: ProcessExecutionResult | None = None
+    report_generator_path: Path | None = None
+    invalid_reset_warning_present: bool = False
+    fallback_warning_present: bool = False
     returncode: int = 0
     stdout: str = ""
     stderr: str = ""
@@ -104,4 +109,11 @@ class ReportGeneratorRateLimitAudit:
             "html_contains_report_name": self.html_contains_report_name,
             "html_contains_pr_approvals": self.html_contains_pr_approvals,
             "html_contains_commits": self.html_contains_commits,
+            "report_generator_path": (
+                self.report_generator_path.as_posix()
+                if self.report_generator_path is not None
+                else ""
+            ),
+            "invalid_reset_warning_present": self.invalid_reset_warning_present,
+            "fallback_warning_present": self.fallback_warning_present,
         }

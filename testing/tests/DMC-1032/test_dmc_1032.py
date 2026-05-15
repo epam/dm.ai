@@ -17,6 +17,7 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
+COMMITS_PATH = "/repos/test-workspace/test-repo/commits"
 
 
 def build_live_service():
@@ -30,6 +31,10 @@ def build_live_service():
         retry_after_seconds=int(str(CONFIG["retry_after_seconds"])),
         minimum_observed_retry_seconds=float(str(CONFIG["minimum_observed_retry_seconds"])),
     )
+
+
+def is_commits_page_one_call(record) -> bool:
+    return record.path == COMMITS_PATH and record.query.get("page") == ("1",)
 
 
 def test_dmc_1032_report_generator_preserves_partial_progress_after_github_rate_limit() -> None:
@@ -54,16 +59,16 @@ def test_dmc_1032_report_generator_preserves_partial_progress_after_github_rate_
     assert audit.report_metrics["Commits"]["count"] == 1
     assert audit.report_metrics["Commits"]["totalWeight"] == 1.0
 
+    request_records = list(audit.request_records)
     pull_requests_calls = [
         record
-        for record in audit.request_records
+        for record in request_records
         if record.path == "/repos/test-workspace/test-repo/pulls"
     ]
     commits_page_one_calls = [
         record
-        for record in audit.request_records
-        if record.path == "/repos/test-workspace/test-repo/commits"
-        and record.query.get("page") == ("1",)
+        for record in request_records
+        if is_commits_page_one_call(record)
     ]
     assert len(pull_requests_calls) == 1, (
         "The earlier pull request metric should not be recollected after the later commits rate limit.\n"
@@ -71,6 +76,29 @@ def test_dmc_1032_report_generator_preserves_partial_progress_after_github_rate_
     )
     assert [record.status for record in commits_page_one_calls] == [429, 200], (
         "The commits metric should fail once with a rate limit and then succeed on retry.\n"
+        f"Recorded requests: {audit.request_records!r}"
+    )
+
+    first_commits_attempt_index = next(
+        index for index, record in enumerate(request_records) if is_commits_page_one_call(record)
+    )
+    assert first_commits_attempt_index > 0, (
+        "Expected the earlier pull request metric to finish collecting before the later commits source started.\n"
+        f"Recorded requests: {audit.request_records!r}"
+    )
+    assert all(
+        record.path != COMMITS_PATH
+        for record in request_records[:first_commits_attempt_index]
+    ), (
+        "The commits source should not start before the earlier pull request metric has completed.\n"
+        f"Recorded requests: {audit.request_records!r}"
+    )
+    assert not [
+        record
+        for record in request_records[first_commits_attempt_index + 1 :]
+        if record.path != COMMITS_PATH
+    ], (
+        "Previously collected pull request data should remain untouched while the later commits source waits and retries.\n"
         f"Recorded requests: {audit.request_records!r}"
     )
 
