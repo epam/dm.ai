@@ -3,18 +3,12 @@ from __future__ import annotations
 import json
 import threading
 import time
-from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
 from urllib.parse import parse_qs, urlparse
 
-
-@dataclass(frozen=True)
-class RecordedRequest:
-    method: str
-    path: str
-    timestamp: float
+from testing.core.models.recorded_request import RecordedRequest
 
 
 class _HarnessHttpServer(ThreadingHTTPServer):

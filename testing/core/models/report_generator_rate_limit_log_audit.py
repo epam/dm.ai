@@ -4,9 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from testing.core.models.process_execution_result import ProcessExecutionResult
-from testing.frameworks.api.rest.report_generator_rate_limit_harness import (
-    RecordedRequest,
-)
+from testing.core.models.recorded_request import RecordedRequest
 
 
 @dataclass(frozen=True)

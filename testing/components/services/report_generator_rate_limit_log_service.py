@@ -6,29 +6,40 @@ import tempfile
 from pathlib import Path
 
 from testing.core.interfaces.process_runner import ProcessRunner
+from testing.core.interfaces.report_generator_rate_limit_harness import (
+    ReportGeneratorRateLimitHarnessFactory,
+)
 from testing.core.models.report_generator_rate_limit_log_audit import (
     ReportGeneratorRateLimitLogAudit,
-)
-from testing.frameworks.api.rest.report_generator_rate_limit_harness import (
-    ReportGeneratorRateLimitHarness,
 )
 
 
 class ReportGeneratorRateLimitLogService:
     ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
     WAIT_LINE_PATTERN = re.compile(r"Waiting (?P<delay>\d+) ms before retry")
-    EXPLICIT_RETRY_PATTERN = re.compile(
-        r"\b(retrying|retry initiated|starting retry|retry attempt \d+)\b",
+    RETRY_REFERENCE_PATTERN = re.compile(
+        r"\b(retry(?:ing|ies|ied)?|re-try|try(?:ing)?\s+again|another\s+attempt|"
+        r"second\s+attempt)\b",
         re.IGNORECASE,
     )
+    RETRY_ACTION_PATTERN = re.compile(
+        r"\b(start(?:ed|ing)?|initiat(?:e|ed|ing)|attempt(?:ing)?|resum(?:e|ed|es|ing)|"
+        r"continu(?:e|ed|es|ing)|proceed(?:ed|ing|s)?|issu(?:e|ed|es|ing)|"
+        r"send(?:ing|s)?|perform(?:ed|ing|s)?|mak(?:e|es|ing)|"
+        r"run(?:ning|s)?|call(?:ing|s)?)\b",
+        re.IGNORECASE,
+    )
+    RETRY_TARGET_PATTERN = re.compile(r"\b(request|call|attempt)\b", re.IGNORECASE)
 
     def __init__(
         self,
         repository_root: Path,
         runner: ProcessRunner,
+        harness_factory: ReportGeneratorRateLimitHarnessFactory,
     ) -> None:
         self.repository_root = repository_root
         self.runner = runner
+        self.harness_factory = harness_factory
 
     def audit(self) -> ReportGeneratorRateLimitLogAudit:
         with tempfile.TemporaryDirectory(prefix="dmc-1033-") as temp_dir:
@@ -55,7 +66,7 @@ class ReportGeneratorRateLimitLogService:
             repository = "rate-limit-repo"
             branch = "main"
 
-            with ReportGeneratorRateLimitHarness(
+            with self.harness_factory.create(
                 workspace=workspace,
                 repository=repository,
                 branch=branch,
@@ -171,15 +182,7 @@ class ReportGeneratorRateLimitLogService:
                     if wait_match is not None:
                         wait_duration_ms = int(wait_match.group("delay"))
 
-                retry_confirmation_line = next(
-                    (
-                        line
-                        for line in output_lines
-                        if self.EXPLICIT_RETRY_PATTERN.search(line) is not None
-                        and "before retry" not in line.lower()
-                    ),
-                    None,
-                )
+                retry_confirmation_line = self._find_retry_confirmation_line(output_lines)
                 metric_collection_line = next(
                     (
                         line
@@ -213,3 +216,24 @@ class ReportGeneratorRateLimitLogService:
                     metric_collection_line=metric_collection_line,
                     request_gap_seconds=request_gap_seconds,
                 )
+
+    @classmethod
+    def _find_retry_confirmation_line(
+        cls,
+        output_lines: list[str],
+    ) -> str | None:
+        for line in output_lines:
+            lowered_line = line.lower()
+            if "before retry" in lowered_line:
+                continue
+            if cls._is_retry_confirmation_line(line):
+                return line
+        return None
+
+    @classmethod
+    def _is_retry_confirmation_line(cls, line: str) -> bool:
+        if cls.RETRY_ACTION_PATTERN.search(line) is None:
+            return False
+        if cls.RETRY_REFERENCE_PATTERN.search(line) is not None:
+            return True
+        return "again" in line.lower() and cls.RETRY_TARGET_PATTERN.search(line) is not None
