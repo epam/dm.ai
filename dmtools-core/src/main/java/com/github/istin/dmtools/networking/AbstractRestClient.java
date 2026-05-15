@@ -332,6 +332,16 @@ public abstract class AbstractRestClient implements RestClient {
     private String execute(String url, boolean isRepeatIfFails, boolean isIgnoreCache, GenericRequest genericRequest) throws IOException {
         return execute(url, isRepeatIfFails, isIgnoreCache, genericRequest, 0);
     }
+
+    protected void logRetryResumption(String method, String url, int nextAttemptNumber) {
+        logger.info(
+                "Starting retry request now that the wait window has elapsed: {} {} (Attempt {}/{})",
+                method,
+                sanitizeUrl(url),
+                nextAttemptNumber,
+                retryPolicy.getMaxRetries()
+        );
+    }
     
     private String execute(String url, boolean isRepeatIfFails, boolean isIgnoreCache, GenericRequest genericRequest, int retryCount) throws IOException {
         try {
@@ -389,6 +399,7 @@ public abstract class AbstractRestClient implements RestClient {
                                     Thread.currentThread().interrupt();
                                     throw new IOException("Request interrupted during retry", e);
                                 }
+                                logRetryResumption("GET", url, attemptNumber + 1);
                                 attemptNumber++;
                                 continue;
                             } else {
@@ -424,6 +435,7 @@ public abstract class AbstractRestClient implements RestClient {
                                 Thread.currentThread().interrupt();
                                 throw new IOException("Request interrupted during retry", interruptedException);
                             }
+                            logRetryResumption("GET", url, attemptNumber + 1);
                         }
                         attemptNumber++;
                     } else {
@@ -554,6 +566,7 @@ public abstract class AbstractRestClient implements RestClient {
                             Thread.currentThread().interrupt();
                             throw new IOException("POST request interrupted during retry", e);
                         }
+                        logRetryResumption("POST", url, attemptNumber + 1);
                         attemptNumber++;
                         continue;
                     } else {
@@ -579,6 +592,7 @@ public abstract class AbstractRestClient implements RestClient {
                             Thread.currentThread().interrupt();
                             throw new IOException("POST request interrupted during retry", interruptedException);
                         }
+                        logRetryResumption("POST", url, attemptNumber + 1);
                     } else {
                         // For connection errors, use existing exponential backoff
                         try {
@@ -589,6 +603,7 @@ public abstract class AbstractRestClient implements RestClient {
                             Thread.currentThread().interrupt();
                             throw new IOException("POST request interrupted during retry", interruptedException);
                         }
+                        logRetryResumption("POST", url, attemptNumber + 1);
                     }
                     attemptNumber++;
                 } else {
@@ -666,6 +681,7 @@ public abstract class AbstractRestClient implements RestClient {
                     Thread.currentThread().interrupt();
                     throw new IOException("PUT request interrupted during retry", interruptedException);
                 }
+                logRetryResumption("PUT", url, retryCount + 2);
                 return put(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
@@ -730,6 +746,7 @@ public abstract class AbstractRestClient implements RestClient {
                     Thread.currentThread().interrupt();
                     throw new IOException("PATCH request interrupted during retry", interruptedException);
                 }
+                logRetryResumption("PATCH", url, retryCount + 2);
                 return patch(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {

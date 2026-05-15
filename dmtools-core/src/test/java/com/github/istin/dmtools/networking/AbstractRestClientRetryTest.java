@@ -4,12 +4,18 @@
 package com.github.istin.dmtools.networking;
 
 import com.github.istin.dmtools.common.networking.RestClient;
+import com.sun.net.httpserver.HttpServer;
 import okhttp3.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.*;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -134,5 +140,68 @@ class AbstractRestClientRetryTest {
         // Verify it can identify retryable errors
         assertTrue(defaultPolicy.isRetryable(new IOException("Rate limit")));
         assertFalse(defaultPolicy.isRetryable(new IOException("Not found")));
+    }
+
+    @Test
+    @DisplayName("AbstractRestClient should log when a delayed retry starts")
+    void testRetryStartConfirmationIsLoggedAfterDelay() throws Exception {
+        AtomicInteger requestCount = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/rate-limit", exchange -> {
+            byte[] responseBody;
+            int statusCode;
+            if (requestCount.getAndIncrement() == 0) {
+                statusCode = 429;
+                responseBody = "{\"message\":\"API rate limit exceeded\"}".getBytes(StandardCharsets.UTF_8);
+            } else {
+                statusCode = 200;
+                responseBody = "ok".getBytes(StandardCharsets.UTF_8);
+            }
+            exchange.sendResponseHeaders(statusCode, responseBody.length);
+            exchange.getResponseBody().write(responseBody);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            TestRestClient client = new TestRestClient("http://127.0.0.1:" + server.getAddress().getPort());
+            client.setRetryPolicy(new RetryPolicy(2, 1, 1, 1.0, 0.0, logger));
+
+            String response = client.execute(client.getBasePath() + "/rate-limit?token=secret");
+
+            assertEquals("ok", response);
+            assertEquals(2, requestCount.get(), "Expected one retry after the initial 429 response");
+            assertEquals(
+                List.of("GET|" + client.getBasePath() + "/rate-limit?token=secret|2"),
+                client.retryResumptionCalls,
+                "Expected the retry flow to emit an explicit retry-start confirmation after the delay"
+            );
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private static class TestRestClient extends AbstractRestClient {
+        private final List<String> retryResumptionCalls = new ArrayList<>();
+
+        TestRestClient(String basePath) throws IOException {
+            super(basePath, "");
+        }
+
+        @Override
+        public String path(String path) {
+            return getBasePath() + path;
+        }
+
+        @Override
+        public okhttp3.Request.Builder sign(okhttp3.Request.Builder builder) {
+            return builder;
+        }
+
+        @Override
+        protected void logRetryResumption(String method, String url, int nextAttemptNumber) {
+            retryResumptionCalls.add(method + "|" + url + "|" + nextAttemptNumber);
+            super.logRetryResumption(method, url, nextAttemptNumber);
+        }
     }
 }
