@@ -1,0 +1,12 @@
+test_id: DMC-1032
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+workspace: test-workspace
+repository: test-repo
+branch: main
+start_date: 2025-01-01
+end_date: 2025-01-31
+retry_after_seconds: 2
+minimum_observed_retry_seconds: 1.5
