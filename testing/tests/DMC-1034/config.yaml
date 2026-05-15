@@ -1,0 +1,15 @@
+test_id: DMC-1034
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+gradle_task: :dmtools-core:test
+target_test: com.github.istin.dmtools.reporting.ReportGeneratorTest.testCollectDataFromAllSources_usesFallbackDelayWhenRateLimitMetadataMissing
+report_generator_path: dmtools-core/src/main/java/com/github/istin/dmtools/reporting/ReportGenerator.java
+expected_rate_limit_status: 403
+expected_fallback_delay_ms: 60000
+expected_invalid_reset_header_name: X-RateLimit-Reset
+expected_invalid_reset_header_value: invalid_timestamp
+expected_invalid_reset_warning: Could not parse X-RateLimit-Reset header 'invalid_timestamp'
+expected_fallback_warning: Rate limit metadata unavailable or invalid. Falling back to 60000 ms before retry.
+expected_retry_log: Waiting 60000 ms before retry attempt 1/5.
