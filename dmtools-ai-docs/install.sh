@@ -146,7 +146,8 @@ NC='\033[0m'
 
 GITHUB_REPO="epam/dm.ai"
 TEMP_DIR=$(mktemp -d)
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+_script_source="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR=$(cd "$(dirname "$_script_source")" 2>/dev/null && pwd || pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 print_header() {
@@ -718,7 +719,7 @@ main() {
     echo "For more information: https://github.com/epam/dm.ai" >&2
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     case "${1:-install}" in
         install)
             main
