@@ -12,8 +12,7 @@ from threading import Lock, Thread
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from testing.components.services.dmtools_cli_service import DmtoolsCliService
-from testing.frameworks.api.rest.subprocess_process_runner import SubprocessProcessRunner
+from testing.core.interfaces.process_runner import ProcessRunner
 
 
 @dataclass(frozen=True)
@@ -211,6 +210,7 @@ class ReportGeneratorRateLimitService:
         self,
         *,
         repository_root: Path,
+        runner: ProcessRunner,
         workspace: str,
         repository: str,
         branch: str,
@@ -220,6 +220,7 @@ class ReportGeneratorRateLimitService:
         minimum_observed_retry_seconds: float,
     ) -> None:
         self.repository_root = repository_root
+        self.runner = runner
         self.workspace = workspace
         self.repository = repository
         self.branch = branch
@@ -227,10 +228,8 @@ class ReportGeneratorRateLimitService:
         self.end_date = end_date
         self.retry_after_seconds = retry_after_seconds
         self.minimum_observed_retry_seconds = minimum_observed_retry_seconds
-        self.cli = DmtoolsCliService(
-            repository_root=repository_root,
-            runner=SubprocessProcessRunner(),
-        )
+        self.gradlew_path = repository_root / "gradlew"
+        self.shadow_jar_directory = repository_root / "build" / "libs"
 
     def audit(self) -> ReportGeneratorRateLimitAudit:
         with tempfile.TemporaryDirectory(prefix="dmc-1032-report-") as temp_dir:
@@ -286,11 +285,7 @@ class ReportGeneratorRateLimitService:
         )
 
     def _run_report_job(self, *, base_url: str, output_dir: Path):
-        jar_path = (
-            self.cli.find_shadow_jar()
-            if any(self.cli.shadow_jar_directory.glob("*-all.jar"))
-            else self.cli.build_shadow_jar()
-        )
+        jar_path = self._find_shadow_jar() if any(self.shadow_jar_directory.glob("*-all.jar")) else self._build_shadow_jar()
         payload = {
             "name": "ReportGenerator",
             "params": {
@@ -356,7 +351,7 @@ class ReportGeneratorRateLimitService:
             "SOURCE_GITHUB_BRANCH": self.branch,
         }
 
-        return self.cli.runner.run(
+        return self.runner.run(
             [
                 "java",
                 "-Dlog4j2.configurationFile=classpath:log4j2-cli.xml",
@@ -377,6 +372,30 @@ class ReportGeneratorRateLimitService:
             cwd=self.repository_root,
             env=env,
         )
+
+    def _build_shadow_jar(self) -> Path:
+        result = self.runner.run(
+            [str(self.gradlew_path), "--no-daemon", ":dmtools-core:shadowJar"],
+            cwd=self.repository_root,
+        )
+        if result.returncode != 0:
+            raise AssertionError(
+                "Failed to build the DMTools fat JAR.\n"
+                f"stdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+            )
+        return self._find_shadow_jar()
+
+    def _find_shadow_jar(self) -> Path:
+        jars = sorted(
+            self.shadow_jar_directory.glob("*-all.jar"),
+            key=lambda candidate: candidate.stat().st_mtime,
+            reverse=True,
+        )
+        if not jars:
+            raise FileNotFoundError(
+                f"No fat JAR was found under {self.shadow_jar_directory.as_posix()}."
+            )
+        return jars[0]
 
     def _observed_retry_seconds(self, request_records: list[MockRequestRecord]) -> float:
         first_attempt: float | None = None

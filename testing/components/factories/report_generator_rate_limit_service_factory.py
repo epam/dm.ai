@@ -3,8 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from testing.components.services.report_generator_rate_limit_service import (
+    ReportGeneratorRateLimitService as ReportGeneratorRateLimitServiceImpl,
+)
+from testing.core.interfaces.report_generator_rate_limit_service import (
     ReportGeneratorRateLimitService,
 )
+from testing.frameworks.api.rest.subprocess_process_runner import SubprocessProcessRunner
 
 
 def create_report_generator_rate_limit_service(
@@ -18,8 +22,9 @@ def create_report_generator_rate_limit_service(
     retry_after_seconds: int,
     minimum_observed_retry_seconds: float,
 ) -> ReportGeneratorRateLimitService:
-    return ReportGeneratorRateLimitService(
+    return ReportGeneratorRateLimitServiceImpl(
         repository_root=repository_root,
+        runner=SubprocessProcessRunner(),
         workspace=workspace,
         repository=repository,
         branch=branch,
