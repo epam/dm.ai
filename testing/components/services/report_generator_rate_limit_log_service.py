@@ -17,7 +17,12 @@ from testing.core.models.report_generator_rate_limit_log_audit import (
 
 class ReportGeneratorRateLimitLogService:
     ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
-    WAIT_LINE_PATTERN = re.compile(r"Waiting (?P<delay>\d+) ms before retry")
+    WAIT_DURATION_PATTERN = re.compile(r"(?P<delay>\d+)\s*ms\b", re.IGNORECASE)
+    WAIT_REFERENCE_PATTERN = re.compile(
+        r"\b(wait(?:ing)?|delay(?:ed|ing)?|pause(?:d|ing)?|sleep(?:ing)?|"
+        r"backoff|cooldown)\b",
+        re.IGNORECASE,
+    )
     RETRY_REFERENCE_PATTERN = re.compile(
         r"\b(retry(?:ing|ies|ied)?|re-try|try(?:ing)?\s+again|another\s+attempt|"
         r"second\s+attempt)\b",
@@ -188,15 +193,15 @@ class ReportGeneratorRateLimitLogService:
                     (
                         line
                         for line in output_lines
-                        if self.WAIT_LINE_PATTERN.search(line) is not None
+                        if self._extract_wait_duration_ms(line) is not None
                     ),
                     None,
                 )
-                wait_duration_ms = None
-                if wait_line is not None:
-                    wait_match = self.WAIT_LINE_PATTERN.search(wait_line)
-                    if wait_match is not None:
-                        wait_duration_ms = int(wait_match.group("delay"))
+                wait_duration_ms = (
+                    self._extract_wait_duration_ms(wait_line)
+                    if wait_line is not None
+                    else None
+                )
 
                 retry_confirmation_line = self._find_retry_confirmation_line(output_lines)
                 metric_collection_line = next(
@@ -262,3 +267,18 @@ class ReportGeneratorRateLimitLogService:
         if cls.RETRY_REFERENCE_PATTERN.search(line) is not None:
             return True
         return "again" in line.lower() and cls.RETRY_TARGET_PATTERN.search(line) is not None
+
+    @classmethod
+    def _extract_wait_duration_ms(cls, line: str | None) -> int | None:
+        if line is None:
+            return None
+        wait_match = cls.WAIT_DURATION_PATTERN.search(line)
+        if wait_match is None:
+            return None
+
+        has_wait_intent = cls.WAIT_REFERENCE_PATTERN.search(line) is not None
+        has_retry_intent = cls.RETRY_REFERENCE_PATTERN.search(line) is not None
+        if not has_wait_intent and not has_retry_intent:
+            return None
+
+        return int(wait_match.group("delay"))

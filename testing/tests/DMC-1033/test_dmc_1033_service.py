@@ -169,6 +169,26 @@ def test_service_accepts_retry_confirmation_with_clear_operator_wording() -> Non
     )
 
 
+def test_service_accepts_wait_duration_with_clear_operator_friendly_wording() -> None:
+    service, _, _ = _build_service(
+        "\n".join(
+            [
+                "[WARN] AbstractRestClient - Rate limit hit for URL: http://127.0.0.1:9999/repos/rate-limit-owner/rate-limit-repo/commits?page=1 (Attempt 1/5). Error: rate limit",
+                "[INFO] AbstractRestClient - Retrying in 1901 ms after rate-limit backoff",
+                "[INFO] AbstractRestClient - Starting retry request now that the wait window has elapsed",
+                "[INFO] ReportGenerator - Metric 'GitHub Commits': collected 1 items",
+            ]
+        )
+    )
+
+    audit = service.audit()
+
+    assert audit.wait_line == (
+        "[INFO] AbstractRestClient - Retrying in 1901 ms after rate-limit backoff"
+    )
+    assert audit.wait_duration_ms == 1901
+
+
 def test_service_stops_before_live_run_when_bootstrap_fails() -> None:
     service, runner, harness_factory = _build_service(
         "",
