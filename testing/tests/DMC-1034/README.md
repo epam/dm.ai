@@ -1,8 +1,9 @@
 # DMC-1034 automated test
 
-This test verifies that the ReportGenerator regression for malformed
-`X-RateLimit-Reset` metadata remains wired to the deployed fallback retry path
-instead of crashing with `NumberFormatException`.
+This test verifies that ReportGenerator handles a mocked GitHub HTTP 403
+rate-limit response with a malformed `X-RateLimit-Reset: invalid_timestamp`
+header by falling back to the safe retry delay instead of crashing with
+`NumberFormatException`.
 
 ## Install dependencies
 

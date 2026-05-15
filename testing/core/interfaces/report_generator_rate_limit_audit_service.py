@@ -8,6 +8,9 @@ from testing.core.models.report_generator_rate_limit_audit import (
 
 
 class ReportGeneratorRateLimitAuditService(Protocol):
+    def audit(self) -> ReportGeneratorRateLimitAudit:
+        raise NotImplementedError
+
     def run_audit(self) -> ReportGeneratorRateLimitAudit:
         raise NotImplementedError
 
