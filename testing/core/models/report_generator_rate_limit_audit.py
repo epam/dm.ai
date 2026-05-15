@@ -40,10 +40,15 @@ class ReportGeneratorRateLimitFailure:
 
 @dataclass(frozen=True)
 class ReportGeneratorRateLimitAudit:
-    gradle_command: tuple[str, ...]
-    execution: ProcessExecutionResult
-    junit_report_path: Path
-    observed_checks: tuple[ReportGeneratorRateLimitCheck, ...]
-    system_out: str
-    system_err: str
-    failures: tuple[ReportGeneratorRateLimitFailure, ...]
+    gradle_command: tuple[str, ...] = ()
+    execution: ProcessExecutionResult | None = None
+    junit_report_path: Path | None = None
+    observed_checks: tuple[ReportGeneratorRateLimitCheck, ...] = ()
+    system_out: str = ""
+    system_err: str = ""
+    failures: tuple[ReportGeneratorRateLimitFailure, ...] = ()
+    missing_header_probe_execution: ProcessExecutionResult | None = None
+    invalid_reset_probe_execution: ProcessExecutionResult | None = None
+    report_generator_path: Path | None = None
+    invalid_reset_warning_present: bool = False
+    fallback_warning_present: bool = False
