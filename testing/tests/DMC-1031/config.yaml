@@ -3,11 +3,6 @@ type: api
 framework: pytest
 platform: linux
 dependencies: []
-implementation_relative_path: dmtools-core/src/main/java/com/github/istin/dmtools/reporting/ReportGenerator.java
-regression_test_relative_path: dmtools-core/src/test/java/com/github/istin/dmtools/reporting/ReportGeneratorTest.java
-java_test_class: com.github.istin.dmtools.reporting.ReportGeneratorTest
-java_test_method: testCollectDataFromAllSources_usesFallbackDelayWhenRateLimitMetadataMissing
 expected_fallback_delay_ms: 60000
-expected_warning: Rate limit metadata unavailable or invalid. Falling back to {} ms before retry.
-missing_header_guard: if (rateLimitResetHeader == null || rateLimitResetHeader.isBlank()) {
-missing_retry_after_guard: if (retryAfterHeader == null || retryAfterHeader.isBlank()) {
+expected_warning_log: Rate limit metadata unavailable or invalid. Falling back to 60000 ms before retry.
+expected_retry_log: Waiting 60000 ms before retry attempt 1/5.
