@@ -12,10 +12,20 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from testing.components.factories.report_generator_rate_limit_log_service_factory import (  # noqa: E402
     create_report_generator_rate_limit_log_service,
 )
+from testing.core.interfaces.report_generator_rate_limit_log_service import (  # noqa: E402
+    ReportGeneratorRateLimitLogService,
+)
+
+
+def create_service(
+    *,
+    repository_root: Path = REPOSITORY_ROOT,
+) -> ReportGeneratorRateLimitLogService:
+    return create_report_generator_rate_limit_log_service(repository_root)
 
 
 def test_dmc_1033_rate_limit_logs_show_wait_time_and_retry_visibility() -> None:
-    service = create_report_generator_rate_limit_log_service(REPOSITORY_ROOT)
+    service = create_service()
     audit = service.audit()
 
     failures: list[str] = []
