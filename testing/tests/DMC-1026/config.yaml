@@ -1,0 +1,14 @@
+test_id: DMC-1026
+type: api
+framework: pytest
+platform: windows-github-actions
+dependencies: []
+owner: epam
+repo: dm.ai
+workflow_ref: main
+workflow_file: windows-git-bash-installer-check.yml
+workflow_name: Windows Git Bash Installer Check
+workflow_job_name: validate-latest-installer
+dispatch_timeout_seconds: 300
+completion_timeout_seconds: 900
+poll_interval_seconds: 10
