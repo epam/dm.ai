@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 import time
 from contextlib import AbstractContextManager
@@ -248,6 +249,10 @@ class ReportGeneratorRateLimitService:
             output_html_path = output_dir / "DMC-1032_Partial_Progress_Report.html"
             report = json.loads(output_json_path.read_text(encoding="utf-8"))
             html_text = output_html_path.read_text(encoding="utf-8")
+            persisted_output_json_path, persisted_output_html_path = self._persist_report_artifacts(
+                output_json_path=output_json_path,
+                output_html_path=output_html_path,
+            )
 
         period = report["timePeriods"][0]
         metrics = period["metrics"]
@@ -259,8 +264,8 @@ class ReportGeneratorRateLimitService:
             stdout=execution.stdout,
             stderr=execution.stderr,
             combined_output=execution.combined_output,
-            output_json_path=str(output_json_path),
-            output_html_path=str(output_html_path),
+            output_json_path=str(persisted_output_json_path),
+            output_html_path=str(persisted_output_html_path),
             observed_retry_seconds=retry_window,
             retry_after_seconds=self.retry_after_seconds,
             minimum_observed_retry_seconds=self.minimum_observed_retry_seconds,
@@ -393,6 +398,16 @@ class ReportGeneratorRateLimitService:
                 f"Recorded requests: {request_records!r}"
             )
         return second_attempt - first_attempt
+
+    def _persist_report_artifacts(self, *, output_json_path: Path, output_html_path: Path) -> tuple[Path, Path]:
+        artifacts_root = self.repository_root / "testing" / ".artifacts" / "DMC-1032"
+        artifacts_root.mkdir(parents=True, exist_ok=True)
+        artifact_dir = Path(tempfile.mkdtemp(prefix="report-", dir=artifacts_root))
+        persisted_output_json_path = artifact_dir / output_json_path.name
+        persisted_output_html_path = artifact_dir / output_html_path.name
+        shutil.copy2(output_json_path, persisted_output_json_path)
+        shutil.copy2(output_html_path, persisted_output_html_path)
+        return persisted_output_json_path, persisted_output_html_path
 
     def _html_excerpt(self, normalized_html: str) -> str:
         if len(normalized_html) <= 500:
