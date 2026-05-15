@@ -85,8 +85,8 @@ class WorkflowDispatchValidationService(WorkflowDispatchValidationServiceContrac
             )
 
         workflow_run = self._wait_for_completion(workflow_run.run_id)
+        workflow_job = self._job_observation_or_none(workflow_run.run_id)
         if workflow_run.status != "completed" or workflow_run.conclusion != "success":
-            workflow_job = self._job_observation_or_none(workflow_run.run_id)
             failures.append(
                 WorkflowDispatchAuditFailure(
                     step=2,
@@ -103,13 +103,6 @@ class WorkflowDispatchValidationService(WorkflowDispatchValidationServiceContrac
                     ),
                 )
             )
-            return WorkflowDispatchValidationAudit(
-                workflow_run=workflow_run,
-                workflow_job=workflow_job,
-                failures=tuple(failures),
-            )
-
-        workflow_job = self._job_observation_or_none(workflow_run.run_id)
         if workflow_job is None:
             failures.append(
                 WorkflowDispatchAuditFailure(
@@ -143,11 +136,6 @@ class WorkflowDispatchValidationService(WorkflowDispatchValidationServiceContrac
                         f"Job excerpt: {workflow_job.log_excerpt or 'no log excerpt available'}"
                     ),
                 )
-            )
-            return WorkflowDispatchValidationAudit(
-                workflow_run=workflow_run,
-                workflow_job=workflow_job,
-                failures=tuple(failures),
             )
 
         missing_steps = [
