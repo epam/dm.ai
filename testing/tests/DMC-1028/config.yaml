@@ -1,0 +1,30 @@
+test_id: DMC-1028
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+release_installer_url: https://github.com/epam/dm.ai/releases/latest/download/install.sh
+repo: epam/dm.ai
+api_failure_exit_code: 22
+api_failure_message: curl: (22) The requested URL returned error: 502
+git_failure_exit_code: 1
+git_failure_message: fatal: unable to access 'https://github.com/epam/dm.ai.git/': Could not resolve host: github.com
+expected_resolved_installer_url_fragment: install.sh
+expected_output_fragments:
+  - Installing DMTools CLI...
+  - Effective skills:
+  - Effective integrations:
+  - Fetching latest CLI release information...
+  - Paginated search failed (exit code: 22) or no CLI release found, trying fallback...
+  - Failed to find latest CLI release from GitHub API.
+  - Possible causes:
+  - Network connectivity issues
+  - GitHub API rate limiting
+  - No CLI releases available (only skill/standalone releases found)
+  - curl version incompatibility
+  - Debug information:
+  - Last curl exit code: 22
+  - API response:
+  - Please check your network connection and try again.
+  - If the issue persists, you can manually download from:
+  - https://github.com/epam/dm.ai/releases/latest
