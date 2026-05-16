@@ -333,13 +333,13 @@ public abstract class AbstractRestClient implements RestClient {
         return execute(url, isRepeatIfFails, isIgnoreCache, genericRequest, 0);
     }
 
-    protected void logRetryResumption(String method, String url, int nextAttemptNumber) {
+    protected void logRetryResumption(String method, String url, int nextAttemptNumber, int totalAttempts) {
         logger.info(
                 "Starting retry request now that the wait window has elapsed: {} {} (Attempt {}/{})",
                 method,
                 sanitizeUrl(url),
                 nextAttemptNumber,
-                retryPolicy.getMaxRetries()
+                totalAttempts
         );
     }
     
@@ -399,7 +399,7 @@ public abstract class AbstractRestClient implements RestClient {
                                     Thread.currentThread().interrupt();
                                     throw new IOException("Request interrupted during retry", e);
                                 }
-                                logRetryResumption("GET", url, attemptNumber + 1);
+                                logRetryResumption("GET", url, attemptNumber + 1, retryPolicy.getMaxRetries());
                                 attemptNumber++;
                                 continue;
                             } else {
@@ -435,7 +435,7 @@ public abstract class AbstractRestClient implements RestClient {
                                 Thread.currentThread().interrupt();
                                 throw new IOException("Request interrupted during retry", interruptedException);
                             }
-                            logRetryResumption("GET", url, attemptNumber + 1);
+                            logRetryResumption("GET", url, attemptNumber + 1, retryPolicy.getMaxRetries());
                         }
                         attemptNumber++;
                     } else {
@@ -566,7 +566,7 @@ public abstract class AbstractRestClient implements RestClient {
                             Thread.currentThread().interrupt();
                             throw new IOException("POST request interrupted during retry", e);
                         }
-                        logRetryResumption("POST", url, attemptNumber + 1);
+                        logRetryResumption("POST", url, attemptNumber + 1, retryPolicy.getMaxRetries());
                         attemptNumber++;
                         continue;
                     } else {
@@ -592,7 +592,7 @@ public abstract class AbstractRestClient implements RestClient {
                             Thread.currentThread().interrupt();
                             throw new IOException("POST request interrupted during retry", interruptedException);
                         }
-                        logRetryResumption("POST", url, attemptNumber + 1);
+                        logRetryResumption("POST", url, attemptNumber + 1, retryPolicy.getMaxRetries());
                     } else {
                         // For connection errors, use existing exponential backoff
                         try {
@@ -603,7 +603,7 @@ public abstract class AbstractRestClient implements RestClient {
                             Thread.currentThread().interrupt();
                             throw new IOException("POST request interrupted during retry", interruptedException);
                         }
-                        logRetryResumption("POST", url, attemptNumber + 1);
+                        logRetryResumption("POST", url, attemptNumber + 1, retryPolicy.getMaxRetries());
                     }
                     attemptNumber++;
                 } else {
@@ -662,16 +662,15 @@ public abstract class AbstractRestClient implements RestClient {
                 throw AbstractRestClient.printAndCreateException(request, response);
             }
         } catch (IOException e) {
-            logger.warn("PUT connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            final int maxRetries = 2;
+            final int maxAttempts = maxRetries + 1;
+            logger.warn("PUT connection error for URL: {} - Error: {} (Attempt: {}/{})", url, e.getMessage(), retryCount + 1, maxAttempts);
             
             // Check if it's a recoverable connection error
             boolean isRecoverableError = isRecoverableConnectionError(e);
             
-            // Maximum of 3 attempts (2 retries)
-            final int MAX_RETRIES = 2;
-            
-            if (isRecoverableError && retryCount < MAX_RETRIES) {
-                logger.info("Retrying PUT request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
+            if (isRecoverableError && retryCount < maxRetries) {
+                logger.info("Retrying PUT request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, maxRetries);
                 try {
                     // Exponential backoff: 200ms, 400ms, 800ms
                     long waitTime = 200L * (long) Math.pow(2, retryCount);
@@ -681,13 +680,13 @@ public abstract class AbstractRestClient implements RestClient {
                     Thread.currentThread().interrupt();
                     throw new IOException("PUT request interrupted during retry", interruptedException);
                 }
-                logRetryResumption("PUT", url, retryCount + 2);
+                logRetryResumption("PUT", url, retryCount + 2, maxAttempts);
                 return put(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
                     logger.error("Non-recoverable PUT connection error for URL: {}", url, e);
-                } else if (retryCount >= MAX_RETRIES) {
-                    logger.error("Max PUT retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
+                } else if (retryCount >= maxRetries) {
+                    logger.error("Max PUT retries ({}) exceeded for URL: {}. Final error: {}", maxRetries, url, e.getMessage());
                 }
                 throw e;
             }
@@ -727,16 +726,15 @@ public abstract class AbstractRestClient implements RestClient {
                 throw AbstractRestClient.printAndCreateException(request, response);
             }
         } catch (IOException e) {
-            logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            final int maxRetries = 2;
+            final int maxAttempts = maxRetries + 1;
+            logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/{})", url, e.getMessage(), retryCount + 1, maxAttempts);
             
             // Check if it's a recoverable connection error
             boolean isRecoverableError = isRecoverableConnectionError(e);
             
-            // Maximum of 3 attempts (2 retries)
-            final int MAX_RETRIES = 2;
-            
-            if (isRecoverableError && retryCount < MAX_RETRIES) {
-                logger.info("Retrying PATCH request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, MAX_RETRIES);
+            if (isRecoverableError && retryCount < maxRetries) {
+                logger.info("Retrying PATCH request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, maxRetries);
                 try {
                     // Exponential backoff: 200ms, 400ms, 800ms
                     long waitTime = 200L * (long) Math.pow(2, retryCount);
@@ -746,13 +744,13 @@ public abstract class AbstractRestClient implements RestClient {
                     Thread.currentThread().interrupt();
                     throw new IOException("PATCH request interrupted during retry", interruptedException);
                 }
-                logRetryResumption("PATCH", url, retryCount + 2);
+                logRetryResumption("PATCH", url, retryCount + 2, maxAttempts);
                 return patch(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
                     logger.error("Non-recoverable PATCH connection error for URL: {}", url, e);
-                } else if (retryCount >= MAX_RETRIES) {
-                    logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
+                } else if (retryCount >= maxRetries) {
+                    logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", maxRetries, url, e.getMessage());
                 }
                 throw e;
             }

@@ -172,13 +172,26 @@ class AbstractRestClientRetryTest {
             assertEquals("ok", response);
             assertEquals(2, requestCount.get(), "Expected one retry after the initial 429 response");
             assertEquals(
-                List.of("GET|" + client.getBasePath() + "/rate-limit?token=secret|2"),
+                List.of("GET|" + client.getBasePath() + "/rate-limit?token=secret|2|2"),
                 client.retryResumptionCalls,
                 "Expected the retry flow to emit an explicit retry-start confirmation after the delay"
             );
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    @DisplayName("AbstractRestClient retry confirmation should use the provided attempt budget")
+    void testRetryStartConfirmationUsesProvidedAttemptBudget() throws Exception {
+        TestRestClient client = new TestRestClient("http://127.0.0.1");
+
+        client.logRetryResumption("PATCH", client.getBasePath() + "/resource", 2, 3);
+
+        assertEquals(
+            List.of("PATCH|" + client.getBasePath() + "/resource|2|3"),
+            client.retryResumptionCalls
+        );
     }
 
     private static class TestRestClient extends AbstractRestClient {
@@ -199,9 +212,9 @@ class AbstractRestClientRetryTest {
         }
 
         @Override
-        protected void logRetryResumption(String method, String url, int nextAttemptNumber) {
-            retryResumptionCalls.add(method + "|" + url + "|" + nextAttemptNumber);
-            super.logRetryResumption(method, url, nextAttemptNumber);
+        protected void logRetryResumption(String method, String url, int nextAttemptNumber, int totalAttempts) {
+            retryResumptionCalls.add(method + "|" + url + "|" + nextAttemptNumber + "|" + totalAttempts);
+            super.logRetryResumption(method, url, nextAttemptNumber, totalAttempts);
         }
     }
 }
