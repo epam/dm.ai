@@ -510,13 +510,22 @@ download_skill() {
         skill_source="$extract_dir"
     elif [ -f "$extract_dir/dmtools-main/dmtools-ai-docs/SKILL.md" ]; then
         skill_source="$extract_dir/dmtools-main/dmtools-ai-docs"
+    elif [ -f "$extract_dir/dm.ai-main/dmtools-ai-docs/SKILL.md" ]; then
+        skill_source="$extract_dir/dm.ai-main/dmtools-ai-docs"
     elif [ -f "$extract_dir/dmtools-ai-docs/SKILL.md" ]; then
         skill_source="$extract_dir/dmtools-ai-docs"
     else
-        print_error "SKILL.md not found in $asset_name"
-        print_info "Contents of extract dir:"
-        ls -la "$extract_dir" >&2 | head -10
-        return 1
+        # Try to find SKILL.md anywhere one level deep
+        local found
+        found=$(find "$extract_dir" -maxdepth 3 -name "SKILL.md" 2>/dev/null | head -1)
+        if [ -n "$found" ]; then
+            skill_source=$(dirname "$found")
+        else
+            print_error "SKILL.md not found in $asset_name"
+            print_info "Contents of extract dir:"
+            ls -la "$extract_dir" >&2 | head -10
+            return 1
+        fi
     fi
 
     echo "$skill_source"

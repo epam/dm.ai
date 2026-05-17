@@ -302,8 +302,8 @@ jobs:
         with:
           name: skill-package
           path: |
-            dist/dmtools-skill-*.zip
-            dist/dmtools-skill-*.tar.gz
+            dist/dmtools-skill*.zip
+            dist/dmtools-skill*.tar.gz
             dist/dmtools-jira-skill*.zip
             dist/dmtools-jira-skill*.tar.gz
             dist/dmtools-github-skill*.zip
