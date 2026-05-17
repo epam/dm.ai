@@ -23,12 +23,15 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
+import java.net.URLConnection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -275,6 +278,70 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return "Workflow '" + workflowId + "' triggered successfully on " + workspace + "/" + repository;
     }
 
+    @MCPTool(
+            name = "github_get_or_create_draft_release",
+            description = "Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release.",
+            integration = "github",
+            category = "releases"
+    )
+    public String getOrCreateDraftRelease(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "tagName", description = "The Git tag name for the release. Reused to find an existing draft release.", required = true, example = "pr-attachments-storage")
+            String tagName,
+            @MCPParam(name = "releaseName", description = "The human-readable release name. If empty, tagName is used.", required = false, example = "PR Attachments Storage")
+            String releaseName,
+            @MCPParam(name = "targetCommitish", description = "Optional branch or commit SHA the release should point to when created.", required = false, example = "main")
+            String targetCommitish,
+            @MCPParam(name = "body", description = "Optional Markdown release notes/body.", required = false, example = "Internal storage release for PR attachments.")
+            String body) throws IOException {
+        String normalizedReleaseName = isBlank(releaseName) ? tagName : releaseName.trim();
+        JSONObject existingRelease = findReleaseByTagOrName(workspace, repository, tagName, normalizedReleaseName);
+        if (existingRelease != null) {
+            if (!existingRelease.optBoolean("draft")) {
+                throw new IllegalStateException("Release '" + normalizedReleaseName + "' (" + tagName + ") already exists but is not a draft release.");
+            }
+            return existingRelease.toString();
+        }
+        return createRelease(workspace, repository, tagName, normalizedReleaseName, targetCommitish, body, true);
+    }
+
+    @MCPTool(
+            name = "github_upload_release_asset",
+            description = "Upload a local file as a GitHub release asset. Returns the uploaded asset metadata including browser_download_url.",
+            integration = "github",
+            category = "releases"
+    )
+    public String uploadReleaseAsset(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "releaseId", description = "The numeric GitHub release ID returned by github_get_or_create_draft_release.", required = true, example = "323096697")
+            String releaseId,
+            @MCPParam(name = "filePath", description = "Absolute or relative path to the local file to upload.", required = true, example = "/tmp/preview.png")
+            String filePath,
+            @MCPParam(name = "assetName", description = "Optional asset filename shown in GitHub. Defaults to the local filename.", required = false, example = "clip_123.png")
+            String assetName,
+            @MCPParam(name = "contentType", description = "Optional MIME type. Defaults to detected type or application/octet-stream.", required = false, example = "image/png")
+            String contentType,
+            @MCPParam(name = "label", description = "Optional display label for the uploaded asset.", required = false, example = "Screenshot")
+            String label) throws IOException {
+        File assetFile = new File(filePath);
+        if (!assetFile.exists()) {
+            throw new FileNotFoundException("Release asset file not found: " + assetFile.getAbsolutePath());
+        }
+        if (!assetFile.isFile()) {
+            throw new IllegalArgumentException("Release asset path must point to a file: " + assetFile.getAbsolutePath());
+        }
+        String resolvedAssetName = isBlank(assetName) ? assetFile.getName() : assetName.trim();
+        String resolvedContentType = resolveAssetContentType(assetFile, contentType);
+        String uploadUrl = buildReleaseAssetUploadUrl(workspace, repository, releaseId, resolvedAssetName, label);
+        return uploadReleaseAssetBinary(uploadUrl, assetFile, resolvedContentType);
+    }
+
     private String getPullRequestResponse(String workspace, String repository, String pullRequestId, boolean isDiff) throws IOException {
         String path = path(String.format("repos/%s/%s/pulls/%s", workspace, repository, pullRequestId));
         GenericRequest getRequest = new GenericRequest(this, path);
@@ -286,6 +353,102 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     private static void addDiffHeader(GenericRequest getRequest) {
         getRequest.header("Accept", "application/vnd.github.diff");
+    }
+
+    private JSONObject findReleaseByTagOrName(String workspace, String repository, String tagName, String releaseName) throws IOException {
+        int perPage = 100;
+        int page = 1;
+        JSONObject releaseNameMatch = null;
+        while (true) {
+            String releasesPath = path(String.format("repos/%s/%s/releases?per_page=%d&page=%d",
+                    workspace, repository, perPage, page));
+            GenericRequest getRequest = new GenericRequest(this, releasesPath);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                return null;
+            }
+            JSONArray releases = new JSONArray(response);
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.getJSONObject(i);
+                String existingTagName = release.optString("tag_name");
+                String existingReleaseName = release.optString("name");
+                if (tagName.equals(existingTagName)) {
+                    return release;
+                }
+                if (releaseNameMatch == null && releaseName.equals(existingReleaseName)) {
+                    releaseNameMatch = release;
+                }
+            }
+            if (releases.length() < perPage) {
+                return releaseNameMatch;
+            }
+            page++;
+        }
+    }
+
+    private String createRelease(String workspace, String repository, String tagName, String releaseName,
+                                 String targetCommitish, String body, boolean draft) throws IOException {
+        String releasesPath = path(String.format("repos/%s/%s/releases", workspace, repository));
+        GenericRequest postRequest = new GenericRequest(this, releasesPath);
+        JSONObject releaseBody = new JSONObject();
+        releaseBody.put("tag_name", tagName);
+        releaseBody.put("name", releaseName);
+        releaseBody.put("draft", draft);
+        if (!isBlank(targetCommitish)) {
+            releaseBody.put("target_commitish", targetCommitish.trim());
+        }
+        if (!isBlank(body)) {
+            releaseBody.put("body", body);
+        }
+        postRequest.setBody(releaseBody.toString());
+        return post(postRequest);
+    }
+
+    private String buildReleaseAssetUploadUrl(String workspace, String repository, String releaseId, String assetName, String label) {
+        okhttp3.HttpUrl.Builder builder = Objects.requireNonNull(okhttp3.HttpUrl.parse(
+                String.format("https://uploads.github.com/repos/%s/%s/releases/%s/assets", workspace, repository, releaseId)))
+                .newBuilder()
+                .addQueryParameter("name", assetName);
+        if (!isBlank(label)) {
+            builder.addQueryParameter("label", label.trim());
+        }
+        return builder.build().toString();
+    }
+
+    private String resolveAssetContentType(File assetFile, String explicitContentType) throws IOException {
+        if (!isBlank(explicitContentType)) {
+            return explicitContentType.trim();
+        }
+        String detected = Files.probeContentType(assetFile.toPath());
+        if (isBlank(detected)) {
+            detected = URLConnection.guessContentTypeFromName(assetFile.getName());
+        }
+        return isBlank(detected) ? "application/octet-stream" : detected;
+    }
+
+    protected String uploadReleaseAssetBinary(String uploadUrl, File assetFile, String contentType) throws IOException {
+        okhttp3.MediaType mediaType = okhttp3.MediaType.parse(contentType);
+        if (mediaType == null) {
+            throw new IllegalArgumentException("Invalid content type for release asset upload: " + contentType);
+        }
+        okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(assetFile, mediaType);
+        okhttp3.Request request = sign(new okhttp3.Request.Builder())
+                .url(uploadUrl)
+                .header("Content-Type", contentType)
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .post(requestBody)
+                .build();
+        try (okhttp3.Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw AbstractRestClient.printAndCreateException(request, response);
+            }
+            return response.body() != null ? response.body().string() : "";
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     @Override
