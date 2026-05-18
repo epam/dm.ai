@@ -1,8 +1,8 @@
 # GitHub MCP Tools Reference
 
-**Total tools**: 27
+**Total tools**: 29
 **Integration key**: `github`
-**Categories**: `pull_requests`, `actions`
+**Categories**: `pull_requests`, `actions`, `releases`
 
 ## Quick Start
 
@@ -867,6 +867,84 @@ function extractFirstError(logs) {
 | `jira_search_by_jql` | Check if bug already exists (dedup via label) |
 | `jira_create_ticket_basic` | Create the Bug ticket |
 | `jira_add_label` | Add deduplication label `gh-run-{runId}` |
+
+---
+
+## Release Asset Tools
+
+These two tools enable storing binary files (screenshots, logs, ZIPs, etc.) as GitHub release assets. Because the standard GitHub UI drag-and-drop upload requires browser cookies unavailable to PATs, the recommended pattern is to create a **draft release** in the same repository and use it as an asset store. Assets are accessible to anyone with read access to that repository.
+
+### `github_get_or_create_draft_release`
+
+Find an existing draft release by tag name (or by release name as fallback) and return it, or create a new one if none is found.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `tagName` | String | ✅ | Tag name for the release (e.g. `mcp-assets-v1`). Used as the primary lookup key. |
+| `releaseName` | String | ❌ | Human-readable release title. Defaults to `tagName` when not set. Used as fallback lookup key if no tag match is found. |
+
+Returns the full GitHub release JSON object (including `id`, `upload_url`, `html_url`, etc.).
+
+> ⚠️ **Guard**: if a release with the given tag/name exists but is already **published** (`draft=false`), the tool throws an error to prevent accidentally using a live release as storage. Use a dedicated tag such as `mcp-assets-storage`.
+
+```bash
+dmtools github_get_or_create_draft_release workspace=IstiN repository=dmtools-agents tagName=mcp-assets-v1 releaseName="MCP Asset Store"
+```
+
+---
+
+### `github_upload_release_asset`
+
+Upload a local file to an existing GitHub release as a release asset. The release must already exist; use `github_get_or_create_draft_release` first to obtain one.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `releaseId` | String | ✅ | Numeric release ID (from the `id` field of the release JSON) |
+| `filePath` | String | ✅ | Absolute or workspace-relative path of the file to upload |
+| `assetName` | String | ❌ | File name shown in GitHub UI. Defaults to the base name of `filePath`. |
+| `label` | String | ❌ | Optional human-readable label displayed alongside the asset in the GitHub UI |
+
+Returns the full GitHub asset JSON object (including `id`, `browser_download_url`, `size`, etc.).
+
+Content-type is auto-detected via `Files.probeContentType()` / `URLConnection.guessContentTypeFromName()`, falling back to `application/octet-stream`.
+
+```bash
+# Step 1 — ensure the draft release exists
+dmtools github_get_or_create_draft_release workspace=IstiN repository=dmtools-agents tagName=mcp-assets-v1
+
+# Step 2 — upload a file (use the `id` from step 1)
+dmtools github_upload_release_asset workspace=IstiN repository=dmtools-agents releaseId=323965673 filePath=/tmp/screenshot.png assetName=screenshot.png label="PR #42 screenshot"
+```
+
+**Typical two-step PR attachment pattern**
+
+```js
+// 1. Get or create the draft release that acts as an asset store
+const releaseJson = JSON.parse(
+  github_get_or_create_draft_release({ workspace, repository, tagName: 'mcp-assets-v1' })
+);
+
+// 2. Upload the file and get the download URL
+const assetJson = JSON.parse(
+  github_upload_release_asset({
+    workspace, repository,
+    releaseId: String(releaseJson.id),
+    filePath: '/tmp/attachment.png',
+    assetName: 'attachment.png'
+  })
+);
+
+// 3. Embed in a PR comment as a markdown image or link
+github_add_pr_comment({
+  workspace, repository,
+  pullRequestId: String(prId),
+  comment: `Screenshot: ![attachment](${assetJson.browser_download_url})`
+});
+```
 
 ---
 
