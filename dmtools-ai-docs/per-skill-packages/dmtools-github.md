@@ -2,7 +2,7 @@
 
 ## Overview
 
-`dmtools-github` is the focused DMtools package for GitHub pull-request review workflows, including PR inspection, comment management, labels, and review-thread follow-up.
+`dmtools-github` is the focused DMtools package for GitHub workflows, including PR inspection, comment management, labels, review-thread follow-up, and binary file attachment storage via GitHub Releases assets.
 
 ## Package / Artifact
 
@@ -34,6 +34,12 @@ bash skill-install.sh --skills github
 
 ```bash
 dmtools github_get_pr workspace=epam repository=dm.ai pullRequestId=42
+```
+
+```bash
+# Store a file as a PR attachment via a draft release
+dmtools github_get_or_create_draft_release workspace=epam repository=dm.ai tagName=mcp-assets-v1
+dmtools github_upload_release_asset workspace=epam repository=dm.ai releaseId=<id> filePath=/tmp/screenshot.png
 ```
 
 ## Compatibility / Supported versions
