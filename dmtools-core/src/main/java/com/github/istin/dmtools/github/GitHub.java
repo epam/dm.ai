@@ -310,7 +310,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     @MCPTool(
             name = "github_upload_release_asset",
-            description = "Upload a local file as a GitHub release asset. Returns the uploaded asset metadata including browser_download_url.",
+            description = "Upload a local file as a GitHub release asset. Returns the uploaded asset metadata including browser_download_url. Set overwrite=true to automatically delete an existing asset with the same name before uploading.",
             integration = "github",
             category = "releases"
     )
@@ -328,7 +328,9 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             @MCPParam(name = "contentType", description = "Optional MIME type. Defaults to detected type or application/octet-stream.", required = false, example = "image/png")
             String contentType,
             @MCPParam(name = "label", description = "Optional display label for the uploaded asset.", required = false, example = "Screenshot")
-            String label) throws IOException {
+            String label,
+            @MCPParam(name = "overwrite", description = "If true, delete any existing asset with the same name before uploading. Defaults to false.", required = false, example = "true")
+            String overwrite) throws IOException {
         File assetFile = new File(filePath);
         if (!assetFile.exists()) {
             throw new FileNotFoundException("Release asset file not found: " + assetFile.getAbsolutePath());
@@ -337,9 +339,48 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             throw new IllegalArgumentException("Release asset path must point to a file: " + assetFile.getAbsolutePath());
         }
         String resolvedAssetName = isBlank(assetName) ? assetFile.getName() : assetName.trim();
+        if (Boolean.parseBoolean(overwrite)) {
+            deleteExistingAssetByName(workspace, repository, releaseId, resolvedAssetName);
+        }
         String resolvedContentType = resolveAssetContentType(assetFile, contentType);
         String uploadUrl = buildReleaseAssetUploadUrl(workspace, repository, releaseId, resolvedAssetName, label);
         return uploadReleaseAssetBinary(uploadUrl, assetFile, resolvedContentType);
+    }
+
+    @MCPTool(
+            name = "github_delete_release_asset",
+            description = "Delete a GitHub release asset by its asset ID. Use github_list_release_assets to find asset IDs.",
+            integration = "github",
+            category = "releases"
+    )
+    public void deleteReleaseAsset(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "assetId", description = "The numeric asset ID to delete.", required = true, example = "422721847")
+            String assetId) throws IOException {
+        String path = path(String.format("repos/%s/%s/releases/assets/%s", workspace, repository, assetId));
+        GenericRequest deleteRequest = new GenericRequest(this, path);
+        delete(deleteRequest);
+    }
+
+    @MCPTool(
+            name = "github_list_release_assets",
+            description = "List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url.",
+            integration = "github",
+            category = "releases"
+    )
+    public String listReleaseAssets(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "releaseId", description = "The numeric GitHub release ID.", required = true, example = "323096697")
+            String releaseId) throws IOException {
+        String path = path(String.format("repos/%s/%s/releases/%s/assets", workspace, repository, releaseId));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        return execute(getRequest);
     }
 
     private String getPullRequestResponse(String workspace, String repository, String pullRequestId, boolean isDiff) throws IOException {
@@ -353,6 +394,26 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     private static void addDiffHeader(GenericRequest getRequest) {
         getRequest.header("Accept", "application/vnd.github.diff");
+    }
+
+    private void deleteExistingAssetByName(String workspace, String repository, String releaseId, String assetName) throws IOException {
+        String assetsPath = path(String.format("repos/%s/%s/releases/%s/assets", workspace, repository, releaseId));
+        GenericRequest getRequest = new GenericRequest(this, assetsPath);
+        String response = execute(getRequest);
+        if (response == null || response.isEmpty()) {
+            return;
+        }
+        JSONArray assets = new JSONArray(response);
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.getJSONObject(i);
+            if (assetName.equals(asset.optString("name"))) {
+                String assetId = String.valueOf(asset.getLong("id"));
+                String deletePath = path(String.format("repos/%s/%s/releases/assets/%s", workspace, repository, assetId));
+                GenericRequest deleteRequest = new GenericRequest(this, deletePath);
+                delete(deleteRequest);
+                return;
+            }
+        }
     }
 
     private JSONObject findReleaseByTagOrName(String workspace, String repository, String tagName, String releaseName) throws IOException {
