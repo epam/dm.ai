@@ -1,6 +1,6 @@
 # GitHub MCP Tools Reference
 
-**Total tools**: 29
+**Total tools**: 31
 **Integration key**: `github`
 **Categories**: `pull_requests`, `actions`, `releases`
 
@@ -906,7 +906,9 @@ Upload a local file to an existing GitHub release as a release asset. The releas
 | `releaseId` | String | ✅ | Numeric release ID (from the `id` field of the release JSON) |
 | `filePath` | String | ✅ | Absolute or workspace-relative path of the file to upload |
 | `assetName` | String | ❌ | File name shown in GitHub UI. Defaults to the base name of `filePath`. |
+| `contentType` | String | ❌ | MIME type. Auto-detected if omitted, falls back to `application/octet-stream`. |
 | `label` | String | ❌ | Optional human-readable label displayed alongside the asset in the GitHub UI |
+| `overwrite` | String | ❌ | Set to `"true"` to automatically delete any existing asset with the same name before uploading. Default: `false`. |
 
 Returns the full GitHub asset JSON object (including `id`, `browser_download_url`, `size`, etc.).
 
@@ -918,6 +920,9 @@ dmtools github_get_or_create_draft_release workspace=IstiN repository=dmtools-ag
 
 # Step 2 — upload a file (use the `id` from step 1)
 dmtools github_upload_release_asset workspace=IstiN repository=dmtools-agents releaseId=323965673 filePath=/tmp/screenshot.png assetName=screenshot.png label="PR #42 screenshot"
+
+# Step 2 (overwrite) — replace file if it already exists in the release
+dmtools github_upload_release_asset workspace=IstiN repository=dmtools-agents releaseId=323965673 filePath=/tmp/screenshot.png assetName=screenshot.png overwrite=true
 ```
 
 **Typical two-step PR attachment pattern**
@@ -928,13 +933,14 @@ const releaseJson = JSON.parse(
   github_get_or_create_draft_release({ workspace, repository, tagName: 'mcp-assets-v1' })
 );
 
-// 2. Upload the file and get the download URL
+// 2. Upload the file and get the download URL (overwrite if re-running)
 const assetJson = JSON.parse(
   github_upload_release_asset({
     workspace, repository,
     releaseId: String(releaseJson.id),
     filePath: '/tmp/attachment.png',
-    assetName: 'attachment.png'
+    assetName: 'attachment.png',
+    overwrite: 'true'
   })
 );
 
@@ -944,6 +950,44 @@ github_add_pr_comment({
   pullRequestId: String(prId),
   comment: `Screenshot: ![attachment](${assetJson.browser_download_url})`
 });
+```
+
+---
+
+### `github_list_release_assets`
+
+List all assets attached to a GitHub release.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `releaseId` | String | ✅ | Numeric release ID |
+
+Returns a JSON array of asset objects, each containing `id`, `name`, `size`, `state`, and `browser_download_url`.
+
+```bash
+dmtools github_list_release_assets workspace=IstiN repository=dmtools-agents releaseId=323965673
+```
+
+---
+
+### `github_delete_release_asset`
+
+Delete a GitHub release asset by its asset ID. Use `github_list_release_assets` to find asset IDs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `assetId` | String | ✅ | Numeric asset ID to delete (from `github_list_release_assets` → `id`) |
+
+```bash
+# List assets first to find the ID
+dmtools github_list_release_assets workspace=IstiN repository=dmtools-agents releaseId=323965673
+
+# Then delete by ID
+dmtools github_delete_release_asset workspace=IstiN repository=dmtools-agents assetId=422721847
 ```
 
 ---
