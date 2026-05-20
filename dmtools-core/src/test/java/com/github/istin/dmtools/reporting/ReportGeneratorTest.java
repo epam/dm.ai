@@ -637,6 +637,44 @@ class ReportGeneratorTest {
     }
 
     @Test
+    void testCollectDataFromAllSources_skipsMetricOnNonRetryableError() throws Exception {
+        SourceCode sourceCode = mock(SourceCode.class);
+        IPullRequest pullRequest = mockPullRequest("123", "PR title");
+        IActivity approvalActivity = mock(IActivity.class);
+        IUser approver = mock(IUser.class);
+        when(approver.getFullName()).thenReturn("Reviewer");
+        when(approvalActivity.getApproval()).thenReturn(approver);
+
+        when(sourceCode.getDefaultWorkspace()).thenReturn("workspace");
+        when(sourceCode.getDefaultRepository()).thenReturn("repo");
+        when(sourceCode.getDefaultBranch()).thenReturn("main");
+
+        // PullRequestsMetricSource throws a non-retryable 404
+        when(sourceCode.pullRequests(eq("workspace"), eq("repo"), eq(IPullRequest.PullRequestState.STATE_MERGED), eq(true), any(Calendar.class)))
+            .thenThrow(new RestClient.RestClientException("Not Found", "Not Found", 404));
+
+        // PullRequestsApprovalsMetricSource succeeds normally
+        when(sourceCode.pullRequestActivities("workspace", "repo", "123"))
+            .thenReturn(List.of(approvalActivity));
+
+        ReportGenerator generator = new TestableReportGenerator(sourceCode);
+
+        // Should NOT throw — the 404 metric is skipped, the rest of the job continues
+        Map<String, Map<String, ReportGenerator.DataSourceResult>> results =
+            invokeCollectDataFromAllSources(generator, sourceCode, createPullRequestReportConfig());
+
+        // Both metric keys are present; the failed one returns an empty result
+        assertTrue(results.containsKey("pullRequests"));
+        Map<String, ReportGenerator.DataSourceResult> sourceResults = results.get("pullRequests");
+        assertTrue(sourceResults.containsKey("PullRequestsMetricSource"), "Failed metric key should still be present");
+        assertEquals(0, sourceResults.get("PullRequestsMetricSource").getAllKeyTimes().size(),
+            "Failed metric should yield empty result, not crash");
+        assertTrue(sourceResults.containsKey("PullRequestsApprovalsMetricSource"),
+            "Subsequent metric should still be collected after a sibling failure");
+    }
+
+
+    @Test
     void testCalculateRateLimitDelayMs_usesGitHubResetHeaderBeyondDefaultRetryCap() {
         TestableReportGenerator generator = new TestableReportGenerator(mock(SourceCode.class));
         Response rateLimitResponse = mock(Response.class);
