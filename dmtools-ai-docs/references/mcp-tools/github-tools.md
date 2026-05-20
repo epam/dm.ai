@@ -1,8 +1,8 @@
 # GitHub MCP Tools Reference
 
-**Total tools**: 31
+**Total tools**: 33
 **Integration key**: `github`
-**Categories**: `pull_requests`, `actions`, `releases`
+**Categories**: `pull_requests`, `actions`, `releases`, `commits`
 
 ## Quick Start
 
@@ -34,6 +34,58 @@ dmtools github_list_prs workspace=IstiN repository=dmtools state=open
 ```
 
 Returns an array of pull request objects with `number`, `title`, `state`, `user`, `head`, `base`, `merged_at`, etc.
+
+---
+
+### `github_list_prs_filtered`
+
+List pull requests filtered by a **Java regex on the PR title**. Fetches all PRs matching the state and returns only those whose title contains a regex match. Useful for large repositories to avoid loading the full history.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `state` | String | ✅ | `open`, `closed`, or `merged` |
+| `titleRegex` | String | ✅ | Java regex matched against PR title (substring match via `find()`). Example: `^feat\(`, `TICKET-\d+`, `release/\d+` |
+
+```bash
+# Only PRs whose title starts with "feat("
+dmtools github_list_prs_filtered workspace=IstiN repository=dmtools state=merged titleRegex="^feat\("
+
+# PRs related to a Jira ticket
+dmtools github_list_prs_filtered workspace=IstiN repository=my-app state=merged titleRegex="PROJ-\d+"
+```
+
+```js
+// In a JS agent
+const featurePRs = github_list_prs_filtered('IstiN', 'dmtools', 'merged', '^feat\\(');
+```
+
+---
+
+### `github_get_commits_from_branches`
+
+Fetch commits from **all branches whose name matches a regex pattern**, aggregated and de-duplicated by commit hash. Ideal for collecting commits from `feature/*`, `release/*`, or similar branch groups without specifying each branch individually.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `branchNameRegex` | String | ✅ | Java regex matched against branch names. Example: `^feature/`, `release/\d+` |
+| `since` | String | ❌ | ISO date `yyyy-MM-dd` — only commits after this date |
+
+```bash
+# All commits from feature/* branches since Jan 2024
+dmtools github_get_commits_from_branches workspace=IstiN repository=dmtools branchNameRegex="^feature/" since=2024-01-01
+
+# Commits from all release branches
+dmtools github_get_commits_from_branches workspace=IstiN repository=my-app branchNameRegex="^release/"
+```
+
+```js
+// In a JS agent
+const featureCommits = github_get_commits_from_branches('IstiN', 'dmtools', '^feature/', '2024-01-01');
+```
 
 ---
 
