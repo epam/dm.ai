@@ -121,7 +121,7 @@ public class GitHubReleaseTest {
 
         String result = gitHub.uploadReleaseAsset(
                 WORKSPACE, REPOSITORY, "323096697", tempAsset.getAbsolutePath(),
-                "preview image.png", "image/png", "Screenshot Label");
+                "preview image.png", "image/png", "Screenshot Label", null);
 
         assertTrue(result.contains("browser_download_url"));
 
@@ -147,11 +147,107 @@ public class GitHubReleaseTest {
 
         gitHub.uploadReleaseAsset(
                 WORKSPACE, REPOSITORY, "323096697", tempAsset.getAbsolutePath(),
-                null, "text/plain", null);
+                null, "text/plain", null, null);
 
         ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
         verify(gitHub, times(1)).uploadReleaseAssetBinary(urlCaptor.capture(), any(File.class), anyString());
         assertTrue(urlCaptor.getValue().contains("name=" + tempAsset.getName()));
+    }
+
+    @Test
+    public void testUploadReleaseAsset_overwriteFalse_doesNotCheckExistingAssets() throws IOException {
+        tempAsset = File.createTempFile("release-asset-", ".png");
+        Files.writeString(tempAsset.toPath(), "png-data");
+
+        doReturn("{\"browser_download_url\":\"https://github.com/download\"}")
+                .when(gitHub).uploadReleaseAssetBinary(anyString(), any(File.class), anyString());
+
+        gitHub.uploadReleaseAsset(
+                WORKSPACE, REPOSITORY, "323096697", tempAsset.getAbsolutePath(),
+                "screenshot.png", "image/png", null, "false");
+
+        // execute() should NOT be called (no asset listing)
+        verify(gitHub, never()).execute(any(GenericRequest.class));
+    }
+
+    @Test
+    public void testUploadReleaseAsset_overwriteTrue_deletesExistingAndUploads() throws IOException {
+        tempAsset = File.createTempFile("release-asset-", ".png");
+        Files.writeString(tempAsset.toPath(), "png-data");
+
+        JSONArray existingAssets = new JSONArray()
+                .put(buildAssetJson(422721847L, "screenshot.png"));
+        doReturn(existingAssets.toString()).when(gitHub).execute(any(GenericRequest.class));
+        doReturn(null).when(gitHub).delete(any(GenericRequest.class));
+        doReturn("{\"browser_download_url\":\"https://github.com/download/screenshot.png\"}")
+                .when(gitHub).uploadReleaseAssetBinary(anyString(), any(File.class), anyString());
+
+        String result = gitHub.uploadReleaseAsset(
+                WORKSPACE, REPOSITORY, "323096697", tempAsset.getAbsolutePath(),
+                "screenshot.png", "image/png", null, "true");
+
+        assertTrue(result.contains("browser_download_url"));
+
+        // delete must have been called with the asset's ID in the path
+        ArgumentCaptor<GenericRequest> deleteCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitHub).delete(deleteCaptor.capture());
+        assertTrue(deleteCaptor.getValue().url().contains("releases/assets/422721847"));
+    }
+
+    @Test
+    public void testUploadReleaseAsset_overwriteTrue_noExistingAsset_uploadsDirectly() throws IOException {
+        tempAsset = File.createTempFile("release-asset-", ".png");
+        Files.writeString(tempAsset.toPath(), "png-data");
+
+        doReturn("[]").when(gitHub).execute(any(GenericRequest.class));
+        doReturn("{\"browser_download_url\":\"https://github.com/download/new.png\"}")
+                .when(gitHub).uploadReleaseAssetBinary(anyString(), any(File.class), anyString());
+
+        gitHub.uploadReleaseAsset(
+                WORKSPACE, REPOSITORY, "323096697", tempAsset.getAbsolutePath(),
+                "new.png", "image/png", null, "true");
+
+        verify(gitHub, never()).delete(any(GenericRequest.class));
+        verify(gitHub, times(1)).uploadReleaseAssetBinary(anyString(), any(File.class), anyString());
+    }
+
+    @Test
+    public void testListReleaseAssets_returnsAssetsForRelease() throws IOException {
+        JSONArray assets = new JSONArray()
+                .put(buildAssetJson(111L, "file-a.zip"))
+                .put(buildAssetJson(222L, "file-b.txt"));
+        doReturn(assets.toString()).when(gitHub).execute(any(GenericRequest.class));
+
+        String result = gitHub.listReleaseAssets(WORKSPACE, REPOSITORY, "323096697");
+
+        JSONArray resultArray = new JSONArray(result);
+        assertEquals(2, resultArray.length());
+        assertEquals("file-a.zip", resultArray.getJSONObject(0).getString("name"));
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitHub).execute(captor.capture());
+        assertTrue(captor.getValue().url().contains("repos/IstiN/dmtools/releases/323096697/assets"));
+    }
+
+    @Test
+    public void testDeleteReleaseAsset_callsDeleteWithCorrectPath() throws IOException {
+        doReturn(null).when(gitHub).delete(any(GenericRequest.class));
+
+        gitHub.deleteReleaseAsset(WORKSPACE, REPOSITORY, "422721847");
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitHub).delete(captor.capture());
+        assertTrue(captor.getValue().url().contains("repos/IstiN/dmtools/releases/assets/422721847"));
+    }
+
+    private JSONObject buildAssetJson(long id, String name) {
+        JSONObject json = new JSONObject();
+        json.put("id", id);
+        json.put("name", name);
+        json.put("size", 1024);
+        json.put("state", "uploaded");
+        json.put("browser_download_url", "https://github.com/download/" + name);
+        return json;
     }
 
     private JSONObject buildReleaseJson(long id, String tagName, String name, boolean draft) {
