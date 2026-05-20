@@ -49,6 +49,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultItem>> {
 
@@ -104,6 +105,12 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
         @SerializedName("ignoreClonedByRelationship")
         private boolean ignoreClonedByRelationship = true;
+
+        @SerializedName("timerJSAction")
+        private String timerJSAction;
+
+        @SerializedName("timerIntervalSeconds")
+        private int timerIntervalSeconds = 60;
 
     }
 
@@ -485,7 +492,31 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
                     // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
                     Path projectRoot = Paths.get(System.getProperty("user.dir"));
-                    cliResult = cliHelper.executeCliCommandsWithResult(finalCliCommands, projectRoot, null);
+
+                    // Build timer JS action runnable if configured
+                    String timerJSAction = expertParams.getTimerJSAction();
+                    int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
+                    AtomicReference<String> liveCliOutput = new AtomicReference<>("");
+                    Runnable timerRunnable = null;
+                    if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
+                        timerRunnable = () -> {
+                            try {
+                                js(timerJSAction)
+                                    .mcp(trackerClient, ai, confluence, null)
+                                    .withJobContext(expertParams, ticket, null)
+                                    .with(TrackerParams.INITIATOR, initiator)
+                                    .with("systemRequest", systemRequestCommentAlias)
+                                    .with("currentCliOutput", liveCliOutput.get())
+                                    .execute();
+                            } catch (Exception e) {
+                                logger.warn("timerJSAction execution failed (CLI continues): {}", e.getMessage());
+                            }
+                        };
+                        logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
+                    }
+
+                    cliResult = cliHelper.executeCliCommandsWithResult(finalCliCommands, projectRoot, null,
+                            timerRunnable, timerIntervalSeconds);
                     
                     // Append CLI responses to knownInfo if not empty
                     StringBuilder cliResponses = cliResult.getCommandResponses();
