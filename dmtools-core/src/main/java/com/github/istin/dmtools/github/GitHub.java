@@ -191,6 +191,68 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return pullRequests(workspace, repository, state, false, null);
     }
 
+    @MCPTool(
+            name = "github_list_prs_filtered",
+            description = "List pull requests in a GitHub repository filtered by a regex pattern on the PR title. Fetches all PRs matching the given state and returns only those whose title matches the regex. Useful for large repos to narrow down results without loading entire history.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public List<IPullRequest> listPullRequestsFiltered(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "state", description = "The state of pull requests: 'open', 'closed', or 'merged'.", required = true, example = "merged")
+            String state,
+            @MCPParam(name = "titleRegex", description = "Java regular expression matched against the PR title (case-sensitive). Only PRs whose title contains a match are returned. Example: '^feat\\(.*\\)' or 'TICKET-\\d+'.", required = true, example = "^feat\\(")
+            String titleRegex) throws IOException {
+        if ("opened".equalsIgnoreCase(state)) state = "open";
+        if ("declined".equalsIgnoreCase(state)) state = "closed";
+        List<IPullRequest> all = pullRequests(workspace, repository, state, true, null);
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(titleRegex);
+        List<IPullRequest> filtered = new java.util.ArrayList<>();
+        for (IPullRequest pr : all) {
+            if (pattern.matcher(pr.getTitle() != null ? pr.getTitle() : "").find()) {
+                filtered.add(pr);
+            }
+        }
+        return filtered;
+    }
+
+    @MCPTool(
+            name = "github_get_commits_from_branches",
+            description = "Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually.",
+            integration = "github",
+            category = "commits"
+    )
+    public List<ICommit> getCommitsFromBranchesByRegex(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "branchNameRegex", description = "Java regular expression matched against branch names. All branches with a matching name are included. Example: '^feature/' or 'release/\\d+'.", required = true, example = "^feature/")
+            String branchNameRegex,
+            @MCPParam(name = "since", description = "Optional ISO date (yyyy-MM-dd) to limit commits to those after this date.", required = false, example = "2024-01-01")
+            String since) throws IOException {
+        List<ITag> branches = getBranches(workspace, repository);
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(branchNameRegex);
+        java.util.Set<String> seenHashes = new java.util.LinkedHashSet<>();
+        List<ICommit> result = new java.util.ArrayList<>();
+        for (ITag branch : branches) {
+            String name = branch.getName();
+            if (name != null && pattern.matcher(name).find()) {
+                List<ICommit> commits = getCommitsFromBranch(workspace, repository, name, since, null);
+                for (ICommit commit : commits) {
+                    String key = commit.getHash() != null ? commit.getHash() : commit.getId();
+                    if (key != null && seenHashes.add(key)) {
+                        result.add(commit);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
     @Override
     @MCPTool(
             name = "github_get_pr",

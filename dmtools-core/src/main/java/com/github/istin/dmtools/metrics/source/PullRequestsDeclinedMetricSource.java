@@ -11,6 +11,7 @@ import com.github.istin.dmtools.team.IEmployees;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Counts declined (closed without merge) PRs, attributed to the PR author.
@@ -21,13 +22,19 @@ public class PullRequestsDeclinedMetricSource extends CommonSourceCollector {
     private final String repo;
     private final SourceCode sourceCode;
     private final Calendar startDate;
+    private final Pattern titlePattern;
 
     public PullRequestsDeclinedMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
+        this(workspace, repo, sourceCode, employees, startDate, null);
+    }
+
+    public PullRequestsDeclinedMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex) {
         super(employees);
         this.workspace = workspace;
         this.repo = repo;
         this.sourceCode = sourceCode;
         this.startDate = startDate;
+        this.titlePattern = titleRegex != null && !titleRegex.isEmpty() ? Pattern.compile(titleRegex) : null;
     }
 
     @Override
@@ -35,6 +42,9 @@ public class PullRequestsDeclinedMetricSource extends CommonSourceCollector {
         List<KeyTime> data = new ArrayList<>();
         List<IPullRequest> pullRequests = sourceCode.pullRequests(workspace, repo, IPullRequest.PullRequestState.STATE_DECLINED, true, startDate);
         for (IPullRequest pullRequest : pullRequests) {
+            if (titlePattern != null && !titlePattern.matcher(pullRequest.getTitle() != null ? pullRequest.getTitle() : "").find()) {
+                continue;
+            }
             String displayName = transformName(pullRequest.getAuthor().getFullName());
             if (!isTeamContainsTheName(displayName)) {
                 displayName = IEmployees.UNKNOWN;

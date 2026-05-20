@@ -224,37 +224,41 @@ public class MetricFactory {
         if (startDateStr == null) startDateStr = (String) params.getOrDefault("since", null);
         if (startDateStr == null) startDateStr = reportStartDate;
 
+        // Regex filters
+        String titleRegex = (String) params.getOrDefault("titleRegex", null);
+        String branchNameRegex = (String) params.getOrDefault("branchNameRegex", null);
+
         switch (metricName) {
             case "PullRequestsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd);
+                return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
             }
 
             case "CommitsMetricSource":
-                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees);
+                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex);
 
             case "LinesOfCodeMetricSource":
-                return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees);
+                return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex);
 
             case "PullRequestsCommentsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 boolean isPositive = (boolean) params.getOrDefault("isPositive", true);
-                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd);
+                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex);
             }
 
             case "PullRequestsApprovalsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd);
+                return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
             }
 
             case "PullRequestsMergedByMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd);
+                return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
             }
 
             case "PullRequestsDeclinedMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd);
+                return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
             }
 
             default:

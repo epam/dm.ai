@@ -14,6 +14,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Counts merged PRs attributed to the person who performed the merge (merged_by).
@@ -27,13 +28,19 @@ public class PullRequestsMergedByMetricSource extends CommonSourceCollector {
     private final String repo;
     private final SourceCode sourceCode;
     private final Calendar startDate;
+    private final Pattern titlePattern;
 
     public PullRequestsMergedByMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
+        this(workspace, repo, sourceCode, employees, startDate, null);
+    }
+
+    public PullRequestsMergedByMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex) {
         super(employees);
         this.workspace = workspace;
         this.repo = repo;
         this.sourceCode = sourceCode;
         this.startDate = startDate;
+        this.titlePattern = titleRegex != null && !titleRegex.isEmpty() ? Pattern.compile(titleRegex) : null;
     }
 
     @Override
@@ -41,6 +48,9 @@ public class PullRequestsMergedByMetricSource extends CommonSourceCollector {
         List<KeyTime> data = new ArrayList<>();
         List<IPullRequest> pullRequests = sourceCode.pullRequests(workspace, repo, IPullRequest.PullRequestState.STATE_MERGED, true, startDate);
         for (IPullRequest pullRequest : pullRequests) {
+            if (titlePattern != null && !titlePattern.matcher(pullRequest.getTitle() != null ? pullRequest.getTitle() : "").find()) {
+                continue;
+            }
             IUser merger = pullRequest.getMergedBy();
 
             // If merged_by not in list response, fetch individual PR for full details

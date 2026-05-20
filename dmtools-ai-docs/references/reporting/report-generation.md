@@ -109,6 +109,22 @@ Pull request source parameters:
 - `workspace`: GitHub org or user.
 - `repository`: Repository name.
 - `branch`: Branch name.
+- `titleRegex` *(optional)*: Java regex matched against the PR title (substring `find()`). Only PRs whose title contains a match are collected. Useful to limit data in large repositories. Example: `^feat\\(`, `TICKET-\\d+`.
+
+Example with title filter (only feature PRs):
+
+```json
+{
+  "name": "pullRequests",
+  "params": {
+    "sourceType": "github",
+    "workspace": "IstiN",
+    "repository": "dmtools",
+    "titleRegex": "^feat\\("
+  },
+  "metrics": [ ... ]
+}
+```
 
 Example for GitLab:
 
@@ -157,7 +173,27 @@ Example for Bitbucket:
 
 Commits source parameters:
 
-- `sourceType`, `workspace`, `repository`, `branch` (same as PRs).
+- `sourceType`, `workspace`, `repository`: same as PRs.
+- `branch`: Exact branch name to fetch commits from.
+- `branchNameRegex` *(optional)*: Java regex matched against branch names. When set, all branches whose name contains a match are included and their commits are aggregated and de-duplicated by hash. Replaces `branch` for dynamic multi-branch collection. Example: `^feature/`, `release/\\d+`.
+
+> **Tip**: Use `branchNameRegex` instead of `branch` for large repositories where you want commits from many branches (e.g., all `feature/*` branches) without specifying each one individually.
+
+Example with branch regex (all feature branches):
+
+```json
+{
+  "name": "commits",
+  "params": {
+    "sourceType": "github",
+    "workspace": "IstiN",
+    "repository": "dmtools",
+    "branchNameRegex": "^feature/",
+    "startDate": "2024-01-01"
+  },
+  "metrics": [ ... ]
+}
+```
 
 Example for GitLab:
 
@@ -341,15 +377,16 @@ Example snippet:
 - `PullRequestsCommentsMetricSource`
 - `PullRequestsApprovalsMetricSource`
 
-Example:
+All PR metric sources accept an optional `titleRegex` param (at the **metric** or **data source** level) to filter PRs by title:
 
 ```json
 {
   "name": "PullRequestsMetricSource",
   "params": {
-    "label": "PRs Created",
+    "label": "Feature PRs Created",
     "isWeight": false,
-    "isPersonalized": true
+    "isPersonalized": true,
+    "titleRegex": "^feat\\("
   }
 }
 ```
@@ -361,7 +398,7 @@ Example snippet:
 - `CommitsMetricSource`
 - `LinesOfCodeMetricSource`
 
-Example:
+Both commit metric sources accept an optional `branchNameRegex` param to collect from multiple branches:
 
 ```json
 {
@@ -370,7 +407,8 @@ Example:
     "label": "Lines Of Code (K)",
     "isWeight": true,
     "isPersonalized": true,
-    "divider": 1000
+    "divider": 1000,
+    "branchNameRegex": "^feature/"
   }
 }
 ```
