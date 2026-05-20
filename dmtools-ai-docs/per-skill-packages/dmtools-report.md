@@ -36,6 +36,31 @@ bash skill-install.sh --skills report
 dmtools run dmtools-ai-docs/references/examples/report-generator-job.json
 ```
 
+```jsonc
+// Filter PRs by title regex — only collect feature PRs in a large repository
+{
+  "name": "pullRequests",
+  "params": {
+    "workspace": "IstiN", "repository": "my-app",
+    "titleRegex": "^feat\\("
+  },
+  "metrics": [...]
+}
+
+// Collect commits from all feature/* branches (aggregated + deduplicated)
+{
+  "name": "commits",
+  "params": {
+    "workspace": "IstiN", "repository": "my-app",
+    "branchNameRegex": "^feature/",
+    "startDate": "2024-01-01"
+  },
+  "metrics": [...]
+}
+```
+
+> **Large repo tip**: Use `titleRegex` on PR sources and `branchNameRegex` on commit sources to avoid loading full histories. These params are optional and fully backward-compatible — omitting them gives the original behavior.
+
 ## Compatibility / Supported versions
 
 - Compatible with Java 17+ and current DMtools focused skill releases
