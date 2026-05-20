@@ -252,8 +252,15 @@ public class ReportGenerator {
                 );
 
                 String metricLabel = (String) metricConfig.getParams().getOrDefault("label", metricConfig.getName());
-                DataSourceResult result = collectMetricDataWithRetry(sourceConfig, metricLabel, dataSource, metric);
-                logger.info("Metric '{}': collected {} items", metricLabel, result.getAllKeyTimes().size());
+                DataSourceResult result;
+                try {
+                    result = collectMetricDataWithRetry(sourceConfig, metricLabel, dataSource, metric);
+                    logger.info("Metric '{}': collected {} items", metricLabel, result.getAllKeyTimes().size());
+                } catch (Exception e) {
+                    logger.warn("Metric '{}' for source '{}' failed and will be skipped: {}",
+                            metricLabel, sourceConfig.getName(), e.getMessage());
+                    result = new DataSourceResult();
+                }
                 sourceResults.put(metricLabel, result);
 
                 if (metric.isWeight()) {
