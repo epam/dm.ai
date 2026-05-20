@@ -229,7 +229,7 @@ public class GitHubPRTest {
         doAnswer(invocation -> {
             GenericRequest req = invocation.getArgument(0);
             String url = req.url();
-            if (url.endsWith("/reviews")) {
+            if (url.contains("/reviews")) {
                 return reviews.toString();
             } else if (url.contains("/pulls/") && url.contains("/comments")) {
                 return inlineComments.toString();
@@ -256,7 +256,7 @@ public class GitHubPRTest {
         doAnswer(invocation -> {
             GenericRequest req = invocation.getArgument(0);
             String url = req.url();
-            if (url.endsWith("/reviews")) {
+            if (url.contains("/reviews")) {
                 return null;
             } else if (url.contains("/pulls/") && url.contains("/comments")) {
                 return inlineComments.toString();
@@ -271,6 +271,62 @@ public class GitHubPRTest {
         assertNotNull(activities);
         assertEquals(1, activities.size());
         assertEquals("COMMENTED", activities.get(0).getAction());
+    }
+
+    @Test
+    public void testGetPRActivities_paginatesReviewsAndInlineComments() throws IOException {
+        // Build page 1 arrays as raw JSON strings to avoid 100+ JSONObject allocations
+        String reviewsPage1 = buildRawReviewsJson(100, "APPROVED");
+        String reviewsPage2 = new JSONArray().put(buildReviewJson(6000L, "CHANGES_REQUESTED")).toString();
+        String commentsPage1 = buildRawCommentsJson(100);
+        String commentsPage2 = new JSONArray().put(buildCommentJson(2000L, "Last", "2024-01-01T11:00:00Z", null)).toString();
+
+        doAnswer(invocation -> {
+            GenericRequest req = invocation.getArgument(0);
+            String url = req.url();
+            if (url.contains("/reviews")) {
+                return url.contains("page=2") ? reviewsPage2 : reviewsPage1;
+            } else if (url.contains("/pulls/") && url.contains("/comments")) {
+                return url.contains("page=2") ? commentsPage2 : commentsPage1;
+            } else if (url.contains("/issues/")) {
+                return new JSONArray().toString();
+            }
+            return null;
+        }).when(gitHub).execute(any(GenericRequest.class));
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+
+        List<IActivity> activities = gitHub.pullRequestActivities(WORKSPACE, REPOSITORY, PR_ID);
+
+        verify(gitHub, atLeast(4)).execute(captor.capture());
+        List<String> urls = captor.getAllValues().stream().map(r -> r.url()).collect(java.util.stream.Collectors.toList());
+        assertTrue("page=2 for reviews not requested", urls.stream().anyMatch(u -> u.contains("/reviews") && u.contains("page=2")));
+        assertTrue("page=2 for comments not requested", urls.stream().anyMatch(u -> u.contains("/comments") && u.contains("page=2")));
+
+        // 100 reviews page1 + 1 review page2 + 100 inline comments page1 + 1 inline comment page2 = 202
+        assertEquals(202, activities.size());
+    }
+
+    private String buildRawReviewsJson(int count, String state) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("{\"id\":").append(5000 + i)
+              .append(",\"state\":\"").append(state)
+              .append("\",\"body\":\"\",\"submitted_at\":\"2024-01-01T10:00:00Z\",\"user\":{\"login\":\"reviewer\"}}");
+        }
+        return sb.append("]").toString();
+    }
+
+    private String buildRawCommentsJson(int count) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("{\"id\":").append(1000 + i)
+              .append(",\"body\":\"comment ").append(i)
+              .append("\",\"created_at\":\"2024-01-01T10:00:00Z\",\"user\":{\"login\":\"reviewer\"}}");
+        }
+        return sb.append("]").toString();
     }
 
     // ---- Serialization / JSON view ----

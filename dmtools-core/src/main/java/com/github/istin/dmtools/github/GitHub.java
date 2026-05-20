@@ -656,26 +656,47 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String repository,
             @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
             String pullRequestId) throws IOException {
-        // Fetch review-level activities (approvals, review comments, change requests)
-        String reviewsPath = path(String.format("repos/%s/%s/pulls/%s/reviews", workspace, repository, pullRequestId));
-        GenericRequest reviewsRequest = new GenericRequest(this, reviewsPath);
-        String reviewsResponse = execute(reviewsRequest);
+        // Fetch review-level activities (approvals, review comments, change requests) with pagination
         List<IActivity> activities = new ArrayList<>();
-        if (reviewsResponse != null) {
-            activities.addAll(JSONModel.convertToModels(GitHubActivity.class, new JSONArray(reviewsResponse)));
+        int perPage = 100;
+        int currentPage = 1;
+        while (true) {
+            String reviewsPath = path(String.format("repos/%s/%s/pulls/%s/reviews?per_page=%d&page=%d",
+                    workspace, repository, pullRequestId, perPage, currentPage));
+            GenericRequest reviewsRequest = new GenericRequest(this, reviewsPath);
+            String reviewsResponse = execute(reviewsRequest);
+            if (reviewsResponse == null || reviewsResponse.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(reviewsResponse);
+            activities.addAll(JSONModel.convertToModels(GitHubActivity.class, pageArray));
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            currentPage++;
         }
 
-        // Also fetch inline review comments (/pulls/{id}/comments)
+        // Also fetch inline review comments (/pulls/{id}/comments) with pagination
         // These are code-level comments left during reviews
         try {
-            String commentsPath = path(String.format("repos/%s/%s/pulls/%s/comments", workspace, repository, pullRequestId));
-            GenericRequest commentsRequest = new GenericRequest(this, commentsPath);
-            String commentsResponse = execute(commentsRequest);
-            if (commentsResponse != null) {
-                List<GitHubComment> inlineComments = JSONModel.convertToModels(GitHubComment.class, new JSONArray(commentsResponse));
+            currentPage = 1;
+            while (true) {
+                String commentsPath = path(String.format("repos/%s/%s/pulls/%s/comments?per_page=%d&page=%d",
+                        workspace, repository, pullRequestId, perPage, currentPage));
+                GenericRequest commentsRequest = new GenericRequest(this, commentsPath);
+                String commentsResponse = execute(commentsRequest);
+                if (commentsResponse == null || commentsResponse.isEmpty()) {
+                    break;
+                }
+                JSONArray pageArray = new JSONArray(commentsResponse);
+                List<GitHubComment> inlineComments = JSONModel.convertToModels(GitHubComment.class, pageArray);
                 for (GitHubComment comment : inlineComments) {
                     activities.add(new GitHubCommentActivity(comment));
                 }
+                if (pageArray.length() < perPage) {
+                    break;
+                }
+                currentPage++;
             }
         } catch (Exception e) {
             logger.debug("Failed to fetch inline PR comments for PR {}: {}", pullRequestId, e.getMessage());
