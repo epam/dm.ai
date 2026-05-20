@@ -379,7 +379,27 @@ public class CliExecutionHelper {
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds) {
-        AtomicReference<String> liveOutput = timerAction != null ? new AtomicReference<>("") : null;
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds, null);
+    }
+
+    /**
+     * Executes CLI commands with an optional background timer and shared live output reference.
+     *
+     * @param cliCommands          Array of CLI commands to execute
+     * @param workingDirectory     Working directory for command execution (optional)
+     * @param envVariablesFile     Path to environment file (null → auto-resolve)
+     * @param timerAction          Optional runnable executed on the timer thread
+     * @param timerIntervalSeconds Interval between timer firings in seconds; timer is disabled if &lt;= 0
+     * @param liveCliOutput        Optional shared AtomicReference updated with accumulated CLI output;
+     *                             if null, an internal reference is created when timerAction is non-null
+     * @return CliExecutionResult containing command responses and output response
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds,
+                                                           AtomicReference<String> liveCliOutput) {
+        AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
+                : (timerAction != null ? new AtomicReference<>("") : null);
 
         ScheduledExecutorService scheduler = null;
         if (timerAction != null && timerIntervalSeconds > 0) {

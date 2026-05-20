@@ -516,7 +516,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     }
 
                     cliResult = cliHelper.executeCliCommandsWithResult(finalCliCommands, projectRoot, null,
-                            timerRunnable, timerIntervalSeconds);
+                            timerRunnable, timerIntervalSeconds, liveCliOutput);
                     
                     // Append CLI responses to knownInfo if not empty
                     StringBuilder cliResponses = cliResult.getCommandResponses();
