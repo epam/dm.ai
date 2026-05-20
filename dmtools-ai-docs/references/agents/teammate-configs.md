@@ -277,6 +277,8 @@ This solves the `ConfigurationMerger` limitation: when you override a config wit
 | `cliPrompts` | Array | - | Array of prompts — each entry is extracted via `InstructionProcessor` and all parts are joined with `\n\n` into one combined prompt. Combined with `cliPrompt` if both are set (`cliPrompt` comes first). Supports the same sources as `cliPrompt`. | `["./base.md", "https://confluence.co/...", "Also apply coding standards"]` |
 | `cliCommands` | Array | - | CLI commands to execute | `["./cicd/scripts/run-cursor-agent.sh"]` |
 | `preCliJSAction` | String | - | JS script path executed **after** input folder is created but **before** CLI commands run. Receives `params.inputFolderPath` (absolute path). Use to write extra files into the input folder. Errors in this script are logged but do NOT stop CLI execution. | `"agents/js/extendInputFolder.js"` |
+| `timerJSAction` | String | - | JS script path executed **periodically in a background thread** while CLI commands are running. Receives the same params as `postJSAction` + `params.currentCliOutput` (accumulated stdout so far). Use for side-effects like auto-committing, posting progress, or sending notifications. Errors are logged and never abort CLI execution. | `"agents/js/autoCommit.js"` |
+| `timerIntervalSeconds` | Integer | `60` | Interval in seconds between `timerJSAction` executions. Timer starts after the first interval elapses. Has no effect when `timerJSAction` is not set or when value is ≤ 0. | `300` |
 | `skipAIProcessing` | Boolean | `false` | Skip AI processing when using CLI agents | `true` |
 | `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133**: Require `output/response.md` before updating fields (strict mode prevents data loss) | `true` (recommended) |
 | `cleanupInputFolder` | Boolean | `true` | **NEW v1.7.133**: Cleanup `input/[TICKET-KEY]/` folder after execution | `false` (for debugging) |
@@ -501,6 +503,49 @@ function action(params) {
 ```
 
 **Error handling**: if `preCliJSAction` throws an exception, it is logged as a warning and CLI execution continues normally — the script failure never blocks the main workflow.
+
+---
+
+##### `timerJSAction` + `timerIntervalSeconds`
+
+A JS script executed **periodically in a background thread** while the CLI commands are running. This enables side-effects like auto-committing to a branch, posting progress comments, or sending notifications — without blocking the main agent workflow.
+
+**JS context** — identical to `postJSAction`:
+- All MCP clients (tracker, AI, Confluence) are available via `executeToolViaJava`
+- `params` contains the full Teammate config (`agentParams`, `customParams`, etc.)
+- `ticket` is the current Jira/ADO ticket being processed
+- **Extra**: `params.currentCliOutput` — a string snapshot of the accumulated CLI stdout **up to the moment the timer fires**
+
+**Threading model**:
+- Single daemon thread (`ScheduledExecutorService`)
+- `scheduleAtFixedRate` — fires at `timerIntervalSeconds`, `2×timerIntervalSeconds`, …
+- First firing happens after the first full interval (not immediately)
+- Timer stops when all CLI commands finish (with a 5-second graceful shutdown)
+- Exceptions inside the timer are caught, logged, and **do not abort CLI execution**
+
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "cliCommands": ["./cicd/scripts/run-cursor-agent.sh"],
+    "timerJSAction": "agents/js/autoCommit.js",
+    "timerIntervalSeconds": 300,
+    "skipAIProcessing": true
+  }
+}
+```
+
+**Example `agents/js/autoCommit.js`** — auto-commit every 5 minutes while agent works:
+```js
+const output = params.currentCliOutput || '';
+const lines = output.split('\n').filter(l => l.trim());
+const lastLine = lines.length > 0 ? lines[lines.length - 1].substring(0, 80) : 'wip';
+
+// Use CLI tools available in your environment:
+// executeToolViaJava('cli_run_command', { command: 'git add -A' });
+// executeToolViaJava('cli_run_command', { command: 'git commit -m "wip: ' + lastLine + '"' });
+print('timerJSAction fired, currentCliOutput lines: ' + lines.length);
+```
 
 **Example: Production-safe CLI configuration:**
 ```json
