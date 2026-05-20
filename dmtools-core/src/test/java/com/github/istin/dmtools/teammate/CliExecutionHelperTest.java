@@ -155,9 +155,9 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo hello", "echo world"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), isNull(), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), isNull(), any(Map.class), any()))
                       .thenReturn("hello\nExit Code: 0");
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), isNull(), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), isNull(), any(Map.class), any()))
                       .thenReturn("world\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -181,7 +181,7 @@ public class CliExecutionHelperTest {
         String[] commands = {"invalid-command"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("invalid-command"), isNull(), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("invalid-command"), isNull(), any(Map.class), any()))
                       .thenThrow(new IOException("Command not found"));
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -223,7 +223,7 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo test"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class), any()))
                       .thenReturn("test\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -235,7 +235,7 @@ public class CliExecutionHelperTest {
             // Assert
             assertTrue(result.toString().contains("test"));
             // Verify that CommandLineUtils was called with the correct working directory
-            mockedUtils.verify(() -> CommandLineUtils.runCommand(eq("echo test"), eq(workingDir.toFile()), any(Map.class)));
+            mockedUtils.verify(() -> CommandLineUtils.runCommand(eq("echo test"), eq(workingDir.toFile()), any(Map.class), any()));
         }
     }
     
@@ -377,9 +377,9 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo hello", "echo world"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), any(File.class), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), any(File.class), any(Map.class), any()))
                       .thenReturn("hello\nExit Code: 0");
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), any(File.class), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), any(File.class), any(Map.class), any()))
                       .thenReturn("world\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -410,7 +410,7 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo test"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class), any()))
                       .thenReturn("test\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -807,7 +807,7 @@ public class CliExecutionHelperTest {
             try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
                 mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                         .thenReturn(Map.of("AI_AGENT_PROVIDER", "cursor")); // dmtools.env has old value
-                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class)))
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
                         .thenReturn("ok");
 
                 cliHelper.executeCliCommands(commands, null, "dmtools.env");
@@ -819,7 +819,8 @@ public class CliExecutionHelperTest {
                         argThat((Map<String, String> env) ->
                                 "claude-opus-4.6".equals(env.get("COPILOT_MODEL"))
                                 && "copilot".equals(env.get("AI_AGENT_PROVIDER")) // override beats dmtools.env
-                        )
+                        ),
+                        any()
                 ));
             }
         } finally {
@@ -835,7 +836,7 @@ public class CliExecutionHelperTest {
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                     .thenReturn(Map.of("COPILOT_MODEL", "gpt-5-mini"));
-            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class)))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
                     .thenReturn("hello");
 
             cliHelper.executeCliCommands(commands, null, "dmtools.env");
@@ -843,7 +844,8 @@ public class CliExecutionHelperTest {
             mockedUtils.verify(() -> CommandLineUtils.runCommand(
                     anyString(),
                     isNull(),
-                    argThat((Map<String, String> env) -> "gpt-5-mini".equals(env.get("COPILOT_MODEL")))
+                    argThat((Map<String, String> env) -> "gpt-5-mini".equals(env.get("COPILOT_MODEL"))),
+                    any()
             ));
         }
     }
@@ -862,7 +864,7 @@ public class CliExecutionHelperTest {
             try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
                 mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                         .thenReturn(new java.util.HashMap<>());
-                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class)))
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
                         .thenReturn("test");
 
                 // Should NOT throw NullPointerException
@@ -877,7 +879,8 @@ public class CliExecutionHelperTest {
                                 && !env.containsKey(null)
                                 && !env.containsKey("  ")
                                 && !env.containsKey("VALID_KEY")
-                        )
+                        ),
+                        any()
                 ));
             }
         } finally {
