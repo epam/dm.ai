@@ -37,12 +37,17 @@ public class SourceCodeCommitsMetricSource extends CommonSourceCollector {
     private final String since;
     private final SourceCode sourceCode;
     private final Pattern branchPattern;
+    private final Pattern commitMessagePattern;
 
     public SourceCodeCommitsMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees) {
-        this(workspace, repo, branch, since, sourceCode, employees, null);
+        this(workspace, repo, branch, since, sourceCode, employees, null, null);
     }
 
     public SourceCodeCommitsMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees, String branchNameRegex) {
+        this(workspace, repo, branch, since, sourceCode, employees, branchNameRegex, null);
+    }
+
+    public SourceCodeCommitsMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees, String branchNameRegex, String commitMessageRegex) {
         super(employees);
         this.workspace = workspace;
         this.repo = repo;
@@ -50,6 +55,7 @@ public class SourceCodeCommitsMetricSource extends CommonSourceCollector {
         this.since = since;
         this.sourceCode = sourceCode;
         this.branchPattern = branchNameRegex != null && !branchNameRegex.isEmpty() ? Pattern.compile(branchNameRegex) : null;
+        this.commitMessagePattern = commitMessageRegex != null && !commitMessageRegex.isEmpty() ? Pattern.compile(commitMessageRegex) : null;
     }
 
     @Override
@@ -70,6 +76,12 @@ public class SourceCodeCommitsMetricSource extends CommonSourceCollector {
             if (fullName == null) {
                 continue;
             }
+
+            String message = model.getMessage();
+            if (commitMessagePattern != null && (message == null || !commitMessagePattern.matcher(message).find())) {
+                continue;
+            }
+
             String displayName = transformName(fullName);
             if (isNameIgnored(displayName)) {
                 continue;

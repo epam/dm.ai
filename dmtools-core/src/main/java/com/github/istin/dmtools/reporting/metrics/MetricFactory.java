@@ -246,6 +246,7 @@ public class MetricFactory {
         // Regex filters
         String titleRegex = (String) params.getOrDefault("titleRegex", null);
         String branchNameRegex = (String) params.getOrDefault("branchNameRegex", null);
+        String commitMessageRegex = (String) params.getOrDefault("commitMessageRegex", null);
 
         switch (metricName) {
             case "PullRequestsMetricSource": {
@@ -255,10 +256,10 @@ public class MetricFactory {
             }
 
             case "CommitsMetricSource":
-                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex);
+                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
 
             case "LinesOfCodeMetricSource":
-                return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex);
+                return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
 
             case "PullRequestsCommentsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
