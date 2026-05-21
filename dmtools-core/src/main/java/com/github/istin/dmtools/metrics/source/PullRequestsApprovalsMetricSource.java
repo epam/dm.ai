@@ -41,6 +41,7 @@ public class PullRequestsApprovalsMetricSource extends PullRequestsBaseMetricSou
             if (isFilteredOut(pullRequest)) continue;
 
             String pullRequestAuthorDisplayName = getEmployees().transformName(pullRequest.getAuthor().getFullName());
+            if (isNameIgnored(pullRequestAuthorDisplayName)) continue;
             if (!isTeamContainsTheName(pullRequestAuthorDisplayName)) {
                 pullRequestAuthorDisplayName = IEmployees.UNKNOWN;
             }
@@ -53,6 +54,7 @@ public class PullRequestsApprovalsMetricSource extends PullRequestsBaseMetricSou
                 IUser approval = activity.getApproval();
                 if (approval != null) {
                     activityDisplayName = getEmployees().transformName(approval.getFullName());
+                    if (isNameIgnored(activityDisplayName)) continue;
                     if (!pullRequestAuthorDisplayName.equalsIgnoreCase(activityDisplayName)) {
                         if (!isTeamContainsTheName(activityDisplayName)) {
                             activityDisplayName = IEmployees.UNKNOWN;

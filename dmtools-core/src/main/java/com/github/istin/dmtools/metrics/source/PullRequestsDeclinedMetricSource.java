@@ -36,6 +36,7 @@ public class PullRequestsDeclinedMetricSource extends PullRequestsBaseMetricSour
         for (IPullRequest pullRequest : getPullRequests()) {
             if (isFilteredOut(pullRequest)) continue;
             String displayName = transformName(pullRequest.getAuthor().getFullName());
+            if (isNameIgnored(displayName)) continue;
             if (!isTeamContainsTheName(displayName)) {
                 displayName = IEmployees.UNKNOWN;
             }

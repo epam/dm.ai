@@ -44,6 +44,7 @@ public class PullRequestsCommentsMetricSource extends PullRequestsBaseMetricSour
             if (isFilteredOut(pullRequest)) continue;
 
             String pullRequestAuthorDisplayName = getEmployees().transformName(pullRequest.getAuthor().getFullName());
+            if (isNameIgnored(pullRequestAuthorDisplayName)) continue;
             if (!isTeamContainsTheName(pullRequestAuthorDisplayName)) {
                 pullRequestAuthorDisplayName = IEmployees.UNKNOWN;
             }
@@ -58,6 +59,7 @@ public class PullRequestsCommentsMetricSource extends PullRequestsBaseMetricSour
                 if (comment == null) continue;
 
                 String commentDisplayName = getEmployees().transformName(comment.getAuthor().getFullName());
+                if (isNameIgnored(commentDisplayName)) continue;
                 if (!isTeamContainsTheName(commentDisplayName)) {
                     commentDisplayName = IEmployees.UNKNOWN;
                 }

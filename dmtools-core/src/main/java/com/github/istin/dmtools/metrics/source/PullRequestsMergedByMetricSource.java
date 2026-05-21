@@ -61,6 +61,7 @@ public class PullRequestsMergedByMetricSource extends PullRequestsBaseMetricSour
             }
 
             String displayName = transformName(merger.getFullName());
+            if (isNameIgnored(displayName)) continue;
             if (!isTeamContainsTheName(displayName)) {
                 displayName = IEmployees.UNKNOWN;
             }
