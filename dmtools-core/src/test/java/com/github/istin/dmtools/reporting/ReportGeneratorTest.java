@@ -575,8 +575,9 @@ class ReportGeneratorTest {
         when(sourceCode.getDefaultWorkspace()).thenReturn("workspace");
         when(sourceCode.getDefaultRepository()).thenReturn("repo");
         when(sourceCode.getDefaultBranch()).thenReturn("main");
+        // First call throws rate-limit; retry succeeds and populates the shared cache;
+        // PullRequestsApprovalsMetricSource then reads from the cache without an extra API call.
         when(sourceCode.pullRequests(eq("workspace"), eq("repo"), eq(IPullRequest.PullRequestState.STATE_MERGED), eq(true), any(Calendar.class)))
-            .thenReturn(List.of(pullRequest))
             .thenThrow(new RestClient.RateLimitException("rate limit", "rate limit", rateLimitResponse, 429))
             .thenReturn(List.of(pullRequest));
         when(sourceCode.pullRequestActivities("workspace", "repo", "123"))
@@ -592,7 +593,8 @@ class ReportGeneratorTest {
         assertEquals(2, results.get("pullRequests").size());
         assertTrue(results.get("pullRequests").containsKey("PullRequestsMetricSource"));
         assertTrue(results.get("pullRequests").containsKey("PullRequestsApprovalsMetricSource"));
-        verify(sourceCode, times(3))
+        // 2 calls: first (rate-limited) + retry — the second metric source uses the cache
+        verify(sourceCode, times(2))
             .pullRequests(eq("workspace"), eq("repo"), eq(IPullRequest.PullRequestState.STATE_MERGED), eq(true), any(Calendar.class));
         verify(sourceCode, times(1)).pullRequestActivities("workspace", "repo", "123");
     }

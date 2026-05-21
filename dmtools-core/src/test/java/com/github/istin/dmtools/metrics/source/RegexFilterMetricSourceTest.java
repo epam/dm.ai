@@ -269,4 +269,71 @@ public class RegexFilterMetricSourceTest {
         assertEquals(1, result.size());
         verify(sourceCode, never()).getCommitsFromBranch("ws", "repo", "main", null, null);
     }
+
+    // ── Shared PR cache tests ─────────────────────────────────────────────────
+
+    @Test
+    public void testSharedPrList_pullRequestsFetchedOnlyOnce_acrossMultipleSources() throws Exception {
+        IPullRequest pr = mockPR("feat: shared cache test", "Alice");
+        when(sourceCode.pullRequests(anyString(), anyString(), anyString(), anyBoolean(), any()))
+                .thenReturn(Collections.singletonList(pr));
+
+        java.util.concurrent.atomic.AtomicReference<List<IPullRequest>> sharedRef =
+                new java.util.concurrent.atomic.AtomicReference<>(null);
+
+        PullRequestsMetricSource s1 = new PullRequestsMetricSource(
+                "ws", "repo", sourceCode, employees, null, null, sharedRef);
+        PullRequestsMergedByMetricSource s2 = new PullRequestsMergedByMetricSource(
+                "ws", "repo", sourceCode, employees, null, null, sharedRef);
+        PullRequestsApprovalsMetricSource s3 = new PullRequestsApprovalsMetricSource(
+                "ws", "repo", sourceCode, employees, null, null, sharedRef);
+
+        when(sourceCode.pullRequestActivities(anyString(), anyString(), anyString()))
+                .thenReturn(Collections.emptyList());
+        when(pr.getMergedBy()).thenReturn(null);
+
+        s1.performSourceCollection(false, "m1");
+        s2.performSourceCollection(false, "m2");
+        s3.performSourceCollection(false, "m3");
+
+        // Despite 3 sources all consuming the PR list, the API is called only once
+        verify(sourceCode, times(1))
+                .pullRequests(anyString(), anyString(), anyString(), anyBoolean(), any());
+    }
+
+    @Test
+    public void testSharedPrList_declinedUsesOwnCache_separateFromMerged() throws Exception {
+        IPullRequest mergedPR = mockPR("feat: merged", "Alice");
+        IPullRequest declinedPR = mockPR("feat: declined", "Bob");
+
+        when(sourceCode.pullRequests(eq("ws"), eq("repo"),
+                eq(com.github.istin.dmtools.common.model.IPullRequest.PullRequestState.STATE_MERGED),
+                anyBoolean(), any()))
+                .thenReturn(Collections.singletonList(mergedPR));
+        when(sourceCode.pullRequests(eq("ws"), eq("repo"),
+                eq(com.github.istin.dmtools.common.model.IPullRequest.PullRequestState.STATE_DECLINED),
+                anyBoolean(), any()))
+                .thenReturn(Collections.singletonList(declinedPR));
+
+        java.util.concurrent.atomic.AtomicReference<List<IPullRequest>> mergedRef =
+                new java.util.concurrent.atomic.AtomicReference<>(null);
+        java.util.concurrent.atomic.AtomicReference<List<IPullRequest>> declinedRef =
+                new java.util.concurrent.atomic.AtomicReference<>(null);
+
+        PullRequestsMetricSource merged = new PullRequestsMetricSource(
+                "ws", "repo", sourceCode, employees, null, null, mergedRef);
+        PullRequestsDeclinedMetricSource declined = new PullRequestsDeclinedMetricSource(
+                "ws", "repo", sourceCode, employees, null, null, declinedRef);
+
+        List<KeyTime> mergedResult = merged.performSourceCollection(false, "merged");
+        List<KeyTime> declinedResult = declined.performSourceCollection(false, "declined");
+
+        assertEquals(1, mergedResult.size());
+        assertEquals(1, declinedResult.size());
+        // Each state fetches exactly once
+        verify(sourceCode, times(1)).pullRequests(eq("ws"), eq("repo"),
+                eq(IPullRequest.PullRequestState.STATE_MERGED), anyBoolean(), any());
+        verify(sourceCode, times(1)).pullRequests(eq("ws"), eq("repo"),
+                eq(IPullRequest.PullRequestState.STATE_DECLINED), anyBoolean(), any());
+    }
 }

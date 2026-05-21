@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.reporting.metrics;
 
 import com.github.istin.dmtools.common.code.SourceCode;
+import com.github.istin.dmtools.common.model.IPullRequest;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.metrics.Metric;
 import com.github.istin.dmtools.metrics.TrackerRule;
@@ -29,6 +30,7 @@ import com.github.istin.dmtools.team.IEmployees;
 import com.github.istin.dmtools.figma.FigmaClient;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -43,6 +45,13 @@ public class MetricFactory {
     private final FigmaClient figmaClient;
     private final IEmployees employees;
     private final String reportStartDate;
+
+    /**
+     * Cache of shared PR lists keyed by "workspace|repo|STATE|startDate".
+     * All PR metric sources that share the same key receive the same AtomicReference,
+     * so the GitHub API is called only once per unique (workspace, repo, state, date) tuple.
+     */
+    private final Map<String, AtomicReference<List<IPullRequest>>> prListCache = new HashMap<>();
 
     public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode) {
         this(trackerClient, sourceCode, null, null, null);
@@ -231,7 +240,8 @@ public class MetricFactory {
         switch (metricName) {
             case "PullRequestsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
             }
 
             case "CommitsMetricSource":
@@ -243,27 +253,42 @@ public class MetricFactory {
             case "PullRequestsCommentsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 boolean isPositive = (boolean) params.getOrDefault("isPositive", true);
-                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
             }
 
             case "PullRequestsApprovalsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
             }
 
             case "PullRequestsMergedByMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
             }
 
             case "PullRequestsDeclinedMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_DECLINED, startDateStr));
             }
 
             default:
                 throw new IllegalArgumentException("Unknown source collector: " + metricName);
         }
+    }
+
+    /**
+     * Returns the shared {@link AtomicReference} for the given (workspace, repo, state, startDate) tuple.
+     * All metric sources that use the same tuple will share the same reference and therefore
+     * the same PR list — avoiding redundant API calls.
+     */
+    private AtomicReference<List<IPullRequest>> sharedPrRef(
+            String workspace, String repo, String state, String startDateStr) {
+        String key = workspace + "|" + repo + "|" + state + "|" + startDateStr;
+        return prListCache.computeIfAbsent(key, k -> new AtomicReference<>(null));
     }
 
     private SourceCollector createFigmaCollector(String metricName, Map<String, Object> params) {
