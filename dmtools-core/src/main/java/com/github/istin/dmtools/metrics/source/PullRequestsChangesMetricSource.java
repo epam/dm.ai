@@ -35,7 +35,11 @@ public class PullRequestsChangesMetricSource extends CommonSourceCollector {
         List<KeyTime> data = new ArrayList<>();
         List<IPullRequest> pullRequests = sourceCode.pullRequests(workspace, repo, IPullRequest.PullRequestState.STATE_MERGED, true, startDate);
         for (IPullRequest pullRequest : pullRequests) {
-            String displayName = transformName(pullRequest.getAuthor().getFullName());
+            String rawName = pullRequest.getAuthor().getFullName();
+            if (isNameIgnored(rawName)) {
+                continue;
+            }
+            String displayName = transformName(rawName);
             if (!isTeamContainsTheName(displayName)) {
                 displayName = IEmployees.UNKNOWN;
             }
