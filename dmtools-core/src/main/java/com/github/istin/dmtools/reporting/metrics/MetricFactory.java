@@ -19,6 +19,7 @@ import com.github.istin.dmtools.metrics.rules.TicketMovedToStatusRule;
 import com.github.istin.dmtools.metrics.rules.TicketCreatorsRule;
 import com.github.istin.dmtools.metrics.source.PullRequestsMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsLOCMetricSource;
+import com.github.istin.dmtools.metrics.source.PullRequestsChangesMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsCommentsMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsApprovalsMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsMergedByMetricSource;
@@ -258,8 +259,19 @@ public class MetricFactory {
             case "CommitsMetricSource":
                 return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
 
-            case "LinesOfCodeMetricSource":
-                return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
+            case "LinesOfCodeMetricSource": {
+                // If branchNameRegex is set → commits-based LOC (branch context)
+                // Otherwise → PR diff-based LOC (pullRequests context)
+                if (branchNameRegex != null) {
+                    return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
+                }
+                Calendar sd = parseDateParam(startDateStr);
+                Object dividerObj = params.getOrDefault("divider", 1000.0);
+                double divider = dividerObj instanceof Number ? ((Number) dividerObj).doubleValue() : 1000.0;
+                return new PullRequestsChangesMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
+                        divider);
+            }
 
             case "PullRequestsCommentsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);

@@ -6,50 +6,53 @@ package com.github.istin.dmtools.metrics.source;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.IDiffStats;
 import com.github.istin.dmtools.common.model.IPullRequest;
-import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.report.model.KeyTime;
 import com.github.istin.dmtools.team.IEmployees;
 
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
-public class PullRequestsChangesMetricSource extends CommonSourceCollector {
+public class PullRequestsChangesMetricSource extends PullRequestsBaseMetricSource {
 
-    private final String workspace;
-    private final String repo;
-    private final SourceCode sourceCode;
-    private final Calendar startDate;
-    private final double linesOfCodeDivider;
-    public PullRequestsChangesMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
-        super(employees);
-        this.workspace = workspace;
-        this.repo = repo;
-        this.sourceCode = sourceCode;
-        this.startDate = startDate;
-        this.linesOfCodeDivider = new PropertyReader().getLinesOfCodeDivider();
+    private final double divider;
+
+    public PullRequestsChangesMetricSource(
+            String workspace, String repo, SourceCode sourceCode, IEmployees employees,
+            Calendar startDate, String titleRegex,
+            AtomicReference<List<IPullRequest>> sharedPrList,
+            double divider) {
+        super(workspace, repo, sourceCode, employees, startDate, titleRegex,
+                IPullRequest.PullRequestState.STATE_MERGED, sharedPrList);
+        this.divider = divider > 0 ? divider : 1.0;
     }
 
     @Override
     public List<KeyTime> performSourceCollection(boolean isPersonalized, String metricName) throws Exception {
         List<KeyTime> data = new ArrayList<>();
-        List<IPullRequest> pullRequests = sourceCode.pullRequests(workspace, repo, IPullRequest.PullRequestState.STATE_MERGED, true, startDate);
-        for (IPullRequest pullRequest : pullRequests) {
-            String rawName = pullRequest.getAuthor().getFullName();
-            if (isNameIgnored(rawName)) {
-                continue;
-            }
+        for (IPullRequest pullRequest : getPullRequests()) {
+            if (isFilteredOut(pullRequest)) continue;
+
+            String rawName = pullRequest.getAuthor() != null ? pullRequest.getAuthor().getFullName() : null;
+            if (rawName == null || isNameIgnored(rawName)) continue;
+
             String displayName = transformName(rawName);
             if (!isTeamContainsTheName(displayName)) {
                 displayName = IEmployees.UNKNOWN;
             }
-            String keyTimeOwner = isPersonalized ? displayName : metricName;
-            IDiffStats pullRequestDiff = sourceCode.getPullRequestDiff(workspace, repo, String.valueOf(pullRequest.getId()));
-            KeyTime keyTime = new KeyTime(pullRequest.getId().toString(), IPullRequest.Utils.getClosedDateAsCalendar(pullRequest), keyTimeOwner);
-            keyTime.setWeight(pullRequestDiff.getStats().getTotal()/linesOfCodeDivider);
+
+            IDiffStats diffStats = sourceCode.getPullRequestDiff(workspace, repo, String.valueOf(pullRequest.getId()));
+            if (diffStats == null || diffStats.getStats() == null) continue;
+
+            KeyTime keyTime = new KeyTime(
+                    pullRequest.getId().toString(),
+                    IPullRequest.Utils.getClosedDateAsCalendar(pullRequest),
+                    isPersonalized ? displayName : metricName);
+            keyTime.setWeight(diffStats.getStats().getTotal() / divider);
             data.add(keyTime);
         }
         return data;
     }
-
 }
+
