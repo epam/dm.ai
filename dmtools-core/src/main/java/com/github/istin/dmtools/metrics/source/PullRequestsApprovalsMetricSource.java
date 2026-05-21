@@ -13,20 +13,25 @@ import com.github.istin.dmtools.team.IEmployees;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PullRequestsApprovalsMetricSource extends PullRequestsBaseMetricSource {
 
     public PullRequestsApprovalsMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
-        this(workspace, repo, sourceCode, employees, startDate, null, null);
+        this(workspace, repo, sourceCode, employees, startDate, null, null, null);
     }
 
     public PullRequestsApprovalsMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex) {
-        this(workspace, repo, sourceCode, employees, startDate, titleRegex, null);
+        this(workspace, repo, sourceCode, employees, startDate, titleRegex, null, null);
     }
 
     public PullRequestsApprovalsMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex, AtomicReference<List<IPullRequest>> sharedPrList) {
-        super(workspace, repo, sourceCode, employees, startDate, titleRegex, IPullRequest.PullRequestState.STATE_MERGED, sharedPrList);
+        this(workspace, repo, sourceCode, employees, startDate, titleRegex, sharedPrList, null);
+    }
+
+    public PullRequestsApprovalsMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex, AtomicReference<List<IPullRequest>> sharedPrList, ConcurrentHashMap<String, List<IActivity>> sharedActivitiesCache) {
+        super(workspace, repo, sourceCode, employees, startDate, titleRegex, IPullRequest.PullRequestState.STATE_MERGED, sharedPrList, sharedActivitiesCache);
     }
 
     @Override
@@ -41,7 +46,7 @@ public class PullRequestsApprovalsMetricSource extends PullRequestsBaseMetricSou
             }
 
             String pullRequestIdAsString = pullRequest.getId().toString();
-            List<IActivity> activities = sourceCode.pullRequestActivities(workspace, repo, pullRequestIdAsString);
+            List<IActivity> activities = getActivities(pullRequestIdAsString);
             for (IActivity activity : activities) {
                 String action = null;
                 String activityDisplayName = null;

@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.metrics.source;
 
 import com.github.istin.dmtools.common.code.SourceCode;
+import com.github.istin.dmtools.common.model.IActivity;
 import com.github.istin.dmtools.common.model.ICommit;
 import com.github.istin.dmtools.common.model.IPullRequest;
 import com.github.istin.dmtools.common.model.ITag;
@@ -17,6 +18,8 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -335,5 +338,63 @@ public class RegexFilterMetricSourceTest {
                 eq(IPullRequest.PullRequestState.STATE_MERGED), anyBoolean(), any());
         verify(sourceCode, times(1)).pullRequests(eq("ws"), eq("repo"),
                 eq(IPullRequest.PullRequestState.STATE_DECLINED), anyBoolean(), any());
+    }
+
+    // ── Shared activities cache tests ─────────────────────────────────────────
+
+    @Test
+    public void testSharedActivitiesCache_activitiesFetchedOnlyOnce_acrossApprovalsAndComments() throws Exception {
+        IPullRequest pr = mockPR("feat: activities cache test", "Alice");
+        when(sourceCode.pullRequests(anyString(), anyString(), anyString(), anyBoolean(), any()))
+                .thenReturn(Collections.singletonList(pr));
+
+        IActivity approvalActivity = mock(IActivity.class);
+        IUser approver = mock(IUser.class);
+        when(approver.getFullName()).thenReturn("Bob");
+        when(approvalActivity.getApproval()).thenReturn(approver);
+        when(approvalActivity.getComment()).thenReturn(null);
+        when(sourceCode.pullRequestActivities(anyString(), anyString(), anyString()))
+                .thenReturn(Collections.singletonList(approvalActivity));
+
+        AtomicReference<List<IPullRequest>> sharedPrRef = new AtomicReference<>(null);
+        ConcurrentHashMap<String, List<IActivity>> sharedActivities = new ConcurrentHashMap<>();
+
+        PullRequestsApprovalsMetricSource approvals = new PullRequestsApprovalsMetricSource(
+                "ws", "repo", sourceCode, employees, null, null, sharedPrRef, sharedActivities);
+        PullRequestsCommentsMetricSource commentsWritten = new PullRequestsCommentsMetricSource(
+                true, "ws", "repo", sourceCode, employees, null, null, sharedPrRef, sharedActivities);
+        PullRequestsCommentsMetricSource commentsGotten = new PullRequestsCommentsMetricSource(
+                false, "ws", "repo", sourceCode, employees, null, null, sharedPrRef, sharedActivities);
+
+        approvals.performSourceCollection(false, "approvals");
+        commentsWritten.performSourceCollection(false, "written");
+        commentsGotten.performSourceCollection(false, "gotten");
+
+        // All 3 sources process the same PR — activities fetched exactly once
+        verify(sourceCode, times(1)).pullRequestActivities(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    public void testSharedActivitiesCache_eachPRFetchedOnce_whenMultiplePRs() throws Exception {
+        IPullRequest pr1 = mockPR("feat: pr-one", "Alice");
+        IPullRequest pr2 = mockPR("feat: pr-two", "Bob");
+        when(sourceCode.pullRequests(anyString(), anyString(), anyString(), anyBoolean(), any()))
+                .thenReturn(Arrays.asList(pr1, pr2));
+        when(sourceCode.pullRequestActivities(anyString(), anyString(), anyString()))
+                .thenReturn(Collections.emptyList());
+
+        AtomicReference<List<IPullRequest>> sharedPrRef = new AtomicReference<>(null);
+        ConcurrentHashMap<String, List<IActivity>> sharedActivities = new ConcurrentHashMap<>();
+
+        PullRequestsApprovalsMetricSource approvals = new PullRequestsApprovalsMetricSource(
+                "ws", "repo", sourceCode, employees, null, null, sharedPrRef, sharedActivities);
+        PullRequestsCommentsMetricSource comments = new PullRequestsCommentsMetricSource(
+                true, "ws", "repo", sourceCode, employees, null, null, sharedPrRef, sharedActivities);
+
+        approvals.performSourceCollection(false, "approvals");
+        comments.performSourceCollection(false, "comments");
+
+        // 2 PRs × 1 fetch each = 2 total (not 4 = 2 PRs × 2 sources)
+        verify(sourceCode, times(2)).pullRequestActivities(anyString(), anyString(), anyString());
     }
 }

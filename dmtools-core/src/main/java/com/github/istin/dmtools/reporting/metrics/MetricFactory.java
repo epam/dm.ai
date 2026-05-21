@@ -28,8 +28,10 @@ import com.github.istin.dmtools.csv.CsvMetricSource;
 import com.github.istin.dmtools.team.Employees;
 import com.github.istin.dmtools.team.IEmployees;
 import com.github.istin.dmtools.figma.FigmaClient;
+import com.github.istin.dmtools.common.model.IActivity;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -52,6 +54,14 @@ public class MetricFactory {
      * so the GitHub API is called only once per unique (workspace, repo, state, date) tuple.
      */
     private final Map<String, AtomicReference<List<IPullRequest>>> prListCache = new HashMap<>();
+
+    /**
+     * Cache of shared activities maps keyed by "workspace|repo".
+     * Approvals, CommentsWritten and CommentsGotten all call pullRequestActivities() for
+     * every PR — sharing a single ConcurrentHashMap ensures each PR's activities are fetched
+     * from the API exactly once regardless of how many metric sources consume them.
+     */
+    private final Map<String, ConcurrentHashMap<String, List<IActivity>>> activitiesCache = new HashMap<>();
 
     public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode) {
         this(trackerClient, sourceCode, null, null, null);
@@ -254,13 +264,15 @@ public class MetricFactory {
                 Calendar sd = parseDateParam(startDateStr);
                 boolean isPositive = (boolean) params.getOrDefault("isPositive", true);
                 return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
+                        sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsApprovalsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
+                        sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsMergedByMetricSource": {
@@ -289,6 +301,16 @@ public class MetricFactory {
             String workspace, String repo, String state, String startDateStr) {
         String key = workspace + "|" + repo + "|" + state + "|" + startDateStr;
         return prListCache.computeIfAbsent(key, k -> new AtomicReference<>(null));
+    }
+
+    /**
+     * Returns the shared activities map for the given (workspace, repo) pair.
+     * All metric sources that call {@code pullRequestActivities()} for the same repo share
+     * this map, so each PR's activities are fetched from the API exactly once.
+     */
+    private ConcurrentHashMap<String, List<IActivity>> sharedActivitiesMap(String workspace, String repo) {
+        String key = workspace + "|" + repo;
+        return activitiesCache.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
     }
 
     private SourceCollector createFigmaCollector(String metricName, Map<String, Object> params) {

@@ -13,6 +13,7 @@ import com.github.istin.dmtools.team.IEmployees;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PullRequestsCommentsMetricSource extends PullRequestsBaseMetricSource {
@@ -20,15 +21,19 @@ public class PullRequestsCommentsMetricSource extends PullRequestsBaseMetricSour
     private final boolean isPositive;
 
     public PullRequestsCommentsMetricSource(boolean isPositive, String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
-        this(isPositive, workspace, repo, sourceCode, employees, startDate, null, null);
+        this(isPositive, workspace, repo, sourceCode, employees, startDate, null, null, null);
     }
 
     public PullRequestsCommentsMetricSource(boolean isPositive, String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex) {
-        this(isPositive, workspace, repo, sourceCode, employees, startDate, titleRegex, null);
+        this(isPositive, workspace, repo, sourceCode, employees, startDate, titleRegex, null, null);
     }
 
     public PullRequestsCommentsMetricSource(boolean isPositive, String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex, AtomicReference<List<IPullRequest>> sharedPrList) {
-        super(workspace, repo, sourceCode, employees, startDate, titleRegex, IPullRequest.PullRequestState.STATE_MERGED, sharedPrList);
+        this(isPositive, workspace, repo, sourceCode, employees, startDate, titleRegex, sharedPrList, null);
+    }
+
+    public PullRequestsCommentsMetricSource(boolean isPositive, String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex, AtomicReference<List<IPullRequest>> sharedPrList, ConcurrentHashMap<String, List<IActivity>> sharedActivitiesCache) {
+        super(workspace, repo, sourceCode, employees, startDate, titleRegex, IPullRequest.PullRequestState.STATE_MERGED, sharedPrList, sharedActivitiesCache);
         this.isPositive = isPositive;
     }
 
@@ -47,7 +52,7 @@ public class PullRequestsCommentsMetricSource extends PullRequestsBaseMetricSour
             String prTitle = pullRequest.getTitle();
             int commentIndex = 0;
 
-            List<IActivity> activities = sourceCode.pullRequestActivities(workspace, repo, pullRequestIdAsString);
+            List<IActivity> activities = getActivities(pullRequestIdAsString);
             for (IActivity activity : activities) {
                 IComment comment = activity.getComment();
                 if (comment == null) continue;

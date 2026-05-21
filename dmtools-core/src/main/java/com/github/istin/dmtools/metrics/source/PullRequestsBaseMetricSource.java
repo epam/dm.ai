@@ -4,24 +4,26 @@
 package com.github.istin.dmtools.metrics.source;
 
 import com.github.istin.dmtools.common.code.SourceCode;
+import com.github.istin.dmtools.common.model.IActivity;
 import com.github.istin.dmtools.common.model.IPullRequest;
 import com.github.istin.dmtools.team.IEmployees;
 
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 /**
  * Abstract base for all PR-based metric sources.
  *
- * <p>Holds common fields (workspace, repo, sourceCode, startDate, titlePattern) and
- * exposes {@link #getPullRequests()} which fetches the PR list on first call and
- * caches it for subsequent calls via a shared {@link AtomicReference}.
- *
- * <p>When multiple metrics in the same data-source config share the same
- * {@code AtomicReference} instance (wired up by {@code MetricFactory}), the
- * GitHub API is called only once regardless of how many metrics consume the list.
+ * <p>Provides two shared caches (wired by {@code MetricFactory}) that eliminate
+ * redundant GitHub API calls when multiple metric sources process the same data:
+ * <ul>
+ *   <li><b>sharedPrList</b> – fetches the PR list once per (workspace, repo, state, date) tuple.</li>
+ *   <li><b>sharedActivitiesCache</b> – fetches {@code pullRequestActivities} once per PR ID,
+ *       shared across Approvals, CommentsWritten and CommentsGotten sources.</li>
+ * </ul>
  */
 public abstract class PullRequestsBaseMetricSource extends CommonSourceCollector {
 
@@ -33,6 +35,7 @@ public abstract class PullRequestsBaseMetricSource extends CommonSourceCollector
 
     private final String state;
     private final AtomicReference<List<IPullRequest>> sharedPrList;
+    private final ConcurrentHashMap<String, List<IActivity>> sharedActivitiesCache;
 
     protected PullRequestsBaseMetricSource(
             String workspace,
@@ -43,6 +46,19 @@ public abstract class PullRequestsBaseMetricSource extends CommonSourceCollector
             String titleRegex,
             String state,
             AtomicReference<List<IPullRequest>> sharedPrList) {
+        this(workspace, repo, sourceCode, employees, startDate, titleRegex, state, sharedPrList, null);
+    }
+
+    protected PullRequestsBaseMetricSource(
+            String workspace,
+            String repo,
+            SourceCode sourceCode,
+            IEmployees employees,
+            Calendar startDate,
+            String titleRegex,
+            String state,
+            AtomicReference<List<IPullRequest>> sharedPrList,
+            ConcurrentHashMap<String, List<IActivity>> sharedActivitiesCache) {
         super(employees);
         this.workspace = workspace;
         this.repo = repo;
@@ -53,6 +69,9 @@ public abstract class PullRequestsBaseMetricSource extends CommonSourceCollector
                 : null;
         this.state = state;
         this.sharedPrList = (sharedPrList != null) ? sharedPrList : new AtomicReference<>(null);
+        this.sharedActivitiesCache = (sharedActivitiesCache != null)
+                ? sharedActivitiesCache
+                : new ConcurrentHashMap<>();
     }
 
     /**
@@ -63,14 +82,26 @@ public abstract class PullRequestsBaseMetricSource extends CommonSourceCollector
         List<IPullRequest> cached = sharedPrList.get();
         if (cached == null) {
             List<IPullRequest> fetched = sourceCode.pullRequests(workspace, repo, state, true, startDate);
-            // compareAndSet ensures only one thread pays the fetch cost
             sharedPrList.compareAndSet(null, fetched);
             cached = sharedPrList.get();
         }
         return cached;
     }
 
-    /** Convenience: returns true if this PR should be skipped by the titleRegex filter. */
+    /**
+     * Returns the activity list (reviews + inline comments) for the given PR.
+     * The result is fetched from the API at most once per PR ID; subsequent calls
+     * for the same ID return the cached result even across different metric sources.
+     */
+    protected List<IActivity> getActivities(String prId) throws Exception {
+        List<IActivity> cached = sharedActivitiesCache.get(prId);
+        if (cached != null) return cached;
+        List<IActivity> fetched = sourceCode.pullRequestActivities(workspace, repo, prId);
+        List<IActivity> existing = sharedActivitiesCache.putIfAbsent(prId, fetched);
+        return existing != null ? existing : fetched;
+    }
+
+    /** Returns true if this PR should be skipped by the titleRegex filter. */
     protected boolean isFilteredOut(IPullRequest pr) {
         if (titlePattern == null) return false;
         String title = pr.getTitle();
