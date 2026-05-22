@@ -48,6 +48,8 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
 
     private static final Logger logger = LogManager.getLogger(FigmaClient.class);
 
+    private boolean useOAuth2Bearer = false;
+
     public FigmaClient(String basePath, String authorization) throws IOException {
         super(basePath, authorization);
         setCacheGetRequestsEnabled(true);
@@ -60,6 +62,18 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
                 return super.isRetryable(e);
             }
         });
+    }
+
+    /**
+     * Marks this client to use {@code Authorization: Bearer} header instead of
+     * {@code X-Figma-Token}. Call this when the authorization value is an OAuth2 access token.
+     */
+    public void setUseOAuth2Bearer(boolean useOAuth2Bearer) {
+        this.useOAuth2Bearer = useOAuth2Bearer;
+    }
+
+    public boolean isUseOAuth2Bearer() {
+        return useOAuth2Bearer;
     }
 
     @Override
@@ -102,6 +116,84 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         }
         
         return basePath;
+    }
+
+    @MCPTool(
+        name = "figma_oauth2_get_auth_url",
+        description = "Generates the Figma OAuth2 authorization URL for the initial authorization code flow. "
+            + "Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. "
+            + "Then call figma_oauth2_exchange_code to get access and refresh tokens. "
+            + "Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured.",
+        integration = "figma",
+        category = "auth"
+    )
+    public String oauth2GetAuthUrl(
+        @MCPParam(name = "redirectUri", description = "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback)", required = true, example = "http://localhost:8080/callback") String redirectUri,
+        @MCPParam(name = "state", description = "Random state string for CSRF protection", required = false, example = "random_state_123") String state
+    ) {
+        com.github.istin.dmtools.common.utils.PropertyReader propertyReader = new com.github.istin.dmtools.common.utils.PropertyReader();
+        String clientId = propertyReader.getFigmaClientId();
+        if (clientId == null || clientId.isEmpty()) {
+            return new JSONObject()
+                    .put("error", "FIGMA_CLIENT_ID is not configured")
+                    .toString();
+        }
+        String clientSecret = propertyReader.getFigmaClientSecret();
+        if (clientSecret == null || clientSecret.isEmpty()) {
+            return new JSONObject()
+                    .put("error", "FIGMA_CLIENT_SECRET is not configured")
+                    .toString();
+        }
+        if (state == null || state.isEmpty()) {
+            state = Long.toHexString(Double.doubleToLongBits(Math.random()));
+        }
+        FigmaOAuth2TokenManager manager = new FigmaOAuth2TokenManager(clientId, clientSecret);
+        String authUrl = manager.buildAuthorizationUrl(redirectUri, state);
+        return new JSONObject()
+                .put("authorization_url", authUrl)
+                .put("instructions", "Open this URL in your browser, authorize the app, then copy the 'code' query parameter from the redirect URL and call figma_oauth2_exchange_code.")
+                .put("state", state)
+                .toString();
+    }
+
+    @MCPTool(
+        name = "figma_oauth2_exchange_code",
+        description = "Exchanges a Figma OAuth2 authorization code for access and refresh tokens. "
+            + "Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. "
+            + "Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh.",
+        integration = "figma",
+        category = "auth"
+    )
+    public String oauth2ExchangeCode(
+        @MCPParam(name = "code", description = "Authorization code received from Figma OAuth2 redirect", required = true, example = "figma_auth_code_abc123") String code,
+        @MCPParam(name = "redirectUri", description = "Same redirect URI used in figma_oauth2_get_auth_url", required = true, example = "http://localhost:8080/callback") String redirectUri
+    ) {
+        com.github.istin.dmtools.common.utils.PropertyReader propertyReader = new com.github.istin.dmtools.common.utils.PropertyReader();
+        String clientId = propertyReader.getFigmaClientId();
+        String clientSecret = propertyReader.getFigmaClientSecret();
+        if (clientId == null || clientId.isEmpty() || clientSecret == null || clientSecret.isEmpty()) {
+            return new JSONObject()
+                    .put("error", "FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET must be configured")
+                    .toString();
+        }
+        try {
+            FigmaOAuth2TokenManager manager = new FigmaOAuth2TokenManager(clientId, clientSecret);
+            FigmaOAuth2TokenManager.TokenResponse tokenResponse = manager.exchangeCodeForTokens(code, redirectUri);
+            JSONObject result = new JSONObject();
+            result.put("access_token", tokenResponse.getAccessToken());
+            result.put("refresh_token", tokenResponse.getRefreshToken());
+            result.put("expires_in", tokenResponse.getExpiresIn());
+            result.put("instructions", "Add FIGMA_OAUTH_REFRESH_TOKEN=" + tokenResponse.getRefreshToken()
+                    + " to your dmtools.env to enable automatic token refresh. "
+                    + "You can also set FIGMA_OAUTH_ACCESS_TOKEN=" + tokenResponse.getAccessToken()
+                    + " for immediate use (expires in " + tokenResponse.getExpiresIn() + "s).");
+            return result.toString();
+        } catch (Exception e) {
+            logger.error("Figma OAuth2 code exchange failed", e);
+            return new JSONObject()
+                    .put("error", "Token exchange failed: " + e.getMessage())
+                    .toString();
+        }
     }
 
     @MCPTool(
@@ -177,6 +269,11 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
 
     @Override
     public Request.Builder sign(Request.Builder builder) {
+        if (useOAuth2Bearer) {
+            return builder
+                    .header("Authorization", "Bearer " + authorization)
+                    .header("Content-Type", "application/json");
+        }
         return builder
                 .header("X-Figma-Token", authorization)
                 .header("Content-Type", "application/json");
