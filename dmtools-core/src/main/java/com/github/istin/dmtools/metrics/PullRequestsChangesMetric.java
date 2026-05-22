@@ -18,7 +18,7 @@ public class PullRequestsChangesMetric extends CommonSourceCodeMetric {
 
     public PullRequestsChangesMetric(boolean isPersonlized, String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
         super(NAME, isPersonlized, workspace, repo, sourceCode, employees,
-                new PullRequestsChangesMetricSource(workspace, repo, sourceCode, employees, startDate, null, new AtomicReference<>(null), 1000.0));
+                new PullRequestsChangesMetricSource(workspace, repo, sourceCode, employees, startDate, null, new AtomicReference<>(null)));
     }
 
     @Override

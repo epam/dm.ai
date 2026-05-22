@@ -266,11 +266,8 @@ public class MetricFactory {
                     return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
                 }
                 Calendar sd = parseDateParam(startDateStr);
-                Object dividerObj = params.getOrDefault("divider", 1000.0);
-                double divider = dividerObj instanceof Number ? ((Number) dividerObj).doubleValue() : 1000.0;
                 return new PullRequestsChangesMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
-                        divider);
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
             }
 
             case "PullRequestsCommentsMetricSource": {

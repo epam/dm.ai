@@ -16,16 +16,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class PullRequestsChangesMetricSource extends PullRequestsBaseMetricSource {
 
-    private final double divider;
-
     public PullRequestsChangesMetricSource(
             String workspace, String repo, SourceCode sourceCode, IEmployees employees,
             Calendar startDate, String titleRegex,
-            AtomicReference<List<IPullRequest>> sharedPrList,
-            double divider) {
+            AtomicReference<List<IPullRequest>> sharedPrList) {
         super(workspace, repo, sourceCode, employees, startDate, titleRegex,
                 IPullRequest.PullRequestState.STATE_MERGED, sharedPrList);
-        this.divider = divider > 0 ? divider : 1.0;
     }
 
     @Override
@@ -49,7 +45,7 @@ public class PullRequestsChangesMetricSource extends PullRequestsBaseMetricSourc
                     pullRequest.getId().toString(),
                     IPullRequest.Utils.getClosedDateAsCalendar(pullRequest),
                     isPersonalized ? displayName : metricName);
-            keyTime.setWeight(diffStats.getStats().getTotal() / divider);
+            keyTime.setWeight(diffStats.getStats().getTotal());
             data.add(keyTime);
         }
         return data;
