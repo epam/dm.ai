@@ -1556,7 +1556,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String pullRequestResponse = getPullRequestResponse(workspace, repository, pullRequestID, true);
             return parseDiffStats(pullRequestResponse);
         } catch (AtlassianRestClient.RestClientException e) {
-            e.printStackTrace();
+            logger.warn("Skipping PR diff for {}/{} PR#{}: {}", workspace, repository, pullRequestID, e.getMessage());
             return new IDiffStats.Empty();
         }
     }
