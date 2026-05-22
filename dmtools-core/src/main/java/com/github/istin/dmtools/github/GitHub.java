@@ -1444,13 +1444,20 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     @Override
     public List<ITag> getBranches(String workspace, String repository) throws IOException {
-        String path = path(String.format("repos/%s/%s/branches", workspace, repository));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        if (response == null) {
-            return Collections.emptyList();
+        List<ITag> allBranches = new ArrayList<>();
+        int page = 1;
+        while (true) {
+            String path = path(String.format("repos/%s/%s/branches?per_page=100&page=%d", workspace, repository, page));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            String response = execute(getRequest);
+            if (response == null) break;
+            List<GithubTag> page_branches = JSONModel.convertToModels(GithubTag.class, new JSONArray(response));
+            if (page_branches.isEmpty()) break;
+            allBranches.addAll(page_branches);
+            if (page_branches.size() < 100) break;
+            page++;
         }
-        return JSONModel.convertToModels(GithubTag.class, new JSONArray(response));
+        return allBranches;
     }
 
     @Override
