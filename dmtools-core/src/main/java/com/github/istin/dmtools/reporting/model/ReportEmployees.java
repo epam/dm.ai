@@ -77,6 +77,7 @@ public class ReportEmployees implements IEmployees {
     @Override
     public boolean contains(String fullName) {
         if (fullName == null) return false;
+        if (isBot(fullName)) return false;  // bots excluded from all metrics
         // No explicit employees list → allow everyone (just apply alias grouping)
         if (!hasExplicitEmployees) return true;
         return employeeNames.contains(fullName.toLowerCase());
