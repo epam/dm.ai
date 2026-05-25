@@ -41,12 +41,17 @@ public class PullRequestsLOCMetricSource extends CommonSourceCollector {
     private final String since;
     private final SourceCode sourceCode;
     private final Pattern branchPattern;
+    private final Pattern commitMessagePattern;
 
     public PullRequestsLOCMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees) {
-        this(workspace, repo, branch, since, sourceCode, employees, null);
+        this(workspace, repo, branch, since, sourceCode, employees, null, null);
     }
 
     public PullRequestsLOCMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees, String branchNameRegex) {
+        this(workspace, repo, branch, since, sourceCode, employees, branchNameRegex, null);
+    }
+
+    public PullRequestsLOCMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees, String branchNameRegex, String commitMessageRegex) {
         super(employees);
         this.workspace = workspace;
         this.repo = repo;
@@ -54,6 +59,7 @@ public class PullRequestsLOCMetricSource extends CommonSourceCollector {
         this.since = since;
         this.sourceCode = sourceCode;
         this.branchPattern = branchNameRegex != null && !branchNameRegex.isEmpty() ? Pattern.compile(branchNameRegex) : null;
+        this.commitMessagePattern = commitMessageRegex != null && !commitMessageRegex.isEmpty() ? Pattern.compile(commitMessageRegex) : null;
     }
 
     @Override
@@ -73,6 +79,11 @@ public class PullRequestsLOCMetricSource extends CommonSourceCollector {
             }
             String displayName = model.getAuthor().getFullName();
             if (displayName == null) {
+                continue;
+            }
+
+            String msg = model.getMessage();
+            if (commitMessagePattern != null && (msg == null || !commitMessagePattern.matcher(msg).find())) {
                 continue;
             }
 
@@ -110,7 +121,6 @@ public class PullRequestsLOCMetricSource extends CommonSourceCollector {
                 model.getCommitterDate(), isPersonalized ? displayName : metricName);
             keyTime.setWeight(additions + deletions);
             keyTime.setLink(model.getUrl());
-            String msg = model.getMessage();
             String summary = (msg != null ? msg.split("\\n")[0] : "") + " (+" + additions + " -" + deletions + ")";
             keyTime.setSummary(summary);
             data.add(keyTime);

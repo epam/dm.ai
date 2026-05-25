@@ -447,4 +447,27 @@ class ReportConfigTest {
         assertEquals("comparison", chartConfig.getType());
         assertEquals(3, chartConfig.getMetrics().size());
     }
+
+    @Test
+    void testBots_deserializedFromJson() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String json = "{ \"bots\": [\"dependabot[bot]\", \"github-actions[bot]\"] }";
+        ReportConfig config = mapper.readValue(json, ReportConfig.class);
+        assertNotNull(config.getBots());
+        assertEquals(2, config.getBots().size());
+        assertTrue(config.getBots().contains("dependabot[bot]"));
+    }
+
+    @Test
+    void testReportEmployees_isBotReturnsTrueForConfiguredBots() {
+        ReportEmployees employees = new ReportEmployees(
+                null, null, null,
+                Arrays.asList("dependabot[bot]", "github-actions[bot]"));
+
+        assertTrue(employees.isBot("dependabot[bot]"));
+        assertTrue(employees.isBot("GITHUB-ACTIONS[BOT]")); // case-insensitive
+        assertFalse(employees.isBot("Alice"));
+        // built-in bots still skipped
+        assertTrue(employees.isBot("DM_scripts"));
+    }
 }

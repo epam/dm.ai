@@ -27,14 +27,29 @@ public class ReportEmployees implements IEmployees {
     private final boolean hasExplicitEmployees;
     // When non-null, all unmatched contributors map to this group name
     private final String catchAllGroup;
+    // Names to completely exclude from statistics (lowercased for fast lookup)
+    private final Set<String> botNames = new HashSet<>();
 
     public ReportEmployees(List<String> employees, Map<String, List<String>> aliases) {
-        this(employees, aliases, null);
+        this(employees, aliases, null, null);
     }
 
     public ReportEmployees(List<String> employees, Map<String, List<String>> aliases, String catchAllGroup) {
+        this(employees, aliases, catchAllGroup, null);
+    }
+
+    public ReportEmployees(List<String> employees, Map<String, List<String>> aliases, String catchAllGroup, List<String> bots) {
         this.catchAllGroup = catchAllGroup;
         hasExplicitEmployees = employees != null && !employees.isEmpty();
+
+        if (bots != null) {
+            for (String bot : bots) {
+                if (bot != null) botNames.add(bot.toLowerCase());
+            }
+        }
+        // Built-in bot names always skipped
+        botNames.add("dm_scripts");
+        botNames.add("dm_scripts_token");
 
         if (hasExplicitEmployees) {
             for (String name : employees) {
@@ -62,6 +77,7 @@ public class ReportEmployees implements IEmployees {
     @Override
     public boolean contains(String fullName) {
         if (fullName == null) return false;
+        if (isBot(fullName)) return false;  // bots excluded from all metrics
         // No explicit employees list → allow everyone (just apply alias grouping)
         if (!hasExplicitEmployees) return true;
         return employeeNames.contains(fullName.toLowerCase());
@@ -81,8 +97,6 @@ public class ReportEmployees implements IEmployees {
 
     @Override
     public boolean isBot(String sourceFullName) {
-        return sourceFullName != null &&
-            (sourceFullName.equalsIgnoreCase("DM_scripts") ||
-             sourceFullName.equalsIgnoreCase("DM_scripts_token"));
+        return sourceFullName != null && botNames.contains(sourceFullName.toLowerCase());
     }
 }

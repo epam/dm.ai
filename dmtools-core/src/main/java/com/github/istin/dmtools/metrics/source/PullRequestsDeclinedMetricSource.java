@@ -11,41 +11,32 @@ import com.github.istin.dmtools.team.IEmployees;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Counts declined (closed without merge) PRs, attributed to the PR author.
  */
-public class PullRequestsDeclinedMetricSource extends CommonSourceCollector {
-
-    private final String workspace;
-    private final String repo;
-    private final SourceCode sourceCode;
-    private final Calendar startDate;
-    private final Pattern titlePattern;
+public class PullRequestsDeclinedMetricSource extends PullRequestsBaseMetricSource {
 
     public PullRequestsDeclinedMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
-        this(workspace, repo, sourceCode, employees, startDate, null);
+        this(workspace, repo, sourceCode, employees, startDate, null, null);
     }
 
     public PullRequestsDeclinedMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex) {
-        super(employees);
-        this.workspace = workspace;
-        this.repo = repo;
-        this.sourceCode = sourceCode;
-        this.startDate = startDate;
-        this.titlePattern = titleRegex != null && !titleRegex.isEmpty() ? Pattern.compile(titleRegex) : null;
+        this(workspace, repo, sourceCode, employees, startDate, titleRegex, null);
+    }
+
+    public PullRequestsDeclinedMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex, AtomicReference<List<IPullRequest>> sharedPrList) {
+        super(workspace, repo, sourceCode, employees, startDate, titleRegex, IPullRequest.PullRequestState.STATE_DECLINED, sharedPrList);
     }
 
     @Override
     public List<KeyTime> performSourceCollection(boolean isPersonalized, String metricName) throws Exception {
         List<KeyTime> data = new ArrayList<>();
-        List<IPullRequest> pullRequests = sourceCode.pullRequests(workspace, repo, IPullRequest.PullRequestState.STATE_DECLINED, true, startDate);
-        for (IPullRequest pullRequest : pullRequests) {
-            if (titlePattern != null && !titlePattern.matcher(pullRequest.getTitle() != null ? pullRequest.getTitle() : "").find()) {
-                continue;
-            }
+        for (IPullRequest pullRequest : getPullRequests()) {
+            if (isFilteredOut(pullRequest)) continue;
             String displayName = transformName(pullRequest.getAuthor().getFullName());
+            if (isNameIgnored(displayName)) continue;
             if (!isTeamContainsTheName(displayName)) {
                 displayName = IEmployees.UNKNOWN;
             }
