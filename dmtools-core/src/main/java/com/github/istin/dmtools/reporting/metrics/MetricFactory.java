@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.reporting.metrics;
 
 import com.github.istin.dmtools.common.code.SourceCode;
+import com.github.istin.dmtools.common.model.IPullRequest;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.metrics.Metric;
 import com.github.istin.dmtools.metrics.TrackerRule;
@@ -18,6 +19,7 @@ import com.github.istin.dmtools.metrics.rules.TicketMovedToStatusRule;
 import com.github.istin.dmtools.metrics.rules.TicketCreatorsRule;
 import com.github.istin.dmtools.metrics.source.PullRequestsMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsLOCMetricSource;
+import com.github.istin.dmtools.metrics.source.PullRequestsChangesMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsCommentsMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsApprovalsMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsMergedByMetricSource;
@@ -27,8 +29,11 @@ import com.github.istin.dmtools.csv.CsvMetricSource;
 import com.github.istin.dmtools.team.Employees;
 import com.github.istin.dmtools.team.IEmployees;
 import com.github.istin.dmtools.figma.FigmaClient;
+import com.github.istin.dmtools.common.model.IActivity;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -43,6 +48,21 @@ public class MetricFactory {
     private final FigmaClient figmaClient;
     private final IEmployees employees;
     private final String reportStartDate;
+
+    /**
+     * Cache of shared PR lists keyed by "workspace|repo|STATE|startDate".
+     * All PR metric sources that share the same key receive the same AtomicReference,
+     * so the GitHub API is called only once per unique (workspace, repo, state, date) tuple.
+     */
+    private final Map<String, AtomicReference<List<IPullRequest>>> prListCache = new HashMap<>();
+
+    /**
+     * Cache of shared activities maps keyed by "workspace|repo".
+     * Approvals, CommentsWritten and CommentsGotten all call pullRequestActivities() for
+     * every PR — sharing a single ConcurrentHashMap ensures each PR's activities are fetched
+     * from the API exactly once regardless of how many metric sources consume them.
+     */
+    private final Map<String, ConcurrentHashMap<String, List<IActivity>>> activitiesCache = new HashMap<>();
 
     public MetricFactory(TrackerClient trackerClient, SourceCode sourceCode) {
         this(trackerClient, sourceCode, null, null, null);
@@ -227,43 +247,80 @@ public class MetricFactory {
         // Regex filters
         String titleRegex = (String) params.getOrDefault("titleRegex", null);
         String branchNameRegex = (String) params.getOrDefault("branchNameRegex", null);
+        String commitMessageRegex = (String) params.getOrDefault("commitMessageRegex", null);
 
         switch (metricName) {
             case "PullRequestsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
             }
 
             case "CommitsMetricSource":
-                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex);
+                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
 
-            case "LinesOfCodeMetricSource":
-                return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex);
+            case "LinesOfCodeMetricSource": {
+                // If branchNameRegex is set → commits-based LOC (branch context)
+                // Otherwise → PR diff-based LOC (pullRequests context)
+                if (branchNameRegex != null) {
+                    return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
+                }
+                Calendar sd = parseDateParam(startDateStr);
+                return new PullRequestsChangesMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
+            }
 
             case "PullRequestsCommentsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 boolean isPositive = (boolean) params.getOrDefault("isPositive", true);
-                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
+                        sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsApprovalsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
+                        sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsMergedByMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
             }
 
             case "PullRequestsDeclinedMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex);
+                return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_DECLINED, startDateStr));
             }
 
             default:
                 throw new IllegalArgumentException("Unknown source collector: " + metricName);
         }
+    }
+
+    /**
+     * Returns the shared {@link AtomicReference} for the given (workspace, repo, state, startDate) tuple.
+     * All metric sources that use the same tuple will share the same reference and therefore
+     * the same PR list — avoiding redundant API calls.
+     */
+    private AtomicReference<List<IPullRequest>> sharedPrRef(
+            String workspace, String repo, String state, String startDateStr) {
+        String key = workspace + "|" + repo + "|" + state + "|" + startDateStr;
+        return prListCache.computeIfAbsent(key, k -> new AtomicReference<>(null));
+    }
+
+    /**
+     * Returns the shared activities map for the given (workspace, repo) pair.
+     * All metric sources that call {@code pullRequestActivities()} for the same repo share
+     * this map, so each PR's activities are fetched from the API exactly once.
+     */
+    private ConcurrentHashMap<String, List<IActivity>> sharedActivitiesMap(String workspace, String repo) {
+        String key = workspace + "|" + repo;
+        return activitiesCache.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
     }
 
     private SourceCollector createFigmaCollector(String metricName, Map<String, Object> params) {
