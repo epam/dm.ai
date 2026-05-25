@@ -775,12 +775,36 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                           @MCPParam(name = "fields", description = "Optional array of fields to include in the response", required = false) String[] fields) throws IOException {
         GenericRequest jiraRequest = createPerformTicketRequest(ticketKey, fields);
         String response = jiraRequest.execute();
-        if (response.contains("errorMessages")) {
+        if (isErrorResponse(response)) {
             return null;
         }
         String projectKey = extractProjectKeyFromTicketKey(ticketKey);
         response = transformResponse(response, projectKey);
         return createTicket(response);
+    }
+
+    /**
+     * Checks whether a Jira API response is an error response by parsing the JSON
+     * and looking for a non-empty {@code errorMessages} array at the root level.
+     * <p>
+     * Unlike a naive {@code response.contains("errorMessages")} check, this method
+     * avoids false positives when ticket field values happen to contain the literal
+     * text "errorMessages".
+     */
+    protected boolean isErrorResponse(String response) {
+        if (response == null || response.isEmpty()) {
+            return false;
+        }
+        if (!response.contains("errorMessages")) {
+            return false;
+        }
+        try {
+            JSONObject json = new JSONObject(response);
+            JSONArray errorMessages = json.optJSONArray("errorMessages");
+            return errorMessages != null && !errorMessages.isEmpty();
+        } catch (JSONException e) {
+            return false;
+        }
     }
 
     protected GenericRequest createPerformTicketRequest(String ticketKey, String[] fields) {
