@@ -14,43 +14,33 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Counts merged PRs attributed to the person who performed the merge (merged_by).
  * Falls back to PR author if merged_by is not available.
  */
-public class PullRequestsMergedByMetricSource extends CommonSourceCollector {
+public class PullRequestsMergedByMetricSource extends PullRequestsBaseMetricSource {
 
     private static final Logger logger = LogManager.getLogger(PullRequestsMergedByMetricSource.class);
 
-    private final String workspace;
-    private final String repo;
-    private final SourceCode sourceCode;
-    private final Calendar startDate;
-    private final Pattern titlePattern;
-
     public PullRequestsMergedByMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate) {
-        this(workspace, repo, sourceCode, employees, startDate, null);
+        this(workspace, repo, sourceCode, employees, startDate, null, null);
     }
 
     public PullRequestsMergedByMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex) {
-        super(employees);
-        this.workspace = workspace;
-        this.repo = repo;
-        this.sourceCode = sourceCode;
-        this.startDate = startDate;
-        this.titlePattern = titleRegex != null && !titleRegex.isEmpty() ? Pattern.compile(titleRegex) : null;
+        this(workspace, repo, sourceCode, employees, startDate, titleRegex, null);
+    }
+
+    public PullRequestsMergedByMetricSource(String workspace, String repo, SourceCode sourceCode, IEmployees employees, Calendar startDate, String titleRegex, AtomicReference<List<IPullRequest>> sharedPrList) {
+        super(workspace, repo, sourceCode, employees, startDate, titleRegex, IPullRequest.PullRequestState.STATE_MERGED, sharedPrList);
     }
 
     @Override
     public List<KeyTime> performSourceCollection(boolean isPersonalized, String metricName) throws Exception {
         List<KeyTime> data = new ArrayList<>();
-        List<IPullRequest> pullRequests = sourceCode.pullRequests(workspace, repo, IPullRequest.PullRequestState.STATE_MERGED, true, startDate);
-        for (IPullRequest pullRequest : pullRequests) {
-            if (titlePattern != null && !titlePattern.matcher(pullRequest.getTitle() != null ? pullRequest.getTitle() : "").find()) {
-                continue;
-            }
+        for (IPullRequest pullRequest : getPullRequests()) {
+            if (isFilteredOut(pullRequest)) continue;
             IUser merger = pullRequest.getMergedBy();
 
             // If merged_by not in list response, fetch individual PR for full details
@@ -71,6 +61,7 @@ public class PullRequestsMergedByMetricSource extends CommonSourceCollector {
             }
 
             String displayName = transformName(merger.getFullName());
+            if (isNameIgnored(displayName)) continue;
             if (!isTeamContainsTheName(displayName)) {
                 displayName = IEmployees.UNKNOWN;
             }

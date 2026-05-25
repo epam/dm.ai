@@ -75,6 +75,9 @@ public class ReportGeneratorJob extends AbstractJob<
         @SerializedName("catchAllGroup")
         private String catchAllGroup;
 
+        @SerializedName("bots")
+        private List<String> bots;
+
         @SerializedName("customCharts")
         private List<CustomChartConfig> customCharts;
 
@@ -137,6 +140,7 @@ public class ReportGeneratorJob extends AbstractJob<
         config.setEmployees(params.getEmployees());
         config.setAliases(params.getAliases());
         config.setCatchAllGroup(params.getCatchAllGroup());
+        config.setBots(params.getBots());
         config.setCustomCharts(params.getCustomCharts());
         config.setComputedMetrics(params.getComputedMetrics());
 

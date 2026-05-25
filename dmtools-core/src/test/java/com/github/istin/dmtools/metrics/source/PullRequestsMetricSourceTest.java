@@ -78,4 +78,36 @@ public class PullRequestsMetricSourceTest {
         assertEquals("2", keyTime.getKey());
         assertEquals(IEmployees.UNKNOWN, keyTime.getWho());
     }
+
+    @Test
+    public void testPerformSourceCollection_skipsBotAuthor() throws Exception {
+        List<IPullRequest> pullRequests = new ArrayList<>();
+        IPullRequest botPR = mock(IPullRequest.class);
+        IPullRequest humanPR = mock(IPullRequest.class);
+        IUser botUser = mock(IUser.class);
+        IUser humanUser = mock(IUser.class);
+
+        when(botUser.getFullName()).thenReturn("dependabot[bot]");
+        when(humanUser.getFullName()).thenReturn("Alice");
+        when(botPR.getAuthor()).thenReturn(botUser);
+        when(botPR.getId()).thenReturn(10);
+        when(humanPR.getAuthor()).thenReturn(humanUser);
+        when(humanPR.getId()).thenReturn(11);
+        pullRequests.add(botPR);
+        pullRequests.add(humanPR);
+
+        when(sourceCodeMock.pullRequests("workspace", "repo", IPullRequest.PullRequestState.STATE_MERGED, true, startDate))
+                .thenReturn(pullRequests);
+        when(employeesMock.transformName("dependabot[bot]")).thenReturn("dependabot[bot]");
+        when(employeesMock.transformName("Alice")).thenReturn("Alice");
+        when(employeesMock.isBot("dependabot[bot]")).thenReturn(true);
+        when(employeesMock.isBot("Alice")).thenReturn(false);
+        when(employeesMock.contains("Alice")).thenReturn(true);
+
+        List<KeyTime> result = pullRequestsMetricSource.performSourceCollection(false, "PRs");
+
+        // Bot PR completely skipped, only human PR appears
+        assertEquals(1, result.size());
+        assertEquals("11", result.get(0).getKey());
+    }
 }
