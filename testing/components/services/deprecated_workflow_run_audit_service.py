@@ -20,7 +20,9 @@ from testing.core.models.deprecated_workflow_run_audit import (
 
 
 class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContract):
-    SUMMARY_ECHO_PATTERN = re.compile(r'echo (?P<argument>.+?) >> \$GITHUB_STEP_SUMMARY$')
+    SUMMARY_ECHO_PATTERN = re.compile(
+        r'echo (?P<argument>.+?) >> (?:"\$GITHUB_STEP_SUMMARY"|\$GITHUB_STEP_SUMMARY)$'
+    )
     ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
     TIMESTAMP_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T[^ ]+\s+")
     RELEASE_URL_PATTERN = re.compile(r"/releases/tag/(?P<tag>[^)\s]+)")
@@ -422,8 +424,8 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         if payload is None:
             return None
 
-        created_at = self._parse_github_datetime(str(payload.get("created_at", "")))
-        if created_at is not None and created_at < dispatch_started_at - timedelta(minutes=5):
+        release_timestamp = self._release_timestamp(payload)
+        if release_timestamp is not None and release_timestamp < dispatch_started_at - timedelta(minutes=5):
             return None
 
         return DeprecatedWorkflowReleaseObservation(
@@ -454,11 +456,18 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             tag_name = str(release.get("tag_name", "")).strip()
             if candidate_tags and tag_name not in candidate_tags:
                 continue
-            created_at = self._parse_github_datetime(str(release.get("created_at", "")))
-            if created_at is None or created_at < dispatch_started_at - timedelta(minutes=5):
+            release_timestamp = self._release_timestamp(release)
+            if release_timestamp is None or release_timestamp < dispatch_started_at - timedelta(minutes=5):
                 continue
             if candidate_tags or self._release_looks_like_deprecated_workflow_output(release):
                 return release
+        return None
+
+    def _release_timestamp(self, payload: dict[str, Any]) -> datetime | None:
+        for key in ("published_at", "created_at"):
+            value = self._parse_github_datetime(str(payload.get(key, "")))
+            if value is not None:
+                return value
         return None
 
     def _extract_step_summary_markdown(self, raw_log_text: str) -> str:
@@ -467,7 +476,7 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             line = self._normalize_log_line(raw_line)
             if line.startswith("##[group]Run "):
                 continue
-            if ">> $GITHUB_STEP_SUMMARY" not in line:
+            if "$GITHUB_STEP_SUMMARY" not in line:
                 continue
             match = self.SUMMARY_ECHO_PATTERN.search(line)
             if not match:
@@ -504,10 +513,13 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
 
     @classmethod
     def _release_tag_from_text(cls, text: str) -> str:
-        for pattern in (cls.RELEASE_URL_PATTERN, cls.RELEASE_TAG_OUTPUT_PATTERN, cls.USING_TAG_PATTERN):
+        for pattern in (cls.RELEASE_TAG_OUTPUT_PATTERN, cls.USING_TAG_PATTERN):
             match = pattern.search(text)
             if match:
                 return match.group("tag")
+        release_url_matches = list(cls.RELEASE_URL_PATTERN.finditer(text))
+        if release_url_matches:
+            return release_url_matches[-1].group("tag")
         return ""
 
     def _release_looks_like_deprecated_workflow_output(self, payload: dict[str, Any]) -> bool:
