@@ -34,22 +34,36 @@ module.exports = {
     cliPrompts: {
         story_development: [
             './.dmtools/instructions/architecture/dmtools_core_scope.md',
-            './.dmtools/prompts/development_focus.md'
+            './.dmtools/prompts/development_focus.md',
+            './agents/instructions/common/codegraph_tools.md'
         ],
         bug_development: [
             './.dmtools/instructions/architecture/dmtools_core_scope.md',
-            './.dmtools/prompts/development_focus.md'
+            './.dmtools/prompts/development_focus.md',
+            './agents/instructions/common/codegraph_tools.md'
         ],
         bug_rca: [
-            './.dmtools/instructions/architecture/dmtools_core_scope.md'
+            './.dmtools/instructions/architecture/dmtools_core_scope.md',
+            './agents/instructions/common/codegraph_tools.md'
         ],
         pr_review: [
             './.dmtools/instructions/architecture/dmtools_core_scope.md',
-            './.dmtools/prompts/review_focus.md'
+            './.dmtools/prompts/review_focus.md',
+            './agents/instructions/common/codegraph_tools.md'
         ],
         pr_rework: [
             './.dmtools/instructions/architecture/dmtools_core_scope.md',
-            './.dmtools/prompts/rework_focus.md'
+            './.dmtools/prompts/rework_focus.md',
+            './agents/instructions/common/codegraph_tools.md'
+        ],
+        pr_test_automation_review: [
+            './agents/instructions/common/codegraph_tools.md'
+        ],
+        pr_test_automation_rework: [
+            './agents/instructions/common/codegraph_tools.md'
+        ],
+        test_case_automation: [
+            './agents/instructions/common/codegraph_tools.md'
         ]
     },
 
