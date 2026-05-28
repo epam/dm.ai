@@ -53,6 +53,10 @@ module.exports = {
         ]
     },
 
+    globalCliPrompts: [
+        './agents/instructions/common/codegraph_tools.md'
+    ],
+
     additionalInstructions: {
         po_refinement: [
             './agents/instructions/common/investigate_before_answer.md',

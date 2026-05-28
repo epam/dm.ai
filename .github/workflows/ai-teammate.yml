@@ -64,7 +64,6 @@ jobs:
           node-version: '20'
 
       - name: Configure npm global prefix
-        if: vars.AI_AGENT_PROVIDER == 'copilot'
         run: |
           npm config set prefix ~/.npm-global
           echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
@@ -111,15 +110,40 @@ jobs:
           fi
           echo "Using Copilot model: ${COPILOT_MODEL}"
 
-      - name: Install DMTools CLI v1.7.180
-        run: |
-          curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.180/install.sh | bash -s -- v1.7.180
+      - name: Export tool cache keys
+        run: bash agents/setup/cache.sh keys dmtools:v1.7.196 codegraph
 
-      - name: Add DMTools to PATH
-        run: echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
+      - name: Cache DMTools
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DMTOOLS_CACHE_PATH }}
+          key: ${{ env.DMTOOLS_CACHE_KEY }}
+          restore-keys: |
+            dmtools-
 
-      - name: Verify DMTools Installation
-        run: dmtools -v || echo "dmtools version check failed"
+      - name: Cache CodeGraph binary
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CODEGRAPH_CACHE_PATH }}
+          key: ${{ env.CODEGRAPH_CACHE_KEY }}
+          restore-keys: |
+            ${{ runner.os }}-npm-global-codegraph-
+            ${{ runner.os }}-npm-global-
+
+      - name: Cache CodeGraph index
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CODEGRAPH_INDEX_CACHE_PATH }}
+          key: ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-${{ github.sha }}
+          restore-keys: |
+            ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-${{ github.ref_name }}-
+            ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-
+
+      - name: Install DMTools v1.7.196
+        run: bash agents/setup/install.sh dmtools:v1.7.196
+
+      - name: Install and init CodeGraph
+        run: bash agents/setup/codegraph.sh
 
       - name: Configure Git Author
         run: |
@@ -129,7 +153,7 @@ jobs:
 
       - name: Run AI Teammate
         env:
-          PATH: "/home/runner/.local/bin:/home/runner/.dmtools/bin:/bin:/usr/bin:$PATH"
+          PATH: "/home/runner/.local/bin:/home/runner/.dmtools/bin:/home/runner/.npm-global/bin:/bin:/usr/bin:$PATH"
 
           # Jira Configuration
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
