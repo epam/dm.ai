@@ -16,6 +16,7 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public class CommandLineUtils {
 
@@ -60,6 +61,23 @@ public class CommandLineUtils {
      * @throws InterruptedException If the current thread is interrupted
      */
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, null);
+    }
+
+    /**
+     * Runs a command-line command with full options and an optional per-line output consumer.
+     *
+     * @param command The command to run
+     * @param workingDirectory The working directory for the command (null to use current directory)
+     * @param additionalEnv Additional environment variables to set
+     * @param lineConsumer Optional consumer called for each output line as it is produced (null to skip)
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer)
             throws IOException, InterruptedException {
 
         logger.debug("Running command: {}", SecurityUtils.maskCommand(command));
@@ -106,6 +124,13 @@ public class CommandLineUtils {
             while ((line = reader.readLine()) != null) {
                 logger.info(line);
                 output.append(line).append(System.lineSeparator());
+                if (lineConsumer != null) {
+                    try {
+                        lineConsumer.accept(line);
+                    } catch (Exception e) {
+                        logger.warn("lineConsumer threw exception on line, ignoring: {}", e.getMessage());
+                    }
+                }
             }
         }
 

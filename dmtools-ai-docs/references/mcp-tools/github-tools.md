@@ -1,8 +1,8 @@
 # GitHub MCP Tools Reference
 
-**Total tools**: 27
+**Total tools**: 33
 **Integration key**: `github`
-**Categories**: `pull_requests`, `actions`
+**Categories**: `pull_requests`, `actions`, `releases`, `commits`
 
 ## Quick Start
 
@@ -34,6 +34,58 @@ dmtools github_list_prs workspace=IstiN repository=dmtools state=open
 ```
 
 Returns an array of pull request objects with `number`, `title`, `state`, `user`, `head`, `base`, `merged_at`, etc.
+
+---
+
+### `github_list_prs_filtered`
+
+List pull requests filtered by a **Java regex on the PR title**. Fetches all PRs matching the state and returns only those whose title contains a regex match. Useful for large repositories to avoid loading the full history.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `state` | String | ✅ | `open`, `closed`, or `merged` |
+| `titleRegex` | String | ✅ | Java regex matched against PR title (substring match via `find()`). Example: `^feat\(`, `TICKET-\d+`, `release/\d+` |
+
+```bash
+# Only PRs whose title starts with "feat("
+dmtools github_list_prs_filtered workspace=IstiN repository=dmtools state=merged titleRegex="^feat\("
+
+# PRs related to a Jira ticket
+dmtools github_list_prs_filtered workspace=IstiN repository=my-app state=merged titleRegex="PROJ-\d+"
+```
+
+```js
+// In a JS agent
+const featurePRs = github_list_prs_filtered('IstiN', 'dmtools', 'merged', '^feat\\(');
+```
+
+---
+
+### `github_get_commits_from_branches`
+
+Fetch commits from **all branches whose name matches a regex pattern**, aggregated and de-duplicated by commit hash. Ideal for collecting commits from `feature/*`, `release/*`, or similar branch groups without specifying each branch individually.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `branchNameRegex` | String | ✅ | Java regex matched against branch names. Example: `^feature/`, `release/\d+` |
+| `since` | String | ❌ | ISO date `yyyy-MM-dd` — only commits after this date |
+
+```bash
+# All commits from feature/* branches since Jan 2024
+dmtools github_get_commits_from_branches workspace=IstiN repository=dmtools branchNameRegex="^feature/" since=2024-01-01
+
+# Commits from all release branches
+dmtools github_get_commits_from_branches workspace=IstiN repository=my-app branchNameRegex="^release/"
+```
+
+```js
+// In a JS agent
+const featureCommits = github_get_commits_from_branches('IstiN', 'dmtools', '^feature/', '2024-01-01');
+```
 
 ---
 
@@ -867,6 +919,128 @@ function extractFirstError(logs) {
 | `jira_search_by_jql` | Check if bug already exists (dedup via label) |
 | `jira_create_ticket_basic` | Create the Bug ticket |
 | `jira_add_label` | Add deduplication label `gh-run-{runId}` |
+
+---
+
+## Release Asset Tools
+
+These two tools enable storing binary files (screenshots, logs, ZIPs, etc.) as GitHub release assets. Because the standard GitHub UI drag-and-drop upload requires browser cookies unavailable to PATs, the recommended pattern is to create a **draft release** in the same repository and use it as an asset store. Assets are accessible to anyone with read access to that repository.
+
+### `github_get_or_create_draft_release`
+
+Find an existing draft release by tag name (or by release name as fallback) and return it, or create a new one if none is found.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `tagName` | String | ✅ | Tag name for the release (e.g. `mcp-assets-v1`). Used as the primary lookup key. |
+| `releaseName` | String | ❌ | Human-readable release title. Defaults to `tagName` when not set. Used as fallback lookup key if no tag match is found. |
+
+Returns the full GitHub release JSON object (including `id`, `upload_url`, `html_url`, etc.).
+
+> ⚠️ **Guard**: if a release with the given tag/name exists but is already **published** (`draft=false`), the tool throws an error to prevent accidentally using a live release as storage. Use a dedicated tag such as `mcp-assets-storage`.
+
+```bash
+dmtools github_get_or_create_draft_release workspace=IstiN repository=dmtools-agents tagName=mcp-assets-v1 releaseName="MCP Asset Store"
+```
+
+---
+
+### `github_upload_release_asset`
+
+Upload a local file to an existing GitHub release as a release asset. The release must already exist; use `github_get_or_create_draft_release` first to obtain one.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `releaseId` | String | ✅ | Numeric release ID (from the `id` field of the release JSON) |
+| `filePath` | String | ✅ | Absolute or workspace-relative path of the file to upload |
+| `assetName` | String | ❌ | File name shown in GitHub UI. Defaults to the base name of `filePath`. |
+| `contentType` | String | ❌ | MIME type. Auto-detected if omitted, falls back to `application/octet-stream`. |
+| `label` | String | ❌ | Optional human-readable label displayed alongside the asset in the GitHub UI |
+| `overwrite` | String | ❌ | Set to `"true"` to automatically delete any existing asset with the same name before uploading. Default: `false`. |
+
+Returns the full GitHub asset JSON object (including `id`, `browser_download_url`, `size`, etc.).
+
+Content-type is auto-detected via `Files.probeContentType()` / `URLConnection.guessContentTypeFromName()`, falling back to `application/octet-stream`.
+
+```bash
+# Step 1 — ensure the draft release exists
+dmtools github_get_or_create_draft_release workspace=IstiN repository=dmtools-agents tagName=mcp-assets-v1
+
+# Step 2 — upload a file (use the `id` from step 1)
+dmtools github_upload_release_asset workspace=IstiN repository=dmtools-agents releaseId=323965673 filePath=/tmp/screenshot.png assetName=screenshot.png label="PR #42 screenshot"
+
+# Step 2 (overwrite) — replace file if it already exists in the release
+dmtools github_upload_release_asset workspace=IstiN repository=dmtools-agents releaseId=323965673 filePath=/tmp/screenshot.png assetName=screenshot.png overwrite=true
+```
+
+**Typical two-step PR attachment pattern**
+
+```js
+// 1. Get or create the draft release that acts as an asset store
+const releaseJson = JSON.parse(
+  github_get_or_create_draft_release({ workspace, repository, tagName: 'mcp-assets-v1' })
+);
+
+// 2. Upload the file and get the download URL (overwrite if re-running)
+const assetJson = JSON.parse(
+  github_upload_release_asset({
+    workspace, repository,
+    releaseId: String(releaseJson.id),
+    filePath: '/tmp/attachment.png',
+    assetName: 'attachment.png',
+    overwrite: 'true'
+  })
+);
+
+// 3. Embed in a PR comment as a markdown image or link
+github_add_pr_comment({
+  workspace, repository,
+  pullRequestId: String(prId),
+  comment: `Screenshot: ![attachment](${assetJson.browser_download_url})`
+});
+```
+
+---
+
+### `github_list_release_assets`
+
+List all assets attached to a GitHub release.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `releaseId` | String | ✅ | Numeric release ID |
+
+Returns a JSON array of asset objects, each containing `id`, `name`, `size`, `state`, and `browser_download_url`.
+
+```bash
+dmtools github_list_release_assets workspace=IstiN repository=dmtools-agents releaseId=323965673
+```
+
+---
+
+### `github_delete_release_asset`
+
+Delete a GitHub release asset by its asset ID. Use `github_list_release_assets` to find asset IDs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitHub owner or organization name |
+| `repository` | String | ✅ | Repository name |
+| `assetId` | String | ✅ | Numeric asset ID to delete (from `github_list_release_assets` → `id`) |
+
+```bash
+# List assets first to find the ID
+dmtools github_list_release_assets workspace=IstiN repository=dmtools-agents releaseId=323965673
+
+# Then delete by ID
+dmtools github_delete_release_asset workspace=IstiN repository=dmtools-agents assetId=422721847
+```
 
 ---
 

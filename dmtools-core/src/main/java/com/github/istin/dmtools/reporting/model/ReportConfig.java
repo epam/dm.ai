@@ -59,6 +59,16 @@ public class ReportConfig {
     @Getter
     private String catchAllGroup;
 
+    /**
+     * Names to completely skip from all statistics (bots, service accounts, etc.).
+     * Unlike the employees list (which maps unknown names to "Unknown"), entries here
+     * are excluded entirely — they produce no KeyTime entries at all.
+     * Example: ["dependabot[bot]", "github-actions[bot]", "sonar-cloud"]
+     */
+    @Setter
+    @Getter
+    private List<String> bots;
+
     @Setter
     @Getter
     private List<CustomChartConfig> customCharts;

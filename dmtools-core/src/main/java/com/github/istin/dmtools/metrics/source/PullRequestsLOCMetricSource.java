@@ -7,13 +7,17 @@ import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.ICommit;
 import com.github.istin.dmtools.common.model.IDiffStats;
 import com.github.istin.dmtools.common.model.IStats;
+import com.github.istin.dmtools.common.model.ITag;
 import com.github.istin.dmtools.report.model.KeyTime;
 import com.github.istin.dmtools.team.IEmployees;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Collects lines-of-code metrics from commits on a target branch.
@@ -21,6 +25,11 @@ import java.util.List;
  * Supports optional since date to limit the range of commits fetched.
  * Uses (additions + deletions) as weight on the KeyTime.
  * Works with GitHub, GitLab, Bitbucket via SourceCode interface.
+ *
+ * Supports two branch selection modes:
+ * - {@code branch}: exact branch name (existing behavior)
+ * - {@code branchNameRegex}: regex matched against all branch names; commits from all
+ *   matching branches are aggregated and de-duplicated by commit hash.
  */
 public class PullRequestsLOCMetricSource extends CommonSourceCollector {
 
@@ -31,27 +40,50 @@ public class PullRequestsLOCMetricSource extends CommonSourceCollector {
     private final String branch;
     private final String since;
     private final SourceCode sourceCode;
+    private final Pattern branchPattern;
+    private final Pattern commitMessagePattern;
 
     public PullRequestsLOCMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees) {
+        this(workspace, repo, branch, since, sourceCode, employees, null, null);
+    }
+
+    public PullRequestsLOCMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees, String branchNameRegex) {
+        this(workspace, repo, branch, since, sourceCode, employees, branchNameRegex, null);
+    }
+
+    public PullRequestsLOCMetricSource(String workspace, String repo, String branch, String since, SourceCode sourceCode, IEmployees employees, String branchNameRegex, String commitMessageRegex) {
         super(employees);
         this.workspace = workspace;
         this.repo = repo;
         this.branch = branch;
         this.since = since;
         this.sourceCode = sourceCode;
+        this.branchPattern = branchNameRegex != null && !branchNameRegex.isEmpty() ? Pattern.compile(branchNameRegex) : null;
+        this.commitMessagePattern = commitMessageRegex != null && !commitMessageRegex.isEmpty() ? Pattern.compile(commitMessageRegex) : null;
     }
 
     @Override
     public List<KeyTime> performSourceCollection(boolean isPersonalized, String metricName) throws Exception {
+        List<ICommit> commits;
+        if (branchPattern != null) {
+            commits = collectCommitsFromMatchingBranches();
+        } else {
+            commits = sourceCode.getCommitsFromBranch(workspace, repo, branch, since, null);
+            logger.info("Fetching LOC stats for {} commits from branch '{}' (since: {})", commits.size(), branch, since != null ? since : "all");
+        }
+
         List<KeyTime> data = new ArrayList<>();
-        List<ICommit> commits = sourceCode.getCommitsFromBranch(workspace, repo, branch, since, null);
-        logger.info("Fetching LOC stats for {} commits from branch '{}' (since: {})", commits.size(), branch, since != null ? since : "all");
         for (ICommit model : commits) {
             if (model.getAuthor() == null) {
                 continue;
             }
             String displayName = model.getAuthor().getFullName();
             if (displayName == null) {
+                continue;
+            }
+
+            String msg = model.getMessage();
+            if (commitMessagePattern != null && (msg == null || !commitMessagePattern.matcher(msg).find())) {
                 continue;
             }
 
@@ -89,11 +121,37 @@ public class PullRequestsLOCMetricSource extends CommonSourceCollector {
                 model.getCommitterDate(), isPersonalized ? displayName : metricName);
             keyTime.setWeight(additions + deletions);
             keyTime.setLink(model.getUrl());
-            String msg = model.getMessage();
             String summary = (msg != null ? msg.split("\\n")[0] : "") + " (+" + additions + " -" + deletions + ")";
             keyTime.setSummary(summary);
             data.add(keyTime);
         }
         return data;
+    }
+
+    private List<ICommit> collectCommitsFromMatchingBranches() throws Exception {
+        List<ITag> branches = sourceCode.getBranches(workspace, repo);
+        List<String> matchingBranches = new ArrayList<>();
+        for (ITag b : branches) {
+            String name = b.getName();
+            if (name != null && branchPattern.matcher(name).find()) {
+                matchingBranches.add(name);
+            }
+        }
+        logger.info("branchNameRegex '{}' matched {} of {} branches in {}/{}",
+            branchPattern.pattern(), matchingBranches.size(), branches.size(), workspace, repo);
+
+        Set<String> seenHashes = new LinkedHashSet<>();
+        List<ICommit> result = new ArrayList<>();
+        for (String matchedBranch : matchingBranches) {
+            List<ICommit> branchCommits = sourceCode.getCommitsFromBranch(workspace, repo, matchedBranch, since, null);
+            for (ICommit commit : branchCommits) {
+                String key = commit.getHash() != null ? commit.getHash() : commit.getId();
+                if (key != null && seenHashes.add(key)) {
+                    result.add(commit);
+                }
+            }
+        }
+        logger.info("Collected {} unique LOC commits from {} matching branches", result.size(), matchingBranches.size());
+        return result;
     }
 }

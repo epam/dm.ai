@@ -3,17 +3,30 @@
 
 package com.github.istin.dmtools.reporting;
 
+import com.github.istin.dmtools.common.code.SourceCode;
+import com.github.istin.dmtools.common.model.IActivity;
+import com.github.istin.dmtools.common.model.ICommit;
+import com.github.istin.dmtools.common.model.IPullRequest;
+import com.github.istin.dmtools.common.model.IUser;
+import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.report.model.KeyTime;
+import com.github.istin.dmtools.reporting.datasource.DataSourceFactory;
+import com.github.istin.dmtools.reporting.metrics.MetricFactory;
 import com.github.istin.dmtools.reporting.model.*;
+import okhttp3.Response;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for ReportGenerator
@@ -545,6 +558,142 @@ class ReportGeneratorTest {
         assertTrue(weightLabels.contains("Input"));
     }
 
+    @Test
+    void testCollectDataFromAllSources_retriesOnlyInterruptedGitHubMetric() throws Exception {
+        SourceCode sourceCode = mock(SourceCode.class);
+        IPullRequest pullRequest = mockPullRequest("123", "PR title");
+        IActivity approvalActivity = mock(IActivity.class);
+        IUser approver = mock(IUser.class);
+        when(approver.getFullName()).thenReturn("Reviewer");
+        when(approvalActivity.getApproval()).thenReturn(approver);
+
+        Response rateLimitResponse = mock(Response.class);
+        when(rateLimitResponse.header("Retry-After")).thenReturn(null);
+        when(rateLimitResponse.header("X-RateLimit-Reset"))
+            .thenReturn(String.valueOf(System.currentTimeMillis() / 1000L));
+
+        when(sourceCode.getDefaultWorkspace()).thenReturn("workspace");
+        when(sourceCode.getDefaultRepository()).thenReturn("repo");
+        when(sourceCode.getDefaultBranch()).thenReturn("main");
+        // First call throws rate-limit; retry succeeds and populates the shared cache;
+        // PullRequestsApprovalsMetricSource then reads from the cache without an extra API call.
+        when(sourceCode.pullRequests(eq("workspace"), eq("repo"), eq(IPullRequest.PullRequestState.STATE_MERGED), eq(true), any(Calendar.class)))
+            .thenThrow(new RestClient.RateLimitException("rate limit", "rate limit", rateLimitResponse, 429))
+            .thenReturn(List.of(pullRequest));
+        when(sourceCode.pullRequestActivities("workspace", "repo", "123"))
+            .thenReturn(List.of(approvalActivity));
+
+        ReportGenerator generator = new TestableReportGenerator(sourceCode);
+
+        Map<String, Map<String, ReportGenerator.DataSourceResult>> results =
+            invokeCollectDataFromAllSources(generator, sourceCode, createPullRequestReportConfig());
+
+        assertEquals(1, results.size());
+        assertTrue(results.containsKey("pullRequests"));
+        assertEquals(2, results.get("pullRequests").size());
+        assertTrue(results.get("pullRequests").containsKey("PullRequestsMetricSource"));
+        assertTrue(results.get("pullRequests").containsKey("PullRequestsApprovalsMetricSource"));
+        // 2 calls: first (rate-limited) + retry — the second metric source uses the cache
+        verify(sourceCode, times(2))
+            .pullRequests(eq("workspace"), eq("repo"), eq(IPullRequest.PullRequestState.STATE_MERGED), eq(true), any(Calendar.class));
+        verify(sourceCode, times(1)).pullRequestActivities("workspace", "repo", "123");
+    }
+
+    @Test
+    void testCollectDataFromAllSources_usesFallbackDelayWhenRateLimitMetadataMissing() throws Exception {
+        SourceCode sourceCode = mock(SourceCode.class);
+        ICommit commit = mock(ICommit.class);
+        IUser author = mock(IUser.class);
+        Calendar commitDate = Calendar.getInstance();
+        commitDate.set(2025, Calendar.JANUARY, 15, 10, 0, 0);
+        commitDate.set(Calendar.MILLISECOND, 0);
+
+        when(author.getFullName()).thenReturn("Author");
+        when(commit.getAuthor()).thenReturn(author);
+        when(commit.getHash()).thenReturn("abc123");
+        when(commit.getCommitterDate()).thenReturn(commitDate);
+        when(commit.getMessage()).thenReturn("Commit message");
+        when(commit.getUrl()).thenReturn("https://github.test/commit/abc123");
+
+        Response rateLimitResponse = mock(Response.class);
+        when(rateLimitResponse.header("Retry-After")).thenReturn("invalid");
+        when(rateLimitResponse.header("X-RateLimit-Reset")).thenReturn("invalid");
+
+        when(sourceCode.getDefaultWorkspace()).thenReturn("workspace");
+        when(sourceCode.getDefaultRepository()).thenReturn("repo");
+        when(sourceCode.getDefaultBranch()).thenReturn("main");
+        when(sourceCode.getCommitsFromBranch("workspace", "repo", "main", "2025-01-01", null))
+            .thenThrow(new RestClient.RateLimitException("rate limit", "rate limit", rateLimitResponse, 429))
+            .thenReturn(List.of(commit));
+
+        TestableReportGenerator generator = new TestableReportGenerator(sourceCode);
+
+        Map<String, Map<String, ReportGenerator.DataSourceResult>> results =
+            invokeCollectDataFromAllSources(generator, sourceCode, createCommitsReportConfig());
+
+        assertEquals(1, results.size());
+        assertTrue(results.containsKey("commits"));
+        assertTrue(results.get("commits").containsKey("CommitsMetricSource"));
+        assertEquals(List.of(60000L), generator.getObservedDelays());
+        verify(sourceCode, times(2)).getCommitsFromBranch("workspace", "repo", "main", "2025-01-01", null);
+    }
+
+    @Test
+    void testCollectDataFromAllSources_skipsMetricOnNonRetryableError() throws Exception {
+        SourceCode sourceCode = mock(SourceCode.class);
+        IPullRequest pullRequest = mockPullRequest("123", "PR title");
+        IActivity approvalActivity = mock(IActivity.class);
+        IUser approver = mock(IUser.class);
+        when(approver.getFullName()).thenReturn("Reviewer");
+        when(approvalActivity.getApproval()).thenReturn(approver);
+
+        when(sourceCode.getDefaultWorkspace()).thenReturn("workspace");
+        when(sourceCode.getDefaultRepository()).thenReturn("repo");
+        when(sourceCode.getDefaultBranch()).thenReturn("main");
+
+        // PullRequestsMetricSource throws a non-retryable 404
+        when(sourceCode.pullRequests(eq("workspace"), eq("repo"), eq(IPullRequest.PullRequestState.STATE_MERGED), eq(true), any(Calendar.class)))
+            .thenThrow(new RestClient.RestClientException("Not Found", "Not Found", 404));
+
+        // PullRequestsApprovalsMetricSource succeeds normally
+        when(sourceCode.pullRequestActivities("workspace", "repo", "123"))
+            .thenReturn(List.of(approvalActivity));
+
+        ReportGenerator generator = new TestableReportGenerator(sourceCode);
+
+        // Should NOT throw — the 404 metric is skipped, the rest of the job continues
+        Map<String, Map<String, ReportGenerator.DataSourceResult>> results =
+            invokeCollectDataFromAllSources(generator, sourceCode, createPullRequestReportConfig());
+
+        // Both metric keys are present; the failed one returns an empty result
+        assertTrue(results.containsKey("pullRequests"));
+        Map<String, ReportGenerator.DataSourceResult> sourceResults = results.get("pullRequests");
+        assertTrue(sourceResults.containsKey("PullRequestsMetricSource"), "Failed metric key should still be present");
+        assertEquals(0, sourceResults.get("PullRequestsMetricSource").getAllKeyTimes().size(),
+            "Failed metric should yield empty result, not crash");
+        assertTrue(sourceResults.containsKey("PullRequestsApprovalsMetricSource"),
+            "Subsequent metric should still be collected after a sibling failure");
+    }
+
+
+    @Test
+    void testCalculateRateLimitDelayMs_usesGitHubResetHeaderBeyondDefaultRetryCap() {
+        TestableReportGenerator generator = new TestableReportGenerator(mock(SourceCode.class));
+        Response rateLimitResponse = mock(Response.class);
+        long resetTimeSeconds = (System.currentTimeMillis() / 1000L) + 120L;
+
+        when(rateLimitResponse.header("Retry-After")).thenReturn(null);
+        when(rateLimitResponse.header("X-RateLimit-Reset")).thenReturn(String.valueOf(resetTimeSeconds));
+
+        long delayMs = generator.calculateRateLimitDelayMs(
+            new RestClient.RateLimitException("rate limit", "rate limit", rateLimitResponse, 429),
+            1
+        );
+
+        assertTrue(delayMs >= 119000L, "Delay should honor the reset timestamp rather than fall back to 60s");
+        assertTrue(delayMs <= 122000L, "Delay should stay close to the reset timestamp plus buffer");
+    }
+
     /**
      * Helper method to create a KeyTime for testing
      */
@@ -552,5 +701,103 @@ class ReportGeneratorTest {
         KeyTime kt = new KeyTime(key, when, who);
         kt.setWeight(1.0);
         return kt;
+    }
+
+    private IPullRequest mockPullRequest(String id, String title) {
+        IPullRequest pullRequest = mock(IPullRequest.class);
+        IUser author = mock(IUser.class);
+        when(author.getFullName()).thenReturn("Author");
+        when(pullRequest.getAuthor()).thenReturn(author);
+        when(pullRequest.getId()).thenReturn(Integer.valueOf(id));
+        when(pullRequest.getTitle()).thenReturn(title);
+        when(pullRequest.getClosedDate()).thenReturn(System.currentTimeMillis());
+        return pullRequest;
+    }
+
+    private ReportConfig createPullRequestReportConfig() {
+        MetricConfig pullRequestsMetric = new MetricConfig();
+        pullRequestsMetric.setName("PullRequestsMetricSource");
+        pullRequestsMetric.setParams(new HashMap<>());
+
+        MetricConfig approvalsMetric = new MetricConfig();
+        approvalsMetric.setName("PullRequestsApprovalsMetricSource");
+        approvalsMetric.setParams(new HashMap<>());
+
+        DataSourceConfig dataSourceConfig = new DataSourceConfig();
+        dataSourceConfig.setName("pullRequests");
+        dataSourceConfig.setParams(new HashMap<>(Map.of(
+            "workspace", "workspace",
+            "repository", "repo"
+        )));
+        dataSourceConfig.setMetrics(List.of(pullRequestsMetric, approvalsMetric));
+
+        ReportConfig config = new ReportConfig();
+        config.setStartDate("2025-01-01");
+        config.setDataSources(List.of(dataSourceConfig));
+        config.setTimeGroupings(Collections.singletonList(new TimeGroupingConfig()));
+        return config;
+    }
+
+    private ReportConfig createCommitsReportConfig() {
+        MetricConfig commitsMetric = new MetricConfig();
+        commitsMetric.setName("CommitsMetricSource");
+        commitsMetric.setParams(new HashMap<>());
+
+        DataSourceConfig dataSourceConfig = new DataSourceConfig();
+        dataSourceConfig.setName("commits");
+        dataSourceConfig.setParams(new HashMap<>(Map.of(
+            "workspace", "workspace",
+            "repository", "repo",
+            "branch", "main"
+        )));
+        dataSourceConfig.setMetrics(List.of(commitsMetric));
+
+        ReportConfig config = new ReportConfig();
+        config.setStartDate("2025-01-01");
+        config.setDataSources(List.of(dataSourceConfig));
+        config.setTimeGroupings(Collections.singletonList(new TimeGroupingConfig()));
+        return config;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Map<String, ReportGenerator.DataSourceResult>> invokeCollectDataFromAllSources(
+        ReportGenerator generator,
+        SourceCode sourceCode,
+        ReportConfig config
+    ) throws Exception {
+        Method method = ReportGenerator.class.getDeclaredMethod(
+            "collectDataFromAllSources",
+            ReportConfig.class,
+            com.github.istin.dmtools.common.tracker.TrackerClient.class,
+            SourceCode.class,
+            DataSourceFactory.class,
+            MetricFactory.class
+        );
+        method.setAccessible(true);
+        return (Map<String, Map<String, ReportGenerator.DataSourceResult>>) method.invoke(
+            generator,
+            config,
+            null,
+            sourceCode,
+            new DataSourceFactory(),
+            new MetricFactory(null, sourceCode, null, null, config.getStartDate())
+        );
+    }
+
+    private static class TestableReportGenerator extends ReportGenerator {
+        private final List<Long> observedDelays = new ArrayList<>();
+
+        private TestableReportGenerator(SourceCode sourceCode) {
+            super(null, sourceCode);
+        }
+
+        @Override
+        protected void sleepBeforeRetry(long delayMs) {
+            observedDelays.add(delayMs);
+        }
+
+        private List<Long> getObservedDelays() {
+            return observedDelays;
+        }
     }
 }

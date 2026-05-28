@@ -23,12 +23,15 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
+import java.net.URLConnection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -117,6 +120,22 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String state,
             boolean checkAllRequests,
             Calendar startDate) throws IOException {
+        return pullRequests(workspace, repository, state, checkAllRequests, startDate, null);
+    }
+
+    @Override
+    public boolean supportsPullRequestTitleFiltering() {
+        return true;
+    }
+
+    @Override
+    public List<IPullRequest> pullRequests(
+            String workspace,
+            String repository,
+            String state,
+            boolean checkAllRequests,
+            Calendar startDate,
+            Pattern titlePattern) throws IOException {
         boolean isMerged = state.equalsIgnoreCase(IPullRequest.PullRequestState.STATE_MERGED);
         boolean isDeclined = state.equalsIgnoreCase(IPullRequest.PullRequestState.STATE_DECLINED);
         if (isMerged || isDeclined) {
@@ -129,7 +148,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         int currentPage = 1;
 
         while (true) {
-            String path = path(String.format("repos/%s/%s/pulls?state=%s&per_page=%d&page=%d",
+            String path = path(String.format("repos/%s/%s/pulls?state=%s&sort=updated&direction=desc&per_page=%d&page=%d",
                     workspace, repository, state, perPage, currentPage));
             GenericRequest getRequest = new GenericRequest(this, path);
             String response = execute(getRequest);
@@ -139,7 +158,20 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             }
 
             JSONArray pullRequestsInResponse = new JSONArray(response);
-            List<GitHubPullRequest> pullRequests = JSONModel.convertToModels(GitHubPullRequest.class, pullRequestsInResponse);
+            List<GitHubPullRequest> allOnPage = JSONModel.convertToModels(GitHubPullRequest.class, pullRequestsInResponse);
+
+            // Date-based stop: check the UNFILTERED page so that pages consisting entirely
+            // of declined (non-merged) PRs still advance the date cursor correctly.
+            // The request is sorted by updated date descending, so the last item on the page is the oldest.
+            boolean pastStartDate = false;
+            if (startDate != null && !allOnPage.isEmpty()) {
+                long oldestOnPage = getPaginationBoundaryDate(allOnPage.get(allOnPage.size() - 1));
+                if (oldestOnPage < startDate.getTimeInMillis()) {
+                    pastStartDate = true;
+                }
+            }
+
+            List<GitHubPullRequest> pullRequests = allOnPage;
             if (isMerged) {
                 pullRequests = pullRequests.stream()
                         .filter(GitHubPullRequest::isMerged)
@@ -149,9 +181,24 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
                         .filter(pr -> !pr.isMerged())
                         .collect(Collectors.toList());
             }
+
+            // Only keep PRs within the requested date window to bound memory usage
+            if (startDate != null) {
+                long startMillis = startDate.getTimeInMillis();
+                pullRequests = pullRequests.stream()
+                        .filter(pr -> getMetricDate(pr) >= startMillis)
+                        .collect(Collectors.toList());
+            }
+
+            if (titlePattern != null) {
+                pullRequests = pullRequests.stream()
+                        .filter(pr -> titlePattern.matcher(pr.getTitle() != null ? pr.getTitle() : "").find())
+                        .collect(Collectors.toList());
+            }
+
             allPullRequests.addAll(pullRequests);
 
-            if (startDate != null && !pullRequests.isEmpty() && pullRequests.get(pullRequests.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
+            if (pastStartDate) {
                 break;
             }
 
@@ -163,6 +210,26 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         }
 
         return allPullRequests;
+    }
+
+    private long getPaginationBoundaryDate(GitHubPullRequest pullRequest) {
+        Long updatedDate = pullRequest.getUpdatedDate();
+        if (updatedDate != null) {
+            return updatedDate;
+        }
+        return pullRequest.getCreatedDate();
+    }
+
+    private long getMetricDate(GitHubPullRequest pullRequest) {
+        Long closedDate = pullRequest.getClosedDate();
+        if (closedDate != null) {
+            return closedDate;
+        }
+        Long updatedDate = pullRequest.getUpdatedDate();
+        if (updatedDate != null) {
+            return updatedDate;
+        }
+        return pullRequest.getCreatedDate();
     }
 
     @MCPTool(
@@ -186,6 +253,68 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             state = "closed";
         }
         return pullRequests(workspace, repository, state, false, null);
+    }
+
+    @MCPTool(
+            name = "github_list_prs_filtered",
+            description = "List pull requests in a GitHub repository filtered by a regex pattern on the PR title. Fetches all PRs matching the given state and returns only those whose title matches the regex. Useful for large repos to narrow down results without loading entire history.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public List<IPullRequest> listPullRequestsFiltered(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "state", description = "The state of pull requests: 'open', 'closed', or 'merged'.", required = true, example = "merged")
+            String state,
+            @MCPParam(name = "titleRegex", description = "Java regular expression matched against the PR title (case-sensitive). Only PRs whose title contains a match are returned. Example: '^feat\\(.*\\)' or 'TICKET-\\d+'.", required = true, example = "^feat\\(")
+            String titleRegex) throws IOException {
+        if ("opened".equalsIgnoreCase(state)) state = "open";
+        if ("declined".equalsIgnoreCase(state)) state = "closed";
+        List<IPullRequest> all = pullRequests(workspace, repository, state, true, null);
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(titleRegex);
+        List<IPullRequest> filtered = new java.util.ArrayList<>();
+        for (IPullRequest pr : all) {
+            if (pattern.matcher(pr.getTitle() != null ? pr.getTitle() : "").find()) {
+                filtered.add(pr);
+            }
+        }
+        return filtered;
+    }
+
+    @MCPTool(
+            name = "github_get_commits_from_branches",
+            description = "Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually.",
+            integration = "github",
+            category = "commits"
+    )
+    public List<ICommit> getCommitsFromBranchesByRegex(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "branchNameRegex", description = "Java regular expression matched against branch names. All branches with a matching name are included. Example: '^feature/' or 'release/\\d+'.", required = true, example = "^feature/")
+            String branchNameRegex,
+            @MCPParam(name = "since", description = "Optional ISO date (yyyy-MM-dd) to limit commits to those after this date.", required = false, example = "2024-01-01")
+            String since) throws IOException {
+        List<ITag> branches = getBranches(workspace, repository);
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(branchNameRegex);
+        java.util.Set<String> seenHashes = new java.util.LinkedHashSet<>();
+        List<ICommit> result = new java.util.ArrayList<>();
+        for (ITag branch : branches) {
+            String name = branch.getName();
+            if (name != null && pattern.matcher(name).find()) {
+                List<ICommit> commits = getCommitsFromBranch(workspace, repository, name, since, null);
+                for (ICommit commit : commits) {
+                    String key = commit.getHash() != null ? commit.getHash() : commit.getId();
+                    if (key != null && seenHashes.add(key)) {
+                        result.add(commit);
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     @Override
@@ -275,6 +404,111 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return "Workflow '" + workflowId + "' triggered successfully on " + workspace + "/" + repository;
     }
 
+    @MCPTool(
+            name = "github_get_or_create_draft_release",
+            description = "Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release.",
+            integration = "github",
+            category = "releases"
+    )
+    public String getOrCreateDraftRelease(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "tagName", description = "The Git tag name for the release. Reused to find an existing draft release.", required = true, example = "pr-attachments-storage")
+            String tagName,
+            @MCPParam(name = "releaseName", description = "The human-readable release name. If empty, tagName is used.", required = false, example = "PR Attachments Storage")
+            String releaseName,
+            @MCPParam(name = "targetCommitish", description = "Optional branch or commit SHA the release should point to when created.", required = false, example = "main")
+            String targetCommitish,
+            @MCPParam(name = "body", description = "Optional Markdown release notes/body.", required = false, example = "Internal storage release for PR attachments.")
+            String body) throws IOException {
+        String normalizedReleaseName = isBlank(releaseName) ? tagName : releaseName.trim();
+        JSONObject existingRelease = findReleaseByTagOrName(workspace, repository, tagName, normalizedReleaseName);
+        if (existingRelease != null) {
+            if (!existingRelease.optBoolean("draft")) {
+                throw new IllegalStateException("Release '" + normalizedReleaseName + "' (" + tagName + ") already exists but is not a draft release.");
+            }
+            return existingRelease.toString();
+        }
+        return createRelease(workspace, repository, tagName, normalizedReleaseName, targetCommitish, body, true);
+    }
+
+    @MCPTool(
+            name = "github_upload_release_asset",
+            description = "Upload a local file as a GitHub release asset. Returns the uploaded asset metadata including browser_download_url. Set overwrite=true to automatically delete an existing asset with the same name before uploading.",
+            integration = "github",
+            category = "releases"
+    )
+    public String uploadReleaseAsset(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "releaseId", description = "The numeric GitHub release ID returned by github_get_or_create_draft_release.", required = true, example = "323096697")
+            String releaseId,
+            @MCPParam(name = "filePath", description = "Absolute or relative path to the local file to upload.", required = true, example = "/tmp/preview.png")
+            String filePath,
+            @MCPParam(name = "assetName", description = "Optional asset filename shown in GitHub. Defaults to the local filename.", required = false, example = "clip_123.png")
+            String assetName,
+            @MCPParam(name = "contentType", description = "Optional MIME type. Defaults to detected type or application/octet-stream.", required = false, example = "image/png")
+            String contentType,
+            @MCPParam(name = "label", description = "Optional display label for the uploaded asset.", required = false, example = "Screenshot")
+            String label,
+            @MCPParam(name = "overwrite", description = "If true, delete any existing asset with the same name before uploading. Defaults to false.", required = false, example = "true")
+            String overwrite) throws IOException {
+        File assetFile = new File(filePath);
+        if (!assetFile.exists()) {
+            throw new FileNotFoundException("Release asset file not found: " + assetFile.getAbsolutePath());
+        }
+        if (!assetFile.isFile()) {
+            throw new IllegalArgumentException("Release asset path must point to a file: " + assetFile.getAbsolutePath());
+        }
+        String resolvedAssetName = isBlank(assetName) ? assetFile.getName() : assetName.trim();
+        if (Boolean.parseBoolean(overwrite)) {
+            deleteExistingAssetByName(workspace, repository, releaseId, resolvedAssetName);
+        }
+        String resolvedContentType = resolveAssetContentType(assetFile, contentType);
+        String uploadUrl = buildReleaseAssetUploadUrl(workspace, repository, releaseId, resolvedAssetName, label);
+        return uploadReleaseAssetBinary(uploadUrl, assetFile, resolvedContentType);
+    }
+
+    @MCPTool(
+            name = "github_delete_release_asset",
+            description = "Delete a GitHub release asset by its asset ID. Use github_list_release_assets to find asset IDs.",
+            integration = "github",
+            category = "releases"
+    )
+    public void deleteReleaseAsset(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "assetId", description = "The numeric asset ID to delete.", required = true, example = "422721847")
+            String assetId) throws IOException {
+        String path = path(String.format("repos/%s/%s/releases/assets/%s", workspace, repository, assetId));
+        GenericRequest deleteRequest = new GenericRequest(this, path);
+        delete(deleteRequest);
+    }
+
+    @MCPTool(
+            name = "github_list_release_assets",
+            description = "List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url.",
+            integration = "github",
+            category = "releases"
+    )
+    public String listReleaseAssets(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "releaseId", description = "The numeric GitHub release ID.", required = true, example = "323096697")
+            String releaseId) throws IOException {
+        String path = path(String.format("repos/%s/%s/releases/%s/assets", workspace, repository, releaseId));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        return execute(getRequest);
+    }
+
     private String getPullRequestResponse(String workspace, String repository, String pullRequestId, boolean isDiff) throws IOException {
         String path = path(String.format("repos/%s/%s/pulls/%s", workspace, repository, pullRequestId));
         GenericRequest getRequest = new GenericRequest(this, path);
@@ -286,6 +520,122 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     private static void addDiffHeader(GenericRequest getRequest) {
         getRequest.header("Accept", "application/vnd.github.diff");
+    }
+
+    private void deleteExistingAssetByName(String workspace, String repository, String releaseId, String assetName) throws IOException {
+        String assetsPath = path(String.format("repos/%s/%s/releases/%s/assets", workspace, repository, releaseId));
+        GenericRequest getRequest = new GenericRequest(this, assetsPath);
+        String response = execute(getRequest);
+        if (response == null || response.isEmpty()) {
+            return;
+        }
+        JSONArray assets = new JSONArray(response);
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.getJSONObject(i);
+            if (assetName.equals(asset.optString("name"))) {
+                String assetId = String.valueOf(asset.getLong("id"));
+                String deletePath = path(String.format("repos/%s/%s/releases/assets/%s", workspace, repository, assetId));
+                GenericRequest deleteRequest = new GenericRequest(this, deletePath);
+                delete(deleteRequest);
+                return;
+            }
+        }
+    }
+
+    private JSONObject findReleaseByTagOrName(String workspace, String repository, String tagName, String releaseName) throws IOException {
+        int perPage = 100;
+        int page = 1;
+        JSONObject releaseNameMatch = null;
+        while (true) {
+            String releasesPath = path(String.format("repos/%s/%s/releases?per_page=%d&page=%d",
+                    workspace, repository, perPage, page));
+            GenericRequest getRequest = new GenericRequest(this, releasesPath);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                return null;
+            }
+            JSONArray releases = new JSONArray(response);
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.getJSONObject(i);
+                String existingTagName = release.optString("tag_name");
+                String existingReleaseName = release.optString("name");
+                if (tagName.equals(existingTagName)) {
+                    return release;
+                }
+                if (releaseNameMatch == null && releaseName.equals(existingReleaseName)) {
+                    releaseNameMatch = release;
+                }
+            }
+            if (releases.length() < perPage) {
+                return releaseNameMatch;
+            }
+            page++;
+        }
+    }
+
+    private String createRelease(String workspace, String repository, String tagName, String releaseName,
+                                 String targetCommitish, String body, boolean draft) throws IOException {
+        String releasesPath = path(String.format("repos/%s/%s/releases", workspace, repository));
+        GenericRequest postRequest = new GenericRequest(this, releasesPath);
+        JSONObject releaseBody = new JSONObject();
+        releaseBody.put("tag_name", tagName);
+        releaseBody.put("name", releaseName);
+        releaseBody.put("draft", draft);
+        if (!isBlank(targetCommitish)) {
+            releaseBody.put("target_commitish", targetCommitish.trim());
+        }
+        if (!isBlank(body)) {
+            releaseBody.put("body", body);
+        }
+        postRequest.setBody(releaseBody.toString());
+        return post(postRequest);
+    }
+
+    private String buildReleaseAssetUploadUrl(String workspace, String repository, String releaseId, String assetName, String label) {
+        okhttp3.HttpUrl.Builder builder = Objects.requireNonNull(okhttp3.HttpUrl.parse(
+                String.format("https://uploads.github.com/repos/%s/%s/releases/%s/assets", workspace, repository, releaseId)))
+                .newBuilder()
+                .addQueryParameter("name", assetName);
+        if (!isBlank(label)) {
+            builder.addQueryParameter("label", label.trim());
+        }
+        return builder.build().toString();
+    }
+
+    private String resolveAssetContentType(File assetFile, String explicitContentType) throws IOException {
+        if (!isBlank(explicitContentType)) {
+            return explicitContentType.trim();
+        }
+        String detected = Files.probeContentType(assetFile.toPath());
+        if (isBlank(detected)) {
+            detected = URLConnection.guessContentTypeFromName(assetFile.getName());
+        }
+        return isBlank(detected) ? "application/octet-stream" : detected;
+    }
+
+    protected String uploadReleaseAssetBinary(String uploadUrl, File assetFile, String contentType) throws IOException {
+        okhttp3.MediaType mediaType = okhttp3.MediaType.parse(contentType);
+        if (mediaType == null) {
+            throw new IllegalArgumentException("Invalid content type for release asset upload: " + contentType);
+        }
+        okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(assetFile, mediaType);
+        okhttp3.Request request = sign(new okhttp3.Request.Builder())
+                .url(uploadUrl)
+                .header("Content-Type", contentType)
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .post(requestBody)
+                .build();
+        try (okhttp3.Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw AbstractRestClient.printAndCreateException(request, response);
+            }
+            return response.body() != null ? response.body().string() : "";
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     @Override
@@ -431,26 +781,47 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String repository,
             @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
             String pullRequestId) throws IOException {
-        // Fetch review-level activities (approvals, review comments, change requests)
-        String reviewsPath = path(String.format("repos/%s/%s/pulls/%s/reviews", workspace, repository, pullRequestId));
-        GenericRequest reviewsRequest = new GenericRequest(this, reviewsPath);
-        String reviewsResponse = execute(reviewsRequest);
+        // Fetch review-level activities (approvals, review comments, change requests) with pagination
         List<IActivity> activities = new ArrayList<>();
-        if (reviewsResponse != null) {
-            activities.addAll(JSONModel.convertToModels(GitHubActivity.class, new JSONArray(reviewsResponse)));
+        int perPage = 100;
+        int currentPage = 1;
+        while (true) {
+            String reviewsPath = path(String.format("repos/%s/%s/pulls/%s/reviews?per_page=%d&page=%d",
+                    workspace, repository, pullRequestId, perPage, currentPage));
+            GenericRequest reviewsRequest = new GenericRequest(this, reviewsPath);
+            String reviewsResponse = execute(reviewsRequest);
+            if (reviewsResponse == null || reviewsResponse.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(reviewsResponse);
+            activities.addAll(JSONModel.convertToModels(GitHubActivity.class, pageArray));
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            currentPage++;
         }
 
-        // Also fetch inline review comments (/pulls/{id}/comments)
+        // Also fetch inline review comments (/pulls/{id}/comments) with pagination
         // These are code-level comments left during reviews
         try {
-            String commentsPath = path(String.format("repos/%s/%s/pulls/%s/comments", workspace, repository, pullRequestId));
-            GenericRequest commentsRequest = new GenericRequest(this, commentsPath);
-            String commentsResponse = execute(commentsRequest);
-            if (commentsResponse != null) {
-                List<GitHubComment> inlineComments = JSONModel.convertToModels(GitHubComment.class, new JSONArray(commentsResponse));
+            currentPage = 1;
+            while (true) {
+                String commentsPath = path(String.format("repos/%s/%s/pulls/%s/comments?per_page=%d&page=%d",
+                        workspace, repository, pullRequestId, perPage, currentPage));
+                GenericRequest commentsRequest = new GenericRequest(this, commentsPath);
+                String commentsResponse = execute(commentsRequest);
+                if (commentsResponse == null || commentsResponse.isEmpty()) {
+                    break;
+                }
+                JSONArray pageArray = new JSONArray(commentsResponse);
+                List<GitHubComment> inlineComments = JSONModel.convertToModels(GitHubComment.class, pageArray);
                 for (GitHubComment comment : inlineComments) {
                     activities.add(new GitHubCommentActivity(comment));
                 }
+                if (pageArray.length() < perPage) {
+                    break;
+                }
+                currentPage++;
             }
         } catch (Exception e) {
             logger.debug("Failed to fetch inline PR comments for PR {}: {}", pullRequestId, e.getMessage());
@@ -1137,13 +1508,20 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     @Override
     public List<ITag> getBranches(String workspace, String repository) throws IOException {
-        String path = path(String.format("repos/%s/%s/branches", workspace, repository));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        if (response == null) {
-            return Collections.emptyList();
+        List<ITag> allBranches = new ArrayList<>();
+        int page = 1;
+        while (true) {
+            String path = path(String.format("repos/%s/%s/branches?per_page=100&page=%d", workspace, repository, page));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            String response = execute(getRequest);
+            if (response == null) break;
+            List<GithubTag> page_branches = JSONModel.convertToModels(GithubTag.class, new JSONArray(response));
+            if (page_branches.isEmpty()) break;
+            allBranches.addAll(page_branches);
+            if (page_branches.size() < 100) break;
+            page++;
         }
-        return JSONModel.convertToModels(GithubTag.class, new JSONArray(response));
+        return allBranches;
     }
 
     @Override
@@ -1242,7 +1620,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String pullRequestResponse = getPullRequestResponse(workspace, repository, pullRequestID, true);
             return parseDiffStats(pullRequestResponse);
         } catch (AtlassianRestClient.RestClientException e) {
-            e.printStackTrace();
+            logger.warn("Skipping PR diff for {}/{} PR#{}: {}", workspace, repository, pullRequestID, e.getMessage());
             return new IDiffStats.Empty();
         }
     }

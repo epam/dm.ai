@@ -21,7 +21,7 @@ from testing.core.models.deprecated_workflow_run_audit import (
 
 class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContract):
     SUMMARY_ECHO_PATTERN = re.compile(
-        r'echo (?P<argument>.+?) >> (?:"\$GITHUB_STEP_SUMMARY"|\$GITHUB_STEP_SUMMARY)$'
+        r'echo (?P<argument>.+?) >> ["\']?\$GITHUB_STEP_SUMMARY["\']?$'
     )
     ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
     TIMESTAMP_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T[^ ]+\s+")
@@ -392,6 +392,8 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
             conclusion=str(payload.get("conclusion", "")),
             step_summary_markdown=self._extract_step_summary_markdown(log_text),
             log_excerpt=self._log_excerpt(log_text),
+            step_conclusions=self._extract_step_conclusions(payload),
+            raw_log_text=log_text,
         )
 
     def _find_release_observation(
@@ -403,7 +405,7 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
     ) -> DeprecatedWorkflowReleaseObservation | None:
         payload = release_payload
         candidate_tags = self._candidate_release_tags(release_job)
-        lookup_deadline = self._deadline(self.poll_interval_seconds * 3)
+        lookup_deadline = self._deadline(max(self.poll_interval_seconds * 6, 120))
         while datetime.now(timezone.utc) < lookup_deadline and payload is None:
             for tag in candidate_tags:
                 try:
@@ -424,8 +426,8 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         if payload is None:
             return None
 
-        release_timestamp = self._release_timestamp(payload)
-        if release_timestamp is not None and release_timestamp < dispatch_started_at - timedelta(minutes=5):
+        visible_at = self._release_visibility_datetime(payload)
+        if visible_at is not None and visible_at < dispatch_started_at - timedelta(minutes=5):
             return None
 
         return DeprecatedWorkflowReleaseObservation(
@@ -439,7 +441,7 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         for value in (
             self.release_tag,
             self._release_tag_from_text(release_job.step_summary_markdown),
-            self._release_tag_from_text(release_job.log_excerpt),
+            self._release_tag_from_text(release_job.raw_log_text or release_job.log_excerpt),
         ):
             normalized = value.strip()
             if normalized and normalized not in candidates:
@@ -452,12 +454,12 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         candidate_tags: tuple[str, ...],
         dispatch_started_at: datetime,
     ) -> dict[str, Any] | None:
-        for release in self.github_client.list_releases(per_page=20):
+        for release in self.github_client.list_releases(per_page=100):
             tag_name = str(release.get("tag_name", "")).strip()
             if candidate_tags and tag_name not in candidate_tags:
                 continue
-            release_timestamp = self._release_timestamp(release)
-            if release_timestamp is None or release_timestamp < dispatch_started_at - timedelta(minutes=5):
+            visible_at = self._release_visibility_datetime(release)
+            if visible_at is None or visible_at < dispatch_started_at - timedelta(minutes=5):
                 continue
             if candidate_tags or self._release_looks_like_deprecated_workflow_output(release):
                 return release
@@ -483,6 +485,17 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
                 continue
             lines.append(self._decode_echo_argument(match.group("argument")))
         return "\n".join(lines).strip()
+
+    @staticmethod
+    def _extract_step_conclusions(job_payload: dict[str, Any]) -> dict[str, str]:
+        steps = job_payload.get("steps", [])
+        if not isinstance(steps, list):
+            return {}
+        return {
+            str(step.get("name", "")): str(step.get("conclusion", ""))
+            for step in steps
+            if isinstance(step, dict) and str(step.get("name", ""))
+        }
 
     def _log_excerpt(self, raw_log_text: str, limit: int = 6000) -> str:
         cleaned = "\n".join(self._normalize_log_line(line) for line in raw_log_text.splitlines())
@@ -527,6 +540,13 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
         if not body:
             return False
         return all(marker in body for marker in self.required_notice_markers)
+
+    def _release_visibility_datetime(self, payload: dict[str, Any]) -> datetime | None:
+        for field in ("published_at", "created_at", "updated_at"):
+            parsed = self._parse_github_datetime(str(payload.get(field, "")))
+            if parsed is not None:
+                return parsed
+        return None
 
     @staticmethod
     def _preview_text(value: str, *, limit: int) -> str:

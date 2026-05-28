@@ -9,15 +9,15 @@
 #   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
 #   # When piped (non-interactive): installs to ALL detected locations automatically
 #
-#   DMTOOLS_SKILLS=jira,github bash install.sh      # Install focused skills only
-#   INSTALL_LOCATION=1 bash install.sh              # Install to first detected location only
-#   bash install.sh --all                           # Install to all detected locations
-#   bash install.sh --skill jira                    # Select one package explicitly
-#   bash install.sh --skills=jira,github            # Allowed alias for multi-skill selection
-#   bash install.sh --all-skills                    # Select every supported package
-#   bash install.sh --skills=jira,unknown           # Fails and lists invalid names
-#   bash install.sh --skills=jira,unknown --skip-unknown  # Warns and keeps valid skills
-#   bash install.sh                             # Interactive mode: ask user to choose
+#   DMTOOLS_SKILLS=jira,github bash skill-install.sh      # Install focused skills only
+#   INSTALL_LOCATION=1 bash skill-install.sh              # Install to first detected location only
+#   bash skill-install.sh --all                           # Install to all detected locations
+#   bash skill-install.sh --skill jira                    # Select one package explicitly
+#   bash skill-install.sh --skills=jira,github            # Allowed alias for multi-skill selection
+#   bash skill-install.sh --all-skills                    # Select every supported package
+#   bash skill-install.sh --skills=jira,unknown           # Fails and lists invalid names
+#   bash skill-install.sh --skills=jira,unknown --skip-unknown  # Warns and keeps valid skills
+#   bash skill-install.sh                                 # Interactive mode: ask user to choose
 
 set -e
 
@@ -107,22 +107,22 @@ while [ $# -gt 0 ]; do
             echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills=jira,github"
             echo "    → Install only /dmtools-jira and /dmtools-github"
             echo ""
-            echo "  bash install.sh"
+            echo "  bash skill-install.sh"
             echo "    → Interactive mode: shows menu to choose location"
             echo ""
-            echo "  INSTALL_LOCATION=1 bash install.sh"
+            echo "  INSTALL_LOCATION=1 bash skill-install.sh"
             echo "    → Install to first location only"
             echo ""
-            echo "  bash install.sh --all"
+            echo "  bash skill-install.sh --all"
             echo "    → Install to all locations"
             echo ""
-            echo "  bash install.sh --all-skills"
+            echo "  bash skill-install.sh --all-skills"
             echo "    → Select every supported skill package"
             echo ""
-            echo "  bash install.sh --skills=jira,unknown"
+            echo "  bash skill-install.sh --skills=jira,unknown"
             echo "    → Fails with a non-zero exit and lists the invalid names"
             echo ""
-            echo "  bash install.sh --skills=jira,unknown --skip-unknown"
+            echo "  bash skill-install.sh --skills=jira,unknown --skip-unknown"
             echo "    → Downgrades invalid skill names to warnings and installs Jira"
             echo ""
             echo "Note: Installs to project-level and global (~/.claude/skills) directories"
@@ -146,7 +146,8 @@ NC='\033[0m'
 
 GITHUB_REPO="epam/dm.ai"
 TEMP_DIR=$(mktemp -d)
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+_script_source="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR=$(cd "$(dirname "$_script_source")" 2>/dev/null && pwd || pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 print_header() {
@@ -509,13 +510,22 @@ download_skill() {
         skill_source="$extract_dir"
     elif [ -f "$extract_dir/dmtools-main/dmtools-ai-docs/SKILL.md" ]; then
         skill_source="$extract_dir/dmtools-main/dmtools-ai-docs"
+    elif [ -f "$extract_dir/dm.ai-main/dmtools-ai-docs/SKILL.md" ]; then
+        skill_source="$extract_dir/dm.ai-main/dmtools-ai-docs"
     elif [ -f "$extract_dir/dmtools-ai-docs/SKILL.md" ]; then
         skill_source="$extract_dir/dmtools-ai-docs"
     else
-        print_error "SKILL.md not found in $asset_name"
-        print_info "Contents of extract dir:"
-        ls -la "$extract_dir" >&2 | head -10
-        return 1
+        # Try to find SKILL.md anywhere one level deep
+        local found
+        found=$(find "$extract_dir" -maxdepth 3 -name "SKILL.md" 2>/dev/null | head -1)
+        if [ -n "$found" ]; then
+            skill_source=$(dirname "$found")
+        else
+            print_error "SKILL.md not found in $asset_name"
+            print_info "Contents of extract dir:"
+            ls -la "$extract_dir" >&2 | head -10
+            return 1
+        fi
     fi
 
     echo "$skill_source"
@@ -718,7 +728,7 @@ main() {
     echo "For more information: https://github.com/epam/dm.ai" >&2
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     case "${1:-install}" in
         install)
             main

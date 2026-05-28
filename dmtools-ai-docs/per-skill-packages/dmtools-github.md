@@ -2,7 +2,7 @@
 
 ## Overview
 
-`dmtools-github` is the focused DMtools package for GitHub pull-request review workflows, including PR inspection, comment management, labels, and review-thread follow-up.
+`dmtools-github` is the focused DMtools package for GitHub workflows, including PR inspection, comment management, labels, review-thread follow-up, binary file attachment storage via GitHub Releases assets, and **regex-based filtering of PRs and commits for large repositories**.
 
 ## Package / Artifact
 
@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills github
+bash skill-install.sh --skills github
 ```
 
 ## Endpoints / Config keys
@@ -35,6 +35,35 @@ bash install.sh --skills github
 ```bash
 dmtools github_get_pr workspace=epam repository=dm.ai pullRequestId=42
 ```
+
+```bash
+# Store a file as a PR attachment via a draft release
+dmtools github_get_or_create_draft_release workspace=epam repository=dm.ai tagName=mcp-assets-v1
+dmtools github_upload_release_asset workspace=epam repository=dm.ai releaseId=<id> filePath=/tmp/screenshot.png
+```
+
+```bash
+# Filter PRs by title regex (e.g. only feature PRs in a large repo)
+dmtools github_list_prs_filtered workspace=epam repository=dm.ai state=merged titleRegex="^feat\("
+
+# Collect commits from all feature/* branches (aggregated, deduplicated)
+dmtools github_get_commits_from_branches workspace=epam repository=dm.ai branchNameRegex="^feature/" since=2024-01-01
+```
+
+## Key tools at a glance
+
+| Tool | Category | Description |
+|------|----------|-------------|
+| `github_get_pr` | pull_requests | Get full PR details |
+| `github_list_prs` | pull_requests | List PRs by state |
+| `github_list_prs_filtered` | pull_requests | List PRs filtered by title regex |
+| `github_get_commits_from_branches` | commits | Commits from branches matching regex |
+| `github_get_or_create_draft_release` | releases | Get or create a draft release |
+| `github_upload_release_asset` | releases | Upload file to release (supports overwrite) |
+| `github_list_release_assets` | releases | List assets in a release |
+| `github_delete_release_asset` | releases | Delete a release asset by ID |
+
+Full list of 33 tools: [GitHub MCP tools reference](../references/mcp-tools/github-tools.md)
 
 ## Compatibility / Supported versions
 
@@ -58,4 +87,3 @@ dmtools github_get_pr workspace=epam repository=dm.ai pullRequestId=42
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

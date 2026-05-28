@@ -302,8 +302,8 @@ jobs:
         with:
           name: skill-package
           path: |
-            dist/dmtools-skill-*.zip
-            dist/dmtools-skill-*.tar.gz
+            dist/dmtools-skill*.zip
+            dist/dmtools-skill*.tar.gz
             dist/dmtools-jira-skill*.zip
             dist/dmtools-jira-skill*.tar.gz
             dist/dmtools-github-skill*.zip
@@ -458,7 +458,7 @@ jobs:
           
           ## 📋 System Requirements
           
-          - **Java 23+** (required)
+          - **Java 17+** (required)
           - **2GB RAM** minimum, 4GB recommended
           - **1GB disk space** for application and data
           
@@ -475,7 +475,7 @@ jobs:
           
           ### Common Issues
           
-          1. **Java version:** Ensure Java 23+ is installed (\`java -version\`)
+          1. **Java version:** Ensure Java 17+ is installed (\`java -version\`)
           2. **Memory issues:** Increase heap size with \`-Xmx4g\`
           
           ### Getting Help

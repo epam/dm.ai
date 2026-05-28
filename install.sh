@@ -779,21 +779,70 @@ detect_version() {
     return 1
 }
 
-# Get latest CLI release version (filters out skill releases)
+# Resolve the latest stable CLI tag without relying on the Releases API.
+get_latest_version_from_git_tags() {
+    local git_output
+    local git_exit_code
+    local version
+
+    if ! command -v git >/dev/null 2>&1; then
+        warn "Git is not available for tag-based fallback lookup." >&2
+        return 1
+    fi
+
+    progress "Falling back to git tag lookup..." >&2
+    git_output=$(git ls-remote --tags --refs "https://github.com/${REPO}.git" 'v*' 2>&1)
+    git_exit_code=$?
+
+    if [ $git_exit_code -ne 0 ] || [ -z "$git_output" ]; then
+        warn "Git tag lookup failed (exit code: $git_exit_code)." >&2
+        return 1
+    fi
+
+    version=$(printf '%s\n' "$git_output" | sed -nE 's#^[[:xdigit:]]+[[:space:]]+refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+)$#\1#p' | LC_ALL=C sort -V | tail -1)
+
+    if [ -z "$version" ]; then
+        warn "Git tag lookup did not return any stable CLI release tags." >&2
+        return 1
+    fi
+
+    progress "Found latest CLI release via git tags: $version" >&2
+    echo "$version"
+}
+
+# Get latest CLI release version (filters out skill/standalone releases, paginates if needed)
 get_latest_version() {
     progress "Fetching latest CLI release information..." >&2
     local version
     local api_response
     local curl_exit_code
+    local page=1
+    local releases_lookup_exit_code=0
+    local releases_lookup_response=""
+    local latest_lookup_exit_code=0
+    local latest_lookup_response=""
+    local git_lookup_status="not attempted"
 
-    # Get all releases (not just latest) to filter CLI releases
-    api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases" 2>&1)
-    curl_exit_code=$?
+    # Paginate through releases until a CLI release (^vX.Y.Z$) is found or no more pages
+    while true; do
+        api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases?per_page=100&page=${page}" 2>&1)
+        curl_exit_code=$?
+        releases_lookup_exit_code=$curl_exit_code
+        releases_lookup_response="$api_response"
 
-    if [ $curl_exit_code -eq 0 ] && [ -n "$api_response" ]; then
-        # Extract all tag names and filter only CLI releases (vX.Y.Z pattern, excluding skill- prefix)
+        if [ $curl_exit_code -ne 0 ] || [ -z "$api_response" ]; then
+            break
+        fi
+
+        # Stop if the page is an empty array (no more releases)
+        if echo "$api_response" | grep -qE '^\[\s*\]$'; then
+            break
+        fi
+
+        # Extract all tag names and filter only CLI releases (vX.Y.Z pattern)
         # CLI releases have format: v1.7.126, v1.7.125, etc.
         # Skill releases have format: skill-vskill-v1.0.19, etc.
+        # Standalone releases have format: v1.7.181-standalone, etc.
         version=$(echo "$api_response" | grep '"tag_name":' | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
 
         if [ -n "$version" ]; then
@@ -801,14 +850,22 @@ get_latest_version() {
             echo "$version"
             return 0
         fi
-    fi
 
-    # If GitHub API failed or no CLI release found, try alternative approach
-    progress "GitHub API failed (exit code: $curl_exit_code) or no CLI release found, trying fallback..." >&2
+        page=$((page + 1))
+        # Safety cap to avoid infinite loops
+        if [ "$page" -gt 10 ]; then
+            break
+        fi
+    done
+
+    # If pagination failed or no CLI release found, try /releases/latest as fallback
+    progress "Paginated search failed (exit code: $curl_exit_code) or no CLI release found, trying fallback..." >&2
 
     # Try to get /releases/latest and check if it's a CLI release
     api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/${REPO}/releases/latest" 2>&1)
     curl_exit_code=$?
+    latest_lookup_exit_code=$curl_exit_code
+    latest_lookup_response="$api_response"
 
     if [ $curl_exit_code -eq 0 ] && [ -n "$api_response" ]; then
         version=$(echo "$api_response" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
@@ -819,25 +876,35 @@ get_latest_version() {
             echo "$version"
             return 0
         else
-            warn "Latest release ($version) is not a CLI release, it might be a skill release." >&2
+            warn "Latest release ($version) is not a CLI release, it might be a skill or standalone release." >&2
         fi
     fi
 
-    # Both methods failed - provide detailed error information
+    if version=$(get_latest_version_from_git_tags); then
+        echo "$version"
+        return 0
+    fi
+    git_lookup_status="failed"
+
+    # All methods failed - provide detailed error information
     error "Failed to find latest CLI release from GitHub API.
 
 Possible causes:
   - Network connectivity issues
   - GitHub API rate limiting
-  - No CLI releases available (only skill releases found)
+  - No CLI releases available (only skill/standalone releases found)
   - curl version incompatibility
+  - git tag fallback unavailable or returned no stable CLI tags
 
 Debug information:
-  - Last curl exit code: $curl_exit_code
-  - API response: ${api_response:-'(empty)'}
+  - /releases exit code: $releases_lookup_exit_code
+  - /releases response: ${releases_lookup_response:-'(empty)'}
+  - /releases/latest exit code: $latest_lookup_exit_code
+  - /releases/latest response: ${latest_lookup_response:-'(empty)'}
+  - git tag lookup: $git_lookup_status
 
 Please check your network connection and try again.
-If the issue persists, you can manually download from:
+If the issue persists, you can manually specify a version with DMTOOLS_VERSION or download from:
 https://github.com/${REPO}/releases/latest"
 }
 
@@ -1018,7 +1085,7 @@ is_windows() {
     return 1
 }
 
-# Download and install Java 23 locally
+# Download and install Java 17 locally
 install_local_java() {
     local platform="$1"
     local jre_dir="$INSTALL_DIR/jre"
@@ -1234,7 +1301,7 @@ check_java() {
     if ! command -v java >/dev/null 2>&1; then
         # First check if we're on Windows - don't try to install Java automatically
         if is_windows; then
-            error "Java 17+ is required but not installed. Please install Java 23 manually on Windows:
+            error "Java 17+ is required but not installed. Please install Java 17 manually on Windows:
   - Download from: https://adoptium.net/
   - Or use Chocolatey: choco install temurin17jdk
   - Or use Windows installer: https://adoptium.net/temurin/releases/?version=17
@@ -1256,11 +1323,11 @@ steps:
         elif [[ "$OSTYPE" == "darwin"* ]]; then
             warn "Java not found. Attempting to install via Homebrew..."
             if command -v brew >/dev/null 2>&1; then
-                progress "Installing OpenJDK 23 via Homebrew..."
+                progress "Installing OpenJDK 17 via Homebrew..."
                 brew install openjdk@17 || error "Failed to install Java via Homebrew"
                 info "Java installed successfully via Homebrew"
             else
-                error "Java 17+ is required but not installed. Please install Java 23:
+                error "Java 17+ is required but not installed. Please install Java 17:
   - Via Homebrew: brew install openjdk@17
   - Via Oracle: https://www.oracle.com/java/technologies/downloads/
   - Via Eclipse Temurin: https://adoptium.net/"
@@ -1269,25 +1336,25 @@ steps:
             # This is real Linux (not Windows/WSL)
             if command -v apt-get >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via apt..."
-                progress "Installing OpenJDK 23..."
-                sudo apt-get update && sudo apt-get install -y openjdk-17-jdk || error "Failed to install Java 23 via apt. Please install manually."
+                progress "Installing OpenJDK 17..."
+                sudo apt-get update && sudo apt-get install -y openjdk-17-jdk || error "Failed to install Java 17 via apt. Please install manually."
                 info "Java installed successfully"
             elif command -v yum >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via yum..."
-                sudo yum install -y java-17-openjdk-devel || error "Failed to install Java 23 via yum. Please install manually."
+                sudo yum install -y java-17-openjdk-devel || error "Failed to install Java 17 via yum. Please install manually."
                 info "Java installed successfully"
             elif command -v dnf >/dev/null 2>&1; then
                 warn "Java not found. Attempting to install via dnf..."
-                sudo dnf install -y java-17-openjdk-devel || error "Failed to install Java 23 via dnf. Please install manually."
+                sudo dnf install -y java-17-openjdk-devel || error "Failed to install Java 17 via dnf. Please install manually."
                 info "Java installed successfully"
             else
-                error "Java 17+ is required but not installed. Please install Java 23:
+                error "Java 17+ is required but not installed. Please install Java 17:
   - Ubuntu/Debian: sudo apt-get install openjdk-17-jdk
   - RHEL/CentOS: sudo yum install java-17-openjdk-devel
   - Fedora: sudo dnf install java-17-openjdk-devel"
             fi
         else
-            error "Java 17+ is required but not installed. Please install Java 23."
+            error "Java 17+ is required but not installed. Please install Java 17."
         fi
     fi
 
@@ -1304,7 +1371,7 @@ steps:
             error "Java $java_version is too old. DMTools requires Java 17+."
         fi
     else
-        error "Java installation failed. Please install Java 23 manually."
+        error "Java installation failed. Please install Java 17 manually."
     fi
 }
 

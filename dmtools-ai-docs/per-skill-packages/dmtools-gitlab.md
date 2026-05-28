@@ -17,7 +17,7 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.
 ```
 
 ```bash
-bash install.sh --skills gitlab
+bash skill-install.sh --skills gitlab
 ```
 
 ## Endpoints / Config keys
@@ -58,4 +58,3 @@ dmtools gitlab_get_mr workspace=mygroup repository=myrepo pullRequestId=42
 
 - Maintainer: DMtools Team
 - Support: [github.com/epam/dm.ai/issues](https://github.com/epam/dm.ai/issues)
-

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,8 @@ class DeprecatedWorkflowJobObservation:
     conclusion: str
     step_summary_markdown: str
     log_excerpt: str
+    step_conclusions: dict[str, str] = field(default_factory=dict)
+    raw_log_text: str = ""
 
 
 @dataclass(frozen=True)

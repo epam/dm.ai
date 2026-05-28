@@ -12,7 +12,7 @@ Enterprise dark-factory orchestrator for automating delivery workflows across tr
 
 [![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest) [![codecov](https://codecov.io/gh/epam/dm.ai/branch/main/graph/badge.svg)](https://codecov.io/gh/epam/dm.ai) [![](https://jitpack.io/v/epam/dm.ai.svg)](https://jitpack.io/#epam/dm.ai)
 
-> DMTools is the current orchestration layer for enterprise dark factories. It is designed for self-hosted and enterprise environments where teams need repeatable AI-assisted workflows instead of one-off scripts or server-first demos.
+> DMTools is orchestration layer for enterprise dark factories. It is designed for self-hosted and enterprise environments where teams need repeatable AI-assisted workflows instead of one-off scripts or server-first demos.
 
 ## What DMTools is for
 
@@ -66,6 +66,19 @@ curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | b
 irm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex
 ```
 
+**Java baseline:** Java 17+ for the DMTools CLI and Agent Skill installer flow.
+
+### Agent Skill
+
+Run the Agent Skill installer from your project root so it can detect project-level skill directories:
+
+```bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
+curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash -s -- --skills jira,github
+```
+
+For shared base configs and child-agent overrides, use the existing [`parent` config inheritance pattern](dmtools-ai-docs/references/configuration/json-config-rules.md#config-inheritance-via-parent).
+
 **Verify installation:**
 
 ```bash
@@ -108,6 +121,7 @@ Keep the latest-release installer flow introduced in DMC-858 when refreshing exi
 3. Preserve or merge your existing `dmtools.env`, `dmtools-local.env`, and local configuration instead of overwriting them.
 4. Remove stale aliases, wrapper scripts, and PATH entries that resolve outside `~/.dmtools/bin`.
 5. Verify the migrated install with `dmtools --version` and `dmtools list`.
+6. If anything fails, roll back by restoring the backup copy of `~/.dmtools` and reactivating the previous wrapper or PATH configuration.
 
 Tagged reinstall example for rollback or migration validation:
 

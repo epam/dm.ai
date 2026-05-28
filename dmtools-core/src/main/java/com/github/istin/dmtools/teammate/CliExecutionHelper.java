@@ -22,6 +22,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Helper class for CLI command execution within Teammate jobs.
@@ -228,6 +232,22 @@ public class CliExecutionHelper {
      * @return StringBuilder containing all command responses
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null);
+    }
+
+    /**
+     * Executes CLI commands and collects their responses.
+     * Each output line is also published to {@code liveOutput} (if non-null) so that a
+     * concurrent timer thread can read accumulated output between command lines.
+     *
+     * @param cliCommands      Array of CLI commands to execute
+     * @param workingDirectory Working directory for command execution (optional)
+     * @param envVariablesFile Path to environment file (null → resolve dmtools.env relative to workingDirectory)
+     * @param liveOutput       Optional AtomicReference updated with accumulated output after each line
+     * @return StringBuilder containing all command responses
+     */
+    public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
+                                            AtomicReference<String> liveOutput) {
         StringBuilder cliResponses = new StringBuilder();
         
         if (cliCommands == null || cliCommands.length == 0) {
@@ -287,12 +307,20 @@ public class CliExecutionHelper {
             
             try {
                 logger.info("Executing CLI command: {}", command);
-                // Use the new method that accepts working directory and environment variables
-                String response = CommandLineUtils.runCommand(command.trim(), workingDir, envVars);
+                // Build a per-line consumer that also updates liveOutput so timer JS can read partial output
+                final StringBuilder commandOutput = new StringBuilder();
+                java.util.function.Consumer<String> lineConsumer = liveOutput == null ? null : line -> {
+                    commandOutput.append(line).append(System.lineSeparator());
+                    liveOutput.set(cliResponses + commandOutput.toString());
+                };
+                String response = CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer);
                 
                 if (response != null && !response.trim().isEmpty()) {
                     cliResponses.append("CLI Command: ").append(command).append("\n");
                     cliResponses.append("Response:\n").append(response).append("\n\n");
+                    if (liveOutput != null) {
+                        liveOutput.set(cliResponses.toString());
+                    }
                     logger.info("CLI command completed successfully");
                 } else {
                     logger.warn("CLI command returned empty response");
@@ -310,6 +338,9 @@ public class CliExecutionHelper {
                 logger.error(errorMsg, e);
                 cliResponses.append("CLI Command: ").append(command).append("\n");
                 cliResponses.append("Error: ").append(errorMsg).append("\n\n");
+                if (liveOutput != null) {
+                    liveOutput.set(cliResponses.toString());
+                }
             }
         }
         
@@ -318,18 +349,93 @@ public class CliExecutionHelper {
     
     /**
      * Executes CLI commands in the specified working directory and processes output response.
-     * 
-     * @param cliCommands Array of CLI commands to execute
+     *
+     * @param cliCommands      Array of CLI commands to execute
      * @param workingDirectory Working directory for command execution (optional)
+     * @param envVariablesFile Path to environment file (null → auto-resolve)
      * @return CliExecutionResult containing command responses and output response
      */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
-        StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile);
-        
-        // Check for output response file in the working directory where commands were executed
-        String outputResponse = processOutputResponse(workingDirectory);
-        
-        return new CliExecutionResult(cliResponses, outputResponse);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0);
+    }
+
+    /**
+     * Executes CLI commands with an optional background timer that fires a JS action periodically.
+     *
+     * <p>If {@code timerAction} is non-null and {@code timerIntervalSeconds > 0}, a single-daemon-thread
+     * {@link ScheduledExecutorService} fires {@code timerAction.run()} every {@code timerIntervalSeconds}
+     * seconds starting after the first interval. The action receives the accumulated CLI output so far
+     * via the {@code Runnable} closure (see {@code Teammate.runJobImpl} for how this is wired).
+     * Timer exceptions are caught and logged; they never interrupt CLI execution.
+     * The executor is shut down (with a 5-second grace period) once all CLI commands finish.
+     *
+     * @param cliCommands          Array of CLI commands to execute
+     * @param workingDirectory     Working directory for command execution (optional)
+     * @param envVariablesFile     Path to environment file (null → auto-resolve)
+     * @param timerAction          Optional runnable executed on the timer thread; receives live output via closure
+     * @param timerIntervalSeconds Interval between timer firings in seconds; timer is disabled if &lt;= 0
+     * @return CliExecutionResult containing command responses and output response
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds) {
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds, null);
+    }
+
+    /**
+     * Executes CLI commands with an optional background timer and shared live output reference.
+     *
+     * @param cliCommands          Array of CLI commands to execute
+     * @param workingDirectory     Working directory for command execution (optional)
+     * @param envVariablesFile     Path to environment file (null → auto-resolve)
+     * @param timerAction          Optional runnable executed on the timer thread
+     * @param timerIntervalSeconds Interval between timer firings in seconds; timer is disabled if &lt;= 0
+     * @param liveCliOutput        Optional shared AtomicReference updated with accumulated CLI output;
+     *                             if null, an internal reference is created when timerAction is non-null
+     * @return CliExecutionResult containing command responses and output response
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds,
+                                                           AtomicReference<String> liveCliOutput) {
+        AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
+                : (timerAction != null ? new AtomicReference<>("") : null);
+
+        ScheduledExecutorService scheduler = null;
+        if (timerAction != null && timerIntervalSeconds > 0) {
+            scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "teammate-timer-js");
+                t.setDaemon(true);
+                return t;
+            });
+            scheduler.scheduleAtFixedRate(() -> {
+                try {
+                    timerAction.run();
+                } catch (Exception e) {
+                    logger.warn("timerJSAction threw exception (ignored, CLI execution continues): {}", e.getMessage());
+                }
+            }, timerIntervalSeconds, timerIntervalSeconds, TimeUnit.SECONDS);
+            logger.info("timerJSAction scheduler started (interval: {}s)", timerIntervalSeconds);
+        }
+
+        try {
+            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput);
+            String outputResponse = processOutputResponse(workingDirectory);
+            return new CliExecutionResult(cliResponses, outputResponse);
+        } finally {
+            if (scheduler != null) {
+                scheduler.shutdown();
+                try {
+                    if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                        scheduler.shutdownNow();
+                    }
+                } catch (InterruptedException ie) {
+                    scheduler.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
+                logger.info("timerJSAction scheduler stopped");
+            }
+        }
     }
     
     /**
