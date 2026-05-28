@@ -1,0 +1,9 @@
+test_id: DMC-1040
+type: api
+framework: pytest
+platform: linux
+dependencies: []
+gradle_task: :dmtools-core:shadowJar
+expected_directory: dmtools-core/build/libs
+fallback_directory: build/libs
+artifact_pattern: dmtools-v*-all.jar
