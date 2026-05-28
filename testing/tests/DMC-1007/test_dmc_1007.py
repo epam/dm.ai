@@ -41,6 +41,12 @@ def _normalized_config_list(key: str) -> tuple[str, ...]:
 FORBIDDEN_LOG_FRAGMENTS = tuple(
     _normalized_config_list("forbidden_log_fragments")
 )
+REQUIRED_RELEASE_BODY_FRAGMENTS = tuple(
+    _normalized_config_list("required_release_body_fragments")
+)
+REQUIRED_STEP_SUMMARY_FRAGMENTS = tuple(
+    _normalized_config_list("required_step_summary_fragments")
+)
 
 
 def build_github_client() -> GitHubActionsReleaseClient:
@@ -79,6 +85,48 @@ def _normalize_visible_text(value: str) -> str:
     return " ".join(value.lower().split())
 
 
+def _preview_text(value: str, *, limit: int = 360) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."
+
+
+def _assert_contains_fragments(
+    *,
+    content: str,
+    fragments: tuple[str, ...],
+    surface_name: str,
+) -> None:
+    normalized_content = _normalize_visible_text(content)
+    missing_fragments = [fragment for fragment in fragments if fragment not in normalized_content]
+    assert not missing_fragments, (
+        f"Expected the published {surface_name} to include {missing_fragments!r}, "
+        f"but it only exposed: {_preview_text(content)!r}"
+    )
+
+
+def _release_asset_names(
+    client: GitHubActionsReleaseClient,
+    *,
+    release_tag: str,
+) -> tuple[str, ...]:
+    release_payload = client.release_by_tag(release_tag)
+    assets = release_payload.get("assets", [])
+    assert isinstance(assets, list), (
+        f"Expected the GitHub release payload for {release_tag!r} to expose an assets list, "
+        f"got {type(assets)!r}."
+    )
+    return tuple(
+        asset_name
+        for asset_name in (
+            str(asset.get("name", "")).strip() if isinstance(asset, dict) else ""
+            for asset in assets
+        )
+        if asset_name
+    )
+
+
 def test_dmc_1007_live_auto_standalone_workflow_completes_without_removed_project_gradle_errors() -> None:
     client = build_github_client()
     service = build_service()
@@ -102,3 +150,24 @@ def test_dmc_1007_live_auto_standalone_workflow_completes_without_removed_projec
     assert audit.release.html_url
     assert audit.release.body.strip()
     assert audit.release_job.step_summary_markdown.strip()
+    assert audit.release.tag_name in audit.release_job.step_summary_markdown
+
+    _assert_contains_fragments(
+        content=audit.release.body,
+        fragments=REQUIRED_RELEASE_BODY_FRAGMENTS,
+        surface_name="release body",
+    )
+    _assert_contains_fragments(
+        content=audit.release_job.step_summary_markdown,
+        fragments=REQUIRED_STEP_SUMMARY_FRAGMENTS,
+        surface_name="step summary",
+    )
+
+    release_asset_names = _release_asset_names(client, release_tag=audit.release.tag_name)
+    assert any(
+        asset_name.startswith("dmtools-v") and asset_name.endswith("-all.jar")
+        for asset_name in release_asset_names
+    ), (
+        "Expected the published GitHub release to include the deprecated compatibility JAR "
+        f"asset, but assets were {release_asset_names!r}."
+    )

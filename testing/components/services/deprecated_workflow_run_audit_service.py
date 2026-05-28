@@ -465,6 +465,13 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
                 return release
         return None
 
+    def _release_timestamp(self, payload: dict[str, Any]) -> datetime | None:
+        for key in ("published_at", "created_at"):
+            value = self._parse_github_datetime(str(payload.get(key, "")))
+            if value is not None:
+                return value
+        return None
+
     def _extract_step_summary_markdown(self, raw_log_text: str) -> str:
         lines: list[str] = []
         for raw_line in raw_log_text.splitlines():
@@ -519,10 +526,13 @@ class DeprecatedWorkflowRunAuditService(DeprecatedWorkflowRunAuditServiceContrac
 
     @classmethod
     def _release_tag_from_text(cls, text: str) -> str:
-        for pattern in (cls.RELEASE_URL_PATTERN, cls.RELEASE_TAG_OUTPUT_PATTERN, cls.USING_TAG_PATTERN):
+        for pattern in (cls.RELEASE_TAG_OUTPUT_PATTERN, cls.USING_TAG_PATTERN):
             match = pattern.search(text)
             if match:
                 return match.group("tag")
+        release_url_matches = list(cls.RELEASE_URL_PATTERN.finditer(text))
+        if release_url_matches:
+            return release_url_matches[-1].group("tag")
         return ""
 
     def _release_looks_like_deprecated_workflow_output(self, payload: dict[str, Any]) -> bool:
