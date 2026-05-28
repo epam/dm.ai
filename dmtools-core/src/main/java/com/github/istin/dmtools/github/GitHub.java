@@ -142,7 +142,20 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             }
 
             JSONArray pullRequestsInResponse = new JSONArray(response);
-            List<GitHubPullRequest> pullRequests = JSONModel.convertToModels(GitHubPullRequest.class, pullRequestsInResponse);
+            List<GitHubPullRequest> allOnPage = JSONModel.convertToModels(GitHubPullRequest.class, pullRequestsInResponse);
+
+            // Date-based stop: check the UNFILTERED page so that pages consisting entirely
+            // of declined (non-merged) PRs still advance the date cursor correctly.
+            // GitHub returns PRs newest-first, so the last item on the page is the oldest.
+            boolean pastStartDate = false;
+            if (startDate != null && !allOnPage.isEmpty()) {
+                long oldestOnPage = allOnPage.get(allOnPage.size() - 1).getCreatedDate();
+                if (oldestOnPage < startDate.getTimeInMillis()) {
+                    pastStartDate = true;
+                }
+            }
+
+            List<GitHubPullRequest> pullRequests = allOnPage;
             if (isMerged) {
                 pullRequests = pullRequests.stream()
                         .filter(GitHubPullRequest::isMerged)
@@ -152,9 +165,18 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
                         .filter(pr -> !pr.isMerged())
                         .collect(Collectors.toList());
             }
+
+            // Only keep PRs within the requested date window to bound memory usage
+            if (startDate != null) {
+                long startMillis = startDate.getTimeInMillis();
+                pullRequests = pullRequests.stream()
+                        .filter(pr -> pr.getCreatedDate() >= startMillis)
+                        .collect(Collectors.toList());
+            }
+
             allPullRequests.addAll(pullRequests);
 
-            if (startDate != null && !pullRequests.isEmpty() && pullRequests.get(pullRequests.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
+            if (pastStartDate) {
                 break;
             }
 
