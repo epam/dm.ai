@@ -111,7 +111,7 @@ jobs:
           echo "Using Copilot model: ${COPILOT_MODEL}"
 
       - name: Export tool cache keys
-        run: bash agents/setup/cache.sh keys dmtools:v1.7.196
+        run: bash agents/setup/cache.sh keys dmtools:v1.7.196 codegraph
 
       - name: Cache DMTools
         uses: actions/cache@v4
@@ -124,8 +124,8 @@ jobs:
       - name: Cache CodeGraph binary
         uses: actions/cache@v4
         with:
-          path: ~/.npm-global
-          key: ${{ runner.os }}-npm-global-codegraph-latest
+          path: ${{ env.CODEGRAPH_CACHE_PATH }}
+          key: ${{ env.CODEGRAPH_CACHE_KEY }}
           restore-keys: |
             ${{ runner.os }}-npm-global-codegraph-
             ${{ runner.os }}-npm-global-
@@ -133,11 +133,11 @@ jobs:
       - name: Cache CodeGraph index
         uses: actions/cache@v4
         with:
-          path: .codegraph
-          key: ${{ runner.os }}-codegraph-index-${{ github.sha }}
+          path: ${{ env.CODEGRAPH_INDEX_CACHE_PATH }}
+          key: ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-codegraph-index-${{ github.ref_name }}-
-            ${{ runner.os }}-codegraph-index-
+            ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-${{ github.ref_name }}-
+            ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-
 
       - name: Install DMTools v1.7.196
         run: bash agents/setup/install.sh dmtools:v1.7.196
