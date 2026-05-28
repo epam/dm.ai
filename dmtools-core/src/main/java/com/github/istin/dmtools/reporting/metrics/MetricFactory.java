@@ -253,7 +253,7 @@ public class MetricFactory {
             case "PullRequestsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex));
             }
 
             case "CommitsMetricSource":
@@ -267,34 +267,34 @@ public class MetricFactory {
                 }
                 Calendar sd = parseDateParam(startDateStr);
                 return new PullRequestsChangesMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex));
             }
 
             case "PullRequestsCommentsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 boolean isPositive = (boolean) params.getOrDefault("isPositive", true);
                 return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex),
                         sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsApprovalsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr),
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex),
                         sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsMergedByMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr));
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex));
             }
 
             case "PullRequestsDeclinedMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
-                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_DECLINED, startDateStr));
+                        sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_DECLINED, startDateStr, titleRegex));
             }
 
             default:
@@ -303,13 +303,13 @@ public class MetricFactory {
     }
 
     /**
-     * Returns the shared {@link AtomicReference} for the given (workspace, repo, state, startDate) tuple.
+     * Returns the shared {@link AtomicReference} for the given (workspace, repo, state, startDate, titleRegex) tuple.
      * All metric sources that use the same tuple will share the same reference and therefore
      * the same PR list — avoiding redundant API calls.
      */
     private AtomicReference<List<IPullRequest>> sharedPrRef(
-            String workspace, String repo, String state, String startDateStr) {
-        String key = workspace + "|" + repo + "|" + state + "|" + startDateStr;
+            String workspace, String repo, String state, String startDateStr, String titleRegex) {
+        String key = workspace + "|" + repo + "|" + state + "|" + startDateStr + "|" + titleRegex;
         return prListCache.computeIfAbsent(key, k -> new AtomicReference<>(null));
     }
 
