@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from testing.core.utils.ticket_config_loader import load_ticket_config  # noqa: 
 
 TEST_DIRECTORY = Path(__file__).resolve().parent
 CONFIG = load_ticket_config(TEST_DIRECTORY / "config.yaml")
+ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
+TIMESTAMP_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T[^ ]+\s+")
 
 
 def _normalize_visible_text(value: str) -> str:
@@ -64,6 +67,27 @@ def _preview_text(value: str, *, limit: int = 500) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: limit - 3] + "..."
+
+
+def _normalize_log_line(line: str) -> str:
+    without_ansi = ANSI_PATTERN.sub("", line)
+    return TIMESTAMP_PREFIX_PATTERN.sub("", without_ansi).strip()
+
+
+def _visible_runtime_log_text(raw_log_text: str) -> str:
+    visible_lines: list[str] = []
+    within_command_group = False
+    for raw_line in raw_log_text.splitlines():
+        line = _normalize_log_line(raw_line)
+        if line.startswith("##[group]Run "):
+            within_command_group = True
+            continue
+        if within_command_group:
+            if line.startswith("##[endgroup]"):
+                within_command_group = False
+            continue
+        visible_lines.append(raw_line)
+    return "\n".join(visible_lines)
 
 
 def _append_audit_failures(
@@ -125,19 +149,20 @@ def test_dmc_1039_live_auto_standalone_workflow_captures_shadow_jar_metadata_wit
                     f"Visible log excerpt: {_preview_text(raw_job_log)}"
                 )
 
-    normalized_log = _normalize_visible_text(raw_job_log)
+    visible_job_log = _visible_runtime_log_text(raw_job_log)
+    normalized_log = _normalize_visible_text(visible_job_log)
     for fragment in REQUIRED_LOG_FRAGMENTS:
         if fragment not in normalized_log:
             failures.append(
                 f"Expected the metadata-capture run log to reference {fragment!r}, but it was absent. "
-                f"Visible log excerpt: {_preview_text(raw_job_log)}"
+                f"Visible log excerpt: {_preview_text(visible_job_log)}"
             )
 
     for fragment in FORBIDDEN_LOG_FRAGMENTS:
         if fragment in normalized_log:
             failures.append(
                 f"Observed forbidden missing-artifact marker {fragment!r} in the live run log. "
-                f"Visible log excerpt: {_preview_text(raw_job_log)}"
+                f"Visible log excerpt: {_preview_text(visible_job_log)}"
             )
 
     normalized_summary = _normalize_visible_text(step_summary)

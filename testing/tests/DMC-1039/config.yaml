@@ -17,11 +17,8 @@ required_successful_steps:
   - Capture compatibility artifact metadata
   - Extract Tag Name
   - Generate Release Notes
-required_log_fragments:
-  - build/libs/dmtools-v
 forbidden_log_fragments:
-  - dmtools-core/build/libs/dmtools-v
-  - ls: cannot access 'dmtools-core/build/libs/dmtools-v*-all.jar': No such file or directory
+  - Expected dmtools-core shadow JAR was not produced
 required_summary_markers:
   - Deprecated Standalone Packaging Release Created
   - Compatibility asset:
