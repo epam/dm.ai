@@ -1,0 +1,27 @@
+test_id: DMC-1039
+type: api
+framework: pytest
+platform: linux-github-actions
+dependencies: []
+owner: epam
+repo: dm.ai
+workflow_ref: main
+workflow_file: standalone-release-auto.yml
+workflow_name: Auto Standalone Release
+workflow_job_name: auto-standalone-release
+dispatch_timeout_seconds: 300
+completion_timeout_seconds: 7200
+poll_interval_seconds: 20
+require_step_summary: true
+required_successful_steps:
+  - Capture compatibility artifact metadata
+  - Extract Tag Name
+  - Generate Release Notes
+required_log_fragments:
+  - build/libs/dmtools-v
+forbidden_log_fragments:
+  - dmtools-core/build/libs/dmtools-v
+  - ls: cannot access 'dmtools-core/build/libs/dmtools-v*-all.jar': No such file or directory
+required_summary_markers:
+  - Deprecated Standalone Packaging Release Created
+  - Compatibility asset:
