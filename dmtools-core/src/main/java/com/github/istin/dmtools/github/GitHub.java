@@ -120,6 +120,22 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String state,
             boolean checkAllRequests,
             Calendar startDate) throws IOException {
+        return pullRequests(workspace, repository, state, checkAllRequests, startDate, null);
+    }
+
+    @Override
+    public boolean supportsPullRequestTitleFiltering() {
+        return true;
+    }
+
+    @Override
+    public List<IPullRequest> pullRequests(
+            String workspace,
+            String repository,
+            String state,
+            boolean checkAllRequests,
+            Calendar startDate,
+            Pattern titlePattern) throws IOException {
         boolean isMerged = state.equalsIgnoreCase(IPullRequest.PullRequestState.STATE_MERGED);
         boolean isDeclined = state.equalsIgnoreCase(IPullRequest.PullRequestState.STATE_DECLINED);
         if (isMerged || isDeclined) {
@@ -132,7 +148,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         int currentPage = 1;
 
         while (true) {
-            String path = path(String.format("repos/%s/%s/pulls?state=%s&per_page=%d&page=%d",
+            String path = path(String.format("repos/%s/%s/pulls?state=%s&sort=updated&direction=desc&per_page=%d&page=%d",
                     workspace, repository, state, perPage, currentPage));
             GenericRequest getRequest = new GenericRequest(this, path);
             String response = execute(getRequest);
@@ -146,10 +162,10 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
             // Date-based stop: check the UNFILTERED page so that pages consisting entirely
             // of declined (non-merged) PRs still advance the date cursor correctly.
-            // GitHub returns PRs newest-first, so the last item on the page is the oldest.
+            // The request is sorted by updated date descending, so the last item on the page is the oldest.
             boolean pastStartDate = false;
             if (startDate != null && !allOnPage.isEmpty()) {
-                long oldestOnPage = allOnPage.get(allOnPage.size() - 1).getCreatedDate();
+                long oldestOnPage = getPaginationBoundaryDate(allOnPage.get(allOnPage.size() - 1));
                 if (oldestOnPage < startDate.getTimeInMillis()) {
                     pastStartDate = true;
                 }
@@ -170,7 +186,13 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             if (startDate != null) {
                 long startMillis = startDate.getTimeInMillis();
                 pullRequests = pullRequests.stream()
-                        .filter(pr -> pr.getCreatedDate() >= startMillis)
+                        .filter(pr -> getMetricDate(pr) >= startMillis)
+                        .collect(Collectors.toList());
+            }
+
+            if (titlePattern != null) {
+                pullRequests = pullRequests.stream()
+                        .filter(pr -> titlePattern.matcher(pr.getTitle() != null ? pr.getTitle() : "").find())
                         .collect(Collectors.toList());
             }
 
@@ -188,6 +210,26 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         }
 
         return allPullRequests;
+    }
+
+    private long getPaginationBoundaryDate(GitHubPullRequest pullRequest) {
+        Long updatedDate = pullRequest.getUpdatedDate();
+        if (updatedDate != null) {
+            return updatedDate;
+        }
+        return pullRequest.getCreatedDate();
+    }
+
+    private long getMetricDate(GitHubPullRequest pullRequest) {
+        Long closedDate = pullRequest.getClosedDate();
+        if (closedDate != null) {
+            return closedDate;
+        }
+        Long updatedDate = pullRequest.getUpdatedDate();
+        if (updatedDate != null) {
+            return updatedDate;
+        }
+        return pullRequest.getCreatedDate();
     }
 
     @MCPTool(

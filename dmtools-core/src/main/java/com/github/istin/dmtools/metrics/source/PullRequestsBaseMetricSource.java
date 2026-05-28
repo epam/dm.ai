@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Abstract base for all PR-based metric sources.
@@ -81,7 +82,17 @@ public abstract class PullRequestsBaseMetricSource extends CommonSourceCollector
     protected List<IPullRequest> getPullRequests() throws Exception {
         List<IPullRequest> cached = sharedPrList.get();
         if (cached == null) {
-            List<IPullRequest> fetched = sourceCode.pullRequests(workspace, repo, state, true, startDate);
+            List<IPullRequest> fetched;
+            if (titlePattern != null && sourceCode.supportsPullRequestTitleFiltering()) {
+                fetched = sourceCode.pullRequests(workspace, repo, state, true, startDate, titlePattern);
+            } else {
+                fetched = sourceCode.pullRequests(workspace, repo, state, true, startDate);
+                if (titlePattern != null) {
+                    fetched = fetched.stream()
+                            .filter(pr -> titlePattern.matcher(pr.getTitle() != null ? pr.getTitle() : "").find())
+                            .collect(Collectors.toList());
+                }
+            }
             sharedPrList.compareAndSet(null, fetched);
             cached = sharedPrList.get();
         }

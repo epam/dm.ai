@@ -20,6 +20,7 @@ import org.mockito.Mockito;
 import java.io.IOException;
 import java.util.Calendar;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.mockito.ArgumentCaptor;
 import static org.junit.Assert.*;
@@ -593,14 +594,55 @@ public class GitHubPRTest {
         assertEquals(Integer.valueOf(10), result.get(0).getId());
     }
 
+    @Test
+    public void testPullRequests_appliesTitleRegexBeforeAccumulatingPageResults() throws Exception {
+        Calendar startDate = Calendar.getInstance();
+        startDate.set(2024, Calendar.JANUARY, 1, 0, 0, 0);
+        startDate.set(Calendar.MILLISECOND, 0);
+
+        JSONArray page1 = new JSONArray();
+        page1.put(prWithDateAndTitle("10", true, "SFLN-123 Implement feature", "2024-08-01T10:00:00Z"));
+        for (int i = 1; i < 100; i++) {
+            page1.put(prWithDateAndTitle(String.valueOf(1000 + i), true, "OTHER-" + i + " unrelated", "2024-08-01T10:00:00Z"));
+        }
+
+        JSONArray page2 = new JSONArray();
+        page2.put(prWithDateAndTitle("20", true, "SFLN-456 Older feature", "2023-12-01T10:00:00Z"));
+
+        doAnswer(inv -> {
+            GenericRequest req = inv.getArgument(0);
+            String url = req.url();
+            if (url.endsWith("page=1")) return page1.toString();
+            if (url.endsWith("page=2")) return page2.toString();
+            return "[]";
+        }).when(gitHub).execute(any(GenericRequest.class));
+
+        List<IPullRequest> result = gitHub.pullRequests(
+                WORKSPACE,
+                REPOSITORY,
+                "merged",
+                true,
+                startDate,
+                Pattern.compile("SFLN-\\d+"));
+
+        assertEquals("Only matching PRs inside date range should be accumulated", 1, result.size());
+        assertEquals(Integer.valueOf(10), result.get(0).getId());
+    }
+
     private JSONObject prWithDate(String number, boolean merged, String createdAt) {
+        return prWithDateAndTitle(number, merged, "PR #" + number, createdAt);
+    }
+
+    private JSONObject prWithDateAndTitle(String number, boolean merged, String title, String createdAt) {
         JSONObject json = new JSONObject();
         json.put("number", Integer.parseInt(number));
-        json.put("title", "PR #" + number);
+        json.put("title", title);
         json.put("state", "closed");
         json.put("merged", merged);
         json.put("body", "");
         json.put("created_at", createdAt);
+        json.put("updated_at", createdAt);
+        json.put("closed_at", createdAt);
         if (merged) {
             json.put("merged_at", createdAt);
         }
