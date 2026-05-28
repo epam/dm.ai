@@ -43,9 +43,21 @@ def test_dmc_1040_shadowjar_build_generates_expected_dmtools_core_artifact() -> 
                 "returncode": audit.execution.returncode,
                 "expected_directory": audit.expected_directory.as_posix(),
                 "expected_directory_exists": audit.expected_directory_exists,
+                "expected_artifacts_before_build": [
+                    path.name for path in audit.expected_artifacts_before_build
+                ],
                 "expected_artifacts": [path.name for path in audit.expected_artifacts],
+                "expected_artifacts_from_current_build": [
+                    path.name for path in audit.expected_artifacts_from_current_build
+                ],
                 "fallback_directory": audit.fallback_directory.as_posix(),
+                "fallback_artifacts_before_build": [
+                    path.name for path in audit.fallback_artifacts_before_build
+                ],
                 "fallback_artifacts": [path.name for path in audit.fallback_artifacts],
+                "fallback_artifacts_from_current_build": [
+                    path.name for path in audit.fallback_artifacts_from_current_build
+                ],
             },
             sort_keys=True,
         )
@@ -54,3 +66,4 @@ def test_dmc_1040_shadowjar_build_generates_expected_dmtools_core_artifact() -> 
     assert audit.execution.returncode == 0, service.format_failure(audit)
     assert audit.expected_directory_exists, service.format_failure(audit)
     assert audit.expected_artifact_present, service.format_failure(audit)
+    assert audit.expected_artifact_built_this_run, service.format_failure(audit)

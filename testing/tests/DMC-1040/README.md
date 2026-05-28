@@ -3,7 +3,8 @@
 This test reproduces the ticket flow exactly: it runs
 `./gradlew :dmtools-core:shadowJar` and then inspects the ticket's expected
 artifact directory, `dmtools-core/build/libs/`, for a `dmtools-v*-all.jar`
-shadow JAR.
+shadow JAR. It also compares the artifact state before and after the build so
+leftover workspace output cannot create a false-positive pass.
 
 ## Install dependencies
 
