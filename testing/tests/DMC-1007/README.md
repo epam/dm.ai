@@ -3,8 +3,8 @@
 This test dispatches the live `standalone-release-auto.yml` workflow on `main`
 and verifies the run completes successfully without the removed-project Gradle
 resolution error for `:dmtools-automation:test`. It also confirms the workflow
-still publishes the release body and visible `GITHUB_STEP_SUMMARY` output that
-depend on successful completion.
+publishes the expected release body, visible `GITHUB_STEP_SUMMARY` text, and
+the deprecated compatibility JAR asset on the resulting GitHub Release.
 
 ## Install dependencies
 

@@ -299,8 +299,7 @@ def test_service_discovers_release_tag_from_logs_when_not_predicted() -> None:
     assert audit.release.tag_name == "v2099.05.06-standalone-abcdef1"
     assert audit.failures == ()
 
-
-def test_service_exposes_release_job_steps_and_full_log_text() -> None:
+def test_service_uses_published_at_when_release_created_at_matches_older_target_commit() -> None:
     client = FakeGitHubActionsReleaseClient()
     dispatched_run = [
         {
@@ -311,7 +310,7 @@ def test_service_exposes_release_job_steps_and_full_log_text() -> None:
             "conclusion": "",
             "head_branch": "main",
             "head_sha": client.head_sha,
-            "created_at": "2099-05-06T10:00:00Z",
+            "created_at": "2099-05-06T12:00:00Z",
             "run_number": 20,
         }
     ]
@@ -327,7 +326,7 @@ def test_service_exposes_release_job_steps_and_full_log_text() -> None:
         "conclusion": "success",
         "head_branch": "main",
         "head_sha": client.head_sha,
-        "created_at": "2099-05-06T10:00:00Z",
+        "created_at": "2099-05-06T12:00:00Z",
         "run_number": 20,
     }
     client.jobs_by_run_id[20] = [
@@ -337,16 +336,13 @@ def test_service_exposes_release_job_steps_and_full_log_text() -> None:
             "html_url": "https://example.test/jobs/104",
             "status": "completed",
             "conclusion": "success",
-            "steps": [
-                {"name": "Build deprecated compatibility artifact", "conclusion": "success"},
-                {"name": "Summary", "conclusion": "success"},
-            ],
         }
     ]
     client.logs_by_job_id[104] = (
-        "2099-05-06T10:00:01Z Task :dmtools-core:test FAILED\n"
-        '2099-05-06T10:00:02Z echo "Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY\n'
-        "2099-05-06T10:00:03Z tag_name=v2099.05.06-standalone-abcdef2\n"
+        '2099-05-06T12:03:00Z echo "**Release:** [v2099.05.06-standalone-abcdef2]'
+        '(https://github.com/example/releases/tag/v2099.05.06-standalone-abcdef2)" >> $GITHUB_STEP_SUMMARY\n'
+        '2099-05-06T12:03:01Z echo "**Positioning:** Deprecated/internal-only packaging workflow" '
+        '>> $GITHUB_STEP_SUMMARY\n'
     )
     client.release_by_tag_payload["v2099.05.06-standalone-abcdef2"] = {
         "tag_name": "v2099.05.06-standalone-abcdef2",
@@ -355,24 +351,23 @@ def test_service_exposes_release_job_steps_and_full_log_text() -> None:
             "> **Deprecated / internal-only workflow.**\n"
             "Do not treat this release body as installation guidance."
         ),
-        "created_at": "2099-05-06T10:00:04Z",
+        "created_at": "2099-05-06T10:00:00Z",
+        "published_at": "2099-05-06T12:03:02Z",
     }
 
     audit = _build_service(
         client,
-        release_tag="",
+        release_tag="v2099.05.06-standalone-abcdef2",
         require_step_summary=True,
     ).audit()
 
-    assert audit.release_job is not None
-    assert audit.release_job.raw_log_text == client.logs_by_job_id[104]
-    assert audit.release_job.step_conclusions == {
-        "Build deprecated compatibility artifact": "success",
-        "Summary": "success",
-    }
+    assert client.dispatch_calls == [("standalone-release-auto.yml", "main", {})]
+    assert audit.release is not None
+    assert audit.release.tag_name == "v2099.05.06-standalone-abcdef2"
+    assert audit.failures == ()
 
 
-def test_service_extracts_step_summary_lines_when_github_summary_path_is_quoted() -> None:
+def test_service_prefers_quoted_step_summary_tag_over_untagged_release_url() -> None:
     client = FakeGitHubActionsReleaseClient()
     dispatched_run = [
         {
@@ -383,7 +378,7 @@ def test_service_extracts_step_summary_lines_when_github_summary_path_is_quoted(
             "conclusion": "",
             "head_branch": "main",
             "head_sha": client.head_sha,
-            "created_at": "2099-05-06T11:00:00Z",
+            "created_at": "2099-05-06T13:00:00Z",
             "run_number": 21,
         }
     ]
@@ -399,7 +394,7 @@ def test_service_extracts_step_summary_lines_when_github_summary_path_is_quoted(
         "conclusion": "success",
         "head_branch": "main",
         "head_sha": client.head_sha,
-        "created_at": "2099-05-06T11:00:00Z",
+        "created_at": "2099-05-06T13:00:00Z",
         "run_number": 21,
     }
     client.jobs_by_run_id[21] = [
@@ -412,8 +407,12 @@ def test_service_extracts_step_summary_lines_when_github_summary_path_is_quoted(
         }
     ]
     client.logs_by_job_id[105] = (
-        '2099-05-06T11:00:01Z echo "Deprecated/internal-only packaging workflow" >> "$GITHUB_STEP_SUMMARY"\n'
-        '2099-05-06T11:00:02Z echo "> Do not reuse this workflow summary as customer-facing installation guidance." >> "$GITHUB_STEP_SUMMARY"\n'
+        "2099-05-06T13:03:00Z https://github.com/example/releases/tag/untagged-deadbeef\n"
+        '2099-05-06T13:03:01Z echo "**Release:** [v2099.05.06-standalone-abcdef3]'
+        '(https://github.com/example/releases/tag/v2099.05.06-standalone-abcdef3)" '
+        '>> "$GITHUB_STEP_SUMMARY"\n'
+        '2099-05-06T13:03:02Z echo "**Positioning:** Deprecated/internal-only packaging workflow" '
+        '>> "$GITHUB_STEP_SUMMARY"\n'
     )
     client.release_by_tag_payload["v2099.05.06-standalone-abcdef3"] = {
         "tag_name": "v2099.05.06-standalone-abcdef3",
@@ -422,23 +421,25 @@ def test_service_extracts_step_summary_lines_when_github_summary_path_is_quoted(
             "> **Deprecated / internal-only workflow.**\n"
             "Do not treat this release body as installation guidance."
         ),
-        "created_at": "2099-05-06T11:00:03Z",
+        "created_at": "2099-05-06T11:00:00Z",
+        "published_at": "2099-05-06T13:03:03Z",
     }
 
     audit = _build_service(
         client,
-        release_tag="v2099.05.06-standalone-abcdef3",
+        release_tag="",
         require_step_summary=True,
     ).audit()
 
+    assert client.dispatch_calls == [("standalone-release-auto.yml", "main", {})]
+    assert audit.release is not None
+    assert audit.release.tag_name == "v2099.05.06-standalone-abcdef3"
     assert audit.release_job is not None
-    assert audit.release_job.step_summary_markdown == (
-        "Deprecated/internal-only packaging workflow\n"
-        "> Do not reuse this workflow summary as customer-facing installation guidance."
-    )
+    assert "v2099.05.06-standalone-abcdef3" in audit.release_job.step_summary_markdown
+    assert audit.failures == ()
 
 
-def test_service_accepts_release_published_after_dispatch_even_when_created_at_is_older() -> None:
+def test_service_exposes_release_job_steps_and_full_log_text() -> None:
     client = FakeGitHubActionsReleaseClient()
     dispatched_run = [
         {
@@ -449,7 +450,7 @@ def test_service_accepts_release_published_after_dispatch_even_when_created_at_i
             "conclusion": "",
             "head_branch": "main",
             "head_sha": client.head_sha,
-            "created_at": "2099-05-06T12:00:00Z",
+            "created_at": "2099-05-06T10:00:00Z",
             "run_number": 22,
         }
     ]
@@ -465,7 +466,7 @@ def test_service_accepts_release_published_after_dispatch_even_when_created_at_i
         "conclusion": "success",
         "head_branch": "main",
         "head_sha": client.head_sha,
-        "created_at": "2099-05-06T12:00:00Z",
+        "created_at": "2099-05-06T10:00:00Z",
         "run_number": 22,
     }
     client.jobs_by_run_id[22] = [
@@ -475,15 +476,153 @@ def test_service_accepts_release_published_after_dispatch_even_when_created_at_i
             "html_url": "https://example.test/jobs/106",
             "status": "completed",
             "conclusion": "success",
+            "steps": [
+                {"name": "Build deprecated compatibility artifact", "conclusion": "success"},
+                {"name": "Summary", "conclusion": "success"},
+            ],
         }
     ]
     client.logs_by_job_id[106] = (
-        '2099-05-06T12:00:01Z echo "Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY\n'
-        "2099-05-06T12:00:02Z tag_name=v2099.05.06-standalone-abcdef4\n"
+        "2099-05-06T10:00:01Z Task :dmtools-core:test FAILED\n"
+        '2099-05-06T10:00:02Z echo "Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY\n'
+        "2099-05-06T10:00:03Z tag_name=v2099.05.06-standalone-abcdef4\n"
     )
     client.release_by_tag_payload["v2099.05.06-standalone-abcdef4"] = {
         "tag_name": "v2099.05.06-standalone-abcdef4",
         "html_url": "https://example.test/releases/v2099.05.06-standalone-abcdef4",
+        "body": (
+            "> **Deprecated / internal-only workflow.**\n"
+            "Do not treat this release body as installation guidance."
+        ),
+        "created_at": "2099-05-06T10:00:04Z",
+    }
+
+    audit = _build_service(
+        client,
+        release_tag="",
+        require_step_summary=True,
+    ).audit()
+
+    assert audit.release_job is not None
+    assert audit.release_job.raw_log_text == client.logs_by_job_id[106]
+    assert audit.release_job.step_conclusions == {
+        "Build deprecated compatibility artifact": "success",
+        "Summary": "success",
+    }
+
+
+def test_service_extracts_step_summary_lines_when_github_summary_path_is_quoted() -> None:
+    client = FakeGitHubActionsReleaseClient()
+    dispatched_run = [
+        {
+            "id": 23,
+            "html_url": "https://example.test/runs/23",
+            "event": "workflow_dispatch",
+            "status": "in_progress",
+            "conclusion": "",
+            "head_branch": "main",
+            "head_sha": client.head_sha,
+            "created_at": "2099-05-06T11:00:00Z",
+            "run_number": 23,
+        }
+    ]
+    client.workflow_runs_responses = [
+        [],
+        dispatched_run,
+    ]
+    client.run_by_id[23] = {
+        "id": 23,
+        "html_url": "https://example.test/runs/23",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": client.head_sha,
+        "created_at": "2099-05-06T11:00:00Z",
+        "run_number": 23,
+    }
+    client.jobs_by_run_id[23] = [
+        {
+            "id": 107,
+            "name": "auto-standalone-release",
+            "html_url": "https://example.test/jobs/107",
+            "status": "completed",
+            "conclusion": "success",
+        }
+    ]
+    client.logs_by_job_id[107] = (
+        '2099-05-06T11:00:01Z echo "Deprecated/internal-only packaging workflow" >> "$GITHUB_STEP_SUMMARY"\n'
+        '2099-05-06T11:00:02Z echo "> Do not reuse this workflow summary as customer-facing installation guidance." >> "$GITHUB_STEP_SUMMARY"\n'
+    )
+    client.release_by_tag_payload["v2099.05.06-standalone-abcdef5"] = {
+        "tag_name": "v2099.05.06-standalone-abcdef5",
+        "html_url": "https://example.test/releases/v2099.05.06-standalone-abcdef5",
+        "body": (
+            "> **Deprecated / internal-only workflow.**\n"
+            "Do not treat this release body as installation guidance."
+        ),
+        "created_at": "2099-05-06T11:00:03Z",
+    }
+
+    audit = _build_service(
+        client,
+        release_tag="v2099.05.06-standalone-abcdef5",
+        require_step_summary=True,
+    ).audit()
+
+    assert audit.release_job is not None
+    assert audit.release_job.step_summary_markdown == (
+        "Deprecated/internal-only packaging workflow\n"
+        "> Do not reuse this workflow summary as customer-facing installation guidance."
+    )
+
+
+def test_service_accepts_release_published_after_dispatch_even_when_created_at_is_older() -> None:
+    client = FakeGitHubActionsReleaseClient()
+    dispatched_run = [
+        {
+            "id": 24,
+            "html_url": "https://example.test/runs/24",
+            "event": "workflow_dispatch",
+            "status": "in_progress",
+            "conclusion": "",
+            "head_branch": "main",
+            "head_sha": client.head_sha,
+            "created_at": "2099-05-06T12:00:00Z",
+            "run_number": 24,
+        }
+    ]
+    client.workflow_runs_responses = [
+        [],
+        dispatched_run,
+    ]
+    client.run_by_id[24] = {
+        "id": 24,
+        "html_url": "https://example.test/runs/24",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": client.head_sha,
+        "created_at": "2099-05-06T12:00:00Z",
+        "run_number": 24,
+    }
+    client.jobs_by_run_id[24] = [
+        {
+            "id": 108,
+            "name": "auto-standalone-release",
+            "html_url": "https://example.test/jobs/108",
+            "status": "completed",
+            "conclusion": "success",
+        }
+    ]
+    client.logs_by_job_id[108] = (
+        '2099-05-06T12:00:01Z echo "Deprecated/internal-only packaging workflow" >> $GITHUB_STEP_SUMMARY\n'
+        "2099-05-06T12:00:02Z tag_name=v2099.05.06-standalone-abcdef6\n"
+    )
+    client.release_by_tag_payload["v2099.05.06-standalone-abcdef6"] = {
+        "tag_name": "v2099.05.06-standalone-abcdef6",
+        "html_url": "https://example.test/releases/v2099.05.06-standalone-abcdef6",
         "body": (
             "> **Deprecated / internal-only workflow.**\n"
             "Do not treat this release body as installation guidance."
@@ -494,10 +633,10 @@ def test_service_accepts_release_published_after_dispatch_even_when_created_at_i
 
     audit = _build_service(
         client,
-        release_tag="v2099.05.06-standalone-abcdef4",
+        release_tag="v2099.05.06-standalone-abcdef6",
         require_step_summary=True,
     ).audit()
 
     assert audit.release is not None
-    assert audit.release.tag_name == "v2099.05.06-standalone-abcdef4"
+    assert audit.release.tag_name == "v2099.05.06-standalone-abcdef6"
     assert audit.failures == ()

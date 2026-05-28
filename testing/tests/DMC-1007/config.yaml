@@ -9,6 +9,17 @@ workflow_ref: main
 forbidden_log_fragments:
   - Cannot locate excluded tasks that match ':dmtools-automation:test'
   - project 'dmtools-automation' not found in root project
+  - Cannot upload asset
+required_release_body_fragments:
+  - Deprecated / internal-only workflow
+  - Assets produced by this workflow
+  - Deprecated compatibility CLI fat JAR
+required_step_summary_fragments:
+  - Deprecated Standalone Packaging Release Created
+  - Release:
+  - Positioning:
+  - Deprecated/internal-only packaging workflow
+  - Compatibility asset:
 dispatch_timeout_seconds: 300
 completion_timeout_seconds: 7200
 poll_interval_seconds: 20
