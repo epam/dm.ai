@@ -121,7 +121,7 @@ jobs:
           restore-keys: |
             dmtools-
 
-      - name: Cache CodeGraph
+      - name: Cache CodeGraph binary
         uses: actions/cache@v4
         with:
           path: ~/.npm-global
@@ -130,17 +130,20 @@ jobs:
             ${{ runner.os }}-npm-global-codegraph-
             ${{ runner.os }}-npm-global-
 
+      - name: Cache CodeGraph index
+        uses: actions/cache@v4
+        with:
+          path: .codegraph
+          key: ${{ runner.os }}-codegraph-index-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-codegraph-index-${{ github.ref_name }}-
+            ${{ runner.os }}-codegraph-index-
+
       - name: Install DMTools v1.7.196
         run: bash agents/setup/install.sh dmtools:v1.7.196
 
-      - name: Install CodeGraph
-        run: |
-          if ! command -v codegraph &>/dev/null; then
-            echo "📦 Installing CodeGraph..."
-            npm install -g @colbymchenry/codegraph
-          else
-            echo "✅ CodeGraph already installed (cache hit): $(codegraph --version 2>/dev/null)"
-          fi
+      - name: Install and init CodeGraph
+        run: bash agents/setup/codegraph.sh
 
       - name: Configure Git Author
         run: |
