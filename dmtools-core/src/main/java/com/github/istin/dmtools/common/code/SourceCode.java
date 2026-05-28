@@ -15,10 +15,26 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public interface SourceCode {
 
     List<IPullRequest> pullRequests(String workspace, String repository, String state, boolean checkAllRequests, Calendar startDate) throws IOException;
+
+    default List<IPullRequest> pullRequests(String workspace, String repository, String state, boolean checkAllRequests, Calendar startDate, Pattern titlePattern) throws IOException {
+        List<IPullRequest> pullRequests = pullRequests(workspace, repository, state, checkAllRequests, startDate);
+        if (titlePattern == null) {
+            return pullRequests;
+        }
+        return pullRequests.stream()
+                .filter(pr -> titlePattern.matcher(pr.getTitle() != null ? pr.getTitle() : "").find())
+                .collect(Collectors.toList());
+    }
+
+    default boolean supportsPullRequestTitleFiltering() {
+        return false;
+    }
 
     IPullRequest pullRequest(String workspace, String repository, String pullRequestId) throws IOException;
 
