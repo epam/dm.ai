@@ -29,6 +29,8 @@ import java.util.Map;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.net.URLConnection;
@@ -1316,7 +1318,11 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             @MCPParam(name = "workflowId", description = "Optional workflow filename to filter runs (e.g. rework.yml). If omitted, returns runs for all workflows.", required = false, example = "rework.yml")
             String workflowId,
             @MCPParam(name = "perPage", description = "Number of results per page (max 100, default 30)", required = false, example = "50")
-            Integer perPage) throws IOException {
+            Integer perPage,
+            @MCPParam(name = "page", description = "Page number for pagination (default 1)", required = false, example = "2")
+            Integer page,
+            @MCPParam(name = "created", description = "Filter by created date/range using GitHub search syntax, e.g. 2026-05-01..2026-05-31 or >=2026-05-01", required = false, example = "2026-05-01..2026-05-31")
+            String created) throws IOException {
         String basePath;
         if (workflowId != null && !workflowId.trim().isEmpty()) {
             basePath = String.format("repos/%s/%s/actions/workflows/%s/runs", workspace, repository, workflowId);
@@ -1330,6 +1336,14 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         if (perPage != null) {
             if (query.length() > 0) query.append("&");
             query.append("per_page=").append(perPage);
+        }
+        if (page != null) {
+            if (query.length() > 0) query.append("&");
+            query.append("page=").append(page);
+        }
+        if (created != null && !created.trim().isEmpty()) {
+            if (query.length() > 0) query.append("&");
+            query.append("created=").append(URLEncoder.encode(created, StandardCharsets.UTF_8));
         }
         String fullPath = query.length() > 0
                 ? path(basePath + "?" + query)

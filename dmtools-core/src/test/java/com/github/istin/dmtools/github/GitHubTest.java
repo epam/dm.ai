@@ -4,14 +4,18 @@
 package com.github.istin.dmtools.github;
 
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
+import com.github.istin.dmtools.common.networking.GenericRequest;
 import okhttp3.Request;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 import java.util.Set;
 
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for GitHub class that test functionality without external API calls.
@@ -78,6 +82,54 @@ public class GitHubTest {
     public void testGetDefaultWorkspace() {
         String workspace = gitHub.getDefaultWorkspace();
         assertEquals("testWorkspace", workspace);
+    }
+
+    @Test
+    public void testListWorkflowRunsAddsPageParameter() throws Exception {
+        GitHub spyGitHub = spy(gitHub);
+        doReturn("{\"workflow_runs\":[]}").when(spyGitHub).execute(any(GenericRequest.class));
+
+        spyGitHub.listWorkflowRuns("testWorkspace", "testRepo", "completed", "ai-teammate.yml", 100, 3, null);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spyGitHub).execute(captor.capture());
+        String url = captor.getValue().url();
+        assertTrue(url.contains("/repos/testWorkspace/testRepo/actions/workflows/ai-teammate.yml/runs?"));
+        assertTrue(url.contains("status=completed"));
+        assertTrue(url.contains("per_page=100"));
+        assertTrue(url.contains("&page=3"));
+    }
+
+    @Test
+    public void testListWorkflowRunsOmitsPageWhenNotProvided() throws Exception {
+        GitHub spyGitHub = spy(gitHub);
+        doReturn("{\"workflow_runs\":[]}").when(spyGitHub).execute(any(GenericRequest.class));
+
+        spyGitHub.listWorkflowRuns("testWorkspace", "testRepo", "failure", null, 50, null, null);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spyGitHub).execute(captor.capture());
+        String url = captor.getValue().url();
+        assertTrue(url.contains("/repos/testWorkspace/testRepo/actions/runs?"));
+        assertTrue(url.contains("status=failure"));
+        assertTrue(url.contains("per_page=50"));
+        assertFalse(url.contains("&page="));
+    }
+
+    @Test
+    public void testListWorkflowRunsAddsCreatedFilter() throws Exception {
+        GitHub spyGitHub = spy(gitHub);
+        doReturn("{\"workflow_runs\":[]}").when(spyGitHub).execute(any(GenericRequest.class));
+
+        spyGitHub.listWorkflowRuns("testWorkspace", "testRepo", "completed", "ai-teammate.yml", 100, 1, "2026-05-01..2026-05-31");
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spyGitHub).execute(captor.capture());
+        String url = captor.getValue().url();
+        assertTrue(url.contains("status=completed"));
+        assertTrue(url.contains("per_page=100"));
+        assertTrue(url.contains("&page=1"));
+        assertTrue(url.contains("created=2026-05-01..2026-05-31"));
     }
 
     // ── parseUris tests ──────────────────────────────────────────────────────

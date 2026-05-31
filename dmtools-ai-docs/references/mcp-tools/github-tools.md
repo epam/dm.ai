@@ -615,6 +615,8 @@ List GitHub Actions workflow runs for a repository, optionally filtered by statu
 | `status` | String | ❌ | Filter by status: `failure`, `success`, `in_progress`, `queued`, `cancelled`, `timed_out`, `action_required`, `neutral`, `skipped`, `stale`, `completed` |
 | `workflowId` | String | ❌ | Workflow filename to filter runs (e.g. `rework.yml`). If omitted, returns runs for all workflows. |
 | `perPage` | Integer | ❌ | Number of results per page (max 100, default 30) |
+| `page` | Integer | ❌ | Page number for pagination (default 1) |
+| `created` | String | ❌ | Filter by created date/range using GitHub search syntax, e.g. `2026-05-01..2026-05-31` or `>=2026-05-01` |
 
 ```bash
 # All failed runs across all workflows
@@ -622,6 +624,12 @@ dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=fail
 
 # Failed runs for a specific workflow
 dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=failure workflowId=rework.yml perPage=50
+
+# Page through historical completed runs
+dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=completed workflowId=ai-teammate.yml perPage=100 page=2
+
+# Page within a created-date window to bypass GitHub's 1000-result search cap
+dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=completed workflowId=ai-teammate.yml perPage=100 page=1 created=2026-05-01..2026-05-31
 
 # All currently running workflows
 dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=in_progress
