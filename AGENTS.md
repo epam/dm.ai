@@ -1,4 +1,27 @@
-Use MCP Tools - Remember that you have a rich set of MCP tools and use them.
-**MANDATORY: Use Serena MCP for all code analysis and editing operations** to achieve maximum token efficiency and precision.
-Serena MCP provides symbol-level analysis and editing capabilities that drastically reduce token consumption compared to reading entire files.
-Before reading any code file, use `get_symbols_overview` to understand structure, then `find_symbol` with targeted queries to read only necessary code sections. Use `replace_symbol_body`, `insert_after_symbol`, and `insert_before_symbol` for precise modifications instead of broad file rewrites. This approach can reduce token usage by 70-90% while improving accuracy and maintaining architectural compliance. Token economy is critical for complex projects - every unnecessary token spent on redundant file reads limits our ability to perform deep analysis and implement comprehensive solutions. NOTE: before using any serena tool you MUST activate it first with `serena_activate_project`.
+## CodeGraph
+
+CodeGraph builds a semantic knowledge graph of codebases for faster, smarter code exploration.
+
+### If `.codegraph/` exists in the project
+
+**Answer directly with CodeGraph — don't delegate exploration to a file-reading sub-agent or a grep/read loop.** CodeGraph *is* the pre-built search index; re-deriving its answers with grep + Read repeats work it already did and costs more for the same result. For "how does X work?", architecture, trace, or where-is-X questions, answer in a handful of CodeGraph calls and stop — typically with **zero file reads**. The returned source is complete and authoritative: treat it as already read and do not re-open those files. Reach for raw Read/Grep only to confirm a specific detail CodeGraph didn't cover.
+
+**Tool selection by intent:**
+
+| Tool | Use For |
+|------|---------|
+| `codegraph_context` | Map a task / feature / area first — composes search + node + callers + callees in one call |
+| `codegraph_trace` | "How does X reach Y" — the call path, each hop's body inline (follows dynamic-dispatch hops grep can't) |
+| `codegraph_explore` | Survey several related symbols' source in ONE budget-capped call |
+| `codegraph_search` | Find a symbol by name |
+| `codegraph_callers` / `codegraph_callees` | Walk call flow one hop at a time |
+| `codegraph_impact` | Check what's affected before editing |
+| `codegraph_node` | Get a single symbol's source / signature |
+
+A direct CodeGraph answer is a handful of calls; a grep/read exploration is dozens.
+
+### If `.codegraph/` does NOT exist
+
+At the start of a session, ask the user if they'd like to initialize CodeGraph:
+
+"I notice this project doesn't have CodeGraph initialized. Would you like me to run `codegraph init -i` to build a code knowledge graph?"
