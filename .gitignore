@@ -169,6 +169,7 @@ temp
 .settings/**
 .codemie
 .claude
+.codegraph/
 
 # Temporary working notes with local paths / internal data
 KB_FIXES*.md
