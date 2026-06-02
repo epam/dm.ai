@@ -30,18 +30,24 @@ public class FigmaOAuth2TokenManager {
 
     public static final String FIGMA_OAUTH_AUTHORIZE_URL = "https://www.figma.com/oauth";
     public static final String FIGMA_OAUTH_TOKEN_URL = "https://www.figma.com/api/oauth/token";
-    public static final String FIGMA_OAUTH_SCOPE = "file_read";
+    public static final String DEFAULT_FIGMA_OAUTH_SCOPE = "file_content:read file_metadata:read";
 
     private final String clientId;
     private final String clientSecret;
+    private final String oauthScope;
     private final OkHttpClient httpClient;
 
     private String cachedAccessToken;
     private long tokenExpiryTimeMs = 0;
 
     public FigmaOAuth2TokenManager(String clientId, String clientSecret) {
+        this(clientId, clientSecret, null);
+    }
+
+    public FigmaOAuth2TokenManager(String clientId, String clientSecret, String oauthScope) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
+        this.oauthScope = normalizeScope(oauthScope);
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -60,7 +66,7 @@ public class FigmaOAuth2TokenManager {
             return FIGMA_OAUTH_AUTHORIZE_URL
                     + "?client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8.name())
                     + "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8.name())
-                    + "&scope=" + URLEncoder.encode(FIGMA_OAUTH_SCOPE, StandardCharsets.UTF_8.name())
+                    + "&scope=" + URLEncoder.encode(oauthScope, StandardCharsets.UTF_8.name())
                     + "&state=" + URLEncoder.encode(state, StandardCharsets.UTF_8.name())
                     + "&response_type=code";
         } catch (Exception e) {
@@ -152,6 +158,13 @@ public class FigmaOAuth2TokenManager {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static String normalizeScope(String scope) {
+        if (scope == null || scope.trim().isEmpty()) {
+            return DEFAULT_FIGMA_OAUTH_SCOPE;
+        }
+        return scope.trim();
     }
 
     public static class TokenResponse {

@@ -123,13 +123,15 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         description = "Generates the Figma OAuth2 authorization URL for the initial authorization code flow. "
             + "Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. "
             + "Then call figma_oauth2_exchange_code to get access and refresh tokens. "
-            + "Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured.",
+            + "Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured. "
+            + "Optional scope can be passed explicitly or via FIGMA_SCOPE/FIGMA_OAUTH_SCOPES env variable.",
         integration = "figma",
         category = "auth"
     )
     public String oauth2GetAuthUrl(
         @MCPParam(name = "redirectUri", description = "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback)", required = true, example = "http://localhost:8080/callback") String redirectUri,
-        @MCPParam(name = "state", description = "Random state string for CSRF protection", required = false, example = "random_state_123") String state
+        @MCPParam(name = "state", description = "Random state string for CSRF protection", required = false, example = "random_state_123") String state,
+        @MCPParam(name = "scope", description = "Optional OAuth scope list (space-separated), e.g. file_content:read file_metadata:read. If omitted, uses FIGMA_SCOPE (or FIGMA_OAUTH_SCOPES) env or default minimal read scope.", required = false, example = "file_content:read file_metadata:read") String scope
     ) {
         com.github.istin.dmtools.common.utils.PropertyReader propertyReader = new com.github.istin.dmtools.common.utils.PropertyReader();
         String clientId = propertyReader.getFigmaClientId();
@@ -147,7 +149,10 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         if (state == null || state.isEmpty()) {
             state = Long.toHexString(Double.doubleToLongBits(Math.random()));
         }
-        FigmaOAuth2TokenManager manager = new FigmaOAuth2TokenManager(clientId, clientSecret);
+        String effectiveScope = (scope != null && !scope.trim().isEmpty())
+                ? scope
+                : propertyReader.getFigmaOAuth2Scopes();
+        FigmaOAuth2TokenManager manager = new FigmaOAuth2TokenManager(clientId, clientSecret, effectiveScope);
         String authUrl = manager.buildAuthorizationUrl(redirectUri, state);
         return new JSONObject()
                 .put("authorization_url", authUrl)
