@@ -672,6 +672,14 @@ public class PropertyReader {
     return getValue("FIGMA_OAUTH_ACCESS_TOKEN");
   }
 
+  public String getFigmaOAuth2Scopes() {
+    String value = getValue("FIGMA_SCOPE");
+    if (value != null && !value.trim().isEmpty()) {
+      return value;
+    }
+    return getValue("FIGMA_OAUTH_SCOPES");
+  }
+
   public Integer getDefaultTicketWeightIfNoSPs() {
     String value = getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
     if (value == null || value.isEmpty()) {
