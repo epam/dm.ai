@@ -5,6 +5,7 @@ package com.github.istin.dmtools.figma;
 
 import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.networking.GenericRequest;
+import okhttp3.Request;
 import org.json.JSONArray;
 import org.junit.Before;
 import org.junit.Test;
@@ -14,7 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 public class FigmaClientTest {
@@ -138,5 +139,41 @@ public class FigmaClientTest {
 
         List<IComment> comments = figmaClient.getComments("fileKey");
         assertEquals(1, comments.size());
+    }
+
+    @Test
+    public void testSetUseOAuth2Bearer_defaultIsFalse() throws Exception {
+        FigmaClient client = new FigmaClient("https://api.figma.com/v1", "test_token");
+        assertFalse(client.isUseOAuth2Bearer());
+    }
+
+    @Test
+    public void testSetUseOAuth2Bearer_canBeEnabled() throws Exception {
+        FigmaClient client = new FigmaClient("https://api.figma.com/v1", "test_token");
+        client.setUseOAuth2Bearer(true);
+        assertTrue(client.isUseOAuth2Bearer());
+    }
+
+    @Test
+    public void testSign_usesXFigmaTokenByDefault() throws Exception {
+        FigmaClient client = new FigmaClient("https://api.figma.com/v1", "my_personal_token");
+        Request.Builder builder = new Request.Builder().url("https://api.figma.com/v1/me");
+        Request.Builder signed = client.sign(builder);
+        Request request = signed.build();
+
+        assertEquals("my_personal_token", request.header("X-Figma-Token"));
+        assertNull(request.header("Authorization"));
+    }
+
+    @Test
+    public void testSign_usesBearerWhenOAuth2Enabled() throws Exception {
+        FigmaClient client = new FigmaClient("https://api.figma.com/v1", "oauth2_access_token");
+        client.setUseOAuth2Bearer(true);
+        Request.Builder builder = new Request.Builder().url("https://api.figma.com/v1/me");
+        Request.Builder signed = client.sign(builder);
+        Request request = signed.build();
+
+        assertEquals("Bearer oauth2_access_token", request.header("Authorization"));
+        assertNull(request.header("X-Figma-Token"));
     }
 }
