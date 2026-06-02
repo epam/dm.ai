@@ -656,6 +656,22 @@ public class PropertyReader {
     return getValue("FIGMA_TOKEN");
   }
 
+  public String getFigmaClientId() {
+    return getValue("FIGMA_CLIENT_ID");
+  }
+
+  public String getFigmaClientSecret() {
+    return getValue("FIGMA_CLIENT_SECRET");
+  }
+
+  public String getFigmaOAuth2RefreshToken() {
+    return getValue("FIGMA_OAUTH_REFRESH_TOKEN");
+  }
+
+  public String getFigmaOAuth2AccessToken() {
+    return getValue("FIGMA_OAUTH_ACCESS_TOKEN");
+  }
+
   public Integer getDefaultTicketWeightIfNoSPs() {
     String value = getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
     if (value == null || value.isEmpty()) {
