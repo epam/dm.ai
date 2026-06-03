@@ -1,8 +1,8 @@
 # GitLab MCP Tools Reference
 
-**Total tools**: 12
+**Total tools**: 22
 **Integration key**: `gitlab`
-**Categories**: `merge_requests`
+**Categories**: `merge_requests`, `ci`
 
 ## Quick Start
 
@@ -15,6 +15,9 @@ dmtools gitlab_get_mr workspace=mygroup repository=myrepo pullRequestId=42
 
 # Get all MR comments
 dmtools gitlab_get_mr_comments workspace=mygroup repository=myrepo pullRequestId=42
+
+# List latest failed pipelines
+dmtools gitlab_list_pipeline_runs workspace=mygroup repository=myrepo status=failed limit=20
 ```
 
 ## Configuration
@@ -25,6 +28,35 @@ GITLAB_BASE_PATH=https://gitlab.yourcompany.com
 ```
 
 ## Tools
+
+## Complete Tool Index
+
+| Tool | Category | Description |
+|------|----------|-------------|
+| `gitlab_list_mrs` | merge_requests | List merge requests by state |
+| `gitlab_get_mr` | merge_requests | Get merge request details |
+| `gitlab_create_mr` | merge_requests | Create a merge request |
+| `gitlab_get_mr_diff` | merge_requests | Get merge request diff/patch |
+| `gitlab_get_mr_comments` | merge_requests | List MR comments/notes |
+| `gitlab_get_mr_activities` | merge_requests | List MR activities |
+| `gitlab_add_mr_comment` | merge_requests | Add MR comment |
+| `gitlab_add_mr_label` | merge_requests | Add label to MR |
+| `gitlab_remove_mr_label` | merge_requests | Remove label from MR |
+| `gitlab_get_mr_discussions` | merge_requests | List MR discussions/threads |
+| `gitlab_reply_to_mr_thread` | merge_requests | Reply in MR discussion thread |
+| `gitlab_add_inline_mr_comment` | merge_requests | Add inline MR comment |
+| `gitlab_resolve_mr_thread` | merge_requests | Resolve MR discussion thread |
+| `gitlab_approve_mr` | merge_requests | Approve MR |
+| `gitlab_merge_mr` | merge_requests | Merge MR |
+| `gitlab_rebase_mr` | merge_requests | Rebase/update MR branch |
+| `gitlab_list_project_jobs` | ci | List CI jobs for project |
+| `gitlab_cancel_job` | ci | Cancel CI job |
+| `gitlab_list_pipeline_runs` | ci | List pipeline runs (supports status/ref/limit) |
+| `gitlab_trigger_pipeline` | ci | Trigger pipeline for branch/ref |
+| `gitlab_get_pipeline_jobs` | ci | List jobs for pipeline |
+| `gitlab_get_job_logs` | ci | Get raw CI job logs |
+
+---
 
 ### `gitlab_list_mrs`
 
@@ -259,6 +291,75 @@ dmtools gitlab_merge_mr workspace=mygroup repository=myrepo pullRequestId=42 mer
 ```
 
 Returns the merged MR object with `state: merged`.
+
+---
+
+### `gitlab_rebase_mr`
+
+Rebase a merge request branch against the latest target branch state.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitLab group or namespace |
+| `repository` | String | ✅ | Repository name |
+| `pullRequestId` | String | ✅ | Merge request IID |
+
+```bash
+dmtools gitlab_rebase_mr workspace=mygroup repository=myrepo pullRequestId=42
+```
+
+---
+
+## CI / Pipeline Tools
+
+### `gitlab_list_pipeline_runs`
+
+List project pipelines with optional filtering.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace` | String | ✅ | GitLab group or namespace |
+| `repository` | String | ✅ | Repository name |
+| `status` | String | ❌ | Pipeline status filter (`failed`, `success`, `running`, etc.) |
+| `ref` | String | ❌ | Branch/tag filter |
+| `limit` | String | ❌ | Max number of pipelines to return |
+
+```bash
+dmtools gitlab_list_pipeline_runs workspace=mygroup repository=myrepo status=failed ref=main limit=50
+```
+
+### `gitlab_trigger_pipeline`
+
+Trigger a pipeline on a specific ref.
+
+```bash
+dmtools gitlab_trigger_pipeline workspace=mygroup repository=myrepo ref=main
+```
+
+### `gitlab_get_pipeline_jobs`
+
+List jobs for a pipeline.
+
+```bash
+dmtools gitlab_get_pipeline_jobs workspace=mygroup repository=myrepo pipelineId=123456
+```
+
+### `gitlab_get_job_logs`
+
+Get raw job logs.
+
+```bash
+dmtools gitlab_get_job_logs workspace=mygroup repository=myrepo jobId=987654
+```
+
+### `gitlab_list_project_jobs` / `gitlab_cancel_job`
+
+List recent project jobs or cancel a running job.
+
+```bash
+dmtools gitlab_list_project_jobs workspace=mygroup repository=myrepo
+dmtools gitlab_cancel_job workspace=mygroup repository=myrepo jobId=987654
+```
 
 ---
 
