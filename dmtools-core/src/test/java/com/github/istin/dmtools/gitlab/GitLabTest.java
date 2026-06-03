@@ -16,6 +16,7 @@ import okhttp3.Request;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
+import org.mockito.ArgumentCaptor;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -58,12 +59,24 @@ public class GitLabTest {
 
     @Test
     public void testAddPullRequestLabel() throws IOException {
-        try {
-            gitLab.addPullRequestLabel("workspace", "repository", "1", "label");
-            fail("Expected UnsupportedOperationException");
-        } catch (UnsupportedOperationException e) {
-            // Expected exception
-        }
+        doReturn("{\"iid\":1,\"labels\":[\"label\"]}").when(gitLab).put(any());
+        gitLab.addPullRequestLabel("workspace", "repository", "1", "label");
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).put(requestCaptor.capture());
+        JSONObject body = new JSONObject(requestCaptor.getValue().getBody());
+        assertEquals("label", body.getString("add_labels"));
+    }
+
+    @Test
+    public void testRemovePullRequestLabel() throws IOException {
+        doReturn("{\"iid\":1,\"labels\":[]}").when(gitLab).put(any());
+        gitLab.removePullRequestLabel("workspace", "repository", "1", "label");
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).put(requestCaptor.capture());
+        JSONObject body = new JSONObject(requestCaptor.getValue().getBody());
+        assertEquals("label", body.getString("remove_labels"));
     }
 
 
@@ -291,6 +304,56 @@ public class GitLabTest {
         assertNotNull(result);
         verify(gitLab, times(1)).put(any());
     }
-}
 
+    @Test
+    public void testCreateMergeRequestWithOptionalFields() throws IOException {
+        doReturn("{\"iid\": 99, \"web_url\": \"https://git.epam.com/group/repo/-/merge_requests/99\"}")
+                .when(gitLab).post(any());
+        String result = gitLab.createMergeRequest(
+                "workspace", "repo", "feature/ABC-1", "main", "ABC-1 title", "Body", "true");
+        assertNotNull(result);
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).post(requestCaptor.capture());
+        JSONObject body = new JSONObject(requestCaptor.getValue().getBody());
+        assertEquals("feature/ABC-1", body.getString("source_branch"));
+        assertEquals("main", body.getString("target_branch"));
+        assertEquals("ABC-1 title", body.getString("title"));
+        assertEquals("Body", body.getString("description"));
+        assertTrue(body.getBoolean("remove_source_branch"));
+    }
+
+    @Test
+    public void testRebaseMergeRequest() throws IOException {
+        doReturn("{\"rebase_in_progress\": true}").when(gitLab).put(any());
+        String result = gitLab.rebaseMergeRequest("workspace", "repo", "42");
+        assertNotNull(result);
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).put(requestCaptor.capture());
+        assertEquals("{}", requestCaptor.getValue().getBody());
+    }
+
+    @Test
+    public void testListPipelineRunsNormalizesFailureStatus() throws IOException {
+        doReturn("[]").when(gitLab).execute(any(GenericRequest.class));
+        String result = gitLab.listPipelineRuns("workspace", "repo", "failure", "main", "10");
+        assertEquals("[]", result);
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).execute(requestCaptor.capture());
+        String url = requestCaptor.getValue().url();
+        assertTrue(url.contains("status=failed"));
+        assertTrue(url.contains("ref=main"));
+        assertTrue(url.contains("per_page=10"));
+    }
+
+    @Test
+    public void testGetPipelineJobsAndJobLogsReturnFallbacks() throws IOException {
+        doReturn(null).when(gitLab).execute(any(GenericRequest.class));
+        assertEquals("[]", gitLab.getPipelineJobs("workspace", "repo", "123"));
+        assertEquals("", gitLab.getJobLogs("workspace", "repo", "456"));
+        verify(gitLab, times(2)).execute(any(GenericRequest.class));
+    }
+}
 

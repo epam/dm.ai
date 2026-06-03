@@ -120,13 +120,44 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
     }
 
     @Override
-    public void addPullRequestLabel(String workspace, String repository, String pullRequestId, String label) throws IOException {
-        throw new UnsupportedOperationException("implement me");
+    @MCPTool(
+        name = "gitlab_add_mr_label",
+        description = "Add a label to a GitLab merge request.",
+        integration = "gitlab",
+        category = "merge_requests",
+        aliases = {"source_code_add_pr_label"}
+    )
+    public void addPullRequestLabel(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestId,
+            @MCPParam(name = "label", description = "Label to add", required = true, example = "pr_approved") String label) throws IOException {
+        updateMergeRequestLabels(workspace, repository, pullRequestId, "add_labels", label);
     }
 
     @Override
-    public void removePullRequestLabel(String workspace, String repository, String pullRequestId, String label) throws IOException {
-        throw new UnsupportedOperationException("implement me");
+    @MCPTool(
+        name = "gitlab_remove_mr_label",
+        description = "Remove a label from a GitLab merge request.",
+        integration = "gitlab",
+        category = "merge_requests",
+        aliases = {"source_code_remove_pr_label"}
+    )
+    public void removePullRequestLabel(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestId,
+            @MCPParam(name = "label", description = "Label to remove", required = true, example = "pr_approved") String label) throws IOException {
+        updateMergeRequestLabels(workspace, repository, pullRequestId, "remove_labels", label);
+    }
+
+    private String updateMergeRequestLabels(String workspace, String repository, String pullRequestId, String field, String label) throws IOException {
+        String path = path(String.format("projects/%s/merge_requests/%s", getEncodedProject(workspace, repository), pullRequestId));
+        GenericRequest putRequest = new GenericRequest(this, path);
+        JSONObject body = new JSONObject();
+        body.put(field, label);
+        putRequest.setBody(body.toString());
+        return put(putRequest);
     }
 
     @MCPTool(
@@ -304,7 +335,17 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
     }
 
     @Override
-    public IDiffStats getPullRequestDiff(String workspace, String repository, String pullRequestID) throws IOException {
+    @MCPTool(
+        name = "gitlab_get_mr_diff",
+        description = "Get diff stats and changed files for a GitLab merge request.",
+        integration = "gitlab",
+        category = "merge_requests",
+        aliases = {"source_code_get_pr_diff"}
+    )
+    public IDiffStats getPullRequestDiff(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestID) throws IOException {
         String mergeRequestChanges = getMergeRequestChanges(workspace, repository, pullRequestID);
         if (mergeRequestChanges == null) {
             return new IDiffStats.Empty();
@@ -484,12 +525,46 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         if ("open".equalsIgnoreCase(state)) {
             state = "opened";
         }
+        if ("closed".equalsIgnoreCase(state)) {
+            state = "all";
+        }
         List<IPullRequest> mrs = pullRequests(workspace, repository, state, false, null);
         JSONArray arr = new JSONArray();
         for (IPullRequest mr : mrs) {
             arr.put(((GitLabPullRequest) mr).getJSONObject());
         }
         return arr.toString();
+    }
+
+    @MCPTool(
+        name = "gitlab_create_mr",
+        description = "Create a GitLab merge request from a source branch into a target branch.",
+        integration = "gitlab",
+        category = "merge_requests",
+        aliases = {"source_code_create_pr"}
+    )
+    public String createMergeRequest(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "sourceBranch", description = "Source branch name", required = true, example = "feature/PROJ-123") String sourceBranch,
+            @MCPParam(name = "targetBranch", description = "Target branch name", required = true, example = "main") String targetBranch,
+            @MCPParam(name = "title", description = "Merge request title", required = true, example = "PROJ-123 Implement feature") String title,
+            @MCPParam(name = "description", description = "Merge request description", required = false, example = "Automated changes") String description,
+            @MCPParam(name = "removeSourceBranch", description = "Remove source branch after merge", required = false, example = "true") String removeSourceBranch) throws IOException {
+        String path = path(String.format("projects/%s/merge_requests", getEncodedProject(workspace, repository)));
+        GenericRequest postRequest = new GenericRequest(this, path);
+        JSONObject body = new JSONObject();
+        body.put("source_branch", sourceBranch);
+        body.put("target_branch", targetBranch);
+        body.put("title", title);
+        if (description != null && !description.isEmpty()) {
+            body.put("description", description);
+        }
+        if (removeSourceBranch != null && !removeSourceBranch.isEmpty()) {
+            body.put("remove_source_branch", Boolean.parseBoolean(removeSourceBranch));
+        }
+        postRequest.setBody(body.toString());
+        return post(postRequest);
     }
 
     @MCPTool(
@@ -635,6 +710,24 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         return put(putRequest);
     }
 
+    @MCPTool(
+        name = "gitlab_rebase_mr",
+        description = "Ask GitLab to rebase/update a merge request source branch with its target branch.",
+        integration = "gitlab",
+        category = "merge_requests",
+        aliases = {"source_code_update_pr_branch"}
+    )
+    public String rebaseMergeRequest(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestId) throws IOException {
+        String path = path(String.format("projects/%s/merge_requests/%s/rebase",
+                getEncodedProject(workspace, repository), pullRequestId));
+        GenericRequest putRequest = new GenericRequest(this, path);
+        putRequest.setBody("{}");
+        return put(putRequest);
+    }
+
     private String getEncodedProject(String workspace, String repository) {
         try {
             return java.net.URLEncoder.encode(workspace + "/" + repository, "UTF-8");
@@ -643,8 +736,15 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         }
     }
 
-    // Method to list jobs for a project
-    public List<GitLabJob> listJobs(String workspace, String repository) throws IOException {
+    @MCPTool(
+        name = "gitlab_list_project_jobs",
+        description = "List recent GitLab CI jobs for a project.",
+        integration = "gitlab",
+        category = "ci"
+    )
+    public List<GitLabJob> listJobs(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository) throws IOException {
         String path = path(String.format("projects/%s/jobs", getEncodedProject(workspace, repository)));
         GenericRequest getRequest = new GenericRequest(this, path);
         String response = execute(getRequest);
@@ -654,11 +754,122 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         return JSONModel.convertToModels(GitLabJob.class, new JSONArray(response));
     }
 
-    // Method to cancel a specific job in a project
-    public String cancelJob(String workspace, String repository, String jobId) throws IOException {
+    @MCPTool(
+        name = "gitlab_cancel_job",
+        description = "Cancel a GitLab CI job.",
+        integration = "gitlab",
+        category = "ci"
+    )
+    public String cancelJob(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "jobId", description = "GitLab job ID", required = true, example = "123456") String jobId) throws IOException {
         String path = path(String.format("projects/%s/jobs/%s/cancel", getEncodedProject(workspace, repository), jobId));
         GenericRequest postRequest = new GenericRequest(this, path);
         return post(postRequest);
+    }
+
+    @MCPTool(
+        name = "gitlab_list_pipeline_runs",
+        description = "List recent GitLab CI pipelines. Optionally filter by status, ref, and limit.",
+        integration = "gitlab",
+        category = "ci",
+        aliases = {"source_code_list_workflow_runs"}
+    )
+    public String listPipelineRuns(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "status", description = "Pipeline status filter", required = false, example = "failed") String status,
+            @MCPParam(name = "ref", description = "Branch or tag ref", required = false, example = "main") String ref,
+            @MCPParam(name = "limit", description = "Maximum number of pipelines to return", required = false, example = "50") String limit) throws IOException {
+        String path = path(String.format("projects/%s/pipelines", getEncodedProject(workspace, repository)));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        getRequest.param("status", normalizePipelineStatus(status));
+        getRequest.param("ref", ref);
+        getRequest.param("per_page", limit != null && !limit.isEmpty() ? limit : "50");
+        String response = execute(getRequest);
+        return response != null ? response : "[]";
+    }
+
+    @MCPTool(
+        name = "gitlab_trigger_pipeline",
+        description = "Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token.",
+        integration = "gitlab",
+        category = "ci",
+        aliases = {"source_code_trigger_workflow"}
+    )
+    public String triggerPipeline(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "ref", description = "Branch or tag ref", required = true, example = "main") String ref,
+            @MCPParam(name = "variablesJson", description = "Optional JSON object of CI variables", required = false, example = "{\"CONFIG_FILE\":\"agents/story_development.json\"}") String variablesJson) throws IOException {
+        String path = path(String.format("projects/%s/pipeline", getEncodedProject(workspace, repository)));
+        GenericRequest postRequest = new GenericRequest(this, path);
+        JSONObject body = new JSONObject();
+        body.put("ref", ref);
+        if (variablesJson != null && !variablesJson.isEmpty()) {
+            JSONObject vars = new JSONObject(variablesJson);
+            JSONArray variables = new JSONArray();
+            for (String key : vars.keySet()) {
+                JSONObject variable = new JSONObject();
+                variable.put("key", key);
+                variable.put("value", String.valueOf(vars.get(key)));
+                variables.put(variable);
+            }
+            body.put("variables", variables);
+        }
+        postRequest.setBody(body.toString());
+        return post(postRequest);
+    }
+
+    @MCPTool(
+        name = "gitlab_get_pipeline_jobs",
+        description = "List jobs for a GitLab CI pipeline.",
+        integration = "gitlab",
+        category = "ci",
+        aliases = {"source_code_get_workflow_run_jobs"}
+    )
+    public String getPipelineJobs(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "pipelineId", description = "GitLab pipeline ID", required = true, example = "123456") String pipelineId) throws IOException {
+        String path = path(String.format("projects/%s/pipelines/%s/jobs", getEncodedProject(workspace, repository), pipelineId));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        String response = execute(getRequest);
+        return response != null ? response : "[]";
+    }
+
+    @MCPTool(
+        name = "gitlab_get_job_logs",
+        description = "Get GitLab CI job trace logs.",
+        integration = "gitlab",
+        category = "ci",
+        aliases = {"source_code_get_job_logs"}
+    )
+    public String getJobLogs(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "jobId", description = "GitLab job ID", required = true, example = "123456") String jobId) throws IOException {
+        String path = path(String.format("projects/%s/jobs/%s/trace", getEncodedProject(workspace, repository), jobId));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        String response = execute(getRequest);
+        return response != null ? response : "";
+    }
+
+    private String normalizePipelineStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+        if ("failure".equalsIgnoreCase(status)) {
+            return "failed";
+        }
+        if ("success".equalsIgnoreCase(status)) {
+            return "success";
+        }
+        if ("in_progress".equalsIgnoreCase(status)) {
+            return "running";
+        }
+        return status;
     }
 
     @Override
