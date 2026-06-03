@@ -192,6 +192,26 @@ public class GitLabTest {
     }
 
     @Test
+    public void testPullRequestCommentsPaginatesNotes() throws IOException {
+        JSONArray firstPage = new JSONArray();
+        for (int i = 1; i <= 100; i++) {
+            firstPage.put(createNonSystemNote(i, "comment " + i));
+        }
+        JSONArray secondPage = new JSONArray();
+        secondPage.put(createNonSystemNote(101, "comment 101"));
+
+        doReturn(firstPage.toString(), secondPage.toString()).when(gitLab).execute(any(GenericRequest.class));
+        List<IComment> comments = gitLab.pullRequestComments("workspace", "repo", "1");
+
+        assertEquals(101, comments.size());
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(2)).execute(requestCaptor.capture());
+        List<GenericRequest> requests = requestCaptor.getAllValues();
+        assertTrue(requests.get(0).url().contains("page=1"));
+        assertTrue(requests.get(1).url().contains("page=2"));
+    }
+
+    @Test
     public void testPullRequestActivitiesReturnsAllNonSystemNotes() throws IOException {
         JSONArray notes = new JSONArray();
 
@@ -237,17 +257,22 @@ public class GitLabTest {
 
     @Test
     public void testGetPRDiscussions() throws IOException {
-        JSONArray discussions = new JSONArray();
-        JSONObject disc = new JSONObject();
-        disc.put("id", "abc123");
-        disc.put("individual_note", false);
-        discussions.put(disc);
+        JSONArray firstPage = new JSONArray();
+        for (int i = 1; i <= 100; i++) {
+            JSONObject disc = new JSONObject();
+            disc.put("id", "abc" + i);
+            disc.put("individual_note", false);
+            firstPage.put(disc);
+        }
+        JSONArray secondPage = new JSONArray();
+        secondPage.put(new JSONObject().put("id", "abc101").put("individual_note", false));
 
-        doReturn(discussions.toString()).when(gitLab).execute(any(GenericRequest.class));
+        doReturn(firstPage.toString(), secondPage.toString()).when(gitLab).execute(any(GenericRequest.class));
         String result = gitLab.getPRDiscussions("workspace", "repo", "1");
         assertNotNull(result);
         JSONArray parsed = new JSONArray(result);
-        assertEquals(1, parsed.length());
+        assertEquals(101, parsed.length());
+        verify(gitLab, times(2)).execute(any(GenericRequest.class));
     }
 
     @Test
@@ -349,11 +374,43 @@ public class GitLabTest {
     }
 
     @Test
+    public void testListPipelineRunsRespectsLimitAcrossPages() throws IOException {
+        JSONArray firstPage = new JSONArray();
+        for (int i = 0; i < 100; i++) {
+            firstPage.put(new JSONObject().put("id", i + 1));
+        }
+        JSONArray secondPage = new JSONArray();
+        for (int i = 0; i < 40; i++) {
+            secondPage.put(new JSONObject().put("id", i + 101));
+        }
+        doReturn(firstPage.toString(), secondPage.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        String result = gitLab.listPipelineRuns("workspace", "repo", "success", "main", "120");
+        JSONArray parsed = new JSONArray(result);
+        assertEquals(120, parsed.length());
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(2)).execute(requestCaptor.capture());
+        List<GenericRequest> requests = requestCaptor.getAllValues();
+        assertTrue(requests.get(0).url().contains("per_page=100"));
+        assertTrue(requests.get(0).url().contains("page=1"));
+        assertTrue(requests.get(1).url().contains("page=2"));
+    }
+
+    @Test
     public void testGetPipelineJobsAndJobLogsReturnFallbacks() throws IOException {
         doReturn(null).when(gitLab).execute(any(GenericRequest.class));
         assertEquals("[]", gitLab.getPipelineJobs("workspace", "repo", "123"));
         assertEquals("", gitLab.getJobLogs("workspace", "repo", "456"));
         verify(gitLab, times(2)).execute(any(GenericRequest.class));
     }
-}
 
+    private JSONObject createNonSystemNote(int id, String body) {
+        return new JSONObject()
+                .put("id", id)
+                .put("body", body)
+                .put("type", JSONObject.NULL)
+                .put("system", false)
+                .put("author", new JSONObject().put("id", 10).put("username", "user1"));
+    }
+}

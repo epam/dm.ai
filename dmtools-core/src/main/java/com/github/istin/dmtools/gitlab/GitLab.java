@@ -110,13 +110,26 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
     }
 
     private @NotNull List<IComment> getPullRequestNotes(String workspace, String repository, String pullRequestId) throws IOException {
-        String path = path(String.format("projects/%s/merge_requests/%s/notes", getEncodedProject(workspace, repository), pullRequestId));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        if (response == null) {
-            return new ArrayList<>();
+        int perPage = 100;
+        int page = 1;
+        List<IComment> result = new ArrayList<>();
+        while (true) {
+            String path = path(String.format("projects/%s/merge_requests/%s/notes", getEncodedProject(workspace, repository), pullRequestId));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            getRequest.param("per_page", perPage);
+            getRequest.param("page", page);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(response);
+            result.addAll(JSONModel.convertToModels(GitLabComment.class, pageArray));
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            page++;
         }
-        return JSONModel.convertToModels(GitLabComment.class, new JSONArray(response));
+        return result;
     }
 
     @Override
@@ -522,16 +535,25 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "state", description = "MR state: opened, closed, merged, all. 'open' is also accepted as a synonym for 'opened'.", required = true, example = "opened") String state) throws IOException {
         // Normalize state synonyms: GitHub uses "open", GitLab uses "opened"
+        boolean includeClosedAndMerged = false;
         if ("open".equalsIgnoreCase(state)) {
             state = "opened";
         }
         if ("closed".equalsIgnoreCase(state)) {
             state = "all";
+            includeClosedAndMerged = true;
         }
         List<IPullRequest> mrs = pullRequests(workspace, repository, state, false, null);
         JSONArray arr = new JSONArray();
         for (IPullRequest mr : mrs) {
-            arr.put(((GitLabPullRequest) mr).getJSONObject());
+            JSONObject mrJson = ((GitLabPullRequest) mr).getJSONObject();
+            if (includeClosedAndMerged) {
+                String mrState = mrJson.optString("state");
+                if (!"closed".equalsIgnoreCase(mrState) && !"merged".equalsIgnoreCase(mrState)) {
+                    continue;
+                }
+            }
+            arr.put(mrJson);
         }
         return arr.toString();
     }
@@ -578,10 +600,28 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestId) throws IOException {
-        String path = path(String.format("projects/%s/merge_requests/%s/discussions", getEncodedProject(workspace, repository), pullRequestId));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        return response != null ? response : "[]";
+        int perPage = 100;
+        int page = 1;
+        JSONArray allDiscussions = new JSONArray();
+        while (true) {
+            String path = path(String.format("projects/%s/merge_requests/%s/discussions", getEncodedProject(workspace, repository), pullRequestId));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            getRequest.param("per_page", perPage);
+            getRequest.param("page", page);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(response);
+            for (int i = 0; i < pageArray.length(); i++) {
+                allDiscussions.put(pageArray.get(i));
+            }
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            page++;
+        }
+        return allDiscussions.toString();
     }
 
     @MCPTool(
@@ -745,13 +785,31 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
     public List<GitLabJob> listJobs(
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository) throws IOException {
-        String path = path(String.format("projects/%s/jobs", getEncodedProject(workspace, repository)));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        if (response == null) {
+        int perPage = 100;
+        int page = 1;
+        JSONArray allJobs = new JSONArray();
+        while (true) {
+            String path = path(String.format("projects/%s/jobs", getEncodedProject(workspace, repository)));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            getRequest.param("per_page", perPage);
+            getRequest.param("page", page);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(response);
+            for (int i = 0; i < pageArray.length(); i++) {
+                allJobs.put(pageArray.get(i));
+            }
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            page++;
+        }
+        if (allJobs.isEmpty()) {
             return Collections.emptyList();
         }
-        return JSONModel.convertToModels(GitLabJob.class, new JSONArray(response));
+        return JSONModel.convertToModels(GitLabJob.class, allJobs);
     }
 
     @MCPTool(
@@ -782,13 +840,31 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "status", description = "Pipeline status filter", required = false, example = "failed") String status,
             @MCPParam(name = "ref", description = "Branch or tag ref", required = false, example = "main") String ref,
             @MCPParam(name = "limit", description = "Maximum number of pipelines to return", required = false, example = "50") String limit) throws IOException {
-        String path = path(String.format("projects/%s/pipelines", getEncodedProject(workspace, repository)));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        getRequest.param("status", normalizePipelineStatus(status));
-        getRequest.param("ref", ref);
-        getRequest.param("per_page", limit != null && !limit.isEmpty() ? limit : "50");
-        String response = execute(getRequest);
-        return response != null ? response : "[]";
+        int maxResults = parsePositiveInt(limit, 50);
+        int perPage = Math.min(maxResults, 100);
+        int page = 1;
+        JSONArray pipelines = new JSONArray();
+        while (pipelines.length() < maxResults) {
+            String path = path(String.format("projects/%s/pipelines", getEncodedProject(workspace, repository)));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            getRequest.param("status", normalizePipelineStatus(status));
+            getRequest.param("ref", ref);
+            getRequest.param("per_page", perPage);
+            getRequest.param("page", page);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(response);
+            for (int i = 0; i < pageArray.length() && pipelines.length() < maxResults; i++) {
+                pipelines.put(pageArray.get(i));
+            }
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            page++;
+        }
+        return pipelines.toString();
     }
 
     @MCPTool(
@@ -833,10 +909,28 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "pipelineId", description = "GitLab pipeline ID", required = true, example = "123456") String pipelineId) throws IOException {
-        String path = path(String.format("projects/%s/pipelines/%s/jobs", getEncodedProject(workspace, repository), pipelineId));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        return response != null ? response : "[]";
+        int perPage = 100;
+        int page = 1;
+        JSONArray allJobs = new JSONArray();
+        while (true) {
+            String path = path(String.format("projects/%s/pipelines/%s/jobs", getEncodedProject(workspace, repository), pipelineId));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            getRequest.param("per_page", perPage);
+            getRequest.param("page", page);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(response);
+            for (int i = 0; i < pageArray.length(); i++) {
+                allJobs.put(pageArray.get(i));
+            }
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            page++;
+        }
+        return allJobs.toString();
     }
 
     @MCPTool(
@@ -870,6 +964,18 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             return "running";
         }
         return status;
+    }
+
+    private int parsePositiveInt(String rawValue, int defaultValue) {
+        if (rawValue == null || rawValue.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(rawValue.trim());
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
     }
 
     @Override
