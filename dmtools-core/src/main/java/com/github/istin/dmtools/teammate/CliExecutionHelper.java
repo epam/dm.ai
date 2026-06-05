@@ -11,6 +11,7 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
+import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -22,6 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -160,6 +162,63 @@ public class CliExecutionHelper {
             Files.write(inputFolderPath.resolve(COMMENTS_FILE_NAME),
                     content.toString().getBytes(StandardCharsets.UTF_8));
             logger.info("Created comments.md with {} comments ({} bytes)", comments.size(), content.length());
+        }
+    }
+
+    /**
+     * Writes Confluence pages referenced in {@code textContent} to
+     * {@code inputFolderPath/confluence/<safe-name>.md} so CLI agents can read them without
+     * requiring web access.  Uses {@link Confluence#parseUris} to detect Confluence URLs
+     * (domain-aware, same as the context orchestrator) and {@link Confluence#uriToObject}
+     * to retrieve already-cleaned content.  If {@code confluence} is null the method is a no-op.
+     *
+     * @param textContent     Any text that may contain Confluence URLs (e.g. full ticket text)
+     * @param inputFolderPath The base input folder (e.g. {@code input/PROJ-123})
+     * @param confluence      Confluence client; if {@code null} the method does nothing
+     */
+    public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence) {
+        if (confluence == null || textContent == null || textContent.isBlank()) return;
+        try {
+            Set<String> urls = confluence.parseUris(textContent);
+            if (urls == null || urls.isEmpty()) {
+                logger.info("No Confluence URLs detected in ticket text");
+                return;
+            }
+            logger.info("Found {} Confluence URL(s), writing to input/confluence/...", urls.size());
+
+            Path confluenceFolder = inputFolderPath.resolve("confluence");
+            Files.createDirectories(confluenceFolder);
+
+            int written = 0;
+            for (String url : urls) {
+                try {
+                    Object content = confluence.uriToObject(url);
+                    if (content == null) {
+                        logger.warn("Confluence returned null for {}", url);
+                        continue;
+                    }
+                    String text = content.toString().trim();
+                    if (text.isBlank()) {
+                        logger.warn("Confluence page empty for {}", url);
+                        continue;
+                    }
+                    // Derive a safe filename from the trailing URL path segment
+                    String urlPath = url.replaceAll("\\?.*", "").replaceAll("#.*", "");
+                    String[] segments = urlPath.split("/");
+                    String rawName = segments[segments.length - 1];
+                    if (rawName.isBlank()) rawName = "page-" + written;
+                    String safeName = rawName.replaceAll("[^\\w.\\-]", "_");
+                    Path filePath = confluenceFolder.resolve(safeName + ".md");
+                    Files.write(filePath, text.getBytes(StandardCharsets.UTF_8));
+                    logger.info("Wrote Confluence page → {} ({} chars)", filePath, text.length());
+                    written++;
+                } catch (Exception e) {
+                    logger.warn("Could not write Confluence page {} (skipping): {}", url, e.getMessage());
+                }
+            }
+            logger.info("Wrote {}/{} Confluence pages to input/confluence/", written, urls.size());
+        } catch (Exception e) {
+            logger.warn("writeConfluencePagesFile failed (non-fatal): {}", e.getMessage());
         }
     }
 
