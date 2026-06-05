@@ -434,6 +434,13 @@ public class CliExecutionHelper {
                     Thread.currentThread().interrupt();
                 }
                 logger.info("timerJSAction scheduler stopped");
+                // Fire one final tick so the complete CLI output is saved to releases
+                try {
+                    logger.info("timerJSAction final tick: saving complete session output");
+                    timerAction.run();
+                } catch (Exception e) {
+                    logger.warn("timerJSAction final tick failed (non-fatal): {}", e.getMessage());
+                }
             }
         }
     }
