@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # DMtools Agent Skill Installer
-# Works with Cursor, Claude, Codex, and any Agent Skills compatible system
-# Installs to project-level directories (.cursor/skills, .claude/skills, .codex/skills)
-# and to global ~/.claude/skills if ~/.claude exists (Claude Code / GitHub Copilot CLI)
+# Works with Cursor, Claude, Codex, GitHub Copilot CLI, and any Agent Skills compatible system
+# Installs to project-level directories (.cursor/skills, .claude/skills, .codex/skills,
+#   .github/skills, .agents/skills)
+# and to global ~/.claude/skills, ~/.copilot/skills, ~/.agents/skills if those dirs exist
 #
 # Usage:
 #   curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash
@@ -125,7 +126,7 @@ while [ $# -gt 0 ]; do
             echo "  bash skill-install.sh --skills=jira,unknown --skip-unknown"
             echo "    → Downgrades invalid skill names to warnings and installs Jira"
             echo ""
-            echo "Note: Installs to project-level and global (~/.claude/skills) directories"
+            echo "Note: Installs to project-level and global (~/.claude/skills, ~/.copilot/skills, ~/.agents/skills) directories"
             echo "      Run this command from your project root directory."
             exit 0
             ;;
@@ -443,16 +444,28 @@ resolve_metadata_version() {
 detect_skill_dirs() {
     local found_dirs=()
 
+    # Project-level: Cursor
     if [ -d ".cursor/skills" ] || [ -d ".cursor" ]; then
         found_dirs+=(".cursor/skills")
     fi
+    # Project-level: Claude Code
     if [ -d ".claude/skills" ] || [ -d ".claude" ]; then
         found_dirs+=(".claude/skills")
     fi
+    # Project-level: Codex
     if [ -d ".codex/skills" ] || [ -d ".codex" ]; then
         found_dirs+=(".codex/skills")
     fi
+    # Project-level: GitHub Copilot CLI / Copilot coding agent
+    if [ -d ".github/skills" ] || [ -d ".github" ]; then
+        found_dirs+=(".github/skills")
+    fi
+    # Project-level: cross-agent (Copilot CLI, etc.)
+    if [ -d ".agents/skills" ] || [ -d ".agents" ]; then
+        found_dirs+=(".agents/skills")
+    fi
 
+    # Global: Claude Code (~/.claude/skills)
     local home_claude="$HOME/.claude"
     if [ -d "$home_claude/skills" ] || [ -d "$home_claude" ]; then
         local already_added=false
@@ -464,6 +477,27 @@ detect_skill_dirs() {
         done
         if [ "$already_added" = false ]; then
             found_dirs+=("$home_claude/skills")
+        fi
+    fi
+
+    # Global: GitHub Copilot CLI (~/.copilot/skills)
+    local home_copilot="$HOME/.copilot"
+    if [ -d "$home_copilot/skills" ] || [ -d "$home_copilot" ]; then
+        found_dirs+=("$home_copilot/skills")
+    fi
+
+    # Global: cross-agent skills (~/.agents/skills)
+    local home_agents="$HOME/.agents"
+    if [ -d "$home_agents/skills" ] || [ -d "$home_agents" ]; then
+        local already_added=false
+        for d in "${found_dirs[@]}"; do
+            if [ "$d" = ".agents/skills" ]; then
+                already_added=true
+                break
+            fi
+        done
+        if [ "$already_added" = false ]; then
+            found_dirs+=("$home_agents/skills")
         fi
     fi
 
@@ -719,9 +753,17 @@ main() {
         echo "  • Navigate to Rules → Agent Decides" >&2
         echo "  • You should see the selected dmtools skills in the skills list" >&2
     elif [[ "$selected_dir" == *"claude"* ]]; then
-        echo -e "${YELLOW}For Claude:${NC}" >&2
-        echo "  • The selected skills are available in your Claude desktop app" >&2
+        echo -e "${YELLOW}For Claude / GitHub Copilot CLI:${NC}" >&2
+        echo "  • The selected skills are available in your Claude desktop app or Copilot CLI" >&2
         echo "  • Type the installed /dmtools* command or mention the matching integration in your questions" >&2
+    elif [[ "$selected_dir" == *"copilot"* ]]; then
+        echo -e "${YELLOW}For GitHub Copilot CLI:${NC}" >&2
+        echo "  • The selected skills are installed to ~/.copilot/skills/" >&2
+        echo "  • Type /dmtools (or the skill command) in your Copilot CLI chat" >&2
+    elif [[ "$selected_dir" == *"agents"* ]]; then
+        echo -e "${YELLOW}For Agent Skills compatible tools:${NC}" >&2
+        echo "  • The selected skills are installed to ~/.agents/skills/" >&2
+        echo "  • Type the installed /dmtools* command in your AI assistant" >&2
     fi
 
     echo "" >&2
@@ -739,10 +781,11 @@ if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
             echo "Usage: $0 [install] [--all] [--skill <name>] [--skills=<name,name>] [--all-skills] [--skip-unknown]"
             echo ""
             echo "This script installs the DMtools skill for AI assistants that"
-            echo "support the Agent Skills standard (Cursor, Claude, Codex, etc.)"
+            echo "support the Agent Skills standard (Cursor, Claude, Codex, GitHub Copilot CLI, etc.)"
             echo ""
             echo "The installer will:"
-            echo "  1. Detect skill directories (.cursor, .claude, .codex, ~/.claude)"
+            echo "  1. Detect skill directories (.cursor, .claude, .codex, .github/skills, .agents/skills,"
+            echo "                              ~/.claude, ~/.copilot/skills, ~/.agents/skills)"
             echo "  2. Download the selected DMtools skill package(s)"
             echo "  3. Install to ALL detected locations (when piped) or ask you to choose"
             echo ""
