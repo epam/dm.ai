@@ -462,6 +462,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     // Write comments.md alongside request.md — same toText() format as chunks sent to AI
                     cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
 
+                    // Write Confluence pages linked in the ticket text to input/confluence/
+                    cliHelper.writeConfluencePagesFile(textFieldsOnly, inputContextPath, confluence);
+
                     // When writeAgentParamsToFiles=true: expand agent params into separate files in the
                     // input folder, then replace request.md with minimal ticket-only content.
                     if (expertParams.isWriteAgentParamsToFiles() && originalParams != null) {
