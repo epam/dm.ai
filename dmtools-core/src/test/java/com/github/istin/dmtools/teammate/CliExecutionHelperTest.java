@@ -932,20 +932,15 @@ public class CliExecutionHelperTest {
         when(mockContent.getStorage()).thenReturn(mockStorage);
         when(mockContent.getId()).thenReturn("12345");
 
-        // Mock attachment
-        com.github.istin.dmtools.atlassian.confluence.model.Attachment mockAttachment =
-                mock(com.github.istin.dmtools.atlassian.confluence.model.Attachment.class);
-        when(mockAttachment.getTitle()).thenReturn("diagram.png");
-        when(mockAttachment.getDownloadLink()).thenReturn("/download/attachments/12345/diagram.png");
-
-        // Create a real temp file that downloadAttachment would return
+        // Create a real temp file representing a downloaded attachment
         File fakeDownloaded = tempDir.resolve("diagram.png").toFile();
         fakeDownloaded.createNewFile();
 
         when(mockConfluence.parseUris(anyString())).thenReturn(java.util.Set.of(url));
         when(mockConfluence.contentByUrl(url)).thenReturn(mockContent);
-        when(mockConfluence.getContentAttachments("12345")).thenReturn(java.util.List.of(mockAttachment));
-        when(mockConfluence.downloadAttachment(eq(mockAttachment), any(File.class))).thenReturn(fakeDownloaded);
+        // downloadPageAttachments is the shared method now — mock it to return the fake file
+        when(mockConfluence.downloadPageAttachments(eq("12345"), any(File.class)))
+                .thenReturn(java.util.List.of(fakeDownloaded));
 
         cliHelper.writeConfluencePagesFile("see " + url, tempDir, mockConfluence);
 
@@ -965,9 +960,8 @@ public class CliExecutionHelperTest {
                 .orElse("");
         assertTrue(fileContent.contains("Page content here."), "File should contain page content");
 
-        // Verify attachment download was attempted
-        verify(mockConfluence).getContentAttachments("12345");
-        verify(mockConfluence).downloadAttachment(eq(mockAttachment), any(File.class));
+        // Verify shared downloadPageAttachments was called with the page content ID
+        verify(mockConfluence).downloadPageAttachments(eq("12345"), any(File.class));
     }
 
     @Test

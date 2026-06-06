@@ -321,40 +321,17 @@ public class ConfluenceMermaidIndexIntegration implements MermaidIndexIntegratio
         metadata.add("spaceKey:" + spaceKey);
         metadata.add("contentId:" + contentId);
         
-        // Get and download attachments
+        // Get and download attachments using the shared Confluence.downloadPageAttachments()
         List<File> attachmentFiles = new ArrayList<>();
         Path tempDirPath = null;
         try {
             List<Attachment> attachments = confluence.getContentAttachments(contentId);
             if (attachments != null && !attachments.isEmpty()) {
-                // Create temp directory for attachments
                 tempDirPath = Files.createTempDirectory("confluence-attachments-" + contentId);
-                File tempDir = tempDirPath.toFile();
-                
-                for (Attachment attachment : attachments) {
-                    String title = attachment.getTitle();
-                    String downloadLink = attachment.getDownloadLink();
-                    
-                    if (downloadLink != null && !downloadLink.isEmpty()) {
-                        try {
-                            // Download attachment
-                            File downloadedFile = confluence.downloadAttachment(attachment, tempDir);
-                            if (downloadedFile != null && downloadedFile.exists()) {
-                                attachmentFiles.add(downloadedFile);
-                                logger.debug("Downloaded attachment {} for content {}", title, contentId);
-                            } else {
-                                logger.warn("Downloaded file is null or doesn't exist for attachment {} in content {}", title, contentId);
-                            }
-                        } catch (Exception e) {
-                            logger.warn("Failed to download attachment {} for content {}: {}", title, contentId, e.getMessage());
-                        }
-                    } else {
-                        logger.warn("Attachment {} has no download link for content {}", title, contentId);
-                    }
-                }
+                attachmentFiles = confluence.downloadPageAttachments(contentId, tempDirPath.toFile());
             }
         } catch (Exception e) {
-            logger.warn("Failed to get attachments for content {}: {}", contentId, e.getMessage());
+            logger.warn("Failed to get/download attachments for content {}: {}", contentId, e.getMessage());
         }
         
         // Get last modified date

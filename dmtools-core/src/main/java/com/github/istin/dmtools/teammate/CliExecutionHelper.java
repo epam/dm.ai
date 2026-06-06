@@ -12,7 +12,6 @@ import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
-import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -234,34 +233,17 @@ public class CliExecutionHelper {
     }
 
     /**
-     * Downloads all attachments for a Confluence content item into {@code targetDir}.
-     * Mirrors the logic in {@code ConfluenceMermaidIndexIntegration.processContent()}.
+     * Downloads all attachments for a Confluence content item into {@code targetDir}
+     * via {@link Confluence#downloadPageAttachments} — the shared method used by both
+     * MermaidIndex and CLI input folder preparation.
      */
     private void downloadConfluenceAttachments(Confluence confluence, String contentId, File targetDir) {
         try {
-            List<Attachment> attachments = confluence.getContentAttachments(contentId);
-            if (attachments == null || attachments.isEmpty()) return;
-            logger.info("Downloading {} attachment(s) for Confluence page {}", attachments.size(), contentId);
-            for (Attachment attachment : attachments) {
-                String attachTitle = attachment.getTitle();
-                String downloadLink = attachment.getDownloadLink();
-                if (downloadLink == null || downloadLink.isBlank()) {
-                    logger.warn("Attachment '{}' has no download link, skipping", attachTitle);
-                    continue;
-                }
-                try {
-                    File downloaded = confluence.downloadAttachment(attachment, targetDir);
-                    if (downloaded != null && downloaded.exists()) {
-                        logger.info("Downloaded Confluence attachment → {} ({} bytes)", downloaded.getName(), downloaded.length());
-                    } else {
-                        logger.warn("Download returned null/missing file for attachment '{}'", attachTitle);
-                    }
-                } catch (Exception e) {
-                    logger.warn("Failed to download attachment '{}': {}", attachTitle, e.getMessage());
-                }
-            }
+            List<java.io.File> files = confluence.downloadPageAttachments(contentId, targetDir);
+            logger.info("Downloaded {} attachment(s) for Confluence page {} to input/confluence/",
+                    files.size(), contentId);
         } catch (Exception e) {
-            logger.warn("Could not list attachments for content {} (skipping): {}", contentId, e.getMessage());
+            logger.warn("Could not download attachments for content {} (skipping): {}", contentId, e.getMessage());
         }
     }
 

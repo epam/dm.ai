@@ -632,6 +632,43 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     }
 
     /**
+     * Downloads all attachments of a Confluence page to {@code targetDir}.
+     * Skips attachments with no download link and logs warnings for failures.
+     * This is a convenience wrapper reused by both MermaidIndex and CLI input folder preparation.
+     *
+     * @param contentId page/content ID whose attachments to download
+     * @param targetDir directory where attachment files will be saved
+     * @return list of successfully downloaded files (may be empty)
+     * @throws IOException if listing attachments fails
+     */
+    public List<File> downloadPageAttachments(String contentId, File targetDir) throws IOException {
+        List<File> downloaded = new ArrayList<>();
+        List<Attachment> attachments = getContentAttachments(contentId);
+        if (attachments == null || attachments.isEmpty()) return downloaded;
+        logger.info("Downloading {} attachment(s) for content {}", attachments.size(), contentId);
+        for (Attachment attachment : attachments) {
+            String title = attachment.getTitle();
+            String link = attachment.getDownloadLink();
+            if (link == null || link.isBlank()) {
+                logger.warn("Attachment '{}' has no download link, skipping", title);
+                continue;
+            }
+            try {
+                File file = downloadAttachment(attachment, targetDir);
+                if (file != null && file.exists()) {
+                    downloaded.add(file);
+                    logger.info("Downloaded attachment '{}' → {} bytes", title, file.length());
+                } else {
+                    logger.warn("Download returned null/missing file for attachment '{}'", title);
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to download attachment '{}': {}", title, e.getMessage());
+            }
+        }
+        return downloaded;
+    }
+
+    /**
      * Converts a MIME media type to a file extension.
      * @param mediaType the MIME type (e.g., "image/jpeg", "image/png")
      * @return the file extension (e.g., "jpg", "png") or null if not recognized
