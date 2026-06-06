@@ -13,6 +13,7 @@ import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
+import io.github.furstenheim.CopyDown;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -209,9 +210,10 @@ public class CliExecutionHelper {
                     String bodyText = page.getStorage() != null && page.getStorage().getValue() != null
                             ? page.getStorage().getValue().trim() : "";
                     if (!bodyText.isBlank()) {
+                        String markdownText = convertHtmlToMarkdown(bodyText);
                         Path mdFile = confluenceFolder.resolve(safeName + ".md");
-                        Files.write(mdFile, bodyText.getBytes(StandardCharsets.UTF_8));
-                        logger.info("Wrote Confluence page → {} ({} chars)", mdFile, bodyText.length());
+                        Files.write(mdFile, markdownText.getBytes(StandardCharsets.UTF_8));
+                        logger.info("Wrote Confluence page → {} ({} chars, markdown)", mdFile, markdownText.length());
                         written++;
                     } else {
                         logger.warn("Confluence page '{}' has empty body, skipping text write", title);
@@ -256,6 +258,20 @@ public class CliExecutionHelper {
         String[] segments = urlPath.split("/");
         String raw = segments[segments.length - 1];
         return raw.isBlank() ? "page-" + index : raw.replaceAll("[^\\w.\\-]", "_");
+    }
+
+    /**
+     * Converts Confluence Storage Format HTML to readable Markdown.
+     * Strips raw HTML tags, Confluence macros (ac:*, ri:*) are handled gracefully —
+     * their text content is preserved where possible.
+     */
+    private static String convertHtmlToMarkdown(String html) {
+        try {
+            return new CopyDown().convert(html);
+        } catch (Exception e) {
+            logger.warn("HTML-to-Markdown conversion failed, saving raw HTML: {}", e.getMessage());
+            return html;
+        }
     }
 
     /**
