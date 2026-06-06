@@ -30,6 +30,28 @@ public class Attachment extends JSONModel {
     }
 
     /**
+     * Gets the attachment ID (e.g. "att6223691792").
+     */
+    public String getId() {
+        return getString("id");
+    }
+
+    /**
+     * Extracts the page/container content ID from the download link.
+     * E.g. "/download/attachments/6180601871/file.png" → "6180601871"
+     */
+    public String getContainerContentId() {
+        String link = getDownloadLink();
+        if (link == null) return null;
+        String prefix = "/download/attachments/";
+        int start = link.indexOf(prefix);
+        if (start < 0) return null;
+        start += prefix.length();
+        int end = link.indexOf("/", start);
+        return end > start ? link.substring(start, end) : null;
+    }
+
+    /**
      * Gets the download link for this attachment.
      * @return the download path (relative to base URL) or null if not available
      */
