@@ -12,6 +12,7 @@ import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.confluence.ConfluenceStorageMarkdown;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import io.github.furstenheim.CopyDown;
 import org.apache.logging.log4j.LogManager;
@@ -262,16 +263,11 @@ public class CliExecutionHelper {
 
     /**
      * Converts Confluence Storage Format HTML to readable Markdown.
-     * Strips raw HTML tags, Confluence macros (ac:*, ri:*) are handled gracefully —
-     * their text content is preserved where possible.
+     * Delegates to {@link ConfluenceStorageMarkdown} which pre-processes
+     * Confluence-specific tags before passing to CopyDown.
      */
     private static String convertHtmlToMarkdown(String html) {
-        try {
-            return new CopyDown().convert(html);
-        } catch (Exception e) {
-            logger.warn("HTML-to-Markdown conversion failed, saving raw HTML: {}", e.getMessage());
-            return html;
-        }
+        return ConfluenceStorageMarkdown.toMarkdown(html);
     }
 
     /**
