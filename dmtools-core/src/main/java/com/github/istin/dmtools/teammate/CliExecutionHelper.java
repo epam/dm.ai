@@ -12,6 +12,8 @@ import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
+import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -166,11 +168,15 @@ public class CliExecutionHelper {
     }
 
     /**
-     * Writes Confluence pages referenced in {@code textContent} to
-     * {@code inputFolderPath/confluence/<safe-name>.md} so CLI agents can read them without
-     * requiring web access.  Uses {@link Confluence#parseUris} to detect Confluence URLs
-     * (domain-aware, same as the context orchestrator) and {@link Confluence#uriToObject}
-     * to retrieve already-cleaned content.  If {@code confluence} is null the method is a no-op.
+     * Fetches Confluence pages referenced in {@code textContent} and writes both the page text
+     * and all page attachments to {@code inputFolderPath/confluence/} so CLI agents can read them
+     * without web access.
+     * <p>
+     * Uses {@link Confluence#parseUris} (domain-aware, same mechanism as ContextOrchestrator)
+     * to detect URLs, then {@link Confluence#contentByUrl} to get the full {@link Content} object,
+     * {@link Confluence#getContentAttachments} + {@link Confluence#downloadAttachment} to fetch
+     * attachments — reusing the same pattern as {@code ConfluenceMermaidIndexIntegration}.
+     * If {@code confluence} is null the method is a no-op.
      *
      * @param textContent     Any text that may contain Confluence URLs (e.g. full ticket text)
      * @param inputFolderPath The base input folder (e.g. {@code input/PROJ-123})
@@ -192,34 +198,82 @@ public class CliExecutionHelper {
             int written = 0;
             for (String url : urls) {
                 try {
-                    Object content = confluence.uriToObject(url);
-                    if (content == null) {
-                        logger.warn("Confluence returned null for {}", url);
+                    Content page = confluence.contentByUrl(url);
+                    if (page == null) {
+                        logger.warn("Confluence returned null Content for {}", url);
                         continue;
                     }
-                    String text = content.toString().trim();
-                    if (text.isBlank()) {
-                        logger.warn("Confluence page empty for {}", url);
-                        continue;
+
+                    // Write page text
+                    String title = page.getTitle();
+                    String safeName = deriveSafeName(title, url, written);
+                    String bodyText = page.getStorage() != null && page.getStorage().getValue() != null
+                            ? page.getStorage().getValue().trim() : "";
+                    if (!bodyText.isBlank()) {
+                        Path mdFile = confluenceFolder.resolve(safeName + ".md");
+                        Files.write(mdFile, bodyText.getBytes(StandardCharsets.UTF_8));
+                        logger.info("Wrote Confluence page → {} ({} chars)", mdFile, bodyText.length());
+                        written++;
+                    } else {
+                        logger.warn("Confluence page '{}' has empty body, skipping text write", title);
                     }
-                    // Derive a safe filename from the trailing URL path segment
-                    String urlPath = url.replaceAll("\\?.*", "").replaceAll("#.*", "");
-                    String[] segments = urlPath.split("/");
-                    String rawName = segments[segments.length - 1];
-                    if (rawName.isBlank()) rawName = "page-" + written;
-                    String safeName = rawName.replaceAll("[^\\w.\\-]", "_");
-                    Path filePath = confluenceFolder.resolve(safeName + ".md");
-                    Files.write(filePath, text.getBytes(StandardCharsets.UTF_8));
-                    logger.info("Wrote Confluence page → {} ({} chars)", filePath, text.length());
-                    written++;
+
+                    // Download attachments (same pattern as ConfluenceMermaidIndexIntegration)
+                    String contentId = page.getId();
+                    if (contentId != null && !contentId.isBlank()) {
+                        downloadConfluenceAttachments(confluence, contentId, confluenceFolder.toFile());
+                    }
                 } catch (Exception e) {
-                    logger.warn("Could not write Confluence page {} (skipping): {}", url, e.getMessage());
+                    logger.warn("Could not fetch Confluence page {} (skipping): {}", url, e.getMessage());
                 }
             }
             logger.info("Wrote {}/{} Confluence pages to input/confluence/", written, urls.size());
         } catch (Exception e) {
             logger.warn("writeConfluencePagesFile failed (non-fatal): {}", e.getMessage());
         }
+    }
+
+    /**
+     * Downloads all attachments for a Confluence content item into {@code targetDir}.
+     * Mirrors the logic in {@code ConfluenceMermaidIndexIntegration.processContent()}.
+     */
+    private void downloadConfluenceAttachments(Confluence confluence, String contentId, File targetDir) {
+        try {
+            List<Attachment> attachments = confluence.getContentAttachments(contentId);
+            if (attachments == null || attachments.isEmpty()) return;
+            logger.info("Downloading {} attachment(s) for Confluence page {}", attachments.size(), contentId);
+            for (Attachment attachment : attachments) {
+                String attachTitle = attachment.getTitle();
+                String downloadLink = attachment.getDownloadLink();
+                if (downloadLink == null || downloadLink.isBlank()) {
+                    logger.warn("Attachment '{}' has no download link, skipping", attachTitle);
+                    continue;
+                }
+                try {
+                    File downloaded = confluence.downloadAttachment(attachment, targetDir);
+                    if (downloaded != null && downloaded.exists()) {
+                        logger.info("Downloaded Confluence attachment → {} ({} bytes)", downloaded.getName(), downloaded.length());
+                    } else {
+                        logger.warn("Download returned null/missing file for attachment '{}'", attachTitle);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to download attachment '{}': {}", attachTitle, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not list attachments for content {} (skipping): {}", contentId, e.getMessage());
+        }
+    }
+
+    /** Derives a safe filesystem name from a Confluence page title or URL. */
+    private static String deriveSafeName(String title, String url, int index) {
+        if (title != null && !title.isBlank()) {
+            return title.replaceAll("[^\\w.\\-]", "_");
+        }
+        String urlPath = url.replaceAll("\\?.*", "").replaceAll("#.*", "");
+        String[] segments = urlPath.split("/");
+        String raw = segments[segments.length - 1];
+        return raw.isBlank() ? "page-" + index : raw.replaceAll("[^\\w.\\-]", "_");
     }
 
     /**

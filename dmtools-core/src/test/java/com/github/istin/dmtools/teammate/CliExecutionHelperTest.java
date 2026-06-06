@@ -892,7 +892,6 @@ public class CliExecutionHelperTest {
 
     @Test
     void writeConfluencePagesFile_nullConfluence_doesNothing() throws Exception {
-        // Should be a no-op and not throw
         assertDoesNotThrow(() -> cliHelper.writeConfluencePagesFile("some text", tempDir, null));
         assertFalse(Files.exists(tempDir.resolve("confluence")));
     }
@@ -909,7 +908,8 @@ public class CliExecutionHelperTest {
     void writeConfluencePagesFile_noUrlsFound_doesNothing() throws Exception {
         com.github.istin.dmtools.atlassian.confluence.Confluence mockConfluence =
                 mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
-        when(mockConfluence.parseUris("plain text without confluence links")).thenReturn(java.util.Collections.emptySet());
+        when(mockConfluence.parseUris("plain text without confluence links"))
+                .thenReturn(java.util.Collections.emptySet());
 
         cliHelper.writeConfluencePagesFile("plain text without confluence links", tempDir, mockConfluence);
 
@@ -917,27 +917,57 @@ public class CliExecutionHelperTest {
     }
 
     @Test
-    void writeConfluencePagesFile_writesPageContentToFile() throws Exception {
+    void writeConfluencePagesFile_writesPageContentAndDownloadsAttachments() throws Exception {
         com.github.istin.dmtools.atlassian.confluence.Confluence mockConfluence =
                 mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
         String url = "https://wiki.example.com/wiki/spaces/SPACE/pages/12345/My+Page";
+
+        // Mock Content with Storage body and page ID
+        com.github.istin.dmtools.atlassian.confluence.model.Content mockContent =
+                mock(com.github.istin.dmtools.atlassian.confluence.model.Content.class);
+        com.github.istin.dmtools.atlassian.confluence.model.Storage mockStorage =
+                mock(com.github.istin.dmtools.atlassian.confluence.model.Storage.class);
+        when(mockStorage.getValue()).thenReturn("<p>Page content here.</p>");
+        when(mockContent.getTitle()).thenReturn("My Page");
+        when(mockContent.getStorage()).thenReturn(mockStorage);
+        when(mockContent.getId()).thenReturn("12345");
+
+        // Mock attachment
+        com.github.istin.dmtools.atlassian.confluence.model.Attachment mockAttachment =
+                mock(com.github.istin.dmtools.atlassian.confluence.model.Attachment.class);
+        when(mockAttachment.getTitle()).thenReturn("diagram.png");
+        when(mockAttachment.getDownloadLink()).thenReturn("/download/attachments/12345/diagram.png");
+
+        // Create a real temp file that downloadAttachment would return
+        File fakeDownloaded = tempDir.resolve("diagram.png").toFile();
+        fakeDownloaded.createNewFile();
+
         when(mockConfluence.parseUris(anyString())).thenReturn(java.util.Set.of(url));
-        when(mockConfluence.uriToObject(url)).thenReturn("# My Page\n\nPage content here.");
+        when(mockConfluence.contentByUrl(url)).thenReturn(mockContent);
+        when(mockConfluence.getContentAttachments("12345")).thenReturn(java.util.List.of(mockAttachment));
+        when(mockConfluence.downloadAttachment(eq(mockAttachment), any(File.class))).thenReturn(fakeDownloaded);
 
         cliHelper.writeConfluencePagesFile("see " + url, tempDir, mockConfluence);
 
         Path confluenceDir = tempDir.resolve("confluence");
         assertTrue(Files.exists(confluenceDir), "confluence/ directory should be created");
+
+        // .md file should be written
         long mdFiles = Files.list(confluenceDir)
                 .filter(p -> p.toString().endsWith(".md"))
                 .count();
         assertEquals(1, mdFiles, "One .md file should be written");
+
         String fileContent = Files.list(confluenceDir)
                 .filter(p -> p.toString().endsWith(".md"))
                 .findFirst()
                 .map(p -> { try { return Files.readString(p, StandardCharsets.UTF_8); } catch (Exception e) { return ""; } })
                 .orElse("");
         assertTrue(fileContent.contains("Page content here."), "File should contain page content");
+
+        // Verify attachment download was attempted
+        verify(mockConfluence).getContentAttachments("12345");
+        verify(mockConfluence).downloadAttachment(eq(mockAttachment), any(File.class));
     }
 
     @Test
@@ -946,14 +976,14 @@ public class CliExecutionHelperTest {
                 mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
         String url = "https://wiki.example.com/wiki/spaces/SPACE/pages/99/Empty";
         when(mockConfluence.parseUris(anyString())).thenReturn(java.util.Set.of(url));
-        when(mockConfluence.uriToObject(url)).thenReturn(null);
+        when(mockConfluence.contentByUrl(url)).thenReturn(null);
 
         cliHelper.writeConfluencePagesFile("see " + url, tempDir, mockConfluence);
 
         Path confluenceDir = tempDir.resolve("confluence");
-        // Folder may or may not be created, but no files should exist
         if (Files.exists(confluenceDir)) {
-            assertEquals(0, Files.list(confluenceDir).count(), "No files should be written for null content");
+            assertEquals(0, Files.list(confluenceDir).filter(p -> p.toString().endsWith(".md")).count(),
+                    "No .md files should be written for null content");
         }
     }
 }
