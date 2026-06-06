@@ -593,15 +593,26 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         // Ensure the target directory exists using atomic method
         java.nio.file.Files.createDirectories(targetDir.toPath());
         
-        // Build the full download URL - ensure proper path joining
+        // Build the full download URL using the REST API endpoint which accepts
+        // API-token Basic auth (the /download/attachments/ path is browser-only and returns 401).
+        // REST path: /rest/api/content/{pageId}/child/attachment/{attachmentId}/download
+        String attachmentId = attachment.getId();
+        String pageId = attachment.getContainerContentId();
         String basePath = getBasePath();
         String fullUrl;
-        if (basePath.endsWith("/") && downloadLink.startsWith("/")) {
-            fullUrl = basePath + downloadLink.substring(1);
-        } else if (!basePath.endsWith("/") && !downloadLink.startsWith("/")) {
-            fullUrl = basePath + "/" + downloadLink;
+        if (attachmentId != null && pageId != null) {
+            // Strip trailing /wiki from basePath if present — REST path already includes it
+            String base = basePath.endsWith("/") ? basePath.substring(0, basePath.length() - 1) : basePath;
+            fullUrl = base + "/rest/api/content/" + pageId + "/child/attachment/" + attachmentId + "/download";
         } else {
-            fullUrl = basePath + downloadLink;
+            // Fallback: use download link directly
+            if (basePath.endsWith("/") && downloadLink.startsWith("/")) {
+                fullUrl = basePath + downloadLink.substring(1);
+            } else if (!basePath.endsWith("/") && !downloadLink.startsWith("/")) {
+                fullUrl = basePath + "/" + downloadLink;
+            } else {
+                fullUrl = basePath + downloadLink;
+            }
         }
         
         // Sanitize filename to prevent directory traversal attacks
