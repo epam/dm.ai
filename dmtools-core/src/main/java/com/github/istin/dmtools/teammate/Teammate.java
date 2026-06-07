@@ -725,11 +725,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
      * @return merged array of CLI prompts, or base prompts if no tracker-specific match found
      */
     static String[] resolveCliPrompts(String[] baseCliPrompts, Map<String, String[]> cliPromptsByTracker, String trackerType) {
-        if (trackerType == null || cliPromptsByTracker == null || !cliPromptsByTracker.containsKey(trackerType)) {
+        String effectiveTracker = trackerType;
+        if (effectiveTracker == null || effectiveTracker.isBlank()) {
+            // Default to Markdown-based formatting when no tracker is configured.
+            effectiveTracker = "ado";
+        }
+        if (cliPromptsByTracker == null || !cliPromptsByTracker.containsKey(effectiveTracker)) {
             return baseCliPrompts;
         }
 
-        String[] trackerPrompts = cliPromptsByTracker.get(trackerType);
+        String[] trackerPrompts = cliPromptsByTracker.get(effectiveTracker);
         if (trackerPrompts == null || trackerPrompts.length == 0) {
             return baseCliPrompts;
         }

@@ -201,11 +201,11 @@ class TeammateCliPromptsTest {
     }
 
     @Test
-    void testResolveCliPrompts_ReturnsBaseWhenTrackerTypeIsNull() {
+    void testResolveCliPrompts_FallsBackToAdoWhenTrackerTypeIsNull() {
         String[] base = {"base1"};
-        Map<String, String[]> byTracker = Map.of("jira", new String[]{"jira1"});
+        Map<String, String[]> byTracker = Map.of("ado", new String[]{"ado1"});
         String[] result = Teammate.resolveCliPrompts(base, byTracker, null);
-        assertSame(base, result);
+        assertArrayEquals(new String[]{"base1", "ado1"}, result);
     }
 
     @Test
