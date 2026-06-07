@@ -448,7 +448,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 try {
                     // Merge base cliPrompts with tracker-specific prompts
                     String[] mergedCliPrompts = resolveCliPrompts(
-                            expertParams.getCliPrompts(), expertParams.getCliPromptsByTracker(), configuration.getDefaultTracker());
+                            expertParams.getCliPrompts(), expertParams.getCliPromptsByTracker(), configuration != null ? configuration.getDefaultTracker() : null);
                     if (mergedCliPrompts != expertParams.getCliPrompts()) {
                         logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
                     }
