@@ -49,6 +49,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultItem>> {
@@ -72,6 +73,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
         @SerializedName("cliPrompts")
         private String[] cliPrompts;
+
+        @SerializedName("cliPromptsByTracker")
+        private Map<String, String[]> cliPromptsByTracker;
 
         @SerializedName("skipAIProcessing")
         private boolean skipAIProcessing = false;
@@ -442,9 +446,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
             if (cliCommands != null && cliCommands.length > 0) {
                 try {
-                    // Build combined CLI prompt from cliPrompt + cliPrompts via InstructionProcessor
+                    // Merge base cliPrompts with tracker-specific prompts
+                    String[] mergedCliPrompts = resolveCliPrompts(
+                            expertParams.getCliPrompts(), expertParams.getCliPromptsByTracker(), configuration != null ? configuration.getDefaultTracker() : null);
+                    if (mergedCliPrompts != expertParams.getCliPrompts()) {
+                        logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
+                    }
+
+                    // Build combined CLI prompt from cliPrompt + merged cliPrompts via InstructionProcessor
                     String processedPrompt = instructionProcessor.buildCombinedPrompt(
-                            expertParams.getCliPrompt(), expertParams.getCliPrompts());
+                            expertParams.getCliPrompt(), mergedCliPrompts);
                     if (processedPrompt != null) {
                         logger.info("Combined CLI prompt ready ({} chars)", processedPrompt.length());
                     }
@@ -703,6 +714,38 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         return results;
     }
 
+
+    /**
+     * Resolves the effective CLI prompts by merging base {@code cliPrompts} with tracker-specific
+     * prompts from {@code cliPromptsByTracker} when a matching tracker type is configured.
+     *
+     * @param baseCliPrompts      the base CLI prompts array (may be null)
+     * @param cliPromptsByTracker map of tracker type → tracker-specific prompts (may be null)
+     * @param trackerType         the current tracker type from configuration (may be null)
+     * @return merged array of CLI prompts, or base prompts if no tracker-specific match found
+     */
+    static String[] resolveCliPrompts(String[] baseCliPrompts, Map<String, String[]> cliPromptsByTracker, String trackerType) {
+        String effectiveTracker = trackerType;
+        if (effectiveTracker == null || effectiveTracker.isBlank()) {
+            // Default to Markdown-based formatting when no tracker is configured.
+            effectiveTracker = "ado";
+        }
+        if (cliPromptsByTracker == null || !cliPromptsByTracker.containsKey(effectiveTracker)) {
+            return baseCliPrompts;
+        }
+
+        String[] trackerPrompts = cliPromptsByTracker.get(effectiveTracker);
+        if (trackerPrompts == null || trackerPrompts.length == 0) {
+            return baseCliPrompts;
+        }
+
+        List<String> merged = new ArrayList<>();
+        if (baseCliPrompts != null) {
+            merged.addAll(List.of(baseCliPrompts));
+        }
+        merged.addAll(List.of(trackerPrompts));
+        return merged.toArray(new String[0]);
+    }
 
     public void attachResponse(Object orchestratorClass, String file, String result, String ticketKey, String contentType) throws IOException {
         String fileNameResult = orchestratorClass.getClass().getSimpleName() + file;
