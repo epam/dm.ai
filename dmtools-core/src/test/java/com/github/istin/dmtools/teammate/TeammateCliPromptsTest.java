@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -149,5 +150,83 @@ class TeammateCliPromptsTest {
     @Test
     void testJoiningLogic_EmptyArray_ProducesNoOutput() throws Exception {
         assertNull(processor.buildCombinedPrompt(null, new String[0]));
+    }
+
+    // -------------------------------------------------------------------------
+    // cliPromptsByTracker deserialization
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testTeammateParams_DeserializesCliPromptsByTracker() {
+        String json = """
+                {
+                  "cliPrompts": ["base prompt"],
+                  "cliPromptsByTracker": {
+                    "jira": ["jira specific"],
+                    "ado": ["ado specific"]
+                  }
+                }
+                """;
+        Teammate.TeammateParams params = new Gson().fromJson(json, Teammate.TeammateParams.class);
+        assertNotNull(params.getCliPromptsByTracker());
+        assertEquals(2, params.getCliPromptsByTracker().size());
+        assertArrayEquals(new String[]{"jira specific"}, params.getCliPromptsByTracker().get("jira"));
+        assertArrayEquals(new String[]{"ado specific"}, params.getCliPromptsByTracker().get("ado"));
+    }
+
+    @Test
+    void testTeammateParams_CliPromptsByTrackerDefaultsToNull() {
+        Teammate.TeammateParams params = new Gson().fromJson("{}", Teammate.TeammateParams.class);
+        assertNull(params.getCliPromptsByTracker());
+    }
+
+    // -------------------------------------------------------------------------
+    // resolveCliPrompts merging logic
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testResolveCliPrompts_MergesTrackerSpecificPrompts() {
+        String[] base = {"base1", "base2"};
+        Map<String, String[]> byTracker = Map.of("jira", new String[]{"jira1"});
+        String[] result = Teammate.resolveCliPrompts(base, byTracker, "jira");
+        assertArrayEquals(new String[]{"base1", "base2", "jira1"}, result);
+    }
+
+    @Test
+    void testResolveCliPrompts_ReturnsBaseWhenNoMatch() {
+        String[] base = {"base1"};
+        Map<String, String[]> byTracker = Map.of("ado", new String[]{"ado1"});
+        String[] result = Teammate.resolveCliPrompts(base, byTracker, "jira");
+        assertSame(base, result);
+    }
+
+    @Test
+    void testResolveCliPrompts_ReturnsBaseWhenTrackerTypeIsNull() {
+        String[] base = {"base1"};
+        Map<String, String[]> byTracker = Map.of("jira", new String[]{"jira1"});
+        String[] result = Teammate.resolveCliPrompts(base, byTracker, null);
+        assertSame(base, result);
+    }
+
+    @Test
+    void testResolveCliPrompts_ReturnsBaseWhenMapIsNull() {
+        String[] base = {"base1"};
+        String[] result = Teammate.resolveCliPrompts(base, null, "jira");
+        assertSame(base, result);
+    }
+
+    @Test
+    void testResolveCliPrompts_ReturnsTrackerOnlyWhenBaseIsNull() {
+        Map<String, String[]> byTracker = Map.of("jira", new String[]{"jira1", "jira2"});
+        String[] result = Teammate.resolveCliPrompts(null, byTracker, "jira");
+        assertArrayEquals(new String[]{"jira1", "jira2"}, result);
+    }
+
+    @Test
+    void testResolveCliPrompts_ReturnsBaseWhenTrackerPromptsEmpty() {
+        String[] base = {"base1"};
+        Map<String, String[]> byTracker = Map.of("jira", new String[0]);
+        String[] result = Teammate.resolveCliPrompts(base, byTracker, "jira");
+        assertSame(base, result);
     }
 }
