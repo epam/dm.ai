@@ -35,6 +35,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify agent snapshots are up-to-date
+        run: |
+          node testing/scripts/generate_agent_snapshots.js
+          if [ -n "$(git diff --name-only snapshots/)" ] || [ -n "$(git ls-files --others --exclude-standard snapshots/)" ]; then
+            echo "❌ Agent snapshots are out of date."
+            echo "Run 'node testing/scripts/generate_agent_snapshots.js' locally and commit the changes."
+            git diff --stat snapshots/
+            exit 1
+          fi
+          echo "✅ Agent snapshots are up-to-date."
+
       - name: Test Report
         uses: dorny/test-reporter@v1
         if: always()
