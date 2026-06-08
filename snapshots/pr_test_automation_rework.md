@@ -4,7 +4,173 @@
 
 ## Base cliPrompts
 
-### [1] `./agents/prompts/bash_tools.md`
+### [1] Role / Plain Text
+
+Senior QA Automation Engineer focused on test code fixes
+
+---
+
+### [2] `./agents/instructions/common/coding_guidelines.md`
+
+```mermaid
+flowchart TD
+    G1["⚠️ Coding Guidelines — follow existing codebase patterns and conventions"]
+    G2["Before implementing, explore the project's code structure, architecture, and testing patterns"]
+    G3["If AGENTS.md exists in project root or subdirectories → READ and FOLLOW it — it contains agent-specific instructions, coding styles, and conventions"]
+    G4["If skills are available in the project → USE them — they provide specialized capabilities, workflows, and tool integrations"]
+    G5["Instructions may be extended via project configuration — always follow the full set of provided instructions"]
+    G6["Never invent new patterns when the codebase already has an established way of doing things"]
+    G1 --> G2 --> G3 --> G4 --> G5 --> G6
+```
+
+
+---
+
+### [3] `./agents/instructions/common/input_context_reading.md`
+
+```mermaid
+flowchart TD
+    subgraph INPUT_ORDER["⚠️ MANDATORY: Read input files FIRST before anything else"]
+        I0["find input/ -type f | sort — list all available files"]
+        I1["1️⃣ instruction.md (repo root) — project stack, deployment constraints, approved frameworks"]
+        I2["2️⃣ input/TICKET/request.md — ticket description, requirements, solution design, diagrams"]
+        I3["3️⃣ input/TICKET/comments.md — existing discussion, prior decisions, linked info"]
+        I4["4️⃣ input/TICKET/existing_questions.json — answered questions = binding requirements"]
+        I5["5️⃣ input/TICKET/confluence/*.md — specifications already downloaded"]
+        I6["6️⃣ Check for images in input/TICKET/ — *.png *.jpg *.gif *.svg"]
+        I0 --> I1 --> I2 --> I3 --> I4 --> I5 --> I6
+    end
+
+    subgraph CONFLUENCE_RULE["Confluence pages in input/ — READ THEM, don't re-fetch"]
+        C1["✅ DO: read input/TICKET/confluence/PageName.md"]
+        C2["❌ DON'T: call dmtools confluence_* to re-fetch pages already in input/"]
+        C3["✅ DO: read image files in input/TICKET/confluence/ — they are attachments from that page"]
+    end
+
+    subgraph ATTACH_RULE["Attachments — check before fetching via API"]
+        A1["Search glob 'input/**/*.png' and 'input/**/*.jpg' — find pre-downloaded images"]
+        A2["If image found locally → analyze it directly, no API call needed"]
+        A3["If attachment NOT in input/ → use dmtools confluence_get_content_attachments <id>"]
+        A1 --> A2
+        A1 -->|not found| A3
+    end
+
+    subgraph DMTOOLS_RULE["When to use dmtools for external data"]
+        D1["ONLY if you need data NOT already in input/"]
+        D2["dmtools jira_get_ticket KEY, dmtools confluence_search QUERY, etc."]
+        D3["See instructions/common/dmtools_cli.md for full reference"]
+    end
+
+    INPUT_ORDER --> CONFLUENCE_RULE --> ATTACH_RULE --> DMTOOLS_RULE
+```
+
+
+---
+
+### [4] `./agents/instructions/pr_test_automation_rework/general_guidelines.md`
+
+```mermaid
+flowchart TD
+    START([Test Case enters In Rework]) --> SETUP{rework_setup_failed.md exists?}
+    SETUP -->|Yes| FAIL[Write setup failure response and stop]
+    SETUP -->|No| INPUT[Read ALL input files in the ticket subfolder]
+    INPUT --> INPUTS["request.md, ticket.md, linked_bugs.md, pr_info.md, pr_diff.txt, comments.md, pr_discussions.md, pr_discussions_raw.json, merge_conflicts.md, ci_failures.md"]
+    INPUTS --> EXPLORE["Explore codebase structure in testing/ folder"]
+    EXPLORE --> CONFLICTS{merge_conflicts.md exists?}
+    CONFLICTS -->|Yes| RESOLVE["Resolve every conflict marker, git add each file, verify with git diff --check"]
+    CONFLICTS -->|No| CI
+    RESOLVE --> CI{ci_failures.md exists?}
+    CI -->|Yes| FIX_CI["Fix CI root cause: dependencies, config, or test setup"]
+    CI -->|No| THREADS
+    FIX_CI --> THREADS[Address every open thread in pr_discussions.md]
+    THREADS --> BLOCKING{BLOCKING issues?}
+    BLOCKING -->|Yes| FIX_BLOCK["Fix BLOCKING first — security, critical bugs"]
+    FIX_BLOCK --> IMPORTANT
+    BLOCKING -->|No| IMPORTANT[Fix IMPORTANT issues]
+    IMPORTANT --> SUGGESTIONS{Minor suggestions?}
+    SUGGESTIONS -->|Yes| SKIP["Skip if time-consuming — note in response.md"]
+    SUGGESTIONS -->|No| TEST[Run tests and verify]
+    SKIP --> TEST
+    TEST --> OUTPUT[Write outputs: response.md, pr_body.md, test_automation_result.json]
+    OUTPUT --> END([End])
+```
+
+
+---
+
+### [5] `./agents/instructions/pr_test_automation_rework/formatting_rules.md`
+
+```mermaid
+flowchart TD
+    F1["outputs/response.md must be a markdown document"]
+    F2["Required sections: ## Issues/Notes (if any), ## Approach, ## Files Modified, ## Test Coverage"]
+    F3["outputs/pr_body.md — GitHub Markdown for SCM-facing summary"]
+    F4["outputs/test_automation_result.json — structured test result"]
+    F5["Be surgical but thorough — fix exact issues flagged, then check same pattern across codebase"]
+    F6["Do NOT refactor unrelated code or add unrequested features"]
+```
+
+
+---
+
+### [6] `./agents/instructions/common/dmtools_cli.md`
+
+## DMTools CLI — External Data Access
+
+When you need additional context from Jira, Confluence, ADO, or GitHub that is not already
+in the `input/` folder, use the `dmtools` CLI directly via shell commands.
+
+```mermaid
+flowchart TD
+    A[Need external data?] --> B{Source}
+    B -->|Jira ticket / search| C[dmtools jira_get_ticket KEY\ndmtools jira_search_by_jql JQL]
+    B -->|Confluence page| D[dmtools confluence_get_page_by_url URL\ndmtools confluence_search QUERY]
+    B -->|Azure DevOps| E[dmtools ado_get_work_item ID\ndmtools ado_search_work_items QUERY]
+    B -->|GitHub| F[dmtools github_get_issue REPO NUM\ndmtools github_search_code QUERY]
+    C --> G[Parse JSON output]
+    D --> G
+    E --> G
+    F --> G
+    G --> H[Use content in your response]
+```
+
+### When to use dmtools CLI
+
+- Confluence pages linked in the ticket were **not** written to `input/confluence/`
+  (e.g. Confluence is on a different domain or not configured)
+- You need to fetch a **related Jira ticket** mentioned in the description
+- You need **ADO work items**, **GitHub issues**, or **pull requests** for context
+- You need to **search** for similar tickets or pages
+
+### Examples
+
+```bash
+# Fetch a Confluence page by URL
+dmtools confluence_get_page_by_url "https://wiki.example.com/wiki/spaces/SPACE/pages/123/Title"
+
+# Get a Jira ticket
+dmtools jira_get_ticket PROJ-456
+
+# Search Confluence
+dmtools confluence_search "sample sheet parser specification"
+
+# Search Jira
+dmtools jira_search_by_jql "project = PROJ AND summary ~ 'sample sheet'"
+```
+
+### Guidelines
+
+1. **Check `input/` first** — read `input/*/confluence/` and `input/*/request.md` before
+   making external calls to avoid redundant fetches.
+2. **Use dmtools only when needed** — don't fetch data that is already available locally.
+3. **Handle errors gracefully** — dmtools may return an error if a resource is not accessible;
+   continue with available information and note the missing context.
+4. **Cite sources** — when using data fetched via dmtools, mention the source in your response.
+
+
+---
+
+### [7] `./agents/prompts/bash_tools.md`
 
 ```mermaid
 flowchart TD
@@ -39,143 +205,54 @@ flowchart TD
 
 ---
 
-### [2] `./agents/prompts/codegraph_tools.md`
+## cliPromptsByTracker
 
-```mermaid
-flowchart TD
-    subgraph PURPOSE["Why investigate code"]
-        P1["BA / questions agent — find what is ALREADY implemented to avoid asking obvious questions"]
-        P2["Dev / review agent — understand call paths and symbols before modifying code"]
-    end
+### Tracker: `jira`
 
-    subgraph TOOLS["Two complementary code-navigation tools"]
-        subgraph CG["codegraph — semantic index"]
-            CG1["codegraph context 'TICKET feature summary'\n→ entry-point symbols + related call paths"]
-            CG2["codegraph query 'SymbolName'\n→ where class / method is defined"]
-            CG3["codegraph callees 'Class.method' → what it calls"]
-            CG4["codegraph callers 'Class.method' → who calls it"]
-            CG5["codegraph node 'ClassName' → read symbol source"]
-            CG6["codegraph sync → rebuild index after editing files"]
-        end
-        subgraph SR["Search — pattern finding"]
-            SR1["Search glob '**/*PayloadManifest*'\n→ find files by name"]
-            SR2["Search grep 'keyword' in **/*.java\n→ find business logic by text"]
-            SR3["Read files returned by grep / glob"]
-        end
-    end
+#### [1] `./agents/instructions/tracker/jira_comment_format.md`
 
-    subgraph FLOW["Investigation flow — use both tools together"]
-        F1["1️⃣ codegraph context 'ticket key + feature'\n   → semantic overview of the feature"]
-        F2{"codegraph returned\nuseful symbols?"}
-        F3["✅ Follow symbols: codegraph callees / callers / node"]
-        F4["↩️ Fallback: Search grep for domain keywords\n   e.g. 'PayloadManifest|RunId|Batch'"]
-        F5["2️⃣ Read source files returned by codegraph or grep"]
-        F6["3️⃣ Confirm what is implemented vs what is missing / ambiguous"]
-        F1 --> F2
-        F2 -->|yes| F3 --> F5
-        F2 -->|few results| F4 --> F5
-        F5 --> F6
-    end
+# Jira tracker comment
 
-    subgraph RULES["Rules"]
-        R1["✅ Dev / review / test agents — run codegraph context FIRST, always"]
-        R2["✅ BA / question agents — use grep + codegraph together; grep is equally valid"]
-        R3["❌ Never skip code investigation and invent questions about already-implemented things"]
-        R4["❌ Never use codegraph sync unless you edited source files in this session"]
-    end
+Use Jira wiki markup in `outputs/response.md`.
 
-    PURPOSE --> TOOLS --> FLOW --> RULES
-```
+- Headings: `h1.`, `h2.`, `h3.`
+- Bullets: `* item`
+- Numbered lists: `# item`
+- Bold: `*text*`
+- Inline code: `{{code}}`
+- Code block: `{code}...{code}`
+- Link: `[title|url]`
+
+Do not use Markdown headings, fenced code blocks, or backtick inline code.
+
+**IMPORTANT** When answering a clarification question about a user story, get the parent story for full context using: `dmtools jira_get_ticket PARENT-KEY` (the parent key is visible in the ticket's parent field).
+
 
 
 ---
 
-## Legacy cliPrompt (scalar)
+### Tracker: `ado`
 
-### `./agents/prompts/pr_test_automation_rework_prompt.md`
+#### [1] `./agents/instructions/tracker/ado_comment_format.md`
 
-User request is in the 'input' folder. Read all files there.
+# ADO tracker comment
 
-Before modifying or reviewing any source/test code, run CodeGraph once to orient
-yourself in the repository. Use a command such as:
+Use GitHub-flavored Markdown in `outputs/response.md` for Azure DevOps work item comments and descriptions.
 
-```bash
-codegraph context "test automation rework architecture and relevant testing patterns"
-```
+- Headings: `#`, `##`, `###`
+- Bullets: `- item` or `* item`
+- Numbered lists: `1. item`
+- Bold: `**text**`
+- Inline code: `` `code` ``
+- Code block: ` ```lang ... ``` `
+- Link: `[title](url)`
+- Tables: standard GFM table syntax
 
-Reading files from `input/` is allowed first because they are generated task
-context, but your first repository code-navigation command must be CodeGraph.
-Do not finish rework without a recorded CodeGraph invocation.
+Do not use Jira wiki markup (`h1.`, `*text*`, `{code}`, `[title|url]`) in ADO fields.
 
-**IMPORTANT**: Read in order:
-1. `request.md` *(if present)* — full ticket details
-2. `comments.md` *(if present)* — ticket comment history; recent comments contain previous test run results and review feedback
-3. `linked_bugs.md` *(if present)* — **CRITICAL**: linked bugs that block or relate to this test case.
-   - Read the **Solution** field and **AI Fix Comments** carefully — they describe HOW the bug was fixed.
-   - If the fix introduced **timing or async behavior** (e.g., a heartbeat probe with an interval, retry delay, polling timeout) — the test **MUST** wait long enough to observe the effect. Do NOT assert immediately after triggering the action.
-   - Example: if the bug was fixed by a heartbeat probe that runs every 5 seconds, the test must wait at least 5–10 seconds after simulating the failure condition before asserting the error appears.
-4. `ticket.md` — the Test Case ticket (objective, steps, expected result)
-5. `pr_info.md` — PR metadata
-6. `pr_diff.txt` — current test code
-7. `merge_conflicts.md` *(if present)* — **Resolve all merge conflicts FIRST** before touching anything else
-8. `pr_discussions.md` — review comments that must be addressed
-9. `pr_discussions_raw.json` — structured thread data with IDs for replies
+**IMPORTANT** When answering a clarification question about a user story, get the parent story for full context using: `dmtools ado_get_work_item PARENT-KEY` (the parent key is visible in the ticket's parent field).
 
-**If `merge_conflicts.md` is present**: Resolve every `<<<<<<<` / `=======` / `>>>>>>>` conflict marker in the listed files, then `git add <file>` for each. Do NOT `git commit` or `git merge --abort`.
+**IMPORTANT** When enhancing story descriptions, check child tickets and parent story for better context using: `dmtools ado_search_by_wiql`.
 
-The feature code is **already in main branch**. Your job is to:
-1. Fix all issues raised in the PR review comments (address every thread)
-2. Re-run the test and capture the new result
-3. Write output files
-
-**You may ONLY write code inside the `testing/` folder.**
-
-## Product defects discovered during rework
-
-If a reviewer asks for behavior that cannot be implemented from `testing/` because the production code, public API, repository service, CLI command, schema, or workflow does not expose the required capability, do **not** create a synthetic passing fixture and do **not** modify code outside `testing/`.
-
-Instead, keep or adjust the test so it exercises the closest production-visible action allowed by the Test Case, let it fail for the real product gap, and write `outputs/test_automation_result.json` with `"status": "failed"`. Also write `outputs/bug_description.md` with enough detail for the downstream bug creation flow to create or link a Bug: reproduction steps, expected result, actual result, exact missing/broken production capability, and the failing command/output.
-
-This is not `blocked_by_human`: missing product behavior is a failed test/product bug. The correct workflow is failed Test Case -> bug creation, not fake green test code.
-
-## Output files
-
-**⚠️ CRITICAL: All output files MUST be written to `outputs/` at the repository root** (e.g. `/home/runner/work/repo/repo/outputs/`).
-Do NOT write them inside `input/`, `input/TICKET-KEY/`, or any subfolder of `input/`. The post-processing script reads from `outputs/` at the repo root — writing elsewhere means all results will be silently lost.
-
-Run `mkdir -p outputs` first to ensure the directory exists.
-
-- `outputs/response.md` — tracker-formatted rework summary (short, factual): what was fixed + new test result
-- `outputs/pr_body.md` — SCM-formatted PR/comment body (always required)
-- `outputs/test_automation_result.json` — **MANDATORY — always write this file**, even if the test failed or errored. Use exactly this format:
-  ```json
-  { "status": "passed", "passed": 1, "failed": 0, "skipped": 0, "summary": "1 passed, 0 failed" }
-  ```
-  or for failure:
-  ```json
-  { "status": "failed", "passed": 0, "failed": 1, "skipped": 0, "summary": "0 passed, 1 failed", "error": "AssertionError: <exact error message>" }
-  ```
-  The `"status"` field **must** be exactly `"passed"` or `"failed"` (lowercase). Missing or wrong field name causes the pipeline to break.
-- `outputs/review_replies.json` — replies per thread: `{ "replies": [{ "inReplyToId": 123, "threadId": "PRRT_...", "reply": "Fixed: ..." }] }`
-- `outputs/bug_description.md` — updated tracker-formatted bug description (only if test still FAILED)
-
-
----
-
-## Legacy agentParams
-
-```json
-{
-  "aiRole": "Senior QA Automation Engineer focused on test code fixes",
-  "instructions": [
-    "./agents/instructions/test_automation/test_automation_architecture.md",
-    "./agents/instructions/test_automation/test_automation_instructions.md",
-    "./agents/instructions/test_automation/test_automation_json_output.md",
-    "./agents/instructions/rework/rework_instructions.md"
-  ],
-  "knownInfo": "",
-  "formattingRules": "./agents/instructions/development/formatting_rules.md"
-}
-```
 
 ---
