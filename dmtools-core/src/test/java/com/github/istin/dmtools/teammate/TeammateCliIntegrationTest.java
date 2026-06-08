@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -89,6 +90,7 @@ public class TeammateCliIntegrationTest {
         teammate.contextOrchestrator = contextOrchestrator;
         teammate.uriToObjectFactory = uriToObjectFactory;
         teammate.instructionProcessor = new InstructionProcessor(null, tempDir.toString());
+        teammate.agentParamsFileWriter = new AgentParamsFileWriter(teammate.instructionProcessor);
         
         // Set up test parameters
         params = new Teammate.TeammateParams();
@@ -233,6 +235,51 @@ public class TeammateCliIntegrationTest {
             
             // Verify CLI command was executed
             mockedUtils.verify(() -> CommandLineUtils.runCommand(eq("echo 'CLI response only'"), any(File.class), any(Map.class), any()));
+        }
+    }
+    
+    @Test
+    void testNullAgentParamsWithWriteAgentParamsToFilesWritesPlainTextRequest() throws Exception {
+        // Arrange: no agentParams (null), writeAgentParamsToFiles defaults to true
+        params.setAgentParams(null);
+        params.setCliCommands(new String[]{"echo 'Hello'"});
+        params.setSkipAIProcessing(true);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(false);
+        
+        Path inputFolder = Paths.get("input", "TEST-123");
+        try (MockedStatic<CommandLineUtils> mockedUtils = mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo 'Hello'"), any(File.class), any(Map.class), any()))
+                      .thenReturn("Hello\nExit Code: 0");
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                      .thenReturn(Map.of());
+            
+            // Act - should NOT throw NPE even with null agentParams
+            List<ResultItem> results = teammate.runJobImpl(params);
+            
+            // Assert
+            assertNotNull(results);
+            assertEquals(1, results.size());
+            
+            // request.md should contain plain text ticket fields (not JSON)
+            assertTrue(Files.exists(inputFolder.resolve("request.md")), "request.md should exist");
+            String requestContent = Files.readString(inputFolder.resolve("request.md"), StandardCharsets.UTF_8);
+            assertEquals("Test fields", requestContent,
+                    "request.md should contain plain text fields, not JSON wrapper");
+            
+            // Empty legacy fields are skipped — no empty files created
+            assertFalse(Files.exists(inputFolder.resolve("ai_role.md")), "ai_role.md should NOT exist for empty value");
+            assertFalse(Files.exists(inputFolder.resolve("formatting_rules.md")), "formatting_rules.md should NOT exist for empty value");
+            assertFalse(Files.exists(inputFolder.resolve("few_shots.md")), "few_shots.md should NOT exist for empty value");
+        } finally {
+            // Clean up input folder created in user.dir
+            if (Files.exists(inputFolder)) {
+                FileUtils.deleteDirectory(inputFolder.toFile());
+            }
+            Path parentInput = inputFolder.getParent();
+            if (parentInput != null && Files.exists(parentInput)) {
+                FileUtils.deleteDirectory(parentInput.toFile());
+            }
         }
     }
     
