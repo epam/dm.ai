@@ -98,6 +98,7 @@ public class TeammatePreCliJSActionTest {
         teammate.contextOrchestrator = contextOrchestrator;
         teammate.uriToObjectFactory = uriToObjectFactory;
         teammate.instructionProcessor = new InstructionProcessor(null, tempDir.toString());
+        teammate.agentParamsFileWriter = new AgentParamsFileWriter(teammate.instructionProcessor);
 
         params = new Teammate.TeammateParams();
         RequestDecompositionAgent.Result agentParams = new RequestDecompositionAgent.Result(
@@ -283,6 +284,7 @@ public class TeammatePreCliJSActionTest {
         spy.contextOrchestrator = contextOrchestrator;
         spy.uriToObjectFactory = uriToObjectFactory;
         spy.instructionProcessor = new InstructionProcessor(null, tempDir.toString());
+        spy.agentParamsFileWriter = new AgentParamsFileWriter(spy.instructionProcessor);
         return spy;
     }
 }

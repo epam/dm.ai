@@ -105,7 +105,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         private String[] additionalInstructions;
 
         @SerializedName("writeAgentParamsToFiles")
-        private boolean writeAgentParamsToFiles = false;
+        private boolean writeAgentParamsToFiles = true;
 
         @SerializedName("ignoreClonedByRelationship")
         private boolean ignoreClonedByRelationship = true;
@@ -302,7 +302,10 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             throw new RuntimeException("Failed to create URI processing sources", e);
         }
 
-        RequestDecompositionAgent.Result inputParams = expertParams.getAgentParams();
+        RequestDecompositionAgent.Result rawInputParams = expertParams.getAgentParams();
+        final RequestDecompositionAgent.Result inputParams = rawInputParams != null
+                ? rawInputParams
+                : new RequestDecompositionAgent.Result("", "", new String[0], new String[0], new String[0], "", "", "");
 
         // Snapshot original params BEFORE InstructionProcessor resolves URLs/paths to content.
         // Used later by AgentParamsFileWriter when writeAgentParamsToFiles=true.
