@@ -16,7 +16,11 @@ import com.github.istin.dmtools.mcp.MCPParam;
 import org.json.JSONObject;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import com.github.istin.dmtools.networking.RetryPolicy;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -377,7 +381,26 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
 
     public File downloadImage(String url) throws IOException {
         GenericRequest genericRequest = new GenericRequest(this, url);
-        return Impl.downloadFile(this, genericRequest, getCachedFile(genericRequest));
+        File downloadedFile = getCachedFile(genericRequest);
+        if (downloadedFile.exists()) {
+            return downloadedFile;
+        }
+        OkHttpClient client = getClient();
+        try (Response response = client.newCall(new Request.Builder()
+                .url(url)
+                .build()).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                try (BufferedSink sink = Okio.buffer(Okio.sink(downloadedFile))) {
+                    sink.writeAll(response.body().source());
+                }
+                logger.info("Download successful: {}", downloadedFile.getAbsolutePath());
+                return downloadedFile;
+            } else {
+                throw new IOException(response.code() + " " + response.body());
+            }
+        } finally {
+            client.connectionPool().evictAll();
+        }
     }
 
     @Override
