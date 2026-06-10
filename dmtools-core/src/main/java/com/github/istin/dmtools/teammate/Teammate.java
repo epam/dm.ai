@@ -110,6 +110,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("ignoreClonedByRelationship")
         private boolean ignoreClonedByRelationship = true;
 
+        @SerializedName("autoConvertionToMarkdown")
+        private boolean autoConvertionToMarkdown = true;
+
         @SerializedName("timerJSAction")
         private String timerJSAction;
 
@@ -317,6 +320,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             originalParams = null;
         }
 
+        instructionProcessor.setAutoConvertionToMarkdown(expertParams.isAutoConvertionToMarkdown());
         String[] aiRoleArray = instructionProcessor.extractIfNeeded(inputParams.getAiRole());
         inputParams.setAiRole(aiRoleArray.length > 0 ? aiRoleArray[0] : "");
         String[] resolvedInstructions = instructionProcessor.extractIfNeeded(inputParams.getInstructions());

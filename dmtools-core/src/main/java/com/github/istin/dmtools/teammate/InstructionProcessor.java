@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.confluence.ConfluenceStorageMarkdown;
 import com.github.istin.dmtools.common.utils.FileConfig;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.github.BasicGithub;
@@ -29,6 +30,7 @@ public class InstructionProcessor {
 
     private final Confluence confluence;
     private final String workingDirectory;
+    private boolean autoConvertionToMarkdown = true;
 
     public InstructionProcessor(Confluence confluence) {
         this(confluence, System.getProperty("user.dir"));
@@ -37,6 +39,10 @@ public class InstructionProcessor {
     public InstructionProcessor(Confluence confluence, String workingDirectory) {
         this.confluence = confluence;
         this.workingDirectory = workingDirectory;
+    }
+
+    public void setAutoConvertionToMarkdown(boolean autoConvertionToMarkdown) {
+        this.autoConvertionToMarkdown = autoConvertionToMarkdown;
     }
 
     /**
@@ -166,10 +172,22 @@ public class InstructionProcessor {
 
         try {
             String value = confluence.contentByUrl(url).getStorage().getValue();
-            if (StringUtils.isConfluenceYamlFormat(value)) {
-                return url + "\n" + StringUtils.extractYamlContentFromConfluence(value);
+            if (autoConvertionToMarkdown) {
+                String content;
+                if (StringUtils.isConfluenceYamlFormat(value)) {
+                    content = StringUtils.extractYamlContentFromConfluence(value);
+                } else {
+                    content = ConfluenceStorageMarkdown.toMarkdown(value);
+                }
+                return "Link: " + url + "\n\nMarkdown content of the link below:\n" + content;
             } else {
-                return url + "\n" + value;
+                String content;
+                if (StringUtils.isConfluenceYamlFormat(value)) {
+                    content = StringUtils.extractYamlContentFromConfluence(value);
+                } else {
+                    content = value;
+                }
+                return "Link: " + url + "\n\nContent of the link below:\n" + content;
             }
         } catch (Exception e) {
             logger.warn("Error fetching Confluence content from '{}': {}. Using URL as fallback.",
