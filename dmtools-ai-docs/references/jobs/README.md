@@ -100,7 +100,7 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 | `DevProductivityReport` | Produces developer productivity metrics from tracker, source control, and optional spreadsheet inputs. | `DevProductivityReport` | [dev-productivity-report.json](../examples/dev-productivity-report.json) |
 | `BAProductivityReport` | Calculates BA delivery metrics such as created work, field updates, and workflow movement over time. | `BAProductivityReport` | [ba-productivity-report.json](../examples/ba-productivity-report.json) |
 | `QAProductivityReport` | Calculates QA metrics such as bugs, tests, comments, and key status transitions across releases. | `QAProductivityReport` | [qa-productivity-report.json](../examples/qa-productivity-report.json) |
-| `ReportGenerator` | Generates configurable analytics reports as JSON and HTML from tracker, SCM, CSV, or Figma data. | `ReportGenerator` / `ReportGeneratorJob` | [report-generator-job.json](../examples/report-generator-job.json) |
+| `ReportGenerator` | Generates configurable analytics reports as JSON and HTML from tracker, SCM, CSV, JSONL, or Figma data. | `ReportGenerator` / `ReportGeneratorJob` | [report-generator-job.json](../examples/report-generator-job.json), [report-generator-jsonl-job.json](../examples/report-generator-jsonl-job.json) |
 | `ReportVisualizer` | Renders a saved JSON report as an interactive HTML dashboard without regenerating report data. | `ReportVisualizer` / `ReportVisualizerJob` | [report-visualizer-job.json](../examples/report-visualizer-job.json) |
 | `KBProcessingJob` | Runs the knowledge-base pipeline that processes source content and aggregates searchable KB output. | `KBProcessingJob` / `KBProcessing` | [kb-processing-job.json](../examples/kb-processing-job.json) |
 
@@ -966,7 +966,7 @@ dmtools run agents/test/test-postprocess.json
 
 ### ReportGenerator
 
-Generate configurable analytics reports from tracker, SCM, CSV, or Figma data.
+Generate configurable analytics reports from tracker, SCM, CSV, JSONL, or Figma data.
 
 **Purpose**: Build JSON output and, when configured, paired HTML reports from reusable metric definitions and time groupings.
 
@@ -976,10 +976,17 @@ Generate configurable analytics reports from tracker, SCM, CSV, or Figma data.
 
 **Usage**:
 ```bash
+# Tracker / SCM / CSV example
 dmtools run dmtools-ai-docs/references/examples/report-generator-job.json
+
+# Generic JSONL example
+dmtools run dmtools-ai-docs/references/examples/report-generator-jsonl-job.json
+
+# Copilot usage export example
+dmtools run dmtools-ai-docs/references/examples/copilot-usage-report.json
 ```
 
-**Example config**: [report-generator-job.json](../examples/report-generator-job.json)
+**Example configs**: [report-generator-job.json](../examples/report-generator-job.json), [report-generator-jsonl-job.json](../examples/report-generator-jsonl-job.json), [copilot-usage-report.json](../examples/copilot-usage-report.json)
 
 → **See also**: [Report Generator Guide](../reporting/report-generation.md)
 

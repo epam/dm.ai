@@ -1,0 +1,268 @@
+{
+  "name": "ReportGenerator",
+  "params": {
+    "reportName": "Copilot Usage Report",
+    "startDate": "2026-01-01",
+    "endDate": "2026-06-30",
+    "dataSources": [
+      {
+        "name": "jsonl",
+        "params": {
+          "folderPath": "/path/to/copilot/jsonl/data"
+        },
+        "metrics": [
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Interactions",
+              "weightField": "user_initiated_interaction_count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Code Generation",
+              "weightField": "code_generation_activity_count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Code Acceptances",
+              "weightField": "code_acceptance_activity_count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "LOC Added",
+              "weightField": "loc_added_sum",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "LOC Deleted",
+              "weightField": "loc_deleted_sum",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "CLI Sessions",
+              "weightField": "totals_by_cli.session_count",
+              "filterField": "used_cli",
+              "filterValue": "true",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "CLI Requests",
+              "weightField": "totals_by_cli.request_count",
+              "filterField": "used_cli",
+              "filterValue": "true",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "CLI Output Tokens",
+              "weightField": "totals_by_cli.token_usage.output_tokens_sum",
+              "filterField": "used_cli",
+              "filterValue": "true",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "CLI Prompt Tokens",
+              "weightField": "totals_by_cli.token_usage.prompt_tokens_sum",
+              "filterField": "used_cli",
+              "filterValue": "true",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Feature: Code Completion",
+              "arrayField": "totals_by_feature",
+              "arrayFilterField": "feature",
+              "arrayFilterValue": "code_completion",
+              "weightField": "code_acceptance_activity_count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Feature: Chat Agent",
+              "arrayField": "totals_by_feature",
+              "arrayFilterField": "feature",
+              "arrayFilterValue": "chat_panel_agent_mode",
+              "weightField": "user_initiated_interaction_count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Feature: Agent Edit",
+              "arrayField": "totals_by_feature",
+              "arrayFilterField": "feature",
+              "arrayFilterValue": "agent_edit",
+              "weightField": "code_acceptance_activity_count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "IDE: VSCode",
+              "arrayField": "totals_by_ide",
+              "arrayFilterField": "ide",
+              "arrayFilterValue": "vscode",
+              "weightField": "code_acceptance_activity_count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "All Models by Acceptances",
+              "arrayField": "totals_by_model_feature",
+              "arrayFilterField": "model",
+              "arrayFilterValue": "*",
+              "weightField": "code_acceptance_activity_count",
+              "groupByField": "model",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "All Features by Acceptances",
+              "arrayField": "totals_by_feature",
+              "arrayFilterField": "feature",
+              "arrayFilterValue": "*",
+              "weightField": "code_acceptance_activity_count",
+              "groupByField": "feature",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "All IDEs by Acceptances",
+              "arrayField": "totals_by_ide",
+              "arrayFilterField": "ide",
+              "arrayFilterValue": "*",
+              "weightField": "code_acceptance_activity_count",
+              "groupByField": "ide",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "All Models by Interactions",
+              "arrayField": "totals_by_model_feature",
+              "arrayFilterField": "model",
+              "arrayFilterValue": "*",
+              "weightField": "user_initiated_interaction_count",
+              "groupByField": "model",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "All Languages by Acceptances",
+              "arrayField": "totals_by_language_model",
+              "arrayFilterField": "language",
+              "arrayFilterValue": "*",
+              "weightField": "code_acceptance_activity_count",
+              "groupByField": "language",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Used Agent",
+              "weightField": "user_initiated_interaction_count",
+              "filterField": "used_agent",
+              "filterValue": "true",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Used Chat",
+              "weightField": "user_initiated_interaction_count",
+              "filterField": "used_chat",
+              "filterValue": "true",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Used CLI",
+              "weightField": "user_initiated_interaction_count",
+              "filterField": "used_cli",
+              "filterValue": "true",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          }
+        ]
+      }
+    ],
+    "timeGrouping": [
+      {"type": "bi-weekly"},
+      {"type": "monthly"},
+      {"type": "weekly"}
+    ],
+    "aggregation": {
+      "label": "Copilot Score",
+      "formula": "${Code Acceptances} + ${LOC Added} * 0.01 + ${Interactions} * 0.1"
+    },
+    "output": {
+      "mode": "combined",
+      "saveRawMetadata": true,
+      "outputPath": "reports/output/copilot",
+      "visualizer": "default"
+    }
+  }
+}

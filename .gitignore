@@ -178,3 +178,8 @@ RELEASE_NOTES*.md
 agents/reports/output/
 agents/reports/cursor_usage.csv
 
+# Local tooling state
+.codegraph/
+.cursor/
+.worktrees/
+

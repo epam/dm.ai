@@ -1,0 +1,89 @@
+{
+  "name": "ReportGenerator",
+  "params": {
+    "reportName": "JSONL Generic Report",
+    "startDate": "2026-01-01",
+    "endDate": "2026-01-31",
+    "dataSources": [
+      {
+        "name": "jsonl",
+        "params": {
+          "folderPath": "/path/to/jsonl/data",
+          "whoField": "user",
+          "whenField": "date"
+        },
+        "metrics": [
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Total Events",
+              "weightField": "count",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Critical Events",
+              "weightField": "count",
+              "filterField": "category",
+              "filterValue": "critical",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Bug Impact",
+              "arrayField": "items",
+              "arrayFilterField": "type",
+              "arrayFilterValue": "bug",
+              "weightField": "impact",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Score by Category",
+              "arrayField": "categories",
+              "arrayFilterField": "name",
+              "arrayFilterValue": "*",
+              "weightField": "score",
+              "groupByField": "name",
+              "isPersonalized": true,
+              "isWeight": true
+            }
+          },
+          {
+            "name": "JsonlMetricSource",
+            "params": {
+              "label": "Scaled Value (K)",
+              "weightField": "value",
+              "weightMultiplier": 0.001,
+              "isPersonalized": false,
+              "isWeight": true
+            }
+          }
+        ]
+      }
+    ],
+    "timeGrouping": [
+      {"type": "weekly"},
+      {"type": "monthly"}
+    ],
+    "aggregation": {
+      "label": "Total Score",
+      "formula": "${Total Events} + ${Critical Events} * 2 + ${Scaled Value (K)}"
+    },
+    "output": {
+      "mode": "combined",
+      "saveRawMetadata": true,
+      "outputPath": "reports/output/jsonl",
+      "visualizer": "default"
+    }
+  }
+}

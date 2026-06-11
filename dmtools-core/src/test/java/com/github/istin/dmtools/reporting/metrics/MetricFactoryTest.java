@@ -486,4 +486,66 @@ class MetricFactoryTest {
         assertThrows(IllegalArgumentException.class,
             () -> factory.createMetric("CsvMetricSource", params, "csv"));
     }
+
+    @Test
+    void testCreateJsonlMetricSource_withFolderPath() throws Exception {
+        Map<String, Object> params = new HashMap<>();
+        params.put("folderPath", "/path/to/jsonl");
+        params.put("weightField", "count");
+        params.put("label", "JSONL Events");
+        params.put("isWeight", true);
+        params.put("isPersonalized", true);
+
+        Metric metric = factory.createMetric("JsonlMetricSource", params, "jsonl");
+
+        assertNotNull(metric);
+        assertEquals("JSONL Events", metric.getName());
+        assertTrue(metric.isWeight());
+        assertTrue(metric.isPersonalized());
+        assertNotNull(metric.getSourceCollector());
+    }
+
+    @Test
+    void testCreateJsonlMetricSource_withFilePath() throws Exception {
+        Map<String, Object> params = new HashMap<>();
+        params.put("filePath", "/path/to/data.jsonl");
+        params.put("weightField", "value");
+        params.put("label", "JSONL File Metric");
+        params.put("isWeight", true);
+        params.put("isPersonalized", false);
+
+        Metric metric = factory.createMetric("JsonlMetricSource", params, "jsonl");
+
+        assertNotNull(metric);
+        assertEquals("JSONL File Metric", metric.getName());
+        assertTrue(metric.isWeight());
+        assertFalse(metric.isPersonalized());
+        assertNotNull(metric.getSourceCollector());
+    }
+
+    @Test
+    void testCreateJsonlMetricSource_missingPath() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("weightField", "count");
+        params.put("label", "Test");
+        params.put("isWeight", false);
+        params.put("isPersonalized", false);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> factory.createMetric("JsonlMetricSource", params, "jsonl"));
+        assertTrue(exception.getMessage().contains("folderPath"));
+    }
+
+    @Test
+    void testCreateJsonlMetricSource_missingWeightField() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("folderPath", "/path/to/jsonl");
+        params.put("label", "Test");
+        params.put("isWeight", false);
+        params.put("isPersonalized", false);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> factory.createMetric("JsonlMetricSource", params, "jsonl"));
+        assertTrue(exception.getMessage().contains("weightField"));
+    }
 }

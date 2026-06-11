@@ -47,6 +47,9 @@ public class DataSourceFactory {
             case "csv":
                 return new CsvDataSource(params);
 
+            case "jsonl":
+                return new JsonlDataSource(params);
+
             default:
                 throw new IllegalArgumentException("Unknown data source: " + name);
         }

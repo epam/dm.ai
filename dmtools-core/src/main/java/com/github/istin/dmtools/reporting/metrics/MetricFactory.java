@@ -25,6 +25,7 @@ import com.github.istin.dmtools.metrics.source.PullRequestsApprovalsMetricSource
 import com.github.istin.dmtools.metrics.source.PullRequestsMergedByMetricSource;
 import com.github.istin.dmtools.metrics.source.PullRequestsDeclinedMetricSource;
 import com.github.istin.dmtools.metrics.source.SourceCodeCommitsMetricSource;
+import com.github.istin.dmtools.metrics.source.JsonlMetricSource;
 import com.github.istin.dmtools.csv.CsvMetricSource;
 import com.github.istin.dmtools.team.Employees;
 import com.github.istin.dmtools.team.IEmployees;
@@ -113,6 +114,9 @@ public class MetricFactory {
             metric = new Metric(label, isWeight, isPersonalized, collector);
         } else if ("csv".equals(dataSourceType)) {
             SourceCollector collector = createCsvCollector(params);
+            metric = new Metric(label, isWeight, isPersonalized, collector);
+        } else if ("jsonl".equals(dataSourceType)) {
+            SourceCollector collector = createJsonlCollector(params);
             metric = new Metric(label, isWeight, isPersonalized, collector);
         } else {
             throw new IllegalArgumentException("Unknown data source type: " + dataSourceType);
@@ -338,6 +342,31 @@ public class MetricFactory {
             default:
                 throw new IllegalArgumentException("Unknown figma source collector: " + metricName);
         }
+    }
+
+    private SourceCollector createJsonlCollector(Map<String, Object> params) {
+        String folderPath = (String) params.get("folderPath");
+        String filePath = (String) params.get("filePath");
+        if ((folderPath == null || folderPath.isEmpty()) && (filePath == null || filePath.isEmpty())) {
+            throw new IllegalArgumentException("JSONL data source requires 'folderPath' or 'filePath' parameter");
+        }
+        String whoField = (String) params.getOrDefault("whoField", "user_login");
+        String whenField = (String) params.getOrDefault("whenField", "day");
+        String weightField = (String) params.get("weightField");
+        if (weightField == null || weightField.isEmpty()) {
+            throw new IllegalArgumentException("JSONL metric requires 'weightField' parameter");
+        }
+        double weightMultiplier = parseDivider(params.get("weightMultiplier"));
+        String filterField = (String) params.getOrDefault("filterField", null);
+        String filterValue = (String) params.getOrDefault("filterValue", null);
+        String arrayField = (String) params.getOrDefault("arrayField", null);
+        String arrayFilterField = (String) params.getOrDefault("arrayFilterField", null);
+        String arrayFilterValue = (String) params.getOrDefault("arrayFilterValue", null);
+        String dateFormat = (String) params.getOrDefault("dateFormat", null);
+        String groupByField = (String) params.getOrDefault("groupByField", null);
+
+        return new JsonlMetricSource(employees, folderPath, filePath, whoField, whenField, weightField,
+                weightMultiplier, filterField, filterValue, arrayField, arrayFilterField, arrayFilterValue, dateFormat, groupByField);
     }
 
     private SourceCollector createCsvCollector(Map<String, Object> params) {

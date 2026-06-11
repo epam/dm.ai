@@ -69,6 +69,7 @@ Supported data sources in the example config:
 - `pullRequests`: Pull requests from GitHub, GitLab, or Bitbucket (via `sourceType`).
 - `commits`: Git commits from GitHub, GitLab, or Bitbucket (via `sourceType`).
 - `csv`: Custom CSV files.
+- `jsonl`: Line-delimited JSON files (generic structured data).
 - `figma`: Figma comments from one or more Figma files.
 
 **Tracker Source**
@@ -244,6 +245,30 @@ CSV source parameters:
 - `filePath`: Absolute or relative path.
 - `whenColumn`: Column name for date.
 - `defaultWho`: Who to attribute if CSV has no person column.
+
+**JSONL Source**
+
+Reads JSON Lines (`.jsonl`) or JSON (`.json`) files from a folder or a single file. Useful for custom event logs, Copilot usage exports, CI metrics, or any line-delimited JSON data.
+
+```json
+{
+  "name": "jsonl",
+  "params": {
+    "folderPath": "path/to/jsonl/data",
+    "whoField": "user",
+    "whenField": "date"
+  },
+  "metrics": [ ... ]
+}
+```
+
+JSONL source parameters:
+
+- `folderPath`: Directory scanned recursively for `.json` and `.jsonl` files.
+- `filePath`: Alternative to `folderPath` — read a single file.
+- `whoField`: Field name for the person (default: `user_login`). Supports dot-notation for nested fields.
+- `whenField`: Field name for the date (default: `day`). Supports dot-notation and custom `dateFormat`.
+- `dateFormat`: Optional Java `SimpleDateFormat` pattern (default: `yyyy-MM-dd`).
 
 **Figma Source**
 
@@ -490,6 +515,67 @@ CSV parsing notes:
 - Invalid values like `NaN`, `N/A`, empty strings are skipped.
 - Filter matching is case-insensitive.
 
+**JSONL Metrics**
+
+JSONL metrics use `JsonlMetricSource` at the metric level.
+
+```json
+{
+  "name": "JsonlMetricSource",
+  "params": {
+    "label": "Total Events",
+    "weightField": "count",
+    "isWeight": true,
+    "isPersonalized": true
+  }
+}
+```
+
+JSONL metric parameters:
+
+- `weightField` (required): Field path with numeric value. Supports dot-notation for nested objects (e.g. `totals.by_model.acceptances`).
+- `whoField`: Overrides source-level `whoField` for this metric.
+- `whenField`: Overrides source-level `whenField` for this metric.
+- `weightMultiplier`: Multiply each value by this factor before aggregation.
+- `filterField` + `filterValue`: Include only top-level rows where the field equals the value (case-insensitive).
+- `arrayField`: Path to a JSON array inside the row.
+- `arrayFilterField` + `arrayFilterValue`: Within `arrayField`, include only objects whose field equals the value. Use `"*"` for `arrayFilterValue` to include every object.
+- `groupByField`: When set, the metric value is attributed to the value of this field instead of the person. Useful for breaking down by model, feature, IDE, language, etc.
+- `dateFormat`: Custom date format for this metric.
+
+Example breakdowns:
+
+```json
+{
+  "name": "JsonlMetricSource",
+  "params": {
+    "label": "Feature Acceptances",
+    "arrayField": "totals_by_feature",
+    "arrayFilterField": "feature",
+    "arrayFilterValue": "code_completion",
+    "weightField": "code_acceptance_activity_count",
+    "isWeight": true,
+    "isPersonalized": true
+  }
+}
+```
+
+```json
+{
+  "name": "JsonlMetricSource",
+  "params": {
+    "label": "Acceptances by Model",
+    "arrayField": "totals_by_model",
+    "arrayFilterField": "model",
+    "arrayFilterValue": "*",
+    "weightField": "code_acceptance_activity_count",
+    "groupByField": "model",
+    "isWeight": true,
+    "isPersonalized": true
+  }
+}
+```
+
 **Figma Metrics**
 
 Figma metrics use one of these names:
@@ -612,5 +698,7 @@ Multiple time groupings can be generated in a single run.
 Use the example config as a template:
 
 - `dmtools-ai-docs/references/examples/report-generator-job.json`
+- `dmtools-ai-docs/references/examples/report-generator-jsonl-job.json`
+- `dmtools-ai-docs/references/examples/copilot-usage-report.json`
 - [ReportGenerator quick reference](../jobs/README.md#reportgenerator)
 - [ReportVisualizer quick reference](../jobs/README.md#reportvisualizer)
