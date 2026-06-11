@@ -1,0 +1,32 @@
+# ======================================================
+# CREDENTIALS AND CONNECTION SETTINGS ONLY
+# (Business configuration is in config.py)
+# ======================================================
+
+# Azure DevOps Connection
+ADO_ORG_URL=https://dev.azure.com/your-organization
+ADO_PROJECT=YourProjectName
+ADO_PAT=your_personal_access_token_here
+
+# Team name for iteration (sprint) lookup.
+# Use the default team name: typically "<ProjectName> Team"
+ADO_TEAM=YourProjectName Team
+
+# ======================================================
+# BUSINESS CONFIGURATION MOVED TO config.py
+# ======================================================
+#
+# The following settings are configured in config.py:
+# - ACCOUNT_NAME (fallback; actual value loaded from resource plan file)
+# - WIQL_QUERY
+# - TIMEZONE
+# - VALID_ISSUE_LOGIC
+# - USE_RESOURCE_PLAN
+# - PROPOGATE_TEAM_FROM_SUBTASKS_TO_PARENT
+# - PATH_TO_RAW_DATA_FILE
+#
+# This separation ensures:
+# - Credentials stay in .env (should be in .gitignore)
+# - Business logic is version-controlled in config.py
+# - Dynamic configuration comes from resource plan file
+# ======================================================

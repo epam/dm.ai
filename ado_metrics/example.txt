@@ -1,0 +1,3 @@
+This is an example file inside the ado_metrics folder.
+
+Add your metrics scripts or notes here.
