@@ -29,6 +29,7 @@ import com.github.istin.dmtools.sm.ScrumMasterDaily;
 import com.github.istin.dmtools.sync.SourceCodeCommitTrackerSyncJob;
 import com.github.istin.dmtools.sync.SourceCodeTrackerSyncJob;
 import com.github.istin.dmtools.teammate.Teammate;
+import com.github.istin.dmtools.cliagent.CliAgent;
 import com.github.istin.dmtools.js.JSRunner;
 import com.github.istin.dmtools.kb.KBProcessingJob;
 import com.github.istin.dmtools.mcp.cli.McpCliHandler;
@@ -78,6 +79,7 @@ public class JobRunner {
             case "scrummasterdaily": return new ScrumMasterDaily();
             case "expert": return new Expert();
             case "teammate": return new Teammate();
+            case "cliagent": return new CliAgent();
             case "sourcecodetrackersyncjob": return new SourceCodeTrackerSyncJob();
             case "sourcecodecommittrackersyncjob": return new SourceCodeCommitTrackerSyncJob();
             case "userstorygenerator": return new UserStoryGenerator();

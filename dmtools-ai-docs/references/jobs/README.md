@@ -490,6 +490,77 @@ Teammate can execute external CLI agents with full workspace context:
 
 ---
 
+### CliAgent
+
+Lightweight CLI-agent orchestrator. Takes the CLI-execution parts of `Teammate` and removes the tracker-ticket plumbing, so it can run cursor-agent / claude / copilot-style tools without an `inputJql` or ticket system.
+
+**Purpose**: Run external CLI agents with aggregated prompts and optional setup/cache/reset hooks, without binding to Jira/ADO/Rally.
+
+**Usage**:
+```bash
+dmtools CliAgent --cliCommands '["cursor-agent"]' --cliPrompts '["Implement the feature"]'
+
+# Use configuration file
+dmtools run agents/cli_agent.json
+```
+
+**Configuration** (`agents/cli_agent.json`):
+```json
+{
+  "name": "CliAgent",
+  "params": {
+    "metadata": {
+      "contextId": "story_development"
+    },
+    "cliCommands": ["./agents/scripts/run-agent.sh"],
+    "cliPrompts": [
+      "Senior Developer Engineer",
+      "./agents/instructions/common/coding_guidelines.md"
+    ],
+    "setup": "./agents/scripts/setup.sh",
+    "preJSAction": "agents/js/checkWipLabel.js",
+    "preCliJSAction": "agents/js/preCliDevelopmentSetup.js",
+    "postJSAction": "agents/js/developTicketAndCreatePR.js",
+    "cache": "./agents/scripts/cache.sh",
+    "reset": "./agents/scripts/reset.sh",
+    "customParams": {
+      "mode": "development",
+      "maxFiles": 10
+    },
+    "outputType": "none",
+    "cleanupInputFolder": true
+  }
+}
+```
+
+**Execution lifecycle**:
+```
+setup → preJSAction → preCliJSAction → cliCommands → postJSAction → cache → reset
+```
+
+**Core Parameters**:
+- `cliCommands` - Array of CLI commands to execute (e.g., `["cursor-agent"]`)
+- `cliPrompt` - Single base CLI prompt (optional)
+- `cliPrompts` - Array of prompts/instructions; files, URLs and plain text are supported
+- `cliPromptsByTracker` - Tracker-specific prompt overrides (same merging as `Teammate`)
+- `setup` - Shell or JS script executed before everything else
+- `preJSAction` - JavaScript executed before CLI commands
+- `preCliJSAction` - JavaScript executed after input context is prepared
+- `postJSAction` - JavaScript executed after CLI commands finish
+- `cache` - Shell or JS script executed after post-action
+- `reset` - Shell or JS script executed in `finally` (always runs, even on failure)
+- `customParams` - Arbitrary key-value map forwarded to JS actions as `customParams`
+- `workingDirectory` - Working directory for CLI execution (defaults to `user.dir`)
+- `cleanupInputFolder` - Clean up `input/{contextId}/` after execution (default: **true**)
+- `requireCliOutputFile` - Require `output/response.md` from CLI agent (default: **false**)
+
+**Differences from `Teammate`**:
+- No `inputJql`, no ticket context, no tracker integration required.
+- No shell-injection whitelist: any shell syntax (`&&`, `|`, `>`, etc.) is allowed in `cliCommands`, `setup`, `cache`, `reset`.
+- Simpler lifecycle focused purely on CLI execution.
+
+---
+
 ### Expert
 
 Domain expert that answers questions based on context (tickets, documentation, code).

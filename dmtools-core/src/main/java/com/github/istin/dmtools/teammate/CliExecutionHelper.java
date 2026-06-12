@@ -339,7 +339,7 @@ public class CliExecutionHelper {
      * @return StringBuilder containing all command responses
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
-        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null);
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null, false);
     }
 
     /**
@@ -355,6 +355,24 @@ public class CliExecutionHelper {
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput) {
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, false);
+    }
+
+    /**
+     * Executes CLI commands and collects their responses.
+     * Each output line is also published to {@code liveOutput} (if non-null) so that a
+     * concurrent timer thread can read accumulated output between command lines.
+     *
+     * @param cliCommands      Array of CLI commands to execute
+     * @param workingDirectory Working directory for command execution (optional)
+     * @param envVariablesFile Path to environment file (null → resolve dmtools.env relative to workingDirectory)
+     * @param liveOutput       Optional AtomicReference updated with accumulated output after each line
+     * @param allowAnyCommand  When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
+     *                         Use only for trusted job configs.
+     * @return StringBuilder containing all command responses
+     */
+    public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
+                                            AtomicReference<String> liveOutput, boolean allowAnyCommand) {
         StringBuilder cliResponses = new StringBuilder();
         
         if (cliCommands == null || cliCommands.length == 0) {
@@ -420,7 +438,9 @@ public class CliExecutionHelper {
                     commandOutput.append(line).append(System.lineSeparator());
                     liveOutput.set(cliResponses + commandOutput.toString());
                 };
-                String response = CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer);
+                String response = allowAnyCommand
+                        ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false)
+                        : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer);
                 
                 if (response != null && !response.trim().isEmpty()) {
                     cliResponses.append("CLI Command: ").append(command).append("\n");
@@ -463,7 +483,16 @@ public class CliExecutionHelper {
      * @return CliExecutionResult containing command responses and output response
      */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
-        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, false);
+    }
+
+    /**
+     * Executes CLI commands in the specified working directory and processes output response,
+     * allowing arbitrary shell syntax when {@code allowAnyCommand} is {@code true}.
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile, boolean allowAnyCommand) {
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, allowAnyCommand);
     }
 
     /**
@@ -505,6 +534,30 @@ public class CliExecutionHelper {
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds,
                                                            AtomicReference<String> liveCliOutput) {
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction,
+                timerIntervalSeconds, liveCliOutput, false);
+    }
+
+    /**
+     * Executes CLI commands with an optional background timer, shared live output reference,
+     * and optional shell-injection validation bypass.
+     *
+     * @param cliCommands          Array of CLI commands to execute
+     * @param workingDirectory     Working directory for command execution (optional)
+     * @param envVariablesFile     Path to environment file (null → auto-resolve)
+     * @param timerAction          Optional runnable executed on the timer thread
+     * @param timerIntervalSeconds Interval between timer firings in seconds; timer is disabled if &lt; 0
+     * @param liveCliOutput        Optional shared AtomicReference updated with accumulated CLI output;
+     *                             if null, an internal reference is created when timerAction is non-null
+     * @param allowAnyCommand      When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
+     *                             Use only for trusted job configs.
+     * @return CliExecutionResult containing command responses and output response
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds,
+                                                           AtomicReference<String> liveCliOutput,
+                                                           boolean allowAnyCommand) {
         AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
                 : (timerAction != null ? new AtomicReference<>("") : null);
 
@@ -526,7 +579,7 @@ public class CliExecutionHelper {
         }
 
         try {
-            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput);
+            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand);
             String outputResponse = processOutputResponse(workingDirectory);
             return new CliExecutionResult(cliResponses, outputResponse);
         } finally {
