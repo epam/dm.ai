@@ -550,7 +550,7 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 - `cliPromptsByTracker` - Tracker-specific prompt overrides (same merging as `Teammate`)
 - `setup` - Shell or JS script executed before everything else
 - `preJSAction` - JavaScript executed before CLI commands
-- `preCliJSAction` - JavaScript executed after input context is prepared
+- `preCliJSAction` - JavaScript executed after the input folder is prepared
 - `postJSAction` - JavaScript executed after CLI commands finish
 - `cliOutputLineJSAction` - JavaScript executed for every output line produced by the CLI process. Receives `line` and `currentCliOutput`. If it returns `true`, the CLI process is killed and execution stops.
 - `cliExecutionErrorJSAction` - JavaScript executed when a CLI command fails. Receives `errorMessage` and `currentCliOutput`.
@@ -563,6 +563,8 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 - `requireCliOutputFile` - Require `outputs/response.md` from CLI agent (default: **false**)
 
 > The `outputs/` folder is created automatically in `workingDirectory` before CLI commands run, so agents can write `outputs/response.md` without extra setup.
+>
+> The `input/{contextId}/` folder is also created empty under `workingDirectory` before `preCliJSAction` runs. Use `preCliJSAction` to populate it if your CLI agent reads files from that location.
 
 **Environment Security**:
 - `excludedEnvVariables` - Array of exact env variable names to remove from the subprocess environment (e.g., `["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]`)

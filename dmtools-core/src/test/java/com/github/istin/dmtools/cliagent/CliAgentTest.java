@@ -202,4 +202,176 @@ class CliAgentTest {
             assertFalse(Files.exists(outputDir), "outputs/ folder should be cleaned up when cleanupOutputsFolder is true");
         }
     }
+
+    @Test
+    void testCleanupOutputsFolderAlsoRemovesLegacyOutputFolder() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setCleanupOutputsFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
+        Path legacyOutputDir = tempDir.resolve("output");
+        Files.createDirectories(legacyOutputDir);
+        Files.writeString(legacyOutputDir.resolve("response.md"), "legacy output");
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.runJobImpl(params);
+
+            assertFalse(Files.exists(legacyOutputDir), "legacy output/ folder should be cleaned up when cleanupOutputsFolder is true");
+        }
+    }
+
+    @Test
+    void testCreatesInputContextUnderWorkingDirectory() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(false);
+        params.setWorkingDirectory(tempDir.toString());
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.runJobImpl(params);
+
+            assertTrue(Files.exists(tempDir.resolve("input/cli-agent")),
+                    "input context should be created under workingDirectory");
+        }
+    }
+
+    @Test
+    void testRequireCliOutputFileReturnsWarningWhenOutputMissing() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo done"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(true);
+        params.setCleanupInputFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+                    .thenReturn("done\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            List<ResultItem> results = agent.runJobImpl(params);
+
+            assertEquals(1, results.size());
+            assertTrue(results.get(0).getResult().contains("did not produce output file"),
+                    "Should report missing output file when requireCliOutputFile=true");
+        }
+    }
+
+    @Test
+    void testExcludedEnvVariablesPassedToSubprocess() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+        params.setExcludedEnvVariables(new String[]{"SECRET_TOKEN"});
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of("SECRET_TOKEN", "secret", "PUBLIC_VAR", "visible"));
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean()))
+                    .thenReturn("hello\nExit Code: 0");
+
+            agent.runJobImpl(params);
+
+            mocked.verify(() -> CommandLineUtils.runCommand(
+                    anyString(),
+                    any(),
+                    argThat((Map<String, String> env) ->
+                            !env.containsKey("SECRET_TOKEN") && env.containsKey("PUBLIC_VAR")),
+                    any(),
+                    anyBoolean()));
+        }
+    }
+
+    @Test
+    void testCustomParamsSerialization() {
+        CliAgentParams params = new CliAgentParams();
+        params.setCustomParams(Map.of("mode", "test", "count", 42));
+
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        String json = gson.toJson(params);
+
+        assertTrue(json.contains("\"customParams\""), "Serialized params should contain customParams");
+        assertTrue(json.contains("\"mode\""), "Serialized params should contain customParams.mode");
+    }
+
+    @Test
+    void testReturnsOutputResponseFileContent() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setCleanupOutputsFolder(false);
+        params.setWorkingDirectory(tempDir.toString());
+
+        Path outputsDir = tempDir.resolve("outputs");
+        Files.createDirectories(outputsDir);
+        Files.writeString(outputsDir.resolve("response.md"), "file based response");
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            List<ResultItem> results = agent.runJobImpl(params);
+
+            assertEquals(1, results.size());
+            assertEquals("file based response", results.get(0).getResult());
+        }
+    }
+
+    @Test
+    void testCleanupInputFolderFalseKeepsInputFolder() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(false);
+        params.setWorkingDirectory(tempDir.toString());
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.runJobImpl(params);
+
+            assertTrue(Files.exists(tempDir.resolve("input/cli-agent")),
+                    "input folder should be kept when cleanupInputFolder=false");
+        }
+    }
 }

@@ -31,7 +31,6 @@ public class CliAgentParams extends TrackerParams {
     public static final String CACHE = "cache";
     public static final String RESET = "reset";
     public static final String PRE_CLI_JS_ACTION = "preCliJSAction";
-    public static final String CUSTOM_PARAMS = "customParams";
     public static final String CLEANUP_INPUT_FOLDER = "cleanupInputFolder";
     public static final String REQUIRE_CLI_OUTPUT_FILE = "requireCliOutputFile";
     public static final String WORKING_DIRECTORY = "workingDirectory";
@@ -66,9 +65,6 @@ public class CliAgentParams extends TrackerParams {
 
     @SerializedName(PRE_CLI_JS_ACTION)
     private String preCliJSAction;
-
-    @SerializedName(CUSTOM_PARAMS)
-    private Map<String, Object> customParams;
 
     @SerializedName(CLEANUP_INPUT_FOLDER)
     private boolean cleanupInputFolder = true;

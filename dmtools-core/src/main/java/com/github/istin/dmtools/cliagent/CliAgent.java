@@ -6,7 +6,6 @@ package com.github.istin.dmtools.cliagent;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
-import com.github.istin.dmtools.common.utils.CliExecutionStoppedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
@@ -14,11 +13,11 @@ import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.ResultItem;
 import com.github.istin.dmtools.job.TrackerParams;
-import com.github.istin.dmtools.teammate.AgentParamsFileWriter;
 import com.github.istin.dmtools.teammate.CliCommandBuilder;
 import com.github.istin.dmtools.teammate.CliExecutionHelper;
 import com.github.istin.dmtools.teammate.InstructionProcessor;
 import lombok.Getter;
+import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -29,8 +28,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -65,7 +64,6 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     ApplicationConfiguration configuration;
 
     private InstructionProcessor instructionProcessor;
-    private AgentParamsFileWriter agentParamsFileWriter;
 
     /**
      * Server-managed Dagger component. Reuses the same integrations module as Teammate.
@@ -80,7 +78,6 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     protected void initializeStandalone() {
         logger.info("Initializing CliAgent in STANDALONE mode");
         this.instructionProcessor = new InstructionProcessor(confluence);
-        this.agentParamsFileWriter = new AgentParamsFileWriter(instructionProcessor);
         logger.info("CliAgent standalone initialization completed");
     }
 
@@ -93,7 +90,6 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 .build();
         component.inject(this);
         this.instructionProcessor = new InstructionProcessor(confluence);
-        this.agentParamsFileWriter = new AgentParamsFileWriter(instructionProcessor);
         logger.info("CliAgent server-managed initialization completed");
     }
 
@@ -221,9 +217,25 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     }
 
     private Path createInputContext(CliAgentParams params, Path workingDirectory) throws IOException {
-        Path inputContextPath = Paths.get("input", getContextId(params));
+        Path inputContextPath = workingDirectory.resolve("input").resolve(getContextId(params));
         Files.createDirectories(inputContextPath);
         return inputContextPath;
+    }
+
+    private JavaScriptExecutor prepareJsExecutor(String script, CliAgentParams params, String response,
+                                                  Map<String, Object> extraBindings) {
+        JavaScriptExecutor executor = js(script)
+                .mcp(null, ai, confluence, null)
+                .withJobContext(params, null, response);
+        if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
+            executor.with("customParams", params.getCustomParams());
+        }
+        if (extraBindings != null) {
+            for (Map.Entry<String, Object> entry : extraBindings.entrySet()) {
+                executor.with(entry.getKey(), entry.getValue());
+            }
+        }
+        return executor;
     }
 
     private void executeJsAction(String action, String actionName, CliAgentParams params, String response,
@@ -233,16 +245,10 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         }
         try {
             logger.info("Executing {}: {}", actionName, action);
-            JavaScriptExecutor executor = js(action)
-                    .mcp(null, ai, confluence, null)
-                    .withJobContext(params, null, response);
-            if (inputFolderPath != null) {
-                executor.with("inputFolderPath", inputFolderPath);
-            }
-            if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
-                executor.with("customParams", params.getCustomParams());
-            }
-            executor.execute();
+            Map<String, Object> extraBindings = inputFolderPath != null
+                    ? Collections.singletonMap("inputFolderPath", inputFolderPath)
+                    : null;
+            prepareJsExecutor(action, params, response, extraBindings).execute();
         } catch (Exception e) {
             logger.warn("{} failed, continuing: {}", actionName, e.getMessage(), e);
         }
@@ -256,14 +262,9 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         logger.info("Executing {} hook: {}", hookName, script);
         try {
             if (script.endsWith(".js")) {
-                JavaScriptExecutor executor = js(script)
-                        .mcp(null, ai, confluence, null)
-                        .withJobContext(params, null, response)
-                        .with("workingDirectory", workingDirectory.toAbsolutePath().toString());
-                if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
-                    executor.with("customParams", params.getCustomParams());
-                }
-                executor.execute();
+                Map<String, Object> extraBindings = Collections.singletonMap(
+                        "workingDirectory", workingDirectory.toAbsolutePath().toString());
+                prepareJsExecutor(script, params, response, extraBindings).execute();
             } else {
                 CommandLineUtils.runCommand(script, workingDirectory.toFile(), PropertyReader.getOverrides(), null, false);
             }
@@ -280,14 +281,9 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         return () -> {
             try {
                 logger.info("Executing timerJSAction: {}", timerJSAction);
-                JavaScriptExecutor executor = js(timerJSAction)
-                        .mcp(null, ai, confluence, null)
-                        .withJobContext(params, null, null)
-                        .with("currentCliOutput", liveOutput.get());
-                if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
-                    executor.with("customParams", params.getCustomParams());
-                }
-                executor.execute();
+                Map<String, Object> extraBindings = Collections.singletonMap(
+                        "currentCliOutput", liveOutput.get());
+                prepareJsExecutor(timerJSAction, params, null, extraBindings).execute();
             } catch (Exception e) {
                 logger.warn("timerJSAction execution failed (CLI continues): {}", e.getMessage(), e);
             }
@@ -302,15 +298,10 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         return exception -> {
             try {
                 logger.info("Executing cliExecutionErrorJSAction: {}", cliExecutionErrorJSAction);
-                JavaScriptExecutor executor = js(cliExecutionErrorJSAction)
-                        .mcp(null, ai, confluence, null)
-                        .withJobContext(params, null, null)
-                        .with("errorMessage", exception.getMessage())
-                        .with("currentCliOutput", liveOutput.get());
-                if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
-                    executor.with("customParams", params.getCustomParams());
-                }
-                executor.execute();
+                Map<String, Object> extraBindings = new HashMap<>();
+                extraBindings.put("errorMessage", exception.getMessage());
+                extraBindings.put("currentCliOutput", liveOutput.get());
+                prepareJsExecutor(cliExecutionErrorJSAction, params, null, extraBindings).execute();
             } catch (Exception e) {
                 logger.warn("cliExecutionErrorJSAction execution failed: {}", e.getMessage(), e);
             }
@@ -325,15 +316,10 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         return line -> {
             try {
                 logger.debug("Executing cliOutputLineJSAction for line: {}", line);
-                JavaScriptExecutor executor = js(cliOutputLineJSAction)
-                        .mcp(null, ai, confluence, null)
-                        .withJobContext(params, null, null)
-                        .with("line", line)
-                        .with("currentCliOutput", liveOutput.get());
-                if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
-                    executor.with("customParams", params.getCustomParams());
-                }
-                Object result = executor.execute();
+                Map<String, Object> extraBindings = new HashMap<>();
+                extraBindings.put("line", line);
+                extraBindings.put("currentCliOutput", liveOutput.get());
+                Object result = prepareJsExecutor(cliOutputLineJSAction, params, null, extraBindings).execute();
                 boolean stop = result != null && Boolean.parseBoolean(String.valueOf(result));
                 if (stop) {
                     logger.info("cliOutputLineJSAction requested stop at line: {}", line);
@@ -350,25 +336,12 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         Path outputFolder = workingDirectory.resolve("outputs");
         Path legacyOutputFolder = workingDirectory.resolve("output");
         if (Files.exists(outputFolder)) {
-            deleteDirectoryRecursively(outputFolder);
+            FileUtils.deleteDirectory(outputFolder.toFile());
             logger.info("Cleaned up outputs folder: {}", outputFolder.toAbsolutePath());
         }
         if (Files.exists(legacyOutputFolder)) {
-            deleteDirectoryRecursively(legacyOutputFolder);
+            FileUtils.deleteDirectory(legacyOutputFolder.toFile());
             logger.info("Cleaned up legacy output folder: {}", legacyOutputFolder.toAbsolutePath());
-        }
-    }
-
-    private void deleteDirectoryRecursively(Path directory) throws IOException {
-        try (java.util.stream.Stream<Path> walk = Files.walk(directory)) {
-            walk.sorted(java.util.Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                            logger.warn("Failed to delete {}: {}", path, e.getMessage());
-                        }
-                    });
         }
     }
 
