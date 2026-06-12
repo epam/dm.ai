@@ -227,7 +227,10 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             logger.debug("[DEBUG-LINKING] alreadyLinked keys: " + currentlyLinked.stream().map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
         }
 
-        // Prepare optional Mermaid snapshot resolver and ticket wrappers for search
+        // Prepare optional Mermaid snapshot resolver and ticket wrappers for search.
+        // The feature is enabled when TestCasesGeneratorParams.mermaidIndexStoragePath is set.
+        // In that case existing test cases are wrapped so that toText() returns the Mermaid
+        // snapshot instead of the full ticket text during the relevant-test search.
         MermaidSnapshotResolver snapshotResolver = null;
         Map<String, ITicket> originalTicketsByKey = new HashMap<>();
         List<ITicket> searchTickets = listOfAllTestCases != null ? new ArrayList<>(listOfAllTestCases) : Collections.emptyList();
@@ -236,7 +239,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 originalTicketsByKey.put(ticket.getKey(), ticket);
             }
             String snapshotPath = params.getMermaidIndexStoragePath();
-            if (snapshotPath != null && !snapshotPath.trim().isEmpty()) {
+            boolean useMermaidSnapshotForSearch = snapshotPath != null && !snapshotPath.trim().isEmpty();
+            if (useMermaidSnapshotForSearch) {
                 snapshotResolver = new MermaidSnapshotResolver(snapshotPath, params.getMermaidIndexIntegration());
                 searchTickets = new ArrayList<>(listOfAllTestCases.size());
                 for (ITicket ticket : listOfAllTestCases) {
