@@ -12,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -261,6 +263,39 @@ class CommandLineUtilsTest {
             assertNotNull(result);
             assertTrue(result.contains("Line1"));
             assertTrue(result.contains("Line2"));
+        }
+    }
+
+    @Test
+    void testRunCommand_LineStopPredicate_StopsOnMatchingLine() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            AtomicInteger seenLines = new AtomicInteger(0);
+            Predicate<String> stopOnLine2 = line -> {
+                seenLines.incrementAndGet();
+                return "Line2".equals(line);
+            };
+            Path testFile = tempDir.resolve("multiline.txt");
+            Files.writeString(testFile, "Line1\nLine2\nLine3\n");
+
+            CliExecutionStoppedException exception = assertThrows(CliExecutionStoppedException.class,
+                    () -> CommandLineUtils.runCommand("cat " + testFile.toAbsolutePath(), null, Map.of(), null, false, stopOnLine2));
+
+            assertTrue(exception.getMessage().contains("stopped by line callback"));
+            assertEquals("Line2", exception.getLine());
+            assertTrue(seenLines.get() >= 2, "Should have seen at least 2 lines before stopping");
+        }
+    }
+
+    @Test
+    void testRunCommand_LineStopPredicate_NullNeverStops() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            Path testFile = tempDir.resolve("multiline.txt");
+            Files.writeString(testFile, "A\nB\n");
+            String result = CommandLineUtils.runCommand("cat " + testFile.toAbsolutePath(), null, Map.of(), null, false, null);
+            assertTrue(result.contains("A"));
+            assertTrue(result.contains("B"));
         }
     }
 }

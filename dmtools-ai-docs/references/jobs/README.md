@@ -444,8 +444,8 @@ dmtools Teammate --inputJql "key = PROJ-123"
 Teammate can execute external CLI agents with full workspace context:
 - **Input folder**: Teammate creates `input/` with ticket context
 - **CLI execution**: Agents (cursor-agent, claude, copilot, etc.) run with full codebase access
-- **Output folder**: CLI agents write results to `output/`
-- **Post-processing**: JavaScript post-actions process `output/` files (create PRs, update tickets, etc.)
+- **Output folder**: CLI agents write results to `outputs/`
+- **Post-processing**: JavaScript post-actions process `outputs/` files (create PRs, update tickets, etc.)
 
 **Pattern**: Input context → CLI agent → Output files → Post-action processing
 
@@ -487,6 +487,101 @@ Teammate can execute external CLI agents with full workspace context:
 **See also**:
 - [Teammate Configuration Guide](../agents/teammate-configs.md)
 - [GitHub Actions Workflow](../workflows/github-actions-teammate.md) - Run Teammate in CI/CD
+
+---
+
+### CliAgent
+
+Lightweight CLI-agent orchestrator. Takes the CLI-execution parts of `Teammate` and removes the tracker-ticket plumbing, so it can run cursor-agent / claude / copilot-style tools without an `inputJql` or ticket system.
+
+**Purpose**: Run external CLI agents with aggregated prompts and optional setup/cache/reset hooks, without binding to Jira/ADO/Rally.
+
+**Usage**:
+```bash
+dmtools run CliAgent --cliCommands '["cursor-agent"]' --cliPrompts '["Implement the feature"]'
+
+# Use configuration file
+dmtools run agents/cli_agent.json
+```
+
+**Configuration** (`agents/cli_agent.json`):
+```json
+{
+  "name": "CliAgent",
+  "params": {
+    "metadata": {
+      "contextId": "story_development"
+    },
+    "cliCommands": ["./agents/scripts/run-agent.sh"],
+    "cliPrompts": [
+      "Senior Developer Engineer",
+      "./agents/instructions/common/coding_guidelines.md"
+    ],
+    "setup": "./agents/scripts/setup.sh",
+    "preJSAction": "agents/js/checkWipLabel.js",
+    "preCliJSAction": "agents/js/preCliDevelopmentSetup.js",
+    "postJSAction": "agents/js/developTicketAndCreatePR.js",
+    "cliOutputLineJSAction": "agents/js/onCliOutputLine.js",
+    "cliExecutionErrorJSAction": "agents/js/onCliExecutionError.js",
+    "timerJSAction": "agents/js/saveCliOutputPeriodically.js",
+    "timerIntervalSeconds": 60,
+    "cache": "./agents/scripts/cache.sh",
+    "reset": "./agents/scripts/reset.sh",
+    "customParams": {
+      "mode": "development",
+      "maxFiles": 10
+    },
+    "outputType": "none",
+    "cleanupInputFolder": true,
+    "cleanupOutputsFolder": false
+  }
+}
+```
+
+**Execution lifecycle**:
+```
+setup → preJSAction → preCliJSAction → cliCommands → postJSAction → cache → reset
+```
+
+**Core Parameters**:
+- `cliCommands` - Array of CLI commands to execute (e.g., `["cursor-agent"]`)
+- `cliPrompt` - Single base CLI prompt (optional)
+- `cliPrompts` - Array of prompts/instructions; files, URLs and plain text are supported
+- `cliPromptsByTracker` - Tracker-specific prompt overrides (same merging as `Teammate`)
+- `setup` - Shell or JS script executed before everything else
+- `preJSAction` - JavaScript executed before CLI commands
+- `preCliJSAction` - JavaScript executed after the input folder is prepared
+- `postJSAction` - JavaScript executed after CLI commands finish
+- `cliOutputLineJSAction` - JavaScript executed for every output line produced by the CLI process. Receives `line` and `currentCliOutput`. If it returns `true`, the CLI process is killed and execution stops.
+- `cliExecutionErrorJSAction` - JavaScript executed when a CLI command fails. Receives `errorMessage` and `currentCliOutput`.
+- `cache` - Shell or JS script executed after post-action
+- `reset` - Shell or JS script executed in `finally` (always runs, even on failure)
+- `customParams` - Arbitrary key-value map forwarded to JS actions as `customParams`
+- `workingDirectory` - Working directory for CLI execution (defaults to `user.dir`)
+- `cleanupInputFolder` - Clean up `input/{contextId}/` after execution (default: **true**)
+- `cleanupOutputsFolder` - Clean up `outputs/` (and legacy `output/`) after execution (default: **false**)
+- `requireCliOutputFile` - Require `outputs/response.md` from CLI agent (default: **false**)
+
+> The `outputs/` folder is created automatically in `workingDirectory` before CLI commands run, so agents can write `outputs/response.md` without extra setup.
+>
+> The `input/{contextId}/` folder is also created empty under `workingDirectory` before `preCliJSAction` runs. Use `preCliJSAction` to populate it if your CLI agent reads files from that location.
+
+**Environment Security**:
+- `excludedEnvVariables` - Array of exact env variable names to remove from the subprocess environment (e.g., `["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]`)
+- `excludeEnvVariablesByRegex` - Array of regex patterns; matching env variable names are removed (e.g., `[".*_API_KEY", "SECRET_.*"]`)
+
+> Useful when you want to hide sensitive keys from `cliCommands` while still keeping them available to DMtools itself.
+
+**Timer JS Action**:
+- `timerJSAction` - JavaScript executed periodically while CLI commands are running
+- `timerIntervalSeconds` - Interval between timer firings in seconds (default: **60**)
+
+> The timer action receives `currentCliOutput` variable containing accumulated CLI output so far, same as `Teammate`.
+
+**Differences from `Teammate`**:
+- No `inputJql`, no ticket context, no tracker integration required.
+- No shell-injection whitelist: any shell syntax (`&&`, `|`, `>`, etc.) is allowed in `cliCommands`, `setup`, `cache`, `reset`.
+- Simpler lifecycle focused purely on CLI execution.
 
 ---
 
