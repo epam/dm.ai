@@ -130,14 +130,18 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     params.getCliPromptsByTracker());
 
             AtomicReference<String> liveOutput = new AtomicReference<>("");
+            Runnable timerRunnable = buildTimerRunnable(params, liveOutput);
+            int timerIntervalSeconds = params.getTimerIntervalSeconds();
             cliResult = cliHelper.executeCliCommandsWithResult(
                     finalCommands,
                     workingDirectory,
                     null,
-                    null,
-                    0,
+                    timerRunnable,
+                    timerIntervalSeconds,
                     liveOutput,
-                    true); // allow arbitrary shell syntax
+                    true, // allow arbitrary shell syntax
+                    params.getExcludedEnvVariables(),
+                    params.getExcludeEnvVariablesByRegex());
 
             // 6. Post-JS action
             String response = extractResponse(cliResult, params);
@@ -241,6 +245,28 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         } catch (Exception e) {
             logger.warn("{} hook failed, continuing: {}", hookName, e.getMessage(), e);
         }
+    }
+
+    private Runnable buildTimerRunnable(CliAgentParams params, AtomicReference<String> liveOutput) {
+        String timerJSAction = params.getTimerJSAction();
+        if (timerJSAction == null || timerJSAction.trim().isEmpty()) {
+            return null;
+        }
+        return () -> {
+            try {
+                logger.info("Executing timerJSAction: {}", timerJSAction);
+                JavaScriptExecutor executor = js(timerJSAction)
+                        .mcp(null, ai, confluence, null)
+                        .withJobContext(params, null, null)
+                        .with("currentCliOutput", liveOutput.get());
+                if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
+                    executor.with("customParams", params.getCustomParams());
+                }
+                executor.execute();
+            } catch (Exception e) {
+                logger.warn("timerJSAction execution failed (CLI continues): {}", e.getMessage(), e);
+            }
+        };
     }
 
     private String extractResponse(CliExecutionHelper.CliExecutionResult cliResult, CliAgentParams params) {

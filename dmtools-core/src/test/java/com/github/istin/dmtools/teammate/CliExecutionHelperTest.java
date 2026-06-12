@@ -25,6 +25,9 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -885,6 +888,110 @@ public class CliExecutionHelperTest {
             }
         } finally {
             com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
+    }
+
+    // ── env variable exclusion tests ─────────────────────────────────────────
+
+    @Test
+    void testFilterEnvVariables_ExactAndRegex() {
+        Map<String, String> env = Map.of(
+                "OPENAI_API_KEY", "secret1",
+                "ANTHROPIC_API_KEY", "secret2",
+                "CURSOR_API_KEY", "secret3",
+                "PUBLIC_VAR", "visible"
+        );
+
+        Map<String, String> result = CliExecutionHelper.filterEnvVariables(
+                env,
+                new String[]{"OPENAI_API_KEY"},
+                new String[]{".*_API_KEY"}
+        );
+
+        assertFalse(result.containsKey("OPENAI_API_KEY"));
+        assertFalse(result.containsKey("ANTHROPIC_API_KEY"));
+        assertFalse(result.containsKey("CURSOR_API_KEY"));
+        assertTrue(result.containsKey("PUBLIC_VAR"));
+        assertEquals("visible", result.get("PUBLIC_VAR"));
+    }
+
+    @Test
+    void testFilterEnvVariables_NullOrEmptyInputs_ReturnsOriginal() {
+        Map<String, String> env = Map.of("KEY", "value");
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, null, null));
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, new String[0], new String[0]));
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, new String[]{"   "}, new String[]{""}));
+    }
+
+    @Test
+    void testExecuteCliCommands_ExcludesEnvVariablesByExactName() {
+        String[] commands = {"echo test"};
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of("KEEP_ME", "keep", "DROP_ME", "drop"));
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                    .thenReturn("test");
+
+            cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                    new String[]{"DROP_ME"}, null);
+
+            mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                    anyString(),
+                    isNull(),
+                    argThat((Map<String, String> env) ->
+                            env.containsKey("KEEP_ME") && !env.containsKey("DROP_ME")
+                    ),
+                    any()
+            ));
+        }
+    }
+
+    @Test
+    void testExecuteCliCommands_ExcludesEnvVariablesByRegex() {
+        String[] commands = {"echo test"};
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of("SECRET_TOKEN", "x", "PUBLIC", "y"));
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                    .thenReturn("test");
+
+            cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                    null, new String[]{".*TOKEN"});
+
+            mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                    anyString(),
+                    isNull(),
+                    argThat((Map<String, String> env) ->
+                            !env.containsKey("SECRET_TOKEN") && env.containsKey("PUBLIC")
+                    ),
+                    any()
+            ));
+        }
+    }
+
+    @Test
+    void testExecuteCliCommandsWithResult_TimerActionFired() throws Exception {
+        Path workingDir = Files.createTempDirectory(tempDir, "working");
+        String[] commands = {"echo hello"};
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger fireCount = new AtomicInteger(0);
+
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of());
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), any(File.class), any(Map.class), any()))
+                    .thenReturn("hello");
+
+            Runnable timerAction = () -> {
+                fireCount.incrementAndGet();
+                latch.countDown();
+            };
+
+            cliHelper.executeCliCommandsWithResult(commands, workingDir, "dmtools.env",
+                    timerAction, 1, null, false, null, null);
+
+            assertTrue(latch.await(5, TimeUnit.SECONDS), "Timer action should fire within 5 seconds");
+            assertTrue(fireCount.get() >= 1, "Timer action should have fired at least once");
         }
     }
 

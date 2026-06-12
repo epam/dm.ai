@@ -554,6 +554,18 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 - `cleanupInputFolder` - Clean up `input/{contextId}/` after execution (default: **true**)
 - `requireCliOutputFile` - Require `output/response.md` from CLI agent (default: **false**)
 
+**Environment Security**:
+- `excludedEnvVariables` - Array of exact env variable names to remove from the subprocess environment (e.g., `["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]`)
+- `excludeEnvVariablesByRegex` - Array of regex patterns; matching env variable names are removed (e.g., `[".*_API_KEY", "SECRET_.*"]`)
+
+> Useful when you want to hide sensitive keys from `cliCommands` while still keeping them available to DMtools itself.
+
+**Timer JS Action**:
+- `timerJSAction` - JavaScript executed periodically while CLI commands are running
+- `timerIntervalSeconds` - Interval between timer firings in seconds (default: **60**)
+
+> The timer action receives `currentCliOutput` variable containing accumulated CLI output so far, same as `Teammate`.
+
 **Differences from `Teammate`**:
 - No `inputJql`, no ticket context, no tracker integration required.
 - No shell-injection whitelist: any shell syntax (`&&`, `|`, `>`, etc.) is allowed in `cliCommands`, `setup`, `cache`, `reset`.

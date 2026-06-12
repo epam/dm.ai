@@ -24,10 +24,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -339,7 +343,7 @@ public class CliExecutionHelper {
      * @return StringBuilder containing all command responses
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
-        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null, false);
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null, false, null, null);
     }
 
     /**
@@ -355,7 +359,7 @@ public class CliExecutionHelper {
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput) {
-        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, false);
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, false, null, null);
     }
 
     /**
@@ -373,13 +377,34 @@ public class CliExecutionHelper {
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput, boolean allowAnyCommand) {
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand, null, null);
+    }
+
+    /**
+     * Executes CLI commands and collects their responses.
+     * Each output line is also published to {@code liveOutput} (if non-null) so that a
+     * concurrent timer thread can read accumulated output between command lines.
+     *
+     * @param cliCommands            Array of CLI commands to execute
+     * @param workingDirectory       Working directory for command execution (optional)
+     * @param envVariablesFile       Path to environment file (null → resolve dmtools.env relative to workingDirectory)
+     * @param liveOutput             Optional AtomicReference updated with accumulated output after each line
+     * @param allowAnyCommand        When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
+     *                               Use only for trusted job configs.
+     * @param excludedEnvVariables   Exact env variable names to exclude from the subprocess
+     * @param excludedEnvRegexes     Regex patterns; matching env variable names are excluded
+     * @return StringBuilder containing all command responses
+     */
+    public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
+                                            AtomicReference<String> liveOutput, boolean allowAnyCommand,
+                                            String[] excludedEnvVariables, String[] excludedEnvRegexes) {
         StringBuilder cliResponses = new StringBuilder();
-        
+
         if (cliCommands == null || cliCommands.length == 0) {
             logger.info("No CLI commands to execute");
             return cliResponses;
         }
-        
+
         // Load environment variables from dmtools.env for CLI tools like cursor-agent
         if (envVariablesFile == null) {
             envVariablesFile = workingDirectory.resolve("dmtools.env").toString();
@@ -416,20 +441,23 @@ public class CliExecutionHelper {
                     mergedCount, skipped);
             envVars = merged;
         }
-        
+
+        // Apply explicit exclusions before spawning subprocess
+        envVars = filterEnvVariables(envVars, excludedEnvVariables, excludedEnvRegexes);
+
         // Convert Path to File for ProcessBuilder - safer than changing system properties
         File workingDir = null;
         if (workingDirectory != null && Files.exists(workingDirectory) && Files.isDirectory(workingDirectory)) {
             workingDir = workingDirectory.toFile();
             logger.info("Set working directory to: {}", workingDirectory.toAbsolutePath());
         }
-        
+
         for (String command : cliCommands) {
             if (command == null || command.trim().isEmpty()) {
                 logger.warn("Skipping empty CLI command");
                 continue;
             }
-            
+
             try {
                 logger.info("Executing CLI command: {}", command);
                 // Build a per-line consumer that also updates liveOutput so timer JS can read partial output
@@ -483,7 +511,7 @@ public class CliExecutionHelper {
      * @return CliExecutionResult containing command responses and output response
      */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
-        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, false);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, false, null, null);
     }
 
     /**
@@ -492,7 +520,7 @@ public class CliExecutionHelper {
      */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile, boolean allowAnyCommand) {
-        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, allowAnyCommand);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, allowAnyCommand, null, null);
     }
 
     /**
@@ -515,7 +543,7 @@ public class CliExecutionHelper {
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds) {
-        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds, null);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds, null, false, null, null);
     }
 
     /**
@@ -535,7 +563,7 @@ public class CliExecutionHelper {
                                                            Runnable timerAction, int timerIntervalSeconds,
                                                            AtomicReference<String> liveCliOutput) {
         return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction,
-                timerIntervalSeconds, liveCliOutput, false);
+                timerIntervalSeconds, liveCliOutput, false, null, null);
     }
 
     /**
@@ -558,6 +586,34 @@ public class CliExecutionHelper {
                                                            Runnable timerAction, int timerIntervalSeconds,
                                                            AtomicReference<String> liveCliOutput,
                                                            boolean allowAnyCommand) {
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction,
+                timerIntervalSeconds, liveCliOutput, allowAnyCommand, null, null);
+    }
+
+    /**
+     * Executes CLI commands with an optional background timer, shared live output reference,
+     * optional shell-injection validation bypass, and optional env variable exclusion.
+     *
+     * @param cliCommands            Array of CLI commands to execute
+     * @param workingDirectory       Working directory for command execution (optional)
+     * @param envVariablesFile       Path to environment file (null → auto-resolve)
+     * @param timerAction            Optional runnable executed on the timer thread
+     * @param timerIntervalSeconds   Interval between timer firings in seconds; timer is disabled if &lt;= 0
+     * @param liveCliOutput          Optional shared AtomicReference updated with accumulated CLI output;
+     *                               if null, an internal reference is created when timerAction is non-null
+     * @param allowAnyCommand        When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
+     *                               Use only for trusted job configs.
+     * @param excludedEnvVariables   Exact env variable names to exclude from the subprocess
+     * @param excludedEnvRegexes     Regex patterns; matching env variable names are excluded
+     * @return CliExecutionResult containing command responses and output response
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds,
+                                                           AtomicReference<String> liveCliOutput,
+                                                           boolean allowAnyCommand,
+                                                           String[] excludedEnvVariables,
+                                                           String[] excludedEnvRegexes) {
         AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
                 : (timerAction != null ? new AtomicReference<>("") : null);
 
@@ -579,7 +635,8 @@ public class CliExecutionHelper {
         }
 
         try {
-            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand);
+            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
+                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes);
             String outputResponse = processOutputResponse(workingDirectory);
             return new CliExecutionResult(cliResponses, outputResponse);
         } finally {
@@ -603,6 +660,56 @@ public class CliExecutionHelper {
                 }
             }
         }
+    }
+
+    /**
+     * Filters environment variables by exact name and/or regex patterns.
+     * Returns a new map with matching keys removed.
+     */
+    public static Map<String, String> filterEnvVariables(Map<String, String> envVars,
+                                                         String[] excludedEnvVariables,
+                                                         String[] excludedEnvRegexes) {
+        if (envVars == null || envVars.isEmpty()) {
+            return envVars;
+        }
+        Set<String> exactExclusions = new HashSet<>();
+        if (excludedEnvVariables != null) {
+            for (String key : excludedEnvVariables) {
+                if (key != null && !key.isBlank()) {
+                    exactExclusions.add(key);
+                }
+            }
+        }
+        java.util.List<java.util.regex.Pattern> patterns = new java.util.ArrayList<>();
+        if (excludedEnvRegexes != null) {
+            for (String regex : excludedEnvRegexes) {
+                if (regex != null && !regex.isBlank()) {
+                    patterns.add(java.util.regex.Pattern.compile(regex));
+                }
+            }
+        }
+        if (exactExclusions.isEmpty() && patterns.isEmpty()) {
+            return envVars;
+        }
+        Map<String, String> filtered = new java.util.HashMap<>(envVars);
+        int removed = 0;
+        for (String key : envVars.keySet()) {
+            if (exactExclusions.contains(key)) {
+                filtered.remove(key);
+                removed++;
+                continue;
+            }
+            for (java.util.regex.Pattern pattern : patterns) {
+                if (pattern.matcher(key).matches()) {
+                    filtered.remove(key);
+                    removed++;
+                    break;
+                }
+            }
+        }
+        logger.info("Excluded {} environment variable(s) from subprocess env (exact={}, regex={})",
+                removed, exactExclusions.size(), patterns.size());
+        return filtered;
     }
     
     /**
