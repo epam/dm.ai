@@ -453,6 +453,40 @@ Teammate can execute external CLI agents with full workspace context:
 
 **See**: [CLI Integration Guide](../agents/cli-integration.md) for complete examples and patterns.
 
+### Standalone CLI Mode (No `inputJql`)
+
+When `inputJql` is omitted or empty, Teammate runs in standalone CLI mode. No tickets are queried and the internal ticket is `null`. This is useful for testing CLI agents or running automation that does not need a tracker ticket.
+
+Behavior in standalone mode:
+- `searchAndPerform` is **not** called.
+- `preJSAction`, `preCliJSAction`, and `postJSAction` are **not** invoked (they require a ticket).
+- Only `cliCommands` aggregation and execution runs (plus optional `indexes` and AI processing).
+- Results are returned with key `"standalone"`; nothing is posted to a tracker.
+
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "cliPrompts": ["Review the codebase and suggest improvements"],
+    "cliCommands": ["cursor-agent"],
+    "skipAIProcessing": true,
+    "outputType": "none"
+  }
+}
+```
+
+If `trackerClient` is not configured at all, standalone mode still works as long as `cliCommands` are provided.
+
+### JS Action Skip Flags
+
+These flags allow disabling specific JavaScript hooks without editing the config file:
+
+- `skipPreJSAction` - When `true`, do not run `preJSAction` (default: **false**).
+- `skipPreCliJSAction` - When `true`, do not run `preCliJSAction` (default: **false**).
+- `skipPostJSAction` - When `true`, do not run `postJSAction` (default: **false**).
+
+Useful for quickly testing CLI command/prompt aggregation while skipping custom JS pre/post processing.
+
 **Inherited from TrackerParams**:
 - `inputJql` - JQL query to find tickets
 - `initiator` - User who initiated the job
