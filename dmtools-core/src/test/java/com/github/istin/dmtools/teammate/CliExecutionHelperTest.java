@@ -246,8 +246,8 @@ public class CliExecutionHelperTest {
     
     @Test
     void testProcessOutputResponse_FileExists() throws IOException {
-        // Arrange - use new "output" folder
-        Path outputDir = tempDir.resolve("output");
+        // Arrange - use primary "outputs" folder
+        Path outputDir = tempDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String expectedContent = "CLI response content";
@@ -262,8 +262,8 @@ public class CliExecutionHelperTest {
 
     @Test
     void testProcessOutputResponse_LegacyFolder() throws IOException {
-        // Arrange - test backward compatibility with "outputs" folder
-        Path outputDir = tempDir.resolve("outputs");
+        // Arrange - test backward compatibility with "output" folder
+        Path outputDir = tempDir.resolve("output");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String expectedContent = "Legacy CLI response content";
@@ -273,34 +273,34 @@ public class CliExecutionHelperTest {
         String result = cliHelper.processOutputResponse(tempDir);
 
         // Assert
-        assertEquals(expectedContent, result, "Should support legacy 'outputs/' folder for backward compatibility");
+        assertEquals(expectedContent, result, "Should support legacy 'output/' folder for backward compatibility");
     }
 
     @Test
     void testProcessOutputResponse_PreferNewOverLegacy() throws IOException {
-        // Arrange - both folders exist, new should take precedence
-        Path newOutputDir = tempDir.resolve("output");
+        // Arrange - both folders exist, primary outputs/ should take precedence
+        Path newOutputDir = tempDir.resolve("outputs");
         Files.createDirectories(newOutputDir);
         Path newResponseFile = newOutputDir.resolve("response.md");
-        String newContent = "New output folder content";
+        String newContent = "New outputs folder content";
         Files.write(newResponseFile, newContent.getBytes(StandardCharsets.UTF_8));
 
-        Path legacyOutputDir = tempDir.resolve("outputs");
+        Path legacyOutputDir = tempDir.resolve("output");
         Files.createDirectories(legacyOutputDir);
         Path legacyResponseFile = legacyOutputDir.resolve("response.md");
-        String legacyContent = "Legacy outputs folder content";
+        String legacyContent = "Legacy output folder content";
         Files.write(legacyResponseFile, legacyContent.getBytes(StandardCharsets.UTF_8));
 
         // Act
         String result = cliHelper.processOutputResponse(tempDir);
 
         // Assert
-        assertEquals(newContent, result, "Should prefer new 'output/' folder over legacy 'outputs/' folder");
+        assertEquals(newContent, result, "Should prefer primary 'outputs/' folder over legacy 'output/' folder");
     }
 
     @Test
     void testProcessOutputResponse_FileNotExists() {
-        // Act - test with a directory that doesn't have output/response.md
+        // Act - test with a directory that doesn't have outputs/response.md
         String result = cliHelper.processOutputResponse(tempDir);
 
         // Assert
@@ -309,8 +309,8 @@ public class CliExecutionHelperTest {
 
     @Test
     void testProcessOutputResponse_EmptyFile() throws IOException {
-        // Arrange - use new "output" folder
-        Path outputDir = tempDir.resolve("output");
+        // Arrange - use primary "outputs" folder
+        Path outputDir = tempDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         Files.write(responseFile, "".getBytes(StandardCharsets.UTF_8));
@@ -397,7 +397,7 @@ public class CliExecutionHelperTest {
             assertNotNull(result);
             assertTrue(result.getCommandResponses().toString().contains("hello"));
             assertTrue(result.getCommandResponses().toString().contains("world"));
-            assertFalse(result.hasOutputResponse()); // No output/response.md file created
+            assertFalse(result.hasOutputResponse()); // No outputs/response.md file created
             assertNull(result.getOutputResponse());
         }
     }
@@ -406,7 +406,7 @@ public class CliExecutionHelperTest {
     void testExecuteCliCommandsWithResult_WithOutputFile() throws IOException {
         // Arrange
         Path workingDir = Files.createTempDirectory(tempDir, "working");
-        Path outputDir = workingDir.resolve("output");  // Changed from "outputs" to "output"
+        Path outputDir = workingDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String outputContent = "CLI generated response content";

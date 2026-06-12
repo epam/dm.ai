@@ -444,8 +444,8 @@ dmtools Teammate --inputJql "key = PROJ-123"
 Teammate can execute external CLI agents with full workspace context:
 - **Input folder**: Teammate creates `input/` with ticket context
 - **CLI execution**: Agents (cursor-agent, claude, copilot, etc.) run with full codebase access
-- **Output folder**: CLI agents write results to `output/`
-- **Post-processing**: JavaScript post-actions process `output/` files (create PRs, update tickets, etc.)
+- **Output folder**: CLI agents write results to `outputs/`
+- **Post-processing**: JavaScript post-actions process `outputs/` files (create PRs, update tickets, etc.)
 
 **Pattern**: Input context → CLI agent → Output files → Post-action processing
 
@@ -559,10 +559,10 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 - `customParams` - Arbitrary key-value map forwarded to JS actions as `customParams`
 - `workingDirectory` - Working directory for CLI execution (defaults to `user.dir`)
 - `cleanupInputFolder` - Clean up `input/{contextId}/` after execution (default: **true**)
-- `cleanupOutputsFolder` - Clean up `output/` (and legacy `outputs/`) after execution (default: **false**)
-- `requireCliOutputFile` - Require `output/response.md` from CLI agent (default: **false**)
+- `cleanupOutputsFolder` - Clean up `outputs/` (and legacy `output/`) after execution (default: **false**)
+- `requireCliOutputFile` - Require `outputs/response.md` from CLI agent (default: **false**)
 
-> The `output/` folder is created automatically in `workingDirectory` before CLI commands run, so agents can write `output/response.md` without extra setup.
+> The `outputs/` folder is created automatically in `workingDirectory` before CLI commands run, so agents can write `outputs/response.md` without extra setup.
 
 **Environment Security**:
 - `excludedEnvVariables` - Array of exact env variable names to remove from the subprocess environment (e.g., `["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]`)

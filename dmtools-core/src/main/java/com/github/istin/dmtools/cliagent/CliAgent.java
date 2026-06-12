@@ -132,13 +132,13 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     params.getCliPrompts(),
                     params.getCliPromptsByTracker());
 
-            // Ensure output folder exists so CLI agents can write output/response.md by default
-            Path outputFolder = workingDirectory.resolve("output");
+            // Ensure outputs folder exists so CLI agents can write outputs/response.md by default
+            Path outputFolder = workingDirectory.resolve("outputs");
             try {
                 Files.createDirectories(outputFolder);
-                logger.info("Created output folder: {}", outputFolder.toAbsolutePath());
+                logger.info("Created outputs folder: {}", outputFolder.toAbsolutePath());
             } catch (Exception e) {
-                logger.warn("Failed to create output folder: {}", e.getMessage());
+                logger.warn("Failed to create outputs folder: {}", e.getMessage());
             }
 
             AtomicReference<String> liveOutput = new AtomicReference<>("");
@@ -191,12 +191,12 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 }
             }
 
-            // Clean up output folder
+            // Clean up outputs folder
             if (params.isCleanupOutputsFolder()) {
                 try {
                     cleanupOutputsFolder(workingDirectory);
                 } catch (Exception cleanupException) {
-                    logger.warn("Failed to clean up output folder: {}", cleanupException.getMessage());
+                    logger.warn("Failed to clean up outputs folder: {}", cleanupException.getMessage());
                 }
             }
         }
@@ -347,15 +347,15 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     }
 
     private void cleanupOutputsFolder(Path workingDirectory) throws IOException {
-        Path outputFolder = workingDirectory.resolve("output");
-        Path legacyOutputFolder = workingDirectory.resolve("outputs");
+        Path outputFolder = workingDirectory.resolve("outputs");
+        Path legacyOutputFolder = workingDirectory.resolve("output");
         if (Files.exists(outputFolder)) {
             deleteDirectoryRecursively(outputFolder);
-            logger.info("Cleaned up output folder: {}", outputFolder.toAbsolutePath());
+            logger.info("Cleaned up outputs folder: {}", outputFolder.toAbsolutePath());
         }
         if (Files.exists(legacyOutputFolder)) {
             deleteDirectoryRecursively(legacyOutputFolder);
-            logger.info("Cleaned up legacy outputs folder: {}", legacyOutputFolder.toAbsolutePath());
+            logger.info("Cleaned up legacy output folder: {}", legacyOutputFolder.toAbsolutePath());
         }
     }
 

@@ -49,8 +49,8 @@ public class CliExecutionHelper {
     
     private static final String INPUT_FOLDER_PREFIX = "input";
     private static final String REQUEST_FILE_NAME = "request.md";
-    private static final String OUTPUT_FOLDER = "output";  // Changed from "outputs" to "output"
-    private static final String OUTPUT_FOLDER_LEGACY = "outputs";  // Backward compatibility
+    private static final String OUTPUT_FOLDER = "outputs";
+    private static final String OUTPUT_FOLDER_LEGACY = "output";  // Backward compatibility
     private static final String COMMENTS_FILE_NAME = "comments.md";
     private static final String RESPONSE_FILE_NAME = "response.md";
 
@@ -796,25 +796,25 @@ public class CliExecutionHelper {
     }
     
     /**
-     * Processes output response from CLI commands by checking for output/response.md file.
-     * For backward compatibility, also checks outputs/response.md if output/response.md is not found.
+     * Processes output response from CLI commands by checking for outputs/response.md file.
+     * For backward compatibility, also checks output/response.md if outputs/response.md is not found.
      *
-     * @return Content of output/response.md file if it exists, null otherwise
+     * @return Content of outputs/response.md file if it exists, null otherwise
      */
     public String processOutputResponse() {
         return processOutputResponse(null);
     }
 
     /**
-     * Processes output response from CLI commands by checking for output/response.md file
+     * Processes output response from CLI commands by checking for outputs/response.md file
      * relative to the specified working directory.
-     * For backward compatibility, also checks outputs/response.md if output/response.md is not found.
+     * For backward compatibility, also checks output/response.md if outputs/response.md is not found.
      *
-     * @param workingDirectory Working directory to look for output/response.md file (null for current directory)
-     * @return Content of output/response.md file if it exists, null otherwise
+     * @param workingDirectory Working directory to look for outputs/response.md file (null for current directory)
+     * @return Content of outputs/response.md file if it exists, null otherwise
      */
     public String processOutputResponse(Path workingDirectory) {
-        // Try new location: output/response.md
+        // Try primary location: outputs/response.md
         Path outputFilePath;
         if (workingDirectory != null) {
             outputFilePath = workingDirectory.resolve(OUTPUT_FOLDER).resolve(RESPONSE_FILE_NAME);
@@ -825,7 +825,7 @@ public class CliExecutionHelper {
         if (!Files.exists(outputFilePath)) {
             logger.info("No output response file found at: {}", outputFilePath.toAbsolutePath());
 
-            // Backward compatibility: Try legacy location: outputs/response.md
+            // Backward compatibility: Try legacy location: output/response.md
             Path legacyOutputFilePath;
             if (workingDirectory != null) {
                 legacyOutputFilePath = workingDirectory.resolve(OUTPUT_FOLDER_LEGACY).resolve(RESPONSE_FILE_NAME);

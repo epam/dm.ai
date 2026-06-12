@@ -171,7 +171,7 @@ class CliAgentTest {
 
             agent.runJobImpl(params);
 
-            assertTrue(Files.exists(tempDir.resolve("output")), "output/ folder should be created in working directory");
+            assertTrue(Files.exists(tempDir.resolve("outputs")), "outputs/ folder should be created in working directory");
         }
     }
 
@@ -185,9 +185,9 @@ class CliAgentTest {
         params.setCleanupOutputsFolder(true);
         params.setWorkingDirectory(tempDir.toString());
 
-        Path outputDir = tempDir.resolve("output");
+        Path outputDir = tempDir.resolve("outputs");
         Files.createDirectories(outputDir);
-        Files.writeString(outputDir.resolve("response.md"), "temporary output");
+        Files.writeString(outputDir.resolve("response.md"), "temporary outputs");
 
         CliAgent agent = buildAgent();
 
@@ -199,7 +199,7 @@ class CliAgentTest {
 
             agent.runJobImpl(params);
 
-            assertFalse(Files.exists(outputDir), "output/ folder should be cleaned up when cleanupOutputsFolder is true");
+            assertFalse(Files.exists(outputDir), "outputs/ folder should be cleaned up when cleanupOutputsFolder is true");
         }
     }
 }
