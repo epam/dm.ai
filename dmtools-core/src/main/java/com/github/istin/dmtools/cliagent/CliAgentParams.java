@@ -39,6 +39,9 @@ public class CliAgentParams extends TrackerParams {
     public static final String EXCLUDE_ENV_VARIABLES_BY_REGEX = "excludeEnvVariablesByRegex";
     public static final String TIMER_JS_ACTION = "timerJSAction";
     public static final String TIMER_INTERVAL_SECONDS = "timerIntervalSeconds";
+    public static final String CLEANUP_OUTPUTS_FOLDER = "cleanupOutputsFolder";
+    public static final String CLI_EXECUTION_ERROR_JS_ACTION = "cliExecutionErrorJSAction";
+    public static final String CLI_OUTPUT_LINE_JS_ACTION = "cliOutputLineJSAction";
 
     @SerializedName(CLI_COMMANDS)
     private String[] cliCommands;
@@ -87,4 +90,13 @@ public class CliAgentParams extends TrackerParams {
 
     @SerializedName(TIMER_INTERVAL_SECONDS)
     private int timerIntervalSeconds = 60;
+
+    @SerializedName(CLEANUP_OUTPUTS_FOLDER)
+    private boolean cleanupOutputsFolder = false;
+
+    @SerializedName(CLI_EXECUTION_ERROR_JS_ACTION)
+    private String cliExecutionErrorJSAction;
+
+    @SerializedName(CLI_OUTPUT_LINE_JS_ACTION)
+    private String cliOutputLineJSAction;
 }

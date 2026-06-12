@@ -8,6 +8,7 @@ import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.CliExecutionStoppedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
@@ -31,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -343,7 +346,7 @@ public class CliExecutionHelper {
      * @return StringBuilder containing all command responses
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
-        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null, false, null, null);
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null, false, null, null, null, null);
     }
 
     /**
@@ -359,7 +362,7 @@ public class CliExecutionHelper {
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput) {
-        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, false, null, null);
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, false, null, null, null, null);
     }
 
     /**
@@ -377,7 +380,7 @@ public class CliExecutionHelper {
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput, boolean allowAnyCommand) {
-        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand, null, null);
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand, null, null, null, null);
     }
 
     /**
@@ -398,6 +401,31 @@ public class CliExecutionHelper {
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput, boolean allowAnyCommand,
                                             String[] excludedEnvVariables, String[] excludedEnvRegexes) {
+        return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand,
+                excludedEnvVariables, excludedEnvRegexes, null, null);
+    }
+
+    /**
+     * Executes CLI commands and collects their responses.
+     * Each output line is also published to {@code liveOutput} (if non-null) so that a
+     * concurrent timer thread can read accumulated output between command lines.
+     *
+     * @param cliCommands            Array of CLI commands to execute
+     * @param workingDirectory       Working directory for command execution (optional)
+     * @param envVariablesFile       Path to environment file (null → resolve dmtools.env relative to workingDirectory)
+     * @param liveOutput             Optional AtomicReference updated with accumulated output after each line
+     * @param allowAnyCommand        When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
+     *                               Use only for trusted job configs.
+     * @param excludedEnvVariables   Exact env variable names to exclude from the subprocess
+     * @param excludedEnvRegexes     Regex patterns; matching env variable names are excluded
+     * @param errorHandler           Optional consumer invoked when a CLI command fails
+     * @param lineStopPredicate      Optional predicate invoked for each output line; returning {@code true} stops execution
+     * @return StringBuilder containing all command responses
+     */
+    public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
+                                            AtomicReference<String> liveOutput, boolean allowAnyCommand,
+                                            String[] excludedEnvVariables, String[] excludedEnvRegexes,
+                                            Consumer<Exception> errorHandler, Predicate<String> lineStopPredicate) {
         StringBuilder cliResponses = new StringBuilder();
 
         if (cliCommands == null || cliCommands.length == 0) {
@@ -466,10 +494,17 @@ public class CliExecutionHelper {
                     commandOutput.append(line).append(System.lineSeparator());
                     liveOutput.set(cliResponses + commandOutput.toString());
                 };
-                String response = allowAnyCommand
-                        ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false)
-                        : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer);
-                
+                String response;
+                if (lineStopPredicate == null) {
+                    response = allowAnyCommand
+                            ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false)
+                            : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer);
+                } else {
+                    response = allowAnyCommand
+                            ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false, lineStopPredicate)
+                            : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, true, lineStopPredicate);
+                }
+
                 if (response != null && !response.trim().isEmpty()) {
                     cliResponses.append("CLI Command: ").append(command).append("\n");
                     cliResponses.append("Response:\n").append(response).append("\n\n");
@@ -480,17 +515,32 @@ public class CliExecutionHelper {
                 } else {
                     logger.warn("CLI command returned empty response");
                 }
+            } catch (CliExecutionStoppedException e) {
+                logger.warn("CLI execution stopped by line callback for command '{}': {}", command, e.getMessage());
+                cliResponses.append("CLI Command: ").append(command).append("\n");
+                cliResponses.append("Stopped: ").append(e.getMessage()).append("\n\n");
+                if (liveOutput != null) {
+                    liveOutput.set(cliResponses.toString());
+                }
+                throw e;
             } catch (Exception e) {
                 String errorMsg = "Failed to execute CLI command '" + command + "': " + e.getMessage();
-                
+
                 // Check if this is a cursor-agent related error and provide helpful message
                 if (command.contains("cursor-agent")) {
                     errorMsg += "\n\nNote: Cursor AI CLI may not be available on this platform.";
                     errorMsg += "\nCursor CLI is currently supported on macOS and Windows.";
                     errorMsg += "\nFor Linux environments, consider using alternative AI tools or running on supported platforms.";
                 }
-                
+
                 logger.error(errorMsg, e);
+                if (errorHandler != null) {
+                    try {
+                        errorHandler.accept(e);
+                    } catch (Exception handlerException) {
+                        logger.warn("errorHandler threw exception, ignoring: {}", handlerException.getMessage());
+                    }
+                }
                 cliResponses.append("CLI Command: ").append(command).append("\n");
                 cliResponses.append("Error: ").append(errorMsg).append("\n\n");
                 if (liveOutput != null) {
@@ -511,7 +561,7 @@ public class CliExecutionHelper {
      * @return CliExecutionResult containing command responses and output response
      */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
-        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, false, null, null);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, false, null, null, null, null);
     }
 
     /**
@@ -520,7 +570,7 @@ public class CliExecutionHelper {
      */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile, boolean allowAnyCommand) {
-        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, allowAnyCommand, null, null);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, allowAnyCommand, null, null, null, null);
     }
 
     /**
@@ -543,7 +593,7 @@ public class CliExecutionHelper {
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds) {
-        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds, null, false, null, null);
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds, null, false, null, null, null, null);
     }
 
     /**
@@ -563,7 +613,7 @@ public class CliExecutionHelper {
                                                            Runnable timerAction, int timerIntervalSeconds,
                                                            AtomicReference<String> liveCliOutput) {
         return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction,
-                timerIntervalSeconds, liveCliOutput, false, null, null);
+                timerIntervalSeconds, liveCliOutput, false, null, null, null, null);
     }
 
     /**
@@ -587,7 +637,7 @@ public class CliExecutionHelper {
                                                            AtomicReference<String> liveCliOutput,
                                                            boolean allowAnyCommand) {
         return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction,
-                timerIntervalSeconds, liveCliOutput, allowAnyCommand, null, null);
+                timerIntervalSeconds, liveCliOutput, allowAnyCommand, null, null, null, null);
     }
 
     /**
@@ -614,6 +664,39 @@ public class CliExecutionHelper {
                                                            boolean allowAnyCommand,
                                                            String[] excludedEnvVariables,
                                                            String[] excludedEnvRegexes) {
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction,
+                timerIntervalSeconds, liveCliOutput, allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, null, null);
+    }
+
+    /**
+     * Executes CLI commands with an optional background timer, shared live output reference,
+     * optional shell-injection validation bypass, optional env variable exclusion,
+     * optional error handler, and optional per-line stop predicate.
+     *
+     * @param cliCommands            Array of CLI commands to execute
+     * @param workingDirectory       Working directory for command execution (optional)
+     * @param envVariablesFile       Path to environment file (null → auto-resolve)
+     * @param timerAction            Optional runnable executed on the timer thread
+     * @param timerIntervalSeconds   Interval between timer firings in seconds; timer is disabled if &lt;= 0
+     * @param liveCliOutput          Optional shared AtomicReference updated with accumulated CLI output;
+     *                               if null, an internal reference is created when timerAction is non-null
+     * @param allowAnyCommand        When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
+     *                               Use only for trusted job configs.
+     * @param excludedEnvVariables   Exact env variable names to exclude from the subprocess
+     * @param excludedEnvRegexes     Regex patterns; matching env variable names are excluded
+     * @param errorHandler           Optional consumer invoked when a CLI command fails
+     * @param lineStopPredicate      Optional predicate invoked for each output line; returning {@code true} stops execution
+     * @return CliExecutionResult containing command responses and output response
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds,
+                                                           AtomicReference<String> liveCliOutput,
+                                                           boolean allowAnyCommand,
+                                                           String[] excludedEnvVariables,
+                                                           String[] excludedEnvRegexes,
+                                                           Consumer<Exception> errorHandler,
+                                                           Predicate<String> lineStopPredicate) {
         AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
                 : (timerAction != null ? new AtomicReference<>("") : null);
 
@@ -636,7 +719,7 @@ public class CliExecutionHelper {
 
         try {
             StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
-                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes);
+                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate);
             String outputResponse = processOutputResponse(workingDirectory);
             return new CliExecutionResult(cliResponses, outputResponse);
         } finally {

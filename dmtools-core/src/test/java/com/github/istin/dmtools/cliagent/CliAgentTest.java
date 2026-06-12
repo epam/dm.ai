@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -149,5 +150,56 @@ class CliAgentTest {
 
         assertEquals("test", params.getCustomParams().get("mode"));
         assertEquals(42, params.getCustomParams().get("count"));
+    }
+
+    @Test
+    void testCreatesOutputFolderByDefault() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.runJobImpl(params);
+
+            assertTrue(Files.exists(tempDir.resolve("output")), "output/ folder should be created in working directory");
+        }
+    }
+
+    @Test
+    void testCleanupOutputsFolderRemovesOutputFolder() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setCleanupOutputsFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
+        Path outputDir = tempDir.resolve("output");
+        Files.createDirectories(outputDir);
+        Files.writeString(outputDir.resolve("response.md"), "temporary output");
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.runJobImpl(params);
+
+            assertFalse(Files.exists(outputDir), "output/ folder should be cleaned up when cleanupOutputsFolder is true");
+        }
     }
 }

@@ -8,6 +8,7 @@ import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.CliExecutionStoppedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -27,6 +28,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -993,6 +995,37 @@ public class CliExecutionHelperTest {
             assertTrue(latch.await(5, TimeUnit.SECONDS), "Timer action should fire within 5 seconds");
             assertTrue(fireCount.get() >= 1, "Timer action should have fired at least once");
         }
+    }
+
+    @Test
+    void testExecuteCliCommands_LineStopPredicate_StopsExecution() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        String[] commands = {"echo line1", "echo line2"};
+
+        CliExecutionStoppedException exception = assertThrows(CliExecutionStoppedException.class,
+                () -> cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                        null, null, null, "line1"::equals));
+
+        String responses = exception.getMessage();
+        assertTrue(responses.contains("line1") || responses.contains("Stopped"));
+    }
+
+    @Test
+    void testExecuteCliCommands_ErrorHandler_InvokedOnFailure() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        String[] commands = {"false"}; // exits with code 1
+        AtomicBoolean handlerCalled = new AtomicBoolean(false);
+
+        cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                null, null, e -> handlerCalled.set(true), null);
+
+        assertTrue(handlerCalled.get(), "errorHandler should be invoked when a command fails");
     }
 
     // ── writeConfluencePagesFile tests ────────────────────────────────────────

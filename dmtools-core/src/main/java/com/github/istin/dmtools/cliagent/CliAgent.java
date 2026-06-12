@@ -6,6 +6,7 @@ package com.github.istin.dmtools.cliagent;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
+import com.github.istin.dmtools.common.utils.CliExecutionStoppedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
@@ -33,6 +34,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Lightweight CLI-agent orchestrator.
@@ -129,8 +132,19 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     params.getCliPrompts(),
                     params.getCliPromptsByTracker());
 
+            // Ensure output folder exists so CLI agents can write output/response.md by default
+            Path outputFolder = workingDirectory.resolve("output");
+            try {
+                Files.createDirectories(outputFolder);
+                logger.info("Created output folder: {}", outputFolder.toAbsolutePath());
+            } catch (Exception e) {
+                logger.warn("Failed to create output folder: {}", e.getMessage());
+            }
+
             AtomicReference<String> liveOutput = new AtomicReference<>("");
             Runnable timerRunnable = buildTimerRunnable(params, liveOutput);
+            Consumer<Exception> errorHandler = buildErrorHandler(params, liveOutput);
+            Predicate<String> lineStopPredicate = buildLineStopPredicate(params, liveOutput);
             int timerIntervalSeconds = params.getTimerIntervalSeconds();
             cliResult = cliHelper.executeCliCommandsWithResult(
                     finalCommands,
@@ -141,7 +155,9 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     liveOutput,
                     true, // allow arbitrary shell syntax
                     params.getExcludedEnvVariables(),
-                    params.getExcludeEnvVariablesByRegex());
+                    params.getExcludeEnvVariablesByRegex(),
+                    errorHandler,
+                    lineStopPredicate);
 
             // 6. Post-JS action
             String response = extractResponse(cliResult, params);
@@ -172,6 +188,15 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     logger.info("Cleaned up input folder: {}", inputContextPath.toAbsolutePath());
                 } catch (Exception cleanupException) {
                     logger.warn("Failed to clean up input folder: {}", cleanupException.getMessage());
+                }
+            }
+
+            // Clean up output folder
+            if (params.isCleanupOutputsFolder()) {
+                try {
+                    cleanupOutputsFolder(workingDirectory);
+                } catch (Exception cleanupException) {
+                    logger.warn("Failed to clean up output folder: {}", cleanupException.getMessage());
                 }
             }
         }
@@ -267,6 +292,84 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 logger.warn("timerJSAction execution failed (CLI continues): {}", e.getMessage(), e);
             }
         };
+    }
+
+    private Consumer<Exception> buildErrorHandler(CliAgentParams params, AtomicReference<String> liveOutput) {
+        String cliExecutionErrorJSAction = params.getCliExecutionErrorJSAction();
+        if (cliExecutionErrorJSAction == null || cliExecutionErrorJSAction.trim().isEmpty()) {
+            return null;
+        }
+        return exception -> {
+            try {
+                logger.info("Executing cliExecutionErrorJSAction: {}", cliExecutionErrorJSAction);
+                JavaScriptExecutor executor = js(cliExecutionErrorJSAction)
+                        .mcp(null, ai, confluence, null)
+                        .withJobContext(params, null, null)
+                        .with("errorMessage", exception.getMessage())
+                        .with("currentCliOutput", liveOutput.get());
+                if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
+                    executor.with("customParams", params.getCustomParams());
+                }
+                executor.execute();
+            } catch (Exception e) {
+                logger.warn("cliExecutionErrorJSAction execution failed: {}", e.getMessage(), e);
+            }
+        };
+    }
+
+    private Predicate<String> buildLineStopPredicate(CliAgentParams params, AtomicReference<String> liveOutput) {
+        String cliOutputLineJSAction = params.getCliOutputLineJSAction();
+        if (cliOutputLineJSAction == null || cliOutputLineJSAction.trim().isEmpty()) {
+            return null;
+        }
+        return line -> {
+            try {
+                logger.debug("Executing cliOutputLineJSAction for line: {}", line);
+                JavaScriptExecutor executor = js(cliOutputLineJSAction)
+                        .mcp(null, ai, confluence, null)
+                        .withJobContext(params, null, null)
+                        .with("line", line)
+                        .with("currentCliOutput", liveOutput.get());
+                if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
+                    executor.with("customParams", params.getCustomParams());
+                }
+                Object result = executor.execute();
+                boolean stop = result != null && Boolean.parseBoolean(String.valueOf(result));
+                if (stop) {
+                    logger.info("cliOutputLineJSAction requested stop at line: {}", line);
+                }
+                return stop;
+            } catch (Exception e) {
+                logger.warn("cliOutputLineJSAction execution failed for line (continuing): {}", e.getMessage(), e);
+                return false;
+            }
+        };
+    }
+
+    private void cleanupOutputsFolder(Path workingDirectory) throws IOException {
+        Path outputFolder = workingDirectory.resolve("output");
+        Path legacyOutputFolder = workingDirectory.resolve("outputs");
+        if (Files.exists(outputFolder)) {
+            deleteDirectoryRecursively(outputFolder);
+            logger.info("Cleaned up output folder: {}", outputFolder.toAbsolutePath());
+        }
+        if (Files.exists(legacyOutputFolder)) {
+            deleteDirectoryRecursively(legacyOutputFolder);
+            logger.info("Cleaned up legacy outputs folder: {}", legacyOutputFolder.toAbsolutePath());
+        }
+    }
+
+    private void deleteDirectoryRecursively(Path directory) throws IOException {
+        try (java.util.stream.Stream<Path> walk = Files.walk(directory)) {
+            walk.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                        } catch (IOException e) {
+                            logger.warn("Failed to delete {}: {}", path, e.getMessage());
+                        }
+                    });
+        }
     }
 
     private String extractResponse(CliExecutionHelper.CliExecutionResult cliResult, CliAgentParams params) {

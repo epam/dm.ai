@@ -521,6 +521,10 @@ dmtools run agents/cli_agent.json
     "preJSAction": "agents/js/checkWipLabel.js",
     "preCliJSAction": "agents/js/preCliDevelopmentSetup.js",
     "postJSAction": "agents/js/developTicketAndCreatePR.js",
+    "cliOutputLineJSAction": "agents/js/onCliOutputLine.js",
+    "cliExecutionErrorJSAction": "agents/js/onCliExecutionError.js",
+    "timerJSAction": "agents/js/saveCliOutputPeriodically.js",
+    "timerIntervalSeconds": 60,
     "cache": "./agents/scripts/cache.sh",
     "reset": "./agents/scripts/reset.sh",
     "customParams": {
@@ -528,7 +532,8 @@ dmtools run agents/cli_agent.json
       "maxFiles": 10
     },
     "outputType": "none",
-    "cleanupInputFolder": true
+    "cleanupInputFolder": true,
+    "cleanupOutputsFolder": false
   }
 }
 ```
@@ -547,12 +552,17 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 - `preJSAction` - JavaScript executed before CLI commands
 - `preCliJSAction` - JavaScript executed after input context is prepared
 - `postJSAction` - JavaScript executed after CLI commands finish
+- `cliOutputLineJSAction` - JavaScript executed for every output line produced by the CLI process. Receives `line` and `currentCliOutput`. If it returns `true`, the CLI process is killed and execution stops.
+- `cliExecutionErrorJSAction` - JavaScript executed when a CLI command fails. Receives `errorMessage` and `currentCliOutput`.
 - `cache` - Shell or JS script executed after post-action
 - `reset` - Shell or JS script executed in `finally` (always runs, even on failure)
 - `customParams` - Arbitrary key-value map forwarded to JS actions as `customParams`
 - `workingDirectory` - Working directory for CLI execution (defaults to `user.dir`)
 - `cleanupInputFolder` - Clean up `input/{contextId}/` after execution (default: **true**)
+- `cleanupOutputsFolder` - Clean up `output/` (and legacy `outputs/`) after execution (default: **false**)
 - `requireCliOutputFile` - Require `output/response.md` from CLI agent (default: **false**)
+
+> The `output/` folder is created automatically in `workingDirectory` before CLI commands run, so agents can write `output/response.md` without extra setup.
 
 **Environment Security**:
 - `excludedEnvVariables` - Array of exact env variable names to remove from the subprocess environment (e.g., `["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]`)
