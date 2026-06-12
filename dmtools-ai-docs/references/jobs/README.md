@@ -498,7 +498,7 @@ Lightweight CLI-agent orchestrator. Takes the CLI-execution parts of `Teammate` 
 
 **Usage**:
 ```bash
-dmtools CliAgent --cliCommands '["cursor-agent"]' --cliPrompts '["Implement the feature"]'
+dmtools run CliAgent --cliCommands '["cursor-agent"]' --cliPrompts '["Implement the feature"]'
 
 # Use configuration file
 dmtools run agents/cli_agent.json
