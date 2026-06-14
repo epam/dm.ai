@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 public class CommandLineUtils {
 
@@ -62,7 +63,7 @@ public class CommandLineUtils {
      */
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv)
             throws IOException, InterruptedException {
-        return runCommand(command, workingDirectory, additionalEnv, null);
+        return runCommand(command, workingDirectory, additionalEnv, null, true);
     }
 
     /**
@@ -79,9 +80,55 @@ public class CommandLineUtils {
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
                                     Consumer<String> lineConsumer)
             throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, true);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * and optional shell-injection validation bypass.
+     *
+     * @param command The command to run
+     * @param workingDirectory The working directory for the command (null to use current directory)
+     * @param additionalEnv Additional environment variables to set
+     * @param lineConsumer Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     *                        Use only for trusted job configs where arbitrary shell syntax is required.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand, null);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * optional shell-injection validation bypass, and an optional per-line stop predicate.
+     *
+     * @param command           The command to run
+     * @param workingDirectory  The working directory for the command (null to use current directory)
+     * @param additionalEnv     Additional environment variables to set
+     * @param lineConsumer      Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand   When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     * @param lineStopPredicate Optional predicate called for each output line; returning {@code true} stops
+     *                          the command and throws {@link CliExecutionStoppedException}.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate)
+            throws IOException, InterruptedException {
 
         logger.debug("Running command: {}", SecurityUtils.maskCommand(command));
-        validateNoShellInjection(command);
+        if (validateCommand) {
+            validateNoShellInjection(command);
+        } else {
+            logger.info("Skipping shell-injection validation for command: {}", SecurityUtils.maskCommand(command));
+        }
 
         // Write command to a temp shell script to avoid shell-escaping issues with
         // special characters (em-dash, embedded quotes, etc.) in the command string.
@@ -130,6 +177,12 @@ public class CommandLineUtils {
                     } catch (Exception e) {
                         logger.warn("lineConsumer threw exception on line, ignoring: {}", e.getMessage());
                     }
+                }
+                if (lineStopPredicate != null && lineStopPredicate.test(line)) {
+                    logger.warn("Line stop predicate returned true on line, terminating process: {}", line);
+                    process.destroyForcibly();
+                    throw new CliExecutionStoppedException(
+                            "CLI execution stopped by line callback at line: " + line, line);
                 }
             }
         }
