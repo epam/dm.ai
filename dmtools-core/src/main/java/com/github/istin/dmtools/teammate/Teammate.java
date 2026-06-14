@@ -453,26 +453,13 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
             if (cliCommands != null && cliCommands.length > 0) {
                 try {
-                    // Merge base cliPrompts with tracker-specific prompts
-                    String[] mergedCliPrompts = resolveCliPrompts(
-                            expertParams.getCliPrompts(), expertParams.getCliPromptsByTracker(), configuration != null ? configuration.getDefaultTracker() : null);
-                    if (mergedCliPrompts != expertParams.getCliPrompts()) {
-                        logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
-                    }
-
-                    // Build combined CLI prompt from cliPrompt + merged cliPrompts via InstructionProcessor
-                    String processedPrompt = instructionProcessor.buildCombinedPrompt(
-                            expertParams.getCliPrompt(), mergedCliPrompts);
-                    if (processedPrompt != null) {
-                        logger.info("Combined CLI prompt ready ({} chars)", processedPrompt.length());
-                    }
-
-                    // Append processed prompt to each CLI command if available
-                    String[] finalCliCommands = cliCommands;
-                    if (processedPrompt != null && !processedPrompt.trim().isEmpty()) {
-                        finalCliCommands = CliExecutionHelper.appendPromptToCommands(cliCommands, processedPrompt);
-                        logger.info("Appended prompt to {} CLI commands", finalCliCommands.length);
-                    }
+                    // Build final CLI commands with aggregated prompt (shared logic with CliAgent)
+                    CliCommandBuilder cliCommandBuilder = new CliCommandBuilder(instructionProcessor, configuration);
+                    String[] finalCliCommands = cliCommandBuilder.buildCommands(
+                            cliCommands,
+                            expertParams.getCliPrompt(),
+                            expertParams.getCliPrompts(),
+                            expertParams.getCliPromptsByTracker());
 
                     // Create input context for CLI commands
                     inputContextPath = cliHelper.createInputContext(ticket, inputParams.toString(), trackerClient);
@@ -732,26 +719,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
      * @return merged array of CLI prompts, or base prompts if no tracker-specific match found
      */
     static String[] resolveCliPrompts(String[] baseCliPrompts, Map<String, String[]> cliPromptsByTracker, String trackerType) {
-        String effectiveTracker = trackerType;
-        if (effectiveTracker == null || effectiveTracker.isBlank()) {
-            // Default to Markdown-based formatting when no tracker is configured.
-            effectiveTracker = "ado";
-        }
-        if (cliPromptsByTracker == null || !cliPromptsByTracker.containsKey(effectiveTracker)) {
-            return baseCliPrompts;
-        }
-
-        String[] trackerPrompts = cliPromptsByTracker.get(effectiveTracker);
-        if (trackerPrompts == null || trackerPrompts.length == 0) {
-            return baseCliPrompts;
-        }
-
-        List<String> merged = new ArrayList<>();
-        if (baseCliPrompts != null) {
-            merged.addAll(List.of(baseCliPrompts));
-        }
-        merged.addAll(List.of(trackerPrompts));
-        return merged.toArray(new String[0]);
+        return CliCommandBuilder.resolveCliPrompts(baseCliPrompts, cliPromptsByTracker, trackerType);
     }
 
     public void attachResponse(Object orchestratorClass, String file, String result, String ticketKey, String contentType) throws IOException {
