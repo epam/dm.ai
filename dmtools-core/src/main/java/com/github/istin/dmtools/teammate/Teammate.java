@@ -58,7 +58,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     @Getter
     @Setter
-    public static class TeammateParams extends JobTrackerParams<RequestDecompositionAgent.Result> {
+    public static class TeammateParams extends JobTrackerParams<RequestDecompositionAgent.Result> implements InputContextConfig {
 
         public static final String SYSTEM_REQUEST_COMMENT_ALIAS = "systemRequestCommentAlias";
 
@@ -118,6 +118,58 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
         @SerializedName("timerIntervalSeconds")
         private int timerIntervalSeconds = 60;
+
+        // ----- InputContextConfig implementation (preserves existing Teammate behavior) -----
+
+        @Override
+        public boolean isSmart() {
+            return true;
+        }
+
+        @Override
+        public String[] getSources() {
+            return new String[] { "confluence" };
+        }
+
+        @Override
+        public int getDepth() {
+            return 0;
+        }
+
+        @Override
+        public boolean isIncludeComments() {
+            return true;
+        }
+
+        @Override
+        public boolean isIncludeAttachments() {
+            return true;
+        }
+
+        @Override
+        public boolean isIncludeLinkedTickets() {
+            return false;
+        }
+
+        @Override
+        public boolean isSkipVideoAttachments() {
+            return skipVideoAttachments;
+        }
+
+        @Override
+        public boolean isSkipAllAttachments() {
+            return skipAllAttachments;
+        }
+
+        @Override
+        public boolean isIgnoreClonedByRelationship() {
+            return ignoreClonedByRelationship;
+        }
+
+        @Override
+        public boolean isWriteAgentParamsToFiles() {
+            return writeAgentParamsToFiles;
+        }
 
     }
 
@@ -461,25 +513,12 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             expertParams.getCliPrompts(),
                             expertParams.getCliPromptsByTracker());
 
-                    // Create input context for CLI commands
-                    inputContextPath = cliHelper.createInputContext(ticket, inputParams.toString(), trackerClient);
-
-                    // Write comments.md alongside request.md — same toText() format as chunks sent to AI
-                    cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
-
-                    // Write Confluence pages linked in the ticket text to input/confluence/
-                    cliHelper.writeConfluencePagesFile(textFieldsOnly, inputContextPath, confluence);
-
-                    // When writeAgentParamsToFiles=true: expand agent params into separate files in the
-                    // input folder, then replace request.md with minimal ticket-only content.
-                    if (expertParams.isWriteAgentParamsToFiles() && originalParams != null) {
-                        agentParamsFileWriter.writeToInputFolder(inputContextPath, originalParams);
-                        // Overwrite request.md with minimal ticket info only
-                        java.nio.file.Path requestMd = inputContextPath.resolve("request.md");
-                        java.nio.file.Files.writeString(requestMd,
-                                textFieldsOnly != null ? textFieldsOnly : "");
-                        logger.info("writeAgentParamsToFiles: rewrote request.md with ticket info only, params in input folder");
-                    }
+                    // Create input context for CLI commands via shared builder
+                    TicketInputContextBuilder contextBuilder = new TicketInputContextBuilder(instructionProcessor);
+                    TicketInputContextBuilder.Result contextResult = contextBuilder.build(
+                            expertParams, ticket, Paths.get(System.getProperty("user.dir")),
+                            trackerClient, confluence, null, originalParams);
+                    inputContextPath = contextResult.getPath();
 
                     // Run preCliJSAction to allow extending input folder with extra content before CLI execution
                     String preCliJSAction = expertParams.getPreCliJSAction();

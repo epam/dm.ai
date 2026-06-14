@@ -548,6 +548,7 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 - `cliPrompt` - Single base CLI prompt (optional)
 - `cliPrompts` - Array of prompts/instructions; files, URLs and plain text are supported
 - `cliPromptsByTracker` - Tracker-specific prompt overrides (same merging as `Teammate`)
+- `input` - Smart input context preparation (string ticket key or object, see below)
 - `setup` - Shell or JS script executed before everything else
 - `preJSAction` - JavaScript executed before CLI commands
 - `preCliJSAction` - JavaScript executed after the input folder is prepared
@@ -564,7 +565,54 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 
 > The `outputs/` folder is created automatically in `workingDirectory` before CLI commands run, so agents can write `outputs/response.md` without extra setup.
 >
-> The `input/{contextId}/` folder is also created empty under `workingDirectory` before `preCliJSAction` runs. Use `preCliJSAction` to populate it if your CLI agent reads files from that location.
+> When `input` is not configured, the `input/{contextId}/` folder is created empty under `workingDirectory` before `preCliJSAction` runs. Use `preCliJSAction` to populate it if your CLI agent reads files from that location.
+
+**Smart Input Context**:
+`CliAgent` can automatically prepare an `input/{TICKET-KEY}/` folder from a tracker ticket, including comments, attachments, and linked Confluence/Figma content. This keeps existing `preCliJSAction` scripts compatible because the folder is still named after the ticket key and the script receives both `inputFolderPath` and `ticket`.
+
+Minimal example — plain ticket key:
+```json
+{
+  "name": "CliAgent",
+  "params": {
+    "cliCommands": ["cursor-agent"],
+    "input": "PROJ-123"
+  }
+}
+```
+
+Full example — object with all options:
+```json
+{
+  "name": "CliAgent",
+  "params": {
+    "cliCommands": ["cursor-agent"],
+    "input": {
+      "ticket": "PROJ-123",
+      "jql": "key = PROJ-123",
+      "smart": true,
+      "sources": ["confluence", "figma"],
+      "depth": 1,
+      "includeComments": true,
+      "includeAttachments": true,
+      "skipVideoAttachments": false,
+      "skipAllAttachments": false,
+      "ignoreClonedByRelationship": true
+    }
+  }
+}
+```
+
+- `ticket` - Explicit ticket key (optional if `jql` is provided).
+- `jql` - JQL query; the first returned ticket is used (optional if `ticket` is provided).
+- `smart` - Automatically resolve URLs found in the ticket text to Confluence pages / Figma images (default: **true**).
+- `sources` - Whitelist of sources to resolve when `smart` is true, e.g. `["confluence"]`, `["figma"]`. Empty/null means all available sources.
+- `depth` - How many levels of linked tickets to include in the context (default: **1**). Set to `0` to skip linked tickets.
+- `includeComments` - Fetch ticket comments into `comments.md` (default: **true**).
+- `includeAttachments` - Download ticket attachments into the input folder (default: **true**).
+- `skipVideoAttachments` - Skip video attachments when downloading (default: **false**).
+- `skipAllAttachments` - Skip all attachments (default: **false**).
+- `ignoreClonedByRelationship` - Ignore "is cloned by" / "clones" linked tickets (default: **true**).
 
 **Environment Security**:
 - `excludedEnvVariables` - Array of exact env variable names to remove from the subprocess environment (e.g., `["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]`)

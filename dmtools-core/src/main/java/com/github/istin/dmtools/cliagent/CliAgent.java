@@ -5,10 +5,16 @@ package com.github.istin.dmtools.cliagent;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
+import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
+import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
+import com.github.istin.dmtools.figma.BasicFigmaClient;
+import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.ResultItem;
@@ -16,6 +22,7 @@ import com.github.istin.dmtools.job.TrackerParams;
 import com.github.istin.dmtools.teammate.CliCommandBuilder;
 import com.github.istin.dmtools.teammate.CliExecutionHelper;
 import com.github.istin.dmtools.teammate.InstructionProcessor;
+import com.github.istin.dmtools.teammate.TicketInputContextBuilder;
 import lombok.Getter;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
@@ -61,6 +68,12 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     Confluence confluence;
 
     @Inject
+    TrackerClient<? extends ITicket> trackerClient;
+
+    @Inject
+    FigmaClient figmaClient;
+
+    @Inject
     ApplicationConfiguration configuration;
 
     private InstructionProcessor instructionProcessor;
@@ -78,6 +91,30 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     protected void initializeStandalone() {
         logger.info("Initializing CliAgent in STANDALONE mode");
         this.instructionProcessor = new InstructionProcessor(confluence);
+        if (this.confluence == null) {
+            try {
+                this.confluence = BasicConfluence.getInstance();
+                logger.info("Initialized standalone Confluence from BasicConfluence");
+            } catch (Exception e) {
+                logger.debug("BasicConfluence not configured, continuing without Confluence: {}", e.getMessage());
+            }
+        }
+        if (this.trackerClient == null) {
+            try {
+                this.trackerClient = BasicJiraClient.getInstance();
+                logger.info("Initialized standalone TrackerClient from BasicJiraClient");
+            } catch (Exception e) {
+                logger.debug("BasicJiraClient not configured, continuing without TrackerClient: {}", e.getMessage());
+            }
+        }
+        if (this.figmaClient == null) {
+            try {
+                this.figmaClient = BasicFigmaClient.getInstance();
+                logger.info("Initialized standalone FigmaClient from BasicFigmaClient");
+            } catch (Exception e) {
+                logger.debug("BasicFigmaClient not configured, continuing without FigmaClient: {}", e.getMessage());
+            }
+        }
         logger.info("CliAgent standalone initialization completed");
     }
 
@@ -111,14 +148,34 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
             executeScriptHook(params.getSetup(), "setup", params, workingDirectory, null);
 
             // 2. Pre-JS action
-            executeJsAction(params.getPreJSAction(), "preJSAction", params, null, null);
+            executeJsAction(params.getPreJSAction(), "preJSAction", params, null, null, null);
 
             // 3. Build input context and pre-CLI JS action
-            inputContextPath = createInputContext(params, workingDirectory);
+            ITicket ticket = null;
+            InputParams input = params.getInput();
+            if (input != null) {
+                if (trackerClient == null) {
+                    logger.warn("Input context requested but TrackerClient is not available; skipping smart input preparation");
+                } else {
+                    try {
+                        TicketInputContextBuilder.Result result = new TicketInputContextBuilder(instructionProcessor)
+                                .build(input, workingDirectory, trackerClient, confluence, figmaClient);
+                        inputContextPath = result.getPath();
+                        ticket = result.getTicket();
+                        logger.info("Prepared smart input context for ticket: {}",
+                                ticket != null ? ticket.getTicketKey() : "unknown");
+                    } catch (Exception e) {
+                        logger.warn("Failed to prepare smart input context, continuing with empty input folder: {}", e.getMessage(), e);
+                    }
+                }
+            }
+            if (inputContextPath == null) {
+                inputContextPath = createEmptyInputContext(params, workingDirectory);
+            }
 
             // 4. Pre-CLI JS action
             executeJsAction(params.getPreCliJSAction(), "preCliJSAction", params, null,
-                    inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null);
+                    inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null, ticket);
 
             // 5. Build and execute CLI commands with aggregated prompt
             CliCommandBuilder commandBuilder = new CliCommandBuilder(instructionProcessor, configuration);
@@ -158,7 +215,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
             // 6. Post-JS action
             String response = extractResponse(cliResult, params);
             executeJsAction(params.getPostJSAction(), "postJSAction", params, response,
-                    inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null);
+                    inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null, ticket);
 
             // 7. Cache hook
             executeScriptHook(params.getCache(), "cache", params, workingDirectory, response);
@@ -216,17 +273,17 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         return Paths.get(System.getProperty("user.dir"));
     }
 
-    private Path createInputContext(CliAgentParams params, Path workingDirectory) throws IOException {
+    private Path createEmptyInputContext(CliAgentParams params, Path workingDirectory) throws IOException {
         Path inputContextPath = workingDirectory.resolve("input").resolve(getContextId(params));
         Files.createDirectories(inputContextPath);
         return inputContextPath;
     }
 
     private JavaScriptExecutor prepareJsExecutor(String script, CliAgentParams params, String response,
-                                                  Map<String, Object> extraBindings) {
+                                                  Map<String, Object> extraBindings, ITicket ticket) {
         JavaScriptExecutor executor = js(script)
                 .mcp(null, ai, confluence, null)
-                .withJobContext(params, null, response);
+                .withJobContext(params, ticket, response);
         if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
             executor.with("customParams", params.getCustomParams());
         }
@@ -239,16 +296,21 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     }
 
     private void executeJsAction(String action, String actionName, CliAgentParams params, String response,
-                                  String inputFolderPath) {
+                                  String inputFolderPath, ITicket ticket) {
         if (action == null || action.trim().isEmpty()) {
             return;
         }
         try {
             logger.info("Executing {}: {}", actionName, action);
-            Map<String, Object> extraBindings = inputFolderPath != null
-                    ? Collections.singletonMap("inputFolderPath", inputFolderPath)
-                    : null;
-            prepareJsExecutor(action, params, response, extraBindings).execute();
+            Map<String, Object> extraBindings = new HashMap<>();
+            if (inputFolderPath != null) {
+                extraBindings.put("inputFolderPath", inputFolderPath);
+            }
+            if (ticket != null) {
+                extraBindings.put("ticket", ticket);
+            }
+            prepareJsExecutor(action, params, response, extraBindings.isEmpty() ? null : extraBindings, ticket)
+                    .execute();
         } catch (Exception e) {
             logger.warn("{} failed, continuing: {}", actionName, e.getMessage(), e);
         }
@@ -264,7 +326,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
             if (script.endsWith(".js")) {
                 Map<String, Object> extraBindings = Collections.singletonMap(
                         "workingDirectory", workingDirectory.toAbsolutePath().toString());
-                prepareJsExecutor(script, params, response, extraBindings).execute();
+                prepareJsExecutor(script, params, response, extraBindings, null).execute();
             } else {
                 CommandLineUtils.runCommand(script, workingDirectory.toFile(), PropertyReader.getOverrides(), null, false);
             }
@@ -283,7 +345,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 logger.info("Executing timerJSAction: {}", timerJSAction);
                 Map<String, Object> extraBindings = Collections.singletonMap(
                         "currentCliOutput", liveOutput.get());
-                prepareJsExecutor(timerJSAction, params, null, extraBindings).execute();
+                prepareJsExecutor(timerJSAction, params, null, extraBindings, null).execute();
             } catch (Exception e) {
                 logger.warn("timerJSAction execution failed (CLI continues): {}", e.getMessage(), e);
             }
@@ -301,7 +363,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 Map<String, Object> extraBindings = new HashMap<>();
                 extraBindings.put("errorMessage", exception.getMessage());
                 extraBindings.put("currentCliOutput", liveOutput.get());
-                prepareJsExecutor(cliExecutionErrorJSAction, params, null, extraBindings).execute();
+                prepareJsExecutor(cliExecutionErrorJSAction, params, null, extraBindings, null).execute();
             } catch (Exception e) {
                 logger.warn("cliExecutionErrorJSAction execution failed: {}", e.getMessage(), e);
             }
@@ -319,7 +381,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 Map<String, Object> extraBindings = new HashMap<>();
                 extraBindings.put("line", line);
                 extraBindings.put("currentCliOutput", liveOutput.get());
-                Object result = prepareJsExecutor(cliOutputLineJSAction, params, null, extraBindings).execute();
+                Object result = prepareJsExecutor(cliOutputLineJSAction, params, null, extraBindings, null).execute();
                 boolean stop = result != null && Boolean.parseBoolean(String.valueOf(result));
                 if (stop) {
                     logger.info("cliOutputLineJSAction requested stop at line: {}", line);

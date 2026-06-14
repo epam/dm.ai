@@ -41,6 +41,10 @@ public class CliAgentParams extends TrackerParams {
     public static final String CLEANUP_OUTPUTS_FOLDER = "cleanupOutputsFolder";
     public static final String CLI_EXECUTION_ERROR_JS_ACTION = "cliExecutionErrorJSAction";
     public static final String CLI_OUTPUT_LINE_JS_ACTION = "cliOutputLineJSAction";
+    public static final String INPUT = "input";
+
+    @SerializedName(INPUT)
+    private InputParams input;
 
     @SerializedName(CLI_COMMANDS)
     private String[] cliCommands;

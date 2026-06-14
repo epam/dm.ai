@@ -81,36 +81,70 @@ public class CliExecutionHelper {
      * @throws IOException if folder/file creation fails
      */
     public Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient) throws IOException {
+        return createInputContext(ticket, inputParams, trackerClient, null);
+    }
+
+    /**
+     * Creates input context folder and files for CLI command execution under an optional base directory.
+     * All attachments (including videos) are downloaded so the CLI tool has full access.
+     *
+     * @param ticket The ticket to create context for
+     * @param inputParams The input parameters to save as request.md
+     * @param trackerClient The tracker client for downloading attachments
+     * @param baseDirectory Base directory for the {@code input/} folder; if null, uses the current working directory
+     * @return Path to the created input folder
+     * @throws IOException if folder/file creation fails
+     */
+    public Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient, Path baseDirectory) throws IOException {
+        return createInputContext(ticket, inputParams, trackerClient, baseDirectory, null);
+    }
+
+    /**
+     * Creates input context folder and files for CLI command execution under an optional base directory,
+     * with an optional override for the attachment list to download.
+     *
+     * @param ticket The ticket to create context for
+     * @param inputParams The input parameters to save as request.md
+     * @param trackerClient The tracker client for downloading attachments
+     * @param baseDirectory Base directory for the {@code input/} folder; if null, uses the current working directory
+     * @param attachmentsOverride Attachments to download instead of {@code ticket.getAttachments()}; may be null
+     * @return Path to the created input folder
+     * @throws IOException if folder/file creation fails
+     */
+    public Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient,
+                                    Path baseDirectory, List<? extends IAttachment> attachmentsOverride) throws IOException {
         if (ticket == null) {
             throw new IllegalArgumentException("Ticket cannot be null");
         }
-        
+
         String ticketKey = ticket.getTicketKey();
         if (ticketKey == null || ticketKey.trim().isEmpty()) {
             throw new IllegalArgumentException("Ticket key cannot be null or empty");
         }
-        
-        // Create input folder structure: input/[TICKET-KEY]/
-        Path inputFolderPath = Paths.get(INPUT_FOLDER_PREFIX, ticketKey);
+
+        // Create input folder structure: [baseDirectory/]input/[TICKET-KEY]/
+        Path inputFolderPath = baseDirectory != null
+                ? baseDirectory.resolve(INPUT_FOLDER_PREFIX).resolve(ticketKey)
+                : Paths.get(INPUT_FOLDER_PREFIX, ticketKey);
         Files.createDirectories(inputFolderPath);
         logger.info("Created input folder: {}", inputFolderPath.toAbsolutePath());
-        
+
         // Write inputParams to request.md file
         if (inputParams != null && !inputParams.trim().isEmpty()) {
             Path requestFilePath = inputFolderPath.resolve(REQUEST_FILE_NAME);
             Files.write(requestFilePath, inputParams.getBytes(StandardCharsets.UTF_8));
             logger.info("Created request file: {} ({} bytes)", requestFilePath.toAbsolutePath(), inputParams.length());
         }
-        
+
         // Enrich work item with relations if it's an ADO work item
         // This is needed because ADO API doesn't include relations when using fields parameter
         if (trackerClient != null) {
             try {
                 // Check if this is an AzureDevOpsClient using instanceof
                 if (trackerClient instanceof com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) {
-                    com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient adoClient = 
+                    com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient adoClient =
                         (com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) trackerClient;
-                    com.github.istin.dmtools.microsoft.ado.model.WorkItem workItem = 
+                    com.github.istin.dmtools.microsoft.ado.model.WorkItem workItem =
                         (com.github.istin.dmtools.microsoft.ado.model.WorkItem) ticket;
                     adoClient.enrichWorkItemWithRelations(workItem);
                     logger.info("🔄 Enriched ADO work item {} with relations for attachment detection", ticketKey);
@@ -120,10 +154,10 @@ public class CliExecutionHelper {
             }
         }
 
-        // Download all ticket attachments to the input folder (including videos)
-        List<? extends IAttachment> attachments = ticket.getAttachments();
+        // Download ticket attachments to the input folder
+        List<? extends IAttachment> attachments = attachmentsOverride != null ? attachmentsOverride : ticket.getAttachments();
         logger.info("📎 Ticket {} has {} attachments", ticketKey, attachments != null ? attachments.size() : 0);
-        
+
         if (attachments != null && !attachments.isEmpty() && trackerClient != null) {
             logger.info("⬇️ Downloading {} attachments for ticket {}", attachments.size(), ticketKey);
             for (IAttachment att : attachments) {
@@ -140,7 +174,7 @@ public class CliExecutionHelper {
                 logger.warn("⚠️ TrackerClient is null, cannot download attachments");
             }
         }
-        
+
         return inputFolderPath;
     }
 
@@ -275,6 +309,18 @@ public class CliExecutionHelper {
      */
     private static String convertHtmlToMarkdown(String html) {
         return ConfluenceStorageMarkdown.toMarkdown(html);
+    }
+
+    /**
+     * Downloads ticket attachments to the specified folder.
+     *
+     * @param attachments List of attachments to download
+     * @param targetFolder Target folder to save attachments
+     * @param trackerClient Tracker client for downloading files
+     * @throws IOException if attachment download fails
+     */
+    public void downloadTicketAttachments(List<? extends IAttachment> attachments, Path targetFolder, TrackerClient<?> trackerClient) throws IOException {
+        downloadAttachments(attachments, targetFolder, trackerClient);
     }
 
     /**
