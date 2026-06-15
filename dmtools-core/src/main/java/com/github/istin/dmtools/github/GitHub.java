@@ -1639,6 +1639,30 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         }
     }
 
+    @MCPTool(
+            name = "github_get_pr_diff_text",
+            description = "Get the raw unified diff text for a GitHub pull request. Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String getPullRequestDiffText(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestID", description = "The pull request number", required = true, example = "74")
+            String pullRequestID) throws IOException {
+        if (!IS_READ_PULL_REQUEST_DIFF) {
+            return "";
+        }
+        try {
+            return getPullRequestResponse(workspace, repository, pullRequestID, true);
+        } catch (AtlassianRestClient.RestClientException e) {
+            logger.warn("Skipping PR diff text for {}/{} PR#{}: {}", workspace, repository, pullRequestID, e.getMessage());
+            return "";
+        }
+    }
+
     public static IDiffStats parseDiffStats(String diff) {
         int addedLines = 0;
         int removedLines = 0;
