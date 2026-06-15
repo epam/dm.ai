@@ -1,6 +1,6 @@
 # FIGMA MCP Tools
 
-**Total Tools**: 16
+**Total Tools**: 18
 
 ## Quick Reference
 
@@ -9,19 +9,16 @@
 dmtools list | jq '.tools[] | select(.name | startswith("figma_"))'
 
 # Example usage
-dmtools figma_get_screen_source [arguments]
+dmtools figma_oauth2_get_auth_url [arguments]
 ```
 
 ## Usage in JavaScript Agents
 
 ```javascript
 // Direct function calls for figma tools
-const me = figma_me();
-const result = figma_get_screen_source(...);
-const result = figma_download_node_image(...);
-const result = figma_download_image_of_file(...);
-const renderUrls = figma_render_nodes(...);
-const imageFills = figma_get_image_fills(...);
+const result = figma_oauth2_get_auth_url(...);
+const result = figma_oauth2_exchange_code(...);
+const result = figma_me(...);
 ```
 
 ## Available Tools
@@ -31,19 +28,21 @@ const imageFills = figma_get_image_fills(...);
 | `figma_download_image_as_file` | Download image as file by node ID and format. Use this after figma_get_icons to download actual icon files. | `format` (string, **required**)<br>`nodeId` (string, **required**)<br>`href` (string, **required**) |
 | `figma_download_image_of_file` | Download image by URL as File type. Converts Figma design URL to downloadable image file. | `href` (string, **required**) |
 | `figma_download_node_image` | Download image of specific node/component. Useful for visual preview of design pieces before processing structure. | `format` (string, optional)<br>`scale` (number, optional)<br>`href` (string, **required**)<br>`nodeId` (string, **required**) |
-| `figma_get_file_structure` | **Primary "load everything" call.** Fetches the complete Figma file document tree (nodes, frames, components, text, styles) in one REST request (`/v1/files/:key`). Response is intentionally large — use for pre-CLI artifact preparation (writing to file), not inline AI context. If the URL contains `node-id`, returns only that subtree. | `href` (string, **required**) |
-| `figma_get_icons` | Fetch the full Figma file document (one large REST call) and extract all exportable visual elements (VECTOR, FRAME, COMPONENT, INSTANCE, RECTANGLE, etc.). Returns id, name, type, width, height, category, isVectorBased for each element. This is the primary "load everything" call. | `href` (string, **required**) |
-| `figma_get_image_fills` | Get image fill URLs for nodes that use raster images as backgrounds or fills. Returns map of nodeId → CDN URL. | `href` (string, **required**) |
+| `figma_get_file_structure` | Get full JSON structure of a Figma design file by URL. Returns the complete document tree (nodes, frames, components, text, styles). Response is large by design — intended for pre-CLI artifact preparation and file output, not inline AI context. If the URL contains node-id, returns only that subtree. | `href` (string, **required**) |
+| `figma_get_icons` | Find and extract all exportable visual elements (vectors, shapes, graphics, text) from Figma design by URL. Focuses on actual visual elements to avoid complex component references. | `href` (string, **required**) |
+| `figma_get_image_fills` | Get original image fill URLs for all imageRefs in a Figma file. Resolves imageRef placeholders to actual downloadable S3 URLs. Use after inspecting file structure to download original photos/images embedded by the designer. | `href` (string, **required**) |
 | `figma_get_layers` | Get first-level layers (direct children) to understand structure. Returns layer names, IDs, types, sizes. Essential first step before getting details. | `href` (string, **required**) |
 | `figma_get_layers_batch` | Get layers for multiple nodes at once. More efficient for analyzing multiple screens/containers. Returns map of nodeId to layers. | `nodeIds` (string, **required**)<br>`href` (string, **required**) |
-| `figma_me` | Get current user information from Figma API (/me endpoint). Returns `{ success, user: { id, handle, email }, message }`. Use to verify credentials before bulk operations. | *(none)* |
 | `figma_get_node_children` | Get immediate children IDs and basic info for a node. Non-recursive, returns only direct children. | `href` (string, **required**) |
 | `figma_get_node_details` | Get detailed properties for specific node(s) including colors, fonts, text, dimensions, and styles. Returns small focused response. | `nodeIds` (string, **required**)<br>`href` (string, **required**) |
 | `figma_get_screen_source` | Get screen source content by URL. Returns the image URL for the specified Figma design node. | `url` (string, **required**) |
 | `figma_get_styles` | Get design tokens (colors, text styles) defined in Figma file. | `href` (string, **required**) |
 | `figma_get_svg_content` | Get SVG content as text by node ID. Use this after figma_get_icons to get SVG code for vector icons. | `nodeId` (string, **required**)<br>`href` (string, **required**) |
 | `figma_get_text_content` | Extract text content from text nodes. Returns map of nodeId to text content. | `nodeIds` (string, **required**)<br>`href` (string, **required**) |
-| `figma_render_nodes` | Batch-export multiple Figma nodes to image URLs in a single API call (auto-batches up to 100 IDs). Returns map of `nodeId → renderUrl`. Most efficient way to get render URLs for many frames/icons at once. | `href` (string, **required**)<br>`nodeIds` (string, **required**)<br>`format` (string, optional — `png`/`jpg`/`svg`/`pdf`, default: `png`) |
+| `figma_me` | Gets current user information from the Figma API using the /me endpoint. Returns user details including id, handle, and email. Can also be used to verify API connectivity. | None |
+| `figma_oauth2_exchange_code` | Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh. | `redirectUri` (string, **required**)<br>`code` (string, **required**) |
+| `figma_oauth2_get_auth_url` | Generates the Figma OAuth2 authorization URL for the initial authorization code flow. Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. Then call figma_oauth2_exchange_code to get access and refresh tokens. Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured. Optional scope can be passed explicitly or via FIGMA_SCOPE/FIGMA_OAUTH_SCOPES env variable. | `redirectUri` (string, **required**)<br>`state` (string, optional)<br>`scope` (string, optional) |
+| `figma_render_nodes` | Render multiple Figma nodes as images in a single batched API call. Automatically batches up to 100 node IDs per request. Returns map of nodeId to render URL. Use for exporting many icons or frames efficiently. | `format` (string, optional)<br>`nodeIds` (string, **required**)<br>`href` (string, **required**) |
 
 ## Detailed Parameter Information
 
@@ -129,6 +128,27 @@ const result = figma_download_node_image("format", "scale");
 
 ---
 
+### `figma_get_file_structure`
+
+Get full JSON structure of a Figma design file by URL. Returns the complete document tree (nodes, frames, components, text, styles). Response is large by design — intended for pre-CLI artifact preparation and file output, not inline AI context. If the URL contains node-id, returns only that subtree.
+
+**Parameters:**
+
+- **`href`** (string) 🔴 Required
+  - Parameter href
+
+**Example:**
+```bash
+dmtools figma_get_file_structure "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = figma_get_file_structure("href");
+```
+
+---
+
 ### `figma_get_icons`
 
 Find and extract all exportable visual elements (vectors, shapes, graphics, text) from Figma design by URL. Focuses on actual visual elements to avoid complex component references.
@@ -147,6 +167,27 @@ dmtools figma_get_icons "value"
 ```javascript
 // In JavaScript agent
 const result = figma_get_icons("href");
+```
+
+---
+
+### `figma_get_image_fills`
+
+Get original image fill URLs for all imageRefs in a Figma file. Resolves imageRef placeholders to actual downloadable S3 URLs. Use after inspecting file structure to download original photos/images embedded by the designer.
+
+**Parameters:**
+
+- **`href`** (string) 🔴 Required
+  - Figma design URL
+
+**Example:**
+```bash
+dmtools figma_get_image_fills "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = figma_get_image_fills("href");
 ```
 
 ---
@@ -334,28 +375,104 @@ const result = figma_get_text_content("nodeIds", "href");
 
 ---
 
-## Minimum REST Calls Pattern
+### `figma_me`
 
-When analysing a Figma file, **3 MCP calls** are enough to capture the entire file regardless of its size:
+Gets current user information from the Figma API using the /me endpoint. Returns user details including id, handle, and email. Can also be used to verify API connectivity.
 
-| # | Tool | REST endpoint hit | What you get |
-|---|------|-------------------|--------------|
-| 1 | `figma_get_file_structure(href)` | `GET /v1/files/:key?geometry=paths&depth=2` | Complete document tree — every node ID, frame, component, text, style |
-| 2 | `figma_render_nodes(href, allIds, "png")` | `GET /v1/images/:key?ids=…` (auto-batched) | Render URL for every node |
+**Parameters:** None
 
-Use the pre-built script that does exactly this and saves everything to `input/figma_snapshot.json`:
-
+**Example:**
 ```bash
-# Set inputJql in agents/figma_design_analysis.json to your ticket, then:
-./dmtools.sh run agents/figma_design_analysis.json
+dmtools figma_me
 ```
 
 ```javascript
-// Or call inline from another JS agent:
-const snapshot = action({ figmaUrl: "https://www.figma.com/file/abc123/..." });
-// → input/figma_snapshot.json contains all icons enriched with renderUrl
+// In JavaScript agent
+const result = figma_me();
 ```
 
-Script location: `agents/js/prepareFigmaArtifacts.js`
+---
 
+### `figma_oauth2_exchange_code`
+
+Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh.
+
+**Parameters:**
+
+- **`redirectUri`** (string) 🔴 Required
+  - Same redirect URI used in figma_oauth2_get_auth_url
+  - Example: `http://localhost:8080/callback`
+
+- **`code`** (string) 🔴 Required
+  - Authorization code received from Figma OAuth2 redirect
+  - Example: `figma_auth_code_abc123`
+
+**Example:**
+```bash
+dmtools figma_oauth2_exchange_code "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = figma_oauth2_exchange_code("redirectUri", "code");
+```
+
+---
+
+### `figma_oauth2_get_auth_url`
+
+Generates the Figma OAuth2 authorization URL for the initial authorization code flow. Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. Then call figma_oauth2_exchange_code to get access and refresh tokens. Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured. Optional scope can be passed explicitly or via FIGMA_SCOPE/FIGMA_OAUTH_SCOPES env variable.
+
+**Parameters:**
+
+- **`redirectUri`** (string) 🔴 Required
+  - Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback)
+  - Example: `http://localhost:8080/callback`
+
+- **`state`** (string) ⚪ Optional
+  - Random state string for CSRF protection
+  - Example: `random_state_123`
+
+- **`scope`** (string) ⚪ Optional
+  - Optional OAuth scope list (space-separated), e.g. file_content:read file_metadata:read. If omitted, uses FIGMA_SCOPE (or FIGMA_OAUTH_SCOPES) env or default minimal read scope.
+  - Example: `file_content:read file_metadata:read`
+
+**Example:**
+```bash
+dmtools figma_oauth2_get_auth_url "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = figma_oauth2_get_auth_url("redirectUri", "state");
+```
+
+---
+
+### `figma_render_nodes`
+
+Render multiple Figma nodes as images in a single batched API call. Automatically batches up to 100 node IDs per request. Returns map of nodeId to render URL. Use for exporting many icons or frames efficiently.
+
+**Parameters:**
+
+- **`format`** (string) ⚪ Optional
+  - Export format: png, jpg, svg, pdf. Default: png
+
+- **`nodeIds`** (string) 🔴 Required
+  - Comma-separated node IDs to render (e.g. '1:2,3:4,5:6')
+
+- **`href`** (string) 🔴 Required
+  - Figma design URL
+
+**Example:**
+```bash
+dmtools figma_render_nodes "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = figma_render_nodes("format", "nodeIds");
+```
+
+---
 

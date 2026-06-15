@@ -119,6 +119,12 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("timerIntervalSeconds")
         private int timerIntervalSeconds = 60;
 
+        @SerializedName("confluenceDepth")
+        private int confluenceDepth = 1;
+
+        @SerializedName("confluenceAttachments")
+        private boolean confluenceAttachments = true;
+
     }
 
     /**
@@ -481,7 +487,13 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
 
                     // Write Confluence pages linked in the ticket text to input/confluence/
-                    cliHelper.writeConfluencePagesFile(textFieldsOnly, inputContextPath, confluence);
+                    cliHelper.writeConfluencePagesFile(
+                        textFieldsOnly,
+                        inputContextPath,
+                        confluence,
+                        expertParams.getConfluenceDepth(),
+                        expertParams.isConfluenceAttachments()
+                    );
 
                     // When writeAgentParamsToFiles=true: expand agent params into separate files in the
                     // input folder, then replace request.md with minimal ticket-only content.

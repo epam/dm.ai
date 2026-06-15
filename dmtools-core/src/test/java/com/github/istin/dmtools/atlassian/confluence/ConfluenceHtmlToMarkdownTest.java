@@ -194,5 +194,102 @@ public class ConfluenceHtmlToMarkdownTest {
         System.out.printf("Input HTML: %d chars → Output Markdown: %d chars%n",
             SAMPLE_CONFLUENCE_HTML.length(), markdown.length());
     }
-}
 
+    @Test
+    public void testToMarkdown_convertsTableToMarkdownTable() {
+        String html = "<table>" +
+            "<tbody>" +
+            "<tr><th>Name</th><th>Value</th></tr>" +
+            "<tr><td>A</td><td>1</td></tr>" +
+            "<tr><td>B</td><td>2</td></tr>" +
+            "</tbody>" +
+            "</table>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should contain table header row with pipes", markdown.contains("| Name | Value |"));
+        assertTrue("Should contain separator row", markdown.contains("|---|"));
+        assertTrue("Should contain data row A", markdown.contains("| A | 1 |"));
+        assertTrue("Should contain data row B", markdown.contains("| B | 2 |"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesAcLinkWithLinkBody() {
+        String html = "<p>See <ac:link><ri:page ri:content-title=\"Target Page\"/>" +
+            "<ac:link-body>click here</ac:link-body></ac:link> for details.</p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve link text and target", markdown.contains("[click here](Target Page)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesAcLinkWithPlainTextLinkBody() {
+        String html = "<p><ac:link><ri:page ri:content-title=\"Target Page\"/>" +
+            "<ac:plain-text-link-body><![CDATA[plain <text> link]]></ac:plain-text-link-body></ac:link></p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve plain text link body", markdown.contains("[plain <text> link](Target Page)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesAcLinkToAttachment() {
+        String html = "<p><ac:link><ri:attachment ri:filename=\"doc.pdf\"/>" +
+            "<ac:link-body>Download</ac:link-body></ac:link></p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve attachment link", markdown.contains("[Download](doc.pdf)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesStandardExternalLink() {
+        String html = "<p>Visit <a href=\"http://example.com\">Example</a></p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve external link", markdown.contains("[Example](http://example.com)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesTableWithLinksInsideCells() {
+        String html = "<table><tbody>" +
+            "<tr><th>Page</th></tr>" +
+            "<tr><td><ac:link><ri:page ri:content-title=\"Home\"/><ac:link-body>Home</ac:link-body></ac:link></td></tr>" +
+            "</tbody></table>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should contain table header", markdown.contains("| Page |"));
+        assertTrue("Should contain link inside table cell", markdown.contains("[Home](Home)"));
+    }
+
+    @Test
+    public void testToMarkdown_convertsCodeMacro() {
+        String html = "<ac:structured-macro ac:name=\"code\">" +
+            "<ac:parameter ac:name=\"language\">java</ac:parameter>" +
+            "<ac:plain-text-body><![CDATA[System.out.println(\"hello\");]]></ac:plain-text-body>" +
+            "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve code body", markdown.contains("System.out.println"));
+        assertTrue("Should preserve hello string", markdown.contains("hello"));
+    }
+
+    @Test
+    public void testToMarkdown_childrenMacroReplacedWithPlaceholder() {
+        String html = "<p>Other Templates</p>" +
+            "<ac:structured-macro ac:name=\"children\">" +
+            "<ac:parameter ac:name=\"allChildren\">true</ac:parameter>" +
+            "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should keep heading", markdown.contains("Other Templates"));
+        assertTrue("Should replace children macro with placeholder", markdown.contains("Child pages"));
+        assertFalse("Should not leak parameter value", markdown.contains("allChildren"));
+        assertFalse("Should not leak parameter value", markdown.contains("true"));
+    }
+}

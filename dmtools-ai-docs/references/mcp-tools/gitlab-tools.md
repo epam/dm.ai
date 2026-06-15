@@ -1,259 +1,174 @@
-# GitLab MCP Tools Reference
+# GITLAB MCP Tools
 
-**Total tools**: 22
-**Integration key**: `gitlab`
-**Categories**: `merge_requests`, `ci`
+**Total Tools**: 22
 
-## Quick Start
+## Quick Reference
 
 ```bash
-# List available GitLab tools
-dmtools list gitlab
+# List all gitlab tools
+dmtools list | jq '.tools[] | select(.name | startswith("gitlab_"))'
 
-# Get MR details (includes diff_refs needed for inline comments)
-dmtools gitlab_get_mr workspace=mygroup repository=myrepo pullRequestId=42
-
-# Get all MR comments
-dmtools gitlab_get_mr_comments workspace=mygroup repository=myrepo pullRequestId=42
-
-# List latest failed pipelines
-dmtools gitlab_list_pipeline_runs workspace=mygroup repository=myrepo status=failed limit=20
+# Example usage
+dmtools gitlab_get_mr_comments [arguments]
 ```
 
-## Configuration
+## Usage in JavaScript Agents
 
+```javascript
+// Direct function calls for gitlab tools
+const result = gitlab_get_mr_comments(...);
+const result = gitlab_add_mr_label(...);
+const result = gitlab_remove_mr_label(...);
+```
+
+## Available Tools
+
+| Tool Name | Description | Parameters |
+|-----------|-------------|------------|
+| `gitlab_add_inline_mr_comment` | Create a new inline code review comment on a specific file and line in a GitLab merge request. Requires base_sha, head_sha, start_sha from the MR diff refs (use gitlab_get_mr to get them from diff_refs). | `workspace` (string, **required**)<br>`line` (string, **required**)<br>`startSha` (string, **required**)<br>`filePath` (string, **required**)<br>`baseSha` (string, **required**)<br>`text` (string, **required**)<br>`headSha` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_add_mr_comment` | Add a general discussion comment to a GitLab merge request. | `workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_add_mr_label` | Add a label to a GitLab merge request. | `workspace` (string, **required**)<br>`label` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_approve_mr` | Approve a GitLab merge request. Adds your approval to the MR. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_cancel_job` | Cancel a GitLab CI job. | `repository` (string, **required**)<br>`jobId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_create_mr` | Create a GitLab merge request from a source branch into a target branch. | `removeSourceBranch` (string, optional)<br>`workspace` (string, **required**)<br>`targetBranch` (string, **required**)<br>`sourceBranch` (string, **required**)<br>`description` (string, optional)<br>`repository` (string, **required**)<br>`title` (string, **required**) |
+| `gitlab_get_job_logs` | Get GitLab CI job trace logs. | `repository` (string, **required**)<br>`jobId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_mr` | Get details of a specific GitLab merge request including title, description, state, author, diff_refs (base_sha, head_sha, start_sha needed for inline comments). | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_mr_activities` | Get all activities for a GitLab merge request including approvals and general discussion notes. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_mr_comments` | Get all comments for a GitLab merge request, including both inline code review comments (DiffNote) and general discussion notes. Excludes system-generated notes. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_mr_diff` | Get diff stats and changed files for a GitLab merge request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_mr_discussions` | Get all discussion threads for a GitLab merge request. Each discussion contains notes (comments) and a resolved status. Use the discussion id with gitlab_resolve_mr_thread. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_pipeline_jobs` | List jobs for a GitLab CI pipeline. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`pipelineId` (string, **required**) |
+| `gitlab_list_mrs` | List merge requests for a GitLab project. State can be 'opened', 'closed', 'merged', or 'all'. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`state` (string, **required**) |
+| `gitlab_list_pipeline_runs` | List recent GitLab CI pipelines. Optionally filter by status, ref, and limit. | `limit` (string, optional)<br>`workspace` (string, **required**)<br>`ref` (string, optional)<br>`repository` (string, **required**)<br>`status` (string, optional) |
+| `gitlab_list_project_jobs` | List recent GitLab CI jobs for a project. | `repository` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_merge_mr` | Merge a GitLab merge request. Optionally provide a custom merge commit message. | `workspace` (string, **required**)<br>`mergeCommitMessage` (string, optional)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_rebase_mr` | Ask GitLab to rebase/update a merge request source branch with its target branch. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_remove_mr_label` | Remove a label from a GitLab merge request. | `workspace` (string, **required**)<br>`label` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_reply_to_mr_thread` | Reply to an existing discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions. | `workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`discussionId` (string, **required**) |
+| `gitlab_resolve_mr_thread` | Resolve (close) a review discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`discussionId` (string, **required**) |
+| `gitlab_trigger_pipeline` | Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token. | `variablesJson` (string, optional)<br>`workspace` (string, **required**)<br>`ref` (string, **required**)<br>`repository` (string, **required**) |
+
+## Detailed Parameter Information
+
+### `gitlab_add_inline_mr_comment`
+
+Create a new inline code review comment on a specific file and line in a GitLab merge request. Requires base_sha, head_sha, start_sha from the MR diff refs (use gitlab_get_mr to get them from diff_refs).
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`line`** (string) 🔴 Required
+  - Line number in the new file to comment on
+  - Example: `42`
+
+- **`startSha`** (string) 🔴 Required
+  - Start commit SHA from MR diff_refs
+  - Example: `abc123`
+
+- **`filePath`** (string) 🔴 Required
+  - Path to the file to comment on
+  - Example: `src/main/Foo.java`
+
+- **`baseSha`** (string) 🔴 Required
+  - Base commit SHA from MR diff_refs
+  - Example: `abc123`
+
+- **`text`** (string) 🔴 Required
+  - Comment text
+  - Example: `This looks wrong`
+
+- **`headSha`** (string) 🔴 Required
+  - Head commit SHA from MR diff_refs
+  - Example: `def456`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+**Example:**
 ```bash
-GITLAB_TOKEN=your-personal-access-token
-GITLAB_BASE_PATH=https://gitlab.yourcompany.com
+dmtools gitlab_add_inline_mr_comment "value" "value"
 ```
 
-## Tools
-
-## Complete Tool Index
-
-| Tool | Category | Description |
-|------|----------|-------------|
-| `gitlab_list_mrs` | merge_requests | List merge requests by state |
-| `gitlab_get_mr` | merge_requests | Get merge request details |
-| `gitlab_create_mr` | merge_requests | Create a merge request |
-| `gitlab_get_mr_diff` | merge_requests | Get merge request diff/patch |
-| `gitlab_get_mr_comments` | merge_requests | List MR comments/notes |
-| `gitlab_get_mr_activities` | merge_requests | List MR activities |
-| `gitlab_add_mr_comment` | merge_requests | Add MR comment |
-| `gitlab_add_mr_label` | merge_requests | Add label to MR |
-| `gitlab_remove_mr_label` | merge_requests | Remove label from MR |
-| `gitlab_get_mr_discussions` | merge_requests | List MR discussions/threads |
-| `gitlab_reply_to_mr_thread` | merge_requests | Reply in MR discussion thread |
-| `gitlab_add_inline_mr_comment` | merge_requests | Add inline MR comment |
-| `gitlab_resolve_mr_thread` | merge_requests | Resolve MR discussion thread |
-| `gitlab_approve_mr` | merge_requests | Approve MR |
-| `gitlab_merge_mr` | merge_requests | Merge MR |
-| `gitlab_rebase_mr` | merge_requests | Rebase/update MR branch |
-| `gitlab_list_project_jobs` | ci | List CI jobs for project |
-| `gitlab_cancel_job` | ci | Cancel CI job |
-| `gitlab_list_pipeline_runs` | ci | List pipeline runs (supports status/ref/limit) |
-| `gitlab_trigger_pipeline` | ci | Trigger pipeline for branch/ref |
-| `gitlab_get_pipeline_jobs` | ci | List jobs for pipeline |
-| `gitlab_get_job_logs` | ci | Get raw CI job logs |
-
----
-
-### `gitlab_list_mrs`
-
-List merge requests for a GitLab project.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `state` | String | ✅ | `opened`, `closed`, `merged`, or `all` |
-
-```bash
-dmtools gitlab_list_mrs workspace=mygroup repository=myrepo state=opened
+```javascript
+// In JavaScript agent
+const result = gitlab_add_inline_mr_comment("workspace", "line");
 ```
-
-Returns an array of merge request objects with `iid`, `title`, `state`, `author`, `source_branch`, `target_branch`, `diff_refs`, etc.
-
----
-
-### `gitlab_get_mr`
-
-Get full details of a specific merge request including `diff_refs` (needed for inline comments).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID (e.g. `42`) |
-
-```bash
-dmtools gitlab_get_mr workspace=mygroup repository=myrepo pullRequestId=42
-```
-
-Returns: `iid`, `title`, `description`, `state`, `author`, `source_branch`, `target_branch`, `diff_refs` (`base_sha`, `head_sha`, `start_sha`), `labels`, `assignees`.
-
-The `diff_refs` fields are required for `gitlab_add_inline_mr_comment`.
-
----
-
-### `gitlab_get_mr_comments`
-
-Get all non-system comments for a merge request. Includes both inline code review comments (`DiffNote`) and general discussion notes.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-
-```bash
-dmtools gitlab_get_mr_comments workspace=mygroup repository=myrepo pullRequestId=42
-```
-
-Returns an array of comment objects with `id`, `body`, `author`, `created_at`, `type` (`DiffNote` for inline, `null` for discussion notes), `system` flag.
-
----
-
-### `gitlab_get_mr_activities`
-
-Get all activities for a merge request, including approvals and general discussion notes. System-generated notes are excluded.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-
-```bash
-dmtools gitlab_get_mr_activities workspace=mygroup repository=myrepo pullRequestId=42
-```
-
-Returns an array of activity objects with `action` (`APPROVED` or `COMMENTED`) and associated comment details.
 
 ---
 
 ### `gitlab_add_mr_comment`
 
-Add a general discussion comment to a merge request.
+Add a general discussion comment to a GitLab merge request.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-| `text` | String | ✅ | Comment text |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`text`** (string) 🔴 Required
+  - Comment text
+  - Example: `LGTM!`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+**Example:**
 ```bash
-dmtools gitlab_add_mr_comment workspace=mygroup repository=myrepo pullRequestId=42 text="LGTM!"
+dmtools gitlab_add_mr_comment "value" "value"
 ```
 
-Returns the created note object as JSON.
-
----
-
-### `gitlab_get_mr_discussions`
-
-Get all discussion threads for a merge request. Each discussion contains one or more notes and a `resolved` status.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-
-```bash
-dmtools gitlab_get_mr_discussions workspace=mygroup repository=myrepo pullRequestId=42
-```
-
-Returns an array of discussion objects:
-```json
-{
-  "id": "6a9c1750b37d57bba1079be3bbd13a...",
-  "individual_note": false,
-  "notes": [
-    { "id": 101, "body": "Please fix this", "author": {...}, "resolvable": true, "resolved": false }
-  ]
-}
-```
-
-Use the `id` field with `gitlab_reply_to_mr_thread` and `gitlab_resolve_mr_thread`.
-
----
-
-### `gitlab_reply_to_mr_thread`
-
-Reply to an existing discussion thread in a merge request.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-| `discussionId` | String | ✅ | Discussion thread ID (from `gitlab_get_mr_discussions`) |
-| `text` | String | ✅ | Reply text |
-
-```bash
-dmtools gitlab_reply_to_mr_thread workspace=mygroup repository=myrepo pullRequestId=42 discussionId=6a9c1750b37d57bba1079be3bbd13a text="Addressed in latest commit"
-```
-
-Returns the created note object as JSON.
-
----
-
-### `gitlab_add_inline_mr_comment`
-
-Create a new inline code review comment on a specific file and line. Requires SHA values from the MR's `diff_refs` (use `gitlab_get_mr` first).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-| `filePath` | String | ✅ | Path to the file (e.g. `src/main/Foo.java`) |
-| `line` | String | ✅ | Line number in the new version of the file |
-| `text` | String | ✅ | Comment text |
-| `baseSha` | String | ✅ | `diff_refs.base_sha` from the MR |
-| `headSha` | String | ✅ | `diff_refs.head_sha` from the MR |
-| `startSha` | String | ✅ | `diff_refs.start_sha` from the MR |
-
-```bash
-dmtools gitlab_add_inline_mr_comment workspace=mygroup repository=myrepo pullRequestId=42 \
-  filePath=src/main/Foo.java line=42 text="This variable name is confusing" \
-  baseSha=abc123 headSha=def456 startSha=abc123
-```
-
-Returns the created discussion object with the inline note.
-
-**Workflow example:**
-```bash
-# 1. Get MR to extract diff_refs
-MR=$(dmtools gitlab_get_mr workspace=mygroup repository=myrepo pullRequestId=42)
-# Extract diff_refs.base_sha, head_sha, start_sha from MR JSON
-
-# 2. Add inline comment
-dmtools gitlab_add_inline_mr_comment workspace=mygroup repository=myrepo pullRequestId=42 \
-  filePath=src/Foo.java line=10 text="Potential null pointer" \
-  baseSha=<base_sha> headSha=<head_sha> startSha=<start_sha>
+```javascript
+// In JavaScript agent
+const result = gitlab_add_mr_comment("workspace", "text");
 ```
 
 ---
 
-### `gitlab_resolve_mr_thread`
+### `gitlab_add_mr_label`
 
-Resolve (close) a review discussion thread in a merge request.
+Add a label to a GitLab merge request.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-| `discussionId` | String | ✅ | Discussion thread ID (from `gitlab_get_mr_discussions`) |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`label`** (string) 🔴 Required
+  - Label to add
+  - Example: `pr_approved`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+**Example:**
 ```bash
-dmtools gitlab_resolve_mr_thread workspace=mygroup repository=myrepo pullRequestId=42 discussionId=6a9c1750b37d57bba1079be3bbd13a
+dmtools gitlab_add_mr_label "value" "value"
 ```
 
-Returns the updated discussion object with `resolved: true`.
+```javascript
+// In JavaScript agent
+const result = gitlab_add_mr_label("workspace", "label");
+```
 
 ---
 
@@ -261,17 +176,409 @@ Returns the updated discussion object with `resolved: true`.
 
 Approve a GitLab merge request. Adds your approval to the MR.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
+**Parameters:**
 
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
 ```bash
-dmtools gitlab_approve_mr workspace=mygroup repository=myrepo pullRequestId=42
+dmtools gitlab_approve_mr "value" "value"
 ```
 
-Returns the approval object with `approved_by` list of approvers.
+```javascript
+// In JavaScript agent
+const result = gitlab_approve_mr("repository", "pullRequestId");
+```
+
+---
+
+### `gitlab_cancel_job`
+
+Cancel a GitLab CI job.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`jobId`** (string) 🔴 Required
+  - GitLab job ID
+  - Example: `123456`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_cancel_job "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_cancel_job("repository", "jobId");
+```
+
+---
+
+### `gitlab_create_mr`
+
+Create a GitLab merge request from a source branch into a target branch.
+
+**Parameters:**
+
+- **`removeSourceBranch`** (string) ⚪ Optional
+  - Remove source branch after merge
+  - Example: `true`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`targetBranch`** (string) 🔴 Required
+  - Target branch name
+  - Example: `main`
+
+- **`sourceBranch`** (string) 🔴 Required
+  - Source branch name
+  - Example: `feature/PROJ-123`
+
+- **`description`** (string) ⚪ Optional
+  - Merge request description
+  - Example: `Automated changes`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`title`** (string) 🔴 Required
+  - Merge request title
+  - Example: `PROJ-123 Implement feature`
+
+**Example:**
+```bash
+dmtools gitlab_create_mr "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_create_mr("removeSourceBranch", "workspace");
+```
+
+---
+
+### `gitlab_get_job_logs`
+
+Get GitLab CI job trace logs.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`jobId`** (string) 🔴 Required
+  - GitLab job ID
+  - Example: `123456`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_get_job_logs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_job_logs("repository", "jobId");
+```
+
+---
+
+### `gitlab_get_mr`
+
+Get details of a specific GitLab merge request including title, description, state, author, diff_refs (base_sha, head_sha, start_sha needed for inline comments).
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_get_mr "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_mr("repository", "pullRequestId");
+```
+
+---
+
+### `gitlab_get_mr_activities`
+
+Get all activities for a GitLab merge request including approvals and general discussion notes.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_get_mr_activities "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_mr_activities("repository", "pullRequestId");
+```
+
+---
+
+### `gitlab_get_mr_comments`
+
+Get all comments for a GitLab merge request, including both inline code review comments (DiffNote) and general discussion notes. Excludes system-generated notes.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_get_mr_comments "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_mr_comments("repository", "pullRequestId");
+```
+
+---
+
+### `gitlab_get_mr_diff`
+
+Get diff stats and changed files for a GitLab merge request.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_get_mr_diff "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_mr_diff("repository", "pullRequestId");
+```
+
+---
+
+### `gitlab_get_mr_discussions`
+
+Get all discussion threads for a GitLab merge request. Each discussion contains notes (comments) and a resolved status. Use the discussion id with gitlab_resolve_mr_thread.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_get_mr_discussions "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_mr_discussions("repository", "pullRequestId");
+```
+
+---
+
+### `gitlab_get_pipeline_jobs`
+
+List jobs for a GitLab CI pipeline.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`pipelineId`** (string) 🔴 Required
+  - GitLab pipeline ID
+  - Example: `123456`
+
+**Example:**
+```bash
+dmtools gitlab_get_pipeline_jobs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_pipeline_jobs("repository", "workspace");
+```
+
+---
+
+### `gitlab_list_mrs`
+
+List merge requests for a GitLab project. State can be 'opened', 'closed', 'merged', or 'all'.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`state`** (string) 🔴 Required
+  - MR state: opened, closed, merged, all. 'open' is also accepted as a synonym for 'opened'.
+  - Example: `opened`
+
+**Example:**
+```bash
+dmtools gitlab_list_mrs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_list_mrs("repository", "workspace");
+```
+
+---
+
+### `gitlab_list_pipeline_runs`
+
+List recent GitLab CI pipelines. Optionally filter by status, ref, and limit.
+
+**Parameters:**
+
+- **`limit`** (string) ⚪ Optional
+  - Maximum number of pipelines to return
+  - Example: `50`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`ref`** (string) ⚪ Optional
+  - Branch or tag ref
+  - Example: `main`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`status`** (string) ⚪ Optional
+  - Pipeline status filter
+  - Example: `failed`
+
+**Example:**
+```bash
+dmtools gitlab_list_pipeline_runs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_list_pipeline_runs("limit", "workspace");
+```
+
+---
+
+### `gitlab_list_project_jobs`
+
+List recent GitLab CI jobs for a project.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_list_project_jobs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_list_project_jobs("repository", "workspace");
+```
 
 ---
 
@@ -279,121 +586,203 @@ Returns the approval object with `approved_by` list of approvers.
 
 Merge a GitLab merge request. Optionally provide a custom merge commit message.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
-| `mergeCommitMessage` | String | ❌ | Optional custom merge commit message |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`mergeCommitMessage`** (string) ⚪ Optional
+  - Optional custom merge commit message
+  - Example: `Merge feature branch`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+**Example:**
 ```bash
-dmtools gitlab_merge_mr workspace=mygroup repository=myrepo pullRequestId=42 mergeCommitMessage="Merge feature XYZ"
+dmtools gitlab_merge_mr "value" "value"
 ```
 
-Returns the merged MR object with `state: merged`.
+```javascript
+// In JavaScript agent
+const result = gitlab_merge_mr("workspace", "mergeCommitMessage");
+```
 
 ---
 
 ### `gitlab_rebase_mr`
 
-Rebase a merge request branch against the latest target branch state.
+Ask GitLab to rebase/update a merge request source branch with its target branch.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Merge request IID |
+**Parameters:**
 
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
 ```bash
-dmtools gitlab_rebase_mr workspace=mygroup repository=myrepo pullRequestId=42
+dmtools gitlab_rebase_mr "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_rebase_mr("repository", "pullRequestId");
 ```
 
 ---
 
-## CI / Pipeline Tools
+### `gitlab_remove_mr_label`
 
-### `gitlab_list_pipeline_runs`
+Remove a label from a GitLab merge request.
 
-List project pipelines with optional filtering.
+**Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitLab group or namespace |
-| `repository` | String | ✅ | Repository name |
-| `status` | String | ❌ | Pipeline status filter (`failed`, `success`, `running`, etc.) |
-| `ref` | String | ❌ | Branch/tag filter |
-| `limit` | String | ❌ | Max number of pipelines to return |
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
 
+- **`label`** (string) 🔴 Required
+  - Label to remove
+  - Example: `pr_approved`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+**Example:**
 ```bash
-dmtools gitlab_list_pipeline_runs workspace=mygroup repository=myrepo status=failed ref=main limit=50
+dmtools gitlab_remove_mr_label "value" "value"
 ```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_remove_mr_label("workspace", "label");
+```
+
+---
+
+### `gitlab_reply_to_mr_thread`
+
+Reply to an existing discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`text`** (string) 🔴 Required
+  - Reply text
+  - Example: `Addressed in latest commit`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`discussionId`** (string) 🔴 Required
+  - Discussion thread ID
+  - Example: `6a9c1750b37d57bba1079be3bbd13a...`
+
+**Example:**
+```bash
+dmtools gitlab_reply_to_mr_thread "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_reply_to_mr_thread("workspace", "text");
+```
+
+---
+
+### `gitlab_resolve_mr_thread`
+
+Resolve (close) a review discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`discussionId`** (string) 🔴 Required
+  - Discussion thread ID to resolve
+  - Example: `6a9c1750b37d57bba1079be3bbd13a...`
+
+**Example:**
+```bash
+dmtools gitlab_resolve_mr_thread "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_resolve_mr_thread("workspace", "repository");
+```
+
+---
 
 ### `gitlab_trigger_pipeline`
 
-Trigger a pipeline on a specific ref.
+Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token.
 
+**Parameters:**
+
+- **`variablesJson`** (string) ⚪ Optional
+  - Optional JSON object of CI variables
+  - Example: `{"CONFIG_FILE":"agents/story_development.json"}`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`ref`** (string) 🔴 Required
+  - Branch or tag ref
+  - Example: `main`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+**Example:**
 ```bash
-dmtools gitlab_trigger_pipeline workspace=mygroup repository=myrepo ref=main
+dmtools gitlab_trigger_pipeline "value" "value"
 ```
 
-### `gitlab_get_pipeline_jobs`
-
-List jobs for a pipeline.
-
-```bash
-dmtools gitlab_get_pipeline_jobs workspace=mygroup repository=myrepo pipelineId=123456
-```
-
-### `gitlab_get_job_logs`
-
-Get raw job logs.
-
-```bash
-dmtools gitlab_get_job_logs workspace=mygroup repository=myrepo jobId=987654
-```
-
-### `gitlab_list_project_jobs` / `gitlab_cancel_job`
-
-List recent project jobs or cancel a running job.
-
-```bash
-dmtools gitlab_list_project_jobs workspace=mygroup repository=myrepo
-dmtools gitlab_cancel_job workspace=mygroup repository=myrepo jobId=987654
+```javascript
+// In JavaScript agent
+const result = gitlab_trigger_pipeline("variablesJson", "workspace");
 ```
 
 ---
 
-## JavaScript Agent Usage
-
-All GitLab tools are available as direct function calls in JS agents:
-
-```javascript
-// List open MRs
-const mrs = JSON.parse(gitlab_list_mrs("mygroup", "myrepo", "opened"));
-
-// Get MR details including diff_refs
-const mr = JSON.parse(gitlab_get_mr("mygroup", "myrepo", "42"));
-const { base_sha, head_sha, start_sha } = mr.diff_refs;
-
-// Get all discussions
-const discussions = JSON.parse(gitlab_get_mr_discussions("mygroup", "myrepo", "42"));
-
-// Add inline comment
-gitlab_add_inline_mr_comment(
-    "mygroup", "myrepo", "42",
-    "src/main/Foo.java", "15", "This needs a null check",
-    base_sha, head_sha, start_sha
-);
-
-// Resolve a discussion thread
-gitlab_resolve_mr_thread("mygroup", "myrepo", "42", discussions[0].id);
-
-// Reply to a thread
-gitlab_reply_to_mr_thread("mygroup", "myrepo", "42", discussions[0].id, "Fixed!");
-
-// Approve an MR
-gitlab_approve_mr("mygroup", "myrepo", "42");
-
-// Merge an MR
-gitlab_merge_mr("mygroup", "myrepo", "42", "Merge feature XYZ");
-```
