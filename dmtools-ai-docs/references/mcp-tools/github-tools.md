@@ -1,419 +1,932 @@
-# GitHub MCP Tools Reference
+# GITHUB MCP Tools
 
-**Total tools**: 33
-**Integration key**: `github`
-**Categories**: `pull_requests`, `actions`, `releases`, `commits`
+**Total Tools**: 33
 
-## Quick Start
+## Quick Reference
 
 ```bash
-# List available GitHub tools
-dmtools list github
+# List all github tools
+dmtools list | jq '.tools[] | select(.name | startswith("github_"))'
 
-# Get PR details
-dmtools github_get_pr workspace=IstiN repository=dmtools pullRequestId=74
-
-# Get all comments (inline + discussion)
-dmtools github_get_pr_comments workspace=IstiN repository=dmtools pullRequestId=74
+# Example usage
+dmtools github_list_prs [arguments]
 ```
 
-## Tools
+## Usage in JavaScript Agents
 
-### `github_list_prs`
+```javascript
+// Direct function calls for github tools
+const result = github_list_prs(...);
+const result = github_list_prs_filtered(...);
+const result = github_get_commits_from_branches(...);
+```
 
-List pull requests in a GitHub repository by state.
+## Available Tools
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `state` | String | ✅ | `open`, `closed`, or `merged` |
+| Tool Name | Description | Parameters |
+|-----------|-------------|------------|
+| `github_add_inline_comment` | Create a new inline code review comment on a specific file and line in a GitHub pull request. To comment on a range of lines, provide both startLine and line. Side is 'RIGHT' for new code (default) or 'LEFT' for old code. | `path` (string, **required**)<br>`workspace` (string, **required**)<br>`side` (string, optional)<br>`line` (string, **required**)<br>`startLine` (string, optional)<br>`text` (string, **required**)<br>`commitId` (string, optional)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `github_add_pr_comment` | Add a comment to a GitHub pull request discussion. | `workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `github_add_pr_label` | Add a label to a GitHub pull request. | `workspace` (string, **required**)<br>`label` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `github_create_check_run` | Create a GitHub Check Run — a rich CI check with progress, annotations, and a full log visible in the PR 'Checks' tab. Use status=in_progress when starting, then call github_update_check_run to complete it. | `summary` (string, optional)<br>`workspace` (string, **required**)<br>`name` (string, **required**)<br>`externalId` (string, optional)<br>`headSha` (string, **required**)<br>`text` (string, optional)<br>`repository` (string, **required**)<br>`title` (string, optional)<br>`status` (string, optional) |
+| `github_create_commit_status` | Create a commit status (the colored dot in PR checks). Use state=pending when AI analysis starts, success/failure/error when complete. The 'context' field acts as the status name and must be unique per check. | `workspace` (string, **required**)<br>`context` (string, optional)<br>`description` (string, optional)<br>`state` (string, **required**)<br>`repository` (string, **required**)<br>`sha` (string, **required**)<br>`targetUrl` (string, optional) |
+| `github_delete_pr_comment` | Delete a comment on a GitHub pull request or issue by its comment ID. | `repository` (string, **required**)<br>`commentId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_delete_release_asset` | Delete a GitHub release asset by its asset ID. Use github_list_release_assets to find asset IDs. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`assetId` (string, **required**) |
+| `github_get_commit_check_runs` | Get all check runs (CI/CD status checks) for a commit SHA in a GitHub repository. Returns details about each check including status, conclusion, and output. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`commitSha` (string, **required**) |
+| `github_get_commits_from_branches` | Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually. | `branchNameRegex` (string, **required**)<br>`workspace` (string, **required**)<br>`repository` (string, **required**)<br>`since` (string, optional) |
+| `github_get_job_logs` | Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job. | `repository` (string, **required**)<br>`jobId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_or_create_draft_release` | Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`targetCommitish` (string, optional)<br>`body` (string, optional)<br>`releaseName` (string, optional) |
+| `github_get_pr` | Get details of a GitHub pull request including title, description, status, author, branches, and merge info. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_pr_activities` | Get all activities for a GitHub pull request including reviews (approvals, change requests), inline code comments, and general discussion comments. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_pr_comments` | Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_pr_conversations` | Get all review conversations (inline code comment threads) for a GitHub pull request. Groups inline code review comments into threads showing root comment and replies. Also includes general PR discussion comments as separate entries. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_pr_diff` | Get the diff statistics for a GitHub pull request (files changed, additions, deletions). Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled. | `repository` (string, **required**)<br>`pullRequestID` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_pr_review_threads` | Get all review threads for a GitHub pull request via GraphQL, including each thread's node ID (needed for resolving), resolved status, file path, line, and comments. Use the returned thread 'id' with github_resolve_pr_thread. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_workflow_run` | Get details of a specific GitHub Actions workflow run by ID. Returns status, conclusion, logs URL, and timing information. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`runId` (string, **required**) |
+| `github_get_workflow_run_jobs` | Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`runId` (string, **required**) |
+| `github_get_workflow_run_logs` | Download and extract complete logs for all jobs in a GitHub Actions workflow run. Returns full untruncated log content from the ZIP archive GitHub provides. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`runId` (string, **required**) |
+| `github_list_prs` | List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`state` (string, **required**) |
+| `github_list_prs_filtered` | List pull requests in a GitHub repository filtered by a regex pattern on the PR title. Fetches all PRs matching the given state and returns only those whose title matches the regex. Useful for large repos to narrow down results without loading entire history. | `titleRegex` (string, **required**)<br>`workspace` (string, **required**)<br>`state` (string, **required**)<br>`repository` (string, **required**) |
+| `github_list_release_assets` | List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url. | `repository` (string, **required**)<br>`releaseId` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_list_workflow_runs` | List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file. Use status='failure' to get all failed runs. | `workspace` (string, **required**)<br>`perPage` (number, optional)<br>`created` (string, optional)<br>`page` (number, optional)<br>`repository` (string, **required**)<br>`workflowId` (string, optional)<br>`status` (string, optional) |
+| `github_merge_pr` | Merge a GitHub pull request. Supports merge, squash, and rebase merge methods. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`commitMessage` (string, optional)<br>`mergeMethod` (string, optional)<br>`commitTitle` (string, optional) |
+| `github_remove_pr_label` | Remove a label from a GitHub pull request. | `workspace` (string, **required**)<br>`label` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `github_reply_to_pr_thread` | Reply to an existing inline code review comment thread in a GitHub pull request. Use the comment ID of the root comment (or any comment) in the thread as inReplyToId. | `workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`inReplyToId` (string, **required**) |
+| `github_repository_dispatch` | Trigger a GitHub repository dispatch event. Workflows listening to 'on: repository_dispatch' with the matching event_type will be triggered. | `workspace` (string, **required**)<br>`eventType` (string, **required**)<br>`clientPayload` (string, optional)<br>`repository` (string, **required**) |
+| `github_resolve_pr_thread` | Resolve a review thread in a GitHub pull request. Requires the thread's GraphQL node ID, which can be obtained from github_get_pr_review_threads (the 'id' field of each thread). | `threadId` (string, **required**) |
+| `github_trigger_workflow` | Trigger a specific GitHub Actions workflow by filename (workflow dispatch). The workflow must have 'on: workflow_dispatch' configured. | `workspace` (string, **required**)<br>`ref` (string, optional)<br>`repository` (string, **required**)<br>`workflowId` (string, **required**)<br>`inputs` (string, optional) |
+| `github_update_check_run` | Update an existing GitHub Check Run — set it to completed with success/failure conclusion, update summary and detailed text. Call this after github_create_check_run to finalize the check. | `conclusion` (string, optional)<br>`summary` (string, optional)<br>`workspace` (string, **required**)<br>`checkRunId` (string, **required**)<br>`text` (string, optional)<br>`repository` (string, **required**)<br>`title` (string, optional)<br>`status` (string, **required**) |
+| `github_update_pr_comment` | Update (edit) an existing comment on a GitHub pull request or issue by its comment ID. | `commentId` (string, **required**)<br>`workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**) |
+| `github_upload_release_asset` | Upload a local file as a GitHub release asset. Returns the uploaded asset metadata including browser_download_url. Set overwrite=true to automatically delete an existing asset with the same name before uploading. | `workspace` (string, **required**)<br>`releaseId` (string, **required**)<br>`filePath` (string, **required**)<br>`assetName` (string, optional)<br>`label` (string, optional)<br>`repository` (string, **required**)<br>`contentType` (string, optional)<br>`overwrite` (string, optional) |
 
+## Detailed Parameter Information
+
+### `github_add_inline_comment`
+
+Create a new inline code review comment on a specific file and line in a GitHub pull request. To comment on a range of lines, provide both startLine and line. Side is 'RIGHT' for new code (default) or 'LEFT' for old code.
+
+**Parameters:**
+
+- **`path`** (string) 🔴 Required
+  - The relative file path in the repository
+  - Example: `src/main/java/com/example/Foo.java`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`side`** (string) ⚪ Optional
+  - Which diff side to comment on: RIGHT (new code, default) or LEFT (old code)
+  - Example: `RIGHT`
+
+- **`line`** (string) 🔴 Required
+  - The line number in the file to comment on
+  - Example: `42`
+
+- **`startLine`** (string) ⚪ Optional
+  - For multi-line comments: the first line of the range. Must be less than line.
+  - Example: `40`
+
+- **`text`** (string) 🔴 Required
+  - The comment text (Markdown supported)
+  - Example: `This should be refactored.`
+
+- **`commitId`** (string) ⚪ Optional
+  - The SHA of the commit to comment on. If empty, uses the PR head commit.
+  - Example: `abc123def456`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+**Example:**
 ```bash
-dmtools github_list_prs workspace=IstiN repository=dmtools state=open
+dmtools github_add_inline_comment "value" "value"
 ```
 
-Returns an array of pull request objects with `number`, `title`, `state`, `user`, `head`, `base`, `merged_at`, etc.
-
----
-
-### `github_list_prs_filtered`
-
-List pull requests filtered by a **Java regex on the PR title**. Fetches all PRs matching the state and returns only those whose title contains a regex match. Useful for large repositories to avoid loading the full history.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `state` | String | ✅ | `open`, `closed`, or `merged` |
-| `titleRegex` | String | ✅ | Java regex matched against PR title (substring match via `find()`). Example: `^feat\(`, `TICKET-\d+`, `release/\d+` |
-
-```bash
-# Only PRs whose title starts with "feat("
-dmtools github_list_prs_filtered workspace=IstiN repository=dmtools state=merged titleRegex="^feat\("
-
-# PRs related to a Jira ticket
-dmtools github_list_prs_filtered workspace=IstiN repository=my-app state=merged titleRegex="PROJ-\d+"
+```javascript
+// In JavaScript agent
+const result = github_add_inline_comment("path", "workspace");
 ```
-
-```js
-// In a JS agent
-const featurePRs = github_list_prs_filtered('IstiN', 'dmtools', 'merged', '^feat\\(');
-```
-
----
-
-### `github_get_commits_from_branches`
-
-Fetch commits from **all branches whose name matches a regex pattern**, aggregated and de-duplicated by commit hash. Ideal for collecting commits from `feature/*`, `release/*`, or similar branch groups without specifying each branch individually.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `branchNameRegex` | String | ✅ | Java regex matched against branch names. Example: `^feature/`, `release/\d+` |
-| `since` | String | ❌ | ISO date `yyyy-MM-dd` — only commits after this date |
-
-```bash
-# All commits from feature/* branches since Jan 2024
-dmtools github_get_commits_from_branches workspace=IstiN repository=dmtools branchNameRegex="^feature/" since=2024-01-01
-
-# Commits from all release branches
-dmtools github_get_commits_from_branches workspace=IstiN repository=my-app branchNameRegex="^release/"
-```
-
-```js
-// In a JS agent
-const featureCommits = github_get_commits_from_branches('IstiN', 'dmtools', '^feature/', '2024-01-01');
-```
-
----
-
-### `github_get_pr`
-
-Get full details of a single pull request.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-
-```bash
-dmtools github_get_pr workspace=IstiN repository=dmtools pullRequestId=74
-```
-
-Returns: `number`, `title`, `state`, `body`, `user` (author), `head`/`base` branches, `merged`, `merged_at`, `merge_commit_sha`, `labels`, `assignees`, `requested_reviewers`.
-
----
-
-### `github_get_pr_comments`
-
-Get **all** comments for a pull request — both inline code review comments and general discussion comments, merged and sorted by creation date.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-
-```bash
-dmtools github_get_pr_comments workspace=IstiN repository=dmtools pullRequestId=74
-```
-
-Returns an array of comment objects with `id`, `body`, `user`, `created_at`, `updated_at`, and for inline comments: `path` (file), `line`, `in_reply_to_id`.
-
----
-
-### `github_get_pr_conversations`
-
-Get inline code review comments grouped into **conversation threads** (root comment + replies). Also includes general discussion comments as standalone entries.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-
-```bash
-dmtools github_get_pr_conversations workspace=IstiN repository=dmtools pullRequestId=74
-```
-
-Returns an array of conversation objects:
-```json
-{
-  "path": "src/Main.java",
-  "rootComment": { "id": 123, "body": "...", "user": {...} },
-  "replies": [ { "id": 456, "body": "...", "in_reply_to_id": 123 } ],
-  "totalComments": 2
-}
-```
-
-Use this instead of `github_get_pr_comments` when you need to understand the **context** of a discussion thread (who replied to what).
-
----
-
-### `github_get_pr_activities`
-
-Get **all activities** for a pull request: reviews (approvals, change requests, dismissals) and all comments (inline + discussion).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-
-```bash
-dmtools github_get_pr_activities workspace=IstiN repository=dmtools pullRequestId=74
-```
-
-Returns an array of activity objects. Each activity has an `action` field:
-- Review activities: `action` = `"APPROVED"`, `"CHANGES_REQUESTED"`, `"COMMENTED"`, `"DISMISSED"` — includes reviewer `user`, `state`, `body`, `submitted_at`
-- Comment activities: `action` = `"COMMENTED"` — includes full comment details
 
 ---
 
 ### `github_add_pr_comment`
 
-Post a comment to the general pull request discussion.
+Add a comment to a GitHub pull request discussion.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-| `text` | String | ✅ | Comment body (Markdown supported) |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`text`** (string) 🔴 Required
+  - The comment text to add
+  - Example: `Looks good!`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+**Example:**
 ```bash
-dmtools github_add_pr_comment workspace=IstiN repository=dmtools pullRequestId=74 text="Looks good!"
+dmtools github_add_pr_comment "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_add_pr_comment("workspace", "text");
 ```
 
 ---
 
-### `github_update_pr_comment`
+### `github_add_pr_label`
 
-Update (edit) an existing comment on a pull request or issue by its comment ID.
+Add a label to a GitHub pull request.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `commentId` | String | ✅ | ID of the comment to update |
-| `text` | String | ✅ | New comment body (replaces existing content, Markdown supported) |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`label`** (string) 🔴 Required
+  - The label name to add to the pull request
+  - Example: `bug`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+**Example:**
 ```bash
-dmtools github_update_pr_comment workspace=IstiN repository=dmtools commentId=123456789 text="✅ Analysis complete."
+dmtools github_add_pr_label "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_add_pr_label("workspace", "label");
 ```
 
 ---
 
-### `github_delete_pr_comment`
+### `github_create_check_run`
 
-Delete a comment on a pull request or issue by its comment ID.
+Create a GitHub Check Run — a rich CI check with progress, annotations, and a full log visible in the PR 'Checks' tab. Use status=in_progress when starting, then call github_update_check_run to complete it.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `commentId` | String | ✅ | ID of the comment to delete |
+**Parameters:**
 
+- **`summary`** (string) ⚪ Optional
+  - Markdown summary shown in the check run output panel
+  - Example: `🔍 Analysis started...`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`name`** (string) 🔴 Required
+  - The name of the check run displayed in the PR
+  - Example: `dmtools / pr-review`
+
+- **`externalId`** (string) ⚪ Optional
+  - Optional external identifier for this check run
+  - Example: `MAPC-6653`
+
+- **`headSha`** (string) 🔴 Required
+  - The SHA of the commit to associate this check run with
+  - Example: `abc123def456...`
+
+- **`text`** (string) ⚪ Optional
+  - Additional details in Markdown (supports large content)
+  - Example: `Full analysis results here...`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`title`** (string) ⚪ Optional
+  - Title shown in the check run output panel
+  - Example: `AI PR Review`
+
+- **`status`** (string) ⚪ Optional
+  - The status: queued | in_progress | completed
+  - Example: `in_progress`
+
+**Example:**
 ```bash
-dmtools github_delete_pr_comment workspace=IstiN repository=dmtools commentId=123456789
+dmtools github_create_check_run "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_create_check_run("summary", "workspace");
 ```
 
 ---
 
 ### `github_create_commit_status`
 
-Create a commit status — the colored dot (🟡🟢🔴) shown next to a commit in the PR checks section. Use `pending` when analysis starts, then `success`/`failure`/`error` when done.
+Create a commit status (the colored dot in PR checks). Use state=pending when AI analysis starts, success/failure/error when complete. The 'context' field acts as the status name and must be unique per check.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `sha` | String | ✅ | Commit SHA to set the status on |
-| `state` | String | ✅ | `pending` \| `success` \| `failure` \| `error` |
-| `description` | String | ❌ | Short human-readable description shown next to the status dot |
-| `context` | String | ❌ | Unique check identifier, e.g. `dmtools/pr-review` (acts as the status name) |
-| `targetUrl` | String | ❌ | URL to link from the status (e.g. CI run URL) |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`context`** (string) ⚪ Optional
+  - Unique identifier for this status check, e.g. 'dmtools/pr-review'
+  - Example: `dmtools/pr-review`
+
+- **`description`** (string) ⚪ Optional
+  - Short human-readable description shown next to the status dot
+  - Example: `AI analysis in progress...`
+
+- **`state`** (string) 🔴 Required
+  - The state: pending | success | failure | error
+  - Example: `pending`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`sha`** (string) 🔴 Required
+  - The commit SHA to set status on
+  - Example: `abc123def456...`
+
+- **`targetUrl`** (string) ⚪ Optional
+  - Optional URL to link from the status (e.g. CI run URL)
+  - Example: `https://github.com/owner/repo/actions/runs/123`
+
+**Example:**
 ```bash
-# Set pending when starting
-dmtools github_create_commit_status workspace=IstiN repository=dmtools sha=abc123 \
-  state=pending context=dmtools/pr-review description="AI analysis in progress..."
-
-# Set success when done
-dmtools github_create_commit_status workspace=IstiN repository=dmtools sha=abc123 \
-  state=success context=dmtools/pr-review description="Review complete — no issues found"
+dmtools github_create_commit_status "value" "value"
 ```
 
-> **Note**: the `context` field is the unique key — posting with the same `context` twice updates the existing status instead of creating a new one.
-
----
-
-### `github_create_check_run`
-
-Create a GitHub **Check Run** — a rich CI check with progress indicator, Markdown summary, and full details visible in the PR **Checks** tab. Use `status=in_progress` when starting, then call `github_update_check_run` to complete it.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `name` | String | ✅ | Check name shown in the PR (e.g. `dmtools / pr-review`) |
-| `headSha` | String | ✅ | Commit SHA to associate this check with |
-| `status` | String | ❌ | `queued` \| `in_progress` \| `completed` (default: `queued`) |
-| `title` | String | ❌ | Title shown in the check output panel |
-| `summary` | String | ❌ | Markdown summary in the output panel |
-| `text` | String | ❌ | Additional Markdown details (supports large content) |
-| `externalId` | String | ❌ | Optional external identifier (e.g. Jira ticket key) |
-
-```bash
-# Create in-progress check run
-dmtools github_create_check_run workspace=IstiN repository=dmtools \
-  name="dmtools / pr-review" headSha=abc123 status=in_progress \
-  title="AI PR Review" summary="🔍 Analysis started..."
-```
-
-Returns a JSON object containing `id` — save this to call `github_update_check_run`.
-
----
-
-### `github_update_check_run`
-
-Update an existing Check Run — set it to `completed` with a `success`/`failure` conclusion and final summary. Call this after `github_create_check_run` to finalize the check.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `checkRunId` | String | ✅ | ID of the check run (from `github_create_check_run` response) |
-| `status` | String | ✅ | `in_progress` \| `completed` |
-| `conclusion` | String | ❌ | Required when `status=completed`: `success` \| `failure` \| `neutral` \| `cancelled` \| `skipped` \| `timed_out` \| `action_required` |
-| `title` | String | ❌ | Updated title for the output panel |
-| `summary` | String | ❌ | Updated Markdown summary |
-| `text` | String | ❌ | Updated detailed Markdown content |
-
-```bash
-dmtools github_update_check_run workspace=IstiN repository=dmtools checkRunId=1234567890 \
-  status=completed conclusion=success \
-  title="AI PR Review — Complete" summary="✅ Review complete. Found 3 issues."
-```
-
-**Typical two-step pattern:**
 ```javascript
-// 1. Create check run (in_progress)
-const run = JSON.parse(github_create_check_run('IstiN', 'dmtools', 'dmtools / pr-review', sha, 'in_progress', 'AI PR Review', '🔍 Analysing...', '', ''));
-const checkRunId = String(run.id);
-
-// ... do the analysis ...
-
-// 2. Complete it
-github_update_check_run('IstiN', 'dmtools', checkRunId, 'completed', 'success', 'AI PR Review — Done', '✅ No issues found.', '');
-```
-
-Reply to an existing **inline code review comment thread**. Use the comment ID from `github_get_pr_conversations` (`rootComment.id` or `replies[].id`) as `inReplyToId`.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-| `inReplyToId` | String | ✅ | ID of the comment to reply to |
-| `text` | String | ✅ | Reply text (Markdown supported) |
-
-```bash
-# First get the conversation to find the comment ID
-dmtools github_get_pr_conversations workspace=IstiN repository=dmtools pullRequestId=74
-
-# Then reply using the rootComment.id
-dmtools github_reply_to_pr_thread workspace=IstiN repository=dmtools pullRequestId=74 inReplyToId=123456789 text="Fixed in the latest commit."
+// In JavaScript agent
+const result = github_create_commit_status("workspace", "context");
 ```
 
 ---
 
-### `github_add_inline_comment`
+### `github_delete_pr_comment`
 
-Create a **new inline code review comment** on a specific file and line. Optionally spans a range of lines (`startLine` to `line`).
+Delete a comment on a GitHub pull request or issue by its comment ID.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-| `path` | String | ✅ | Relative file path (e.g. `src/main/java/Foo.java`) |
-| `line` | String | ✅ | Line number to comment on |
-| `text` | String | ✅ | Comment text (Markdown supported) |
-| `commitId` | String | — | Commit SHA to comment on. If empty, uses PR head commit automatically. |
-| `startLine` | String | — | First line of a multi-line comment range (must be less than `line`) |
-| `side` | String | — | `RIGHT` (new code, default) or `LEFT` (old code removed) |
+**Parameters:**
 
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`commentId`** (string) 🔴 Required
+  - The ID of the comment to delete
+  - Example: `123456789`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
 ```bash
-# Single-line comment on new code (commitId auto-fetched)
-dmtools github_add_inline_comment workspace=IstiN repository=dmtools pullRequestId=74 \
-  path=src/main/java/Foo.java line=42 text="This should use Optional<> instead."
+dmtools github_delete_pr_comment "value" "value"
+```
 
-# Multi-line comment
-dmtools github_add_inline_comment workspace=IstiN repository=dmtools pullRequestId=74 \
-  path=src/main/java/Foo.java startLine=10 line=15 text="Extract this block into a method."
+```javascript
+// In JavaScript agent
+const result = github_delete_pr_comment("repository", "commentId");
+```
+
+---
+
+### `github_delete_release_asset`
+
+Delete a GitHub release asset by its asset ID. Use github_list_release_assets to find asset IDs.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`assetId`** (string) 🔴 Required
+  - The numeric asset ID to delete.
+  - Example: `422721847`
+
+**Example:**
+```bash
+dmtools github_delete_release_asset "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_delete_release_asset("repository", "workspace");
+```
+
+---
+
+### `github_get_commit_check_runs`
+
+Get all check runs (CI/CD status checks) for a commit SHA in a GitHub repository. Returns details about each check including status, conclusion, and output.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`commitSha`** (string) 🔴 Required
+  - The commit SHA to get check runs for
+  - Example: `abc123...`
+
+**Example:**
+```bash
+dmtools github_get_commit_check_runs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_commit_check_runs("repository", "workspace");
+```
+
+---
+
+### `github_get_commits_from_branches`
+
+Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually.
+
+**Parameters:**
+
+- **`branchNameRegex`** (string) 🔴 Required
+  - Java regular expression matched against branch names. All branches with a matching name are included. Example: '^feature/' or 'release/\d+'.
+  - Example: `^feature/`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`since`** (string) ⚪ Optional
+  - Optional ISO date (yyyy-MM-dd) to limit commits to those after this date.
+  - Example: `2024-01-01`
+
+**Example:**
+```bash
+dmtools github_get_commits_from_branches "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_commits_from_branches("branchNameRegex", "workspace");
+```
+
+---
+
+### `github_get_job_logs`
+
+Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`jobId`** (string) 🔴 Required
+  - The job ID (from github_get_workflow_run_jobs)
+  - Example: `1234567890`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_get_job_logs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_job_logs("repository", "jobId");
+```
+
+---
+
+### `github_get_or_create_draft_release`
+
+Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`tagName`** (string) 🔴 Required
+  - The Git tag name for the release. Reused to find an existing draft release.
+  - Example: `pr-attachments-storage`
+
+- **`targetCommitish`** (string) ⚪ Optional
+  - Optional branch or commit SHA the release should point to when created.
+  - Example: `main`
+
+- **`body`** (string) ⚪ Optional
+  - Optional Markdown release notes/body.
+  - Example: `Internal storage release for PR attachments.`
+
+- **`releaseName`** (string) ⚪ Optional
+  - The human-readable release name. If empty, tagName is used.
+  - Example: `PR Attachments Storage`
+
+**Example:**
+```bash
+dmtools github_get_or_create_draft_release "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_or_create_draft_release("workspace", "repository");
+```
+
+---
+
+### `github_get_pr`
+
+Get details of a GitHub pull request including title, description, status, author, branches, and merge info.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_get_pr "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_pr("repository", "pullRequestId");
+```
+
+---
+
+### `github_get_pr_activities`
+
+Get all activities for a GitHub pull request including reviews (approvals, change requests), inline code comments, and general discussion comments.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_get_pr_activities "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_pr_activities("repository", "pullRequestId");
+```
+
+---
+
+### `github_get_pr_comments`
+
+Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_get_pr_comments "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_pr_comments("repository", "pullRequestId");
+```
+
+---
+
+### `github_get_pr_conversations`
+
+Get all review conversations (inline code comment threads) for a GitHub pull request. Groups inline code review comments into threads showing root comment and replies. Also includes general PR discussion comments as separate entries.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_get_pr_conversations "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_pr_conversations("repository", "pullRequestId");
+```
+
+---
+
+### `github_get_pr_diff`
+
+Get the diff statistics for a GitHub pull request (files changed, additions, deletions). Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestID`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_get_pr_diff "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_pr_diff("repository", "pullRequestID");
 ```
 
 ---
 
 ### `github_get_pr_review_threads`
 
-Get all review threads for a pull request via **GraphQL**, including each thread's node ID (needed to resolve threads), resolved status, file path, line, and all comments.
+Get all review threads for a GitHub pull request via GraphQL, including each thread's node ID (needed for resolving), resolved status, file path, line, and comments. Use the returned thread 'id' with github_resolve_pr_thread.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
+**Parameters:**
 
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
 ```bash
-dmtools github_get_pr_review_threads workspace=IstiN repository=dmtools pullRequestId=74
+dmtools github_get_pr_review_threads "value" "value"
 ```
 
-Returns GraphQL response with `data.repository.pullRequest.reviewThreads.nodes`, each containing:
-- `id` — GraphQL node ID (use this with `github_resolve_pr_thread`)
-- `isResolved` — whether the thread is resolved
-- `path`, `line`, `startLine` — file location
-- `comments.nodes` — comments with `databaseId`, `body`, `author.login`
+```javascript
+// In JavaScript agent
+const result = github_get_pr_review_threads("repository", "pullRequestId");
+```
 
 ---
 
-### `github_resolve_pr_thread`
+### `github_get_workflow_run`
 
-Resolve a review thread via **GraphQL mutation**. Requires the thread's GraphQL node ID from `github_get_pr_review_threads`.
+Get details of a specific GitHub Actions workflow run by ID. Returns status, conclusion, logs URL, and timing information.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `threadId` | String | ✅ | GraphQL node ID of the thread (from `github_get_pr_review_threads` → `thread.id`) |
+**Parameters:**
 
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`runId`** (string) 🔴 Required
+  - The workflow run ID
+  - Example: `1234567890`
+
+**Example:**
 ```bash
-# Step 1: get thread IDs
-dmtools github_get_pr_review_threads workspace=IstiN repository=dmtools pullRequestId=74
-
-# Step 2: resolve a specific thread using its id
-dmtools github_resolve_pr_thread threadId="PRRT_kwDOBQfyNc5A_example"
+dmtools github_get_workflow_run "value" "value"
 ```
 
-Returns: `{ "data": { "resolveReviewThread": { "thread": { "id": "...", "isResolved": true } } } }`
+```javascript
+// In JavaScript agent
+const result = github_get_workflow_run("repository", "workspace");
+```
 
 ---
 
-### `github_add_pr_label`
+### `github_get_workflow_run_jobs`
 
-Add a label to a pull request. The label must already exist in the repository.
+Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-| `label` | String | ✅ | Label name to add |
+**Parameters:**
 
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`runId`** (string) 🔴 Required
+  - The workflow run ID
+  - Example: `1234567890`
+
+**Example:**
 ```bash
-dmtools github_add_pr_label workspace=IstiN repository=dmtools pullRequestId=74 label=bug
+dmtools github_get_workflow_run_jobs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_workflow_run_jobs("repository", "workspace");
+```
+
+---
+
+### `github_get_workflow_run_logs`
+
+Download and extract complete logs for all jobs in a GitHub Actions workflow run. Returns full untruncated log content from the ZIP archive GitHub provides.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`runId`** (string) 🔴 Required
+  - The workflow run ID
+  - Example: `22498697315`
+
+**Example:**
+```bash
+dmtools github_get_workflow_run_logs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_workflow_run_logs("repository", "workspace");
+```
+
+---
+
+### `github_list_prs`
+
+List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`state`** (string) 🔴 Required
+  - The state of pull requests to list: 'open', 'closed', or 'merged'. 'opened' is accepted as a synonym for 'open'.
+  - Example: `open`
+
+**Example:**
+```bash
+dmtools github_list_prs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_list_prs("repository", "workspace");
+```
+
+---
+
+### `github_list_prs_filtered`
+
+List pull requests in a GitHub repository filtered by a regex pattern on the PR title. Fetches all PRs matching the given state and returns only those whose title matches the regex. Useful for large repos to narrow down results without loading entire history.
+
+**Parameters:**
+
+- **`titleRegex`** (string) 🔴 Required
+  - Java regular expression matched against the PR title (case-sensitive). Only PRs whose title contains a match are returned. Example: '^feat\(.*\)' or 'TICKET-\d+'.
+  - Example: `^feat\(`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`state`** (string) 🔴 Required
+  - The state of pull requests: 'open', 'closed', or 'merged'.
+  - Example: `merged`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+**Example:**
+```bash
+dmtools github_list_prs_filtered "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_list_prs_filtered("titleRegex", "workspace");
+```
+
+---
+
+### `github_list_release_assets`
+
+List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`releaseId`** (string) 🔴 Required
+  - The numeric GitHub release ID.
+  - Example: `323096697`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_list_release_assets "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_list_release_assets("repository", "releaseId");
+```
+
+---
+
+### `github_list_workflow_runs`
+
+List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file. Use status='failure' to get all failed runs.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`perPage`** (number) ⚪ Optional
+  - Number of results per page (max 100, default 30)
+  - Example: `50`
+
+- **`created`** (string) ⚪ Optional
+  - Filter by created date/range using GitHub search syntax, e.g. 2026-05-01..2026-05-31 or >=2026-05-01
+  - Example: `2026-05-01..2026-05-31`
+
+- **`page`** (number) ⚪ Optional
+  - Page number for pagination (default 1)
+  - Example: `2`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workflowId`** (string) ⚪ Optional
+  - Optional workflow filename to filter runs (e.g. rework.yml). If omitted, returns runs for all workflows.
+  - Example: `rework.yml`
+
+- **`status`** (string) ⚪ Optional
+  - Filter by status: failure, success, in_progress, queued, cancelled, timed_out, action_required, neutral, skipped, stale, completed
+  - Example: `failure`
+
+**Example:**
+```bash
+dmtools github_list_workflow_runs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_list_workflow_runs("workspace", "perPage");
+```
+
+---
+
+### `github_merge_pr`
+
+Merge a GitHub pull request. Supports merge, squash, and rebase merge methods.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number to merge
+  - Example: `74`
+
+- **`commitMessage`** (string) ⚪ Optional
+  - Extra detail to append to the merge commit message (optional)
+  - Example: `Closes #123`
+
+- **`mergeMethod`** (string) ⚪ Optional
+  - The merge method: 'merge' (default), 'squash', or 'rebase'
+  - Example: `squash`
+
+- **`commitTitle`** (string) ⚪ Optional
+  - Title for the merge commit (optional, defaults to PR title)
+  - Example: `Merge feature/my-branch into main`
+
+**Example:**
+```bash
+dmtools github_merge_pr "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_merge_pr("workspace", "repository");
 ```
 
 ---
@@ -422,636 +935,300 @@ dmtools github_add_pr_label workspace=IstiN repository=dmtools pullRequestId=74 
 
 Remove a label from a GitHub pull request.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-| `label` | String | ✅ | Label name to remove |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`label`** (string) 🔴 Required
+  - The label name to remove from the pull request
+  - Example: `bug`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+**Example:**
 ```bash
-dmtools github_remove_pr_label workspace=IstiN repository=dmtools pullRequestId=74 label=bug
+dmtools github_remove_pr_label "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_remove_pr_label("workspace", "label");
 ```
 
 ---
 
-### `github_merge_pr`
+### `github_reply_to_pr_thread`
 
-Merge a pull request. Supports merge, squash, and rebase merge methods.
+Reply to an existing inline code review comment thread in a GitHub pull request. Use the comment ID of the root comment (or any comment) in the thread as inReplyToId.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner/organization |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestId` | String | ✅ | Pull request number |
-| `mergeMethod` | String | ❌ | Merge method: `merge` (default), `squash`, or `rebase` |
-| `commitTitle` | String | ❌ | Title for the merge commit (defaults to PR title) |
-| `commitMessage` | String | ❌ | Extra detail to append to the merge commit message |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`text`** (string) 🔴 Required
+  - The reply text (Markdown supported)
+  - Example: `Fixed in the latest commit.`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`inReplyToId`** (string) 🔴 Required
+  - The ID of the comment to reply to (from github_get_pr_conversations rootComment.id or replies[].id)
+  - Example: `123456789`
+
+**Example:**
 ```bash
-dmtools github_merge_pr workspace=IstiN repository=dmtools pullRequestId=74
-dmtools github_merge_pr workspace=IstiN repository=dmtools pullRequestId=74 mergeMethod=squash
-dmtools github_merge_pr workspace=IstiN repository=dmtools pullRequestId=74 mergeMethod=squash commitTitle="feat: my feature" commitMessage="Closes #123"
+dmtools github_reply_to_pr_thread "value" "value"
 ```
 
----
-
-### `github_get_pr_diff`
-
-Get diff statistics for a pull request (files changed, lines added/deleted).
-
-> **Note**: Requires `IS_READ_PULL_REQUEST_DIFF=true` in your environment configuration.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `pullRequestID` | String | ✅ | Pull request number |
-
-```bash
-dmtools github_get_pr_diff workspace=IstiN repository=dmtools pullRequestID=74
+```javascript
+// In JavaScript agent
+const result = github_reply_to_pr_thread("workspace", "text");
 ```
-
-Returns: files changed, additions, deletions per file.
-
----
-
-### `github_get_commit_check_runs`
-
-Get all check runs (CI/CD status checks) for a specific commit SHA. Returns details about each check including status, conclusion, and output.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `commitSha` | String | ✅ | Commit SHA to get check runs for |
-
-```bash
-dmtools github_get_commit_check_runs workspace=IstiN repository=dmtools commitSha=abc123def456...
-```
-
-Returns JSON with `total_count` and array of `check_runs`, each containing:
-- `id` — Check run ID
-- `name` — Check name (e.g., "unit-tests", "Unit Tests")
-- `status` — `queued`, `in_progress`, or `completed`
-- `conclusion` — `success`, `failure`, `cancelled`, `skipped`, etc. (only when completed)
-- `html_url` — Link to check run details
-- `output` — Check output with `title`, `summary`, `text`
-
----
-
-### `github_get_workflow_run`
-
-Get details of a specific GitHub Actions workflow run by ID. Returns status, conclusion, logs URL, and timing information.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `runId` | String | ✅ | Workflow run ID (from check runs or PR status) |
-
-```bash
-dmtools github_get_workflow_run workspace=IstiN repository=dmtools runId=22403207268
-```
-
-Returns workflow run object with:
-- `id`, `name` — Run ID and workflow name
-- `status` — `queued`, `in_progress`, or `completed`
-- `conclusion` — `success`, `failure`, `cancelled`, etc.
-- `html_url` — Link to run
-- `jobs_url`, `logs_url` — API endpoints for jobs and logs
-- `event`, `head_sha`, `head_branch` — Trigger info
-- `created_at`, `updated_at`, `run_started_at` — Timing
-
----
-
-### `github_get_workflow_run_jobs`
-
-Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `runId` | String | ✅ | Workflow run ID |
-
-```bash
-dmtools github_get_workflow_run_jobs workspace=IstiN repository=dmtools runId=22403207268
-```
-
-Returns JSON with `total_count` and array of `jobs`, each containing:
-- `id` — Job ID (use with `github_get_job_logs`)
-- `name` — Job name (e.g., "unit-tests", "build")
-- `status`, `conclusion` — Job status and result
-- `steps` — Array of steps with individual status/conclusion
-- `html_url` — Link to job details
-
----
-
-### `github_get_job_logs`
-
-Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `jobId` | String | ✅ | Job ID from `github_get_workflow_run_jobs` |
-
-```bash
-dmtools github_get_job_logs workspace=IstiN repository=dmtools jobId=64855476586
-```
-
-Returns raw text log output from all job steps. Useful for debugging test failures, build errors, or analyzing CI/CD behavior.
-
----
-
-### `github_get_workflow_run_logs`
-
-Download and extract **complete untruncated logs** for all jobs in a workflow run. Unlike `github_get_job_logs` which may be truncated for large logs, this tool downloads the full ZIP archive GitHub provides and returns all log files concatenated.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `runId` | String | ✅ | Workflow run ID |
-
-```bash
-dmtools github_get_workflow_run_logs workspace=IstiN repository=dmtools runId=22498697315
-```
-
-Returns all `.txt` log files from the ZIP concatenated together, each prefixed with its filename (e.g. `--- 0_Set up job.txt ---`).
-
-**Use this instead of `github_get_job_logs` when:**
-- Logs are very large and getting truncated
-- You need logs from all jobs at once (not per job)
-- You want the full raw output without pagination
-
-**Common workflow for debugging failed CI**:
-```bash
-# 1. Get check runs for the failing commit
-dmtools github_get_commit_check_runs workspace=IstiN repository=dmtools commitSha=abc123...
-
-# 2. Find the failed workflow run ID from check_runs, then get run details
-dmtools github_get_workflow_run workspace=IstiN repository=dmtools runId=22403207268
-
-# 3. Get jobs to find which one failed
-dmtools github_get_workflow_run_jobs workspace=IstiN repository=dmtools runId=22403207268
-
-# 4. Get logs from the failed job
-dmtools github_get_job_logs workspace=IstiN repository=dmtools jobId=64855476586
-```
-
----
-
-### `github_list_workflow_runs`
-
-List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `status` | String | ❌ | Filter by status: `failure`, `success`, `in_progress`, `queued`, `cancelled`, `timed_out`, `action_required`, `neutral`, `skipped`, `stale`, `completed` |
-| `workflowId` | String | ❌ | Workflow filename to filter runs (e.g. `rework.yml`). If omitted, returns runs for all workflows. |
-| `perPage` | Integer | ❌ | Number of results per page (max 100, default 30) |
-| `page` | Integer | ❌ | Page number for pagination (default 1) |
-| `created` | String | ❌ | Filter by created date/range using GitHub search syntax, e.g. `2026-05-01..2026-05-31` or `>=2026-05-01` |
-
-```bash
-# All failed runs across all workflows
-dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=failure
-
-# Failed runs for a specific workflow
-dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=failure workflowId=rework.yml perPage=50
-
-# Page through historical completed runs
-dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=completed workflowId=ai-teammate.yml perPage=100 page=2
-
-# Page within a created-date window to bypass GitHub's 1000-result search cap
-dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=completed workflowId=ai-teammate.yml perPage=100 page=1 created=2026-05-01..2026-05-31
-
-# All currently running workflows
-dmtools github_list_workflow_runs workspace=IstiN repository=dmtools status=in_progress
-```
-
-Returns JSON with `total_count` and `workflow_runs` array, each run containing `id`, `name`, `status`, `conclusion`, `html_url`, `head_branch`, `created_at`, `updated_at`.
 
 ---
 
 ### `github_repository_dispatch`
 
-Trigger a GitHub repository dispatch event. Workflows with `on: repository_dispatch` and matching `event_type` will be triggered.
+Trigger a GitHub repository dispatch event. Workflows listening to 'on: repository_dispatch' with the matching event_type will be triggered.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `eventType` | String | ✅ | Event type string — workflows listen via `types: [your-event]` |
-| `clientPayload` | String | ❌ | JSON string with payload passed as `client_payload` to the workflow |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`eventType`** (string) 🔴 Required
+  - The type of activity that triggers the workflow (event_type)
+  - Example: `rework`
+
+- **`clientPayload`** (string) ⚪ Optional
+  - Optional JSON string with payload passed to the workflow as client_payload
+  - Example: `{"key":"value"}`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+**Example:**
 ```bash
-dmtools github_repository_dispatch workspace=IstiN repository=dmtools eventType=rework
-dmtools github_repository_dispatch workspace=IstiN repository=dmtools eventType=rework clientPayload='{"ticket":"PROJ-123"}'
+dmtools github_repository_dispatch "value" "value"
 ```
 
-**Workflow YAML side:**
-```yaml
-on:
-  repository_dispatch:
-    types: [rework]
+```javascript
+// In JavaScript agent
+const result = github_repository_dispatch("workspace", "eventType");
+```
+
+---
+
+### `github_resolve_pr_thread`
+
+Resolve a review thread in a GitHub pull request. Requires the thread's GraphQL node ID, which can be obtained from github_get_pr_review_threads (the 'id' field of each thread).
+
+**Parameters:**
+
+- **`threadId`** (string) 🔴 Required
+  - The GraphQL node ID of the review thread to resolve (from github_get_pr_review_threads thread.id)
+  - Example: `PRRT_kwDOBQfyNc5A...`
+
+**Example:**
+```bash
+dmtools github_resolve_pr_thread "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_resolve_pr_thread("threadId");
 ```
 
 ---
 
 ### `github_trigger_workflow`
 
-Trigger a specific GitHub Actions workflow by filename (`workflow_dispatch`). The workflow must have `on: workflow_dispatch` configured.
+Trigger a specific GitHub Actions workflow by filename (workflow dispatch). The workflow must have 'on: workflow_dispatch' configured.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `workflowId` | String | ✅ | Workflow filename (e.g. `rework.yml`) |
-| `inputs` | String | ❌ | JSON string with workflow inputs (e.g. `{"user_request":"...","branch":"main"}`) |
-| `ref` | String | ❌ | Branch or tag to run on (default: `main`) |
+**Parameters:**
 
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`ref`** (string) ⚪ Optional
+  - The branch or tag to run the workflow on (default: main)
+  - Example: `main`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`workflowId`** (string) 🔴 Required
+  - The workflow filename or ID to trigger
+  - Example: `rework.yml`
+
+- **`inputs`** (string) ⚪ Optional
+  - JSON string with workflow inputs (e.g. {"user_request":"...","branch":"main"})
+  - Example: `{"user_request":"Please rework PROJ-123"}`
+
+**Example:**
 ```bash
-dmtools github_trigger_workflow workspace=IstiN repository=dmtools workflowId=rework.yml \
-  inputs='{"user_request":"Please rework PROJ-123"}' ref=main
+dmtools github_trigger_workflow "value" "value"
 ```
 
-**Workflow YAML side:**
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      user_request:
-        required: true
+```javascript
+// In JavaScript agent
+const result = github_trigger_workflow("workspace", "ref");
 ```
-
-**Difference from `github_repository_dispatch`:**
-
-| | `github_repository_dispatch` | `github_trigger_workflow` |
-|---|---|---|
-| API | `POST /repos/.../dispatches` | `POST /repos/.../actions/workflows/{id}/dispatches` |
-| Targets | Any workflow listening to the event type | Specific workflow file directly |
-| Inputs | `client_payload` (free JSON) | `inputs` (named, declared in workflow YAML) |
 
 ---
 
-## Usage in JavaScript Agents
+### `github_update_check_run`
+
+Update an existing GitHub Check Run — set it to completed with success/failure conclusion, update summary and detailed text. Call this after github_create_check_run to finalize the check.
+
+**Parameters:**
+
+- **`conclusion`** (string) ⚪ Optional
+  - Required when status=completed: success | failure | neutral | cancelled | skipped | timed_out | action_required
+  - Example: `success`
+
+- **`summary`** (string) ⚪ Optional
+  - Updated Markdown summary for the check run output panel
+  - Example: `✅ Review complete. Found 3 issues.`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`checkRunId`** (string) 🔴 Required
+  - The ID of the check run to update (from github_create_check_run response)
+  - Example: `1234567890`
+
+- **`text`** (string) ⚪ Optional
+  - Updated detailed Markdown content (full analysis, annotations etc.)
+  - Example: `## Issues Found
+...`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`title`** (string) ⚪ Optional
+  - Updated title for the check run output panel
+  - Example: `AI PR Review — Complete`
+
+- **`status`** (string) 🔴 Required
+  - The new status: in_progress | completed
+  - Example: `completed`
+
+**Example:**
+```bash
+dmtools github_update_check_run "value" "value"
+```
 
 ```javascript
-// List open PRs
-const prs = github_list_prs('IstiN', 'dmtools', 'open');
-
-// Get PR details
-const pr = github_get_pr('IstiN', 'dmtools', '74');
-print('PR Title: ' + pr.title + ' (' + pr.state + ')');
-
-// Get all comments
-const comments = github_get_pr_comments('IstiN', 'dmtools', '74');
-print('Total comments: ' + comments.length);
-
-// Get review threads
-const conversations = github_get_pr_conversations('IstiN', 'dmtools', '74');
-for (const conv of conversations) {
-    print('Thread on ' + conv.path + ': ' + conv.totalComments + ' comments');
-}
-
-// Get all activities (reviews + comments)
-const activities = github_get_pr_activities('IstiN', 'dmtools', '74');
-const approvals = activities.filter(a => JSON.parse(a).action === 'APPROVED');
-print('Approvals: ' + approvals.length);
-
-// Add a general discussion comment
-github_add_pr_comment('IstiN', 'dmtools', '74', 'Automated review complete.');
-
-// Reply to an inline review thread
-// (get the comment ID first from github_get_pr_conversations)
-github_reply_to_pr_thread('IstiN', 'dmtools', '74', '123456789', 'Fixed in latest commit.');
-
-// Create a new inline code review comment
-github_add_inline_comment('IstiN', 'dmtools', '74',
-    'src/main/java/Foo.java', '42', 'This should use Optional<>.',
-    '', null, 'RIGHT');  // commitId empty = auto-fetch from PR head
-
-// Get review threads with GraphQL IDs (needed to resolve)
-const threadsJson = github_get_pr_review_threads('IstiN', 'dmtools', '74');
-const threads = JSON.parse(threadsJson).data.repository.pullRequest.reviewThreads.nodes;
-const openThreads = threads.filter(t => !t.isResolved);
-print('Open threads: ' + openThreads.length);
-
-// Resolve a thread using its GraphQL node ID
-github_resolve_pr_thread('PRRT_kwDOBQfyNc5A_example');
-
-// Check CI/CD status for a commit
-const checkRuns = JSON.parse(github_get_commit_check_runs('IstiN', 'dmtools', 'abc123def456...'));
-const failedChecks = checkRuns.check_runs.filter(c => c.conclusion === 'failure');
-print('Failed checks: ' + failedChecks.length);
-
-// Get workflow run details
-const run = JSON.parse(github_get_workflow_run('IstiN', 'dmtools', '22403207268'));
-print('Workflow: ' + run.name + ' - ' + run.conclusion);
-
-// Get all jobs for a workflow run
-const jobs = JSON.parse(github_get_workflow_run_jobs('IstiN', 'dmtools', '22403207268'));
-const failedJobs = jobs.jobs.filter(j => j.conclusion === 'failure');
-print('Failed jobs: ' + failedJobs.length);
-
-// Get job logs for debugging
-const logs = github_get_job_logs('IstiN', 'dmtools', '64855476586');
-if (logs.includes('FAILED')) {
-    print('Found test failures in logs');
-    // Parse logs to extract failure details
-}
-
-// Download complete (untruncated) logs for a workflow run
-const fullLogs = github_get_workflow_run_logs('ai-teammate', 'mytube', '22498697315');
-// Returns all job logs concatenated — no truncation
-
-// List all failed runs (all workflows)
-const failedRuns = JSON.parse(github_list_workflow_runs('IstiN', 'dmtools', 'failure', null, 50));
-print('Failed runs: ' + failedRuns.total_count);
-
-// List failed runs for a specific workflow
-const failedRework = JSON.parse(github_list_workflow_runs('IstiN', 'dmtools', 'failure', 'rework.yml', 30));
-for (const run of failedRework.workflow_runs) {
-    print(run.id + ' - ' + run.name + ' - ' + run.html_url);
-}
-
-// Trigger workflow dispatch (specific workflow file)
-github_trigger_workflow('IstiN', 'dmtools', 'rework.yml',
-    JSON.stringify({ user_request: 'Please rework PROJ-123' }),
-    'main');
-
-// Repository dispatch (any workflow listening to event type)
-github_repository_dispatch('IstiN', 'dmtools', 'rework',
-    JSON.stringify({ ticket: 'PROJ-123' }));
+// In JavaScript agent
+const result = github_update_check_run("conclusion", "summary");
 ```
-
-## Practical Example: Failed Workflows → Jira Bugs (with Deduplication)
-
-A common automation pattern: scan for recently failed GitHub Actions runs and automatically create Jira bugs. Uses **label-based deduplication** so each failed run creates at most one bug.
-
-```javascript
-/**
- * Scans failed GitHub Actions runs and creates Jira bugs with deduplication.
- *
- * Deduplication strategy: Jira label "gh-run-{runId}"
- * Before creating a bug we search Jira for an existing ticket with that label.
- * If one exists we skip creation; otherwise we fetch the full logs and create the bug.
- *
- * Required customParams in Teammate JSON config:
- * {
- *   "workspace": "my-org",
- *   "repository": "my-repo",
- *   "workflowId": "deploy.yml",       // optional — omit to check all workflows
- *   "jiraProject": "OPS",
- *   "maxRuns": 20
- * }
- */
-function action(params) {
-    const custom      = params.jobParams.customParams;
-    const workspace   = custom.workspace;
-    const repo        = custom.repository;
-    const workflowId  = custom.workflowId  || null;   // optional
-    const jiraProject = custom.jiraProject;
-    const maxRuns     = custom.maxRuns     || 10;
-
-    // 1. Get recently failed runs
-    const runsJson = github_list_workflow_runs(workspace, repo, 'failure', workflowId, maxRuns);
-    const runs = JSON.parse(runsJson).workflow_runs;
-
-    if (!runs || runs.length === 0) {
-        print('No failed runs found.');
-        return { created: 0 };
-    }
-
-    let created = 0;
-
-    for (const run of runs) {
-        const runId = String(run.id);
-        const label = 'gh-run-' + runId;
-
-        // 2. Check for existing Jira bug with this label (deduplication)
-        const jql = 'project = "' + jiraProject + '" AND labels = "' + label + '"';
-        const existing = jira_search_by_jql(jql, 1);
-        const existingIssues = JSON.parse(existing);
-
-        if (existingIssues.total > 0) {
-            print('Run ' + runId + ' already has a bug: ' + existingIssues.issues[0].key + ' — skipping.');
-            continue;
-        }
-
-        // 3. Fetch full logs for this run
-        print('Fetching logs for failed run ' + runId + ' (' + run.name + ')...');
-        let logs = '';
-        try {
-            logs = github_get_workflow_run_logs(workspace, repo, runId);
-            // Trim to avoid Jira description overflow (keep last 20 000 chars)
-            if (logs.length > 20000) {
-                logs = '...(truncated)...\n' + logs.slice(-20000);
-            }
-        } catch (e) {
-            logs = 'Could not fetch logs: ' + e;
-        }
-
-        // 4. Build a concise summary line from log content
-        const errorLine = extractFirstError(logs);
-
-        // 5. Create Jira bug
-        const summary = '[CI Failure] ' + run.name + ' — ' + (run.head_branch || 'unknown branch') +
-                        (errorLine ? ': ' + errorLine : '');
-        const description =
-            'GitHub Actions run **' + runId + '** failed.\n\n' +
-            '- **Workflow**: ' + run.name + '\n' +
-            '- **Branch**: ' + (run.head_branch || 'N/A') + '\n' +
-            '- **Triggered at**: ' + run.created_at + '\n' +
-            '- **Run URL**: ' + run.html_url + '\n\n' +
-            '**Logs:**\n{code}\n' + logs + '\n{code}';
-
-        const newIssue = jira_create_ticket_basic(jiraProject, 'Bug', summary, description);
-        const newKey   = JSON.parse(newIssue).key;
-
-        // 6. Add deduplication label so this run is never filed twice
-        jira_add_label(newKey, label);
-
-        print('Created ' + newKey + ' for run ' + runId);
-        created++;
-    }
-
-    return { created: created };
-}
-
-/**
- * Extracts the first line that looks like an error from the log text.
- */
-function extractFirstError(logs) {
-    const lines = logs.split('\n');
-    for (const line of lines) {
-        const l = line.toLowerCase();
-        if (l.includes('error') || l.includes('failed') || l.includes('exception')) {
-            // Strip leading timestamp / log-prefix noise
-            return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.Z]+ /, '').substring(0, 120);
-        }
-    }
-    return '';
-}
-```
-
-**Teammate JSON config** (`agents/detect_failed_workflows.json`):
-```json
-{
-  "name": "FailedWorkflowMonitor",
-  "params": {
-    "jsAction": "agents/js/failedWorkflowsToJira.js",
-    "customParams": {
-      "workspace": "my-org",
-      "repository": "my-repo",
-      "workflowId": "deploy.yml",
-      "jiraProject": "OPS",
-      "maxRuns": 20
-    }
-  }
-}
-```
-
-**MCP tools used in this example:**
-
-| Tool | Purpose |
-|------|---------|
-| `github_list_workflow_runs` | Get recently failed runs |
-| `github_get_workflow_run_logs` | Download full (untruncated) logs ZIP |
-| `jira_search_by_jql` | Check if bug already exists (dedup via label) |
-| `jira_create_ticket_basic` | Create the Bug ticket |
-| `jira_add_label` | Add deduplication label `gh-run-{runId}` |
 
 ---
 
-## Release Asset Tools
+### `github_update_pr_comment`
 
-These two tools enable storing binary files (screenshots, logs, ZIPs, etc.) as GitHub release assets. Because the standard GitHub UI drag-and-drop upload requires browser cookies unavailable to PATs, the recommended pattern is to create a **draft release** in the same repository and use it as an asset store. Assets are accessible to anyone with read access to that repository.
+Update (edit) an existing comment on a GitHub pull request or issue by its comment ID.
 
-### `github_get_or_create_draft_release`
+**Parameters:**
 
-Find an existing draft release by tag name (or by release name as fallback) and return it, or create a new one if none is found.
+- **`commentId`** (string) 🔴 Required
+  - The ID of the comment to update
+  - Example: `123456789`
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `tagName` | String | ✅ | Tag name for the release (e.g. `mcp-assets-v1`). Used as the primary lookup key. |
-| `releaseName` | String | ❌ | Human-readable release title. Defaults to `tagName` when not set. Used as fallback lookup key if no tag match is found. |
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
 
-Returns the full GitHub release JSON object (including `id`, `upload_url`, `html_url`, etc.).
+- **`text`** (string) 🔴 Required
+  - The new comment text (replaces existing content)
+  - Example: `✅ Analysis complete.`
 
-> ⚠️ **Guard**: if a release with the given tag/name exists but is already **published** (`draft=false`), the tool throws an error to prevent accidentally using a live release as storage. Use a dedicated tag such as `mcp-assets-storage`.
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
 
+**Example:**
 ```bash
-dmtools github_get_or_create_draft_release workspace=IstiN repository=dmtools-agents tagName=mcp-assets-v1 releaseName="MCP Asset Store"
+dmtools github_update_pr_comment "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_update_pr_comment("commentId", "workspace");
 ```
 
 ---
 
 ### `github_upload_release_asset`
 
-Upload a local file to an existing GitHub release as a release asset. The release must already exist; use `github_get_or_create_draft_release` first to obtain one.
+Upload a local file as a GitHub release asset. Returns the uploaded asset metadata including browser_download_url. Set overwrite=true to automatically delete an existing asset with the same name before uploading.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `releaseId` | String | ✅ | Numeric release ID (from the `id` field of the release JSON) |
-| `filePath` | String | ✅ | Absolute or workspace-relative path of the file to upload |
-| `assetName` | String | ❌ | File name shown in GitHub UI. Defaults to the base name of `filePath`. |
-| `contentType` | String | ❌ | MIME type. Auto-detected if omitted, falls back to `application/octet-stream`. |
-| `label` | String | ❌ | Optional human-readable label displayed alongside the asset in the GitHub UI |
-| `overwrite` | String | ❌ | Set to `"true"` to automatically delete any existing asset with the same name before uploading. Default: `false`. |
+**Parameters:**
 
-Returns the full GitHub asset JSON object (including `id`, `browser_download_url`, `size`, etc.).
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
 
-Content-type is auto-detected via `Files.probeContentType()` / `URLConnection.guessContentTypeFromName()`, falling back to `application/octet-stream`.
+- **`releaseId`** (string) 🔴 Required
+  - The numeric GitHub release ID returned by github_get_or_create_draft_release.
+  - Example: `323096697`
 
+- **`filePath`** (string) 🔴 Required
+  - Absolute or relative path to the local file to upload.
+  - Example: `/tmp/preview.png`
+
+- **`assetName`** (string) ⚪ Optional
+  - Optional asset filename shown in GitHub. Defaults to the local filename.
+  - Example: `clip_123.png`
+
+- **`label`** (string) ⚪ Optional
+  - Optional display label for the uploaded asset.
+  - Example: `Screenshot`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`contentType`** (string) ⚪ Optional
+  - Optional MIME type. Defaults to detected type or application/octet-stream.
+  - Example: `image/png`
+
+- **`overwrite`** (string) ⚪ Optional
+  - If true, delete any existing asset with the same name before uploading. Defaults to false.
+  - Example: `true`
+
+**Example:**
 ```bash
-# Step 1 — ensure the draft release exists
-dmtools github_get_or_create_draft_release workspace=IstiN repository=dmtools-agents tagName=mcp-assets-v1
-
-# Step 2 — upload a file (use the `id` from step 1)
-dmtools github_upload_release_asset workspace=IstiN repository=dmtools-agents releaseId=323965673 filePath=/tmp/screenshot.png assetName=screenshot.png label="PR #42 screenshot"
-
-# Step 2 (overwrite) — replace file if it already exists in the release
-dmtools github_upload_release_asset workspace=IstiN repository=dmtools-agents releaseId=323965673 filePath=/tmp/screenshot.png assetName=screenshot.png overwrite=true
+dmtools github_upload_release_asset "value" "value"
 ```
 
-**Typical two-step PR attachment pattern**
-
-```js
-// 1. Get or create the draft release that acts as an asset store
-const releaseJson = JSON.parse(
-  github_get_or_create_draft_release({ workspace, repository, tagName: 'mcp-assets-v1' })
-);
-
-// 2. Upload the file and get the download URL (overwrite if re-running)
-const assetJson = JSON.parse(
-  github_upload_release_asset({
-    workspace, repository,
-    releaseId: String(releaseJson.id),
-    filePath: '/tmp/attachment.png',
-    assetName: 'attachment.png',
-    overwrite: 'true'
-  })
-);
-
-// 3. Embed in a PR comment as a markdown image or link
-github_add_pr_comment({
-  workspace, repository,
-  pullRequestId: String(prId),
-  comment: `Screenshot: ![attachment](${assetJson.browser_download_url})`
-});
+```javascript
+// In JavaScript agent
+const result = github_upload_release_asset("workspace", "releaseId");
 ```
 
 ---
 
-### `github_list_release_assets`
-
-List all assets attached to a GitHub release.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `releaseId` | String | ✅ | Numeric release ID |
-
-Returns a JSON array of asset objects, each containing `id`, `name`, `size`, `state`, and `browser_download_url`.
-
-```bash
-dmtools github_list_release_assets workspace=IstiN repository=dmtools-agents releaseId=323965673
-```
-
----
-
-### `github_delete_release_asset`
-
-Delete a GitHub release asset by its asset ID. Use `github_list_release_assets` to find asset IDs.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workspace` | String | ✅ | GitHub owner or organization name |
-| `repository` | String | ✅ | Repository name |
-| `assetId` | String | ✅ | Numeric asset ID to delete (from `github_list_release_assets` → `id`) |
-
-```bash
-# List assets first to find the ID
-dmtools github_list_release_assets workspace=IstiN repository=dmtools-agents releaseId=323965673
-
-# Then delete by ID
-dmtools github_delete_release_asset workspace=IstiN repository=dmtools-agents assetId=422721847
-```
-
----
-
-## Setup
-
-See [GitHub Configuration Guide](../configuration/integrations/github.md) for authentication and environment setup.

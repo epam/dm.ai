@@ -12,9 +12,7 @@ import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
-import com.github.istin.dmtools.atlassian.confluence.ConfluenceStorageMarkdown;
-import com.github.istin.dmtools.atlassian.confluence.model.Content;
-import io.github.furstenheim.CopyDown;
+import com.github.istin.dmtools.atlassian.confluence.ConfluencePageDownloader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -24,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -173,101 +172,53 @@ public class CliExecutionHelper {
      * and all page attachments to {@code inputFolderPath/confluence/} so CLI agents can read them
      * without web access.
      * <p>
-     * Uses {@link Confluence#parseUris} (domain-aware, same mechanism as ContextOrchestrator)
-     * to detect URLs, then {@link Confluence#contentByUrl} to get the full {@link Content} object,
-     * {@link Confluence#getContentAttachments} + {@link Confluence#downloadAttachment} to fetch
-     * attachments — reusing the same pattern as {@code ConfluenceMermaidIndexIntegration}.
-     * If {@code confluence} is null the method is a no-op.
+     * This overload preserves the original behavior: depth 0 (only pages explicitly linked in the
+     * ticket text) and attachments enabled.
      *
      * @param textContent     Any text that may contain Confluence URLs (e.g. full ticket text)
      * @param inputFolderPath The base input folder (e.g. {@code input/PROJ-123})
      * @param confluence      Confluence client; if {@code null} the method does nothing
      */
     public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence) {
+        writeConfluencePagesFile(textContent, inputFolderPath, confluence, 0, true);
+    }
+
+    /**
+     * Fetches Confluence pages referenced in {@code textContent} and writes both the page text
+     * and all page attachments to {@code inputFolderPath/confluence/} so CLI agents can read them
+     * without web access.
+     * <p>
+     * Recursively follows internal Confluence links and {@code children} macros up to
+     * {@code confluenceDepth} levels. Attachments are downloaded for every fetched page unless
+     * {@code confluenceAttachments} is {@code false}.
+     * <p>
+     * Delegates to {@link ConfluencePageDownloader} so that Teammate and the
+     * {@code confluence_download_pages} MCP tool use the exact same download logic.
+     *
+     * @param textContent           Any text that may contain Confluence URLs (e.g. full ticket text)
+     * @param inputFolderPath       The base input folder (e.g. {@code input/PROJ-123})
+     * @param confluence            Confluence client; if {@code null} the method does nothing
+     * @param confluenceDepth       How many levels of linked/child pages to follow (0 = only ticket links)
+     * @param confluenceAttachments Whether to download attachments for each fetched page
+     */
+    public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence,
+                                         int confluenceDepth, boolean confluenceAttachments) {
         if (confluence == null || textContent == null || textContent.isBlank()) return;
         try {
-            Set<String> urls = confluence.parseUris(textContent);
-            if (urls == null || urls.isEmpty()) {
+            Set<String> seedUrls = confluence.parseUris(textContent);
+            if (seedUrls == null || seedUrls.isEmpty()) {
                 logger.info("No Confluence URLs detected in ticket text");
                 return;
             }
-            logger.info("Found {} Confluence URL(s), writing to input/confluence/...", urls.size());
+            logger.info("Found {} Confluence URL(s), writing to input/confluence/ with depth={} attachments={}",
+                    seedUrls.size(), confluenceDepth, confluenceAttachments);
 
             Path confluenceFolder = inputFolderPath.resolve("confluence");
-            Files.createDirectories(confluenceFolder);
-
-            int written = 0;
-            for (String url : urls) {
-                try {
-                    Content page = confluence.contentByUrl(url);
-                    if (page == null) {
-                        logger.warn("Confluence returned null Content for {}", url);
-                        continue;
-                    }
-
-                    // Write page text
-                    String title = page.getTitle();
-                    String safeName = deriveSafeName(title, url, written);
-                    String bodyText = page.getStorage() != null && page.getStorage().getValue() != null
-                            ? page.getStorage().getValue().trim() : "";
-                    if (!bodyText.isBlank()) {
-                        String markdownText = convertHtmlToMarkdown(bodyText);
-                        Path mdFile = confluenceFolder.resolve(safeName + ".md");
-                        Files.write(mdFile, markdownText.getBytes(StandardCharsets.UTF_8));
-                        logger.info("Wrote Confluence page → {} ({} chars, markdown)", mdFile, markdownText.length());
-                        written++;
-                    } else {
-                        logger.warn("Confluence page '{}' has empty body, skipping text write", title);
-                    }
-
-                    // Download attachments (same pattern as ConfluenceMermaidIndexIntegration)
-                    String contentId = page.getId();
-                    if (contentId != null && !contentId.isBlank()) {
-                        downloadConfluenceAttachments(confluence, contentId, confluenceFolder.toFile());
-                    }
-                } catch (Exception e) {
-                    logger.warn("Could not fetch Confluence page {} (skipping): {}", url, e.getMessage());
-                }
-            }
-            logger.info("Wrote {}/{} Confluence pages to input/confluence/", written, urls.size());
+            new ConfluencePageDownloader(confluence).downloadPages(
+                    new ArrayList<>(seedUrls), confluenceFolder.toFile(), confluenceDepth, confluenceAttachments);
         } catch (Exception e) {
             logger.warn("writeConfluencePagesFile failed (non-fatal): {}", e.getMessage());
         }
-    }
-
-    /**
-     * Downloads all attachments for a Confluence content item into {@code targetDir}
-     * via {@link Confluence#downloadPageAttachments} — the shared method used by both
-     * MermaidIndex and CLI input folder preparation.
-     */
-    private void downloadConfluenceAttachments(Confluence confluence, String contentId, File targetDir) {
-        try {
-            List<java.io.File> files = confluence.downloadPageAttachments(contentId, targetDir);
-            logger.info("Downloaded {} attachment(s) for Confluence page {} to input/confluence/",
-                    files.size(), contentId);
-        } catch (Exception e) {
-            logger.warn("Could not download attachments for content {} (skipping): {}", contentId, e.getMessage());
-        }
-    }
-
-    /** Derives a safe filesystem name from a Confluence page title or URL. */
-    private static String deriveSafeName(String title, String url, int index) {
-        if (title != null && !title.isBlank()) {
-            return title.replaceAll("[^\\w.\\-]", "_");
-        }
-        String urlPath = url.replaceAll("\\?.*", "").replaceAll("#.*", "");
-        String[] segments = urlPath.split("/");
-        String raw = segments[segments.length - 1];
-        return raw.isBlank() ? "page-" + index : raw.replaceAll("[^\\w.\\-]", "_");
-    }
-
-    /**
-     * Converts Confluence Storage Format HTML to readable Markdown.
-     * Delegates to {@link ConfluenceStorageMarkdown} which pre-processes
-     * Confluence-specific tags before passing to CopyDown.
-     */
-    private static String convertHtmlToMarkdown(String html) {
-        return ConfluenceStorageMarkdown.toMarkdown(html);
     }
 
     /**

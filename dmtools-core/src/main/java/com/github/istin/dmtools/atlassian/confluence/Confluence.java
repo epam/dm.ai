@@ -8,6 +8,7 @@ import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.confluence.model.ContentResult;
 import com.github.istin.dmtools.atlassian.confluence.model.SearchResult;
+import com.github.istin.dmtools.atlassian.confluence.model.Storage;
 import com.github.istin.dmtools.atlassian.jira.utils.IssuesIDsParser;
 import com.github.istin.dmtools.common.model.JSONModel;
 import com.github.istin.dmtools.common.networking.GenericRequest;
@@ -75,13 +76,15 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
 
     @MCPTool(
         name = "confluence_contents_by_urls",
-        description = "Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL.",
+        description = "Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
     public List<Content> contentsByUrls(
         @MCPParam(name = "urlStrings", description = "Array of Confluence URLs to retrieve content from", required = true, example = "['https://confluence.example.com/wiki/spaces/SPACE/pages/123/Page+Title']")
-        String ... urlStrings
+        String[] urlStrings,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
     ) throws IOException {
         List<Content> result = new ArrayList<>();
         for (String url : urlStrings) {
@@ -93,7 +96,14 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
                 }
             }
         }
-        return result;
+        return applyFormat(result, format);
+    }
+
+    /**
+     * Backward-compatible wrapper that fetches Confluence content by URLs without format conversion.
+     */
+    public List<Content> contentsByUrls(String... urlStrings) throws IOException {
+        return contentsByUrls(urlStrings, null);
     }
 
     public Content contentByUrl(String urlString) throws IOException {
@@ -234,14 +244,16 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
 
     @MCPTool(
         name = "confluence_content_by_id",
-        description = "Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata.",
+        description = "Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
     public Content contentById(
         @MCPParam(name = "contentId", description = "The unique content ID of the Confluence page", required = true, example = "123456")
-        String contentId
-    ) throws IOException {
+        String contentId,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
+) throws IOException {
         // Construct the path using the content ID and expand needed fields
         GenericRequest content = new GenericRequest(this, path("content/" + contentId + "?expand=body.storage,ancestors,version"));
 
@@ -250,7 +262,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
 
         try {
             // Parse and return the result
-            return new Content(response);
+            return applyFormat(new Content(response), format);
         } catch (Exception e) {
             // Log any exceptions and the response for easier debugging
             logger.error(response);
@@ -258,9 +270,16 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         }
     }
 
+    /**
+     * Backward-compatible wrapper that fetches content by ID without format conversion.
+     */
+    public Content contentById(String contentId) throws IOException {
+        return contentById(contentId, null);
+    }
+
     @MCPTool(
         name = "confluence_content_by_title_and_space",
-        description = "Get Confluence content by title and space key. Returns content result with metadata and body information.",
+        description = "Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
@@ -268,7 +287,9 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "title", description = "The title of the Confluence page", required = true, example = "Project Documentation")
         String title,
         @MCPParam(name = "space", description = "The space key where the content is located", required = true, example = "PROJ")
-        String space
+        String space,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
     ) throws IOException {
         GenericRequest content = new GenericRequest(this, path("content?expand=body.storage,ancestors,version"));
         content.param("title", title);
@@ -277,11 +298,18 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         }
         String response = execute(content);
         try {
-            return new ContentResult(response);
+            return applyFormat(new ContentResult(response), format);
         } catch (Exception e) {
             logger.error(response);
             throw e;
         }
+    }
+
+    /**
+     * Backward-compatible wrapper that fetches content by title and space without format conversion.
+     */
+    public ContentResult content(String title, String space) throws IOException {
+        return content(title, space, null);
     }
 
     @MCPTool(
@@ -345,7 +373,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
 
     @MCPTool(
         name = "confluence_find_content_by_title_and_space",
-        description = "Find Confluence content by title and space key. Returns the first matching content or null if not found.",
+        description = "Find Confluence content by title and space key. Returns the first matching content or null if not found. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
@@ -353,14 +381,23 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "title", description = "The title of the content to find", required = true, example = "Project Documentation")
         String title,
         @MCPParam(name = "space", description = "The space key where to search for the content", required = true, example = "PROJ")
-        String space
+        String space,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
     ) throws IOException {
-        List<Content> contents = content(title, space).getContents();
+        List<Content> contents = content(title, space, null).getContents();
         if (contents.isEmpty()) {
             return null;
         } else {
-            return contents.get(0);
+            return applyFormat(contents.get(0), format);
         }
+    }
+
+    /**
+     * Backward-compatible wrapper that finds content by title and space without format conversion.
+     */
+    public Content findContent(String title, String space) throws IOException {
+        return findContent(title, space, null);
     }
 
     @MCPTool(
@@ -537,7 +574,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
 
     @MCPTool(
         name = "confluence_get_children_by_name",
-        description = "Get child pages of a Confluence page by space key and content name. Returns a list of child content objects.",
+        description = "Get child pages of a Confluence page by space key and content name. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
@@ -545,24 +582,42 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "spaceKey", description = "The space key where the parent page is located", required = true, example = "PROJ")
         String spaceKey,
         @MCPParam(name = "contentName", description = "The name/title of the parent page", required = true, example = "Project Documentation")
-        String contentName
+        String contentName,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
     ) throws IOException {
-        Content pageContent = findContent(contentName, spaceKey);
+        Content pageContent = findContent(contentName, spaceKey, null);
         String contentId = pageContent.getId();
-        return getChildrenOfContentById(contentId);
+        return applyFormat(getChildrenOfContentById(contentId, null), format);
+    }
+
+    /**
+     * Backward-compatible wrapper that fetches child pages by name without format conversion.
+     */
+    public List<Content> getChildrenOfContentByName(String spaceKey, String contentName) throws IOException {
+        return getChildrenOfContentByName(spaceKey, contentName, null);
     }
 
     @MCPTool(
         name = "confluence_get_children_by_id",
-        description = "Get child pages of a Confluence page by content ID. Returns a list of child content objects.",
+        description = "Get child pages of a Confluence page by content ID. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
     public List<Content> getChildrenOfContentById(
         @MCPParam(name = "contentId", description = "The content ID of the parent page", required = true, example = "123456")
-        String contentId
+        String contentId,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
     ) throws IOException {
-        return new ContentResult(execute(new GenericRequest(this, path("content/" + contentId + "/child/page?limit=100&expand=body.storage,ancestors,version")))).getContents();
+        return applyFormat(new ContentResult(execute(new GenericRequest(this, path("content/" + contentId + "/child/page?limit=100&expand=body.storage,ancestors,version")))).getContents(), format);
+    }
+
+    /**
+     * Backward-compatible wrapper that fetches child pages by ID without format conversion.
+     */
+    public List<Content> getChildrenOfContentById(String contentId) throws IOException {
+        return getChildrenOfContentById(contentId, null);
     }
 
     /**
@@ -679,6 +734,28 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         return downloaded;
     }
 
+    @MCPTool(
+        name = "confluence_download_pages",
+        description = "Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public String downloadPages(
+        @MCPParam(name = "urlStrings", description = "Array of Confluence page URLs to download", required = true, example = "['https://wiki.example.com/wiki/spaces/SPACE/pages/123/Page']")
+        String[] urlStrings,
+        @MCPParam(name = "outputPath", description = "Local folder path where pages and attachments will be saved", required = true, example = "/tmp/confluence-pages")
+        String outputPath,
+        @MCPParam(name = "depth", description = "How many levels of linked/child pages to follow. Default is 1.", required = false, example = "1")
+        Integer depth,
+        @MCPParam(name = "downloadAttachments", description = "Whether to download page attachments. Default is true.", required = false, example = "true")
+        Boolean downloadAttachments
+    ) throws IOException {
+        int actualDepth = depth != null ? depth : 1;
+        boolean actualAttachments = downloadAttachments != null ? downloadAttachments : true;
+        int written = new ConfluencePageDownloader(this).downloadPages(urlStrings, new File(outputPath), actualDepth, actualAttachments);
+        return "Downloaded " + written + " Confluence page(s) to " + outputPath;
+    }
+
     /**
      * Converts a MIME media type to a file extension.
      * @param mediaType the MIME type (e.g., "image/jpeg", "image/png")
@@ -771,17 +848,26 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      */
     @MCPTool(
         name = "confluence_find_content",
-        description = "Find a Confluence page by title in the default space. Returns the page content if found.",
+        description = "Find a Confluence page by title in the default space. Returns the page content if found. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
-    public Content findContent(
+    public Content findContentInDefaultSpace(
         @MCPParam(name = "title", description = "Title of the Confluence page to find", required = true, example = "Project Documentation")
-        String title
+        String title,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
     ) throws IOException {
         if (defaultSpace == null) {
             throw new IllegalStateException("Default space not set. Use findContent(String title, String space) instead.");
         }
+        return findContent(title, defaultSpace, format);
+    }
+
+    /**
+     * Backward-compatible wrapper that finds content by title in the default space without format conversion.
+     */
+    public Content findContent(String title) throws IOException {
         return findContent(title, defaultSpace);
     }
     
@@ -825,17 +911,26 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      */
     @MCPTool(
         name = "confluence_content_by_title",
-        description = "Get Confluence content by title in the default space. Returns content result with metadata and body information.",
+        description = "Get Confluence content by title in the default space. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown.",
         integration = "confluence",
         category = "content_retrieval"
     )
-    public ContentResult content(
+    public ContentResult contentByTitleInDefaultSpace(
         @MCPParam(name = "title", description = "Title of the Confluence page to get", required = true, example = "Project Documentation")
-        String title
+        String title,
+        @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
+        String format
     ) throws IOException {
         if (defaultSpace == null) {
             throw new IllegalStateException("Default space not set. Use content(String title, String space) instead.");
         }
+        return content(title, defaultSpace, format);
+    }
+
+    /**
+     * Backward-compatible wrapper that fetches content by title in the default space without format conversion.
+     */
+    public ContentResult content(String title) throws IOException {
         return content(title, defaultSpace);
     }
 
@@ -855,6 +950,99 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         } catch (Exception ignored){
             return null;
         }
+    }
+
+    /**
+     * Checks whether the requested format is Markdown.
+     *
+     * @param format the format identifier (e.g. "md" or "markdown")
+     * @return true if the format should trigger Markdown conversion
+     */
+    private static boolean isMarkdownFormat(String format) {
+        return "md".equalsIgnoreCase(format) || "markdown".equalsIgnoreCase(format);
+    }
+
+    /**
+     * Converts Confluence storage format HTML to Markdown.
+     * If the content uses the Confluence YAML macro format, the YAML payload is
+     * extracted instead (matching the behaviour in {@link InstructionProcessor}).
+     *
+     * @param storageValue raw Confluence storage format HTML
+     * @return Markdown or extracted YAML
+     */
+    private static String convertStorageToMarkdown(String storageValue) {
+        if (storageValue == null || storageValue.isBlank()) {
+            return storageValue;
+        }
+        if (StringUtils.isConfluenceYamlFormat(storageValue)) {
+            return StringUtils.extractYamlContentFromConfluence(storageValue);
+        }
+        return ConfluenceStorageMarkdown.toMarkdown(storageValue);
+    }
+
+    /**
+     * Applies the requested output format to a single Confluence content object.
+     * For format "md"/"markdown" the {@code body.storage.value} is replaced with
+     * Markdown and the representation is updated to "markdown".
+     *
+     * @param content the content to transform (mutated in place)
+     * @param format the requested format
+     * @return the same content instance
+     */
+    private static Content applyFormat(Content content, String format) {
+        if (content == null || !isMarkdownFormat(format)) {
+            return content;
+        }
+        Storage storage = content.getStorage();
+        if (storage == null) {
+            return content;
+        }
+        String value = storage.getValue();
+        if (value == null || value.isBlank()) {
+            return content;
+        }
+        String markdown = convertStorageToMarkdown(value);
+        JSONObject body = content.getJSONObject().optJSONObject("body");
+        if (body != null) {
+            JSONObject storageObj = body.optJSONObject("storage");
+            if (storageObj != null) {
+                storageObj.put("value", markdown);
+                storageObj.put("representation", "markdown");
+            }
+        }
+        return content;
+    }
+
+    /**
+     * Applies the requested output format to a list of Confluence content objects.
+     *
+     * @param contents the contents to transform
+     * @param format the requested format
+     * @return the same list instance
+     */
+    private static List<Content> applyFormat(List<Content> contents, String format) {
+        if (contents == null || !isMarkdownFormat(format)) {
+            return contents;
+        }
+        for (Content content : contents) {
+            applyFormat(content, format);
+        }
+        return contents;
+    }
+
+    /**
+     * Applies the requested output format to all contents inside a {@link ContentResult}.
+     *
+     * @param result the result to transform
+     * @param format the requested format
+     * @return the same result instance
+     */
+    private static ContentResult applyFormat(ContentResult result, String format) {
+        if (result == null || !isMarkdownFormat(format)) {
+            return result;
+        }
+        applyFormat(result.getContents(), format);
+        return result;
     }
 
     public String encodeContent(String content) {

@@ -1,4 +1,4 @@
-# TestRail MCP Tools
+# TESTRAIL MCP Tools
 
 **Total Tools**: 15
 
@@ -9,79 +9,473 @@
 dmtools list | jq '.tools[] | select(.name | startswith("testrail_"))'
 
 # Example usage
-dmtools testrail_get_cases_by_refs PROJ-123 "My Project"
+dmtools testrail_get_projects [arguments]
 ```
 
 ## Usage in JavaScript Agents
 
 ```javascript
 // Direct function calls for testrail tools
-const cases = testrail_get_cases_by_refs("PROJ-123", "My Project");
-const caseTypes = testrail_get_case_types();
-const labels = testrail_get_labels("My Project");
-```
-
-## Environment Setup
-
-```bash
-# dmtools.env
-TESTRAIL_BASE_PATH=https://your-company.testrail.io
-TESTRAIL_USERNAME=your-email@company.com
-TESTRAIL_API_KEY=your_api_key_from_my_settings
-TESTRAIL_PROJECT=My Project        # Default project name (optional)
-TESTRAIL_LOGGING_ENABLED=true      # Enable debug logging (optional)
+const result = testrail_get_projects(...);
+const result = testrail_get_case(...);
+const result = testrail_get_all_cases(...);
 ```
 
 ## Available Tools
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
-| `testrail_get_projects` | Get list of all projects in TestRail instance | None |
-| `testrail_get_case` | Get a test case by ID | `case_id` (string, **required**) — numeric ID without 'C' prefix |
-| `testrail_get_all_cases` | Get ALL test cases in a project (auto-paginated) | `project_name` (string, **required**) |
-| `testrail_search_cases` | Search test cases by project with optional filters | `project_name` (string, **required**)<br>`suite_id` (string, optional)<br>`section_id` (string, optional) |
-| `testrail_get_cases_by_refs` | Get test cases linked to a requirement/story via refs field | `refs` (string, **required**) — e.g. Jira ticket key<br>`project_name` (string, **required**) |
-| `testrail_create_case` | Create a basic test case (description → preconditions field) | `project_name` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`priority_id` (string, optional) — 1=Low, 2=Medium, 3=High, 4=Critical<br>`refs` (string, optional) |
-| `testrail_create_case_detailed` | Create a test case using **Text template** (template_id=1). Single text fields for steps and expected. Markdown tables auto-converted to TestRail `\|\|\|` format. | `project_name` (string, **required**)<br>`title` (string, **required**)<br>`preconditions` (string, optional)<br>`steps` (string, optional)<br>`expected` (string, optional)<br>`priority_id` (string, optional)<br>`type_id` (string, optional)<br>`refs` (string, optional)<br>`label_ids` (string, optional) — comma-separated |
-| `testrail_create_case_steps` | Create a test case using **Steps template** (template_id=2). Steps as JSON array. Markdown tables in content/expected auto-converted to HTML. | `project_name` (string, **required**)<br>`title` (string, **required**)<br>`steps_json` (string, **required**) — JSON array `[{"content":"step","expected":"result"},...]`<br>`preconditions` (string, optional)<br>`priority_id` (string, optional)<br>`type_id` (string, optional)<br>`refs` (string, optional)<br>`label_ids` (string, optional) — comma-separated |
-| `testrail_update_case` | Update a test case. All parameters except case_id are optional | `case_id` (string, **required**)<br>`title` (string, optional)<br>`priority_id` (string, optional)<br>`refs` (string, optional) |
-| `testrail_delete_case` | Delete a test case by ID | `case_id` (string, **required**) — numeric ID without 'C' prefix |
-| `testrail_link_to_requirement` | Link a test case to a requirement by appending key to refs field | `case_id` (string, **required**)<br>`requirement_key` (string, **required**) — e.g. PROJ-123 |
-| `testrail_get_labels` | Get all labels for a project | `project_name` (string, **required**) |
+| `testrail_create_case` | Create a new test case in TestRail | `description` (string, optional)<br>`priority_id` (string, optional)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`refs` (string, optional) |
+| `testrail_create_case_detailed` | Create a new test case in TestRail with detailed fields (preconditions, steps, expected results, labels, type). Note: TestRail uses its own table format in text fields: \|\|\|:Col 1\|:Col 2\|:Col 3\n\|\|val1\|val2\|val3. Standard Markdown tables (\| Col \| Col \|) will be auto-converted to TestRail format. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`expected` (string, optional)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`steps` (string, optional) |
+| `testrail_create_case_steps` | Create a TestRail test case using the 'Test Case (Steps)' template (template_id=2). Steps are provided as a JSON array: [{"content":"step text","expected":"expected result"}, ...]. Markdown tables in step content or expected are auto-converted to HTML tables. Use testrail_get_case_types for type_id, testrail_get_labels for label_ids. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`steps_json` (string, **required**)<br>`project_name` (string, **required**)<br>`title` (string, **required**) |
+| `testrail_delete_case` | Delete a test case in TestRail by case ID | `case_id` (string, **required**) |
+| `testrail_get_all_cases` | Get ALL test cases in a project (uses pagination to retrieve all cases) | `project_name` (string, **required**) |
+| `testrail_get_case` | Get a TestRail test case by ID | `case_id` (string, **required**) |
+| `testrail_get_case_types` | Get all available case types in TestRail (e.g., Automated, Functionality, Other) | None |
+| `testrail_get_cases_by_refs` | Get test cases linked to a requirement/story via refs field | `project_name` (string, **required**)<br>`refs` (string, **required**) |
 | `testrail_get_label` | Get a single label by ID | `label_id` (string, **required**) |
-| `testrail_update_label` | Update a label title (max 20 characters) | `label_id` (string, **required**)<br>`project_name` (string, **required**)<br>`title` (string, **required**) |
-| `testrail_get_case_types` | Get all available case types (e.g., Automated, Functional, Other) | None |
+| `testrail_get_labels` | Get all labels for a project in TestRail | `project_name` (string, **required**) |
+| `testrail_get_projects` | Get list of all projects in TestRail | None |
+| `testrail_link_to_requirement` | Link a test case to a requirement by updating refs field | `case_id` (string, **required**)<br>`requirement_key` (string, **required**) |
+| `testrail_search_cases` | Search TestRail test cases by project and optional filters | `project_name` (string, **required**)<br>`section_id` (string, optional)<br>`suite_id` (string, optional) |
+| `testrail_update_case` | Update a test case in TestRail | `case_id` (string, **required**)<br>`priority_id` (string, optional)<br>`title` (string, optional)<br>`refs` (string, optional) |
+| `testrail_update_label` | Update a label title in TestRail. Maximum 20 characters allowed. | `project_name` (string, **required**)<br>`title` (string, **required**)<br>`label_id` (string, **required**) |
 
-## Key Concepts
+## Detailed Parameter Information
 
-### Test Case ID Format
+### `testrail_create_case`
 
-TestRail test case IDs have a `C` prefix (e.g., `C42`). MCP tools that accept `case_id` expect the **numeric part only** (e.g., `42`).
+Create a new test case in TestRail
 
+**Parameters:**
+
+- **`description`** (string) ⚪ Optional
+  - Test case description/steps (optional)
+  - Example: `1. Navigate to login page
+2. Enter credentials
+3. Click login`
+
+- **`priority_id`** (string) ⚪ Optional
+  - Priority ID: 1=Low, 2=Medium, 3=High, 4=Critical (optional, default=2)
+  - Example: `3`
+
+- **`project_name`** (string) 🔴 Required
+  - Project name
+  - Example: `My Project`
+
+- **`title`** (string) 🔴 Required
+  - Test case title/summary
+  - Example: `Verify login functionality`
+
+- **`refs`** (string) ⚪ Optional
+  - Reference to requirement (e.g., JIRA key)
+  - Example: `PROJ-123`
+
+**Example:**
 ```bash
-# Correct
-dmtools testrail_get_case 42
-dmtools testrail_delete_case 42
-
-# Wrong
-dmtools testrail_get_case C42
+dmtools testrail_create_case "value" "value"
 ```
 
-### Templates
+```javascript
+// In JavaScript agent
+const result = testrail_create_case("description", "priority_id");
+```
 
-| Template | `template_id` | Tool | Fields |
-|----------|--------------|------|--------|
-| Text | 1 | `testrail_create_case_detailed` | `preconditions`, `steps` (text), `expected` (text) |
-| Steps | 2 | `testrail_create_case_steps` | `preconditions`, `steps_json` (JSON array) |
+---
 
-### Priority IDs
+### `testrail_create_case_detailed`
 
-| ID | Name |
-|----|------|
-| 1  | Low |
-| 2  | Medium |
-| 3  | High |
-| 4  | Critical |
+Create a new test case in TestRail with detailed fields (preconditions, steps, expected results, labels, type). Note: TestRail uses its own table format in text fields: |||:Col 1|:Col 2|:Col 3\n||val1|val2|val3. Standard Markdown tables (| Col | Col |) will be auto-converted to TestRail format.
 
-Use `testrail_get_case_types` to find available `type_id` values.
-Use `testrail_get_labels` to find available `label_ids` for your project.
+**Parameters:**
+
+- **`priority_id`** (string) ⚪ Optional
+  - Priority ID: 1=Low, 2=Medium, 3=High, 4=Critical (optional, default=2)
+  - Example: `3`
+
+- **`refs`** (string) ⚪ Optional
+  - Reference to requirement (e.g., JIRA key)
+  - Example: `PROJ-123`
+
+- **`preconditions`** (string) ⚪ Optional
+  - Preconditions (optional). For tables use TestRail format: |||:Col1|:Col2\n||val1|val2
+  - Example: `User is logged out`
+
+- **`type_id`** (string) ⚪ Optional
+  - Case type ID (optional). Use testrail_get_case_types to get available types.
+  - Example: `1`
+
+- **`label_ids`** (string) ⚪ Optional
+  - Comma-separated label IDs (optional). Use testrail_get_labels to find IDs.
+  - Example: `7,8`
+
+- **`expected`** (string) ⚪ Optional
+  - Expected results (optional)
+  - Example: `User is logged in and redirected to dashboard`
+
+- **`project_name`** (string) 🔴 Required
+  - Project name
+  - Example: `My Project`
+
+- **`title`** (string) 🔴 Required
+  - Test case title/summary
+  - Example: `Verify login functionality`
+
+- **`steps`** (string) ⚪ Optional
+  - Test steps separated by double newline (optional)
+  - Example: `Navigate to login page.\n\nEnter username %Username%.\n\nClick Login button.`
+
+**Example:**
+```bash
+dmtools testrail_create_case_detailed "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_create_case_detailed("priority_id", "refs");
+```
+
+---
+
+### `testrail_create_case_steps`
+
+Create a TestRail test case using the 'Test Case (Steps)' template (template_id=2). Steps are provided as a JSON array: [{"content":"step text","expected":"expected result"}, ...]. Markdown tables in step content or expected are auto-converted to HTML tables. Use testrail_get_case_types for type_id, testrail_get_labels for label_ids.
+
+**Parameters:**
+
+- **`priority_id`** (string) ⚪ Optional
+  - Priority ID: 1=Low, 2=Medium, 3=High, 4=Critical (optional, default=2)
+  - Example: `3`
+
+- **`refs`** (string) ⚪ Optional
+  - Reference to requirement (e.g., JIRA key)
+  - Example: `PROJ-123`
+
+- **`preconditions`** (string) ⚪ Optional
+  - Preconditions text (optional)
+  - Example: `User is logged out`
+
+- **`type_id`** (string) ⚪ Optional
+  - Case type ID (optional). Use testrail_get_case_types to get available types.
+  - Example: `1`
+
+- **`label_ids`** (string) ⚪ Optional
+  - Comma-separated label IDs (optional). Use testrail_get_labels to find IDs.
+  - Example: `7,8`
+
+- **`steps_json`** (string) 🔴 Required
+  - JSON array of step objects: [{"content":"step","expected":"result"}, ...]. Markdown tables are auto-converted to HTML.
+  - Example: `[{"content":"Open login page","expected":"Login form is displayed"},{"content":"Enter credentials","expected":"Fields populated"}]`
+
+- **`project_name`** (string) 🔴 Required
+  - Project name
+  - Example: `My Project`
+
+- **`title`** (string) 🔴 Required
+  - Test case title/summary
+  - Example: `Verify login functionality`
+
+**Example:**
+```bash
+dmtools testrail_create_case_steps "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_create_case_steps("priority_id", "refs");
+```
+
+---
+
+### `testrail_delete_case`
+
+Delete a test case in TestRail by case ID
+
+**Parameters:**
+
+- **`case_id`** (string) 🔴 Required
+  - The numeric test case ID to delete (without the C prefix)
+  - Example: `123`
+
+**Example:**
+```bash
+dmtools testrail_delete_case "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_delete_case("case_id");
+```
+
+---
+
+### `testrail_get_all_cases`
+
+Get ALL test cases in a project (uses pagination to retrieve all cases)
+
+**Parameters:**
+
+- **`project_name`** (string) 🔴 Required
+  - Project name to get all cases from
+  - Example: `My Project`
+
+**Example:**
+```bash
+dmtools testrail_get_all_cases "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_all_cases("project_name");
+```
+
+---
+
+### `testrail_get_case`
+
+Get a TestRail test case by ID
+
+**Parameters:**
+
+- **`case_id`** (string) 🔴 Required
+  - The test case ID (numeric, without 'C' prefix)
+  - Example: `123`
+
+**Example:**
+```bash
+dmtools testrail_get_case "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_case("case_id");
+```
+
+---
+
+### `testrail_get_case_types`
+
+Get all available case types in TestRail (e.g., Automated, Functionality, Other)
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools testrail_get_case_types
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_case_types();
+```
+
+---
+
+### `testrail_get_cases_by_refs`
+
+Get test cases linked to a requirement/story via refs field
+
+**Parameters:**
+
+- **`project_name`** (string) 🔴 Required
+  - Project name to search in
+  - Example: `My Project`
+
+- **`refs`** (string) 🔴 Required
+  - Reference ID (e.g., JIRA ticket key)
+  - Example: `PROJ-123`
+
+**Example:**
+```bash
+dmtools testrail_get_cases_by_refs "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_cases_by_refs("project_name", "refs");
+```
+
+---
+
+### `testrail_get_label`
+
+Get a single label by ID
+
+**Parameters:**
+
+- **`label_id`** (string) 🔴 Required
+  - The label ID
+  - Example: `7`
+
+**Example:**
+```bash
+dmtools testrail_get_label "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_label("label_id");
+```
+
+---
+
+### `testrail_get_labels`
+
+Get all labels for a project in TestRail
+
+**Parameters:**
+
+- **`project_name`** (string) 🔴 Required
+  - Project name
+  - Example: `My Project`
+
+**Example:**
+```bash
+dmtools testrail_get_labels "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_labels("project_name");
+```
+
+---
+
+### `testrail_get_projects`
+
+Get list of all projects in TestRail
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools testrail_get_projects
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_projects();
+```
+
+---
+
+### `testrail_link_to_requirement`
+
+Link a test case to a requirement by updating refs field
+
+**Parameters:**
+
+- **`case_id`** (string) 🔴 Required
+  - The test case ID
+  - Example: `123`
+
+- **`requirement_key`** (string) 🔴 Required
+  - Requirement key (e.g., JIRA ticket)
+  - Example: `PROJ-123`
+
+**Example:**
+```bash
+dmtools testrail_link_to_requirement "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_link_to_requirement("case_id", "requirement_key");
+```
+
+---
+
+### `testrail_search_cases`
+
+Search TestRail test cases by project and optional filters
+
+**Parameters:**
+
+- **`project_name`** (string) 🔴 Required
+  - Project name to search in
+  - Example: `My Project`
+
+- **`section_id`** (string) ⚪ Optional
+  - Section ID to filter by (optional)
+  - Example: `10`
+
+- **`suite_id`** (string) ⚪ Optional
+  - Suite ID to filter by (optional)
+  - Example: `1`
+
+**Example:**
+```bash
+dmtools testrail_search_cases "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_search_cases("project_name", "section_id");
+```
+
+---
+
+### `testrail_update_case`
+
+Update a test case in TestRail
+
+**Parameters:**
+
+- **`case_id`** (string) 🔴 Required
+  - The test case ID to update
+  - Example: `123`
+
+- **`priority_id`** (string) ⚪ Optional
+  - New priority ID (optional)
+  - Example: `3`
+
+- **`title`** (string) ⚪ Optional
+  - New title (optional)
+  - Example: `Updated title`
+
+- **`refs`** (string) ⚪ Optional
+  - New references (optional)
+  - Example: `PROJ-123`
+
+**Example:**
+```bash
+dmtools testrail_update_case "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_update_case("case_id", "priority_id");
+```
+
+---
+
+### `testrail_update_label`
+
+Update a label title in TestRail. Maximum 20 characters allowed.
+
+**Parameters:**
+
+- **`project_name`** (string) 🔴 Required
+  - Project name
+  - Example: `My Project`
+
+- **`title`** (string) 🔴 Required
+  - New label title (max 20 characters)
+  - Example: `Release 2.0`
+
+- **`label_id`** (string) 🔴 Required
+  - The label ID to update
+  - Example: `7`
+
+**Example:**
+```bash
+dmtools testrail_update_label "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_update_label("project_name", "title");
+```
+
+---
+

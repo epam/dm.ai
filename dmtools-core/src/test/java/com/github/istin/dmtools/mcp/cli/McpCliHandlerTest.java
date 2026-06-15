@@ -633,4 +633,41 @@ class McpCliHandlerTest {
         assertFalse(resultWith.contains("--toon"),
             "--toon flag should be stripped and must not appear in the tool error");
     }
+
+    @Test
+    @DisplayName("--format md flag is consumed and does not cause ClassCastException for array params")
+    void testFormatMdFlagConsumedForArrayParam() {
+        String[] args = {"mcp", "confluence_contents_by_urls",
+            "https://example.com/wiki/spaces/SPACE/pages/123/Page1",
+            "https://example.com/wiki/spaces/SPACE/pages/456/Page2",
+            "--format", "md"};
+
+        String result = mcpCliHandler.processMcpCommand(args);
+
+        JSONObject response = new JSONObject(result);
+        if (response.has("error")) {
+            String message = response.getString("message");
+            assertFalse(message.contains("ClassCastException"),
+                "--format md should be consumed as named arg, not as a URL. Error: " + message);
+            assertFalse(message.contains("must be an array"),
+                "URL array should still be parsed correctly. Error: " + message);
+        }
+    }
+
+    @Test
+    @DisplayName("--md flag is consumed and injected as format=md")
+    void testMdFlagInjectedAsFormat() {
+        String[] args = {"mcp", "confluence_contents_by_urls",
+            "https://example.com/wiki/spaces/SPACE/pages/123/Page1",
+            "--md"};
+
+        String result = mcpCliHandler.processMcpCommand(args);
+
+        JSONObject response = new JSONObject(result);
+        if (response.has("error")) {
+            String message = response.getString("message");
+            assertFalse(message.contains("ClassCastException"),
+                "--md should be consumed as named arg. Error: " + message);
+        }
+    }
 }
