@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.atlassian.confluence;
 
 import io.github.furstenheim.CopyDown;
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
@@ -121,7 +122,7 @@ public final class ConfluenceStorageMarkdown {
             // 5. Restore the Markdown tables at their placeholders.
             return restoreTables(markdown, extraction.tables);
         } catch (Exception e) {
-            logger.warn("Confluence HTML→Markdown conversion failed, returning raw HTML: {}", e.getMessage());
+            logger.warn("Confluence HTML→Markdown conversion failed, returning raw HTML: {}", e.getMessage(), e);
             return confluenceHtml;
         }
     }
@@ -210,8 +211,9 @@ public final class ConfluenceStorageMarkdown {
     }
 
     /**
-     * Uses Jsoup to convert any remaining {@code <ac:image>} and {@code <ac:link>}
-     * tags that the fast regex pre-processor did not handle.
+     * Uses Jsoup to convert any remaining {@code <ac:image>}, {@code <ac:link>}
+     * and {@code <ac:structured-macro>} tags that the fast regex pre-processor
+     * did not handle.
      *
      * <p>This covers:
      * <ul>
@@ -219,6 +221,8 @@ public final class ConfluenceStorageMarkdown {
      *   <li>{@code <ac:link><ri:attachment ri:filename="..."/></ac:link>}</li>
      *   <li>{@code <ac:link><ri:url ri:value="..."/></ac:link>}</li>
      *   <li>{@code <ac:plain-text-link-body>}</li>
+     *   <li>{@code <ac:structured-macro ac:name="code">} → fenced code block</li>
+     *   <li>{@code <ac:structured-macro>} with rich-text-body → {@code <div>}</li>
      * </ul>
      */
     private static String replaceRemainingAcLinksAndImages(String html) {
@@ -262,6 +266,36 @@ public final class ConfluenceStorageMarkdown {
                 a.text(fallbackText);
             }
             link.replaceWith(a);
+        }
+
+        for (Element macro : doc.getElementsByTag("ac:structured-macro")) {
+            String macroName = macro.attr("ac:name").toLowerCase();
+            if ("code".equals(macroName)) {
+                String language = "";
+                for (Element param : macro.getElementsByTag("ac:parameter")) {
+                    if ("language".equals(param.attr("ac:name"))) {
+                        language = param.text();
+                        break;
+                    }
+                }
+                Element plainBody = macro.getElementsByTag("ac:plain-text-body").first();
+                String code = plainBody != null ? plainBody.text() : "";
+                Element pre = doc.createElement("pre");
+                Element codeEl = doc.createElement("code");
+                if (!language.isBlank()) {
+                    codeEl.addClass("language-" + language);
+                }
+                codeEl.html(StringEscapeUtils.escapeHtml4(code));
+                pre.appendChild(codeEl);
+                macro.replaceWith(pre);
+            } else {
+                Element richBody = macro.getElementsByTag("ac:rich-text-body").first();
+                if (richBody != null) {
+                    Element div = doc.createElement("div");
+                    div.html(richBody.html());
+                    macro.replaceWith(div);
+                }
+            }
         }
 
         return bodyHtml(doc);

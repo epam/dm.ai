@@ -264,4 +264,17 @@ public class ConfluenceHtmlToMarkdownTest {
         assertTrue("Should contain table header", markdown.contains("| Page |"));
         assertTrue("Should contain link inside table cell", markdown.contains("[Home](Home)"));
     }
+
+    @Test
+    public void testToMarkdown_convertsCodeMacro() {
+        String html = "<ac:structured-macro ac:name=\"code\">" +
+            "<ac:parameter ac:name=\"language\">java</ac:parameter>" +
+            "<ac:plain-text-body><![CDATA[System.out.println(\"hello\");]]></ac:plain-text-body>" +
+            "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve code body", markdown.contains("System.out.println"));
+        assertTrue("Should preserve hello string", markdown.contains("hello"));
+    }
 }

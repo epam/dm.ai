@@ -253,7 +253,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         String contentId,
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
-    ) throws IOException {
+) throws IOException {
         // Construct the path using the content ID and expand needed fields
         GenericRequest content = new GenericRequest(this, path("content/" + contentId + "?expand=body.storage,ancestors,version"));
 
