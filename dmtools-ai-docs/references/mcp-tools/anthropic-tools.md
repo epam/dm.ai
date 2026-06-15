@@ -1,6 +1,6 @@
 # ANTHROPIC MCP Tools
 
-**Total Tools**: 2
+**Total Tools**: 3
 
 ## Quick Reference
 
@@ -18,6 +18,7 @@ dmtools anthropic_ai_chat [arguments]
 // Direct function calls for anthropic tools
 const result = anthropic_ai_chat(...);
 const result = anthropic_ai_chat_with_files(...);
+const result = anthropic_list_models(...);
 ```
 
 ## Available Tools
@@ -26,6 +27,7 @@ const result = anthropic_ai_chat_with_files(...);
 |-----------|-------------|------------|
 | `anthropic_ai_chat` | Send a text message to Anthropic Claude AI and get response | `message` (string, **required**) |
 | `anthropic_ai_chat_with_files` | Send a text message to Anthropic Claude AI with file attachments. Supports images, documents, and other file types for analysis and questions. | `message` (string, **required**)<br>`filePaths` (array, **required**) |
+| `anthropic_list_models` | Get a list of available anthropic foundation models | None |
 
 ## Detailed Parameter Information
 
@@ -72,6 +74,24 @@ dmtools anthropic_ai_chat_with_files "value" "value"
 ```javascript
 // In JavaScript agent
 const result = anthropic_ai_chat_with_files("message", "filePaths");
+```
+
+---
+
+### `anthropic_list_models`
+
+Get a list of available anthropic foundation models
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools anthropic_list_models
+```
+
+```javascript
+// In JavaScript agent
+const result = anthropic_list_models();
 ```
 
 ---
