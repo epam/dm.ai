@@ -680,6 +680,10 @@ public class PropertyReader {
     return getValue("FIGMA_OAUTH_SCOPES");
   }
 
+  public String getFigmaRedirectUri() {
+    return getValue("FIGMA_REDIRECT_URI");
+  }
+
   public Integer getDefaultTicketWeightIfNoSPs() {
     String value = getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
     if (value == null || value.isEmpty()) {
