@@ -461,14 +461,20 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     public List<T> searchAndPerform(
             @MCPParam(name = "jql", description = "JQL query string to search tickets", required = true, example = "project = DEMO AND status = Open", aliases = {"searchQueryJQL", "query"})
             String jql,
-            @MCPParam(name = "fields", description = "Optional array of field names to include in response", required = false, example = "[\"summary\", \"status\", \"assignee\"]")
+            @MCPParam(name = "fields", description = "Optional array of field names to include in response. When omitted, the project's extended default fields are used.", required = false, example = "[\"summary\", \"status\", \"assignee\"]")
             String[] fields
     ) throws Exception {
+        String[] effectiveFields = fields;
+        if (effectiveFields == null || effectiveFields.length == 0 ||
+                (effectiveFields.length == 1 && effectiveFields[0] != null && effectiveFields[0].isBlank())) {
+            effectiveFields = getExtendedQueryFields();
+            logger.info("jira_search_by_jql: no fields specified, using extended default fields");
+        }
         List<T> tickets = new ArrayList<>();
         searchAndPerform(ticket -> {
             tickets.add(ticket);
             return false;
-        }, jql, fields);
+        }, jql, effectiveFields);
         return tickets;
     }
 
@@ -771,9 +777,15 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             category = "ticket_management",
             aliases = {"tracker_get_ticket"}
     )
-    public T performTicket(@MCPParam(name = "key", description = "The Jira ticket key to retrieve", required = true) String ticketKey, 
-                          @MCPParam(name = "fields", description = "Optional array of fields to include in the response", required = false) String[] fields) throws IOException {
-        GenericRequest jiraRequest = createPerformTicketRequest(ticketKey, fields);
+    public T performTicket(@MCPParam(name = "key", description = "The Jira ticket key to retrieve", required = true) String ticketKey,
+                          @MCPParam(name = "fields", description = "Optional array of fields to include in the response. When omitted, the project's extended default fields are used.", required = false) String[] fields) throws IOException {
+        String[] effectiveFields = fields;
+        if (effectiveFields == null || effectiveFields.length == 0 ||
+                (effectiveFields.length == 1 && effectiveFields[0] != null && effectiveFields[0].isBlank())) {
+            effectiveFields = getExtendedQueryFields();
+            logger.info("jira_get_ticket: no fields specified, using extended default fields");
+        }
+        GenericRequest jiraRequest = createPerformTicketRequest(ticketKey, effectiveFields);
         String response = jiraRequest.execute();
         if (isErrorResponse(response)) {
             return null;
