@@ -56,9 +56,19 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         int page = 1;
         int perPage = 100; // Adjust as needed, GitLab default is 20, max is 100
 
+        // Build base URL with optional created_after for server-side filtering.
+        // Sort ascending (oldest first) so early pages are stable between daily runs
+        // and the HTTP cache only misses on the last page (newest MRs).
+        String baseUrl = String.format("projects/%s/merge_requests?state=%s&per_page=%d&order_by=created_at&sort=asc",
+                getEncodedProject(workspace, repository), state, perPage);
+        if (startDate != null) {
+            String createdAfter = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                    .format(startDate.getTime());
+            baseUrl += "&created_after=" + createdAfter;
+        }
+
         do {
-            String path = path(String.format("projects/%s/merge_requests?state=%s&per_page=%d&page=%d",
-                    getEncodedProject(workspace, repository), state, perPage, page));
+            String path = path(baseUrl + "&page=" + page);
 
             GenericRequest getRequest = new GenericRequest(this, path);
             String response = execute(getRequest);
@@ -69,11 +79,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
             List<IPullRequest> pullRequests = JSONModel.convertToModels(GitLabPullRequest.class, new JSONArray(response));
             allPullRequests.addAll(pullRequests);
-            if (startDate != null && !pullRequests.isEmpty() && pullRequests.get(pullRequests.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
-                break;
-            }
             if (!checkAllRequests || pullRequests.size() < perPage) {
-                // Stop if we are not checking all requests or if there are fewer pull requests than the perPage limit
                 break;
             }
 
@@ -175,7 +181,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
     @MCPTool(
         name = "gitlab_get_mr_activities",
-        description = "Get all activities for a GitLab merge request including approvals and general discussion notes.",
+        description = "Get all activities for a GitLab merge request. Approvals are fetched from the real GitLab Approvals API. General discussion notes are also included.",
         integration = "gitlab",
         category = "merge_requests",
         aliases = {"source_code_get_pr_activities"}
@@ -185,33 +191,41 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestId) throws IOException {
-        List<IComment> pullRequestNotes = getPullRequestNotes(workspace, repository, pullRequestId);
-        return pullRequestNotes.stream()
-                .filter(comment -> !((GitLabComment)comment).isSystem())
-                .map(new Function<IComment, IActivity>() {
-                    @Override
-                    public IActivity apply(IComment comment) {
-                        final String action = comment.getBody() != null && comment.getBody().toLowerCase().contains("approved")
-                                ? "APPROVED" : "COMMENTED";
-                        return new IActivity() {
-                            @Override
-                            public String getAction() {
-                                return action;
-                            }
+        List<IActivity> activities = new ArrayList<>();
 
-                            @Override
-                            public IComment getComment() {
-                                return comment;
-                            }
+        // Fetch real approvals via the GitLab MR Approvals API
+        // GET /projects/:id/merge_requests/:iid/approvals → { "approved_by": [ { "user": {...} } ] }
+        String approvalsPath = path(String.format("projects/%s/merge_requests/%s/approvals",
+                getEncodedProject(workspace, repository), pullRequestId));
+        GenericRequest approvalsRequest = new GenericRequest(this, approvalsPath);
+        String approvalsResponse = execute(approvalsRequest);
+        if (approvalsResponse != null && !approvalsResponse.isEmpty()) {
+            JSONArray approvedBy = new JSONObject(approvalsResponse).optJSONArray("approved_by");
+            if (approvedBy != null) {
+                for (int i = 0; i < approvedBy.length(); i++) {
+                    GitLabMRApproval approval = new GitLabMRApproval(approvedBy.getJSONObject(i));
+                    IUser approver = approval.getUser();
+                    activities.add(new IActivity() {
+                        @Override public String getAction() { return "APPROVED"; }
+                        @Override public IComment getComment() { return null; }
+                        @Override public IUser getApproval() { return approver; }
+                    });
+                }
+            }
+        }
 
-                            @Override
-                            public IUser getApproval() {
-                                return comment.getAuthor();
-                            }
-                        };
-                    }
-            })
-            .collect(Collectors.toList());
+        // Also include non-system discussion notes as COMMENTED activities
+        List<IComment> notes = getPullRequestNotes(workspace, repository, pullRequestId);
+        for (IComment note : notes) {
+            if (((GitLabComment) note).isSystem()) continue;
+            activities.add(new IActivity() {
+                @Override public String getAction() { return "COMMENTED"; }
+                @Override public IComment getComment() { return note; }
+                @Override public IUser getApproval() { return null; }
+            });
+        }
+
+        return activities;
     }
 
     @Override
@@ -323,13 +337,29 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
     @Override
     public List<ICommit> getCommitsFromBranch(String workspace, String repository, String branchName, String startDate, String endDate) throws IOException {
-        String path = path(String.format("projects/%s/repository/commits?ref_name=%s", getEncodedProject(workspace, repository), branchName));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        if (response == null) {
-            return Collections.emptyList();
-        }
-        return JSONModel.convertToModels(GitLabCommit.class, new JSONArray(response));
+        List<ICommit> allCommits = new ArrayList<>();
+        int page = 1;
+        int perPage = 100;
+        do {
+            StringBuilder urlBuilder = new StringBuilder(
+                    String.format("projects/%s/repository/commits?ref_name=%s&per_page=%d&page=%d&with_stats=true",
+                            getEncodedProject(workspace, repository), branchName, perPage, page));
+            if (startDate != null && !startDate.isEmpty()) {
+                urlBuilder.append("&since=").append(startDate);
+            }
+            GenericRequest getRequest = new GenericRequest(this, path(urlBuilder.toString()));
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            List<ICommit> commits = JSONModel.convertToModels(GitLabCommit.class, new JSONArray(response));
+            allCommits.addAll(commits);
+            if (commits.size() < perPage) {
+                break;
+            }
+            page++;
+        } while (true);
+        return allCommits;
     }
 
     @Override
