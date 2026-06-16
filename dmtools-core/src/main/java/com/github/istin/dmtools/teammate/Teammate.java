@@ -12,6 +12,7 @@ import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.ai.agent.SourceImpactAssessmentAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
+import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
@@ -486,9 +487,10 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     // Write comments.md alongside request.md — same toText() format as chunks sent to AI
                     cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
 
-                    // Write Confluence pages linked in the ticket text to input/confluence/
+                    // Write Confluence pages linked in the ticket text (and its parent's text) to input/confluence/
+                    String confluenceScanText = buildConfluenceScanText(ticket, textFieldsOnly, trackerClient);
                     cliHelper.writeConfluencePagesFile(
-                        textFieldsOnly,
+                        confluenceScanText,
                         inputContextPath,
                         confluence,
                         expertParams.getConfluenceDepth(),
@@ -801,6 +803,43 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             return Collections.emptyList();
         }
         return mermaidIndexTools.read(config.getIntegration(), config.getStoragePath());
+    }
+
+    /**
+     * Builds the text used to discover Confluence URLs for the CLI input folder.
+     * In addition to the current ticket's text fields, it also includes the parent
+     * ticket's text fields (for Jira sub-tasks) so that Confluence pages linked from
+     * the parent story are downloaded too.
+     *
+     * @param ticket          the ticket being processed
+     * @param textFieldsOnly  the current ticket's text fields
+     * @param trackerClient   tracker client for fetching the parent ticket
+     * @return combined text to scan for Confluence URLs
+     */
+    private String buildConfluenceScanText(ITicket ticket, String textFieldsOnly, TrackerClient<?> trackerClient) {
+        StringBuilder scanText = new StringBuilder(textFieldsOnly != null ? textFieldsOnly : "");
+        if (ticket instanceof Ticket) {
+            Ticket jiraTicket = (Ticket) ticket;
+            if (jiraTicket.getFields() != null) {
+                Ticket parent = jiraTicket.getFields().getParent();
+                if (parent != null && parent.getKey() != null && !parent.getKey().isBlank()) {
+                    String parentKey = parent.getKey();
+                    try {
+                        ITicket parentTicket = trackerClient.performTicket(parentKey, trackerClient.getExtendedQueryFields());
+                        if (parentTicket != null) {
+                            String parentTextFields = trackerClient.getTextFieldsOnly(parentTicket);
+                            if (parentTextFields != null && !parentTextFields.isBlank()) {
+                                scanText.append("\n\n").append(parentTextFields);
+                                logger.info("Including parent ticket {} text in Confluence URL scan", parentKey);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Could not fetch parent ticket {} for Confluence URL scan (skipping): {}", parentKey, e.getMessage());
+                    }
+                }
+            }
+        }
+        return scanText.toString();
     }
 
 }
