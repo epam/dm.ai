@@ -22,14 +22,14 @@ import java.util.concurrent.TimeUnit;
  *   <li>Refreshing an access token using a stored refresh token</li>
  * </ul>
  *
- * <p>Token endpoint: {@code https://www.figma.com/api/oauth/token}
+ * <p>Token endpoint: {@code https://api.figma.com/v1/oauth/token}
  */
 public class FigmaOAuth2TokenManager {
 
     private static final Logger logger = LogManager.getLogger(FigmaOAuth2TokenManager.class);
 
     public static final String FIGMA_OAUTH_AUTHORIZE_URL = "https://www.figma.com/oauth";
-    public static final String FIGMA_OAUTH_TOKEN_URL = "https://www.figma.com/api/oauth/token";
+    public static final String FIGMA_OAUTH_TOKEN_URL = "https://api.figma.com/v1/oauth/token";
     public static final String DEFAULT_FIGMA_OAUTH_SCOPE = "file_content:read file_metadata:read";
 
     private final String clientId;
