@@ -126,6 +126,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("confluenceAttachments")
         private boolean confluenceAttachments = true;
 
+        @SerializedName("includeParentConfluence")
+        private boolean includeParentConfluence = true;
+
     }
 
     /**
@@ -488,7 +491,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
 
                     // Write Confluence pages linked in the ticket text (and its parent's text) to input/confluence/
-                    String confluenceScanText = buildConfluenceScanText(ticket, textFieldsOnly, trackerClient);
+                    String confluenceScanText = buildConfluenceScanText(
+                        ticket, textFieldsOnly, trackerClient, expertParams.isIncludeParentConfluence());
                     cliHelper.writeConfluencePagesFile(
                         confluenceScanText,
                         inputContextPath,
@@ -811,14 +815,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
      * ticket's text fields (for Jira sub-tasks) so that Confluence pages linked from
      * the parent story are downloaded too.
      *
-     * @param ticket          the ticket being processed
-     * @param textFieldsOnly  the current ticket's text fields
-     * @param trackerClient   tracker client for fetching the parent ticket
+     * @param ticket                   the ticket being processed
+     * @param textFieldsOnly           the current ticket's text fields
+     * @param trackerClient            tracker client for fetching the parent ticket
+     * @param includeParentConfluence  whether to include the parent ticket's text fields
      * @return combined text to scan for Confluence URLs
      */
-    private String buildConfluenceScanText(ITicket ticket, String textFieldsOnly, TrackerClient<?> trackerClient) {
+    private String buildConfluenceScanText(ITicket ticket, String textFieldsOnly,
+                                            TrackerClient<?> trackerClient, boolean includeParentConfluence) {
         StringBuilder scanText = new StringBuilder(textFieldsOnly != null ? textFieldsOnly : "");
-        if (ticket instanceof Ticket) {
+        if (includeParentConfluence && ticket instanceof Ticket) {
             Ticket jiraTicket = (Ticket) ticket;
             if (jiraTicket.getFields() != null) {
                 Ticket parent = jiraTicket.getFields().getParent();
