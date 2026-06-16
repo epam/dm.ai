@@ -57,15 +57,9 @@ public class GitLabCommit extends JSONModel implements ICommit, IDiffStats {
 
     @Override
     public IUser getAuthor() {
-        // GitLab commits API returns author_name and author_email as flat top-level strings,
-        // not as a nested object. Build a synthetic GitLabUser from those fields.
         String name = getString("author_name");
-        String email = getString("author_email");
         if (name == null) return null;
-        JSONObject userJson = new JSONObject();
-        userJson.put("name", name);
-        userJson.put("email", email);
-        return new GitLabUser(userJson);
+        return GitLabUser.fromCommitFields(name, getString("author_email"));
     }
 
     @Override
