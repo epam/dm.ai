@@ -2,6 +2,7 @@
 plugins {
     id 'io.spring.dependency-management' version '1.1.4' apply false
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+    id 'org.owasp.dependencycheck' version '11.1.0'
 }
 
 group = 'com.github.istin'
@@ -12,6 +13,7 @@ subprojects {
     // Apply common plugins
     apply plugin: 'java-library'
     apply plugin: 'jacoco'
+    apply plugin: 'org.owasp.dependencycheck'
     
     // Common group and version
     group = 'com.github.istin'
@@ -49,6 +51,23 @@ subprojects {
         reports {
             xml.required.set(true)
             html.required.set(true)
+        }
+    }
+
+    // OWASP Dependency-Check — advisory only (does not fail build/CI on CVE findings)
+    dependencyCheck {
+        autoUpdate = System.getenv('DEPENDENCY_CHECK_SKIP_UPDATE') != 'true'
+        failBuildOnCVSS = 11f
+        nvd {
+            apiKey = System.getenv('NVD_API_KEY') ?: ''
+        }
+        if (rootProject.file('dependency-check-suppressions.xml').exists()) {
+            suppressionFiles = [rootProject.file('dependency-check-suppressions.xml').path]
+        }
+        analyzers {
+            assemblyEnabled = false
+            nodeEnabled = false
+            ossIndexEnabled = false
         }
     }
 }
