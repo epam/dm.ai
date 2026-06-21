@@ -48,6 +48,7 @@ public class ReportGenerator {
     private final Set<String> weightMetricLabels = new HashSet<>();
     private final Map<String, Double> metricDividers = new HashMap<>();
     private final Map<String, String> metricLinkTemplates = new HashMap<>();
+    private final Set<String> groupByMetricLabels = new HashSet<>();
 
     public ReportGenerator(TrackerClient trackerClient, SourceCode sourceCode) {
         this.trackerClient = trackerClient;
@@ -136,6 +137,9 @@ public class ReportGenerator {
             }
             if (!metricDividers.isEmpty()) {
                 output.setMetricDividers(new HashMap<>(metricDividers));
+            }
+            if (!groupByMetricLabels.isEmpty()) {
+                output.setGroupByMetrics(new ArrayList<>(groupByMetricLabels));
             }
             if (config.getCustomCharts() != null && !config.getCustomCharts().isEmpty()) {
                 output.setCustomCharts(config.getCustomCharts());
@@ -270,6 +274,9 @@ public class ReportGenerator {
                 }
                 if (metric.getDivider() != 1.0) {
                     metricDividers.put(metricLabel, metric.getDivider());
+                }
+                if (metric.isGroupBy()) {
+                    groupByMetricLabels.add(metricLabel);
                 }
 
                 // Build link template from data source params
@@ -712,28 +719,33 @@ public class ReportGenerator {
                     String metricLabel = metricEntry.getKey();
 
                     double divider = metricDividers.getOrDefault(metricLabel, 1.0);
+                    boolean isGroupByMetric = groupByMetricLabels.contains(metricLabel);
 
                     for (KeyTimeData keyTime : metricEntry.getValue().getKeyTimes()) {
                         String contributor = keyTime.getWho();
                         double weight = keyTime.getWeight() / divider;
 
-                        // Get or create contributor metrics
-                        ContributorMetrics contributorMetrics = byContributor.computeIfAbsent(
-                            contributor,
-                            k -> new ContributorMetrics()
-                        );
+                        // Only aggregate per-contributor for non-group-by metrics;
+                        // group-by metrics are tracked in the total only.
+                        if (!isGroupByMetric) {
+                            // Get or create contributor metrics
+                            ContributorMetrics contributorMetrics = byContributor.computeIfAbsent(
+                                contributor,
+                                k -> new ContributorMetrics()
+                            );
 
-                        // Get or create metric summary for this contributor
-                        MetricSummary summary = contributorMetrics.getMetrics().computeIfAbsent(
-                            metricLabel,
-                            k -> new MetricSummary(0, 0.0, new ArrayList<>())
-                        );
+                            // Get or create metric summary for this contributor
+                            MetricSummary summary = contributorMetrics.getMetrics().computeIfAbsent(
+                                metricLabel,
+                                k -> new MetricSummary(0, 0.0, new ArrayList<>())
+                            );
 
-                        // Update summary
-                        summary.setCount(summary.getCount() + 1);
-                        summary.setTotalWeight(summary.getTotalWeight() + weight);
-                        if (!summary.getContributors().contains(contributor)) {
-                            summary.getContributors().add(contributor);
+                            // Update summary
+                            summary.setCount(summary.getCount() + 1);
+                            summary.setTotalWeight(summary.getTotalWeight() + weight);
+                            if (!summary.getContributors().contains(contributor)) {
+                                summary.getContributors().add(contributor);
+                            }
                         }
 
                         // Update total
@@ -785,6 +797,12 @@ public class ReportGenerator {
         for (DatasetItem item : dataset) {
             for (Map.Entry<String, MetricKeyTimes> metricEntry : item.getMetrics().entrySet()) {
                 String metricLabel = metricEntry.getKey();
+
+                // Skip group-by metrics from the per-person contributor breakdown;
+                // their "who" values are categories (model, language, feature), not people.
+                if (groupByMetricLabels.contains(metricLabel)) {
+                    continue;
+                }
 
                 double divider = metricDividers.getOrDefault(metricLabel, 1.0);
 

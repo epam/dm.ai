@@ -8,7 +8,10 @@ import com.google.gson.Gson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -422,5 +425,133 @@ class ReportGeneratorJobTest {
 
         assertNotNull(params.getOutput());
         assertEquals("none", params.getOutput().getVisualizer());
+    }
+
+    @Test
+    void testRunJob_groupByMetricsDoNotPolluteContributorBreakdown() throws Exception {
+        // Given: a JSONL file with both personalized and group-by metrics
+        Path tempDir = Files.createTempDirectory("report_groupby_test");
+        Path jsonlFile = tempDir.resolve("data.jsonl");
+        Files.writeString(jsonlFile, """
+            {"day":"2026-03-15","user_login":"alice","user_initiated_interaction_count":10,"totals_by_model_feature":[{"model":"gpt-4o","code_acceptance_activity_count":5}]}
+            {"day":"2026-03-20","user_login":"bob","user_initiated_interaction_count":20,"totals_by_model_feature":[{"model":"claude-sonnet","code_acceptance_activity_count":7}]}
+            """);
+
+        MetricConfig personalMetric = new MetricConfig();
+        personalMetric.setName("JsonlMetricSource");
+        personalMetric.setParams(Map.of(
+            "label", "Interactions",
+            "weightField", "user_initiated_interaction_count",
+            "isWeight", true,
+            "isPersonalized", true
+        ));
+
+        MetricConfig groupByMetric = new MetricConfig();
+        groupByMetric.setName("JsonlMetricSource");
+        groupByMetric.setParams(Map.of(
+            "label", "Models",
+            "arrayField", "totals_by_model_feature",
+            "arrayFilterField", "model",
+            "arrayFilterValue", "*",
+            "weightField", "code_acceptance_activity_count",
+            "groupByField", "model",
+            "isWeight", true,
+            "isPersonalized", true
+        ));
+
+        DataSourceConfig dataSourceConfig = new DataSourceConfig();
+        dataSourceConfig.setName("jsonl");
+        dataSourceConfig.setParams(Map.of("folderPath", tempDir.toString()));
+        dataSourceConfig.setMetrics(List.of(personalMetric, groupByMetric));
+
+        TimeGroupingConfig groupingConfig = new TimeGroupingConfig();
+        groupingConfig.setType("monthly");
+
+        OutputConfig outputConfig = new OutputConfig();
+        outputConfig.setMode("combined");
+        outputConfig.setSaveRawMetadata(true);
+        outputConfig.setOutputPath(tempDir.toString());
+        outputConfig.setVisualizer("none");
+
+        ReportGeneratorJob.Params params = new ReportGeneratorJob.Params();
+        params.setReportName("GroupBy Test Report");
+        params.setStartDate("2026-03-01");
+        params.setEndDate("2026-03-31");
+        params.setDataSources(List.of(dataSourceConfig));
+        params.setTimeGrouping(groupingConfig);
+        params.setOutput(outputConfig);
+
+        // When
+        ReportOutput output = job.runJob(params);
+
+        // Then: aggregated totals include both metrics
+        assertNotNull(output);
+        assertNotNull(output.getAggregated());
+        assertNotNull(output.getAggregated().getTotal());
+        assertTrue(output.getAggregated().getTotal().getMetrics().containsKey("Interactions"));
+        assertTrue(output.getAggregated().getTotal().getMetrics().containsKey("Models"));
+
+        // And: per-contributor breakdown contains only people, not model names
+        Map<String, ContributorMetrics> byContributor = output.getAggregated().getByContributor();
+        assertNotNull(byContributor);
+        assertTrue(byContributor.containsKey("alice"), "alice should be a contributor");
+        assertTrue(byContributor.containsKey("bob"), "bob should be a contributor");
+        assertFalse(byContributor.containsKey("gpt-4o"), "model names should not appear as contributors");
+        assertFalse(byContributor.containsKey("claude-sonnet"), "model names should not appear as contributors");
+
+        // And: period contributor breakdown is also clean
+        assertFalse(output.getTimePeriods().isEmpty());
+        TimePeriodResult period = output.getTimePeriods().get(0);
+        assertTrue(period.getContributorBreakdown().containsKey("alice"));
+        assertFalse(period.getContributorBreakdown().containsKey("gpt-4o"));
+    }
+
+    @Test
+    void testRunJob_withoutTrackerDataSource_doesNotRequireTrackerConfig() throws Exception {
+        // Given: a temporary JSONL file and a report config that uses only the jsonl source
+        Path tempDir = Files.createTempDirectory("report_test");
+        Path jsonlFile = tempDir.resolve("data.jsonl");
+        Files.writeString(jsonlFile,
+            "{\"day\":\"2026-03-01\",\"user_login\":\"alice\",\"user_initiated_interaction_count\":10}\n" +
+            "{\"day\":\"2026-03-15\",\"user_login\":\"bob\",\"user_initiated_interaction_count\":20}\n");
+
+        MetricConfig metricConfig = new MetricConfig();
+        metricConfig.setName("JsonlMetricSource");
+        metricConfig.setParams(Map.of(
+            "label", "Interactions",
+            "weightField", "user_initiated_interaction_count",
+            "isWeight", true,
+            "isPersonalized", true
+        ));
+
+        DataSourceConfig dataSourceConfig = new DataSourceConfig();
+        dataSourceConfig.setName("jsonl");
+        dataSourceConfig.setParams(Map.of("folderPath", tempDir.toString()));
+        dataSourceConfig.setMetrics(List.of(metricConfig));
+
+        TimeGroupingConfig groupingConfig = new TimeGroupingConfig();
+        groupingConfig.setType("monthly");
+
+        OutputConfig outputConfig = new OutputConfig();
+        outputConfig.setMode("combined");
+        outputConfig.setSaveRawMetadata(false);
+        outputConfig.setOutputPath(tempDir.toString());
+        outputConfig.setVisualizer("none");
+
+        ReportGeneratorJob.Params params = new ReportGeneratorJob.Params();
+        params.setReportName("No Tracker Report");
+        params.setStartDate("2026-03-01");
+        params.setEndDate("2026-03-31");
+        params.setDataSources(List.of(dataSourceConfig));
+        params.setTimeGrouping(groupingConfig);
+        params.setOutput(outputConfig);
+
+        // When: run the job without any JIRA/ADO/Rally configuration
+        ReportOutput output = job.runJob(params);
+
+        // Then: report is generated successfully and does not require tracker credentials
+        assertNotNull(output, "Report output should not be null");
+        assertEquals("No Tracker Report", output.getReportName(), "Report name should match");
+        assertFalse(output.getTimePeriods().isEmpty(), "Should have at least one time period");
     }
 }

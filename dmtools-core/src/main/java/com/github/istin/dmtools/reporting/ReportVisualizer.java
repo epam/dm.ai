@@ -11,10 +11,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
+import java.io.InputStream;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Scanner;
 
 /**
  * Visualizes JSON reports as interactive HTML with charts.
@@ -27,6 +29,7 @@ public class ReportVisualizer {
 
     private final Configuration freemarkerConfig;
     private final String trackerBaseUrl;
+    private final String echartsJs;
 
     /**
      * Create visualizer with explicit tracker base URL.
@@ -36,6 +39,21 @@ public class ReportVisualizer {
         this.freemarkerConfig.setClassForTemplateLoading(this.getClass(), "/ftl/reports");
         this.freemarkerConfig.setDefaultEncoding("UTF-8");
         this.trackerBaseUrl = trackerBaseUrl != null ? trackerBaseUrl : "";
+        this.echartsJs = readResource("/ftl/reports/echarts.min.js");
+    }
+
+    private String readResource(String path) {
+        try (InputStream is = getClass().getResourceAsStream(path)) {
+            if (is == null) {
+                throw new IllegalStateException("Resource not found: " + path);
+            }
+            try (Scanner scanner = new Scanner(is, StandardCharsets.UTF_8.name())) {
+                scanner.useDelimiter("\\A");
+                return scanner.hasNext() ? scanner.next() : "";
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read resource: " + path, e);
+        }
     }
 
     /**
@@ -68,6 +86,7 @@ public class ReportVisualizer {
         templateData.put("reportJson", jsonContent);
         templateData.put("trackerBaseUrl", trackerBaseUrl);
         templateData.put("reportFileName", jsonFile.getName());
+        templateData.put("echartsJs", echartsJs);
 
         // Generate HTML from template
         Template template = freemarkerConfig.getTemplate("report_visualizer.ftl");
