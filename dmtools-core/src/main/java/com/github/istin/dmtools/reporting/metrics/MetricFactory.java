@@ -119,9 +119,15 @@ public class MetricFactory {
         } else if ("csv".equals(dataSourceType)) {
             SourceCollector collector = createCsvCollector(params);
             metric = new Metric(label, isWeight, isPersonalized, collector);
+            if (params.get("groupByField") != null && !params.get("groupByField").toString().isEmpty()) {
+                metric.setGroupBy(true);
+            }
         } else if ("jsonl".equals(dataSourceType)) {
             SourceCollector collector = createJsonlCollector(params);
             metric = new Metric(label, isWeight, isPersonalized, collector);
+            if (params.get("groupByField") != null && !params.get("groupByField").toString().isEmpty()) {
+                metric.setGroupBy(true);
+            }
         } else {
             throw new IllegalArgumentException("Unknown data source type: " + dataSourceType);
         }
