@@ -343,6 +343,22 @@ public class TestRailClientTest {
         return response.toString();
     }
 
+    private String createLabelsPage(int offset, String nextLink, JSONObject... labels) {
+        JSONObject response = new JSONObject();
+        JSONArray labelsArray = new JSONArray();
+        for (JSONObject label : labels) {
+            labelsArray.put(label);
+        }
+        response.put("offset", offset);
+        response.put("limit", 250);
+        response.put("size", labelsArray.length());
+        response.put("labels", labelsArray);
+        response.put("_links", new JSONObject()
+                .put("next", nextLink == null ? JSONObject.NULL : nextLink)
+                .put("prev", JSONObject.NULL));
+        return response.toString();
+    }
+
     @Test(expected = UnsupportedOperationException.class)
     public void testMoveToStatusThrowsException() throws IOException {
         client = new TestRailClient(basePath, username, apiKey);
@@ -617,6 +633,51 @@ public class TestRailClientTest {
     @Test
     public void testGetLabelsMethodExists() throws Exception {
         assertNotNull(TestRailClient.class.getMethod("getLabels", String.class));
+    }
+
+    @Test
+    public void testResolveLabelIdsByProjectId_matchesTitleField() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createLabelsPage(0, null,
+                new JSONObject().put("id", 12).put("title", "ai_generated"),
+                new JSONObject().put("id", 7).put("title", "Login")));
+
+        String result = stubClient.resolveLabelIdsByProjectId(8, new String[]{"ai_generated"});
+
+        assertEquals("12", result);
+        assertEquals(List.of("/get_labels/8&limit=250&offset=0"), stubClient.getRequestedPaths());
+    }
+
+    @Test
+    public void testResolveLabelIdsByProjectId_fallsBackToNameField() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createLabelsPage(0, null,
+                new JSONObject().put("id", 12).put("name", "ai_generated"),
+                new JSONObject().put("id", 7).put("name", "Login")));
+
+        String result = stubClient.resolveLabelIdsByProjectId(8, new String[]{"ai_generated", "Login"});
+
+        assertEquals("12,7", result);
+    }
+
+    @Test
+    public void testResolveLabelIdsByProjectId_prefersTitleOverName() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createLabelsPage(0, null,
+                new JSONObject().put("id", 12).put("title", "ai_generated").put("name", "ignored_name")));
+
+        String result = stubClient.resolveLabelIdsByProjectId(8, new String[]{"ai_generated"});
+
+        assertEquals("12", result);
+    }
+
+    @Test(expected = IOException.class)
+    public void testResolveLabelIdsByProjectId_throwsWhenNoLabelsMatch() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createLabelsPage(0, null,
+                new JSONObject().put("id", 12).put("name", "other_label")));
+
+        stubClient.resolveLabelIdsByProjectId(8, new String[]{"ai_generated"});
     }
 
     @Test
