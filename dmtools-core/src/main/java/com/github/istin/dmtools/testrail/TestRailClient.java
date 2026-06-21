@@ -800,7 +800,11 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
             String trimmed = name.trim();
             for (int i = 0; i < labels.length(); i++) {
                 JSONObject label = labels.getJSONObject(i);
-                if (trimmed.equalsIgnoreCase(label.optString("title"))) {
+                String labelName = label.optString("title");
+                if (labelName == null || labelName.isEmpty()) {
+                    labelName = label.optString("name");
+                }
+                if (trimmed.equalsIgnoreCase(labelName)) {
                     ids.add(String.valueOf(label.getInt("id")));
                     break;
                 }
