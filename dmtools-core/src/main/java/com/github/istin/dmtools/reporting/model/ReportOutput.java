@@ -17,6 +17,7 @@ public class ReportOutput {
     private List<String> weightMetrics;
     private Map<String, String> linkTemplates;
     private Map<String, Double> metricDividers;
+    private List<String> groupByMetrics;
     private List<CustomChartConfig> customCharts;
     private String aggregationLabel;
     private String aggregationFormula;
@@ -47,6 +48,8 @@ public class ReportOutput {
     public void setLinkTemplates(Map<String, String> linkTemplates) { this.linkTemplates = linkTemplates; }
     public Map<String, Double> getMetricDividers() { return metricDividers; }
     public void setMetricDividers(Map<String, Double> metricDividers) { this.metricDividers = metricDividers; }
+    public List<String> getGroupByMetrics() { return groupByMetrics; }
+    public void setGroupByMetrics(List<String> groupByMetrics) { this.groupByMetrics = groupByMetrics; }
     public List<CustomChartConfig> getCustomCharts() { return customCharts; }
     public void setCustomCharts(List<CustomChartConfig> customCharts) { this.customCharts = customCharts; }
     public String getAggregationLabel() { return aggregationLabel; }
