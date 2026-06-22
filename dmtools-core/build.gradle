@@ -51,7 +51,7 @@ dependencies {
     api 'org.json:json:20250517'
     api 'com.squareup.okhttp3:okhttp:4.12.0'
     api 'org.apache.commons:commons-lang3:3.19.0'
-    api 'com.thedeanda:lorem:2.1'
+    api 'com.thedeanda:lorem:2.2'
 
     // Logging using Log4j2 with SLF4J Bridge
     api "org.slf4j:slf4j-api:${versions.slf4j}"
