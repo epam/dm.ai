@@ -1,6 +1,6 @@
 # JIRA MCP Tools
 
-**Total Tools**: 66
+**Total Tools**: 67
 
 ## Quick Reference
 
@@ -79,6 +79,7 @@ const result = jira_xray_get_test_details(...);
 | `jira_update_all_fields_with_name` | Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name. | `value` (object, **required**)<br>`key` (string, **required**)<br>`fieldName` (string, **required**) |
 | `jira_update_description` | Update the description of a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists | `description` (string, **required**)<br>`key` (string, **required**) |
 | `jira_update_field` | Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field. | `field` (string, **required**)<br>`value` (object, **required**)<br>`key` (string, **required**) |
+| `jira_update_field_as_adf` | Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud. | `field` (string, **required**)<br>`value` (object, **required**)<br>`key` (string, **required**) |
 | `jira_update_ticket` | Update a Jira ticket using JSON parameters following the standard Jira REST API format | `params` (object, **required**)<br>`key` (string, **required**) |
 | `jira_update_ticket_parent` | Update the parent of a Jira ticket. Can be used for setting up epic relationships and parent-child relationships for subtasks | `key` (string, **required**)<br>`parentKey` (string, **required**) |
 | `jira_xray_add_precondition_to_test` | Add a single precondition to a test issue using X-ray GraphQL API. Returns JSONObject with result. | `testIssueId` (string, **required**)<br>`preconditionIssueId` (string, **required**) |
@@ -1391,6 +1392,59 @@ dmtools jira_update_field "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_update_field("field", "value");
+```
+
+---
+
+### `jira_update_field_as_adf`
+
+Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud.
+
+**Parameters:**
+
+- **`field`** (string) 🔴 Required
+  - The rich-text field to update, e.g. 'description' or 'comment'
+
+- **`value`** (object) 🔴 Required
+  - Plain text or ADF JSON. Plain text is wrapped into an ADF paragraph; JSON object is sent as-is; JSON array is used as the ADF content.
+
+- **`key`** (string) 🔴 Required
+  - The Jira ticket key to update
+
+**Example:**
+
+```bash
+# Plain text (wrapped into ADF automatically)
+dmtools jira_update_field_as_adf --data '{"key":"TP-1523","field":"description","value":"Plain text description"}'
+
+# ADF with interactive task-list checkboxes
+./dmtools.sh jira_update_field_as_adf --data '{"key":"TP-1523","field":"description","value":"{\"version\":1,\"type\":\"doc\",\"content\":[{\"type\":\"taskList\",\"attrs\":{\"localId\":\"\"},\"content\":[{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"DONE\"},\"content\":[{\"type\":\"text\",\"text\":\"E2E\"}]},{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"TODO\"},\"content\":[{\"type\":\"text\",\"text\":\"Component\"}]},{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"TODO\"},\"content\":[{\"type\":\"text\",\"text\":\"Unit\"}]}]}]}"}'
+```
+
+```javascript
+// In JavaScript agent
+const adfDoc = {
+    version: 1,
+    type: "doc",
+    content: [
+        { type: "paragraph", content: [{ type: "text", text: "Test Levels:" }] },
+        {
+            type: "taskList",
+            attrs: { localId: "" },
+            content: [
+                { type: "taskItem", attrs: { localId: "", state: "DONE" }, content: [{ type: "text", text: "E2E" }] },
+                { type: "taskItem", attrs: { localId: "", state: "TODO" }, content: [{ type: "text", text: "Component" }] },
+                { type: "taskItem", attrs: { localId: "", state: "TODO" }, content: [{ type: "text", text: "Unit" }] }
+            ]
+        }
+    ]
+};
+
+const result = jira_update_field_as_adf({
+    key: "TP-1523",
+    field: "description",
+    value: JSON.stringify(adfDoc)
+});
 ```
 
 ---
