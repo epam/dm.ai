@@ -132,6 +132,7 @@ dependencies {
     // Test dependencies
     testImplementation platform("org.junit:junit-bom:${versions.junit}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
     configurations.configureEach {
@@ -195,6 +196,7 @@ test {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         exceptionFormat "full"
     }
+    jvmArgs '-Djava.awt.headless=true', '-Dnet.bytebuddy.experimental=true', '-Xmx1536m'
     finalizedBy jacocoTestReport
 }
 
