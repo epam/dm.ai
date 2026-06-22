@@ -6,6 +6,7 @@ package com.github.istin.dmtools.atlassian.jira;
 import com.github.istin.dmtools.atlassian.common.model.Assignee;
 import com.github.istin.dmtools.atlassian.common.networking.AtlassianRestClient;
 import com.github.istin.dmtools.atlassian.jira.model.*;
+import com.github.istin.dmtools.atlassian.jira.utils.AtlassianDocumentFormat;
 import com.github.istin.dmtools.atlassian.jira.utils.IssuesIDsParser;
 import com.github.istin.dmtools.atlassian.jira.utils.JiraResponseUtils;
 import com.github.istin.dmtools.common.model.*;
@@ -2144,6 +2145,35 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return updateResult;
     }
 
+    /**
+     * Updates a rich-text field using Jira REST API v3 and Atlassian Document Format (ADF).
+     * This bypasses {@link #path(String)} because v3 requires an explicit API version path
+     * and ADF payloads for fields such as description, comment and environment.
+     */
+    private String performFieldUpdateAsAdf(String key, String fieldIdentifier, Object value, String errorMessage) throws IOException {
+        JSONObject adfValue = AtlassianDocumentFormat.normalize(value);
+
+        GenericRequest jiraRequest = createV3IssueRequest(key);
+        JSONObject body = new JSONObject();
+        body.put("update", new JSONObject()
+                .put(fieldIdentifier, new JSONArray()
+                        .put(new JSONObject()
+                                .put("set", adfValue)
+                        )));
+        jiraRequest.setBody(body.toString());
+
+        String updateResult = jiraRequest.put();
+        validateFieldUpdateResponse(updateResult, errorMessage);
+        return updateResult;
+    }
+
+    /**
+     * Factory for v3 issue update requests. Package-private so tests can spy/mock it.
+     */
+    GenericRequest createV3IssueRequest(String issueKey) {
+        return new GenericRequest(this, getBasePath() + "/rest/api/3/issue/" + issueKey);
+    }
+
     private void validateFieldUpdateResponse(String updateResult, String defaultMessage) throws IOException {
         if (updateResult == null || updateResult.trim().isEmpty()) {
             return;
@@ -2409,6 +2439,36 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 return results.toString();
             }
         }
+    }
+
+    @MCPTool(
+            name = "jira_update_field_as_adf",
+            description = "Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud.",
+            integration = "jira",
+            category = "ticket_management"
+    )
+    public String updateFieldAsAdf(
+            @MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key,
+            @MCPParam(name = "field", description = "The rich-text field to update, e.g. 'description' or 'comment'", required = true) String field,
+            @MCPParam(name = "value", description = "Plain text or ADF JSON. Plain text is wrapped into an ADF paragraph; JSON object is sent as-is; JSON array is used as the ADF content.", required = true) Object value) throws IOException {
+        if ("".equals(value)) {
+            return clearField(key, field);
+        }
+        value = coerceFieldValue(value);
+
+        String updateResult = performFieldUpdateAsAdf(
+                key,
+                field,
+                value,
+                "Failed to update field '" + field + "' as ADF on ticket " + key
+        );
+
+        if (updateResult == null || updateResult.trim().isEmpty()) {
+            log("Updated field '" + field + "' as ADF on ticket " + key);
+            return "Field '" + field + "' updated as ADF successfully on ticket " + key;
+        }
+        log("Updated field '" + field + "' as ADF on ticket " + key + " with result: " + updateResult);
+        return updateResult;
     }
 
     @MCPTool(
