@@ -1,3 +1,6 @@
 [submodule "agents"]
 	path = agents
 	url = git@github.com:IstiN/dmtools-agents.git
+[submodule "dmtools-mermaid-renderer"]
+	path = dmtools-mermaid-renderer
+	url = git@github.com:IstiN/dmtools-mermaid-renderer.git
