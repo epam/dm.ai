@@ -137,13 +137,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download CLI Package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cli-package
           path: cli/
 
       - name: Download Skill Package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: skill-package
           path: skill/
