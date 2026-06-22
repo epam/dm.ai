@@ -48,7 +48,7 @@ dependencies {
     testRuntimeOnly "org.junit.vintage:junit-vintage-engine:${versions.junit}"
 
     // Core dependencies
-    api 'org.json:json:20250517'
+    api 'org.json:json:20260522'
     api 'com.squareup.okhttp3:okhttp:4.12.0'
     api 'org.apache.commons:commons-lang3:3.19.0'
     api 'com.thedeanda:lorem:2.2'
