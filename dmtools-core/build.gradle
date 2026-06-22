@@ -195,6 +195,7 @@ test {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         exceptionFormat "full"
     }
+    jvmArgs '-Djava.awt.headless=true', '-Dnet.bytebuddy.experimental=true', '-Xmx1536m'
     finalizedBy jacocoTestReport
 }
 
