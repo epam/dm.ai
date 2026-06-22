@@ -23,7 +23,7 @@ jobs:
     
     steps:
       - name: Checkout repository (for scripts)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       
       - name: Download Build Artifacts
         uses: actions/download-artifact@v8
