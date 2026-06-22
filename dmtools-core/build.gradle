@@ -1,6 +1,6 @@
 plugins {
     id 'java-library'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.gradleup.shadow' version '9.4.2'
     id 'jacoco'
 }
 
@@ -296,10 +296,17 @@ shadowJar {
     archiveClassifier.set('all')
     archiveExtension.set('jar')
     zip64 true
-    
+
     // Include all dependencies
     configurations = [project.configurations.runtimeClasspath]
-    
+
+    // GraalVM 25 publishes org.graalvm.js:js as an aggregator POM-only artifact.
+    // Shadow cannot expand POMs, so exclude it; the real JARs (js-language, etc.)
+    // are still pulled in transitively and bundled.
+    dependencies {
+        exclude(dependency('org.graalvm.js:js:.*'))
+    }
+
     manifest {
         attributes 'Main-Class': 'com.github.istin.dmtools.job.JobRunner'
         attributes 'Implementation-Version': version
