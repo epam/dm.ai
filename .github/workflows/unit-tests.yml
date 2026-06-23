@@ -42,3 +42,62 @@ jobs:
           path: '**/build/test-results/test/TEST-*.xml'
           reporter: java-junit
           fail-on-error: false
+
+  dmtools-agents-js-tests:
+    name: DMTools Agents JS unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Configure Git for tests
+        run: |
+          git config --global user.name "dm.ai"
+          git config --global user.email "dm.ai@epam.com"
+
+      - name: Build DMTools shadow JAR
+        run: ./gradlew :dmtools-core:shadowJar --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install DMTools CLI for agents tests
+        run: |
+          mkdir -p "$HOME/.dmtools"
+          cp "build/libs/dmtools-v$(grep '^version=' gradle.properties | cut -d'=' -f2)-all.jar" "$HOME/.dmtools/dmtools.jar"
+          echo "Installed DMTools CLI:"
+          java -jar "$HOME/.dmtools/dmtools.jar" --version
+
+      - name: Run DMTools Agents JS unit tests
+        id: agents_tests
+        run: |
+          cd agents
+          ../dmtools.sh run js/unit-tests/run_all.json > ../agents-test-output.json 2>&1 || true
+          cat ../agents-test-output.json
+
+      - name: Validate agents test results
+        run: |
+          PASSED=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
+          FAILED=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
+          echo "Agents JS tests: $PASSED passed, $FAILED failed"
+          if [ -z "$PASSED" ] || [ -z "$FAILED" ]; then
+            echo "Could not parse agents test results"
+            exit 1
+          fi
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Some agents JS tests failed. See output above for details."
+            exit 1
+          fi
