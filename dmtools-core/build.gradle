@@ -307,15 +307,20 @@ shadowJar {
         exclude(dependency('org.graalvm.js:js:.*'))
     }
 
+    // GraalVM languages are registered via META-INF/services files. Multiple jars
+    // (js-language, regex, etc.) provide the same service file and Shadow does not
+    // always merge them, so we ship an explicit merged provider list under
+    // src/main/resources/META-INF/services/com.oracle.truffle.api.provider.TruffleLanguageProvider.
+    // That file lists JavaScriptLanguageProvider and RegexLanguageProvider, which is
+    // required for JavaScript regex literals (/.../) in GraalVM 25.
+    mergeServiceFiles()
+
     manifest {
         attributes 'Main-Class': 'com.github.istin.dmtools.job.JobRunner'
         attributes 'Implementation-Version': version
         attributes 'Implementation-Title': 'DMTools'
         attributes 'Multi-Release': 'true'  // Enable multi-release JAR for Log4j Java 9+ classes
     }
-    
-    // Merge service files properly (fixes GraalJS ScriptEngineFactory issue)
-    mergeServiceFiles()
     
     // Exclude duplicate files and problematic files
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
