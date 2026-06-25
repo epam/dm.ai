@@ -206,6 +206,7 @@ jobs:
 
           # DMTools Integration Settings
           DMTOOLS_INTEGRATIONS: "jira,confluence,ado,figma,ai,cli,file,github"
+          DEFAULT_TRACKER: "jira"
 
           # Encoded config input
           ENCODED_CONFIG: ${{ inputs.encoded_config }}
