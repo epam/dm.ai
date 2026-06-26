@@ -87,6 +87,35 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 
 ---
 
+## Common Job Parameters
+
+All jobs that inherit from `TrackerParams` support the following common parameters.
+
+### Jira Issue Key Filtering
+
+You can control which Jira issue keys are recognized when DMtools parses ticket references in text, comments, descriptions, and JQL results.
+
+| Parameter | Env Variable | Description |
+|-----------|--------------|-------------|
+| `issueIgnorePrefixes` | `JIRA_ISSUE_IGNORE_PREFIXES` | Comma-separated prefixes to ignore (e.g. `PSR,RFC,CVE`). All other keys are allowed. |
+| `issueAllowedPrefixes` | `JIRA_ISSUE_ALLOWED_PREFIXES` | Comma-separated prefixes to allow. When set, only keys with these prefixes are kept. |
+| `envVariables` | — | Per-job environment variable overrides. Job-level `issueIgnorePrefixes` / `issueAllowedPrefixes` take precedence over env variables with the same name. |
+
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "inputJql": "key = PROJ-123",
+    "issueIgnorePrefixes": "PSR,RFC,CVE",
+    "issueAllowedPrefixes": "PROJ,TEAM"
+  }
+}
+```
+
+If neither list is configured, parsing behavior is unchanged (full backward compatibility).
+
+---
+
 ## 🎯 Featured Jobs
 
 ### Quick reference for common agent jobs
