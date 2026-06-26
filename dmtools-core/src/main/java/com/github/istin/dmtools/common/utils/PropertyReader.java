@@ -374,6 +374,31 @@ public class PropertyReader {
     return value.split(",");
   }
 
+  public static final String JIRA_ISSUE_IGNORE_PREFIXES = "JIRA_ISSUE_IGNORE_PREFIXES";
+  public static final String JIRA_ISSUE_ALLOWED_PREFIXES = "JIRA_ISSUE_ALLOWED_PREFIXES";
+
+  public Set<String> getJiraIssueIgnorePrefixes() {
+    return parseUpperCasePrefixSet(getValue(JIRA_ISSUE_IGNORE_PREFIXES));
+  }
+
+  public Set<String> getJiraIssueAllowedPrefixes() {
+    return parseUpperCasePrefixSet(getValue(JIRA_ISSUE_ALLOWED_PREFIXES));
+  }
+
+  private Set<String> parseUpperCasePrefixSet(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<String> result = new HashSet<>();
+    for (String prefix : value.split(",")) {
+      String trimmed = prefix.trim().toUpperCase(Locale.ROOT);
+      if (!trimmed.isEmpty()) {
+        result.add(trimmed);
+      }
+    }
+    return Collections.unmodifiableSet(result);
+  }
+
   public String getXrayClientId() {
     return getValue("XRAY_CLIENT_ID");
   }

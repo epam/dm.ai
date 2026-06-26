@@ -241,11 +241,23 @@ public class JobRunner {
             Object paramsByClass = jobParams.getParamsByClass(job.getParamsClass());
             
             // Apply per-job env variable overrides (from envVariables in JSON params)
+            // Job-level params take precedence over envVariables.
             if (paramsByClass instanceof TrackerParams) {
-                java.util.Map<String, String> envVariables = ((TrackerParams) paramsByClass).getEnvVariables();
+                TrackerParams trackerParams = (TrackerParams) paramsByClass;
+                java.util.Map<String, String> overrides = new java.util.LinkedHashMap<>();
+                java.util.Map<String, String> envVariables = trackerParams.getEnvVariables();
                 if (envVariables != null && !envVariables.isEmpty()) {
-                    logger.info("Applying {} env variable override(s) for job: {}", envVariables.size(), jobParams.getName());
-                    PropertyReader.setOverrides(envVariables);
+                    overrides.putAll(envVariables);
+                }
+                if (trackerParams.getIssueIgnorePrefixes() != null && !trackerParams.getIssueIgnorePrefixes().isBlank()) {
+                    overrides.put(PropertyReader.JIRA_ISSUE_IGNORE_PREFIXES, trackerParams.getIssueIgnorePrefixes());
+                }
+                if (trackerParams.getIssueAllowedPrefixes() != null && !trackerParams.getIssueAllowedPrefixes().isBlank()) {
+                    overrides.put(PropertyReader.JIRA_ISSUE_ALLOWED_PREFIXES, trackerParams.getIssueAllowedPrefixes());
+                }
+                if (!overrides.isEmpty()) {
+                    logger.info("Applying {} env variable override(s) for job: {}", overrides.size(), jobParams.getName());
+                    PropertyReader.setOverrides(overrides);
                 }
             }
 

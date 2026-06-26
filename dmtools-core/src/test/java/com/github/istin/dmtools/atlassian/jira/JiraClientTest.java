@@ -377,4 +377,17 @@ public class JiraClientTest {
         assertTrue(spyClient.isValidImageUrl(validUrl));
     }
 
+    @Test
+    public void testExtractProjectKeyFromJQLIgnoresKeywords() throws Exception {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doReturn(Arrays.asList("IN", "PROJ", "TEAM")).when(spyClient).getKnownProjectKeys();
+
+        Method method = JiraClient.class.getDeclaredMethod("extractProjectKeyFromJQL", String.class);
+        method.setAccessible(true);
+
+        assertNotEquals("IN", method.invoke(spyClient, "parent in (PSR-18,PSR-17)"));
+        assertEquals("PROJ", method.invoke(spyClient, "project = PROJ AND status = Open"));
+        assertEquals("TEAM", method.invoke(spyClient, "key = TEAM-123"));
+    }
+
 }

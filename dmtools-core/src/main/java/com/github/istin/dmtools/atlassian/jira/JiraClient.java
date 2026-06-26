@@ -1970,17 +1970,29 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return cached != null ? cached : new ArrayList<>();
     }
 
+    private static final Set<String> JQL_KEYWORDS = new HashSet<>(Arrays.asList(
+            "AND", "OR", "NOT", "IN", "IS", "WAS", "CHANGED", "EMPTY", "NULL",
+            "ORDER", "BY", "ASC", "DESC", "LIKE", "CONTAINS", "~", "!=", "<=", ">="
+    ));
+
+    private boolean isJqlKeyword(String value) {
+        return value != null && JQL_KEYWORDS.contains(value.toUpperCase(Locale.ROOT));
+    }
+
     private String extractProjectKeyFromJQL(String jql) {
         if (jql == null || jql.trim().isEmpty()) {
             return "";
         }
 
-        String upperJql = jql.toUpperCase();
+        String upperJql = jql.toUpperCase(Locale.ROOT);
         // Sort by length descending so longer keys (e.g. "MYPROJ") are checked before shorter ones (e.g. "MY")
         Optional<String> match = getKnownProjectKeys().stream()
                 .sorted(Comparator.comparingInt(String::length).reversed())
                 .filter(key -> {
-                    String upperKey = key.toUpperCase();
+                    String upperKey = key.toUpperCase(Locale.ROOT);
+                    if (isJqlKeyword(upperKey)) {
+                        return false;
+                    }
                     return upperJql.contains(upperKey + "-")
                             || Pattern.compile("\\b" + Pattern.quote(upperKey) + "\\b").matcher(upperJql).find();
                 })
@@ -1997,16 +2009,20 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 "\\bproject\\s*(?:=|in)\\s*[\"'(]?([A-Z][A-Z0-9_]+)[\"')]?", Pattern.CASE_INSENSITIVE
         ).matcher(jql);
         if (projectMatcher.find()) {
-            String extracted = projectMatcher.group(1).toUpperCase();
-            logger.debug("Extracted project key '{}' from JQL via pattern (not in member list): {}", extracted, jql);
-            return extracted;
+            String extracted = projectMatcher.group(1).toUpperCase(Locale.ROOT);
+            if (!isJqlKeyword(extracted)) {
+                logger.debug("Extracted project key '{}' from JQL via pattern (not in member list): {}", extracted, jql);
+                return extracted;
+            }
         }
         // Also try to extract from a ticket key pattern like "MYTUBE-123"
         java.util.regex.Matcher keyMatcher = Pattern.compile("\\b([A-Z][A-Z0-9_]+)-\\d+\\b").matcher(upperJql);
-        if (keyMatcher.find()) {
+        while (keyMatcher.find()) {
             String extracted = keyMatcher.group(1);
-            logger.debug("Extracted project key '{}' from ticket key pattern in JQL: {}", extracted, jql);
-            return extracted;
+            if (!isJqlKeyword(extracted)) {
+                logger.debug("Extracted project key '{}' from ticket key pattern in JQL: {}", extracted, jql);
+                return extracted;
+            }
         }
 
         return "";

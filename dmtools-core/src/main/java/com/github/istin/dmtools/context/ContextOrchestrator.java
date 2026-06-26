@@ -149,7 +149,7 @@ public class ContextOrchestrator {
                         } catch (Exception e) {
                             long uriProcessDuration = System.currentTimeMillis() - uriProcessStart;
                             logger.info("TIMING: uriToObject() for {} failed after {}ms: {}", uri, uriProcessDuration, e.getMessage());
-                            e.printStackTrace();
+                            logger.debug("uriToObject() failed for {}", uri, e);
                             return new ObjectUriPair(uri, null);
                         }
                     });

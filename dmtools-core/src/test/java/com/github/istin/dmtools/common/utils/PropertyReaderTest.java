@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -438,6 +439,56 @@ class PropertyReaderTest {
             } finally {
                 PropertyReader.clearOverrides();
             }
+        }
+    }
+
+    @Test
+    @DisplayName("getJiraIssueIgnorePrefixes() returns empty set by default")
+    void testGetJiraIssueIgnorePrefixes_DefaultValue() {
+        Set<String> result = propertyReader.getJiraIssueIgnorePrefixes();
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("getJiraIssueAllowedPrefixes() returns empty set by default")
+    void testGetJiraIssueAllowedPrefixes_DefaultValue() {
+        Set<String> result = propertyReader.getJiraIssueAllowedPrefixes();
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("getJiraIssueIgnorePrefixes() parses comma-separated values and upper-cases them")
+    void testGetJiraIssueIgnorePrefixes_Parsing() {
+        Map<String, String> overrides = new java.util.HashMap<>();
+        overrides.put(PropertyReader.JIRA_ISSUE_IGNORE_PREFIXES, "PSR, rfc ,CVE");
+        PropertyReader.setOverrides(overrides);
+        try {
+            Set<String> result = new PropertyReader().getJiraIssueIgnorePrefixes();
+            assertEquals(3, result.size());
+            assertTrue(result.contains("PSR"));
+            assertTrue(result.contains("RFC"));
+            assertTrue(result.contains("CVE"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    @DisplayName("getJiraIssueAllowedPrefixes() parses comma-separated values and upper-cases them")
+    void testGetJiraIssueAllowedPrefixes_Parsing() {
+        Map<String, String> overrides = new java.util.HashMap<>();
+        overrides.put(PropertyReader.JIRA_ISSUE_ALLOWED_PREFIXES, "PROJ, TEAM, PLATFORM");
+        PropertyReader.setOverrides(overrides);
+        try {
+            Set<String> result = new PropertyReader().getJiraIssueAllowedPrefixes();
+            assertEquals(3, result.size());
+            assertTrue(result.contains("PROJ"));
+            assertTrue(result.contains("TEAM"));
+            assertTrue(result.contains("PLATFORM"));
+        } finally {
+            PropertyReader.clearOverrides();
         }
     }
 }
