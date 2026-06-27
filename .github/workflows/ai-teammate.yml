@@ -71,7 +71,7 @@ jobs:
 
       - name: Cache npm global packages
         if: vars.AI_AGENT_PROVIDER == 'copilot'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.npm-global
@@ -114,7 +114,7 @@ jobs:
         run: bash agents/setup/cache.sh keys dmtools:v1.7.196 codegraph
 
       - name: Cache DMTools
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.DMTOOLS_CACHE_PATH }}
           key: ${{ env.DMTOOLS_CACHE_KEY }}
@@ -122,7 +122,7 @@ jobs:
             dmtools-
 
       - name: Cache CodeGraph binary
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CODEGRAPH_CACHE_PATH }}
           key: ${{ env.CODEGRAPH_CACHE_KEY }}
@@ -131,7 +131,7 @@ jobs:
             ${{ runner.os }}-npm-global-
 
       - name: Cache CodeGraph index
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CODEGRAPH_INDEX_CACHE_PATH }}
           key: ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-${{ github.sha }}
