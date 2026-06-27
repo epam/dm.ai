@@ -27,7 +27,7 @@ jobs:
           cache: 'gradle'
 
       - name: Cache OWASP Dependency-Check data
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/dependency-check-data
           key: dependency-check-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle.properties') }}
