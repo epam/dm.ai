@@ -129,6 +129,12 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("includeParentConfluence")
         private boolean includeParentConfluence = true;
 
+        @SerializedName("excludedEnvVariables")
+        private String[] excludedEnvVariables;
+
+        @SerializedName("excludedEnvRegexes")
+        private String[] excludedEnvRegexes;
+
     }
 
     /**
@@ -554,8 +560,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                         logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
                     }
 
-                    cliResult = cliHelper.executeCliCommandsWithResult(finalCliCommands, projectRoot, null,
-                            timerRunnable, timerIntervalSeconds, liveCliOutput);
+                    cliResult = cliHelper.executeCliCommandsWithResult(
+                            finalCliCommands,
+                            projectRoot,
+                            null,
+                            timerRunnable,
+                            timerIntervalSeconds,
+                            liveCliOutput,
+                            false,
+                            expertParams.getExcludedEnvVariables(),
+                            expertParams.getExcludedEnvRegexes());
                     
                     // Append CLI responses to knownInfo if not empty
                     StringBuilder cliResponses = cliResult.getCommandResponses();
