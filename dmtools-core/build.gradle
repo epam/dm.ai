@@ -146,7 +146,7 @@ dependencies {
         force "org.apache.logging.log4j:log4j-core:${versions.log4j}"
         force "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
         force "io.swagger.core.v3:swagger-annotations:2.2.27"
-        force "org.jboss.logging:jboss-logging:3.6.1.Final"
+        force "org.jboss.logging:jboss-logging:3.6.3.Final"
         force "org.apache.poi:poi:${versions.poi}"
         force "org.apache.poi:poi-ooxml:${versions.poi}"
         force "commons-io:commons-io:2.18.0"
