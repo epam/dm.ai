@@ -453,6 +453,10 @@ dmtools Teammate --inputJql "key = PROJ-123"
   - Each index has `integration` (index name) and `storagePath` (path to index)
 - `systemRequestCommentAlias` - Alias for system request in comments
 - `ignoreClonedByRelationship` - Exclude tickets linked via "is cloned by" from AI context (default: **true**). Prevents cloned duplicates from overloading the context.
+- `excludedEnvVariables` - Array of exact env variable names to exclude from the CLI subprocess (optional)
+- `excludedEnvRegexes` - Array of regex patterns; matching env variable names are excluded from the CLI subprocess (optional)
+  - Use these to prevent sensitive values from being passed to CLI agents.
+  - Default: `null` (no filtering, backward compatible).
 
 **Index Configuration** (IndexConfig):
 ```json
