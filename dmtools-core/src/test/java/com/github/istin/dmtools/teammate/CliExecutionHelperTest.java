@@ -1142,4 +1142,96 @@ public class CliExecutionHelperTest {
         verify(confluence, times(1)).contentByUrl(urlA);
         verify(confluence, times(1)).contentByUrl(urlB);
     }
+
+    // ── env variable exclusion tests ─────────────────────────────────────────
+
+    @Test
+    void testExecuteCliCommands_ExcludesExactEnvVariables() {
+        com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(
+                Map.of("KEEP_ME", "ok", "DROP_ME", "secret", "ALSO_DROP", "secret2")
+        );
+        try {
+            String[] commands = {"echo test"};
+            String[] excluded = {"DROP_ME", "ALSO_DROP"};
+            try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+                mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                        .thenReturn(Map.of());
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                        .thenReturn("test");
+
+                cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false, excluded, null);
+
+                mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                        anyString(),
+                        isNull(),
+                        argThat((Map<String, String> env) ->
+                                "ok".equals(env.get("KEEP_ME"))
+                                && !env.containsKey("DROP_ME")
+                                && !env.containsKey("ALSO_DROP")
+                        ),
+                        any()
+                ));
+            }
+        } finally {
+            com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testExecuteCliCommands_ExcludesEnvVariablesByRegex() {
+        com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(
+                Map.of("API_KEY", "secret1", "MY_API_KEY", "secret2", "PUBLIC", "ok")
+        );
+        try {
+            String[] commands = {"echo test"};
+            String[] excludedRegexes = {".*API_KEY$"};
+            try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+                mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                        .thenReturn(Map.of());
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                        .thenReturn("test");
+
+                cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false, null, excludedRegexes);
+
+                mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                        anyString(),
+                        isNull(),
+                        argThat((Map<String, String> env) ->
+                                !env.containsKey("API_KEY")
+                                && !env.containsKey("MY_API_KEY")
+                                && "ok".equals(env.get("PUBLIC"))
+                        ),
+                        any()
+                ));
+            }
+        } finally {
+            com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testFilterEnvVariables_BothExactAndRegexExclusions() {
+        Map<String, String> env = Map.of(
+                "KEEP", "ok",
+                "DROP_EXACT", "secret1",
+                "DROP_REGEX", "secret2"
+        );
+
+        Map<String, String> result = CliExecutionHelper.filterEnvVariables(
+                env,
+                new String[]{"DROP_EXACT"},
+                new String[]{"DROP_.*"}
+        );
+
+        assertEquals(1, result.size());
+        assertEquals("ok", result.get("KEEP"));
+        assertFalse(result.containsKey("DROP_EXACT"));
+        assertFalse(result.containsKey("DROP_REGEX"));
+    }
+
+    @Test
+    void testFilterEnvVariables_NullInputs_ReturnsOriginal() {
+        Map<String, String> env = Map.of("KEY", "value");
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, null, null));
+    }
 }
