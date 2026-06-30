@@ -747,12 +747,56 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             } else {
                 logger.info("Output type is 'none', skipping publishing results for ticket {}", ticket.getKey());
             }
+
+            // Post completion comment so the initiator is notified when the Teammate run finishes
+            postCompletionComment(trackerClient, ticket.getTicketKey(), ciRunUrl, initiator, expertParams);
+
             results.add(new ResultItem(ticket.getTicketKey(), response));
             return false;
         }, inputJQL, trackerClient.getExtendedQueryFields());
         return results;
     }
 
+
+    /**
+     * Builds the completion comment text that tags the initiator and references the CI run URL.
+     * If tagging the initiator fails, the comment is built without the tag so the notification
+     * still goes out.
+     */
+    static String buildCompletionComment(String initiator, String ciRunUrl, TrackerClient trackerClient) {
+        if (initiator != null && !initiator.isEmpty()) {
+            try {
+                return trackerClient.tag(initiator) + ", \n\n✅ Teammate run completed. CI Run: " + ciRunUrl;
+            } catch (Exception e) {
+                logger.warn("Failed to tag initiator {} in completion comment — posting without tag. Error: {}",
+                        initiator, e.getMessage());
+            }
+        }
+        return "✅ Teammate run completed. CI Run: " + ciRunUrl;
+    }
+
+    /**
+     * Posts a completion comment to the ticket when a CI run URL is configured.
+     * Tags the initiator if available. Errors are logged and swallowed so the job continues.
+     */
+    void postCompletionComment(TrackerClient trackerClient, String ticketKey, String ciRunUrl, String initiator, TeammateParams params) {
+        if (ciRunUrl == null || ciRunUrl.isEmpty()) {
+            return;
+        }
+        if (!shouldPostComments(params)) {
+            logger.debug("CI run URL provided ({}) but comments disabled - not posting completion comment to ticket {}",
+                    ciRunUrl, ticketKey);
+            return;
+        }
+        try {
+            String completionComment = buildCompletionComment(initiator, ciRunUrl, trackerClient);
+            trackerClient.postComment(ticketKey, agentNamePrefix(params) + completionComment);
+            logger.info("Posted completion comment for ticket {} with CI run trace", ticketKey);
+        } catch (Exception e) {
+            logger.warn("Failed to post completion comment for ticket {} — continuing. Error: {}",
+                    ticketKey, e.getMessage());
+        }
+    }
 
     /**
      * Resolves the effective CLI prompts by merging base {@code cliPrompts} with tracker-specific
