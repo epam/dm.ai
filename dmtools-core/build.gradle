@@ -80,7 +80,7 @@ dependencies {
 
     // Guava and its dependencies
     api "com.google.guava:guava:${versions.guava}"
-    api 'com.google.guava:failureaccess:1.0.1'
+    api 'com.google.guava:failureaccess:1.0.3'
     api 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
 
     // Playwright dependency moved to dmtools-automation module
@@ -139,7 +139,7 @@ dependencies {
     resolutionStrategy {
         // Force specific versions for key dependencies
         force "com.google.guava:guava:${versions.guava}"
-        force "com.google.guava:failureaccess:1.0.1"
+        force "com.google.guava:failureaccess:1.0.3"
         force "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
         force "org.slf4j:slf4j-api:${versions.slf4j}"
         force "org.apache.logging.log4j:log4j-api:${versions.log4j}"
