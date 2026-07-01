@@ -974,6 +974,41 @@ validate_not_html() {
 }
 
 # Download file with progress and validation
+# Validate a downloaded file (JAR integrity, shell script sanity, HTML error pages).
+# Returns 0 on success, 1 on failure. Caller is responsible for removing the file on failure.
+validate_downloaded_file() {
+    local output="$1"
+    local desc="$2"
+    local url="$3"
+
+    # JAR files must be valid zip archives
+    if [[ "$output" == *.jar ]] || [[ "$desc" == *"JAR"* ]]; then
+        local jar_valid=false
+        if command -v jar >/dev/null 2>&1 && jar tf "$output" >/dev/null 2>&1; then
+            jar_valid=true
+        elif command -v unzip >/dev/null 2>&1 && unzip -t "$output" >/dev/null 2>&1; then
+            jar_valid=true
+        fi
+        if [ "$jar_valid" != true ]; then
+            warn "Downloaded JAR file appears to be corrupted (invalid zip)."
+            return 1
+        fi
+    fi
+
+    local require_shell="false"
+    # Check if this is a shell script download
+    if [[ "$desc" == *"shell script"* ]] || [[ "$url" == *.sh ]]; then
+        require_shell="true"
+    fi
+
+    if ! validate_not_html "$output" "$desc" "$require_shell"; then
+        warn "Downloaded file appears to be invalid (HTML error page or not a valid shell script)."
+        return 1
+    fi
+
+    return 0
+}
+
 download_file() {
     local url="$1"
     local output="$2"
@@ -996,7 +1031,11 @@ download_file() {
             curl_log=$(mktemp)
             local curl_exit_code=0
 
-            curl -L --fail --connect-timeout 30 --max-time 1200 -s -S "$url" -o "$output" >"$curl_log" 2>&1 || curl_exit_code=$?
+            # Resume partial downloads, abort on stalls (<1KB/s for 30s), and keep
+            # real error messages visible despite -s progress suppression.
+            curl -L --fail --connect-timeout 30 --max-time 1200 \
+                 -C - --speed-time 30 --speed-limit 1024 \
+                 -s -S "$url" -o "$output" >"$curl_log" 2>&1 || curl_exit_code=$?
 
             if [ -s "$curl_log" ]; then
                 cat "$curl_log" >&2
@@ -1006,19 +1045,34 @@ download_file() {
             if [ $curl_exit_code -eq 0 ]; then
                 download_success=true
             else
-                # Map curl exit codes to messages
+                # Map curl exit codes to messages.
+                # For transient network/timeout errors we keep the partial file so
+                # the next attempt can resume (-C -). For 404/write/range errors
+                # we wipe the partial file and start fresh.
                 case $curl_exit_code in
-                    6|7) warn "Network error or timeout when downloading $desc. Retrying..." ;;
-                    22) warn "HTTP error (404 or similar) when downloading $desc. Retrying..." ;;
-                    23) warn "Write error when saving $desc. Retrying..." ;;
-                    28) warn "Transfer timeout when downloading $desc. Retrying..." ;;
-                    *) warn "Download failed (curl exit code: $curl_exit_code). Retrying..." ;;
+                    6|7|28|35|56)
+                        warn "Network/timeout error (curl $curl_exit_code) when downloading $desc. Retrying with resume..."
+                        ;;
+                    33)
+                        warn "Server does not support resume for $desc. Restarting download..."
+                        rm -f "$output" 2>/dev/null
+                        ;;
+                    22)
+                        warn "HTTP error (404 or similar) when downloading $desc. Retrying..."
+                        rm -f "$output" 2>/dev/null
+                        ;;
+                    23)
+                        warn "Write error when saving $desc. Retrying..."
+                        rm -f "$output" 2>/dev/null
+                        ;;
+                    *)
+                        warn "Download failed (curl exit code: $curl_exit_code). Retrying..."
+                        ;;
                 esac
-                rm -f "$output" 2>/dev/null
             fi
         elif command -v wget >/dev/null 2>&1; then
-            # Use wget with better error handling
-            if wget --progress=bar --tries=1 --timeout=30 "$url" -O "$output" 2>&1; then
+            # Use wget with resume support and a reasonable overall timeout
+            if wget -c --progress=bar --tries=1 --timeout=60 --read-timeout=30 "$url" -O "$output" 2>&1; then
                 download_success=true
             else
                 warn "Download failed. Retrying..."
@@ -1028,7 +1082,18 @@ download_file() {
         fi
         
         if [ "$download_success" = true ]; then
-            break
+            # Validate while we're still inside the retry loop so a corrupted or
+            # HTML-wrapped download counts as a retryable failure.
+            if [ "$validate" = "true" ]; then
+                if validate_downloaded_file "$output" "$desc" "$url"; then
+                    return 0
+                fi
+                warn "Validation failed for $desc. Retrying..."
+                rm -f "$output" 2>/dev/null
+                download_success=false
+            else
+                return 0
+            fi
         fi
         
         retry_count=$((retry_count + 1))
@@ -1039,49 +1104,14 @@ download_file() {
         fi
     done
     
-    # Check if download was successful
-    if [ ! -f "$output" ] || [ ! -s "$output" ]; then
-        error "Failed to download $desc from $url after $max_retries attempts.
-        
+    error "Failed to download $desc from $url after $max_retries attempts.
+    
 Possible causes:
   - Network connectivity issues
   - GitHub service temporarily unavailable (503 error)
   - File not found in release (404 error)
   
 Please try again later or check: https://github.com/${REPO}/releases/latest"
-    fi
-    
-    # Validate the downloaded file if requested
-    if [ "$validate" = "true" ]; then
-        # JAR files must be valid zip archives
-        if [[ "$output" == *.jar ]] || [[ "$desc" == *"JAR"* ]]; then
-            local jar_valid=false
-            if command -v jar >/dev/null 2>&1 && jar tf "$output" >/dev/null 2>&1; then
-                jar_valid=true
-            elif command -v unzip >/dev/null 2>&1 && unzip -t "$output" >/dev/null 2>&1; then
-                jar_valid=true
-            fi
-            if [ "$jar_valid" != true ]; then
-                warn "Downloaded JAR file appears to be corrupted (invalid zip). Removing invalid file."
-                rm -f "$output"
-                return 1
-            fi
-        fi
-
-        local require_shell="false"
-        # Check if this is a shell script download
-        if [[ "$desc" == *"shell script"* ]] || [[ "$url" == *.sh ]]; then
-            require_shell="true"
-        fi
-        
-        if ! validate_not_html "$output" "$desc" "$require_shell"; then
-            warn "Downloaded file appears to be invalid (HTML error page or not a valid shell script). Removing invalid file."
-            rm -f "$output"
-            return 1
-        fi
-    fi
-    
-    return 0
 }
 
 # Create installation directory
