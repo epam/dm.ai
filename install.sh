@@ -1489,12 +1489,120 @@ download_script_from_repo() {
     return 1
 }
 
-# Download DMTools JAR
+# Download DMTools checksum file (best-effort; returns 0 even if not present)
+download_checksum_file() {
+    local version="$1"
+    local checksum_url="https://github.com/${REPO}/releases/download/${version}/dmtools-checksums.sha256"
+    local checksum_path="$INSTALL_DIR/dmtools-checksums.sha256"
+
+    # Try standard release URL
+    if download_file "$checksum_url" "$checksum_path" "DMTools checksums" "false" >/dev/null 2>&1; then
+        echo "$checksum_path"
+        return 0
+    fi
+
+    # Try GitHub API direct URL
+    local api_asset_url
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-checksums.sha256")
+    if [ -n "$api_asset_url" ]; then
+        if download_file "$api_asset_url" "$checksum_path" "DMTools checksums (from API)" "false" >/dev/null 2>&1; then
+            echo "$checksum_path"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Verify the downloaded JAR against the published SHA-256 checksum (if available).
+# Returns 0 when verified or when no checksum is available, 1 on mismatch.
+verify_jar_checksum() {
+    local version="$1"
+    local checksum_path
+    checksum_path=$(download_checksum_file "$version") || return 0
+
+    if [ ! -s "$checksum_path" ]; then
+        return 0
+    fi
+
+    local expected_checksum
+    expected_checksum=$(grep -o "^[a-f0-9A-F]\{64\}  dmtools-${version}-all.jar" "$checksum_path" 2>/dev/null | awk '{print $1}')
+    if [ -z "$expected_checksum" ]; then
+        warn "Could not find JAR checksum in $checksum_path — skipping checksum verification"
+        return 0
+    fi
+
+    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+        warn "Neither sha256sum nor shasum is available — skipping checksum verification"
+        return 0
+    fi
+
+    local actual_checksum
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual_checksum=$(sha256sum "$JAR_PATH" | awk '{print $1}')
+    else
+        actual_checksum=$(shasum -a 256 "$JAR_PATH" | awk '{print $1}')
+    fi
+
+    if [ "$expected_checksum" != "$actual_checksum" ]; then
+        warn "JAR checksum mismatch! Expected: $expected_checksum, got: $actual_checksum"
+        return 1
+    fi
+
+    info "JAR checksum verified successfully."
+    return 0
+}
+
+# Download DMTools JAR with fallback to the GitHub API direct asset URL.
+# Verifies SHA-256 checksum when the checksum file is published in the release.
 download_dmtools_jar() {
     local version="$1"
     local jar_url="https://github.com/${REPO}/releases/download/${version}/dmtools-${version}-all.jar"
 
-    download_file "$jar_url" "$JAR_PATH" "DMTools JAR"
+    # Method 1: Standard release URL
+    if download_file "$jar_url" "$JAR_PATH" "DMTools JAR"; then
+        if verify_jar_checksum "$version"; then
+            return 0
+        fi
+        warn "Downloaded JAR failed checksum verification, retrying from alternative source..."
+        rm -f "$JAR_PATH"
+    fi
+
+    # Method 2: GitHub API direct asset URL (different CDN/blob, may work when
+    # the redirect-based release URL is slow or blocked)
+    warn "Standard release URL failed, trying GitHub API for direct asset URL..."
+    local api_asset_url
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-${version}-all.jar")
+
+    if [ -n "$api_asset_url" ]; then
+        if download_file "$api_asset_url" "$JAR_PATH" "DMTools JAR (from API)"; then
+            if verify_jar_checksum "$version"; then
+                return 0
+            fi
+            warn "JAR from API failed checksum verification."
+            rm -f "$JAR_PATH"
+        fi
+    fi
+
+    # All methods failed
+    error "Failed to download DMTools JAR for ${version}.
+
+Tried:
+  1. GitHub release URL: $jar_url
+  2. GitHub API asset URL: ${api_asset_url:-'(not available)'}
+
+The JAR file is required to run DMTools.
+
+Possible causes:
+  - Network connectivity issues or a very slow/unstable connection
+  - GitHub service temporarily unavailable (503 error)
+  - Release asset not found (404 error) — the version may not exist yet
+
+You can check available releases at:
+  https://github.com/${REPO}/releases
+
+Or try installing the previous known-good version manually:
+  curl -fsSL https://github.com/${REPO}/releases/download/vPREVIOUS/install.sh | bash -s -- vPREVIOUS"
 }
 
 # Download DMTools shell script

@@ -531,6 +531,21 @@ jobs:
           
           echo "Release notes generated"
       
+      - name: Generate CLI Checksums
+        run: |
+          VERSION="${{ needs.version-and-tag.outputs.version }}"
+          cd cli
+          sha256sum \
+            "dmtools-v${VERSION}-all.jar" \
+            install.sh \
+            install \
+            install.bat \
+            install.ps1 \
+            dmtools.sh \
+            > dmtools-checksums.sha256
+          echo "CLI checksums generated:"
+          cat dmtools-checksums.sha256
+
       - name: Create Unified Release
         uses: softprops/action-gh-release@v3
         env:
@@ -548,6 +563,7 @@ jobs:
             cli/install.bat
             cli/install.ps1
             cli/dmtools.sh
+            cli/dmtools-checksums.sha256
             skill/dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.zip
             skill/dmtools-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
             skill/dmtools-skill.zip
