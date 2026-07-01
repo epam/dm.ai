@@ -331,3 +331,25 @@ shadowJar {
     // Move the JAR to the root build directory
     destinationDirectory.set(file("${project.rootDir}/build/libs"))
 }
+
+/**
+ * Smoke test that verifies the assembled shadow JAR can execute
+ * `dmtools list` successfully. This catches packaging issues such as a
+ * truncated JAR or a missing main-class manifest before the release is cut.
+ */
+tasks.named('test') {
+    // Smoke test for the packaged shadow JAR is run by shadowJarSmokeTest instead.
+    exclude 'com/github/istin/dmtools/job/CliJarSmokeTest.class'
+}
+
+task shadowJarSmokeTest(type: Test) {
+    description = 'Smoke test that runs the built shadow JAR with dmtools list'
+    group = 'verification'
+    dependsOn shadowJar
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include 'com/github/istin/dmtools/job/CliJarSmokeTest.class'
+    systemProperty 'dmtools.shadow.jar.path', shadowJar.archiveFile.get().asFile.absolutePath
+}
+
+check.dependsOn shadowJarSmokeTest
