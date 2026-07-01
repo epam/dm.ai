@@ -557,7 +557,14 @@ installer_managed_artifacts_present() {
 }
 
 installer_managed_jar_present() {
-    [ -s "$JAR_PATH" ]
+    [ -s "$JAR_PATH" ] || return 1
+    if command -v jar >/dev/null 2>&1 && jar tf "$JAR_PATH" >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v unzip >/dev/null 2>&1 && unzip -t "$JAR_PATH" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
 }
 
 installer_managed_script_present() {
@@ -983,12 +990,22 @@ download_file() {
         
         if command -v curl >/dev/null 2>&1; then
             # Use curl with better error handling
-            # For large files (like JAR), skip HTTP code check and download directly
-            # This avoids double download and handles redirects better
-            if curl -L --fail --connect-timeout 30 --max-time 300 "$url" -o "$output" 2>&1 | grep -v "^[[:space:]]*[0-9]"; then
+            # For large files (like JAR), use a long max-time and suppress the
+            # progress bar while still surfacing real errors.
+            local curl_log
+            curl_log=$(mktemp)
+            local curl_exit_code=0
+
+            curl -L --fail --connect-timeout 30 --max-time 1200 -s -S "$url" -o "$output" >"$curl_log" 2>&1 || curl_exit_code=$?
+
+            if [ -s "$curl_log" ]; then
+                cat "$curl_log" >&2
+            fi
+            rm -f "$curl_log"
+
+            if [ $curl_exit_code -eq 0 ]; then
                 download_success=true
             else
-                local curl_exit_code=$?
                 # Map curl exit codes to messages
                 case $curl_exit_code in
                     6|7) warn "Network error or timeout when downloading $desc. Retrying..." ;;
@@ -1036,6 +1053,21 @@ Please try again later or check: https://github.com/${REPO}/releases/latest"
     
     # Validate the downloaded file if requested
     if [ "$validate" = "true" ]; then
+        # JAR files must be valid zip archives
+        if [[ "$output" == *.jar ]] || [[ "$desc" == *"JAR"* ]]; then
+            local jar_valid=false
+            if command -v jar >/dev/null 2>&1 && jar tf "$output" >/dev/null 2>&1; then
+                jar_valid=true
+            elif command -v unzip >/dev/null 2>&1 && unzip -t "$output" >/dev/null 2>&1; then
+                jar_valid=true
+            fi
+            if [ "$jar_valid" != true ]; then
+                warn "Downloaded JAR file appears to be corrupted (invalid zip). Removing invalid file."
+                rm -f "$output"
+                return 1
+            fi
+        fi
+
         local require_shell="false"
         # Check if this is a shell script download
         if [[ "$desc" == *"shell script"* ]] || [[ "$url" == *.sh ]]; then
