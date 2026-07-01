@@ -71,7 +71,7 @@ dependencies {
 
     // Document processing
     //TODO check tests, some markdown tests are failing if update to 1.21.2
-    api 'org.jsoup:jsoup:1.18.3'
+    api 'org.jsoup:jsoup:1.22.2'
     // Apache POI dependencies - ensure consistent versions
     api "org.apache.poi:poi:${versions.poi}"
     api "org.apache.poi:poi-ooxml:${versions.poi}"
