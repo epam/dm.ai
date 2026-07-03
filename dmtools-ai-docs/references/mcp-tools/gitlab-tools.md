@@ -1,6 +1,6 @@
 # GITLAB MCP Tools
 
-**Total Tools**: 22
+**Total Tools**: 23
 
 ## Quick Reference
 
@@ -36,6 +36,7 @@ const result = gitlab_remove_mr_label(...);
 | `gitlab_get_mr_activities` | Get all activities for a GitLab merge request including approvals and general discussion notes. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr_comments` | Get all comments for a GitLab merge request, including both inline code review comments (DiffNote) and general discussion notes. Excludes system-generated notes. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr_diff` | Get diff stats and changed files for a GitLab merge request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_mr_diff_text` | Get the raw unified diff text for a GitLab merge request (suitable for locating file/line positions, e.g. for inline review comments). | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr_discussions` | Get all discussion threads for a GitLab merge request. Each discussion contains notes (comments) and a resolved status. Use the discussion id with gitlab_resolve_mr_thread. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_pipeline_jobs` | List jobs for a GitLab CI pipeline. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`pipelineId` (string, **required**) |
 | `gitlab_list_mrs` | List merge requests for a GitLab project. State can be 'opened', 'closed', 'merged', or 'all'. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`state` (string, **required**) |
@@ -424,6 +425,36 @@ dmtools gitlab_get_mr_diff "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_get_mr_diff("repository", "pullRequestId");
+```
+
+---
+
+### `gitlab_get_mr_diff_text`
+
+Get the raw unified diff text for a GitLab merge request (suitable for locating file/line positions, e.g. for inline review comments).
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_get_mr_diff_text "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_mr_diff_text("repository", "pullRequestId");
 ```
 
 ---

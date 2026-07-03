@@ -1,3 +1,10 @@
+## [skill-v1.0.29] - 2026-07-03
+
+### Added
+
+- **New GitLab MCP tool**: `gitlab_get_mr_diff_text` — returns the raw unified diff text for a GitLab merge request (as a `String`), suitable for locating file/line positions (e.g. inline PR review comments). Complements the existing `gitlab_get_mr_diff` (returns `IDiffStats`, stats-only) the same way `github_get_pr_diff_text` complements `github_get_pr_diff` on the GitHub side.
+- Updated **Total tools** count in `gitlab-tools.md`: 22 → 23, and in `mcp-tools/README.md`: 270 → 271
+
 ## [skill-v1.0.28] - 2026-05-01
 
 ### Changed
