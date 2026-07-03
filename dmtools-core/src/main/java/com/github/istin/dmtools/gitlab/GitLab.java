@@ -396,6 +396,66 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         return parseDiffStats(new JSONObject(mergeRequestChanges));
     }
 
+    @MCPTool(
+        name = "gitlab_get_mr_diff_text",
+        description = "Get the raw unified diff text for a GitLab merge request (suitable for locating file/line positions, e.g. for inline review comments).",
+        integration = "gitlab",
+        category = "merge_requests"
+    )
+    public String getPullRequestDiffText(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestID) throws IOException {
+        String mergeRequestChanges = getMergeRequestChanges(workspace, repository, pullRequestID);
+        if (mergeRequestChanges == null) {
+            return "";
+        }
+        return buildUnifiedDiffText(new JSONObject(mergeRequestChanges));
+    }
+
+    /**
+     * The GitLab "changes" API returns each file's diff as a bare hunk body (starting at
+     * {@code @@ ... @@}), without the leading {@code diff --git a/... b/...} / {@code --- a/...}
+     * / {@code +++ b/...} header lines that a standard {@code git diff}/unified diff produces.
+     * Callers that parse unified diff text (e.g. to map an inline review comment to a specific
+     * file/line) need those headers to identify which file a hunk belongs to, so we reconstruct
+     * them here from the per-change metadata.
+     */
+    private static String buildUnifiedDiffText(JSONObject response) {
+        JSONArray changes = response.optJSONArray("changes");
+        if (changes == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < changes.length(); i++) {
+            JSONObject change = changes.getJSONObject(i);
+            String oldPath = change.optString("old_path", change.optString("new_path", ""));
+            String newPath = change.optString("new_path", oldPath);
+            boolean isNewFile = change.optBoolean("new_file", false);
+            boolean isDeletedFile = change.optBoolean("deleted_file", false);
+            String diff = change.optString("diff", "");
+
+            sb.append("diff --git a/").append(oldPath).append(" b/").append(newPath).append("\n");
+            if (isNewFile) {
+                sb.append("new file mode 100644\n");
+                sb.append("--- /dev/null\n");
+                sb.append("+++ b/").append(newPath).append("\n");
+            } else if (isDeletedFile) {
+                sb.append("deleted file mode 100644\n");
+                sb.append("--- a/").append(oldPath).append("\n");
+                sb.append("+++ /dev/null\n");
+            } else {
+                sb.append("--- a/").append(oldPath).append("\n");
+                sb.append("+++ b/").append(newPath).append("\n");
+            }
+            sb.append(diff);
+            if (!diff.endsWith("\n")) {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
     private boolean isMRChangesError = false;
     private String getMergeRequestChanges(String workspace, String repository, String pullRequestId) throws IOException {
         if (isMRChangesError) {
