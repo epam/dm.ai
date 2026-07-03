@@ -1489,11 +1489,15 @@ download_script_from_repo() {
     return 1
 }
 
-# Download DMTools checksum file (best-effort; returns 0 even if not present)
+# Download DMTools checksum file (best-effort; returns 0 even if not present).
+# Any stale local checksum file is removed first so that a failed download does
+# not leave a corrupted file behind to be used by verify_jar_checksum.
 download_checksum_file() {
     local version="$1"
     local checksum_url="https://github.com/${REPO}/releases/download/${version}/dmtools-checksums.sha256"
     local checksum_path="$INSTALL_DIR/dmtools-checksums.sha256"
+
+    rm -f "$checksum_path" 2>/dev/null
 
     # Try standard release URL
     if download_file "$checksum_url" "$checksum_path" "DMTools checksums" "false" >/dev/null 2>&1; then
