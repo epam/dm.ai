@@ -974,6 +974,38 @@ validate_not_html() {
 }
 
 # Download file with progress and validation
+# Cross-platform file size in bytes.
+stat_file_size() {
+    local file="$1"
+    if stat -f%z "$file" >/dev/null 2>&1; then
+        stat -f%z "$file"
+    else
+        stat -c%s "$file"
+    fi
+}
+
+# Convert bytes to a human-readable string (e.g. 89MB).
+human_readable_size() {
+    local bytes="$1"
+    if ! [[ "$bytes" =~ ^[0-9]+$ ]]; then
+        echo "$bytes"
+        return
+    fi
+    if command -v numfmt >/dev/null 2>&1; then
+        numfmt --to=iec-i --suffix=B "$bytes" 2>/dev/null || echo "${bytes}B"
+        return
+    fi
+    if [ "$bytes" -ge 1073741824 ]; then
+        echo "$((bytes / 1073741824))GB"
+    elif [ "$bytes" -ge 1048576 ]; then
+        echo "$((bytes / 1048576))MB"
+    elif [ "$bytes" -ge 1024 ]; then
+        echo "$((bytes / 1024))KB"
+    else
+        echo "${bytes}B"
+    fi
+}
+
 # Validate a downloaded file (JAR integrity, shell script sanity, HTML error pages).
 # Returns 0 on success, 1 on failure. Caller is responsible for removing the file on failure.
 validate_downloaded_file() {
@@ -1025,24 +1057,46 @@ download_file() {
         
         if command -v curl >/dev/null 2>&1; then
             # Use curl with better error handling
-            # For large files (like JAR), use a long max-time and suppress the
-            # progress bar while still surfacing real errors.
             local curl_log
             curl_log=$(mktemp)
             local curl_exit_code=0
+            local is_jar=false
+            if [[ "$desc" == *"JAR"* ]] || [[ "$output" == *.jar ]]; then
+                is_jar=true
+            fi
 
-            # Resume partial downloads, abort on stalls (<1KB/s for 30s), and keep
-            # real error messages visible despite -s progress suppression.
-            curl -L --fail --connect-timeout 30 --max-time 1200 \
-                 -C - --speed-time 30 --speed-limit 1024 \
-                 -s -S "$url" -o "$output" >"$curl_log" 2>&1 || curl_exit_code=$?
+            # Show the user what is being downloaded and from where.
+            info "Downloading $desc from $url (attempt $((retry_count + 1))/$max_retries)..."
 
-            if [ -s "$curl_log" ]; then
-                cat "$curl_log" >&2
+            # For large JAR files, show a progress bar when stderr is a terminal;
+            # otherwise stay silent and surface errors after the fact.
+            if [ "$is_jar" = true ] && [ -t 2 ]; then
+                local resume_msg=""
+                if [ -f "$output" ] && [ -s "$output" ]; then
+                    resume_msg=" (resuming from $(human_readable_size "$(stat_file_size "$output")"))"
+                fi
+                [ -n "$resume_msg" ] && info "Resuming partial download$resume_msg"
+
+                local max_time=${DMTOOLS_DOWNLOAD_MAX_TIME:-3600}
+                curl -L --fail --connect-timeout 30 --max-time "$max_time" \
+                     -C - --speed-time 30 --speed-limit 1024 \
+                     --progress-bar "$url" -o "$output" 2>&1 || curl_exit_code=$?
+            else
+                # Resume partial downloads, abort on stalls (<1KB/s for 30s), and keep
+                # real error messages visible despite -s progress suppression.
+                local max_time=${DMTOOLS_DOWNLOAD_MAX_TIME:-3600}
+                curl -L --fail --connect-timeout 30 --max-time "$max_time" \
+                     -C - --speed-time 30 --speed-limit 1024 \
+                     -s -S "$url" -o "$output" >"$curl_log" 2>&1 || curl_exit_code=$?
+
+                if [ -s "$curl_log" ]; then
+                    cat "$curl_log" >&2
+                fi
             fi
             rm -f "$curl_log"
 
             if [ $curl_exit_code -eq 0 ]; then
+                info "Downloaded $desc ($(human_readable_size "$(stat_file_size "$output")"))"
                 download_success=true
             else
                 # Map curl exit codes to messages.
@@ -1072,7 +1126,11 @@ download_file() {
             fi
         elif command -v wget >/dev/null 2>&1; then
             # Use wget with resume support and a reasonable overall timeout
-            if wget -c --progress=bar --tries=1 --timeout=60 --read-timeout=30 "$url" -O "$output" 2>&1; then
+            info "Downloading $desc from $url (attempt $((retry_count + 1))/$max_retries) using wget..."
+            local wget_progress="--progress=bar"
+            [ -t 2 ] || wget_progress="--progress=dot:mega"
+            if wget -c $wget_progress --tries=1 --timeout=120 --read-timeout=30 "$url" -O "$output" 2>&1; then
+                info "Downloaded $desc ($(human_readable_size "$(stat_file_size "$output")"))"
                 download_success=true
             else
                 warn "Download failed. Retrying..."
@@ -1574,9 +1632,14 @@ download_dmtools_jar() {
 
     # Method 2: GitHub API direct asset URL (different CDN/blob, may work when
     # the redirect-based release URL is slow or blocked)
-    warn "Standard release URL failed, trying GitHub API for direct asset URL..."
+    info "Standard release URL failed or checksum mismatch. Trying GitHub API direct asset URL..."
     local api_asset_url
     api_asset_url=$(get_asset_url_from_api "$version" "dmtools-${version}-all.jar")
+    if [ -n "$api_asset_url" ]; then
+        info "Got API asset URL: $api_asset_url"
+    else
+        warn "Could not get direct asset URL from GitHub API."
+    fi
 
     if [ -n "$api_asset_url" ]; then
         if download_file "$api_asset_url" "$JAR_PATH" "DMTools JAR (from API)"; then
