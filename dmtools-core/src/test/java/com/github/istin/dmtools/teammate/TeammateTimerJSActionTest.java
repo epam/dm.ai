@@ -188,4 +188,65 @@ public class TeammateTimerJSActionTest {
 
         assertEquals(1, cliCompletedCount.get(), "CLI command should have completed despite timer exception");
     }
+
+    // ── CliExecutionHelper.runWithTimer (generic, reusable for any long-running phase,
+    //    e.g. wrapping postJSAction so a feedback-loop quality-gate retry also gets
+    //    periodic auto-save/auto-commit protection) ──────────────────────────────────
+
+    @Test
+    void testRunWithTimer_runsWorkEvenWithoutTimer() {
+        AtomicInteger workRuns = new AtomicInteger(0);
+        CliExecutionHelper.runWithTimer(null, 0, workRuns::incrementAndGet);
+        assertEquals(1, workRuns.get(), "work must run exactly once");
+    }
+
+    @Test
+    void testRunWithTimer_firesPeriodicallyWhileWorkRuns() throws InterruptedException {
+        AtomicInteger fireCount = new AtomicInteger(0);
+        CountDownLatch timerFired = new CountDownLatch(1);
+        Runnable timerAction = () -> {
+            fireCount.incrementAndGet();
+            timerFired.countDown();
+        };
+
+        CliExecutionHelper.runWithTimer(timerAction, 1, () -> {
+            try {
+                Thread.sleep(1200); // longer than the 1s timer interval
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        assertTrue(timerFired.await(1, TimeUnit.SECONDS), "timer should have already fired by the time work returns");
+        assertTrue(fireCount.get() >= 1, "timer should fire at least once while work runs");
+    }
+
+    @Test
+    void testRunWithTimer_firesFinalTickAfterWorkCompletes() {
+        AtomicInteger fireCount = new AtomicInteger(0);
+        Runnable timerAction = fireCount::incrementAndGet;
+
+        // Interval longer than the (near-instant) work, so the only firing is the final tick
+        CliExecutionHelper.runWithTimer(timerAction, 300, () -> { /* fast no-op work */ });
+
+        assertEquals(1, fireCount.get(), "final tick should fire exactly once after work completes");
+    }
+
+    @Test
+    void testRunWithTimer_timerExceptionDoesNotAbortWork() {
+        AtomicInteger workRuns = new AtomicInteger(0);
+        Runnable timerAction = () -> { throw new RuntimeException("timer boom"); };
+
+        CliExecutionHelper.runWithTimer(timerAction, 300, workRuns::incrementAndGet);
+
+        assertEquals(1, workRuns.get(), "work should complete despite timer exceptions");
+    }
+
+    @Test
+    void testRunWithTimer_workExceptionPropagatesAndStopsTimer() {
+        assertThrows(RuntimeException.class, () ->
+                CliExecutionHelper.runWithTimer(() -> {}, 300, () -> {
+                    throw new RuntimeException("work boom");
+                }));
+    }
 }
