@@ -467,6 +467,32 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             CliExecutionHelper.CliExecutionResult cliResult = null;
             Path inputContextPath = null;
 
+            // Build timer JS action runnable if configured. Declared here (outer scope) so the
+            // SAME timer also wraps postJSAction below — a postJSAction can itself run a long
+            // CLI-driven loop (e.g. a feedback-loop quality-gate retry calling cli_execute_command
+            // repeatedly from JavaScript), which previously had zero periodic auto-save/auto-commit
+            // protection since the timer only covered the main cliCommands execution.
+            String timerJSAction = expertParams.getTimerJSAction();
+            int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
+            AtomicReference<String> liveCliOutput = new AtomicReference<>("");
+            Runnable timerRunnable = null;
+            if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
+                timerRunnable = () -> {
+                    try {
+                        js(timerJSAction)
+                            .mcp(trackerClient, ai, confluence, null)
+                            .withJobContext(expertParams, ticket, null)
+                            .with(TrackerParams.INITIATOR, initiator)
+                            .with("systemRequest", systemRequestCommentAlias)
+                            .with("currentCliOutput", liveCliOutput.get())
+                            .execute();
+                    } catch (Exception e) {
+                        logger.warn("timerJSAction execution failed (continues): {}", e.getMessage());
+                    }
+                };
+                logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
+            }
+
             if (cliCommands != null && cliCommands.length > 0) {
                 try {
                     // Merge base cliPrompts with tracker-specific prompts
@@ -537,28 +563,6 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
                     // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
                     Path projectRoot = Paths.get(System.getProperty("user.dir"));
-
-                    // Build timer JS action runnable if configured
-                    String timerJSAction = expertParams.getTimerJSAction();
-                    int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
-                    AtomicReference<String> liveCliOutput = new AtomicReference<>("");
-                    Runnable timerRunnable = null;
-                    if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
-                        timerRunnable = () -> {
-                            try {
-                                js(timerJSAction)
-                                    .mcp(trackerClient, ai, confluence, null)
-                                    .withJobContext(expertParams, ticket, null)
-                                    .with(TrackerParams.INITIATOR, initiator)
-                                    .with("systemRequest", systemRequestCommentAlias)
-                                    .with("currentCliOutput", liveCliOutput.get())
-                                    .execute();
-                            } catch (Exception e) {
-                                logger.warn("timerJSAction execution failed (CLI continues): {}", e.getMessage());
-                            }
-                        };
-                        logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
-                    }
 
                     cliResult = cliHelper.executeCliCommandsWithResult(
                             finalCliCommands,
@@ -679,12 +683,22 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, chunksContext, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
                 response = genericRequestAgent.run(genericRequesAgentParams);
             }
-            js(expertParams.getPostJSAction())
-                .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
-                .withJobContext(expertParams, ticket, response)
-                .with(TrackerParams.INITIATOR, initiator)
-                .with("systemRequest", systemRequestCommentAlias)
-                .execute();
+            AtomicReference<Exception> postJsError = new AtomicReference<>();
+            CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
+                try {
+                    js(expertParams.getPostJSAction())
+                        .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                        .withJobContext(expertParams, ticket, response)
+                        .with(TrackerParams.INITIATOR, initiator)
+                        .with("systemRequest", systemRequestCommentAlias)
+                        .execute();
+                } catch (Exception e) {
+                    postJsError.set(e);
+                }
+            });
+            if (postJsError.get() != null) {
+                throw postJsError.get();
+            }
             if (expertParams.isAttachResponseAsFile()) {
                 attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
             }
