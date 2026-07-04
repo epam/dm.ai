@@ -339,7 +339,11 @@ shadowJar {
  */
 tasks.named('test') {
     // Smoke test for the packaged shadow JAR is run by shadowJarSmokeTest instead.
-    exclude 'com/github/istin/dmtools/job/CliJarSmokeTest.class'
+    // Use a pattern-based exclude so the regular test task still works in branches
+    // where the smoke-test class is not present (e.g. dependabot PRs).
+    filter {
+        excludeTestsMatching '*CliJarSmokeTest'
+    }
 }
 
 task shadowJarSmokeTest(type: Test) {
