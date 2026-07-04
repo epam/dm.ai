@@ -27,6 +27,10 @@ public class ContentUtils {
 
     public static String convertLinksToImages(BasicConfluence basicConfluence, Content content, UrlToImageFile... urlToImageFiles) throws Exception {
         Document doc = Jsoup.parse(content.getStorage().getValue());
+        // XML syntax preserves self-closing tags (e.g. <ri:attachment />) for Confluence storage format.
+        doc.outputSettings()
+                .syntax(Document.OutputSettings.Syntax.xml)
+                .prettyPrint(false);
 
         // Select all anchor tags with href attributes
         Elements anchorTags = doc.select("a[href]");
