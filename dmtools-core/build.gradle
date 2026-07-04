@@ -71,7 +71,7 @@ dependencies {
 
     // Document processing
     //TODO check tests, some markdown tests are failing if update to 1.21.2
-    api 'org.jsoup:jsoup:1.18.3'
+    api 'org.jsoup:jsoup:1.22.2'
     // Apache POI dependencies - ensure consistent versions
     api "org.apache.poi:poi:${versions.poi}"
     api "org.apache.poi:poi-ooxml:${versions.poi}"
@@ -339,7 +339,11 @@ shadowJar {
  */
 tasks.named('test') {
     // Smoke test for the packaged shadow JAR is run by shadowJarSmokeTest instead.
-    exclude 'com/github/istin/dmtools/job/CliJarSmokeTest.class'
+    // Use a pattern-based exclude so the regular test task still works in branches
+    // where the smoke-test class is not present (e.g. dependabot PRs).
+    filter {
+        excludeTestsMatching '*CliJarSmokeTest'
+    }
 }
 
 task shadowJarSmokeTest(type: Test) {

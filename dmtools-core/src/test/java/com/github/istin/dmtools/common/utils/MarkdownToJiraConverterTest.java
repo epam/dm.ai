@@ -27,7 +27,7 @@ public class MarkdownToJiraConverterTest {
                 "\n" +
                 "||Action: Main Event Tracking|| || || || ||\n" +
                 "|When user performs primary action X\n" +
-                "\\\\\n" +
+                "\\\\" +
                 "trackEvent(\"main-event\", contextData)| | | | |\n" +
                 "|*Variable*|*Description*|*When to set*|*Syntax / Allowed Values*|*Example*|\n" +
                 "|event.name|Event identifier|Always|main-event|main-event|\n" +
