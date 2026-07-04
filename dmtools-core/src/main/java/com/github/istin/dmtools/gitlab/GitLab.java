@@ -1199,14 +1199,39 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         JSONObject releaseBody = new JSONObject();
         releaseBody.put("tag_name", tagName);
         releaseBody.put("name", releaseName);
-        if (!isBlank(targetCommitish)) {
-            releaseBody.put("ref", targetCommitish.trim());
-        }
+        // GitLab's release-create API requires 'ref' when the tag does not already exist
+        // (returns 422 "Ref is not specified" otherwise). Fall back to the project's
+        // default branch when the caller doesn't specify one.
+        String ref = !isBlank(targetCommitish) ? targetCommitish.trim() : resolveDefaultBranch(workspace, repository);
+        releaseBody.put("ref", ref);
         if (!isBlank(body)) {
             releaseBody.put("description", body);
         }
         postRequest.setBody(releaseBody.toString());
         return post(postRequest);
+    }
+
+    /**
+     * Resolves the project's default branch, used as the release 'ref' when the caller
+     * does not specify a targetCommitish. Falls back to "main" if the project's default
+     * branch cannot be determined (e.g. transient API error).
+     */
+    private String resolveDefaultBranch(String workspace, String repository) {
+        try {
+            String projectPath = path(String.format("projects/%s", getEncodedProject(workspace, repository)));
+            GenericRequest getRequest = new GenericRequest(this, projectPath);
+            String response = execute(getRequest);
+            if (response != null && !response.isEmpty()) {
+                JSONObject project = new JSONObject(response);
+                String defaultBranch = project.optString("default_branch", null);
+                if (!isBlank(defaultBranch)) {
+                    return defaultBranch;
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Could not resolve default branch for {}/{}: {}", workspace, repository, e.getMessage());
+        }
+        return "main";
     }
 
     private void deleteExistingAssetByName(String workspace, String repository, String tagName,
