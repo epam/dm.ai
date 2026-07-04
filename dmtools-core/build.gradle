@@ -115,7 +115,7 @@ dependencies {
 
     // Additional dependencies for JSON processing
     api "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
-    api 'io.swagger.core.v3:swagger-annotations:2.2.27'
+    api 'io.swagger.core.v3:swagger-annotations:2.2.52'
 
     // AWS SDK for Bedrock IAM authentication
     api 'software.amazon.awssdk:auth:2.46.15'
@@ -145,7 +145,7 @@ dependencies {
         force "org.apache.logging.log4j:log4j-api:${versions.log4j}"
         force "org.apache.logging.log4j:log4j-core:${versions.log4j}"
         force "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
-        force "io.swagger.core.v3:swagger-annotations:2.2.27"
+        force "io.swagger.core.v3:swagger-annotations:2.2.52"
         force "org.jboss.logging:jboss-logging:3.6.3.Final"
         force "org.apache.poi:poi:${versions.poi}"
         force "org.apache.poi:poi-ooxml:${versions.poi}"
