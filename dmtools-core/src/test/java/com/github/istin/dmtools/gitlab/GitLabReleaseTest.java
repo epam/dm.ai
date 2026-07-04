@@ -20,6 +20,7 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -92,6 +93,51 @@ public class GitLabReleaseTest {
         assertEquals("PR Attachments Storage", requestBody.getString("name"));
         assertEquals("main", requestBody.getString("ref"));
         assertEquals("storage", requestBody.getString("description"));
+    }
+
+    @Test
+    public void testGetOrCreateRelease_createsReleaseWithProjectDefaultBranchWhenTargetCommitishBlank() throws IOException {
+        doAnswer(invocation -> {
+            GenericRequest request = invocation.getArgument(0);
+            if (request.url().contains("/releases")) {
+                return "[]";
+            }
+            // GET /projects/:id lookup for default_branch
+            JSONObject project = new JSONObject();
+            project.put("default_branch", "develop");
+            return project.toString();
+        }).when(gitLab).execute(any(GenericRequest.class));
+        doReturn(buildReleaseJson("pr-attachments-storage", "PR Attachments Storage").toString())
+                .when(gitLab).post(any(GenericRequest.class));
+
+        gitLab.getOrCreateRelease(
+                WORKSPACE, REPOSITORY, "pr-attachments-storage", "PR Attachments Storage", null, null);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab).post(captor.capture());
+        JSONObject requestBody = new JSONObject(captor.getValue().getBody());
+        assertEquals("develop", requestBody.getString("ref"));
+    }
+
+    @Test
+    public void testGetOrCreateRelease_fallsBackToMainWhenDefaultBranchLookupFails() throws IOException {
+        doAnswer(invocation -> {
+            GenericRequest request = invocation.getArgument(0);
+            if (request.url().contains("/releases")) {
+                return "[]";
+            }
+            throw new IOException("simulated network error");
+        }).when(gitLab).execute(any(GenericRequest.class));
+        doReturn(buildReleaseJson("pr-attachments-storage", "PR Attachments Storage").toString())
+                .when(gitLab).post(any(GenericRequest.class));
+
+        gitLab.getOrCreateRelease(
+                WORKSPACE, REPOSITORY, "pr-attachments-storage", "PR Attachments Storage", null, null);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab).post(captor.capture());
+        JSONObject requestBody = new JSONObject(captor.getValue().getBody());
+        assertEquals("main", requestBody.getString("ref"));
     }
 
     @Test
