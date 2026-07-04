@@ -514,6 +514,38 @@ public class CliExecutionHelper {
         AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
                 : (timerAction != null ? new AtomicReference<>("") : null);
 
+        AtomicReference<CliExecutionResult> resultRef = new AtomicReference<>();
+        runWithTimer(timerAction, timerIntervalSeconds, () -> {
+            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
+                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes);
+            String outputResponse = processOutputResponse(workingDirectory);
+            resultRef.set(new CliExecutionResult(cliResponses, outputResponse));
+        });
+        return resultRef.get();
+    }
+
+    /**
+     * Runs {@code work} with an optional periodic background timer, using the same
+     * scheduling/shutdown/final-tick semantics as {@link #executeCliCommandsWithResult}.
+     *
+     * <p>Useful for wrapping any long-running phase with the same auto-commit/session-save
+     * safety net used for the main CLI command phase — in particular a {@code postJSAction}
+     * that itself loops over CLI commands (e.g. a feedback-loop quality-gate retry calling
+     * {@code cli_execute_command} repeatedly from JavaScript). Without this, such a phase
+     * would run with zero periodic auto-save/auto-commit protection, since the timer
+     * previously only wrapped the main {@code cliCommands} array execution.
+     *
+     * <p>Each timer firing invokes {@code timerAction} on a dedicated daemon scheduler thread.
+     * Since {@code timerAction} is expected to spin up its own independent JS execution
+     * context (see {@code Teammate}'s {@code js(...)} helper), this is safe to run
+     * concurrently with {@code work} even when {@code work} itself is executing JavaScript,
+     * as GraalJS contexts created independently do not share thread-affinity locks.
+     *
+     * @param timerAction          Optional runnable executed on the timer thread; timer is disabled if null or timerIntervalSeconds &lt;= 0
+     * @param timerIntervalSeconds Interval between timer firings in seconds
+     * @param work                 The work to run on the calling thread while the timer fires in the background
+     */
+    public static void runWithTimer(Runnable timerAction, int timerIntervalSeconds, Runnable work) {
         ScheduledExecutorService scheduler = null;
         if (timerAction != null && timerIntervalSeconds > 0) {
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -525,17 +557,14 @@ public class CliExecutionHelper {
                 try {
                     timerAction.run();
                 } catch (Exception e) {
-                    logger.warn("timerJSAction threw exception (ignored, CLI execution continues): {}", e.getMessage());
+                    logger.warn("timerJSAction threw exception (ignored, execution continues): {}", e.getMessage());
                 }
             }, timerIntervalSeconds, timerIntervalSeconds, TimeUnit.SECONDS);
             logger.info("timerJSAction scheduler started (interval: {}s)", timerIntervalSeconds);
         }
 
         try {
-            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
-                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes);
-            String outputResponse = processOutputResponse(workingDirectory);
-            return new CliExecutionResult(cliResponses, outputResponse);
+            work.run();
         } finally {
             if (scheduler != null) {
                 scheduler.shutdown();
@@ -548,7 +577,7 @@ public class CliExecutionHelper {
                     Thread.currentThread().interrupt();
                 }
                 logger.info("timerJSAction scheduler stopped");
-                // Fire one final tick so the complete CLI output is saved to releases
+                // Fire one final tick so the complete output (commit/push, session save) is captured
                 try {
                     logger.info("timerJSAction final tick: saving complete session output");
                     timerAction.run();
