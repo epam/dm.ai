@@ -18,7 +18,7 @@ def versions = [
         guava    : '33.6.0-jre',
         graalvm  : '25.0.3',
         mockito  : '5.23.0',
-        junit    : '6.1.0',
+        junit    : '6.1.1',
         jackson  : '2.22.0',
         jackson3 : '3.2.0',
         poi      : '5.5.1'
