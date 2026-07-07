@@ -16,9 +16,9 @@ def versions = [
         log4j    : '2.26.1',
         slf4j    : '2.0.18',
         guava    : '33.6.0-jre',
-        graalvm  : '25.0.3',
+        graalvm  : '25.1.3',
         mockito  : '5.23.0',
-        junit    : '6.1.0',
+        junit    : '6.1.1',
         jackson  : '2.22.0',
         jackson3 : '3.2.0',
         poi      : '5.5.1'
@@ -110,7 +110,7 @@ dependencies {
     annotationProcessor project(':dmtools-annotation-processor')
     
     // Basic dependencies (NOT server dependencies - those go in dmtools-server)
-    api 'com.google.code.gson:gson:2.13.2'
+    api 'com.google.code.gson:gson:2.14.0'
     //api 'org.apache.httpcomponents.client5:httpclient5:5.4.1'
 
     // Additional dependencies for JSON processing
