@@ -10,6 +10,7 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.timeline.ReportIteration;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.HtmlToMarkdownConverter;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.mcp.MCPParam;
 import com.github.istin.dmtools.mcp.MCPTool;
@@ -238,35 +239,43 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
 
     @MCPTool(
             name = "testrail_get_case",
-            description = "Get a TestRail test case by ID",
+            description = "Get a TestRail test case by ID. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML — raw HTML pasted from Google Docs/browsers can be 20-30x larger than necessary due to inline CSS styling on every tag.",
             integration = "testrail",
             category = "test_cases"
     )
     public TestCase getCase(
             @MCPParam(name = "case_id", description = "The test case ID (numeric, without 'C' prefix)", required = true, example = "123")
-            String caseId
+            String caseId,
+            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM).", required = false, example = "markdown")
+            String format
     ) throws IOException {
-        return performTicket(caseId, null);
+        TestCase testCase = performTicket(caseId, null);
+        applyFormat(testCase, format);
+        return testCase;
     }
 
     @MCPTool(
             name = "testrail_get_all_cases",
-            description = "Get ALL test cases in a project (uses pagination to retrieve all cases)",
+            description = "Get ALL test cases in a project (uses pagination to retrieve all cases). Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML.",
             integration = "testrail",
             category = "test_cases"
     )
     public List<TestCase> getAllCases(
             @MCPParam(name = "project_name", description = "Project name to get all cases from", required = true, example = "My Project")
-            String projectName
+            String projectName,
+            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM).", required = false, example = "markdown")
+            String format
     ) throws Exception {
         int projectId = getProjectId(projectName);
         log("Retrieving all test cases for project: " + projectName);
-        return getCasesByProjectId(projectId, null, null, null);
+        List<TestCase> cases = getCasesByProjectId(projectId, null, null, null);
+        applyFormat(cases, format);
+        return cases;
     }
 
     @MCPTool(
             name = "testrail_search_cases",
-            description = "Search TestRail test cases by project and optional filters",
+            description = "Search TestRail test cases by project and optional filters. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML.",
             integration = "testrail",
             category = "test_cases"
     )
@@ -276,10 +285,89 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
             @MCPParam(name = "suite_id", description = "Suite ID to filter by (optional)", required = false, example = "1")
             String suiteId,
             @MCPParam(name = "section_id", description = "Section ID to filter by (optional)", required = false, example = "10")
-            String sectionId
+            String sectionId,
+            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM).", required = false, example = "markdown")
+            String format
     ) throws Exception {
         int projectId = getProjectId(projectName);
-        return getCasesByProjectId(projectId, suiteId, sectionId, null);
+        List<TestCase> cases = getCasesByProjectId(projectId, suiteId, sectionId, null);
+        applyFormat(cases, format);
+        return cases;
+    }
+
+    private static boolean isMarkdownFormat(String format) {
+        return format != null && format.trim().equalsIgnoreCase("markdown");
+    }
+
+    private static void applyFormat(List<TestCase> cases, String format) {
+        if (!isMarkdownFormat(format)) {
+            return;
+        }
+        for (TestCase testCase : cases) {
+            applyFormat(testCase, format);
+        }
+    }
+
+    private static void applyFormat(TestCase testCase, String format) {
+        if (!isMarkdownFormat(format) || testCase == null) {
+            return;
+        }
+        convertHtmlFieldsToMarkdown(testCase.getJSONObject());
+    }
+
+    /**
+     * Names of TestCase custom fields known to hold a JSON array of step objects
+     * ({@code {content, expected, additional_info, ...}}), rather than a plain HTML string.
+     * TestRail step-template field names vary by project/template ("Test Case (Steps)" uses
+     * "custom_steps_separated" by default, but a project can rename its custom fields), so this
+     * is a best-effort list covering the default/common names — any other HTML-bearing string
+     * field is still detected and converted via content-sniffing in
+     * {@link #convertHtmlFieldsToMarkdown}.
+     */
+    private static final Set<String> STEP_ARRAY_FIELD_NAMES = Set.of(
+            "custom_steps_separated"
+    );
+
+    private static final Set<String> STEP_HTML_SUBFIELDS = Set.of("content", "expected", "additional_info");
+
+    /**
+     * Converts every HTML-bearing field on a raw TestRail test case JSON object to Markdown,
+     * in place. Fields are detected by content (containing a {@code <tag>}), not by a hardcoded
+     * field-name allowlist, so this works regardless of custom-field naming across different
+     * TestRail projects/templates (e.g. "custom_preconds", "custom_expected",
+     * "custom_testrail_bdd_scenario", ...).
+     */
+    private static void convertHtmlFieldsToMarkdown(JSONObject caseJson) {
+        if (caseJson == null) {
+            return;
+        }
+        for (String key : new ArrayList<>(caseJson.keySet())) {
+            Object value = caseJson.opt(key);
+            if (value instanceof String) {
+                String stringValue = (String) value;
+                if (looksLikeHtml(stringValue)) {
+                    caseJson.put(key, HtmlToMarkdownConverter.convert(stringValue));
+                }
+            } else if (value instanceof JSONArray && STEP_ARRAY_FIELD_NAMES.contains(key)) {
+                JSONArray steps = (JSONArray) value;
+                for (int i = 0; i < steps.length(); i++) {
+                    JSONObject step = steps.optJSONObject(i);
+                    if (step == null) {
+                        continue;
+                    }
+                    for (String stepField : STEP_HTML_SUBFIELDS) {
+                        String stepHtml = step.optString(stepField, null);
+                        if (stepHtml != null && looksLikeHtml(stepHtml)) {
+                            step.put(stepField, HtmlToMarkdownConverter.convert(stepHtml));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean looksLikeHtml(String value) {
+        return value.indexOf('<') != -1 && value.indexOf('>') != -1;
     }
 
     /**

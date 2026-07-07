@@ -744,4 +744,89 @@ public class TestRailClientTest {
                 String.class, String.class, String.class, String.class,
                 String.class, String.class, String.class, String.class));
     }
+
+    // -- format=markdown for get_all_cases / search_cases -----------------------------------
+
+    @Test
+    public void testGetAllCasesDefaultFormatReturnsRawHtml() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", null);
+
+        assertEquals(1, result.size());
+        assertEquals("<p style=\"color: red;\">Precondition text</p>",
+                result.get(0).getJSONObject().getString("custom_preconds"));
+    }
+
+    @Test
+    public void testGetAllCasesMarkdownFormatConvertsHtmlFields() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red; font-family: Arial;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", "markdown");
+
+        assertEquals(1, result.size());
+        String converted = result.get(0).getJSONObject().getString("custom_preconds");
+        assertFalse("markdown output must not contain leftover style attributes", converted.contains("style="));
+        assertTrue(converted.contains("Precondition text"));
+    }
+
+    @Test
+    public void testGetAllCasesMarkdownFormatConvertsStepsSeparatedArray() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+
+        JSONArray steps = new JSONArray()
+                .put(new JSONObject()
+                        .put("content", "<p style=\"margin:0\">Do the thing</p>")
+                        .put("expected", "<table><tr><td>A</td><td>B</td></tr></table>"));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 2)
+                .put("title", "TC2")
+                .put("custom_steps_separated", steps);
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", "markdown");
+
+        JSONArray convertedSteps = result.get(0).getJSONObject().getJSONArray("custom_steps_separated");
+        String convertedContent = convertedSteps.getJSONObject(0).getString("content");
+        String convertedExpected = convertedSteps.getJSONObject(0).getString("expected");
+
+        assertFalse(convertedContent.contains("style="));
+        assertTrue(convertedContent.contains("Do the thing"));
+        assertTrue("expected field's HTML table should become a Markdown table",
+                convertedExpected.contains("| A | B |"));
+    }
+
+    @Test
+    public void testSearchCasesMarkdownFormatConvertsHtmlFields() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 3)
+                .put("title", "TC3")
+                .put("custom_expected", "<p style=\"color:blue\">Expected outcome</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.searchCases("Project A", "1", null, "markdown");
+
+        String converted = result.get(0).getJSONObject().getString("custom_expected");
+        assertFalse(converted.contains("style="));
+        assertTrue(converted.contains("Expected outcome"));
+    }
 }
