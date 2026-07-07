@@ -63,10 +63,13 @@ public class CliOutputFormatterFactory {
      */
     public static CliOutputFormatter fromFormat(OutputFormat format) {
         switch (format) {
-            case TOON: return new ToonCliOutputFormatter();
-            case MINI: return new MiniCliOutputFormatter();
+            case TOON:     return new ToonCliOutputFormatter();
+            case MINI:     return new MiniCliOutputFormatter();
+            case SHORT:    return new ShortCliOutputFormatter();
+            case TABLE:    return new TableCliOutputFormatter();
+            case MERMAID:  return new MermaidCliOutputFormatter();
             case JSON:
-            default:  return new JsonCliOutputFormatter();
+            default:       return new JsonCliOutputFormatter();
         }
     }
 }
