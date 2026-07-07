@@ -36,7 +36,7 @@ public class TestRailTestCasesAdapter implements TestCasesTrackerAdapter {
     public List<ITicket> getExistingCases() throws Exception {
         List<ITicket> result = new ArrayList<>();
         for (String projectName : config.getProjectNames()) {
-            List<TestCase> cases = client.getAllCases(projectName);
+            List<TestCase> cases = client.getAllCases(projectName, null);
             System.out.println("[DEBUG-LINKING] getExistingCases project='" + projectName + "' returned " + cases.size() + " cases");
             if (!cases.isEmpty()) {
                 System.out.println("[DEBUG-LINKING] getExistingCases sample keys (first 5): " + cases.stream().limit(5).map(c -> { try { return c.getKey() + "(refs=" + c.getString("refs") + ")"; } catch (Exception e) { return c.getKey(); } }).collect(java.util.stream.Collectors.joining(", ")));

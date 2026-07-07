@@ -1097,6 +1097,13 @@ public class PropertyReader {
   public static final String TESTRAIL_API_KEY = "TESTRAIL_API_KEY";
   public static final String TESTRAIL_PROJECT = "TESTRAIL_PROJECT";
   public static final String TESTRAIL_LOGGING_ENABLED = "TESTRAIL_LOGGING_ENABLED";
+  // Optional: default output format ("md"/"markdown" or "html", default "html") applied by
+  // testrail_get_case/testrail_get_all_cases/testrail_search_cases when the caller does not
+  // explicitly pass a format parameter. Set to "markdown" to make every TestRail integration
+  // (including internal callers like TestCasesGenerator's related-test-case search) return
+  // clean Markdown by default, without needing per-call-site changes -- avoiding the token
+  // bloat of raw HTML (which can carry 20-30x overhead from inline CSS styling).
+  public static final String TESTRAIL_DEFAULT_FORMAT = "TESTRAIL_DEFAULT_FORMAT";
 
   // Bitrise configuration
   public static final String BITRISE_TOKEN = "BITRISE_TOKEN";
@@ -1472,6 +1479,11 @@ public class PropertyReader {
       return false;
     }
     return Boolean.parseBoolean(value);
+  }
+
+  public String getTestRailDefaultFormat() {
+    String value = getValue(TESTRAIL_DEFAULT_FORMAT);
+    return (value == null || value.isBlank()) ? "html" : value;
   }
 
   // -------------------------------------------------------------------------
