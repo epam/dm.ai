@@ -97,4 +97,21 @@ public class HtmlToMarkdownConverterTest {
         String markdown = HtmlToMarkdownConverter.convert(html);
         assertTrue(markdown.contains("A \\| B"));
     }
+
+    @Test
+    public void testIsMarkdownFormatAcceptsMdAndMarkdownCaseInsensitively() {
+        assertTrue(HtmlToMarkdownConverter.isMarkdownFormat("md"));
+        assertTrue(HtmlToMarkdownConverter.isMarkdownFormat("MD"));
+        assertTrue(HtmlToMarkdownConverter.isMarkdownFormat("markdown"));
+        assertTrue(HtmlToMarkdownConverter.isMarkdownFormat("Markdown"));
+        assertTrue(HtmlToMarkdownConverter.isMarkdownFormat("MARKDOWN"));
+    }
+
+    @Test
+    public void testIsMarkdownFormatRejectsOtherValues() {
+        assertFalse(HtmlToMarkdownConverter.isMarkdownFormat("html"));
+        assertFalse(HtmlToMarkdownConverter.isMarkdownFormat(null));
+        assertFalse(HtmlToMarkdownConverter.isMarkdownFormat(""));
+        assertFalse(HtmlToMarkdownConverter.isMarkdownFormat("wiki"));
+    }
 }

@@ -47,6 +47,18 @@ public final class HtmlToMarkdownConverter {
     private HtmlToMarkdownConverter() {}
 
     /**
+     * Checks whether a requested output-format identifier means "convert to Markdown".
+     * Shared across all integrations that expose a {@code format} parameter (Confluence,
+     * TestRail, ...) so the accepted values never drift between them.
+     *
+     * @param format the format identifier (e.g. "md" or "markdown")
+     * @return true if the format should trigger Markdown conversion
+     */
+    public static boolean isMarkdownFormat(String format) {
+        return "md".equalsIgnoreCase(format) || "markdown".equalsIgnoreCase(format);
+    }
+
+    /**
      * Converts an HTML fragment to Markdown, preserving tables as GitHub-Flavoured Markdown
      * tables.
      *

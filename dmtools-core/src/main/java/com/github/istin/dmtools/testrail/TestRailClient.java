@@ -246,7 +246,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
     public TestCase getCase(
             @MCPParam(name = "case_id", description = "The test case ID (numeric, without 'C' prefix)", required = true, example = "123")
             String caseId,
-            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM).", required = false, example = "markdown")
+            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).", required = false, example = "markdown")
             String format
     ) throws IOException {
         TestCase testCase = performTicket(caseId, null);
@@ -263,7 +263,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
     public List<TestCase> getAllCases(
             @MCPParam(name = "project_name", description = "Project name to get all cases from", required = true, example = "My Project")
             String projectName,
-            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM).", required = false, example = "markdown")
+            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).", required = false, example = "markdown")
             String format
     ) throws Exception {
         int projectId = getProjectId(projectName);
@@ -286,7 +286,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
             String suiteId,
             @MCPParam(name = "section_id", description = "Section ID to filter by (optional)", required = false, example = "10")
             String sectionId,
-            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM).", required = false, example = "markdown")
+            @MCPParam(name = "format", description = "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).", required = false, example = "markdown")
             String format
     ) throws Exception {
         int projectId = getProjectId(projectName);
@@ -295,8 +295,20 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         return cases;
     }
 
+    /**
+     * Resolves the effective output format: an explicit non-blank {@code format} argument
+     * always wins; otherwise falls back to {@code TESTRAIL_DEFAULT_FORMAT} (see
+     * {@link PropertyReader#getTestRailDefaultFormat()}), which defaults to "html" when unset.
+     * This means setting {@code TESTRAIL_DEFAULT_FORMAT=markdown} makes every TestRail read
+     * (including internal callers that don't pass a format at all, e.g.
+     * TestCasesGenerator's related-test-case search via TestRailTestCasesAdapter) return
+     * Markdown by default, with no per-call-site changes required.
+     */
     private static boolean isMarkdownFormat(String format) {
-        return format != null && format.trim().equalsIgnoreCase("markdown");
+        String effectiveFormat = (format == null || format.isBlank())
+                ? new PropertyReader().getTestRailDefaultFormat()
+                : format;
+        return HtmlToMarkdownConverter.isMarkdownFormat(effectiveFormat);
     }
 
     private static void applyFormat(List<TestCase> cases, String format) {

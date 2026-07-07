@@ -4,9 +4,11 @@
 package com.github.istin.dmtools.testrail;
 
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.testrail.model.TestCase;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -14,6 +16,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 
 import static org.junit.Assert.*;
@@ -56,6 +59,12 @@ public class TestRailClientTest {
         // Note: This creates a real client instance, but without actual HTTP calls
         // All HTTP calls would need to be mocked for integration testing
         // For unit testing, we test the logic without making real API calls
+        PropertyReader.clearOverrides();
+    }
+
+    @After
+    public void tearDown() {
+        PropertyReader.clearOverrides();
     }
 
     @Test
@@ -828,5 +837,67 @@ public class TestRailClientTest {
         String converted = result.get(0).getJSONObject().getString("custom_expected");
         assertFalse(converted.contains("style="));
         assertTrue(converted.contains("Expected outcome"));
+    }
+
+    @Test
+    public void testGetAllCasesMdAliasConvertsHtmlFieldsSameAsMarkdown() throws Exception {
+        // "md" must be accepted as an alias for "markdown", matching Confluence's convention.
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", "md");
+
+        String converted = result.get(0).getJSONObject().getString("custom_preconds");
+        assertFalse("md alias must trigger markdown conversion", converted.contains("style="));
+        assertTrue(converted.contains("Precondition text"));
+    }
+
+    @Test
+    public void testGetAllCasesUsesMarkdownWhenEnvDefaultIsSetAndFormatIsNull() throws Exception {
+        PropertyReader.setOverrides(Map.of(PropertyReader.TESTRAIL_DEFAULT_FORMAT, "markdown"));
+
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        // format is null here -- exactly how TestRailTestCasesAdapter's internal
+        // "find related existing test cases" call site invokes getAllCases today.
+        List<TestCase> result = stubClient.getAllCases("Project A", null);
+
+        String converted = result.get(0).getJSONObject().getString("custom_preconds");
+        assertFalse("env-var default should trigger markdown conversion even with format=null",
+                converted.contains("style="));
+        assertTrue(converted.contains("Precondition text"));
+    }
+
+    @Test
+    public void testGetAllCasesExplicitHtmlFormatOverridesEnvDefault() throws Exception {
+        PropertyReader.setOverrides(Map.of(PropertyReader.TESTRAIL_DEFAULT_FORMAT, "markdown"));
+
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        String rawHtml = "<p style=\"color: red;\">Precondition text</p>";
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", rawHtml);
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        // Explicit format="html" must win over the env-var default.
+        List<TestCase> result = stubClient.getAllCases("Project A", "html");
+
+        assertEquals(rawHtml, result.get(0).getJSONObject().getString("custom_preconds"));
     }
 }
