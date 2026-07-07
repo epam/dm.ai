@@ -102,6 +102,16 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return result;
     }
 
+    @MCPTool(
+            name = "github_test",
+            description = "Test GitHub connectivity by fetching the current user's profile",
+            integration = "github",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        return testConnectionDetailed();
+    }
+
     @Override
     public String path(String path) {
         return getBasePath() + "/" + path;

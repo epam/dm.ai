@@ -23,7 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Bitrise CI/CD API client.
@@ -67,6 +69,47 @@ public abstract class Bitrise extends AbstractRestClient {
                 .header("Authorization", authHeader)
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json");
+    }
+
+    @MCPTool(
+            name = "bitrise_test",
+            description = "Test Bitrise connectivity by fetching the current user's profile",
+            integration = "bitrise",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            GenericRequest req = new GenericRequest(this, path("me"));
+            String response = execute(req);
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                JSONObject data = jsonResponse.optJSONObject("data");
+                if (data != null && (data.has("username") || data.has("email"))) {
+                    result.put("success", true);
+                    result.put("message", "Bitrise API connection successful");
+                    result.put("user", data.optString("username", "unknown"));
+                    result.put("email", data.optString("email", "unknown"));
+                } else if (jsonResponse.has("username") || jsonResponse.has("email")) {
+                    result.put("success", true);
+                    result.put("message", "Bitrise API connection successful");
+                    result.put("user", jsonResponse.optString("username", "unknown"));
+                    result.put("email", jsonResponse.optString("email", "unknown"));
+                } else {
+                    result.put("success", false);
+                    result.put("message", "Unexpected response format from Bitrise API");
+                }
+            } else {
+                result.put("success", false);
+                result.put("message", "Empty response from Bitrise API");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Bitrise API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Bitrise connection test failed", e);
+        }
+        return result;
     }
 
     // -------------------------------------------------------------------------

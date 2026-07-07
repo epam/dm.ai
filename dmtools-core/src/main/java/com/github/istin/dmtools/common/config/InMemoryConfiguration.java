@@ -793,7 +793,17 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     public String getFigmaApiKey() {
         return getValue("FIGMA_TOKEN");
     }
-    
+
+    @Override
+    public String getFigmaOAuth2AccessToken() {
+        return getValue("FIGMA_OAUTH_ACCESS_TOKEN");
+    }
+
+    @Override
+    public String getFigmaOAuth2RefreshToken() {
+        return getValue("FIGMA_OAUTH_REFRESH_TOKEN");
+    }
+
     @Override
     public Integer getDefaultTicketWeightIfNoSPs() {
         String value = getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
@@ -853,5 +863,142 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
             return 1.0;
         }
     }
-    
+
+    // TestRailConfiguration
+
+    @Override
+    public String getTestRailBasePath() {
+        return getValue("TESTRAIL_BASE_PATH");
+    }
+
+    @Override
+    public String getTestRailUsername() {
+        return getValue("TESTRAIL_USERNAME");
+    }
+
+    @Override
+    public String getTestRailApiKey() {
+        return getValue("TESTRAIL_API_KEY");
+    }
+
+    @Override
+    public String getTestRailProject() {
+        return getValue("TESTRAIL_PROJECT");
+    }
+
+    @Override
+    public boolean isTestRailLoggingEnabled() {
+        String value = getValue("TESTRAIL_LOGGING_ENABLED");
+        return value != null && Boolean.parseBoolean(value);
+    }
+
+    // BitriseConfiguration
+
+    @Override
+    public String getBitriseToken() {
+        return getValue("BITRISE_TOKEN");
+    }
+
+    @Override
+    public String getBitriseBasePath() {
+        return getValue("BITRISE_BASE_PATH", "https://api.bitrise.io/v0.1");
+    }
+
+    @Override
+    public String getBitriseAppSlug() {
+        return getValue("BITRISE_APP_SLUG");
+    }
+
+    // XrayConfiguration
+
+    @Override
+    public String getXrayClientId() {
+        return getValue("XRAY_CLIENT_ID");
+    }
+
+    @Override
+    public String getXrayClientSecret() {
+        return getValue("XRAY_CLIENT_SECRET");
+    }
+
+    @Override
+    public String getXrayBasePath() {
+        return getValue("XRAY_BASE_PATH");
+    }
+
+    // AdoConfiguration
+
+    @Override
+    public String getAdoOrganization() {
+        return getValue("ADO_ORGANIZATION");
+    }
+
+    @Override
+    public String getAdoProject() {
+        return getValue("ADO_PROJECT");
+    }
+
+    @Override
+    public String getAdoPatToken() {
+        return getValue("ADO_PAT_TOKEN");
+    }
+
+    @Override
+    public String getAdoBasePath() {
+        return getValue("ADO_BASE_PATH", "https://dev.azure.com");
+    }
+
+    // TeamsConfiguration
+
+    @Override
+    public String getTeamsBasePath() {
+        return getValue("TEAMS_BASE_PATH", "https://graph.microsoft.com/v1.0");
+    }
+
+    @Override
+    public String getTeamsClientId() {
+        return getValue("TEAMS_CLIENT_ID");
+    }
+
+    @Override
+    public String getTenantId() {
+        return getValue("TEAMS_TENANT_ID", "common");
+    }
+
+    @Override
+    public String getTeamsAuthPort() {
+        return getValue("TEAMS_AUTH_PORT", "8080");
+    }
+
+    @Override
+    public String getTeamsRefreshToken() {
+        return getValue("TEAMS_REFRESH_TOKEN");
+    }
+
+    @Override
+    public String getTeamsAuthMethod() {
+        return getValue("TEAMS_AUTH_METHOD", "device");
+    }
+
+    @Override
+    public String getTeamsScopes() {
+        return getValue("TEAMS_SCOPES");
+    }
+
+    @Override
+    public String getTeamsTokenCachePath() {
+        return getValue("TEAMS_TOKEN_CACHE_PATH", "./teams.token");
+    }
+
+    @Override
+    public String getAnthropicCustomHeaderNames() {
+        return getValue("ANTHROPIC_CUSTOM_HEADER_NAMES");
+    }
+
+    @Override
+    public String getAnthropicCustomHeaderValues() {
+        return getValue("ANTHROPIC_CUSTOM_HEADER_VALUES");
+    }
+
 }
+
