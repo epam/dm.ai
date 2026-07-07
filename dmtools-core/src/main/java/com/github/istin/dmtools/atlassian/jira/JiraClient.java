@@ -748,6 +748,29 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     }
 
     @MCPTool(
+            name = "jira_test",
+            description = "Test Jira connectivity by fetching the current user's profile",
+            integration = "jira",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() throws IOException {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            IUser profile = performMyProfile();
+            result.put("success", true);
+            result.put("message", "Jira connection successful");
+            result.put("user", profile.getFullName());
+            result.put("email", profile.getEmailAddress());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Jira connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Jira connection test failed", e);
+        }
+        return result;
+    }
+
+    @MCPTool(
             name = "jira_get_my_profile",
             description = "Get the current user's profile information from Jira",
             integration = "jira",
