@@ -197,27 +197,7 @@ find_jar_file() {
 
 JAR_FILE=$(find_jar_file)
 
-# Display branded banner
-show_banner() {
-    echo ""
-    echo -e "${TEAL_LIGHT}╔══════════════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${TEAL_LIGHT}║${RESET}                                                                          ${TEAL_LIGHT}║${RESET}"
-    echo -e "${TEAL_LIGHT}║${WHITE}    ██████╗ ███╗   ███╗${TEAL_DARK}████████╗ ██████╗  ██████╗ ██╗     ███████╗${TEAL_LIGHT}        ║${RESET}"
-    echo -e "${TEAL_LIGHT}║${WHITE}    ██╔══██╗████╗ ████║${TEAL_DARK}╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝${TEAL_LIGHT}        ║${RESET}"
-    echo -e "${TEAL_LIGHT}║${WHITE}    ██║  ██║██╔████╔██║${TEAL_DARK}   ██║   ██║   ██║██║   ██║██║     ███████╗${TEAL_LIGHT}        ║${RESET}"
-    echo -e "${TEAL_LIGHT}║${WHITE}    ██║  ██║██║╚██╔╝██║${TEAL_DARK}   ██║   ██║   ██║██║   ██║██║          ██║ ${TEAL_LIGHT}       ║${RESET}"
-    echo -e "${TEAL_LIGHT}║${WHITE}    ██████╔╝██║ ╚═╝ ██║${TEAL_DARK}   ██║   ╚██████╔╝╚██████╔╝███████╗███████║${TEAL_LIGHT}        ║${RESET}"
-    echo -e "${TEAL_LIGHT}║${WHITE}    ╚═════╝ ╚═╝     ╚═╝${TEAL_DARK}   ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝${TEAL_LIGHT}        ║${RESET}"
-    echo -e "${TEAL_LIGHT}║${RESET}                                                                          ${TEAL_LIGHT}║${RESET}"
-    echo -e "${TEAL_LIGHT}║${RESET}                                                                          ${TEAL_LIGHT}║${RESET}"
-    echo -e "${TEAL_LIGHT}║${WHITE}   Is it easier to train ${TEAL_DARK}thousands employees${WHITE} to write perfect ${TEAL_DARK}prompts${WHITE},${TEAL_LIGHT}    ║${RESET}"
-    echo -e "${TEAL_LIGHT}║${RESET}      or to build a system of ${TEAL_DARK}expert agents${WHITE} for them to use?              ${TEAL_LIGHT}║${RESET}"
-    echo -e "${TEAL_LIGHT}╚══════════════════════════════════════════════════════════════════════════╝${RESET}"
-    echo ""
-}
-
 usage() {
-    show_banner
     # Check if JAR file exists before calling JobRunner
     if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
         error "DMTools JAR file not found. Please install DMTools first:
@@ -232,9 +212,39 @@ Note: Java 17+ is required for DMTools to run."
     exit 0
 }
 
+
 # Parse arguments
 if [ $# -eq 0 ]; then
-    show_banner
+    if [ -t 0 ] && [ -t 1 ]; then
+        chosen=$("$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner interactive)
+        if [ -n "$chosen" ]; then
+            if [[ "$chosen" == run:* ]]; then
+                target="${chosen#run:}"
+                exec "$0" run "$target"
+            else
+                # chosen is "tool_name\tjson_params\toutput_format"
+                tool_name="${chosen%%$'\t'*}"
+                rest="${chosen#*$'\t'}"
+                params="${rest%%$'\t'*}"
+                output_format="${rest#*$'\t'}"
+                if [ "$params" = "$rest" ]; then
+                    output_format=""
+                fi
+                output_args=()
+                if [ -n "$output_format" ]; then
+                    output_args=("--output" "$output_format")
+                fi
+                if [ -n "$params" ] && [ "$tool_name" != "$params" ]; then
+                    exec "$0" "$tool_name" --data "$params" "${output_args[@]}"
+                else
+                    exec "$0" "$tool_name" "${output_args[@]}"
+                fi
+            fi
+        fi
+        exit 0
+    else
+        usage
+    fi
     exit 0
 fi
 
@@ -316,15 +326,39 @@ case "$COMMAND" in
     "help"|"-h"|"--help")
         usage
         ;;
-    "list")
-        if [ ${#ARGS[@]} -gt 0 ]; then
-            # List with filter
-            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp list "${ARGS[0]}"
-        else
-            # List all tools
-            execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp list
+    "interactive"|"i")
+        chosen=$("$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner interactive)
+        if [ -n "$chosen" ]; then
+            if [[ "$chosen" == run:* ]]; then
+                target="${chosen#run:}"
+                exec "$0" run "$target"
+            else
+                tool_name="${chosen%%$'\t'*}"
+                rest="${chosen#*$'\t'}"
+                params="${rest%%$'\t'*}"
+                output_format="${rest#*$'\t'}"
+                if [ "$params" = "$rest" ]; then
+                    output_format=""
+                fi
+                output_args=()
+                if [ -n "$output_format" ]; then
+                    output_args=("--output" "$output_format")
+                fi
+                if [ -n "$params" ] && [ "$tool_name" != "$params" ]; then
+                    exec "$0" "$tool_name" --data "$params" "${output_args[@]}"
+                else
+                    exec "$0" "$tool_name" "${output_args[@]}"
+                fi
+            fi
         fi
         exit 0
+        ;;
+    "doctor")
+        if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
+            error "DMTools JAR file not found. Please install DMTools first or build the project."
+        fi
+        "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner doctor
+        exit $?
         ;;
     "run")
         # Handle run command with JSON file, JS file, or direct job name + optional encoded parameter

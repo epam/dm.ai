@@ -216,6 +216,17 @@ public class XrayClient extends JiraClient<Ticket> {
         extendedJiraFields = extendedFields.toArray(new String[0]);
     }
 
+    @MCPTool(
+            name = "jira_xray_test",
+            description = "Test X-ray connectivity by obtaining an access token",
+            integration = "jira_xray",
+            category = "system",
+            aliases = {"xray_test"}
+    )
+    public Map<String, Object> testConnection() {
+        return xrayRestClient.testConnection();
+    }
+
     /**
      * Makes an authenticated request to X-ray API using XrayRestClient.
      * 

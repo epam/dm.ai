@@ -14,6 +14,8 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.DateUtils;
 import com.github.istin.dmtools.common.utils.ImageUtils;
 import com.github.istin.dmtools.networking.AbstractRestClient;
+import com.github.istin.dmtools.mcp.MCPParam;
+import com.github.istin.dmtools.mcp.MCPTool;
 import okhttp3.Request;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.logging.log4j.LogManager;
@@ -45,6 +47,41 @@ public abstract class RallyClient extends AbstractRestClient implements TrackerC
     @Override
     public String path(String path) {
         return basePath + "/slm/webservice/v2.0/" + path;
+    }
+
+    @MCPTool(
+            name = "rally_test",
+            description = "Test Rally connectivity by fetching the current user's profile",
+            integration = "rally",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            GenericRequest getRequest = new GenericRequest(this, path("user"));
+            String response = execute(getRequest);
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                JSONObject user = jsonResponse.optJSONObject("User");
+                if (user != null && (user.has("_refObjectName") || user.has("_ref"))) {
+                    result.put("success", true);
+                    result.put("message", "Rally API connection successful");
+                    result.put("user", user.optString("_refObjectName", "unknown"));
+                } else {
+                    result.put("success", false);
+                    result.put("message", "Unexpected response format from Rally API");
+                }
+            } else {
+                result.put("success", false);
+                result.put("message", "Empty response from Rally API");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Rally API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Rally connection test failed", e);
+        }
+        return result;
     }
 
     public String search(String query, String[] fields) throws IOException {
