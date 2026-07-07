@@ -4,9 +4,11 @@
 package com.github.istin.dmtools.testrail;
 
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.testrail.model.TestCase;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -14,6 +16,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 
 import static org.junit.Assert.*;
@@ -56,6 +59,12 @@ public class TestRailClientTest {
         // Note: This creates a real client instance, but without actual HTTP calls
         // All HTTP calls would need to be mocked for integration testing
         // For unit testing, we test the logic without making real API calls
+        PropertyReader.clearOverrides();
+    }
+
+    @After
+    public void tearDown() {
+        PropertyReader.clearOverrides();
     }
 
     @Test
@@ -309,6 +318,22 @@ public class TestRailClientTest {
         client = new TestRailClient(basePath, username, apiKey);
 
         assertEquals("cacheTestRail", client.getCacheFolderName());
+    }
+
+    private String createSuitesPage(int offset, String nextLink, JSONObject... suites) {
+        JSONObject response = new JSONObject();
+        JSONArray suitesArray = new JSONArray();
+        for (JSONObject suite : suites) {
+            suitesArray.put(suite);
+        }
+        response.put("offset", offset);
+        response.put("limit", 250);
+        response.put("size", suitesArray.length());
+        response.put("suites", suitesArray);
+        response.put("_links", new JSONObject()
+                .put("next", nextLink == null ? JSONObject.NULL : nextLink)
+                .put("prev", JSONObject.NULL));
+        return response.toString();
     }
 
     private String createProjectsPage(int offset, String nextLink, JSONObject... projects) {
@@ -691,6 +716,33 @@ public class TestRailClientTest {
     }
 
     @Test
+    public void testGetSuitesMethodExists() throws Exception {
+        assertNotNull(TestRailClient.class.getMethod("getSuites", String.class));
+    }
+
+    @Test
+    public void testGetSuitesAggregatesAllPagesUsingNextLink() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        stubClient.queueResponse(createSuitesPage(0, "/api/v2/get_suites/5&limit=250&offset=250",
+                new JSONObject().put("id", 1).put("name", "Master")));
+        stubClient.queueResponse(createSuitesPage(250, null,
+                new JSONObject().put("id", 2).put("name", "Baseline Copy")));
+
+        JSONArray suites = new JSONArray(stubClient.getSuites("Project A"));
+
+        assertEquals(2, suites.length());
+        assertEquals("Master", suites.getJSONObject(0).getString("name"));
+        assertEquals("Baseline Copy", suites.getJSONObject(1).getString("name"));
+        assertEquals(List.of(
+                "/get_projects&limit=250&offset=0",
+                "/get_suites/5&limit=250&offset=0",
+                "/get_suites/5&limit=250&offset=250"
+        ), stubClient.getRequestedPaths());
+    }
+
+    @Test
     public void testGetCaseTypesMethodExists() throws Exception {
         assertNotNull(TestRailClient.class.getMethod("getCaseTypes"));
     }
@@ -700,5 +752,152 @@ public class TestRailClientTest {
         assertNotNull(TestRailClient.class.getMethod("createCaseSteps",
                 String.class, String.class, String.class, String.class,
                 String.class, String.class, String.class, String.class));
+    }
+
+    // -- format=markdown for get_all_cases / search_cases -----------------------------------
+
+    @Test
+    public void testGetAllCasesDefaultFormatReturnsRawHtml() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", null);
+
+        assertEquals(1, result.size());
+        assertEquals("<p style=\"color: red;\">Precondition text</p>",
+                result.get(0).getJSONObject().getString("custom_preconds"));
+    }
+
+    @Test
+    public void testGetAllCasesMarkdownFormatConvertsHtmlFields() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red; font-family: Arial;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", "markdown");
+
+        assertEquals(1, result.size());
+        String converted = result.get(0).getJSONObject().getString("custom_preconds");
+        assertFalse("markdown output must not contain leftover style attributes", converted.contains("style="));
+        assertTrue(converted.contains("Precondition text"));
+    }
+
+    @Test
+    public void testGetAllCasesMarkdownFormatConvertsStepsSeparatedArray() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+
+        JSONArray steps = new JSONArray()
+                .put(new JSONObject()
+                        .put("content", "<p style=\"margin:0\">Do the thing</p>")
+                        .put("expected", "<table><tr><td>A</td><td>B</td></tr></table>"));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 2)
+                .put("title", "TC2")
+                .put("custom_steps_separated", steps);
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", "markdown");
+
+        JSONArray convertedSteps = result.get(0).getJSONObject().getJSONArray("custom_steps_separated");
+        String convertedContent = convertedSteps.getJSONObject(0).getString("content");
+        String convertedExpected = convertedSteps.getJSONObject(0).getString("expected");
+
+        assertFalse(convertedContent.contains("style="));
+        assertTrue(convertedContent.contains("Do the thing"));
+        assertTrue("expected field's HTML table should become a Markdown table",
+                convertedExpected.contains("| A | B |"));
+    }
+
+    @Test
+    public void testSearchCasesMarkdownFormatConvertsHtmlFields() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 3)
+                .put("title", "TC3")
+                .put("custom_expected", "<p style=\"color:blue\">Expected outcome</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.searchCases("Project A", "1", null, "markdown");
+
+        String converted = result.get(0).getJSONObject().getString("custom_expected");
+        assertFalse(converted.contains("style="));
+        assertTrue(converted.contains("Expected outcome"));
+    }
+
+    @Test
+    public void testGetAllCasesMdAliasConvertsHtmlFieldsSameAsMarkdown() throws Exception {
+        // "md" must be accepted as an alias for "markdown", matching Confluence's convention.
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        List<TestCase> result = stubClient.getAllCases("Project A", "md");
+
+        String converted = result.get(0).getJSONObject().getString("custom_preconds");
+        assertFalse("md alias must trigger markdown conversion", converted.contains("style="));
+        assertTrue(converted.contains("Precondition text"));
+    }
+
+    @Test
+    public void testGetAllCasesUsesMarkdownWhenEnvDefaultIsSetAndFormatIsNull() throws Exception {
+        PropertyReader.setOverrides(Map.of(PropertyReader.TESTRAIL_DEFAULT_FORMAT, "markdown"));
+
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", "<p style=\"color: red;\">Precondition text</p>");
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        // format is null here -- exactly how TestRailTestCasesAdapter's internal
+        // "find related existing test cases" call site invokes getAllCases today.
+        List<TestCase> result = stubClient.getAllCases("Project A", null);
+
+        String converted = result.get(0).getJSONObject().getString("custom_preconds");
+        assertFalse("env-var default should trigger markdown conversion even with format=null",
+                converted.contains("style="));
+        assertTrue(converted.contains("Precondition text"));
+    }
+
+    @Test
+    public void testGetAllCasesExplicitHtmlFormatOverridesEnvDefault() throws Exception {
+        PropertyReader.setOverrides(Map.of(PropertyReader.TESTRAIL_DEFAULT_FORMAT, "markdown"));
+
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        String rawHtml = "<p style=\"color: red;\">Precondition text</p>";
+        JSONObject caseJson = new JSONObject()
+                .put("id", 1)
+                .put("title", "TC1")
+                .put("custom_preconds", rawHtml);
+        stubClient.queueResponse(createCasesPage(0, null, caseJson));
+
+        // Explicit format="html" must win over the env-var default.
+        List<TestCase> result = stubClient.getAllCases("Project A", "html");
+
+        assertEquals(rawHtml, result.get(0).getJSONObject().getString("custom_preconds"));
     }
 }

@@ -392,6 +392,28 @@ class PropertyReaderTest {
         assertTrue(result, "X-ray enrichment should be enabled by default");
     }
 
+    @Test
+    void testTestRailDefaultFormatConstant_NotNullAndCorrectValue() {
+        assertNotNull(PropertyReader.TESTRAIL_DEFAULT_FORMAT, "TESTRAIL_DEFAULT_FORMAT constant should exist");
+        assertEquals("TESTRAIL_DEFAULT_FORMAT", PropertyReader.TESTRAIL_DEFAULT_FORMAT);
+    }
+
+    @Test
+    void testGetTestRailDefaultFormat_DefaultsToHtmlWhenUnset() {
+        assertEquals("html", propertyReader.getTestRailDefaultFormat(),
+                "TestRail default format should be 'html' when the env var is unset, to preserve existing behavior");
+    }
+
+    @Test
+    void testGetTestRailDefaultFormat_ReturnsConfiguredValue() {
+        PropertyReader.setOverrides(Map.of(PropertyReader.TESTRAIL_DEFAULT_FORMAT, "markdown"));
+        try {
+            assertEquals("markdown", propertyReader.getTestRailDefaultFormat());
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
     // -------------------------------------------------------------------------
     // CLI output configuration
     // -------------------------------------------------------------------------
