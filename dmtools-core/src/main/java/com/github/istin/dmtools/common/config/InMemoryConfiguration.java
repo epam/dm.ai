@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.common.config;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -95,55 +96,55 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         }
         
         // Priority 2: Fall back to existing base64-encoded token
-        return getValue("JIRA_LOGIN_PASS_TOKEN");
+        return getValue(PropertyReader.JIRA_LOGIN_PASS_TOKEN);
     }
     
     @Override
     public String getJiraEmail() {
-        return getValue("JIRA_EMAIL");
+        return getValue(PropertyReader.JIRA_EMAIL);
     }
     
     @Override
     public String getJiraApiToken() {
-        return getValue("JIRA_API_TOKEN");
+        return getValue(PropertyReader.JIRA_API_TOKEN);
     }
     
     @Override
     public String getJiraBasePath() {
-        return getValue("JIRA_BASE_PATH");
+        return getValue(PropertyReader.JIRA_BASE_PATH);
     }
     
     @Override
     public String getJiraAuthType() {
-        return getValue("JIRA_AUTH_TYPE");
+        return getValue(PropertyReader.JIRA_AUTH_TYPE);
     }
     
     @Override
     public boolean isJiraWaitBeforePerform() {
-        String value = getValue("JIRA_WAIT_BEFORE_PERFORM");
+        String value = getValue(PropertyReader.JIRA_WAIT_BEFORE_PERFORM);
         return value != null && Boolean.parseBoolean(value);
     }
     
     @Override
     public boolean isJiraLoggingEnabled() {
-        String value = getValue("JIRA_LOGGING_ENABLED");
+        String value = getValue(PropertyReader.JIRA_LOGGING_ENABLED);
         return value != null && Boolean.parseBoolean(value);
     }
     
     @Override
     public boolean isJiraClearCache() {
-        String value = getValue("JIRA_CLEAR_CACHE");
+        String value = getValue(PropertyReader.JIRA_CLEAR_CACHE);
         return value != null && Boolean.parseBoolean(value);
     }
     
     @Override
     public String getJiraExtraFieldsProject() {
-        return getValue("JIRA_EXTRA_FIELDS_PROJECT");
+        return getValue(PropertyReader.JIRA_EXTRA_FIELDS_PROJECT);
     }
     
     @Override
     public String[] getJiraExtraFields() {
-        String value = getValue("JIRA_EXTRA_FIELDS");
+        String value = getValue(PropertyReader.JIRA_EXTRA_FIELDS);
         if (value == null) {
             return null;
         }
@@ -791,12 +792,22 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     
     @Override
     public String getFigmaApiKey() {
-        return getValue("FIGMA_TOKEN");
+        return getValue(PropertyReader.FIGMA_TOKEN);
     }
-    
+
+    @Override
+    public String getFigmaOAuth2AccessToken() {
+        return getValue(PropertyReader.FIGMA_OAUTH_ACCESS_TOKEN);
+    }
+
+    @Override
+    public String getFigmaOAuth2RefreshToken() {
+        return getValue(PropertyReader.FIGMA_OAUTH_REFRESH_TOKEN);
+    }
+
     @Override
     public Integer getDefaultTicketWeightIfNoSPs() {
-        String value = getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
+        String value = getValue(PropertyReader.DEFAULT_TICKET_WEIGHT_IF_NO_SP);
         if (value == null) {
             return -1;
         }
@@ -809,7 +820,7 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     
     @Override
     public Double getLinesOfCodeDivider() {
-        String value = getValue("LINES_OF_CODE_DIVIDER");
+        String value = getValue(PropertyReader.LINES_OF_CODE_DIVIDER);
         if (value == null) {
             return 1.0;
         }
@@ -822,7 +833,7 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     
     @Override
     public Double getTimeSpentOnDivider() {
-        String value = getValue("TIME_SPENT_ON_DIVIDER");
+        String value = getValue(PropertyReader.TIME_SPENT_ON_DIVIDER);
         if (value == null) {
             return 1.0;
         }
@@ -837,7 +848,7 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
     public Double getTicketFieldsChangedDivider(String fieldName) {
         String value = getValue("TICKET_FIELDS_CHANGED_DIVIDER_" + fieldName.toUpperCase());
         if (value == null) {
-            String defaultValue = getValue("TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT");
+            String defaultValue = getValue(PropertyReader.TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT);
             if (defaultValue != null) {
                 try {
                     return Double.parseDouble(defaultValue);
@@ -853,5 +864,142 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
             return 1.0;
         }
     }
-    
+
+    // TestRailConfiguration
+
+    @Override
+    public String getTestRailBasePath() {
+        return getValue(PropertyReader.TESTRAIL_BASE_PATH);
+    }
+
+    @Override
+    public String getTestRailUsername() {
+        return getValue(PropertyReader.TESTRAIL_USERNAME);
+    }
+
+    @Override
+    public String getTestRailApiKey() {
+        return getValue(PropertyReader.TESTRAIL_API_KEY);
+    }
+
+    @Override
+    public String getTestRailProject() {
+        return getValue(PropertyReader.TESTRAIL_PROJECT);
+    }
+
+    @Override
+    public boolean isTestRailLoggingEnabled() {
+        String value = getValue(PropertyReader.TESTRAIL_LOGGING_ENABLED);
+        return value != null && Boolean.parseBoolean(value);
+    }
+
+    // BitriseConfiguration
+
+    @Override
+    public String getBitriseToken() {
+        return getValue(PropertyReader.BITRISE_TOKEN);
+    }
+
+    @Override
+    public String getBitriseBasePath() {
+        return getValue(PropertyReader.BITRISE_BASE_PATH, "https://api.bitrise.io/v0.1");
+    }
+
+    @Override
+    public String getBitriseAppSlug() {
+        return getValue(PropertyReader.BITRISE_APP_SLUG);
+    }
+
+    // XrayConfiguration
+
+    @Override
+    public String getXrayClientId() {
+        return getValue(PropertyReader.XRAY_CLIENT_ID);
+    }
+
+    @Override
+    public String getXrayClientSecret() {
+        return getValue(PropertyReader.XRAY_CLIENT_SECRET);
+    }
+
+    @Override
+    public String getXrayBasePath() {
+        return getValue(PropertyReader.XRAY_BASE_PATH);
+    }
+
+    // AdoConfiguration
+
+    @Override
+    public String getAdoOrganization() {
+        return getValue(PropertyReader.ADO_ORGANIZATION);
+    }
+
+    @Override
+    public String getAdoProject() {
+        return getValue(PropertyReader.ADO_PROJECT);
+    }
+
+    @Override
+    public String getAdoPatToken() {
+        return getValue(PropertyReader.ADO_PAT_TOKEN);
+    }
+
+    @Override
+    public String getAdoBasePath() {
+        return getValue(PropertyReader.ADO_BASE_PATH, "https://dev.azure.com");
+    }
+
+    // TeamsConfiguration
+
+    @Override
+    public String getTeamsBasePath() {
+        return getValue(PropertyReader.TEAMS_BASE_PATH, "https://graph.microsoft.com/v1.0");
+    }
+
+    @Override
+    public String getTeamsClientId() {
+        return getValue(PropertyReader.TEAMS_CLIENT_ID);
+    }
+
+    @Override
+    public String getTenantId() {
+        return getValue(PropertyReader.TEAMS_TENANT_ID, "common");
+    }
+
+    @Override
+    public String getTeamsAuthPort() {
+        return getValue(PropertyReader.TEAMS_AUTH_PORT, "8080");
+    }
+
+    @Override
+    public String getTeamsRefreshToken() {
+        return getValue(PropertyReader.TEAMS_REFRESH_TOKEN);
+    }
+
+    @Override
+    public String getTeamsAuthMethod() {
+        return getValue(PropertyReader.TEAMS_AUTH_METHOD, "device");
+    }
+
+    @Override
+    public String getTeamsScopes() {
+        return getValue(PropertyReader.TEAMS_SCOPES);
+    }
+
+    @Override
+    public String getTeamsTokenCachePath() {
+        return getValue(PropertyReader.TEAMS_TOKEN_CACHE_PATH, "./teams.token");
+    }
+
+    @Override
+    public String getAnthropicCustomHeaderNames() {
+        return getValue(PropertyReader.ANTHROPIC_CUSTOM_HEADER_NAMES);
+    }
+
+    @Override
+    public String getAnthropicCustomHeaderValues() {
+        return getValue(PropertyReader.ANTHROPIC_CUSTOM_HEADER_VALUES);
+    }
+
 }
+

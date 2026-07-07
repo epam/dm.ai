@@ -23,8 +23,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -90,6 +92,41 @@ public class TeamsClient extends MicrosoftGraphRestClient {
             logger.debug("Cached current user display name: {}", currentUserDisplayName);
         }
         return currentUserDisplayName;
+    }
+    
+    @MCPTool(
+            name = "teams_test",
+            description = "Test Microsoft Teams connectivity by fetching the current user's profile",
+            integration = "teams",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            GenericRequest request = new GenericRequest(this, path("/me"));
+            String response = execute(request);
+            if (response != null && !response.isEmpty()) {
+                JSONObject user = new JSONObject(response);
+                if (user.has("id") || user.has("displayName")) {
+                    result.put("success", true);
+                    result.put("message", "Microsoft Teams API connection successful");
+                    result.put("user", user.optString("displayName", "unknown"));
+                    result.put("email", user.optString("mail", user.optString("userPrincipalName", "unknown")));
+                } else {
+                    result.put("success", false);
+                    result.put("message", "Unexpected response format from Microsoft Teams API");
+                }
+            } else {
+                result.put("success", false);
+                result.put("message", "Empty response from Microsoft Teams API");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Microsoft Teams API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Teams connection test failed", e);
+        }
+        return result;
     }
     
     // ========== Chat Operations (Direct Access) ==========
