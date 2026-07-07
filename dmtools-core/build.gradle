@@ -357,3 +357,38 @@ task shadowJarSmokeTest(type: Test) {
 }
 
 check.dependsOn shadowJarSmokeTest
+
+// Local install: build shadow JAR and copy it (plus wrapper script) into ~/.dmtools
+tasks.register('buildLocalInstall') {
+    description = 'Build shadow JAR and install it into ~/.dmtools'
+    group = 'build'
+    dependsOn shadowJar
+
+    def installDir = file("${System.getProperty('user.home')}/.dmtools")
+
+    doLast {
+        copy {
+            from shadowJar.archiveFile
+            into installDir
+            rename { 'dmtools.jar' }
+        }
+        copy {
+            from "${project.rootDir}/dmtools.sh"
+            into file("${installDir}/bin")
+            rename { 'dmtools' }
+        }
+        ant.chmod(file: "${installDir}/bin/dmtools", perm: "755")
+
+        // Update local checksum file for consistency
+        def checksumFile = file("${installDir}/dmtools-checksums.sha256")
+        def jar = file("${installDir}/dmtools.jar")
+        def digest = java.security.MessageDigest.getInstance('SHA-256').digest(jar.bytes)
+        def hex = digest.collect { String.format('%02x', it) }.join('')
+        checksumFile.text = "${hex}  dmtools.jar\n"
+
+        println "Installed DMTools locally:"
+        println "  JAR: ${jar.absolutePath}"
+        println "  Bin: ${installDir}/bin/dmtools"
+        println "  Checksum: ${checksumFile.text.trim()}"
+    }
+}
