@@ -38,7 +38,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -310,6 +312,30 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      */
     public ContentResult content(String title, String space) throws IOException {
         return content(title, space, null);
+    }
+
+    @MCPTool(
+        name = "confluence_test",
+        description = "Test Confluence connectivity by fetching the current user's profile",
+        integration = "confluence",
+        category = "system"
+    )
+    public Map<String, Object> testConnection() throws IOException {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            String response = profile();
+            JSONObject json = new JSONObject(response);
+            result.put("success", true);
+            result.put("message", "Confluence connection successful");
+            result.put("user", json.optString("displayName", json.optString("username", "unknown")));
+            result.put("email", json.optString("email", "unknown"));
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Confluence connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Confluence connection test failed", e);
+        }
+        return result;
     }
 
     @MCPTool(

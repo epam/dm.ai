@@ -6,6 +6,8 @@ package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.model.Metadata;
+import com.github.istin.dmtools.common.config.ApplicationConfiguration;
+import com.github.istin.dmtools.common.config.PropertyReaderConfiguration;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.ba.BusinessAnalyticDORGeneration;
 import com.github.istin.dmtools.ba.RequirementsCollector;
@@ -17,6 +19,7 @@ import com.github.istin.dmtools.diagram.DiagramsCreator;
 import com.github.istin.dmtools.documentation.DocumentationGenerator;
 import com.github.istin.dmtools.estimations.JEstimator;
 import com.github.istin.dmtools.expert.Expert;
+import com.github.istin.dmtools.job.doctor.DoctorCommand;
 import com.github.istin.dmtools.presale.PreSaleSupport;
 import com.github.istin.dmtools.qa.TestCasesGenerator;
 import com.github.istin.dmtools.qa.InstructionsGenerator;
@@ -32,17 +35,19 @@ import com.github.istin.dmtools.teammate.Teammate;
 import com.github.istin.dmtools.js.JSRunner;
 import com.github.istin.dmtools.kb.KBProcessingJob;
 import com.github.istin.dmtools.mcp.cli.McpCliHandler;
+import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import com.github.istin.dmtools.common.utils.JSONUtils;
-import com.github.istin.dmtools.teammate.Teammate;
-import com.github.istin.dmtools.js.JSRunner;
-import com.github.istin.dmtools.kb.KBProcessingJob;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONException;
@@ -110,7 +115,7 @@ public class JobRunner {
      *
      * @return List of available jobs
      */
-    private static List<Job> getJobs() {
+    public static List<Job> getJobs() {
         if (JOBS == null) {
             synchronized (JobRunner.class) {
                 if (JOBS == null) {
@@ -169,6 +174,10 @@ public class JobRunner {
                 listJobs();
                 return;
             }
+            if ("doctor".equals(firstArg)) {
+                new DoctorCommand().run();
+                return;
+            }
             if ("mcp".equals(firstArg)) {
                 // Handle MCP CLI commands
                 McpCliHandler mcpHandler = new McpCliHandler();
@@ -189,10 +198,18 @@ public class JobRunner {
                 }
                 System.exit(1);
             }
+            if ("interactive".equals(firstArg) || "i".equals(firstArg)) {
+                launchInteractive();
+                return;
+            }
         }
         
         if (args.length == 0) {
-            printHelp();
+            if (System.console() != null) {
+                launchInteractive();
+            } else {
+                printHelp();
+            }
             return;
         }
         
@@ -290,6 +307,7 @@ public class JobRunner {
         System.out.println();
         System.out.println("Usage:");
         System.out.println("  dmtools list                           # List available MCP tools");
+        System.out.println("  dmtools doctor                         # Check current directory configuration");
         System.out.println("  dmtools run <json-file>                # Execute job with JSON config file");
         System.out.println("  dmtools run <job-name> [--key value]   # Execute a registered job without a config file");
         System.out.println("  dmtools run <json-file> <encoded>      # Execute job with file + encoded overrides");
@@ -304,6 +322,7 @@ public class JobRunner {
         System.out.println();
         System.out.println("Examples:");
         System.out.println("  dmtools list");
+        System.out.println("  dmtools doctor");
         System.out.println("  dmtools run job-config.json");
         System.out.println("  dmtools run codegenerator --param1 test");
         System.out.println("  dmtools run job-config.json \"eyJvdmVycmlkZSI6InZhbHVlIn0=\"  # base64 encoded");
@@ -347,6 +366,19 @@ public class JobRunner {
         System.out.println("  curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash");
         System.out.println();
         System.out.println("DM.ai uses DMTools. Do you?");
+    }
+
+    private static void launchInteractive() {
+        com.github.istin.dmtools.mcp.cli.interactive.Terminal terminal =
+                com.github.istin.dmtools.mcp.cli.interactive.Terminal.create();
+        com.github.istin.dmtools.mcp.cli.interactive.CommandSource source =
+                new com.github.istin.dmtools.mcp.cli.interactive.CommandSource();
+        com.github.istin.dmtools.mcp.cli.interactive.InteractiveCli cli =
+                new com.github.istin.dmtools.mcp.cli.interactive.InteractiveCli(terminal, source);
+        String command = cli.run();
+        if (command != null && !command.isEmpty()) {
+            System.out.println(command);
+        }
     }
 
     private static void listJobs() {
