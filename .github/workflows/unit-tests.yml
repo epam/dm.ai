@@ -5,6 +5,73 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js (for jscpd)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install jscpd
+        run: npm install -g jscpd
+
+      - name: Check Java file sizes
+        run: |
+          MAX_LINES=2800
+          FAILED=0
+          while IFS= read -r file; do
+            case "$file" in
+              *.java)
+                # Only fail if the file is currently over the limit AND was not
+                # already over the limit on the base branch. This lets legacy
+                # large files improve gradually while preventing new violations.
+                head_lines=$(wc -l < "$file")
+                base_lines=$(git show origin/${{ github.base_ref }}:"$file" 2>/dev/null | wc -l || echo 0)
+                if (( head_lines > MAX_LINES && base_lines <= MAX_LINES )); then
+                  echo "❌ $file: $head_lines lines (max $MAX_LINES); was $base_lines on ${{ github.base_ref }}"
+                  FAILED=1
+                fi
+                ;;
+            esac
+          done < <(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Quality gate failed: changed Java files exceed $MAX_LINES lines."
+            exit 1
+          fi
+
+      - name: Check code duplication against baseline
+        run: |
+          jscpd --min-tokens 50 --min-lines 5 --reporters json --output /tmp/jscpd-check dmtools-core/src/main/java/ >/dev/null 2>&1 || true
+          CURRENT=$(python3 -c '
+          import json,sys
+          try:
+              with open("/tmp/jscpd-check/jscpd-report.json") as f:
+                  d=json.load(f)
+              print(d["statistics"]["total"]["percentage"])
+          except: print("0.0")
+          ')
+          BASELINE=$(python3 -c '
+          import json,sys
+          try:
+              with open("scripts/jscpd-baseline.json") as f:
+                  d=json.load(f)
+              print(d.get("percentage", 999.0))
+          except: print("999.0")
+          ')
+          echo "Current duplication: $CURRENT%"
+          echo "Baseline: $BASELINE%"
+          python3 -c "import sys; sys.exit(0 if float('$CURRENT') <= float('$BASELINE') else 1)"
+
   test:
     name: Java unit tests
     runs-on: ubuntu-latest
