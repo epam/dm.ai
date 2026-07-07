@@ -874,15 +874,10 @@ public class McpCliHandler {
             }
         }
 
-        // If no environment variable, return all possible integrations
+        // If no environment variable, return all known integration types from the generated registry
         // Do NOT create clients just to check - this is for listing only
         if (integrations.isEmpty()) {
-            // Return all known integration types without creating clients
-            integrations.addAll(Arrays.asList(
-                "jira", "jira_xray", "ado", "confluence", "figma",
-                "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
-                "file", "kb", "mermaid", "github", "gitlab", "bitrise", "bitbucket", "rally"
-            ));
+            integrations.addAll(MCPToolRegistry.getAvailableIntegrations());
         }
         logger.debug("Available integrations: {}", integrations);
         return integrations;

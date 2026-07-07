@@ -3,8 +3,11 @@
 
 package com.github.istin.dmtools.mcp.cli.interactive;
 
+import com.github.istin.dmtools.job.Job;
+import com.github.istin.dmtools.job.JobRunner;
 import com.github.istin.dmtools.mcp.cli.interactive.CommandItem.Kind;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
+import com.github.istin.dmtools.mcp.generated.MCPToolRegistry;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -48,7 +51,7 @@ public class CommandSource {
 
     public CommandSource(Set<String> integrations) {
         this.integrations = integrations == null || integrations.isEmpty()
-                ? defaultIntegrationsInternal()
+                ? MCPToolRegistry.getAvailableIntegrations()
                 : new HashSet<>(integrations);
     }
 
@@ -114,13 +117,22 @@ public class CommandSource {
     }
 
     /**
-     * Loads built-in job names.
-     *
-     * <p>This mirrors the list produced by {@code JobRunner --list-jobs}.
-     * Keeping the list in one place avoids drift; for now it is duplicated
-     * because the job list is not exposed through a public Java API.</p>
+     * Loads built-in job names from {@link JobRunner#getJobs()}.
      */
     public List<CommandItem> loadJobs() {
+        List<CommandItem> items = new ArrayList<>();
+        try {
+            for (Job job : JobRunner.getJobs()) {
+                items.add(new CommandItem(Kind.JOB, "job", job.getName(), "Built-in job"));
+            }
+        } catch (Exception e) {
+            // Fallback to static list if JobRunner listing fails for any reason
+            items.addAll(loadFallbackJobs());
+        }
+        return items;
+    }
+
+    private List<CommandItem> loadFallbackJobs() {
         List<String> names = Arrays.asList(
                 "PreSaleSupport",
                 "DocumentationGenerator",
@@ -253,14 +265,12 @@ public class CommandSource {
 
     /**
      * Returns the default set of integration names used when no explicit set is provided.
+     *
+     * @deprecated Use {@link MCPToolRegistry#getAvailableIntegrations()} directly. Kept for compatibility.
      */
+    @Deprecated
     public static Set<String> defaultIntegrations() {
-        Set<String> set = new HashSet<>(Arrays.asList(
-                "jira", "jira_xray", "ado", "confluence", "figma",
-                "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
-                "file", "kb", "mermaid", "github", "gitlab", "bitrise", "bitbucket", "rally"
-        ));
-        return set;
+        return MCPToolRegistry.getAvailableIntegrations();
     }
 
     private static Set<String> defaultIntegrationsInternal() {
