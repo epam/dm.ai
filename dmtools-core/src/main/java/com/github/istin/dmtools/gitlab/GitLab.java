@@ -26,7 +26,9 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -51,6 +53,42 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
                 .header("Authorization", "Bearer " + authorization)
                 .header("Accept",  "application/json")
                 .header("Content-Type", "application/json");
+    }
+
+    @MCPTool(
+            name = "gitlab_test",
+            description = "Test GitLab connectivity by fetching the current user's profile",
+            integration = "gitlab",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            GenericRequest getRequest = new GenericRequest(this, path("user"));
+            String response = execute(getRequest);
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                if (jsonResponse.has("id") || jsonResponse.has("username")) {
+                    result.put("success", true);
+                    result.put("message", "GitLab API connection successful");
+                    result.put("user", jsonResponse.optString("username", "unknown"));
+                    result.put("userId", jsonResponse.optString("id", "unknown"));
+                    result.put("email", jsonResponse.optString("email", "unknown"));
+                } else {
+                    result.put("success", false);
+                    result.put("message", "Unexpected response format from GitLab API");
+                }
+            } else {
+                result.put("success", false);
+                result.put("message", "Empty response from GitLab API");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "GitLab API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("GitLab connection test failed", e);
+        }
+        return result;
     }
 
     @Override
