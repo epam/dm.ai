@@ -23,7 +23,7 @@ jobs:
           node-version: '20'
 
       - name: Install jscpd
-        run: npm install -g jscpd
+        run: npm install -g jscpd@5.0.11
 
       - name: Check Java file sizes
         run: |
