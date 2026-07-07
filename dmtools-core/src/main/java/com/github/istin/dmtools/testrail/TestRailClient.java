@@ -127,6 +127,39 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
     // ========== MCP Tools ==========
 
     @MCPTool(
+            name = "testrail_test",
+            description = "Test TestRail connectivity by fetching projects",
+            integration = "testrail",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            String response = executeGet("/get_projects");
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                if (jsonResponse.has("projects")) {
+                    result.put("success", true);
+                    result.put("message", "TestRail API connection successful");
+                    result.put("projects", jsonResponse.optJSONArray("projects").length());
+                } else {
+                    result.put("success", false);
+                    result.put("message", "Unexpected response format from TestRail API");
+                }
+            } else {
+                result.put("success", false);
+                result.put("message", "Empty response from TestRail API");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "TestRail API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("TestRail connection test failed", e);
+        }
+        return result;
+    }
+
+    @MCPTool(
             name = "testrail_get_projects",
             description = "Get list of all projects in TestRail",
             integration = "testrail",

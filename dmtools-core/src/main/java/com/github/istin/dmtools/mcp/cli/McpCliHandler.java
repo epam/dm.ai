@@ -11,6 +11,7 @@ import com.github.istin.dmtools.di.AIComponentsModule;
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.atlassian.jira.xray.XrayClient;
+import com.github.istin.dmtools.atlassian.bitbucket.BasicBitbucket;
 import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
@@ -30,6 +31,7 @@ import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import com.github.istin.dmtools.mcp.generated.MCPToolRegistry;
 import com.github.istin.dmtools.mcp.MCPToolDefinition;
+import com.github.istin.dmtools.broadcom.rally.BasicRallyClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -61,6 +63,14 @@ public class McpCliHandler {
         configureCLILogging();
         // Don't initialize clients in constructor - use lazy initialization
         // This significantly improves startup time for list commands
+    }
+
+    /**
+     * Public accessor used by JobRunner.doctor to run connectivity tests.
+     */
+    public Map<String, Object> createClientInstancesForDoctor() {
+        ensureClientInstances();
+        return clientInstances;
     }
 
     /**
@@ -595,6 +605,28 @@ public class McpCliHandler {
         }
 
         try {
+            // Create Bitbucket client
+            clients.put("bitbucket", BasicBitbucket.getInstance());
+            logger.debug("Created BasicBitbucket instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicBitbucket: {}", e.getMessage());
+        }
+
+        try {
+            // Create Rally client
+            TrackerClient<?> rallyClient = BasicRallyClient.getInstance();
+            if (rallyClient == null) {
+                // Create a placeholder so that rally_test can report a graceful failure
+                // when Rally is not configured. Real Rally tools will fail at execution.
+                rallyClient = BasicRallyClient.createInstance("", "");
+            }
+            clients.put("rally", rallyClient);
+            logger.debug("Created BasicRallyClient instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicRallyClient: {}", e.getMessage());
+        }
+
+        try {
             // Create Bitrise client
             clients.put("bitrise", BasicBitrise.getInstance());
             logger.debug("Created BasicBitrise instance");
@@ -842,15 +874,10 @@ public class McpCliHandler {
             }
         }
 
-        // If no environment variable, return all possible integrations
+        // If no environment variable, return all known integration types from the generated registry
         // Do NOT create clients just to check - this is for listing only
         if (integrations.isEmpty()) {
-            // Return all known integration types without creating clients
-            integrations.addAll(Arrays.asList(
-                "jira", "jira_xray", "ado", "confluence", "figma",
-                "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
-                "file", "kb", "mermaid", "github", "gitlab", "bitrise"
-            ));
+            integrations.addAll(MCPToolRegistry.getAvailableIntegrations());
         }
         logger.debug("Available integrations: {}", integrations);
         return integrations;

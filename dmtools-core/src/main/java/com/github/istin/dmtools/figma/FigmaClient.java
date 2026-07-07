@@ -222,6 +222,16 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
     }
 
     @MCPTool(
+        name = "figma_test",
+        description = "Test Figma connectivity by fetching the current user's profile",
+        integration = "figma",
+        category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        return me();
+    }
+
+    @MCPTool(
         name = "figma_me",
         description = "Gets current user information from the Figma API using the /me endpoint. Returns user details including id, handle, and email. Can also be used to verify API connectivity.",
         integration = "figma",
