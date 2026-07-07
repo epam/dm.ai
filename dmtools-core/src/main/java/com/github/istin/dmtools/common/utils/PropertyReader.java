@@ -710,7 +710,7 @@ public class PropertyReader {
   }
 
   public Integer getDefaultTicketWeightIfNoSPs() {
-    String value = getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
+    String value = getValue(DEFAULT_TICKET_WEIGHT_IF_NO_SP);
     if (value == null || value.isEmpty()) {
       return -1;
     }
@@ -753,7 +753,7 @@ public class PropertyReader {
   }
 
   public Double getLinesOfCodeDivider() {
-    String value = getValue("LINES_OF_CODE_DIVIDER");
+    String value = getValue(LINES_OF_CODE_DIVIDER);
     if (value == null || value.isEmpty()) {
       return 1d;
     }
@@ -761,7 +761,7 @@ public class PropertyReader {
   }
 
   public Double getTimeSpentOnDivider() {
-    String value = getValue("TIME_SPENT_ON_DIVIDER");
+    String value = getValue(TIME_SPENT_ON_DIVIDER);
     if (value == null || value.isEmpty()) {
       return 1d;
     }
@@ -771,7 +771,7 @@ public class PropertyReader {
   public Double getTicketFieldsChangedDivider(String fieldName) {
     String value = getValue("TICKET_FIELDS_CHANGED_DIVIDER_"+ fieldName.toUpperCase());
     if (value == null) {
-      String defaultValue = getValue("TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT");
+      String defaultValue = getValue(TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT);
       if (defaultValue != null && !defaultValue.isEmpty()) {
         return Double.parseDouble(defaultValue);
       }
@@ -1022,6 +1022,12 @@ public class PropertyReader {
   public static final String DEFAULT_LLM = "DEFAULT_LLM";
   public static final String DEFAULT_TRACKER = "DEFAULT_TRACKER";
 
+  // Misc configuration
+  public static final String DEFAULT_TICKET_WEIGHT_IF_NO_SP = "DEFAULT_TICKET_WEIGHT_IF_NO_SP";
+  public static final String LINES_OF_CODE_DIVIDER = "LINES_OF_CODE_DIVIDER";
+  public static final String TIME_SPENT_ON_DIVIDER = "TIME_SPENT_ON_DIVIDER";
+  public static final String TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT = "TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT";
+
   // Jira configuration
   public static final String JIRA_BASE_PATH = "JIRA_BASE_PATH";
   public static final String JIRA_EMAIL = "JIRA_EMAIL";
@@ -1090,6 +1096,7 @@ public class PropertyReader {
   public static final String TESTRAIL_USERNAME = "TESTRAIL_USERNAME";
   public static final String TESTRAIL_API_KEY = "TESTRAIL_API_KEY";
   public static final String TESTRAIL_PROJECT = "TESTRAIL_PROJECT";
+  public static final String TESTRAIL_LOGGING_ENABLED = "TESTRAIL_LOGGING_ENABLED";
 
   // Bitrise configuration
   public static final String BITRISE_TOKEN = "BITRISE_TOKEN";
@@ -1102,6 +1109,7 @@ public class PropertyReader {
   public static final String XRAY_BASE_PATH = "XRAY_BASE_PATH";
 
   // Microsoft Teams configuration
+  public static final String TEAMS_BASE_PATH = "TEAMS_BASE_PATH";
   public static final String TEAMS_CLIENT_ID = "TEAMS_CLIENT_ID";
   public static final String TEAMS_TENANT_ID = "TEAMS_TENANT_ID";
   public static final String TEAMS_SCOPES = "TEAMS_SCOPES";
@@ -1114,6 +1122,8 @@ public class PropertyReader {
   public static final String DIAL_BASE_PATH = "DIAL_BASE_PATH";
   public static final String DIAL_API_KEY = "DIAL_API_KEY";
   public static final String DIAL_API_VERSION = "DIAL_API_VERSION";
+
+
   public static final String IMAGE_MAX_DIMENSION = "IMAGE_MAX_DIMENSION";
   public static final String IMAGE_JPEG_QUALITY = "IMAGE_JPEG_QUALITY";
 
@@ -1264,12 +1274,15 @@ public class PropertyReader {
     }
   }
 
+  public static final String ANTHROPIC_CUSTOM_HEADER_NAMES = "ANTHROPIC_CUSTOM_HEADER_NAMES";
+  public static final String ANTHROPIC_CUSTOM_HEADER_VALUES = "ANTHROPIC_CUSTOM_HEADER_VALUES";
+
   public String getAnthropicCustomHeaderNames() {
-    return getValue("ANTHROPIC_CUSTOM_HEADER_NAMES");
+    return getValue(ANTHROPIC_CUSTOM_HEADER_NAMES);
   }
 
   public String getAnthropicCustomHeaderValues() {
-    return getValue("ANTHROPIC_CUSTOM_HEADER_VALUES");
+    return getValue(ANTHROPIC_CUSTOM_HEADER_VALUES);
   }
 
   // Bedrock configuration
@@ -1454,7 +1467,7 @@ public class PropertyReader {
   }
 
   public boolean isTestRailLoggingEnabled() {
-    String value = getValue("TESTRAIL_LOGGING_ENABLED");
+    String value = getValue(TESTRAIL_LOGGING_ENABLED);
     if (value == null) {
       return false;
     }

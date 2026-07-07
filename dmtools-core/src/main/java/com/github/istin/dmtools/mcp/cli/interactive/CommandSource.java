@@ -34,6 +34,12 @@ import java.util.Set;
  * <p>The loader intentionally avoids creating integration clients so that
  * the interactive picker starts quickly.  Tool metadata is read from the
  * generated schema; runnable files are discovered by scanning the working tree.</p>
+ *
+ * <p>{@code EXCLUDED_DIR_NAMES} lists directories that are skipped while
+ * scanning for runnable {@code .js} and {@code .json} files.  It is intentionally
+ * conservative: build outputs, dependency folders, cache directories and VCS
+ * metadata are ignored to keep the picker fast and avoid surfacing generated
+ * or non-runnable files.</p>
  */
 public class CommandSource {
 
