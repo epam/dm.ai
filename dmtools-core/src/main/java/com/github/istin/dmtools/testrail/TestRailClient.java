@@ -192,6 +192,51 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
     }
 
     @MCPTool(
+            name = "testrail_get_suites",
+            description = "Get all test suites for a TestRail project",
+            integration = "testrail",
+            category = "suites"
+    )
+    public String getSuites(
+            @MCPParam(name = "project_name", description = "Project name to get suites from", required = true, example = "My Project")
+            String projectName
+    ) throws IOException {
+        return getSuitesByProjectId(getProjectId(projectName));
+    }
+
+    /** ID-based variant — bypasses project name resolution. */
+    String getSuitesByProjectId(int projectId) throws IOException {
+        List<JSONObject> allSuites = new ArrayList<>();
+        int limit = 250;
+        String baseApiPath = "/get_suites/" + projectId;
+        String nextPagePath = buildPagedPath(baseApiPath, limit, 0);
+
+        while (nextPagePath != null) {
+            String response = executeGet(nextPagePath);
+
+            JSONObject responseObj = new JSONObject(response);
+            JSONArray suites = responseObj.optJSONArray("suites");
+
+            if (suites == null || suites.length() == 0) {
+                break;
+            }
+
+            for (int i = 0; i < suites.length(); i++) {
+                allSuites.add(suites.getJSONObject(i));
+            }
+
+            nextPagePath = getNextPagePath(responseObj, baseApiPath, limit, suites.length());
+        }
+
+        JSONArray result = new JSONArray();
+        for (JSONObject suite : allSuites) {
+            result.put(suite);
+        }
+        log("Retrieved " + allSuites.size() + " suites for project ID " + projectId);
+        return result.toString(2);
+    }
+
+    @MCPTool(
             name = "testrail_get_case",
             description = "Get a TestRail test case by ID",
             integration = "testrail",

@@ -311,6 +311,22 @@ public class TestRailClientTest {
         assertEquals("cacheTestRail", client.getCacheFolderName());
     }
 
+    private String createSuitesPage(int offset, String nextLink, JSONObject... suites) {
+        JSONObject response = new JSONObject();
+        JSONArray suitesArray = new JSONArray();
+        for (JSONObject suite : suites) {
+            suitesArray.put(suite);
+        }
+        response.put("offset", offset);
+        response.put("limit", 250);
+        response.put("size", suitesArray.length());
+        response.put("suites", suitesArray);
+        response.put("_links", new JSONObject()
+                .put("next", nextLink == null ? JSONObject.NULL : nextLink)
+                .put("prev", JSONObject.NULL));
+        return response.toString();
+    }
+
     private String createProjectsPage(int offset, String nextLink, JSONObject... projects) {
         JSONObject response = new JSONObject();
         JSONArray projectsArray = new JSONArray();
@@ -688,6 +704,33 @@ public class TestRailClientTest {
     @Test
     public void testUpdateLabelMethodExists() throws Exception {
         assertNotNull(TestRailClient.class.getMethod("updateLabel", String.class, String.class, String.class));
+    }
+
+    @Test
+    public void testGetSuitesMethodExists() throws Exception {
+        assertNotNull(TestRailClient.class.getMethod("getSuites", String.class));
+    }
+
+    @Test
+    public void testGetSuitesAggregatesAllPagesUsingNextLink() throws Exception {
+        StubTestRailClient stubClient = new StubTestRailClient(basePath, username, apiKey);
+        stubClient.queueResponse(createProjectsPage(0, null,
+                new JSONObject().put("id", 5).put("name", "Project A")));
+        stubClient.queueResponse(createSuitesPage(0, "/api/v2/get_suites/5&limit=250&offset=250",
+                new JSONObject().put("id", 1).put("name", "Master")));
+        stubClient.queueResponse(createSuitesPage(250, null,
+                new JSONObject().put("id", 2).put("name", "Baseline Copy")));
+
+        JSONArray suites = new JSONArray(stubClient.getSuites("Project A"));
+
+        assertEquals(2, suites.length());
+        assertEquals("Master", suites.getJSONObject(0).getString("name"));
+        assertEquals("Baseline Copy", suites.getJSONObject(1).getString("name"));
+        assertEquals(List.of(
+                "/get_projects&limit=250&offset=0",
+                "/get_suites/5&limit=250&offset=0",
+                "/get_suites/5&limit=250&offset=250"
+        ), stubClient.getRequestedPaths());
     }
 
     @Test
