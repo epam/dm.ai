@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.common.config;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -95,55 +96,55 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         }
         
         // Priority 2: Fall back to existing base64-encoded token
-        return getValue("JIRA_LOGIN_PASS_TOKEN");
+        return getValue(PropertyReader.JIRA_LOGIN_PASS_TOKEN);
     }
     
     @Override
     public String getJiraEmail() {
-        return getValue("JIRA_EMAIL");
+        return getValue(PropertyReader.JIRA_EMAIL);
     }
     
     @Override
     public String getJiraApiToken() {
-        return getValue("JIRA_API_TOKEN");
+        return getValue(PropertyReader.JIRA_API_TOKEN);
     }
     
     @Override
     public String getJiraBasePath() {
-        return getValue("JIRA_BASE_PATH");
+        return getValue(PropertyReader.JIRA_BASE_PATH);
     }
     
     @Override
     public String getJiraAuthType() {
-        return getValue("JIRA_AUTH_TYPE");
+        return getValue(PropertyReader.JIRA_AUTH_TYPE);
     }
     
     @Override
     public boolean isJiraWaitBeforePerform() {
-        String value = getValue("JIRA_WAIT_BEFORE_PERFORM");
+        String value = getValue(PropertyReader.JIRA_WAIT_BEFORE_PERFORM);
         return value != null && Boolean.parseBoolean(value);
     }
     
     @Override
     public boolean isJiraLoggingEnabled() {
-        String value = getValue("JIRA_LOGGING_ENABLED");
+        String value = getValue(PropertyReader.JIRA_LOGGING_ENABLED);
         return value != null && Boolean.parseBoolean(value);
     }
     
     @Override
     public boolean isJiraClearCache() {
-        String value = getValue("JIRA_CLEAR_CACHE");
+        String value = getValue(PropertyReader.JIRA_CLEAR_CACHE);
         return value != null && Boolean.parseBoolean(value);
     }
     
     @Override
     public String getJiraExtraFieldsProject() {
-        return getValue("JIRA_EXTRA_FIELDS_PROJECT");
+        return getValue(PropertyReader.JIRA_EXTRA_FIELDS_PROJECT);
     }
     
     @Override
     public String[] getJiraExtraFields() {
-        String value = getValue("JIRA_EXTRA_FIELDS");
+        String value = getValue(PropertyReader.JIRA_EXTRA_FIELDS);
         if (value == null) {
             return null;
         }

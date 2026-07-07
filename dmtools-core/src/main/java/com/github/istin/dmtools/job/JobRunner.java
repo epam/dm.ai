@@ -7,7 +7,6 @@ package com.github.istin.dmtools.job;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.model.Metadata;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
-import com.github.istin.dmtools.common.config.ConfigDoctor;
 import com.github.istin.dmtools.common.config.PropertyReaderConfiguration;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.ba.BusinessAnalyticDORGeneration;
@@ -20,6 +19,7 @@ import com.github.istin.dmtools.diagram.DiagramsCreator;
 import com.github.istin.dmtools.documentation.DocumentationGenerator;
 import com.github.istin.dmtools.estimations.JEstimator;
 import com.github.istin.dmtools.expert.Expert;
+import com.github.istin.dmtools.job.doctor.DoctorCommand;
 import com.github.istin.dmtools.presale.PreSaleSupport;
 import com.github.istin.dmtools.qa.TestCasesGenerator;
 import com.github.istin.dmtools.qa.InstructionsGenerator;
@@ -179,7 +179,7 @@ public class JobRunner {
                 return;
             }
             if ("doctor".equals(firstArg)) {
-                runDoctor();
+                new DoctorCommand().run();
                 return;
             }
             if ("mcp".equals(firstArg)) {
@@ -394,61 +394,6 @@ public class JobRunner {
         }
         System.out.println();
         System.out.println("Total: " + jobs.size() + " jobs available");
-    }
-
-    private static void runDoctor() {
-        ApplicationConfiguration config = new PropertyReaderConfiguration();
-        List<ConfigDoctor.CheckResult> results = ConfigDoctor.diagnose(config);
-
-        long ready = results.stream().filter(ConfigDoctor.CheckResult::isReady).count();
-        System.out.println("DMTools Configuration Check");
-        System.out.println("==========================");
-        System.out.println("Integrations ready: " + ready + " / " + results.size());
-        System.out.println();
-
-        McpCliHandler handler = new McpCliHandler();
-        Map<String, Object> clientInstances = handler.createClientInstancesForDoctor();
-
-        for (ConfigDoctor.CheckResult r : results) {
-            String symbol = r.isReady() ? "✓" : "✗";
-            String status = r.getStatus();
-            List<String> warnings = new ArrayList<>(r.getWarnings());
-            List<String> missing = new ArrayList<>(r.getMissing());
-
-            if (r.isReady() && !"defaults".equals(r.getName()) && !"ai".equals(r.getName())) {
-                String testTool = r.getName() + "_test";
-                if ("xray".equals(r.getName()) || "jira_xray".equals(r.getName())) {
-                    testTool = "jira_xray_test";
-                }
-                try {
-                    Object testResult = MCPToolExecutor.executeTool(testTool, new HashMap<>(), clientInstances);
-                    if (testResult instanceof Map) {
-                        Map<String, Object> tr = (Map<String, Object>) testResult;
-                        Object success = tr.get("success");
-                        if (Boolean.TRUE.equals(success)) {
-                            status = status + " (connectivity OK)";
-                        } else {
-                            status = status + " (connectivity failed)";
-                            Object message = tr.get("message");
-                            warnings.add("connectivity: " + (message != null ? message : "unknown error"));
-                        }
-                    }
-                } catch (Exception e) {
-                    status = status + " (connectivity failed)";
-                    warnings.add("connectivity: " + e.getMessage());
-                }
-            }
-
-            System.out.println(symbol + " " + r.getName() + " - " + status);
-            for (String m : missing) {
-                System.out.println("    missing: " + m);
-            }
-            for (String w : warnings) {
-                System.out.println("    warning: " + w);
-            }
-        }
-        System.out.println();
-        System.out.println("Note: doctor checks configuration presence and, when configured, basic connectivity.");
     }
 
     public static void initMetadata(Job job, Object paramsByClass) {

@@ -3,6 +3,8 @@
 
 package com.github.istin.dmtools.common.config;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,20 +67,20 @@ public class ConfigDoctor {
 
     private static CheckResult checkJira(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getJiraBasePath())) missing.add("JIRA_BASE_PATH");
+        if (isBlank(config.getJiraBasePath())) missing.add(PropertyReader.JIRA_BASE_PATH);
         boolean hasBasicAuth = !isBlank(config.getJiraEmail()) && !isBlank(config.getJiraApiToken());
         boolean hasLoginPassToken = !isBlank(config.getJiraLoginPassToken());
         if (!hasBasicAuth && !hasLoginPassToken) {
-            missing.add("JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN");
+            missing.add(PropertyReader.JIRA_EMAIL + " + " + PropertyReader.JIRA_API_TOKEN + " or " + PropertyReader.JIRA_LOGIN_PASS_TOKEN);
         }
         return result("jira", missing, "Basic Jira authentication");
     }
 
     private static CheckResult checkConfluence(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getConfluenceBasePath())) missing.add("CONFLUENCE_BASE_PATH");
-        if (isBlank(config.getConfluenceEmail())) missing.add("CONFLUENCE_EMAIL");
-        if (isBlank(config.getConfluenceApiToken())) missing.add("CONFLUENCE_API_TOKEN");
+        if (isBlank(config.getConfluenceBasePath())) missing.add(PropertyReader.CONFLUENCE_BASE_PATH);
+        if (isBlank(config.getConfluenceEmail())) missing.add(PropertyReader.CONFLUENCE_EMAIL);
+        if (isBlank(config.getConfluenceApiToken())) missing.add(PropertyReader.CONFLUENCE_API_TOKEN);
         return result("confluence", missing, "Confluence authentication");
     }
 
@@ -86,64 +88,64 @@ public class ConfigDoctor {
         List<String> missing = new ArrayList<>();
         boolean oauth = !isBlank(config.getFigmaOAuth2AccessToken()) || !isBlank(config.getFigmaOAuth2RefreshToken());
         if (isBlank(config.getFigmaApiKey()) && !oauth) {
-            missing.add("FIGMA_TOKEN or FIGMA OAuth credentials");
+            missing.add(PropertyReader.FIGMA_TOKEN + " or FIGMA OAuth credentials");
         }
-        if (isBlank(config.getFigmaBasePath())) missing.add("FIGMA_BASE_PATH");
+        if (isBlank(config.getFigmaBasePath())) missing.add(PropertyReader.FIGMA_BASE_PATH);
         return result("figma", missing, "Figma API or OAuth authentication");
     }
 
     private static CheckResult checkGitHub(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getGithubToken())) missing.add("SOURCE_GITHUB_TOKEN (or GITHUB_TOKEN)");
+        if (isBlank(config.getGithubToken())) missing.add(PropertyReader.SOURCE_GITHUB_TOKEN + " (or GITHUB_TOKEN)");
         return result("github", missing, "GitHub token");
     }
 
     private static CheckResult checkGitLab(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getGitLabToken())) missing.add("GITLAB_TOKEN");
+        if (isBlank(config.getGitLabToken())) missing.add(PropertyReader.GITLAB_TOKEN);
         return result("gitlab", missing, "GitLab token");
     }
 
     private static CheckResult checkBitbucket(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getBitbucketToken())) missing.add("BITBUCKET_TOKEN");
+        if (isBlank(config.getBitbucketToken())) missing.add(PropertyReader.BITBUCKET_TOKEN);
         return result("bitbucket", missing, "Bitbucket token");
     }
 
     private static CheckResult checkAdo(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getAdoOrganization())) missing.add("ADO_ORGANIZATION");
-        if (isBlank(config.getAdoProject())) missing.add("ADO_PROJECT");
-        if (isBlank(config.getAdoPatToken())) missing.add("ADO_PAT_TOKEN");
+        if (isBlank(config.getAdoOrganization())) missing.add(PropertyReader.ADO_ORGANIZATION);
+        if (isBlank(config.getAdoProject())) missing.add(PropertyReader.ADO_PROJECT);
+        if (isBlank(config.getAdoPatToken())) missing.add(PropertyReader.ADO_PAT_TOKEN);
         return result("ado", missing, "Azure DevOps PAT and project");
     }
 
     private static CheckResult checkRally(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getRallyToken())) missing.add("RALLY_TOKEN");
-        if (isBlank(config.getRallyPath())) missing.add("RALLY_PATH");
+        if (isBlank(config.getRallyToken())) missing.add(PropertyReader.RALLY_TOKEN);
+        if (isBlank(config.getRallyPath())) missing.add(PropertyReader.RALLY_PATH);
         return result("rally", missing, "Rally token and path");
     }
 
     private static CheckResult checkTestRail(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getTestRailBasePath())) missing.add("TESTRAIL_BASE_PATH");
-        if (isBlank(config.getTestRailUsername())) missing.add("TESTRAIL_USERNAME");
-        if (isBlank(config.getTestRailApiKey())) missing.add("TESTRAIL_API_KEY");
+        if (isBlank(config.getTestRailBasePath())) missing.add(PropertyReader.TESTRAIL_BASE_PATH);
+        if (isBlank(config.getTestRailUsername())) missing.add(PropertyReader.TESTRAIL_USERNAME);
+        if (isBlank(config.getTestRailApiKey())) missing.add(PropertyReader.TESTRAIL_API_KEY);
         return result("testrail", missing, "TestRail authentication");
     }
 
     private static CheckResult checkBitrise(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getBitriseToken())) missing.add("BITRISE_TOKEN");
+        if (isBlank(config.getBitriseToken())) missing.add(PropertyReader.BITRISE_TOKEN);
         return result("bitrise", missing, "Bitrise token");
     }
 
     private static CheckResult checkXray(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getXrayClientId())) missing.add("XRAY_CLIENT_ID");
-        if (isBlank(config.getXrayClientSecret())) missing.add("XRAY_CLIENT_SECRET");
-        if (isBlank(config.getXrayBasePath())) missing.add("XRAY_BASE_PATH");
+        if (isBlank(config.getXrayClientId())) missing.add(PropertyReader.XRAY_CLIENT_ID);
+        if (isBlank(config.getXrayClientSecret())) missing.add(PropertyReader.XRAY_CLIENT_SECRET);
+        if (isBlank(config.getXrayBasePath())) missing.add(PropertyReader.XRAY_BASE_PATH);
         return result("xray", missing, "Xray client credentials");
     }
 
@@ -164,8 +166,8 @@ public class ConfigDoctor {
 
     private static CheckResult checkTeams(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
-        if (isBlank(config.getTeamsClientId())) missing.add("TEAMS_CLIENT_ID");
-        if (isBlank(config.getTenantId())) missing.add("TEAMS_TENANT_ID");
+        if (isBlank(config.getTeamsClientId())) missing.add(PropertyReader.TEAMS_CLIENT_ID);
+        if (isBlank(config.getTenantId())) missing.add(PropertyReader.TEAMS_TENANT_ID);
         return result("teams", missing, "Microsoft Teams OAuth credentials");
     }
 
@@ -173,10 +175,10 @@ public class ConfigDoctor {
         List<String> missing = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         if (isBlank(config.getDefaultTracker())) {
-            warnings.add("DEFAULT_TRACKER is not set; tracker_ aliases may not resolve");
+            warnings.add(PropertyReader.DEFAULT_TRACKER + " is not set; tracker_ aliases may not resolve");
         }
         if (isBlank(config.getDefaultLLM())) {
-            warnings.add("DEFAULT_LLM is not set; some AI features may use fallback logic");
+            warnings.add(PropertyReader.DEFAULT_LLM + " is not set; some AI features may use fallback logic");
         }
         return result("defaults", missing, warnings, "Default tracker/LLM selection");
     }
