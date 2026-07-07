@@ -43,6 +43,32 @@ TESTRAIL_API_KEY=your_api_key
 |----------|-------------|---------|
 | `TESTRAIL_PROJECT` | Default project name for operations | None |
 | `TESTRAIL_LOGGING_ENABLED` | Enable debug request logging | `false` |
+| `TESTRAIL_DEFAULT_FORMAT` | Default output format (`html` or `md`/`markdown`) applied when a tool call doesn't pass `format` explicitly | `html` |
+
+## 📝 Markdown Output for Test Case Fields
+
+TestRail case fields (preconditions, steps, expected results) are often pasted from Google Docs or a
+browser, which bakes every computed CSS property into inline `style="..."` attributes on every tag —
+this can make the raw HTML 20-30x larger than the actual visible text, wasting tokens when fed to an LLM.
+
+`testrail_get_case`, `testrail_get_all_cases`, and `testrail_search_cases` accept an optional `format`
+parameter: pass `format=md` (or `format=markdown`) to receive these fields converted to clean Markdown
+instead (tables are preserved as GitHub-Flavoured Markdown tables, so no data is lost).
+
+```bash
+# Explicit per-call opt-in
+dmtools testrail_get_all_cases "My Project" --format md
+```
+
+To make Markdown the **default** for every TestRail read — including internal callers like
+`TestCasesGenerator`'s "find related existing test cases" search, which don't pass `format` themselves —
+set `TESTRAIL_DEFAULT_FORMAT=markdown` in `dmtools.env`. An explicit `format` argument on any call always
+overrides this default.
+
+```bash
+# dmtools.env
+TESTRAIL_DEFAULT_FORMAT=markdown
+```
 
 ## 🧪 Testing Your Configuration
 
@@ -127,7 +153,7 @@ dmtools testrail_get_projects
 
 ## 📋 Available TestRail MCP Tools
 
-**Complete reference**: [../../mcp-tools/testrail-tools.md](../../mcp-tools/testrail-tools.md) — all 15 TestRail tools with parameters.
+**Complete reference**: [../../mcp-tools/testrail-tools.md](../../mcp-tools/testrail-tools.md) — all 16 TestRail tools with parameters.
 
 ### Quick Examples
 

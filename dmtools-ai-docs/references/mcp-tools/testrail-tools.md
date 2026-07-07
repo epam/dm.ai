@@ -1,6 +1,6 @@
 # TESTRAIL MCP Tools
 
-**Total Tools**: 15
+**Total Tools**: 16
 
 ## Quick Reference
 
@@ -19,6 +19,7 @@ dmtools testrail_get_projects [arguments]
 const result = testrail_get_projects(...);
 const result = testrail_get_case(...);
 const result = testrail_get_all_cases(...);
+const result = testrail_get_suites(...);
 ```
 
 ## Available Tools
@@ -29,15 +30,16 @@ const result = testrail_get_all_cases(...);
 | `testrail_create_case_detailed` | Create a new test case in TestRail with detailed fields (preconditions, steps, expected results, labels, type). Note: TestRail uses its own table format in text fields: \|\|\|:Col 1\|:Col 2\|:Col 3\n\|\|val1\|val2\|val3. Standard Markdown tables (\| Col \| Col \|) will be auto-converted to TestRail format. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`expected` (string, optional)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`steps` (string, optional) |
 | `testrail_create_case_steps` | Create a TestRail test case using the 'Test Case (Steps)' template (template_id=2). Steps are provided as a JSON array: [{"content":"step text","expected":"expected result"}, ...]. Markdown tables in step content or expected are auto-converted to HTML tables. Use testrail_get_case_types for type_id, testrail_get_labels for label_ids. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`steps_json` (string, **required**)<br>`project_name` (string, **required**)<br>`title` (string, **required**) |
 | `testrail_delete_case` | Delete a test case in TestRail by case ID | `case_id` (string, **required**) |
-| `testrail_get_all_cases` | Get ALL test cases in a project (uses pagination to retrieve all cases) | `project_name` (string, **required**) |
-| `testrail_get_case` | Get a TestRail test case by ID | `case_id` (string, **required**) |
+| `testrail_get_all_cases` | Get ALL test cases in a project (uses pagination to retrieve all cases). Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML. | `project_name` (string, **required**)<br>`format` (string, optional) |
+| `testrail_get_case` | Get a TestRail test case by ID. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML — raw HTML pasted from Google Docs/browsers can be 20-30x larger than necessary due to inline CSS styling on every tag. | `case_id` (string, **required**)<br>`format` (string, optional) |
 | `testrail_get_case_types` | Get all available case types in TestRail (e.g., Automated, Functionality, Other) | None |
 | `testrail_get_cases_by_refs` | Get test cases linked to a requirement/story via refs field | `project_name` (string, **required**)<br>`refs` (string, **required**) |
 | `testrail_get_label` | Get a single label by ID | `label_id` (string, **required**) |
 | `testrail_get_labels` | Get all labels for a project in TestRail | `project_name` (string, **required**) |
 | `testrail_get_projects` | Get list of all projects in TestRail | None |
+| `testrail_get_suites` | Get all test suites for a TestRail project | `project_name` (string, **required**) |
 | `testrail_link_to_requirement` | Link a test case to a requirement by updating refs field | `case_id` (string, **required**)<br>`requirement_key` (string, **required**) |
-| `testrail_search_cases` | Search TestRail test cases by project and optional filters | `project_name` (string, **required**)<br>`section_id` (string, optional)<br>`suite_id` (string, optional) |
+| `testrail_search_cases` | Search TestRail test cases by project and optional filters. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML. | `project_name` (string, **required**)<br>`section_id` (string, optional)<br>`suite_id` (string, optional)<br>`format` (string, optional) |
 | `testrail_update_case` | Update a test case in TestRail | `case_id` (string, **required**)<br>`priority_id` (string, optional)<br>`title` (string, optional)<br>`refs` (string, optional) |
 | `testrail_update_label` | Update a label title in TestRail. Maximum 20 characters allowed. | `project_name` (string, **required**)<br>`title` (string, **required**)<br>`label_id` (string, **required**) |
 
@@ -211,7 +213,7 @@ const result = testrail_delete_case("case_id");
 
 ### `testrail_get_all_cases`
 
-Get ALL test cases in a project (uses pagination to retrieve all cases)
+Get ALL test cases in a project (uses pagination to retrieve all cases). Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML.
 
 **Parameters:**
 
@@ -219,21 +221,25 @@ Get ALL test cases in a project (uses pagination to retrieve all cases)
   - Project name to get all cases from
   - Example: `My Project`
 
+- **`format`** (string) ⚪ Optional
+  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the `TESTRAIL_DEFAULT_FORMAT` env var (defaults to 'html' when unset).
+  - Example: `markdown`
+
 **Example:**
 ```bash
-dmtools testrail_get_all_cases "value"
+dmtools testrail_get_all_cases "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = testrail_get_all_cases("project_name");
+const result = testrail_get_all_cases("project_name", "format");
 ```
 
 ---
 
 ### `testrail_get_case`
 
-Get a TestRail test case by ID
+Get a TestRail test case by ID. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML — raw HTML pasted from Google Docs/browsers can be 20-30x larger than necessary due to inline CSS styling on every tag.
 
 **Parameters:**
 
@@ -241,14 +247,18 @@ Get a TestRail test case by ID
   - The test case ID (numeric, without 'C' prefix)
   - Example: `123`
 
+- **`format`** (string) ⚪ Optional
+  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the `TESTRAIL_DEFAULT_FORMAT` env var (defaults to 'html' when unset).
+  - Example: `markdown`
+
 **Example:**
 ```bash
-dmtools testrail_get_case "value"
+dmtools testrail_get_case "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = testrail_get_case("case_id");
+const result = testrail_get_case("case_id", "format");
 ```
 
 ---
@@ -359,6 +369,28 @@ const result = testrail_get_projects();
 
 ---
 
+### `testrail_get_suites`
+
+Get all test suites for a TestRail project
+
+**Parameters:**
+
+- **`project_name`** (string) 🔴 Required
+  - Project name to get suites from
+  - Example: `My Project`
+
+**Example:**
+```bash
+dmtools testrail_get_suites "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_suites("project_name");
+```
+
+---
+
 ### `testrail_link_to_requirement`
 
 Link a test case to a requirement by updating refs field
@@ -387,7 +419,7 @@ const result = testrail_link_to_requirement("case_id", "requirement_key");
 
 ### `testrail_search_cases`
 
-Search TestRail test cases by project and optional filters
+Search TestRail test cases by project and optional filters. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML.
 
 **Parameters:**
 
@@ -395,22 +427,26 @@ Search TestRail test cases by project and optional filters
   - Project name to search in
   - Example: `My Project`
 
-- **`section_id`** (string) ⚪ Optional
-  - Section ID to filter by (optional)
-  - Example: `10`
-
 - **`suite_id`** (string) ⚪ Optional
   - Suite ID to filter by (optional)
   - Example: `1`
 
+- **`section_id`** (string) ⚪ Optional
+  - Section ID to filter by (optional)
+  - Example: `10`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the `TESTRAIL_DEFAULT_FORMAT` env var (defaults to 'html' when unset).
+  - Example: `markdown`
+
 **Example:**
 ```bash
-dmtools testrail_search_cases "value" "value"
+dmtools testrail_search_cases "value" "value" "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = testrail_search_cases("project_name", "section_id");
+const result = testrail_search_cases("project_name", "suite_id", "section_id", "format");
 ```
 
 ---
