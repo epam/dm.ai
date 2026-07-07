@@ -225,6 +225,32 @@ public class XrayRestClient extends AbstractRestClient {
     }
 
     /**
+     * Tests X-ray connectivity by obtaining an access token.
+     *
+     * @return Map containing test result details
+     */
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            String token = getAccessToken();
+            if (token != null && !token.isEmpty()) {
+                result.put("success", true);
+                result.put("message", "X-ray API connection successful");
+                result.put("tokenLength", token.length());
+            } else {
+                result.put("success", false);
+                result.put("message", "X-ray API returned empty token");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "X-ray API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("X-ray connection test failed", e);
+        }
+        return result;
+    }
+
+    /**
      * Executes a GraphQL query against X-ray API.
      * 
      * @param query GraphQL query string
