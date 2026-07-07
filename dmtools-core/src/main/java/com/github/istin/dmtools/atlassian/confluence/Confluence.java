@@ -14,6 +14,7 @@ import com.github.istin.dmtools.common.model.JSONModel;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.common.utils.HtmlCleaner;
+import com.github.istin.dmtools.common.utils.HtmlToMarkdownConverter;
 import com.github.istin.dmtools.common.utils.MarkdownToJiraConverter;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.context.UriToObject;
@@ -979,16 +980,6 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     }
 
     /**
-     * Checks whether the requested format is Markdown.
-     *
-     * @param format the format identifier (e.g. "md" or "markdown")
-     * @return true if the format should trigger Markdown conversion
-     */
-    private static boolean isMarkdownFormat(String format) {
-        return "md".equalsIgnoreCase(format) || "markdown".equalsIgnoreCase(format);
-    }
-
-    /**
      * Converts Confluence storage format HTML to Markdown.
      * If the content uses the Confluence YAML macro format, the YAML payload is
      * extracted instead (matching the behaviour in {@link InstructionProcessor}).
@@ -1016,7 +1007,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      * @return the same content instance
      */
     private static Content applyFormat(Content content, String format) {
-        if (content == null || !isMarkdownFormat(format)) {
+        if (content == null || !HtmlToMarkdownConverter.isMarkdownFormat(format)) {
             return content;
         }
         Storage storage = content.getStorage();
@@ -1047,7 +1038,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      * @return the same list instance
      */
     private static List<Content> applyFormat(List<Content> contents, String format) {
-        if (contents == null || !isMarkdownFormat(format)) {
+        if (contents == null || !HtmlToMarkdownConverter.isMarkdownFormat(format)) {
             return contents;
         }
         for (Content content : contents) {
@@ -1064,7 +1055,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      * @return the same result instance
      */
     private static ContentResult applyFormat(ContentResult result, String format) {
-        if (result == null || !isMarkdownFormat(format)) {
+        if (result == null || !HtmlToMarkdownConverter.isMarkdownFormat(format)) {
             return result;
         }
         applyFormat(result.getContents(), format);

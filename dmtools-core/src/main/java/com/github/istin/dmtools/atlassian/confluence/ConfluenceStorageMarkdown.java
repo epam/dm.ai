@@ -3,17 +3,14 @@
 
 package com.github.istin.dmtools.atlassian.confluence;
 
-import io.github.furstenheim.CopyDown;
+import com.github.istin.dmtools.common.utils.HtmlToMarkdownConverter;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,7 +20,7 @@ import java.util.regex.Pattern;
  * <p>Confluence uses its own XML dialect on top of HTML that includes
  * {@code <ac:*>} and {@code <ri:*>} tags which standard HTML-to-Markdown
  * converters cannot handle. This class pre-processes those tags into
- * standard HTML equivalents before delegating to {@link CopyDown}.
+ * standard HTML equivalents before delegating to {@link HtmlToMarkdownConverter}.
  *
  * <p>Handled Confluence constructs:
  * <ul>
@@ -46,8 +43,6 @@ import java.util.regex.Pattern;
 public final class ConfluenceStorageMarkdown {
 
     private static final Logger logger = LogManager.getLogger(ConfluenceStorageMarkdown.class);
-
-    private static final String TABLE_PLACEHOLDER_PREFIX = "DMTABLEIDX";
 
     // ac:image → img: <ac:image ... ac:alt="name.png" ...><ri:attachment .../></ac:image>
     private static final Pattern AC_IMAGE = Pattern.compile(
@@ -111,16 +106,9 @@ public final class ConfluenceStorageMarkdown {
             //    (attachments, URLs, plain-text link bodies, links inside tables, etc.).
             String withStandardLinksAndImages = replaceRemainingAcLinksAndImages(preprocessed);
 
-            // 3. Convert HTML tables to GitHub-Flavoured Markdown tables.
-            //    Tables are replaced with placeholders because CopyDown does not
-            //    generate Markdown tables on its own.
-            TableExtraction extraction = extractTables(withStandardLinksAndImages);
-
-            // 4. Run the generic HTML→Markdown converter on the table-less HTML.
-            String markdown = new CopyDown().convert(extraction.htmlWithoutTables);
-
-            // 5. Restore the Markdown tables at their placeholders.
-            return restoreTables(markdown, extraction.tables);
+            // 3. Delegate table-aware HTML→Markdown conversion (table extraction,
+            //    CopyDown, table restoration) to the shared, generic converter.
+            return HtmlToMarkdownConverter.convert(withStandardLinksAndImages);
         } catch (Exception e) {
             logger.warn("Confluence HTML→Markdown conversion failed, returning raw HTML: {}", e.getMessage(), e);
             return confluenceHtml;
@@ -359,95 +347,6 @@ public final class ConfluenceStorageMarkdown {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    /**
-     * Extracts all {@code <table>} elements, converts them to GitHub-Flavoured Markdown
-     * tables, and replaces them with placeholders so that the remaining HTML can be
-     * safely passed to CopyDown.
-     */
-    private static TableExtraction extractTables(String html) {
-        Document doc = parseFragment(html);
-        List<String> tables = new ArrayList<>();
-
-        Elements tableElements = doc.getElementsByTag("table");
-        int index = 0;
-        for (Element table : tableElements) {
-            String markdownTable = convertTableToMarkdown(table);
-            tables.add(markdownTable);
-
-            Element placeholder = doc.createElement("p").text(TABLE_PLACEHOLDER_PREFIX + index);
-            table.replaceWith(placeholder);
-            index++;
-        }
-
-        return new TableExtraction(bodyHtml(doc), tables);
-    }
-
-    private static String convertTableToMarkdown(Element table) {
-        List<List<String>> rows = new ArrayList<>();
-        int maxColumns = 0;
-        boolean hasHeader = false;
-
-        for (Element tr : table.getElementsByTag("tr")) {
-            List<String> cells = new ArrayList<>();
-            for (Element child : tr.children()) {
-                String tag = child.tagName();
-                if ("th".equalsIgnoreCase(tag) || "td".equalsIgnoreCase(tag)) {
-                    if ("th".equalsIgnoreCase(tag)) {
-                        hasHeader = true;
-                    }
-                    cells.add(cellToMarkdown(child));
-                }
-            }
-            if (!cells.isEmpty()) {
-                rows.add(cells);
-                maxColumns = Math.max(maxColumns, cells.size());
-            }
-        }
-
-        if (rows.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder markdown = new StringBuilder();
-        for (int i = 0; i < rows.size(); i++) {
-            appendMarkdownRow(markdown, rows.get(i), maxColumns);
-            if (i == 0 && hasHeader) {
-                appendMarkdownRow(markdown, null, maxColumns);
-            }
-        }
-        return markdown.toString();
-    }
-
-    private static String cellToMarkdown(Element cell) {
-        // Convert the cell's inner HTML to Markdown so that links, bold, etc. are preserved.
-        String cellMarkdown = new CopyDown().convert(cell.html()).trim();
-        // Markdown tables cannot contain newlines or pipe characters in cells.
-        cellMarkdown = cellMarkdown.replace("|", "\\|");
-        cellMarkdown = cellMarkdown.replaceAll("\\s+", " ").trim();
-        return cellMarkdown;
-    }
-
-    private static void appendMarkdownRow(StringBuilder markdown, List<String> cells, int maxColumns) {
-        markdown.append("|");
-        for (int i = 0; i < maxColumns; i++) {
-            if (cells == null) {
-                markdown.append("---|");
-            } else {
-                String value = i < cells.size() ? cells.get(i) : "";
-                markdown.append(" ").append(value).append(" |");
-            }
-        }
-        markdown.append("\n");
-    }
-
-    private static String restoreTables(String markdown, List<String> tables) {
-        String result = markdown;
-        for (int i = 0; i < tables.size(); i++) {
-            result = result.replace(TABLE_PLACEHOLDER_PREFIX + i, tables.get(i).trim());
-        }
-        return result;
-    }
-
     private static Document parseFragment(String html) {
         Document doc = Jsoup.parseBodyFragment(html);
         doc.outputSettings().prettyPrint(false);
@@ -458,13 +357,4 @@ public final class ConfluenceStorageMarkdown {
         return doc.body() != null ? doc.body().html() : doc.html();
     }
 
-    private static final class TableExtraction {
-        final String htmlWithoutTables;
-        final List<String> tables;
-
-        TableExtraction(String htmlWithoutTables, List<String> tables) {
-            this.htmlWithoutTables = htmlWithoutTables;
-            this.tables = tables;
-        }
-    }
 }
