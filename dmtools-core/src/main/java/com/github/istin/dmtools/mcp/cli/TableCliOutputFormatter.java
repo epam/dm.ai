@@ -3,12 +3,8 @@
 
 package com.github.istin.dmtools.mcp.cli;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -48,8 +44,7 @@ public class TableCliOutputFormatter implements CliOutputFormatter {
         } else if (result instanceof org.json.JSONArray) {
             data = ((org.json.JSONArray) result).toList();
         } else {
-            // JSONModel and similar wrappers: try getJSONObject()/toString -> parse
-            org.json.JSONObject json = extractJSONObject(result);
+            org.json.JSONObject json = CliFormatterUtils.extractJSONObject(result);
             if (json != null) {
                 data = json.toMap();
             }
@@ -62,28 +57,6 @@ public class TableCliOutputFormatter implements CliOutputFormatter {
             return formatListAsTable((List<Object>) data);
         }
         return formatFallback(result);
-    }
-
-    private org.json.JSONObject extractJSONObject(Object result) {
-        try {
-            java.lang.reflect.Method m = result.getClass().getMethod("getJSONObject");
-            Object jo = m.invoke(result);
-            if (jo instanceof org.json.JSONObject) {
-                return (org.json.JSONObject) jo;
-            }
-        } catch (Exception e) {
-            // ignore
-        }
-        try {
-            String s = result.toString();
-            String t = s.trim();
-            if (t.startsWith("{") || t.startsWith("[")) {
-                return new org.json.JSONObject(s);
-            }
-        } catch (Exception e) {
-            // ignore
-        }
-        return null;
     }
 
     private String formatFallback(Object result) {
@@ -100,17 +73,17 @@ public class TableCliOutputFormatter implements CliOutputFormatter {
         valueWidth = Math.min(valueWidth, 120);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("| ").append(padRight("Key", keyWidth))
-                .append(" | ").append(padRight("Value", valueWidth)).append(" |\n");
-        sb.append("| ").append(repeat('-', keyWidth))
-                .append(" | ").append(repeat('-', valueWidth)).append(" |\n");
+        sb.append("| ").append(CliFormatterUtils.padRight("Key", keyWidth))
+                .append(" | ").append(CliFormatterUtils.padRight("Value", valueWidth)).append(" |\n");
+        sb.append("| ").append(CliFormatterUtils.repeat('-', keyWidth))
+                .append(" | ").append(CliFormatterUtils.repeat('-', valueWidth)).append(" |\n");
         for (String key : keys) {
             String value = String.valueOf(map.get(key));
             if (value.length() > valueWidth) {
                 value = value.substring(0, valueWidth - 3) + "...";
             }
-            sb.append("| ").append(padRight(key, keyWidth))
-                    .append(" | ").append(padRight(value, valueWidth)).append(" |\n");
+            sb.append("| ").append(CliFormatterUtils.padRight(key, keyWidth))
+                    .append(" | ").append(CliFormatterUtils.padRight(value, valueWidth)).append(" |\n");
         }
         return sb.toString();
     }
@@ -148,67 +121,51 @@ public class TableCliOutputFormatter implements CliOutputFormatter {
         }
         for (Map<String, Object> row : list) {
             for (String col : columns) {
-                Object val = row.get(col);
-                String text = val == null ? "" : String.valueOf(val);
-                if (text.length() > 100) {
-                    text = text.substring(0, 97) + "...";
-                }
-                widths.put(col, Math.max(widths.get(col), Math.min(text.length(), 80)));
+                widths.put(col, Math.max(widths.get(col), Math.min(cellText(row, col).length(), 80)));
             }
         }
 
         StringBuilder sb = new StringBuilder();
         sb.append("| ");
         for (String col : columns) {
-            sb.append(padRight(col, widths.get(col))).append(" | ");
+            sb.append(CliFormatterUtils.padRight(col, widths.get(col))).append(" | ");
         }
         sb.append('\n');
         sb.append("| ");
         for (String col : columns) {
-            sb.append(repeat('-', widths.get(col))).append(" | ");
+            sb.append(CliFormatterUtils.repeat('-', widths.get(col))).append(" | ");
         }
         sb.append('\n');
         for (Map<String, Object> row : list) {
             sb.append("| ");
             for (String col : columns) {
-                Object val = row.get(col);
-                String text = val == null ? "" : String.valueOf(val);
-                if (text.length() > 100) {
-                    text = text.substring(0, 97) + "...";
-                }
-                text = text.replace("|", "\\|");
-                sb.append(padRight(text, widths.get(col))).append(" | ");
+                sb.append(CliFormatterUtils.padRight(cellText(row, col), widths.get(col))).append(" | ");
             }
             sb.append('\n');
         }
         return sb.toString();
     }
 
+    private static String cellText(Map<String, Object> row, String col) {
+        Object val = row.get(col);
+        String text = val == null ? "" : String.valueOf(val);
+        if (text.length() > 100) {
+            text = text.substring(0, 97) + "...";
+        }
+        return text.replace("|", "\\|");
+    }
+
     @Override
-    @SuppressWarnings("unchecked")
     public String formatList(Map<String, Object> toolsList) {
-        List<Map<String, Object>> tools = toToolList(toolsList.get("tools"));
-        if (tools == null) {
-            return new JsonCliOutputFormatter().formatList(toolsList);
-        }
-        if (tools.isEmpty()) {
-            return "No tools available.";
-        }
+        return CliFormatterUtils.formatToolList(
+                toolsList,
+                this::formatHeader,
+                this::formatRow,
+                null
+        );
+    }
 
-        List<ToolLine> lines = new ArrayList<>();
-        for (Map<String, Object> tool : tools) {
-            String name = stringValue(tool.get("name"));
-            String integration = stringValue(tool.get("integration"));
-            if (integration.isEmpty()) {
-                integration = "-";
-            }
-            String description = firstSentence(stringValue(tool.get("description")));
-            lines.add(new ToolLine(integration, name, description));
-        }
-
-        lines.sort(Comparator.comparing((ToolLine t) -> t.integration)
-                .thenComparing(t -> t.name));
-
+    private String formatHeader(List<CliFormatterUtils.ToolLine> lines) {
         int integrationWidth = Math.max("Integration".length(), lines.stream()
                 .mapToInt(t -> t.integration.length()).max().orElse(0));
         int nameWidth = Math.max("Tool".length(), lines.stream()
@@ -216,103 +173,29 @@ public class TableCliOutputFormatter implements CliOutputFormatter {
         int descWidth = Math.max("Description".length(), lines.stream()
                 .mapToInt(t -> t.description.length()).max().orElse(0));
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("| ").append(padRight("Integration", integrationWidth))
-                .append(" | ").append(padRight("Tool", nameWidth))
-                .append(" | ").append(padRight("Description", descWidth)).append(" |\n");
-        sb.append("| ").append(repeat('-', integrationWidth))
-                .append(" | ").append(repeat('-', nameWidth))
-                .append(" | ").append(repeat('-', descWidth)).append(" |\n");
+        return "| " + CliFormatterUtils.padRight("Integration", integrationWidth)
+                + " | " + CliFormatterUtils.padRight("Tool", nameWidth)
+                + " | " + CliFormatterUtils.padRight("Description", descWidth) + " |\n"
+                + "| " + CliFormatterUtils.repeat('-', integrationWidth)
+                + " | " + CliFormatterUtils.repeat('-', nameWidth)
+                + " | " + CliFormatterUtils.repeat('-', descWidth) + " |\n";
+    }
 
-        for (ToolLine line : lines) {
-            sb.append("| ").append(padRight(line.integration, integrationWidth))
-                    .append(" | ").append(padRight(line.name, nameWidth))
-                    .append(" | ").append(padRight(line.description, descWidth)).append(" |\n");
-        }
-        sb.append('\n');
-        sb.append("Total: ").append(lines.size()).append(" tools");
-        return sb.toString();
+    private String formatRow(List<CliFormatterUtils.ToolLine> lines, CliFormatterUtils.ToolLine line) {
+        int integrationWidth = Math.max("Integration".length(), lines.stream()
+                .mapToInt(t -> t.integration.length()).max().orElse(0));
+        int nameWidth = Math.max("Tool".length(), lines.stream()
+                .mapToInt(t -> t.name.length()).max().orElse(0));
+        int descWidth = Math.max("Description".length(), lines.stream()
+                .mapToInt(t -> t.description.length()).max().orElse(0));
+
+        return "| " + CliFormatterUtils.padRight(line.integration, integrationWidth)
+                + " | " + CliFormatterUtils.padRight(line.name, nameWidth)
+                + " | " + CliFormatterUtils.padRight(line.description, descWidth) + " |\n";
     }
 
     @Override
     public String formatError(String message) {
         return "Error: " + message;
-    }
-
-    private static String stringValue(Object value) {
-        return value == null ? "" : value.toString();
-    }
-
-    private static String firstSentence(String description) {
-        if (description == null || description.isEmpty()) {
-            return "";
-        }
-        String trimmed = description.trim().replace("|", "\\|");
-        int idx = trimmed.indexOf('\n');
-        if (idx > 0 && idx < 120) {
-            return trimmed.substring(0, idx).trim();
-        }
-        idx = trimmed.indexOf('.');
-        if (idx > 0 && idx < 120) {
-            return trimmed.substring(0, idx + 1).trim();
-        }
-        if (trimmed.length() > 120) {
-            return trimmed.substring(0, 117).trim() + "...";
-        }
-        return trimmed;
-    }
-
-    private static String padRight(String s, int width) {
-        if (s.length() >= width) {
-            return s;
-        }
-        StringBuilder sb = new StringBuilder(s);
-        while (sb.length() < width) {
-            sb.append(' ');
-        }
-        return sb.toString();
-    }
-
-    private static String repeat(char c, int count) {
-        char[] arr = new char[count];
-        java.util.Arrays.fill(arr, c);
-        return new String(arr);
-    }
-
-    private static final class ToolLine {
-        final String integration;
-        final String name;
-        final String description;
-
-        ToolLine(String integration, String name, String description) {
-            this.integration = integration;
-            this.name = name;
-            this.description = description;
-        }
-    }
-
-    /**
-     * Normalises the tools payload (List or JSONArray) into a list of maps.
-     * Returns {@code null} when the payload cannot be interpreted as a tool list.
-     */
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, Object>> toToolList(Object toolsObj) {
-        if (toolsObj instanceof List) {
-            return (List<Map<String, Object>>) toolsObj;
-        }
-        if (toolsObj instanceof JSONArray) {
-            JSONArray arr = (JSONArray) toolsObj;
-            List<Map<String, Object>> result = new ArrayList<>();
-            for (int i = 0; i < arr.length(); i++) {
-                Object item = arr.get(i);
-                if (item instanceof Map) {
-                    result.add((Map<String, Object>) item);
-                } else if (item instanceof JSONObject) {
-                    result.add(((JSONObject) item).toMap());
-                }
-            }
-            return result;
-        }
-        return null;
     }
 }
