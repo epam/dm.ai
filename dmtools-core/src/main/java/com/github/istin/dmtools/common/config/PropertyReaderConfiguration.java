@@ -382,6 +382,16 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
     
     @Override
+    public String getFigmaOAuth2AccessToken() {
+        return propertyReader.getFigmaOAuth2AccessToken();
+    }
+
+    @Override
+    public String getFigmaOAuth2RefreshToken() {
+        return propertyReader.getFigmaOAuth2RefreshToken();
+    }
+
+    @Override
     public Integer getDefaultTicketWeightIfNoSPs() {
         return propertyReader.getDefaultTicketWeightIfNoSPs();
     }
@@ -441,6 +451,16 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
         return propertyReader.getAnthropicMaxTokens();
     }
     
+    @Override
+    public String getAnthropicCustomHeaderNames() {
+        return propertyReader.getAnthropicCustomHeaderNames();
+    }
+
+    @Override
+    public String getAnthropicCustomHeaderValues() {
+        return propertyReader.getAnthropicCustomHeaderValues();
+    }
+
     @Override
     public String getBedrockBasePath() {
         return propertyReader.getBedrockBasePath();
@@ -524,6 +544,125 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     @Override
     public String getDefaultTracker() {
         return propertyReader.getDefaultTracker();
+    }
+
+    @Override
+    public String getTestRailBasePath() {
+        return propertyReader.getTestRailBasePath();
+    }
+
+    @Override
+    public String getTestRailUsername() {
+        return propertyReader.getTestRailUsername();
+    }
+
+    @Override
+    public String getTestRailApiKey() {
+        return propertyReader.getTestRailApiKey();
+    }
+
+    @Override
+    public String getTestRailProject() {
+        return propertyReader.getTestRailProject();
+    }
+
+    @Override
+    public boolean isTestRailLoggingEnabled() {
+        return propertyReader.isTestRailLoggingEnabled();
+    }
+
+    @Override
+    public String getAdoOrganization() {
+        return propertyReader.getAdoOrganization();
+    }
+
+    @Override
+    public String getAdoProject() {
+        return propertyReader.getAdoProject();
+    }
+
+    @Override
+    public String getAdoPatToken() {
+        return propertyReader.getAdoPatToken();
+    }
+
+    @Override
+    public String getAdoBasePath() {
+        return propertyReader.getAdoBasePath();
+    }
+
+    @Override
+    public String getBitriseToken() {
+        return propertyReader.getBitriseToken();
+    }
+
+    @Override
+    public String getBitriseBasePath() {
+        return propertyReader.getBitriseBasePath();
+    }
+
+    @Override
+    public String getBitriseAppSlug() {
+        return propertyReader.getBitriseAppSlug();
+    }
+
+    @Override
+    public String getXrayClientId() {
+        return propertyReader.getXrayClientId();
+    }
+
+    @Override
+    public String getXrayClientSecret() {
+        return propertyReader.getXrayClientSecret();
+    }
+
+    @Override
+    public String getXrayBasePath() {
+        return propertyReader.getXrayBasePath();
+    }
+
+    @Override
+    public String getTeamsBasePath() {
+        return propertyReader.getValue("TEAMS_BASE_PATH", "https://graph.microsoft.com/v1.0");
+    }
+
+    @Override
+    public String getTeamsClientId() {
+        return propertyReader.getTeamsClientId();
+    }
+
+    @Override
+    public String getTenantId() {
+        return propertyReader.getTeamsTenantId();
+    }
+
+    public String getTeamsTenantId() {
+        return propertyReader.getTeamsTenantId();
+    }
+
+    @Override
+    public String getTeamsScopes() {
+        return propertyReader.getTeamsScopes();
+    }
+
+    @Override
+    public String getTeamsAuthMethod() {
+        return propertyReader.getTeamsAuthMethod();
+    }
+
+    @Override
+    public String getTeamsAuthPort() {
+        return String.valueOf(propertyReader.getTeamsAuthPort());
+    }
+
+    @Override
+    public String getTeamsTokenCachePath() {
+        return propertyReader.getTeamsTokenCachePath();
+    }
+
+    @Override
+    public String getTeamsRefreshToken() {
+        return propertyReader.getTeamsRefreshToken();
     }
 
     @Override
