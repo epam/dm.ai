@@ -292,4 +292,39 @@ public class ConfluenceHtmlToMarkdownTest {
         assertFalse("Should not leak parameter value", markdown.contains("allChildren"));
         assertFalse("Should not leak parameter value", markdown.contains("true"));
     }
+
+    // Reproduces a real-world pattern from third-party "live table" macros (e.g. the
+    // Table Filter/Charts family: table-excerpt-include, livesearch, pivot-table,
+    // sparkline). These wrap a nested configuration macro (with its own
+    // <ac:parameter> flags/filters) inside an outer macro's <ac:rich-text-body>.
+    // A single, non-recursive unwrap pass used to leave the nested macro/parameters
+    // untouched, and their raw boolean/text values leaked into the Markdown output.
+    @Test
+    public void testToMarkdown_nestedMacroInsideRichTextBodyDoesNotLeakParameters() {
+        String html = "<h2>Linked Table</h2>" +
+            "<ac:structured-macro ac:name=\"outer-live-table\">" +
+            "  <ac:parameter ac:name=\"source\">Some Other Page</ac:parameter>" +
+            "  <ac:rich-text-body>" +
+            "    <ac:structured-macro ac:name=\"inner-sort-config\">" +
+            "      <ac:parameter ac:name=\"disableSorting\">false</ac:parameter>" +
+            "      <ac:parameter ac:name=\"enableSparkline\">true</ac:parameter>" +
+            "      <ac:parameter ac:name=\"columnFilter\">Workflow Type</ac:parameter>" +
+            "    </ac:structured-macro>" +
+            "    <p>Fallback text</p>" +
+            "  </ac:rich-text-body>" +
+            "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should keep heading", markdown.contains("Linked Table"));
+        assertTrue("Should keep fallback body text", markdown.contains("Fallback text"));
+        assertFalse("Should not leak nested macro parameter values",
+            markdown.contains("disableSorting"));
+        assertFalse("Should not leak nested macro parameter values",
+            markdown.contains("enableSparkline"));
+        assertFalse("Should not leak nested macro parameter values",
+            markdown.contains("columnFilter"));
+        assertFalse("Should not leak concatenated boolean noise",
+            markdown.toLowerCase().contains("falsetrue"));
+    }
 }
