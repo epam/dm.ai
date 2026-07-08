@@ -258,7 +258,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         String format
 ) throws IOException {
         // Construct the path using the content ID and expand needed fields
-        GenericRequest content = new GenericRequest(this, path("content/" + contentId + "?expand=body.storage,ancestors,version"));
+        GenericRequest content = new GenericRequest(this, path("content/" + contentId + "?expand=body.storage,body.export_view,ancestors,version"));
 
         // Execute the request
         String response = execute(content);
@@ -294,7 +294,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
     ) throws IOException {
-        GenericRequest content = new GenericRequest(this, path("content?expand=body.storage,ancestors,version"));
+        GenericRequest content = new GenericRequest(this, path("content?expand=body.storage,body.export_view,ancestors,version"));
         content.param("title", title);
         if (space != null && !space.isEmpty()) {
             content.param("spaceKey", space);
@@ -637,7 +637,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
     ) throws IOException {
-        return applyFormat(new ContentResult(execute(new GenericRequest(this, path("content/" + contentId + "/child/page?limit=100&expand=body.storage,ancestors,version")))).getContents(), format);
+        return applyFormat(new ContentResult(execute(new GenericRequest(this, path("content/" + contentId + "/child/page?limit=100&expand=body.storage,body.export_view,ancestors,version")))).getContents(), format);
     }
 
     /**
@@ -988,11 +988,31 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      * @return Markdown or extracted YAML
      */
     private static String convertStorageToMarkdown(String storageValue) {
+        return convertStorageToMarkdown(storageValue, null);
+    }
+
+    /**
+     * Converts Confluence storage format HTML to Markdown, using the page's rendered
+     * {@code body.export_view} HTML (when available) to recover content from "live"
+     * macros (e.g. third-party table filter/aggregation macros) whose actual output
+     * only exists once Confluence renders the page — {@code body.storage} only holds
+     * their configuration parameters.
+     * If the content uses the Confluence YAML macro format, the YAML payload is
+     * extracted instead (matching the behaviour in {@link InstructionProcessor}).
+     *
+     * @param storageValue raw Confluence storage format HTML
+     * @param exportViewValue rendered Confluence HTML ({@code body.export_view.value}), may be null
+     * @return Markdown or extracted YAML
+     */
+    private static String convertStorageToMarkdown(String storageValue, String exportViewValue) {
         if (storageValue == null || storageValue.isBlank()) {
             return storageValue;
         }
         if (StringUtils.isConfluenceYamlFormat(storageValue)) {
             return StringUtils.extractYamlContentFromConfluence(storageValue);
+        }
+        if (exportViewValue != null && !exportViewValue.isBlank()) {
+            return ConfluenceStorageMarkdown.toMarkdownWithRenderedFallback(storageValue, exportViewValue);
         }
         return ConfluenceStorageMarkdown.toMarkdown(storageValue);
     }
@@ -1000,7 +1020,10 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     /**
      * Applies the requested output format to a single Confluence content object.
      * For format "md"/"markdown" the {@code body.storage.value} is replaced with
-     * Markdown and the representation is updated to "markdown".
+     * Markdown and the representation is updated to "markdown". When the response
+     * also contains {@code body.export_view} (rendered HTML with macros resolved),
+     * it is used to recover "live" tables (see {@link #convertStorageToMarkdown(String, String)})
+     * and then dropped from the returned JSON to avoid doubling the payload size.
      *
      * @param content the content to transform (mutated in place)
      * @param format the requested format
@@ -1018,8 +1041,17 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         if (value == null || value.isBlank()) {
             return content;
         }
-        String markdown = convertStorageToMarkdown(value);
         JSONObject body = content.getJSONObject().optJSONObject("body");
+        String exportViewValue = null;
+        if (body != null) {
+            JSONObject exportViewObj = body.optJSONObject("export_view");
+            if (exportViewObj != null) {
+                exportViewValue = exportViewObj.optString("value", null);
+            }
+            // Drop the (large, now redundant) rendered HTML from the response.
+            body.remove("export_view");
+        }
+        String markdown = convertStorageToMarkdown(value, exportViewValue);
         if (body != null) {
             JSONObject storageObj = body.optJSONObject("storage");
             if (storageObj != null) {
