@@ -151,6 +151,33 @@ dmtools testrail_get_projects
 
 **Full guide**: [../../test-generation/testrail-manual.md](../../test-generation/testrail-manual.md)
 
+## 🚀 Generating Diagrams from TestRail Test Cases
+
+You can generate a Mermaid diagram for every TestRail test case in a project or suite.
+
+```bash
+# Generate diagrams for all cases in a TestRail project/suite
+dmtools mermaid_index_generate testrail '["project_id=5&suite_id=3"]' '[]' ./mermaid-diagrams
+```
+
+Requirements:
+- `TESTRAIL_BASE_PATH`, `TESTRAIL_USERNAME`, and `TESTRAIL_API_KEY` must be configured.
+- The first `include_patterns` entry is passed directly to TestRail as the API query for `get_cases`.
+
+Output is stored under `./mermaid-diagrams/testrail/CASE_KEY/CaseTitle.mmd`, for example:
+
+```
+./mermaid-diagrams/testrail/
+└── C12345
+    └── Verify_Login_Page.mmd
+```
+
+Read generated diagrams back with:
+
+```bash
+dmtools mermaid_index_read testrail ./mermaid-diagrams
+```
+
 ## 📋 Available TestRail MCP Tools
 
 **Complete reference**: [../../mcp-tools/testrail-tools.md](../../mcp-tools/testrail-tools.md) — all 16 TestRail tools with parameters.

@@ -9,6 +9,7 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.atlassian.jira.xray.XrayClient;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.testrail.TestRailClient;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.index.mermaid.MermaidIndex;
@@ -47,13 +48,13 @@ public class MermaidIndexTools {
     }
     
     /**
-     * Generate Mermaid diagrams from content sources (Confluence or Jira) based on include/exclude patterns.
+     * Generate Mermaid diagrams from content sources (Confluence, Jira, Jira Xray, or TestRail) based on include/exclude patterns.
      * Processes content recursively and stores diagrams in hierarchical file structure.
      * 
-     * @param integration Integration type ("confluence", "jira", or "jira_xray")
+     * @param integration Integration type ("confluence", "jira", "jira_xray", or "testrail")
      * @param storagePath Base path for storing generated diagrams
-     * @param includePatterns Array of include patterns. For Confluence: ["SPACE/pages/PAGE_ID/PAGE_NAME/**"]. For Jira: ["JQL query"]
-     * @param excludePatterns Optional array of exclude patterns (not used for Jira)
+     * @param includePatterns Array of include patterns. For Confluence: ["SPACE/pages/PAGE_ID/PAGE_NAME/**"]. For Jira: ["JQL query"]. For TestRail: ["project_id=5&suite_id=3"]
+     * @param excludePatterns Optional array of exclude patterns (not used for Jira or TestRail)
      * @param customFields Optional array of custom field names to include (only for Jira integrations)
      * @param includeComments Whether to include comments in content (only for Jira integrations, default: false)
      * @return JSON string with operation result and statistics
@@ -67,7 +68,7 @@ public class MermaidIndexTools {
     public String mermaidIndexGenerate(
             @MCPParam(
                 name = "integration",
-                description = "Integration type: 'confluence', 'jira', or 'jira_xray'",
+                description = "Integration type: 'confluence', 'jira', 'jira_xray', or 'testrail'",
                 required = true,
                 example = "confluence"
             ) String integration,
@@ -79,7 +80,7 @@ public class MermaidIndexTools {
             ) String storagePath,
             @MCPParam(
                 name = "include_patterns",
-                description = "Array of include patterns. For Confluence: [\"SPACE/pages/PAGE_ID/PAGE_NAME/**\"]. For Jira: [\"JQL query\"]",
+                description = "Array of include patterns. For Confluence: [\"SPACE/pages/PAGE_ID/PAGE_NAME/**\"]. For Jira: [\"JQL query\"]. For TestRail: [\"project_id=5&suite_id=3\"]",
                 required = true,
                 example = "[\"AINA/pages/11665522/Templates/**\"]",
                 type = "array"
@@ -191,8 +192,35 @@ public class MermaidIndexTools {
                         includeCommentsValue,
                         diagramGenerator
                 );
+            }
+            // Handle TestRail integration
+            else if ("testrail".equalsIgnoreCase(integration)) {
+                TrackerClient<? extends ITicket> trackerClient;
+                try {
+                    logger.info("Using TestRailClient for integration: {}", integration);
+                    trackerClient = TestRailClient.getInstance();
+                    if (trackerClient == null) {
+                        logger.error("TestRailClient.getInstance() returned null");
+                        return "{\"success\": false, \"error\": \"TestRail is not configured. Please configure TestRail credentials.\"}";
+                    }
+                    logger.info("TestRailClient instance obtained successfully: {}", trackerClient.getClass().getName());
+                } catch (IOException e) {
+                    logger.error("Failed to get TestRail client instance for integration: {}", integration, e);
+                    return "{\"success\": false, \"error\": \"Failed to get TestRail client instance: " + e.getMessage() + "\"}";
+                }
+
+                mermaidIndex = new MermaidIndex(
+                        integration,
+                        storagePath,
+                        includePatterns,
+                        normalizedExclude,
+                        trackerClient,
+                        customFieldsArray,
+                        includeCommentsValue,
+                        diagramGenerator
+                );
             } else {
-                return "{\"success\": false, \"error\": \"Unsupported integration: " + integration + ". Supported: 'confluence', 'jira', 'jira_xray'.\"}";
+                return "{\"success\": false, \"error\": \"Unsupported integration: " + integration + ". Supported: 'confluence', 'jira', 'jira_xray', 'testrail'.\"}";
             }
             
             // Execute indexing
@@ -216,7 +244,7 @@ public class MermaidIndexTools {
      * Read all Mermaid diagram files (.mmd) from storage path recursively.
      * Returns a list of ToText objects containing file path and content.
      * 
-     * @param integration Integration type (currently only "confluence" is supported)
+     * @param integration Integration type (used as subfolder name under storage path)
      * @param storagePath Base path where diagrams are stored
      * @return List of ToText objects, each containing path and content of a diagram file
      * @throws IOException if an error occurs reading files
@@ -230,7 +258,7 @@ public class MermaidIndexTools {
     public List<ToText> read(
             @MCPParam(
                 name = "integration",
-                description = "Integration type (currently only 'confluence' is supported)",
+                description = "Integration type (used as subfolder name under storage path)",
                 required = true,
                 example = "confluence"
             ) String integration,
@@ -243,23 +271,25 @@ public class MermaidIndexTools {
     ) throws IOException {
         logger.info("Reading Mermaid diagrams: integration={}, storagePath={}", integration, storagePath);
         
-        // Validate integration type
-        if (!"confluence".equalsIgnoreCase(integration)) {
-            throw new IllegalArgumentException("Unsupported integration: " + integration + ". Only 'confluence' is currently supported.");
-        }
-        
         // Validate storage path
         if (storagePath == null || storagePath.trim().isEmpty()) {
             throw new IllegalArgumentException("Storage path is required");
         }
         
-        Path storagePathObj = Paths.get(storagePath, integration);
-        if (!Files.exists(storagePathObj)) {
-            throw new IOException("Storage path does not exist: " + storagePathObj);
+        Path basePathObj = Paths.get(storagePath);
+        if (!Files.exists(basePathObj)) {
+            throw new IOException("Storage path does not exist: " + basePathObj);
         }
         
         // Recursively find all .mmd files
         List<ToText> diagrams = new ArrayList<>();
+        
+        Path storagePathObj = basePathObj.resolve(integration);
+        if (!Files.exists(storagePathObj)) {
+            logger.info("Integration subfolder does not exist: {}, returning empty list", storagePathObj);
+            return diagrams;
+        }
+        
         try (Stream<Path> paths = Files.walk(storagePathObj)) {
             paths.filter(Files::isRegularFile)
                  .filter(path -> path.toString().endsWith(".mmd"))
@@ -283,7 +313,7 @@ public class MermaidIndexTools {
      * Read all Mermaid diagram files (.mmd) from storage path recursively.
      * Returns JSON string with list of diagram files (path and content).
      * 
-     * @param integration Integration type (currently only "confluence" is supported)
+     * @param integration Integration type (used as subfolder name under storage path)
      * @param storagePath Base path where diagrams are stored
      * @return JSON string with list of diagram files (path and content)
      */
@@ -296,7 +326,7 @@ public class MermaidIndexTools {
     public String mermaidIndexRead(
             @MCPParam(
                 name = "integration",
-                description = "Integration type (currently only 'confluence' is supported)",
+                description = "Integration type (used as subfolder name under storage path)",
                 required = true,
                 example = "confluence"
             ) String integration,
