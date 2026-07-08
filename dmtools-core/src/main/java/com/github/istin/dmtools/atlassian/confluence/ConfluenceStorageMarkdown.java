@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -256,42 +257,78 @@ public final class ConfluenceStorageMarkdown {
             link.replaceWith(a);
         }
 
-        for (Element macro : doc.getElementsByTag("ac:structured-macro")) {
-            String macroName = macro.attr("ac:name").toLowerCase();
-            if ("code".equals(macroName)) {
-                String language = "";
-                for (Element param : macro.getElementsByTag("ac:parameter")) {
-                    if ("language".equals(param.attr("ac:name"))) {
-                        language = param.text();
-                        break;
-                    }
-                }
-                Element plainBody = macro.getElementsByTag("ac:plain-text-body").first();
-                String code = plainBody != null ? plainBody.text() : "";
-                Element pre = doc.createElement("pre");
-                Element codeEl = doc.createElement("code");
-                if (!language.isBlank()) {
-                    codeEl.addClass("language-" + language);
-                }
-                codeEl.html(StringEscapeUtils.escapeHtml4(code));
-                pre.appendChild(codeEl);
-                macro.replaceWith(pre);
-            } else if ("children".equals(macroName) || "childpages".equals(macroName)) {
-                macro.replaceWith(doc.createElement("p").text("[Child pages]"));
-            } else {
-                Element richBody = macro.getElementsByTag("ac:rich-text-body").first();
-                if (richBody != null) {
-                    Element div = doc.createElement("div");
-                    div.html(richBody.html());
-                    macro.replaceWith(div);
-                } else {
-                    // Remove unknown macros so their parameter text doesn't leak into Markdown.
-                    macro.remove();
-                }
-            }
-        }
+        resolveStructuredMacros(doc);
+
+        // Safety net: <ac:parameter> is always macro configuration, never real page
+        // content. If any survive (e.g. malformed/unexpected nesting the loop above
+        // did not anticipate), strip them so their raw text never leaks into Markdown.
+        doc.getElementsByTag("ac:parameter").remove();
 
         return bodyHtml(doc);
+    }
+
+    // Unwrapping an unknown macro's <ac:rich-text-body> can reveal further nested
+    // <ac:structured-macro> elements (e.g. third-party "live table" macros such as
+    // Table Filter/Charts' table-excerpt-include, livesearch, sparkline, pivot-table,
+    // etc. wrap their filter/sort configuration macro inside the body of an outer
+    // macro). A single pass over doc.getElementsByTag(...) does not revisit elements
+    // inserted during that same pass, so nested macros/parameters were previously left
+    // untouched and leaked as raw concatenated text once handed to the Markdown
+    // converter. Re-run the resolution loop until no structured macros remain (bounded
+    // to avoid an infinite loop on pathological/self-referential input).
+    private static void resolveStructuredMacros(Document doc) {
+        int maxIterations = 25;
+        for (int iteration = 0; iteration < maxIterations; iteration++) {
+            Elements macros = doc.getElementsByTag("ac:structured-macro");
+            if (macros.isEmpty()) {
+                return;
+            }
+            for (Element macro : macros) {
+                resolveStructuredMacro(doc, macro);
+            }
+        }
+        // Give up gracefully: remove any macros still standing rather than let their
+        // configuration parameters leak into the final Markdown.
+        doc.getElementsByTag("ac:structured-macro").remove();
+    }
+
+    private static void resolveStructuredMacro(Document doc, Element macro) {
+        String macroName = macro.attr("ac:name").toLowerCase();
+        if ("code".equals(macroName)) {
+            String language = "";
+            for (Element param : macro.getElementsByTag("ac:parameter")) {
+                if ("language".equals(param.attr("ac:name"))) {
+                    language = param.text();
+                    break;
+                }
+            }
+            Element plainBody = macro.getElementsByTag("ac:plain-text-body").first();
+            String code = plainBody != null ? plainBody.text() : "";
+            Element pre = doc.createElement("pre");
+            Element codeEl = doc.createElement("code");
+            if (!language.isBlank()) {
+                codeEl.addClass("language-" + language);
+            }
+            codeEl.html(StringEscapeUtils.escapeHtml4(code));
+            pre.appendChild(codeEl);
+            macro.replaceWith(pre);
+        } else if ("children".equals(macroName) || "childpages".equals(macroName)) {
+            macro.replaceWith(doc.createElement("p").text("[Child pages]"));
+        } else {
+            Element richBody = macro.getElementsByTag("ac:rich-text-body").first();
+            if (richBody != null) {
+                // Macro configuration (ac:parameter) never belongs inside the rendered
+                // body — strip it before unwrapping so it cannot leak as text, even
+                // before the next iteration gets a chance to process nested macros.
+                richBody.getElementsByTag("ac:parameter").remove();
+                Element div = doc.createElement("div");
+                div.html(richBody.html());
+                macro.replaceWith(div);
+            } else {
+                // Remove unknown macros so their parameter text doesn't leak into Markdown.
+                macro.remove();
+            }
+        }
     }
 
     private static String resolveLinkHref(Element link) {
