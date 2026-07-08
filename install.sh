@@ -1565,7 +1565,7 @@ download_checksum_file() {
 
     # Try GitHub API direct URL
     local api_asset_url
-    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-checksums.sha256")
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-checksums.sha256") || true
     if [ -n "$api_asset_url" ]; then
         if download_file "$api_asset_url" "$checksum_path" "DMTools checksums (from API)" "false" >/dev/null 2>&1; then
             echo "$checksum_path"
@@ -1634,7 +1634,7 @@ download_dmtools_jar() {
     # the redirect-based release URL is slow or blocked)
     info "Standard release URL failed or checksum mismatch. Trying GitHub API direct asset URL..."
     local api_asset_url
-    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-${version}-all.jar")
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-${version}-all.jar") || true
     if [ -n "$api_asset_url" ]; then
         info "Got API asset URL: $api_asset_url"
     else
@@ -1688,7 +1688,7 @@ download_dmtools_shell_script() {
     # Method 2: Try GitHub API to get direct asset URL (avoids expired blob URLs)
     warn "Redirect-based download failed, trying GitHub API for direct asset URL..."
     local api_asset_url
-    api_asset_url=$(get_asset_url_from_api "$version" "dmtools.sh")
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools.sh") || true
     
     if [ -n "$api_asset_url" ]; then
         if download_file "$api_asset_url" "$SCRIPT_PATH" "DMTools shell script (from API)" "true"; then
