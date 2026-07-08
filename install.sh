@@ -1781,6 +1781,29 @@ update_shell_config() {
     done
 }
 
+# Ensure dmtools is reachable in the current session without requiring a shell restart.
+# In CI environments shell rc files are usually not sourced between steps, so create a
+# symlink in a directory that is already on PATH (commonly ~/.local/bin).
+ensure_dmtools_in_path() {
+    # If BIN_DIR is already in PATH, the existing shell config updates are enough.
+    case ":${PATH}:" in
+        *:"$BIN_DIR":*) return 0 ;;
+    esac
+
+    local preferred_dir="$HOME/.local/bin"
+
+    # Create ~/.local/bin if it does not exist yet.
+    if ! mkdir -p "$preferred_dir" 2>/dev/null; then
+        return 0
+    fi
+
+    if [ -w "$preferred_dir" ]; then
+        if ln -sf "$SCRIPT_PATH" "$preferred_dir/dmtools" 2>/dev/null; then
+            info "Created symlink at $preferred_dir/dmtools so dmtools is available immediately."
+        fi
+    fi
+}
+
 # Verify installation
 verify_installation() {
     progress "Verifying installation..."
@@ -1915,6 +1938,9 @@ main() {
     
     # Update shell configuration
     update_shell_config
+    
+    # Make dmtools available in the current session (important for CI)
+    ensure_dmtools_in_path
     
     # Verify installation
     verify_installation
