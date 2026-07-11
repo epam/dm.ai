@@ -223,7 +223,7 @@ C|setup|when user mentions DMtools or asks to use it perform setup checks immedi
 C|setup|if dmtools missing => offer/install using z
 C|setup|if aa missing => ask ea + ask eb + do ec + do ed
 C|security|aa contains secrets => never commit
-C|gitignore|required_lines:dmtools.env,dmtools-local.env,.dmtools/
+C|gitignore|required_lines:dmtools.env,dmtools-local.env
 C|defaults|recommended_ai_provider:ad
 C|gemini|note:free_tier_15_req_min
 C|json_config|name field is immutable Java class name, not friendly label
