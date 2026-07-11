@@ -88,6 +88,65 @@ dmtools list
 
 ### Minimal configuration
 
+Create `dmtools.env` in your project root (or export the same variables in your shell). You only need the variables for the integrations you actually use — there is no single required set, and the AI provider key is optional (required only for AI-powered jobs and agents).
+
+**Jira** — [full guide](dmtools-ai-docs/references/configuration/integrations/jira.md)
+
+```bash
+JIRA_BASE_PATH=https://your-company.atlassian.net
+JIRA_EMAIL=your-email@company.com
+JIRA_API_TOKEN=your-jira-api-token
+```
+
+**Azure DevOps** — [full guide](dmtools-ai-docs/references/configuration/integrations/ado.md)
+
+```bash
+ADO_BASE_PATH=https://dev.azure.com/your-organization
+ADO_PAT=your-personal-access-token
+ADO_PROJECT=YourProject
+```
+
+**GitHub** — [full guide](dmtools-ai-docs/references/configuration/integrations/github.md)
+
+```bash
+SOURCE_GITHUB_TOKEN=ghp_your_token
+```
+
+**Confluence**
+
+```bash
+CONFLUENCE_BASE_PATH=https://your-company.atlassian.net/wiki
+CONFLUENCE_EMAIL=your-email@company.com
+CONFLUENCE_API_TOKEN=your-confluence-api-token
+```
+
+**TestRail** — [full guide](dmtools-ai-docs/references/configuration/integrations/testrail.md)
+
+```bash
+TESTRAIL_BASE_PATH=https://your-company.testrail.io
+TESTRAIL_USERNAME=your-email@company.com
+TESTRAIL_API_KEY=your-testrail-api-key
+```
+
+**Figma**
+
+```bash
+FIGMA_TOKEN=your-figma-personal-access-token
+```
+
+**AI provider** (optional — only needed for AI-powered jobs and agents). Configure one:
+
+```bash
+# Gemini (free tier available)
+GEMINI_API_KEY=your-gemini-api-key
+# OpenAI
+# OPEN_AI_API_KEY=sk-...
+# Enterprise gateway / AWS Bedrock / local models
+# DIAL_API_KEY=...   # or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or OLLAMA_BASE_URL
+```
+
+Example combined `dmtools.env` (Jira + Gemini):
+
 ```bash
 cat > dmtools.env << EOF
 JIRA_BASE_PATH=https://your-company.atlassian.net
@@ -95,11 +154,10 @@ JIRA_EMAIL=your-email@company.com
 JIRA_API_TOKEN=your-jira-api-token
 GEMINI_API_KEY=your-gemini-api-key
 EOF
-
 chmod 600 dmtools.env
 ```
 
-For provider-specific and integration-specific setup, use the maintained docs instead of copying old snippets from the repository root:
+For the full variable list, auth setup (token generation, PAT scopes, base64 credentials), and per-integration options, use the maintained docs instead of copying old snippets from the repository root:
 
 - [Configuration overview](dmtools-ai-docs/references/configuration/README.md)
 - [Integration setup guides](dmtools-ai-docs/references/configuration/integrations/)
