@@ -10,7 +10,18 @@ Enterprise dark-factory orchestrator for automating delivery workflows across tr
 >
 > PowerShell: https://github.com/epam/dm.ai/releases/latest/download/install.ps1
 
-[![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest) [![codecov](https://codecov.io/gh/epam/dm.ai/branch/main/graph/badge.svg)](https://codecov.io/gh/epam/dm.ai) [![](https://jitpack.io/v/epam/dm.ai.svg)](https://jitpack.io/#epam/dm.ai)
+[![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest)
+[![Coverage](.github/badges/jacoco.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
+[![Branches](.github/badges/branches.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
+[![License](https://img.shields.io/github/license/epam/dm.ai)](LICENSE)
+[![JitPack](https://jitpack.io/v/epam/dm.ai.svg)](https://jitpack.io/#epam/dm.ai)
+
+[![GitHub stars](https://img.shields.io/github/stars/epam/dm.ai)](https://github.com/epam/dm.ai/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/epam/dm.ai)](https://github.com/epam/dm.ai/network/members)
+[![Contributors](https://img.shields.io/github/contributors/epam/dm.ai)](https://github.com/epam/dm.ai/graphs/contributors)
+[![Downloads](https://img.shields.io/github/downloads/epam/dm.ai/total)](https://github.com/epam/dm.ai/releases)
+[![Last commit](https://img.shields.io/github/last-commit/epam/dm.ai)](https://github.com/epam/dm.ai/commits/main)
+[![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://adoptium.net/)
 
 > DMTools is orchestration layer for enterprise dark factories. It is designed for self-hosted and enterprise environments where teams need repeatable AI-assisted workflows instead of one-off scripts or server-first demos.
 
@@ -203,3 +214,13 @@ set DMTOOLS_VERSION=v1.7.179 && curl -fsSL https://github.com/epam/dm.ai/release
 ```
 
 See the [installation guide](dmtools-ai-docs/references/installation/README.md) for local development installation details.
+
+## Star History
+
+<a href="https://star-history.com/#epam/dm.ai&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=epam/dm.ai&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=epam/dm.ai&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=epam/dm.ai&type=Date" />
+  </picture>
+</a>
