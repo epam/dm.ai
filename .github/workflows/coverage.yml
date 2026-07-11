@@ -5,9 +5,14 @@ name: Coverage
 # It is intentionally a standalone workflow (not part of build-and-test.yml) so it
 # runs in parallel with the release pipeline and can never block a release.
 #
-# The badge SVG is committed straight back to `main`. Pushes made with the default
-# GITHUB_TOKEN do not trigger new workflow runs (and the message carries [skip ci]),
-# so this cannot loop.
+# The badge SVGs land on `main` via a small bot PR with auto-merge: the
+# "Protect main" ruleset requires the "Java unit tests" status check, so a
+# direct push from a workflow is rejected. The PR gets the required check
+# from unit-tests.yml, then GitHub auto-merges it (squash). Bot-created squash
+# merges do not fire the push trigger, so this cannot loop.
+#
+# Use `workflow_dispatch` to refresh the badge manually, e.g. after an
+# auto-merged PR (bot squash merges do not fire the push trigger).
 
 on:
   push:
@@ -20,7 +25,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # needed to commit the coverage badge back to main
+  contents: write       # push the badge-update branch
+  pull-requests: write  # open the badge-update PR and enable auto-merge
 
 jobs:
   coverage:
@@ -60,15 +66,30 @@ jobs:
           echo "coverage = ${{ steps.jacoco.outputs.coverage }}"
           echo "branch coverage = ${{ steps.jacoco.outputs.branches }}"
 
-      - name: Commit coverage badge to main (if changed)
+      - name: Publish coverage badge to main via auto-merge PR (if changed)
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ -n $(git status --porcelain .github/badges) ]]; then
-            git config --global user.name 'github-actions[bot]'
-            git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add .github/badges
-            git commit -m "chore(badges): update coverage badge [skip ci]"
-            git push origin HEAD:main
-          else
-            echo "Coverage badge unchanged; nothing to commit."
+          if [[ -z $(git status --porcelain .github/badges) ]]; then
+            echo "Coverage badge unchanged; nothing to do."
+            exit 0
           fi
+
+          # Direct pushes to main are rejected by the "Protect main" ruleset
+          # (required check "Java unit tests"), so publish through a bot PR and
+          # let GitHub auto-merge it once the required check passes.
+          BRANCH="bot/coverage-badges-${{ github.run_id }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git add .github/badges
+          git commit -m "chore(badges): update coverage badge"
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(badges): update coverage badge" \
+            --body "Automated coverage badge refresh from run ${{ github.run_id }}.")
+          gh pr merge "$PR_URL" --auto --squash --delete-branch
