@@ -1,0 +1,51 @@
+name: Coverage
+
+# Dedicated coverage workflow. It runs the dmtools-core unit tests, generates the
+# JaCoCo report, and uploads it to Codecov. It is intentionally a standalone
+# workflow (not part of build-and-test.yml) so that it runs in parallel with the
+# release pipeline and can never block a release.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    name: JaCoCo coverage -> Codecov
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Configure Git for tests
+        run: |
+          git config --global user.name "dm.ai"
+          git config --global user.email "dm.ai@epam.com"
+
+      - name: Run unit tests and generate JaCoCo report
+        run: ./gradlew :dmtools-core:test :dmtools-core:jacocoTestReport --no-daemon -x integrationTest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@v7
+        # Never fail the build because of a coverage upload problem.
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: dmtools-core/build/reports/jacoco/test/jacocoTestReport.xml
+          fail_ci_if_error: false
