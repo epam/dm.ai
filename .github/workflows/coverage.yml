@@ -15,6 +15,9 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+  # Manual trigger, e.g. to refresh the badge after an auto-merged PR (squash
+  # merges created by the GitHub Actions bot do not fire the push trigger).
+  workflow_dispatch:
 
 permissions:
   contents: write  # needed to commit the coverage badge back to main
@@ -58,7 +61,7 @@ jobs:
           echo "branch coverage = ${{ steps.jacoco.outputs.branches }}"
 
       - name: Commit coverage badge to main (if changed)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: |
           if [[ -n $(git status --porcelain .github/badges) ]]; then
             git config --global user.name 'github-actions[bot]'
