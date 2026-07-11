@@ -13,8 +13,7 @@ Enterprise dark-factory orchestrator for automating delivery workflows across tr
 [![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest)
 [![Coverage](.github/badges/jacoco.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
 [![Branches](.github/badges/branches.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
-[![License](https://img.shields.io/github/license/epam/dm.ai)](LICENSE)
-[![JitPack](https://jitpack.io/v/epam/dm.ai.svg)](https://jitpack.io/#epam/dm.ai)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
 [![GitHub stars](https://img.shields.io/github/stars/epam/dm.ai)](https://github.com/epam/dm.ai/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/epam/dm.ai)](https://github.com/epam/dm.ai/network/members)
