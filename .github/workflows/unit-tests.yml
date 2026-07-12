@@ -43,7 +43,7 @@ jobs:
                 fi
                 ;;
             esac
-          done < <(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          done < <(git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD)
           if [ "$FAILED" -ne 0 ]; then
             echo "Quality gate failed: changed Java files exceed $MAX_LINES lines."
             exit 1
