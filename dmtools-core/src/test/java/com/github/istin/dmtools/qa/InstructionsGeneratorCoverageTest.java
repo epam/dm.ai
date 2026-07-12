@@ -11,8 +11,10 @@ import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -25,6 +27,7 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,6 +48,11 @@ public class InstructionsGeneratorCoverageTest {
 
     @Before
     public void setUp() throws Exception {
+        // Pin the chunk token limit so chunk/merge counts below are deterministic
+        // regardless of the developer's local dmtools.env (gitignored; CI default
+        // is 50000 while these tests were derived for 100000).
+        PropertyReader.setOverrides(Collections.singletonMap("PROMPT_CHUNK_TOKEN_LIMIT", "100000"));
+
         generator = new InstructionsGenerator();
         trackerClient = mock(TrackerClient.class);
         confluence = mock(Confluence.class);
@@ -59,6 +67,11 @@ public class InstructionsGeneratorCoverageTest {
         setField(generator, "ai", ai);
 
         when(trackerClient.getExtendedQueryFields()).thenReturn(new String[]{"summary", "description"});
+    }
+
+    @After
+    public void tearDown() {
+        PropertyReader.clearOverrides();
     }
 
     private void setField(Object target, String fieldName, Object value) throws Exception {
