@@ -10,11 +10,9 @@ import com.github.istin.dmtools.ba.RequirementsCollector;
 import com.github.istin.dmtools.ba.UserStoryGenerator;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.dev.CodeGeneratorCompatibilityJob;
-import com.github.istin.dmtools.dev.CommitsTriage;
 import com.github.istin.dmtools.dev.UnitTestsGenerator;
 import com.github.istin.dmtools.diagram.DiagramsCreator;
 import com.github.istin.dmtools.documentation.DocumentationGenerator;
-import com.github.istin.dmtools.estimations.JEstimator;
 import com.github.istin.dmtools.expert.Expert;
 import com.github.istin.dmtools.js.JSRunner;
 import com.github.istin.dmtools.kb.KBProcessingJob;
@@ -27,7 +25,6 @@ import com.github.istin.dmtools.report.productivity.QAProductivityReport;
 import com.github.istin.dmtools.reporting.ReportGeneratorJob;
 import com.github.istin.dmtools.reporting.ReportVisualizerJob;
 import com.github.istin.dmtools.sa.SolutionArchitectureCreator;
-import com.github.istin.dmtools.sm.ScrumMasterDaily;
 import com.github.istin.dmtools.sync.SourceCodeCommitTrackerSyncJob;
 import com.github.istin.dmtools.sync.SourceCodeTrackerSyncJob;
 import com.github.istin.dmtools.teammate.Teammate;
@@ -65,7 +62,6 @@ public class JobRunnerCoverageTest {
         assertTrue(invokeCreateJobInstance("presalesupport") instanceof PreSaleSupport);
         assertTrue(invokeCreateJobInstance("documentationgenerator") instanceof DocumentationGenerator);
         assertTrue(invokeCreateJobInstance("requirementscollector") instanceof RequirementsCollector);
-        assertTrue(invokeCreateJobInstance("jestimator") instanceof JEstimator);
         assertTrue(invokeCreateJobInstance("testcasesgenerator") instanceof TestCasesGenerator);
         assertTrue(invokeCreateJobInstance("instructionsgenerator") instanceof InstructionsGenerator);
         assertTrue(invokeCreateJobInstance("solutionarchitecturecreator") instanceof SolutionArchitectureCreator);
@@ -80,14 +76,12 @@ public class JobRunnerCoverageTest {
         assertTrue(invokeCreateJobInstance("reportgeneratorjob") instanceof ReportGeneratorJob);
         assertTrue(invokeCreateJobInstance("reportvisualizer") instanceof ReportVisualizerJob);
         assertTrue(invokeCreateJobInstance("reportvisualizerjob") instanceof ReportVisualizerJob);
-        assertTrue(invokeCreateJobInstance("scrummasterdaily") instanceof ScrumMasterDaily);
         assertTrue(invokeCreateJobInstance("expert") instanceof Expert);
         assertTrue(invokeCreateJobInstance("teammate") instanceof Teammate);
         assertTrue(invokeCreateJobInstance("sourcecodetrackersyncjob") instanceof SourceCodeTrackerSyncJob);
         assertTrue(invokeCreateJobInstance("sourcecodecommittrackersyncjob") instanceof SourceCodeCommitTrackerSyncJob);
         assertTrue(invokeCreateJobInstance("userstorygenerator") instanceof UserStoryGenerator);
         assertTrue(invokeCreateJobInstance("unittestsgenerator") instanceof UnitTestsGenerator);
-        assertTrue(invokeCreateJobInstance("commitstriage") instanceof CommitsTriage);
         assertTrue(invokeCreateJobInstance("jsrunner") instanceof JSRunner);
         assertTrue(invokeCreateJobInstance("kbprocessing") instanceof KBProcessingJob);
         assertTrue(invokeCreateJobInstance("kbprocessingjob") instanceof KBProcessingJob);
@@ -124,7 +118,7 @@ public class JobRunnerCoverageTest {
     public void testGetJobsReturnsAllJobsAndCachesList() {
         List<Job> jobs = JobRunner.getJobs();
         assertNotNull(jobs);
-        assertEquals(25, jobs.size());
+        assertEquals(22, jobs.size());
         for (Job job : jobs) {
             assertNotNull(job);
             assertNotNull(job.getName());
@@ -390,7 +384,7 @@ public class JobRunnerCoverageTest {
         assertTrue(output.contains("Available Jobs:"));
         assertTrue(output.contains("- CodeGenerator"));
         assertTrue(output.contains("- KBProcessingJob"));
-        assertTrue(output.contains("Total: 25 jobs available"));
+        assertTrue(output.contains("Total: 22 jobs available"));
     }
 
     @Test

@@ -107,7 +107,7 @@ class CommandSourceCoverageTest {
         @SuppressWarnings("unchecked")
         List<CommandItem> jobs = (List<CommandItem>) invoke(new CommandSource(Set.of("github")),
                 "loadFallbackJobs", new Class<?>[0]);
-        assertEquals(25, jobs.size());
+        assertEquals(22, jobs.size());
         assertTrue(jobs.stream().anyMatch(j -> "Expert".equals(j.getName())));
         assertTrue(jobs.stream().anyMatch(j -> "JSRunner".equals(j.getName())));
         for (CommandItem item : jobs) {
