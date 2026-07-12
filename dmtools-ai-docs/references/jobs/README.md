@@ -53,7 +53,6 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 ### Development (Dev)
 - [UnitTestsGenerator](#unittestsgenerator) - Generate unit tests for code
 - [DevProductivityReport](#devproductivityreport) - Dev team productivity metrics
-- [CommitsTriage](#commitstriage) - Analyze and categorize commits
 
 ### Architecture & Design
 - [SolutionArchitectureCreator](#solutionarchitecturecreator) - Create solution architecture docs
@@ -68,8 +67,6 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 - [ReportVisualizer](#reportvisualizer) - Render report JSON as interactive HTML
 
 ### Project Management
-- [JEstimator](#jestimator) - Estimate story points and effort
-- [ScrumMasterDaily](#scrummasterdaily) - Daily scrum reports
 - [BusinessAnalyticDORGeneration](#businessanalyticdorgeneration) - Definition of Ready
 
 ### Documentation

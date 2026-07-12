@@ -13,11 +13,9 @@ import com.github.istin.dmtools.ba.BusinessAnalyticDORGeneration;
 import com.github.istin.dmtools.ba.RequirementsCollector;
 import com.github.istin.dmtools.ba.UserStoryGenerator;
 import com.github.istin.dmtools.dev.CodeGeneratorCompatibilityJob;
-import com.github.istin.dmtools.dev.CommitsTriage;
 import com.github.istin.dmtools.dev.UnitTestsGenerator;
 import com.github.istin.dmtools.diagram.DiagramsCreator;
 import com.github.istin.dmtools.documentation.DocumentationGenerator;
-import com.github.istin.dmtools.estimations.JEstimator;
 import com.github.istin.dmtools.expert.Expert;
 import com.github.istin.dmtools.job.doctor.DoctorCommand;
 import com.github.istin.dmtools.presale.PreSaleSupport;
@@ -28,7 +26,6 @@ import com.github.istin.dmtools.report.productivity.DevProductivityReport;
 import com.github.istin.dmtools.report.productivity.QAProductivityReport;
 import com.github.istin.dmtools.reporting.ReportGeneratorJob;
 import com.github.istin.dmtools.sa.SolutionArchitectureCreator;
-import com.github.istin.dmtools.sm.ScrumMasterDaily;
 import com.github.istin.dmtools.sync.SourceCodeCommitTrackerSyncJob;
 import com.github.istin.dmtools.sync.SourceCodeTrackerSyncJob;
 import com.github.istin.dmtools.teammate.Teammate;
@@ -66,7 +63,6 @@ public class JobRunner {
             case "presalesupport": return new PreSaleSupport();
             case "documentationgenerator": return new DocumentationGenerator();
             case "requirementscollector": return new RequirementsCollector();
-            case "jestimator": return new JEstimator();
             case "testcasesgenerator": return new TestCasesGenerator();
             case "instructionsgenerator": return new InstructionsGenerator();
             case "solutionarchitecturecreator": return new SolutionArchitectureCreator();
@@ -80,14 +76,12 @@ public class JobRunner {
             case "reportgeneratorjob": return new ReportGeneratorJob();
             case "reportvisualizer":
             case "reportvisualizerjob": return new com.github.istin.dmtools.reporting.ReportVisualizerJob();
-            case "scrummasterdaily": return new ScrumMasterDaily();
             case "expert": return new Expert();
             case "teammate": return new Teammate();
             case "sourcecodetrackersyncjob": return new SourceCodeTrackerSyncJob();
             case "sourcecodecommittrackersyncjob": return new SourceCodeCommitTrackerSyncJob();
             case "userstorygenerator": return new UserStoryGenerator();
             case "unittestsgenerator": return new UnitTestsGenerator();
-            case "commitstriage": return new CommitsTriage();
             case "jsrunner": return new JSRunner();
             case "kbprocessing":
             case "kbprocessingjob": return new KBProcessingJob();
@@ -125,7 +119,6 @@ public class JobRunner {
                             new PreSaleSupport(),
                             new DocumentationGenerator(),
                             new RequirementsCollector(),
-                            new JEstimator(),
                             new TestCasesGenerator(),
                             new InstructionsGenerator(),
                             new SolutionArchitectureCreator(),
@@ -137,14 +130,12 @@ public class JobRunner {
                             new QAProductivityReport(),
                             new ReportGeneratorJob(),
                             new com.github.istin.dmtools.reporting.ReportVisualizerJob(),
-                            new ScrumMasterDaily(),
                             new Expert(),
                             new Teammate(),
                             new SourceCodeTrackerSyncJob(),
                             new SourceCodeCommitTrackerSyncJob(),
                             new UserStoryGenerator(),
                             new UnitTestsGenerator(),
-                            new CommitsTriage(),
                             new JSRunner(),
                             new KBProcessingJob()
                     );
