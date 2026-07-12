@@ -4,14 +4,11 @@
 package com.github.istin.dmtools.ai;
 
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
-import com.github.istin.dmtools.atlassian.jira.model.IssueType;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
-import com.github.istin.dmtools.atlassian.jira.utils.IssuesIDsParser;
 import com.github.istin.dmtools.ba.UserStoryGenerator;
 import com.github.istin.dmtools.ba.UserStoryGeneratorParams;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.*;
-import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.common.utils.StringUtils;
@@ -30,7 +27,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class JAssistant {
 
@@ -91,102 +87,6 @@ public class JAssistant {
         this.ai = ai;
         this.promptManager = (PromptManager) promptManager;
         this.conversationObserver = conversationObserver;
-    }
-
-    public String generateCode(String role, TicketContext ticketContext) throws Exception {
-        ITicket ticket = ticketContext.getTicket();
-
-        CodeGeneration codeGeneration = new CodeGeneration(trackerClient.getBasePath(), role, ticketContext);
-        codeGeneration.setExtraTickets(ticketContext.getExtraTickets());
-        if (!IssueType.isBug(ticket.getIssueType())) {
-            List<? extends ITicket> testCases = trackerClient.getTestCases(ticket, "Test Case");
-            codeGeneration.setExistingTickets(testCases);
-        }
-
-        List<IFile> finalResults = new ArrayList<>();
-        for (SourceCode sourceCode : sourceCodes) {
-            extractPotentiallyEffectedFiles(role, ticketContext, sourceCode, codeGeneration, ticket, finalResults);
-        }
-
-        codeGeneration.setFiles(finalResults);
-        String finalAIRequest = promptManager.requestGenerateCodeForTicket(codeGeneration);
-        String finalResponse = ai.chat(
-                CODE_AI_MODEL,
-                finalAIRequest);
-        logger.info("----- FINAL AI RESPONSE ---- ");
-        logger.info(finalResponse);
-        trackerClient.postComment(ticketContext.getTicket().getTicketKey(), "<p>AI Generated Code: </p>" + finalResponse);
-        trackerClient.addLabelIfNotExists(ticketContext.getTicket(), "ai_generated_code");
-        return finalResponse;
-
-    }
-
-    private void extractPotentiallyEffectedFiles(String role, TicketContext ticketContext, SourceCode sourceCode, CodeGeneration codeGeneration, ITicket ticket, List<IFile> finalResults) throws Exception {
-        List<IFile> listOfFiles = sourceCode.getListOfFiles(sourceCode.getDefaultWorkspace(), sourceCode.getDefaultRepository(), sourceCode.getDefaultBranch());
-        List<IFile> filesOnly = listOfFiles.stream().filter(file -> !file.isDir()).collect(Collectors.toList());
-
-        JSONArray filePaths = getListOfEffectedFilesFromFiles(codeGeneration, filesOnly);
-
-        List<ICommit> commitsFromBranch = sourceCode.getCommitsFromBranch(sourceCode.getDefaultWorkspace(), sourceCode.getDefaultRepository(), sourceCode.getDefaultBranch(), null, null);
-        JSONArray filePathsFromCommits = getListOfEffectedFilesFromCommits(sourceCode, sourceCode.getDefaultWorkspace(), sourceCode.getDefaultRepository(), codeGeneration, commitsFromBranch);
-        filePaths.putAll(filePathsFromCommits);
-        for (int i = 0; i < filePaths.length(); i++) {
-            String path = filePaths.getString(i);
-            List<IFile> result = filesOnly.stream().filter(file -> file.getPath().equals(path)).collect(Collectors.toList());
-            if (!result.isEmpty()) {
-                IFile file = result.get(0);
-                file.setFileContent(sourceCode.getFileContent(file.getSelfLink()));
-
-                TicketFilePrompt ticketFilePrompt = new TicketFilePrompt(trackerClient.getBasePath(), role, ticketContext, file);
-                ticketFilePrompt.setExtraTickets(ticketContext.getExtraTickets());
-                String request = promptManager.validatePotentiallyEffectedFile(ticketFilePrompt);
-                boolean isTheFileUsefull = AI.Utils.chatAsBoolean(ai,
-                        CODE_AI_MODEL,
-                        request);
-                if (isTheFileUsefull) {
-                    finalResults.add(file);
-                }
-            }
-        }
-    }
-
-    private JSONArray getListOfEffectedFilesFromFiles(CodeGeneration codeGeneration, List<IFile> filesOnly) throws Exception {
-        codeGeneration.setFiles(filesOnly);
-        String aiRequest = promptManager.checkPotentiallyEffectedFilesForTicket(codeGeneration);
-        JSONArray result = AI.Utils.chatAsJSONArray(ai,
-                CODE_AI_MODEL,
-                aiRequest);
-        logger.info(result);
-        return result;
-    }
-
-    private JSONArray getListOfEffectedFilesFromCommits(SourceCode sourceCode, String workspace, String repository, CodeGeneration codeGeneration, List<ICommit> commits) throws Exception {
-        codeGeneration.setCommits(commits);
-        String aiRequest = promptManager.checkPotentiallyRelatedCommitsToTicket(codeGeneration);
-        JSONArray jsonArray = AI.Utils.chatAsJSONArray(ai,
-                CODE_AI_MODEL,
-                aiRequest);
-        logger.info(jsonArray);
-        Set<String> filesFromCommits = new HashSet<>();
-        for (int i = 0; i < jsonArray.length(); i++) {
-            String commit = jsonArray.getString(i);
-            IDiffStats commitDiffStat = sourceCode.getCommitDiffStat(workspace, repository, commit);
-            List<IChange> changes = commitDiffStat.getChanges();
-            for (IChange change : changes) {
-                filesFromCommits.add(change.getFilePath());
-            }
-        }
-        JSONArray result = new JSONArray();
-        for (String path : filesFromCommits) {
-            result.put(path);
-        }
-        return result;
-    }
-
-    private void trackConversation(String author, String text) {
-        if (conversationObserver != null) {
-            conversationObserver.addMessage(new ConversationObserver.Message(author, text));
-        }
     }
 
     public UserStoryGenerator.Result generateUserStories(TicketContext ticketContext, List<? extends ITicket> listOfLinkedUserStories, String projectCode, String issueType, String acceptanceCriteriaField, String relationship, String outputType, String priorities, String parentField) throws Exception {
@@ -311,39 +211,6 @@ public class JAssistant {
         }
     }
 
-    public @NotNull StringBuilder buildAttachmentsDescription(ITicket ticket) throws Exception {
-        List<? extends IAttachment> attachments = ticket.getAttachments();
-        StringBuilder attachmentsDescription = new StringBuilder();
-        if (!attachments.isEmpty()) {
-            for (IAttachment attachment : attachments) {
-                if (!RestClient.Impl.getFileImageExtension(attachment.getName()).isEmpty()) {
-                    java.io.File pageSnapshot = trackerClient.convertUrlToFile(attachment.getUrl());
-                    String extendedDescription = combineTextAndImage(ticket.getTicketTitle() + "\n" + ticket.getTicketDescription() + "\n" + attachmentsDescription, pageSnapshot);
-                    attachmentsDescription.append(extendedDescription).append("\n");
-                }
-            }
-
-        }
-        return attachmentsDescription;
-    }
-
-    public void generateNiceLookingStoryInGherkinStyleAndPotentialQuestionsToPO(String key) throws Exception {
-        ITicket ticket = trackerClient.performTicket(key, trackerClient.getExtendedQueryFields());
-        TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-        ticketContext.prepareContext();
-        String aiRequest = promptManager.requestNiceLookingStoryInGherkinStyleAndPotentialQuestionsToPO(new TicketBasedPrompt(trackerClient.getBasePath(), ticketContext));
-        String response = ai.chat(aiRequest);
-        response = ai.chat(promptManager.convertToHTML(new InputPrompt(response)));
-        trackerClient.postComment(key, "<p>JAI Generated Nice Looking Story In Gherkin Style And Potential Questions To PO: </p>" + response);
-    }
-
-    public String checkStoryIsTechnicalOrProduct(ITicket ticket) throws Exception {
-        TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-        ticketContext.prepareContext();
-        String aiRequest = promptManager.checkTaskTechnicalOrProduct(new TicketBasedPrompt(trackerClient.getBasePath(), ticketContext));
-        return ai.chat(aiRequest);
-    }
-
     public String chooseFeatureAreaForStory(ToText inputText, String areas) throws Exception {
         String aiRequest = promptManager.checkStoryAreas(new BAStoryAreaPrompt(trackerClient.getBasePath(), inputText, areas));
         return ai.chat(
@@ -443,47 +310,6 @@ public class JAssistant {
             return null;
         }
     }
-    public void reviewPullRequest(SourceCode sourceCode, String role, String workspace, String repository, String pullRequestId, IssuesIDsParser issuesIDsParser) throws Exception {
-        IPullRequest pullRequest = sourceCode.pullRequest(workspace, repository, pullRequestId);
-        List<String> keys = issuesIDsParser.parseIssues(pullRequest.getTitle(), pullRequest.getSourceBranchName(), pullRequest.getDescription());
-        if (keys.isEmpty()) {
-            sourceCode.addPullRequestComment(workspace, repository, pullRequestId, "Please use Ticket Number in Title, Description or Branch Name");
-            return;
-        }
-        if (keys.size() > 1) {
-            sourceCode.addPullRequestComment(workspace, repository, pullRequestId, "One Pull Request should be related to one ticket.");
-            return;
-        }
-
-        ITicket ticket = trackerClient.performTicket(keys.get(0), trackerClient.getExtendedQueryFields());
-        TicketContext ticketContext = new TicketContext(trackerClient, ticket);
-        ticketContext.prepareContext();
-        PullRequestReview input = new PullRequestReview(trackerClient.getBasePath(), role, ticketContext);
-        input.setTicket(ticket);
-
-        if (!IssueType.isBug(ticket.getIssueType())) {
-            List<? extends ITicket> testCases = trackerClient.getTestCases(ticket, "Test Case");
-            input.setExistingTickets(testCases);
-        }
-
-        input.setRole(role);
-        IBody diff = sourceCode.getDiff(workspace, repository, pullRequestId);
-        input.setDiff(diff.getBody());
-
-        String request;
-        if (!IssueType.isBug(ticket.getIssueType())) {
-            request = promptManager.requestDeveloperStoryPullRequestReview(input);
-        } else {
-            request = promptManager.requestDeveloperBugPullRequestReview(input);
-        }
-        String response = ai.chat(request);
-        logger.info("===== AI Response ======");
-        logger.info(response);
-        logger.info("===== AI Response ======");
-        sourceCode.addPullRequestComment(workspace, repository, pullRequestId, "JAI Review \n\n\n" + response);
-    }
-
-
     public JSONObject createFeatureAreasTree(String inputAreas) throws Exception {
         String prompt = promptManager.createFeatureAreasTree(new InputPrompt(inputAreas));
         return AI.Utils.chatAsJSONObject(ai, prompt);

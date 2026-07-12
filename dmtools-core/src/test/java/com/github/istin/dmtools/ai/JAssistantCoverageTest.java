@@ -5,7 +5,6 @@ package com.github.istin.dmtools.ai;
 
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
-import com.github.istin.dmtools.atlassian.jira.utils.IssuesIDsParser;
 import com.github.istin.dmtools.ba.UserStoryGenerator;
 import com.github.istin.dmtools.ba.UserStoryGeneratorParams;
 import com.github.istin.dmtools.common.code.SourceCode;
@@ -19,7 +18,6 @@ import org.junit.Test;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -28,9 +26,8 @@ import static org.mockito.Mockito.*;
 
 /**
  * Additional coverage tests for {@link JAssistant} focusing on branches
- * not exercised by {@link JAssistantTest}: code generation over source
- * files/commits, user story creation/update flows, story estimation,
- * pull request review and attachment description building.
+ * not exercised by {@link JAssistantTest}: user story creation/update
+ * flows, story estimation and similar-ticket validation.
  */
 public class JAssistantCoverageTest {
 
@@ -47,58 +44,6 @@ public class JAssistantCoverageTest {
         aiClientMock = mock(AI.class);
         promptManagerMock = mock(PromptManager.class);
         jAssistant = new JAssistant(trackerClientMock, sourceCodesMock, aiClientMock, promptManagerMock);
-    }
-
-    @Test
-    public void testGenerateCodeWithSourceCodeFilesAndCommits() throws Exception {
-        TicketContext ticketContextMock = mock(TicketContext.class);
-        ITicket ticketMock = mock(ITicket.class);
-        when(ticketContextMock.getTicket()).thenReturn(ticketMock);
-        when(ticketContextMock.getExtraTickets()).thenReturn(new ArrayList<>());
-        when(ticketMock.getIssueType()).thenReturn("Story");
-        when(ticketMock.getTicketKey()).thenReturn("KEY-1");
-        when(trackerClientMock.getBasePath()).thenReturn("basePath");
-        when(trackerClientMock.getTestCases(any(), anyString())).thenReturn(new ArrayList<>());
-
-        SourceCode sourceCodeMock = mock(SourceCode.class);
-        sourceCodesMock.add(sourceCodeMock);
-        when(sourceCodeMock.getDefaultWorkspace()).thenReturn("workspace");
-        when(sourceCodeMock.getDefaultRepository()).thenReturn("repository");
-        when(sourceCodeMock.getDefaultBranch()).thenReturn("branch");
-
-        IFile fileMock = mock(IFile.class);
-        when(fileMock.isDir()).thenReturn(false);
-        when(fileMock.getPath()).thenReturn("src/A.java");
-        when(fileMock.getSelfLink()).thenReturn("selfLink");
-        IFile dirMock = mock(IFile.class);
-        when(dirMock.isDir()).thenReturn(true);
-        when(sourceCodeMock.getListOfFiles(anyString(), anyString(), anyString()))
-                .thenReturn(Arrays.asList(fileMock, dirMock));
-
-        ICommit commitMock = mock(ICommit.class);
-        when(sourceCodeMock.getCommitsFromBranch(anyString(), anyString(), anyString(), any(), any()))
-                .thenReturn(Collections.singletonList(commitMock));
-        IDiffStats diffStatsMock = mock(IDiffStats.class);
-        IChange changeMock = mock(IChange.class);
-        when(changeMock.getFilePath()).thenReturn("src/A.java");
-        when(diffStatsMock.getChanges()).thenReturn(Collections.singletonList(changeMock));
-        when(sourceCodeMock.getCommitDiffStat(anyString(), anyString(), anyString())).thenReturn(diffStatsMock);
-        when(sourceCodeMock.getFileContent(anyString())).thenReturn("file content");
-
-        when(promptManagerMock.checkPotentiallyEffectedFilesForTicket(any())).thenReturn("AI Request");
-        when(promptManagerMock.checkPotentiallyRelatedCommitsToTicket(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(any(), anyString(), (File) any()))
-                .thenReturn("[\"src/A.java\"]", "[\"commit1\"]");
-        when(promptManagerMock.validatePotentiallyEffectedFile(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(any(), anyString())).thenReturn("true", "AI Final Response");
-        when(promptManagerMock.requestGenerateCodeForTicket(any())).thenReturn("Final AI Request");
-
-        String result = jAssistant.generateCode("role", ticketContextMock);
-
-        assertEquals("AI Final Response", result);
-        verify(fileMock, times(2)).setFileContent("file content");
-        verify(trackerClientMock).postComment(eq("KEY-1"), contains("AI Generated Code: "));
-        verify(trackerClientMock).addLabelIfNotExists(ticketMock, "ai_generated_code");
     }
 
     @Test
@@ -303,146 +248,6 @@ public class JAssistantCoverageTest {
         assertEquals(1, result.size());
         assertSame(similarTicketMock, result.get(0));
         verify(promptManagerMock, never()).validateSimilarStory(any());
-    }
-
-    @Test
-    public void testReviewPullRequestWithoutTicketKeys() throws Exception {
-        SourceCode sourceCodeMock = mock(SourceCode.class);
-        IPullRequest pullRequestMock = mock(IPullRequest.class);
-        when(pullRequestMock.getTitle()).thenReturn("Some title");
-        when(pullRequestMock.getSourceBranchName()).thenReturn("feature/branch");
-        when(pullRequestMock.getDescription()).thenReturn("description");
-        when(sourceCodeMock.pullRequest(anyString(), anyString(), anyString())).thenReturn(pullRequestMock);
-        IssuesIDsParser issuesIDsParserMock = mock(IssuesIDsParser.class);
-        when(issuesIDsParserMock.parseIssues(anyString(), anyString(), anyString()))
-                .thenReturn(new ArrayList<>());
-
-        jAssistant.reviewPullRequest(sourceCodeMock, "role", "workspace", "repository", "1", issuesIDsParserMock);
-
-        verify(sourceCodeMock).addPullRequestComment("workspace", "repository", "1",
-                "Please use Ticket Number in Title, Description or Branch Name");
-        verify(trackerClientMock, never()).performTicket(anyString(), any());
-    }
-
-    @Test
-    public void testReviewPullRequestWithMultipleTicketKeys() throws Exception {
-        SourceCode sourceCodeMock = mock(SourceCode.class);
-        IPullRequest pullRequestMock = mock(IPullRequest.class);
-        when(pullRequestMock.getTitle()).thenReturn("DMC-1 DMC-2 title");
-        when(pullRequestMock.getSourceBranchName()).thenReturn("feature/branch");
-        when(pullRequestMock.getDescription()).thenReturn("description");
-        when(sourceCodeMock.pullRequest(anyString(), anyString(), anyString())).thenReturn(pullRequestMock);
-        IssuesIDsParser issuesIDsParserMock = mock(IssuesIDsParser.class);
-        when(issuesIDsParserMock.parseIssues(anyString(), anyString(), anyString()))
-                .thenReturn(Arrays.asList("DMC-1", "DMC-2"));
-
-        jAssistant.reviewPullRequest(sourceCodeMock, "role", "workspace", "repository", "1", issuesIDsParserMock);
-
-        verify(sourceCodeMock).addPullRequestComment("workspace", "repository", "1",
-                "One Pull Request should be related to one ticket.");
-        verify(trackerClientMock, never()).performTicket(anyString(), any());
-    }
-
-    @Test
-    public void testReviewPullRequestForStory() throws Exception {
-        SourceCode sourceCodeMock = mock(SourceCode.class);
-        IPullRequest pullRequestMock = mock(IPullRequest.class);
-        when(pullRequestMock.getTitle()).thenReturn("DMC-1 title");
-        when(pullRequestMock.getSourceBranchName()).thenReturn("feature/DMC-1");
-        when(pullRequestMock.getDescription()).thenReturn("description");
-        when(sourceCodeMock.pullRequest(anyString(), anyString(), anyString())).thenReturn(pullRequestMock);
-        IssuesIDsParser issuesIDsParserMock = mock(IssuesIDsParser.class);
-        when(issuesIDsParserMock.parseIssues(anyString(), anyString(), anyString()))
-                .thenReturn(Collections.singletonList("DMC-1"));
-
-        ITicket ticketMock = mock(ITicket.class);
-        when(ticketMock.toText()).thenReturn("");
-        when(ticketMock.getIssueType()).thenReturn("Story");
-        when(trackerClientMock.performTicket(eq("DMC-1"), any())).thenReturn(ticketMock);
-        when(trackerClientMock.getTestCases(any(), anyString())).thenReturn(new ArrayList<>());
-        IBody bodyMock = mock(IBody.class);
-        when(bodyMock.getBody()).thenReturn("diff body");
-        when(sourceCodeMock.getDiff(anyString(), anyString(), anyString())).thenReturn(bodyMock);
-        when(promptManagerMock.requestDeveloperStoryPullRequestReview(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(anyString())).thenReturn("Review response");
-
-        jAssistant.reviewPullRequest(sourceCodeMock, "role", "workspace", "repository", "1", issuesIDsParserMock);
-
-        verify(promptManagerMock).requestDeveloperStoryPullRequestReview(any());
-        verify(promptManagerMock, never()).requestDeveloperBugPullRequestReview(any());
-        verify(sourceCodeMock).addPullRequestComment(eq("workspace"), eq("repository"), eq("1"),
-                contains("JAI Review"));
-    }
-
-    @Test
-    public void testReviewPullRequestForBug() throws Exception {
-        SourceCode sourceCodeMock = mock(SourceCode.class);
-        IPullRequest pullRequestMock = mock(IPullRequest.class);
-        when(pullRequestMock.getTitle()).thenReturn("DMC-1 title");
-        when(pullRequestMock.getSourceBranchName()).thenReturn("bugfix/DMC-1");
-        when(pullRequestMock.getDescription()).thenReturn("description");
-        when(sourceCodeMock.pullRequest(anyString(), anyString(), anyString())).thenReturn(pullRequestMock);
-        IssuesIDsParser issuesIDsParserMock = mock(IssuesIDsParser.class);
-        when(issuesIDsParserMock.parseIssues(anyString(), anyString(), anyString()))
-                .thenReturn(Collections.singletonList("DMC-1"));
-
-        ITicket ticketMock = mock(ITicket.class);
-        when(ticketMock.toText()).thenReturn("");
-        when(ticketMock.getIssueType()).thenReturn("Bug");
-        when(trackerClientMock.performTicket(eq("DMC-1"), any())).thenReturn(ticketMock);
-        IBody bodyMock = mock(IBody.class);
-        when(bodyMock.getBody()).thenReturn("diff body");
-        when(sourceCodeMock.getDiff(anyString(), anyString(), anyString())).thenReturn(bodyMock);
-        when(promptManagerMock.requestDeveloperBugPullRequestReview(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(anyString())).thenReturn("Review response");
-
-        jAssistant.reviewPullRequest(sourceCodeMock, "role", "workspace", "repository", "1", issuesIDsParserMock);
-
-        verify(trackerClientMock, never()).getTestCases(any(), anyString());
-        verify(promptManagerMock).requestDeveloperBugPullRequestReview(any());
-        verify(sourceCodeMock).addPullRequestComment(eq("workspace"), eq("repository"), eq("1"),
-                contains("JAI Review"));
-    }
-
-    @Test
-    public void testBuildAttachmentsDescriptionWithImage() throws Exception {
-        ITicket ticketMock = mock(ITicket.class);
-        IAttachment attachmentMock = mock(IAttachment.class);
-        when(attachmentMock.getName()).thenReturn("snapshot.png");
-        when(attachmentMock.getUrl()).thenReturn("http://example.com/snapshot.png");
-        doReturn(Collections.singletonList(attachmentMock)).when(ticketMock).getAttachments();
-        when(ticketMock.getTicketTitle()).thenReturn("Title");
-        when(ticketMock.getTicketDescription()).thenReturn("Description");
-        when(trackerClientMock.convertUrlToFile(anyString())).thenReturn(new File("snapshot.png"));
-        when(promptManagerMock.combineTextAndImage(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(anyString(), anyString(), (File) any())).thenReturn("extended description");
-
-        StringBuilder result = jAssistant.buildAttachmentsDescription(ticketMock);
-
-        assertTrue(result.toString().contains("extended description"));
-    }
-
-    @Test
-    public void testBuildAttachmentsDescriptionWithNonImageAttachment() throws Exception {
-        ITicket ticketMock = mock(ITicket.class);
-        IAttachment attachmentMock = mock(IAttachment.class);
-        when(attachmentMock.getName()).thenReturn("document.pdf");
-        doReturn(Collections.singletonList(attachmentMock)).when(ticketMock).getAttachments();
-
-        StringBuilder result = jAssistant.buildAttachmentsDescription(ticketMock);
-
-        assertEquals(0, result.length());
-        verify(trackerClientMock, never()).convertUrlToFile(anyString());
-    }
-
-    @Test
-    public void testBuildAttachmentsDescriptionWithoutAttachments() throws Exception {
-        ITicket ticketMock = mock(ITicket.class);
-        when(ticketMock.getAttachments()).thenReturn(new ArrayList<>());
-
-        StringBuilder result = jAssistant.buildAttachmentsDescription(ticketMock);
-
-        assertEquals(0, result.length());
     }
 
     @Test
