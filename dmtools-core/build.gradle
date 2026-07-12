@@ -206,6 +206,15 @@ jacocoTestReport {
         html.required.set(true)
         csv.required.set(true)
     }
+    // Generated annotation-processor output (e.g. mcp/generated/MCPToolExecutor)
+    // is machine-written; excluding it from coverage is standard practice.
+    afterEvaluate {
+        classDirectories.setFrom(
+            files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: '**/generated/**')
+            })
+        )
+    }
 }
 
 sourceSets {
