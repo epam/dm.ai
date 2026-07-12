@@ -26,6 +26,10 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Deprecated: superseded by JSON agents (agents/*.json); scheduled for removal.
+ */
+@Deprecated
 public class RequirementsCollector extends AbstractJob<RequirementsCollectorParams, List<ResultItem>> {
     private static final Logger logger = LogManager.getLogger(RequirementsCollector.class);
     @Override

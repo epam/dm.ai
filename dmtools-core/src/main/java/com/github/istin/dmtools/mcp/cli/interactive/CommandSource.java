@@ -143,7 +143,6 @@ public class CommandSource {
                 "PreSaleSupport",
                 "DocumentationGenerator",
                 "RequirementsCollector",
-                "JEstimator",
                 "TestCasesGenerator",
                 "InstructionsGenerator",
                 "SolutionArchitectureCreator",
@@ -155,14 +154,12 @@ public class CommandSource {
                 "QAProductivityReport",
                 "ReportGeneratorJob",
                 "ReportVisualizerJob",
-                "ScrumMasterDaily",
                 "Expert",
                 "Teammate",
                 "SourceCodeTrackerSyncJob",
                 "SourceCodeCommitTrackerSyncJob",
                 "UserStoryGenerator",
                 "UnitTestsGenerator",
-                "CommitsTriage",
                 "JSRunner",
                 "KBProcessingJob"
         );

@@ -8,6 +8,10 @@ import com.github.istin.dmtools.job.BaseJobParams;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+/**
+ * Deprecated: superseded by JSON agents (agents/*.json); scheduled for removal.
+ */
+@Deprecated
 public class RequirementsCollectorParams extends BaseJobParams {
 
     public static final String LABEL_NAME_TO_MARK_AS_REVIEWED = "labelNameToMarkAsReviewed";

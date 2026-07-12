@@ -88,7 +88,6 @@ The `"name"` field in JSON configuration **MUST** exactly match the Java Job cla
 | `DiagramsCreator` | Create Mermaid diagrams |
 | `SolutionArchitectureCreator` | Create architecture docs |
 | `InstructionsGenerator` | Generate implementation instructions |
-| `JEstimator` | Estimate story points |
 | `RequirementsCollector` | Collect requirements |
 | `UserStoryGenerator` | Generate user stories |
 | `JSRunner` | Run JavaScript agents |
