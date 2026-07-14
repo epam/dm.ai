@@ -13,6 +13,7 @@ public interface MiscConfiguration extends
         MetricsConfiguration,
         TestRailConfiguration,
         BitriseConfiguration,
+        JenkinsConfiguration,
         XrayConfiguration,
         AdoConfiguration {
     
