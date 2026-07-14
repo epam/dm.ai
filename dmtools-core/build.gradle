@@ -75,7 +75,7 @@ dependencies {
     // Apache POI dependencies - ensure consistent versions
     api "org.apache.poi:poi:${versions.poi}"
     api "org.apache.poi:poi-ooxml:${versions.poi}"
-    api 'org.apache.pdfbox:pdfbox:3.0.7'
+    api 'org.apache.pdfbox:pdfbox:3.0.8'
     api 'io.github.furstenheim:copy_down:1.1'
 
     // Guava and its dependencies
@@ -153,9 +153,9 @@ dependencies {
         force "tools.jackson.core:jackson-core:${versions.jackson3}"
         force "tools.jackson.core:jackson-databind:${versions.jackson3}"
         force "tools.jackson.module:jackson-module-blackbird:${versions.jackson3}"
-        force "org.apache.pdfbox:pdfbox:3.0.7"
-        force "org.apache.pdfbox:pdfbox-io:3.0.7"
-        force "org.apache.pdfbox:fontbox:3.0.7"
+        force "org.apache.pdfbox:pdfbox:3.0.8"
+        force "org.apache.pdfbox:pdfbox-io:3.0.8"
+        force "org.apache.pdfbox:fontbox:3.0.8"
 
         // Handle transitive dependencies
         eachDependency { DependencyResolveDetails details ->
