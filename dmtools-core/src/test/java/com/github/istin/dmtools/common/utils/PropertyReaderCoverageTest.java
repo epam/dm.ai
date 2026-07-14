@@ -244,7 +244,7 @@ class PropertyReaderCoverageTest {
     }
 
     @Test
-    @DisplayName("Jira boolean flags default to false when unset")
+    @DisplayName("Jira boolean flags fall back to defaults when unset")
     void testJiraBooleanFlagsDefaults() {
         // Empty-string overrides shadow any real environment variables and behave as "unset"
         Map<String, String> values = new HashMap<>();
@@ -256,7 +256,8 @@ class PropertyReaderCoverageTest {
         assertFalse(propertyReader.isJiraWaitBeforePerform());
         assertFalse(propertyReader.isJiraLoggingEnabled());
         assertFalse(propertyReader.isJiraClearCache());
-        assertFalse(propertyReader.isJiraTransformCustomFieldsToNames());
+        // JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES defaults to true when unset
+        assertTrue(propertyReader.isJiraTransformCustomFieldsToNames());
     }
 
     @Test
