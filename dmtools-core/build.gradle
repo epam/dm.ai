@@ -94,12 +94,12 @@ dependencies {
     api('com.github.mpkorstanje:simmetrics-core:4.1.1') {
         exclude group: 'com.google.guava'
     }
-    api('com.google.dagger:dagger:2.60') {
+    api('com.google.dagger:dagger:2.60.1') {
         exclude group: 'com.google.guava'
     }
 
     // Annotation processors
-    annotationProcessor 'com.google.dagger:dagger-compiler:2.60'
+    annotationProcessor 'com.google.dagger:dagger-compiler:2.60.1'
     compileOnly 'org.projectlombok:lombok:1.18.46'
     annotationProcessor 'org.projectlombok:lombok:1.18.46'
     
