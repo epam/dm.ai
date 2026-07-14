@@ -342,15 +342,11 @@ public class PropertyReader {
   }
 
   public boolean isJiraTransformCustomFieldsToNames() {
-    String value = getValue("JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES");
-    if (value == null) {
-      return false;
-    }
-    return Boolean.parseBoolean(value);
+    return Boolean.parseBoolean(getValue("JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES", "true"));
   }
 
   public String getJiraExtraFieldsProject() {
-    return getValue(JIRA_EXTRA_FIELDS_PROJECT);
+    return getValue(JIRA_EXTRA_FIELDS_PROJECT, "TS");
   }
 
     public int getJiraMaxSearchResults() {

@@ -158,7 +158,8 @@ export AI_RETRY_DELAY_STEP="20000"
 - `JIRA_LOGGING_ENABLED`: Boolean flag for request logging
 - `JIRA_CLEAR_CACHE`: Boolean flag for cache management
 - `JIRA_EXTRA_FIELDS`: Comma-separated list of additional fields to fetch
-- `JIRA_EXTRA_FIELDS_PROJECT`: Project-specific extra fields
+- `JIRA_EXTRA_FIELDS_PROJECT`: Project-specific extra fields (defaults to `TS` when unset)
+- `JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES`: Rename `customfield_XXXX` keys to their human-readable names (defaults to `true` when unset)
 
 ### Confluence Integration
 - `CONFLUENCE_LOGIN_PASS_TOKEN`: Confluence API Token
