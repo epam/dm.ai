@@ -212,39 +212,83 @@ public class GitLabTest {
     }
 
     @Test
-    public void testPullRequestActivitiesReturnsAllNonSystemNotes() throws IOException {
+    public void testPullRequestActivities_approvalsFromApi() throws IOException {
+        // First call = Approvals API → returns two approvers
+        JSONObject approvalsResponse = new JSONObject();
+        JSONArray approvedBy = new JSONArray();
+        JSONObject approverEntry = new JSONObject();
+        approverEntry.put("user", new JSONObject().put("id", 7).put("username", "alice").put("name", "Alice"));
+        approvedBy.put(approverEntry);
+        approvalsResponse.put("approved_by", approvedBy);
+
+        // Second call = notes endpoint → one non-system comment
         JSONArray notes = new JSONArray();
-
-        JSONObject approvedNote = new JSONObject();
-        approvedNote.put("id", 1);
-        approvedNote.put("body", "approved");
-        approvedNote.put("type", JSONObject.NULL);
-        approvedNote.put("system", false);
-        approvedNote.put("author", new JSONObject().put("id", 10).put("username", "user1"));
-
         JSONObject commentNote = new JSONObject();
         commentNote.put("id", 2);
         commentNote.put("body", "looks good");
         commentNote.put("type", JSONObject.NULL);
         commentNote.put("system", false);
-        commentNote.put("author", new JSONObject().put("id", 10).put("username", "user1"));
-
-        JSONObject systemNote = new JSONObject();
-        systemNote.put("id", 3);
-        systemNote.put("body", "system event");
-        systemNote.put("type", JSONObject.NULL);
-        systemNote.put("system", true);
-        systemNote.put("author", new JSONObject().put("id", 0).put("username", "system"));
-
-        notes.put(approvedNote);
+        commentNote.put("author", new JSONObject().put("id", 10).put("username", "bob"));
         notes.put(commentNote);
-        notes.put(systemNote);
 
-        doReturn(notes.toString()).when(gitLab).execute(any(GenericRequest.class));
+        // execute() is called twice: first for approvals, then for notes
+        doReturn(approvalsResponse.toString(), notes.toString()).when(gitLab).execute(any(GenericRequest.class));
+
         List<IActivity> activities = gitLab.pullRequestActivities("workspace", "repo", "1");
-        assertEquals("Should return 2 activities (excluding system note)", 2, activities.size());
+        assertEquals("One approval + one comment = 2 activities", 2, activities.size());
         assertEquals("APPROVED", activities.get(0).getAction());
+        assertNotNull("Approval must carry the approver user", activities.get(0).getApproval());
+        assertEquals("Alice", activities.get(0).getApproval().getFullName());
         assertEquals("COMMENTED", activities.get(1).getAction());
+        assertNull("Comment activities have null approval", activities.get(1).getApproval());
+    }
+
+    @Test
+    public void testPullRequestActivities_noApprovalsNoComments() throws IOException {
+        // Approvals API returns empty approved_by
+        JSONObject approvalsResponse = new JSONObject();
+        approvalsResponse.put("approved_by", new JSONArray());
+        // Notes endpoint returns empty array
+        doReturn(approvalsResponse.toString(), new JSONArray().toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        List<IActivity> activities = gitLab.pullRequestActivities("workspace", "repo", "1");
+        assertTrue("No activities when there are no approvals and no notes", activities.isEmpty());
+    }
+
+    @Test
+    public void testGetCommitsFromBranch_singlePage() throws IOException {
+        // Response with 2 commits (< 100) → only one page fetched
+        JSONArray page1 = new JSONArray();
+        JSONObject c1 = new JSONObject();
+        c1.put("id", "abc1");
+        c1.put("author_name", "Alice");
+        c1.put("author_email", "alice@example.com");
+        c1.put("committed_date", "2024-01-10T10:00:00.000Z");
+        c1.put("message", "Fix bug");
+        c1.put("web_url", "https://gitlab.com/g/r/-/commit/abc1");
+        page1.put(c1);
+        JSONObject c2 = new JSONObject();
+        c2.put("id", "abc2");
+        c2.put("author_name", "Bob");
+        c2.put("author_email", "bob@example.com");
+        c2.put("committed_date", "2024-01-11T10:00:00.000Z");
+        c2.put("message", "Add feature");
+        c2.put("web_url", "https://gitlab.com/g/r/-/commit/abc2");
+        page1.put(c2);
+
+        doReturn(page1.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        List<ICommit> commits = gitLab.getCommitsFromBranch("workspace", "repo", "main", "2024-01-01", null);
+        assertEquals("Two commits returned from single page", 2, commits.size());
+        assertNotNull("Author must be set", commits.get(0).getAuthor());
+        assertEquals("Alice", commits.get(0).getAuthor().getFullName());
+    }
+
+    @Test
+    public void testGetCommitsFromBranch_nullResponseReturnsEmptyList() throws IOException {
+        doReturn(null).when(gitLab).execute(any(GenericRequest.class));
+        List<ICommit> commits = gitLab.getCommitsFromBranch("workspace", "repo", "main", null, null);
+        assertTrue("Null HTTP response must yield empty list", commits.isEmpty());
     }
 
     @Test
@@ -412,5 +456,104 @@ public class GitLabTest {
                 .put("type", JSONObject.NULL)
                 .put("system", false)
                 .put("author", new JSONObject().put("id", 10).put("username", "user1"));
+    }
+
+    // ── gitlab_get_mr_diff_text ──────────────────────────────────────────────
+    //
+    // GitLab's /merge_requests/:iid/changes endpoint returns each file's diff as a bare
+    // hunk body (starting at "@@ ... @@"), without the "diff --git a/... b/...",
+    // "--- a/...", "+++ b/..." header lines that a standard unified diff has. Callers
+    // that parse unified diff text to locate a specific file/line (e.g. inline PR review
+    // comments) need those headers, so getPullRequestDiffText() reconstructs them.
+
+    @Test
+    public void testGetPullRequestDiffText_modifiedFile() throws IOException {
+        JSONObject change = new JSONObject()
+                .put("old_path", "src/Foo.java")
+                .put("new_path", "src/Foo.java")
+                .put("new_file", false)
+                .put("deleted_file", false)
+                .put("diff", "@@ -1,3 +1,4 @@\n context\n+added line\n-removed line\n unchanged\n");
+        JSONObject response = new JSONObject().put("changes", new JSONArray().put(change));
+
+        doReturn(response.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        String diffText = gitLab.getPullRequestDiffText("workspace", "repo", "42");
+
+        assertTrue("Should contain diff --git header", diffText.contains("diff --git a/src/Foo.java b/src/Foo.java"));
+        assertTrue("Should contain --- a/ header", diffText.contains("--- a/src/Foo.java"));
+        assertTrue("Should contain +++ b/ header", diffText.contains("+++ b/src/Foo.java"));
+        assertTrue("Should contain the hunk", diffText.contains("@@ -1,3 +1,4 @@"));
+        assertTrue("Should contain added line", diffText.contains("+added line"));
+        assertFalse("Should not be a broken Java object toString", diffText.matches("^[A-Za-z0-9_.$]+@[0-9a-f]+$"));
+    }
+
+    @Test
+    public void testGetPullRequestDiffText_newFile() throws IOException {
+        JSONObject change = new JSONObject()
+                .put("old_path", "src/New.java")
+                .put("new_path", "src/New.java")
+                .put("new_file", true)
+                .put("deleted_file", false)
+                .put("diff", "@@ -0,0 +1,2 @@\n+line one\n+line two\n");
+        JSONObject response = new JSONObject().put("changes", new JSONArray().put(change));
+
+        doReturn(response.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        String diffText = gitLab.getPullRequestDiffText("workspace", "repo", "42");
+
+        assertTrue(diffText.contains("diff --git a/src/New.java b/src/New.java"));
+        assertTrue("New file marker expected", diffText.contains("new file mode 100644"));
+        assertTrue("Old side must be /dev/null", diffText.contains("--- /dev/null"));
+        assertTrue(diffText.contains("+++ b/src/New.java"));
+    }
+
+    @Test
+    public void testGetPullRequestDiffText_deletedFile() throws IOException {
+        JSONObject change = new JSONObject()
+                .put("old_path", "src/Old.java")
+                .put("new_path", "src/Old.java")
+                .put("new_file", false)
+                .put("deleted_file", true)
+                .put("diff", "@@ -1,2 +0,0 @@\n-line one\n-line two\n");
+        JSONObject response = new JSONObject().put("changes", new JSONArray().put(change));
+
+        doReturn(response.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        String diffText = gitLab.getPullRequestDiffText("workspace", "repo", "42");
+
+        assertTrue(diffText.contains("diff --git a/src/Old.java b/src/Old.java"));
+        assertTrue("Deleted file marker expected", diffText.contains("deleted file mode 100644"));
+        assertTrue("Old side must reference the original path", diffText.contains("--- a/src/Old.java"));
+        assertTrue("New side must be /dev/null", diffText.contains("+++ /dev/null"));
+    }
+
+    @Test
+    public void testGetPullRequestDiffText_multipleFiles() throws IOException {
+        JSONObject change1 = new JSONObject()
+                .put("old_path", "a.java").put("new_path", "a.java")
+                .put("new_file", false).put("deleted_file", false)
+                .put("diff", "@@ -1,1 +1,1 @@\n-old\n+new\n");
+        JSONObject change2 = new JSONObject()
+                .put("old_path", "b.java").put("new_path", "b.java")
+                .put("new_file", false).put("deleted_file", false)
+                .put("diff", "@@ -1,1 +1,1 @@\n-old2\n+new2\n");
+        JSONObject response = new JSONObject().put("changes", new JSONArray().put(change1).put(change2));
+
+        doReturn(response.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        String diffText = gitLab.getPullRequestDiffText("workspace", "repo", "42");
+
+        assertTrue(diffText.contains("diff --git a/a.java b/a.java"));
+        assertTrue(diffText.contains("diff --git a/b.java b/b.java"));
+        assertTrue("a.java diff --git must appear before b.java's",
+                diffText.indexOf("a/a.java") < diffText.indexOf("a/b.java"));
+    }
+
+    @Test
+    public void testGetPullRequestDiffText_nullChangesReturnsEmptyString() throws IOException {
+        doReturn(null).when(gitLab).execute(any(GenericRequest.class));
+        String diffText = gitLab.getPullRequestDiffText("workspace", "repo", "42");
+        assertEquals("", diffText);
     }
 }

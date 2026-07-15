@@ -298,27 +298,27 @@ public class PropertyReader {
     }
     
     // Priority 2: Fall back to existing base64-encoded token
-    return getValue("JIRA_LOGIN_PASS_TOKEN");
+    return getValue(JIRA_LOGIN_PASS_TOKEN);
   }
   
   public String getJiraEmail() {
-    return getValue("JIRA_EMAIL");
+    return getValue(JIRA_EMAIL);
   }
   
   public String getJiraApiToken() {
-    return getValue("JIRA_API_TOKEN");
+    return getValue(JIRA_API_TOKEN);
   }
 
   public String getJiraBasePath() {
-    return getValue("JIRA_BASE_PATH");
+    return getValue(JIRA_BASE_PATH);
   }
 
   public String getJiraAuthType() {
-    return getValue("JIRA_AUTH_TYPE");
+    return getValue(JIRA_AUTH_TYPE);
   }
 
   public boolean isJiraWaitBeforePerform() {
-    String value = getValue("JIRA_WAIT_BEFORE_PERFORM");
+    String value = getValue(JIRA_WAIT_BEFORE_PERFORM);
     if (value == null) {
       return false;
     }
@@ -326,7 +326,7 @@ public class PropertyReader {
   }
 
   public boolean isJiraLoggingEnabled() {
-    String value = getValue("JIRA_LOGGING_ENABLED");
+    String value = getValue(JIRA_LOGGING_ENABLED);
     if (value == null) {
       return false;
     }
@@ -334,7 +334,7 @@ public class PropertyReader {
   }
 
   public boolean isJiraClearCache() {
-    String value = getValue("JIRA_CLEAR_CACHE");
+    String value = getValue(JIRA_CLEAR_CACHE);
     if (value == null) {
       return false;
     }
@@ -342,15 +342,11 @@ public class PropertyReader {
   }
 
   public boolean isJiraTransformCustomFieldsToNames() {
-    String value = getValue("JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES");
-    if (value == null) {
-      return false;
-    }
-    return Boolean.parseBoolean(value);
+    return Boolean.parseBoolean(getValue("JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES", "true"));
   }
 
   public String getJiraExtraFieldsProject() {
-    return getValue("JIRA_EXTRA_FIELDS_PROJECT");
+    return getValue(JIRA_EXTRA_FIELDS_PROJECT, "TS");
   }
 
     public int getJiraMaxSearchResults() {
@@ -367,23 +363,48 @@ public class PropertyReader {
     }
 
   public String[] getJiraExtraFields() {
-    String value = getValue("JIRA_EXTRA_FIELDS");
+    String value = getValue(JIRA_EXTRA_FIELDS);
     if (value == null) {
       return null;
     }
     return value.split(",");
   }
 
+  public static final String JIRA_ISSUE_IGNORE_PREFIXES = "JIRA_ISSUE_IGNORE_PREFIXES";
+  public static final String JIRA_ISSUE_ALLOWED_PREFIXES = "JIRA_ISSUE_ALLOWED_PREFIXES";
+
+  public Set<String> getJiraIssueIgnorePrefixes() {
+    return parseUpperCasePrefixSet(getValue(JIRA_ISSUE_IGNORE_PREFIXES));
+  }
+
+  public Set<String> getJiraIssueAllowedPrefixes() {
+    return parseUpperCasePrefixSet(getValue(JIRA_ISSUE_ALLOWED_PREFIXES));
+  }
+
+  private Set<String> parseUpperCasePrefixSet(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<String> result = new HashSet<>();
+    for (String prefix : value.split(",")) {
+      String trimmed = prefix.trim().toUpperCase(Locale.ROOT);
+      if (!trimmed.isEmpty()) {
+        result.add(trimmed);
+      }
+    }
+    return Collections.unmodifiableSet(result);
+  }
+
   public String getXrayClientId() {
-    return getValue("XRAY_CLIENT_ID");
+    return getValue(XRAY_CLIENT_ID);
   }
 
   public String getXrayClientSecret() {
-    return getValue("XRAY_CLIENT_SECRET");
+    return getValue(XRAY_CLIENT_SECRET);
   }
 
   public String getXrayBasePath() {
-    return getValue("XRAY_BASE_PATH");
+    return getValue(XRAY_BASE_PATH);
   }
 
   public boolean isXrayCachePostRequestsEnabled() {
@@ -475,28 +496,28 @@ public class PropertyReader {
 
 
   public String getRallyToken() {
-    return getValue("RALLY_TOKEN");
+    return getValue(RALLY_TOKEN);
   }
 
   public String getRallyPath() {
-    return getValue("RALLY_PATH");
+    return getValue(RALLY_PATH);
   }
 
   // Azure DevOps (ADO) configuration methods
   public String getAdoOrganization() {
-    return getValue("ADO_ORGANIZATION");
+    return getValue(ADO_ORGANIZATION);
   }
 
   public String getAdoProject() {
-    return getValue("ADO_PROJECT");
+    return getValue(ADO_PROJECT);
   }
 
   public String getAdoPatToken() {
-    return getValue("ADO_PAT_TOKEN");
+    return getValue(ADO_PAT_TOKEN);
   }
 
   public String getAdoBasePath() {
-    String value = getValue("ADO_BASE_PATH");
+    String value = getValue(ADO_BASE_PATH);
     if (value == null || value.isEmpty()) {
       return "https://dev.azure.com";
     }
@@ -504,47 +525,47 @@ public class PropertyReader {
   }
 
   public String getBitbucketToken() {
-    return getValue("BITBUCKET_TOKEN");
+    return getValue(BITBUCKET_TOKEN);
   }
 
   public String getBitbucketApiVersion() {
-    return getValue("BITBUCKET_API_VERSION");
+    return getValue(BITBUCKET_API_VERSION);
   }
 
   public String getBitbucketWorkspace() {
-    return getValue("BITBUCKET_WORKSPACE");
+    return getValue(BITBUCKET_WORKSPACE);
   }
 
   public String getBitbucketRepository() {
-    return getValue("BITBUCKET_REPOSITORY");
+    return getValue(BITBUCKET_REPOSITORY);
   }
 
   public String getBitbucketBranch() {
-    return getValue("BITBUCKET_BRANCH");
+    return getValue(BITBUCKET_BRANCH);
   }
 
   public String getBitbucketBasePath() {
-    return getValue("BITBUCKET_BASE_PATH");
+    return getValue(BITBUCKET_BASE_PATH);
   }
 
   public String getGithubToken() {
-    return getValue("SOURCE_GITHUB_TOKEN");
+    return getValue(SOURCE_GITHUB_TOKEN);
   }
 
   public String getGithubWorkspace() {
-    return getValue("SOURCE_GITHUB_WORKSPACE");
+    return getValue(SOURCE_GITHUB_WORKSPACE);
   }
 
   public String getGithubRepository() {
-    return getValue("SOURCE_GITHUB_REPOSITORY");
+    return getValue(SOURCE_GITHUB_REPOSITORY);
   }
 
   public String getGithubBranch() {
-    return getValue("SOURCE_GITHUB_BRANCH");
+    return getValue(SOURCE_GITHUB_BRANCH);
   }
 
   public String getGithubBasePath() {
-    String value = getValue("SOURCE_GITHUB_BASE_PATH");
+    String value = getValue(SOURCE_GITHUB_BASE_PATH);
     if (value == null || value.isEmpty()) {
       return "https://api.github.com";
     }
@@ -552,27 +573,27 @@ public class PropertyReader {
   }
 
   public String getGitLabToken() {
-    return getValue("GITLAB_TOKEN");
+    return getValue(GITLAB_TOKEN);
   }
 
   public String getGitLabWorkspace() {
-    return getValue("GITLAB_WORKSPACE");
+    return getValue(GITLAB_WORKSPACE);
   }
 
   public String getGitLabRepository() {
-    return getValue("GITLAB_REPOSITORY");
+    return getValue(GITLAB_REPOSITORY);
   }
 
   public String getGitLabBranch() {
-    return getValue("GITLAB_BRANCH");
+    return getValue(GITLAB_BRANCH);
   }
 
   public String getGitLabBasePath() {
-    return getValue("GITLAB_BASE_PATH");
+    return getValue(GITLAB_BASE_PATH);
   }
 
   public String getConfluenceBasePath() {
-    return getValue("CONFLUENCE_BASE_PATH");
+    return getValue(CONFLUENCE_BASE_PATH);
   }
 
   public String getConfluenceLoginPassToken() {
@@ -595,33 +616,33 @@ public class PropertyReader {
     }
     
     // Priority 2: Fall back to existing base64-encoded token
-    return getValue("CONFLUENCE_LOGIN_PASS_TOKEN");
+    return getValue(CONFLUENCE_LOGIN_PASS_TOKEN);
   }
   
   public String getConfluenceEmail() {
-    return getValue("CONFLUENCE_EMAIL");
+    return getValue(CONFLUENCE_EMAIL);
   }
   
   public String getConfluenceApiToken() {
-    return getValue("CONFLUENCE_API_TOKEN");
+    return getValue(CONFLUENCE_API_TOKEN);
   }
   
   public String getConfluenceAuthType() {
-    String authType = getValue("CONFLUENCE_AUTH_TYPE");
+    String authType = getValue(CONFLUENCE_AUTH_TYPE);
     // Default to Basic if not specified
     return authType != null ? authType : "Basic";
   }
 
   public String getConfluenceGraphQLPath() {
-    return getValue("CONFLUENCE_GRAPHQL_PATH");
+    return getValue(CONFLUENCE_GRAPHQL_PATH);
   }
 
   public String getConfluenceDefaultSpace() {
-    return getValue("CONFLUENCE_DEFAULT_SPACE");
+    return getValue(CONFLUENCE_DEFAULT_SPACE);
   }
 
   public String getDialBathPath() {
-    String value = getValue("DIAL_BASE_PATH", null);
+    String value = getValue(DIAL_BASE_PATH, null);
     if (value != null) {
       return value;
     }
@@ -629,7 +650,7 @@ public class PropertyReader {
   }
 
   public String getDialIApiKey() {
-    return getValue("DIAL_API_KEY");
+    return getValue(DIAL_API_KEY);
   }
 
   public String getDialModel() {
@@ -637,7 +658,7 @@ public class PropertyReader {
   }
 
   public String getDialApiVersion() {
-    return getValue("DIAL_API_VERSION");
+    return getValue(DIAL_API_VERSION);
   }
 
   public String getCodeAIModel() {
@@ -649,39 +670,43 @@ public class PropertyReader {
   }
 
   public String getFigmaBasePath() {
-    return getValue("FIGMA_BASE_PATH");
+    return getValue(FIGMA_BASE_PATH);
   }
 
   public String getFigmaApiKey() {
-    return getValue("FIGMA_TOKEN");
+    return getValue(FIGMA_TOKEN);
   }
 
   public String getFigmaClientId() {
-    return getValue("FIGMA_CLIENT_ID");
+    return getValue(FIGMA_CLIENT_ID);
   }
 
   public String getFigmaClientSecret() {
-    return getValue("FIGMA_CLIENT_SECRET");
+    return getValue(FIGMA_CLIENT_SECRET);
   }
 
   public String getFigmaOAuth2RefreshToken() {
-    return getValue("FIGMA_OAUTH_REFRESH_TOKEN");
+    return getValue(FIGMA_OAUTH_REFRESH_TOKEN);
   }
 
   public String getFigmaOAuth2AccessToken() {
-    return getValue("FIGMA_OAUTH_ACCESS_TOKEN");
+    return getValue(FIGMA_OAUTH_ACCESS_TOKEN);
   }
 
   public String getFigmaOAuth2Scopes() {
-    String value = getValue("FIGMA_SCOPE");
+    String value = getValue(FIGMA_SCOPE);
     if (value != null && !value.trim().isEmpty()) {
       return value;
     }
     return getValue("FIGMA_OAUTH_SCOPES");
   }
 
+  public String getFigmaRedirectUri() {
+    return getValue(FIGMA_REDIRECT_URI);
+  }
+
   public Integer getDefaultTicketWeightIfNoSPs() {
-    String value = getValue("DEFAULT_TICKET_WEIGHT_IF_NO_SP");
+    String value = getValue(DEFAULT_TICKET_WEIGHT_IF_NO_SP);
     if (value == null || value.isEmpty()) {
       return -1;
     }
@@ -724,7 +749,7 @@ public class PropertyReader {
   }
 
   public Double getLinesOfCodeDivider() {
-    String value = getValue("LINES_OF_CODE_DIVIDER");
+    String value = getValue(LINES_OF_CODE_DIVIDER);
     if (value == null || value.isEmpty()) {
       return 1d;
     }
@@ -732,7 +757,7 @@ public class PropertyReader {
   }
 
   public Double getTimeSpentOnDivider() {
-    String value = getValue("TIME_SPENT_ON_DIVIDER");
+    String value = getValue(TIME_SPENT_ON_DIVIDER);
     if (value == null || value.isEmpty()) {
       return 1d;
     }
@@ -742,7 +767,7 @@ public class PropertyReader {
   public Double getTicketFieldsChangedDivider(String fieldName) {
     String value = getValue("TICKET_FIELDS_CHANGED_DIVIDER_"+ fieldName.toUpperCase());
     if (value == null) {
-      String defaultValue = getValue("TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT");
+      String defaultValue = getValue(TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT);
       if (defaultValue != null && !defaultValue.isEmpty()) {
         return Double.parseDouble(defaultValue);
       }
@@ -992,6 +1017,116 @@ public class PropertyReader {
   public static final String OPENAI_MAX_TOKENS_PARAM_NAME = "OPENAI_MAX_TOKENS_PARAM_NAME";
   public static final String DEFAULT_LLM = "DEFAULT_LLM";
   public static final String DEFAULT_TRACKER = "DEFAULT_TRACKER";
+
+  // Misc configuration
+  public static final String DEFAULT_TICKET_WEIGHT_IF_NO_SP = "DEFAULT_TICKET_WEIGHT_IF_NO_SP";
+  public static final String LINES_OF_CODE_DIVIDER = "LINES_OF_CODE_DIVIDER";
+  public static final String TIME_SPENT_ON_DIVIDER = "TIME_SPENT_ON_DIVIDER";
+  public static final String TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT = "TICKET_FIELDS_CHANGED_DIVIDER_DEFAULT";
+
+  // Jira configuration
+  public static final String JIRA_BASE_PATH = "JIRA_BASE_PATH";
+  public static final String JIRA_EMAIL = "JIRA_EMAIL";
+  public static final String JIRA_API_TOKEN = "JIRA_API_TOKEN";
+  public static final String JIRA_LOGIN_PASS_TOKEN = "JIRA_LOGIN_PASS_TOKEN";
+  public static final String JIRA_AUTH_TYPE = "JIRA_AUTH_TYPE";
+  public static final String JIRA_WAIT_BEFORE_PERFORM = "JIRA_WAIT_BEFORE_PERFORM";
+  public static final String JIRA_LOGGING_ENABLED = "JIRA_LOGGING_ENABLED";
+  public static final String JIRA_CLEAR_CACHE = "JIRA_CLEAR_CACHE";
+  public static final String JIRA_EXTRA_FIELDS_PROJECT = "JIRA_EXTRA_FIELDS_PROJECT";
+  public static final String JIRA_EXTRA_FIELDS = "JIRA_EXTRA_FIELDS";
+
+  // Confluence configuration
+  public static final String CONFLUENCE_BASE_PATH = "CONFLUENCE_BASE_PATH";
+  public static final String CONFLUENCE_EMAIL = "CONFLUENCE_EMAIL";
+  public static final String CONFLUENCE_API_TOKEN = "CONFLUENCE_API_TOKEN";
+  public static final String CONFLUENCE_LOGIN_PASS_TOKEN = "CONFLUENCE_LOGIN_PASS_TOKEN";
+  public static final String CONFLUENCE_AUTH_TYPE = "CONFLUENCE_AUTH_TYPE";
+  public static final String CONFLUENCE_GRAPHQL_PATH = "CONFLUENCE_GRAPHQL_PATH";
+  public static final String CONFLUENCE_DEFAULT_SPACE = "CONFLUENCE_DEFAULT_SPACE";
+
+  // Figma configuration
+  public static final String FIGMA_BASE_PATH = "FIGMA_BASE_PATH";
+  public static final String FIGMA_TOKEN = "FIGMA_TOKEN";
+  public static final String FIGMA_CLIENT_ID = "FIGMA_CLIENT_ID";
+  public static final String FIGMA_CLIENT_SECRET = "FIGMA_CLIENT_SECRET";
+  public static final String FIGMA_OAUTH_REFRESH_TOKEN = "FIGMA_OAUTH_REFRESH_TOKEN";
+  public static final String FIGMA_OAUTH_ACCESS_TOKEN = "FIGMA_OAUTH_ACCESS_TOKEN";
+  public static final String FIGMA_SCOPE = "FIGMA_SCOPE";
+  public static final String FIGMA_REDIRECT_URI = "FIGMA_REDIRECT_URI";
+
+  // GitHub configuration
+  public static final String SOURCE_GITHUB_TOKEN = "SOURCE_GITHUB_TOKEN";
+  public static final String SOURCE_GITHUB_WORKSPACE = "SOURCE_GITHUB_WORKSPACE";
+  public static final String SOURCE_GITHUB_REPOSITORY = "SOURCE_GITHUB_REPOSITORY";
+  public static final String SOURCE_GITHUB_BRANCH = "SOURCE_GITHUB_BRANCH";
+  public static final String SOURCE_GITHUB_BASE_PATH = "SOURCE_GITHUB_BASE_PATH";
+
+  // GitLab configuration
+  public static final String GITLAB_TOKEN = "GITLAB_TOKEN";
+  public static final String GITLAB_WORKSPACE = "GITLAB_WORKSPACE";
+  public static final String GITLAB_REPOSITORY = "GITLAB_REPOSITORY";
+  public static final String GITLAB_BRANCH = "GITLAB_BRANCH";
+  public static final String GITLAB_BASE_PATH = "GITLAB_BASE_PATH";
+
+  // Bitbucket configuration
+  public static final String BITBUCKET_TOKEN = "BITBUCKET_TOKEN";
+  public static final String BITBUCKET_API_VERSION = "BITBUCKET_API_VERSION";
+  public static final String BITBUCKET_WORKSPACE = "BITBUCKET_WORKSPACE";
+  public static final String BITBUCKET_REPOSITORY = "BITBUCKET_REPOSITORY";
+  public static final String BITBUCKET_BRANCH = "BITBUCKET_BRANCH";
+  public static final String BITBUCKET_BASE_PATH = "BITBUCKET_BASE_PATH";
+
+  // Azure DevOps configuration
+  public static final String ADO_ORGANIZATION = "ADO_ORGANIZATION";
+  public static final String ADO_PROJECT = "ADO_PROJECT";
+  public static final String ADO_PAT_TOKEN = "ADO_PAT_TOKEN";
+  public static final String ADO_BASE_PATH = "ADO_BASE_PATH";
+
+  // Rally configuration
+  public static final String RALLY_TOKEN = "RALLY_TOKEN";
+  public static final String RALLY_PATH = "RALLY_PATH";
+
+  // TestRail configuration
+  public static final String TESTRAIL_BASE_PATH = "TESTRAIL_BASE_PATH";
+  public static final String TESTRAIL_USERNAME = "TESTRAIL_USERNAME";
+  public static final String TESTRAIL_API_KEY = "TESTRAIL_API_KEY";
+  public static final String TESTRAIL_PROJECT = "TESTRAIL_PROJECT";
+  public static final String TESTRAIL_LOGGING_ENABLED = "TESTRAIL_LOGGING_ENABLED";
+  // Optional: default output format ("md"/"markdown" or "html", default "html") applied by
+  // testrail_get_case/testrail_get_all_cases/testrail_search_cases when the caller does not
+  // explicitly pass a format parameter. Set to "markdown" to make every TestRail integration
+  // (including internal callers like TestCasesGenerator's related-test-case search) return
+  // clean Markdown by default, without needing per-call-site changes -- avoiding the token
+  // bloat of raw HTML (which can carry 20-30x overhead from inline CSS styling).
+  public static final String TESTRAIL_DEFAULT_FORMAT = "TESTRAIL_DEFAULT_FORMAT";
+
+  // Bitrise configuration
+  public static final String BITRISE_TOKEN = "BITRISE_TOKEN";
+  public static final String BITRISE_BASE_PATH = "BITRISE_BASE_PATH";
+  public static final String BITRISE_APP_SLUG = "BITRISE_APP_SLUG";
+
+  // Xray configuration
+  public static final String XRAY_CLIENT_ID = "XRAY_CLIENT_ID";
+  public static final String XRAY_CLIENT_SECRET = "XRAY_CLIENT_SECRET";
+  public static final String XRAY_BASE_PATH = "XRAY_BASE_PATH";
+
+  // Microsoft Teams configuration
+  public static final String TEAMS_BASE_PATH = "TEAMS_BASE_PATH";
+  public static final String TEAMS_CLIENT_ID = "TEAMS_CLIENT_ID";
+  public static final String TEAMS_TENANT_ID = "TEAMS_TENANT_ID";
+  public static final String TEAMS_SCOPES = "TEAMS_SCOPES";
+  public static final String TEAMS_AUTH_METHOD = "TEAMS_AUTH_METHOD";
+  public static final String TEAMS_AUTH_PORT = "TEAMS_AUTH_PORT";
+  public static final String TEAMS_TOKEN_CACHE_PATH = "TEAMS_TOKEN_CACHE_PATH";
+  public static final String TEAMS_REFRESH_TOKEN = "TEAMS_REFRESH_TOKEN";
+
+  // DIAL configuration
+  public static final String DIAL_BASE_PATH = "DIAL_BASE_PATH";
+  public static final String DIAL_API_KEY = "DIAL_API_KEY";
+  public static final String DIAL_API_VERSION = "DIAL_API_VERSION";
+
+
   public static final String IMAGE_MAX_DIMENSION = "IMAGE_MAX_DIMENSION";
   public static final String IMAGE_JPEG_QUALITY = "IMAGE_JPEG_QUALITY";
 
@@ -1029,26 +1164,26 @@ public class PropertyReader {
 
   // Microsoft Teams configuration
   public String getTeamsClientId() {
-    return getValue("TEAMS_CLIENT_ID");
+    return getValue(TEAMS_CLIENT_ID);
   }
 
   public String getTeamsTenantId() {
-    return getValue("TEAMS_TENANT_ID", "common");
+    return getValue(TEAMS_TENANT_ID, "common");
   }
 
   public String getTeamsScopes() {
-    return getValue("TEAMS_SCOPES", 
+    return getValue(TEAMS_SCOPES, 
       "User.Read Chat.Read ChatMessage.Read Mail.Read " +
       "Team.ReadBasic.All Channel.ReadBasic.All " +
       "openid profile email offline_access");
   }
 
   public String getTeamsAuthMethod() {
-    return getValue("TEAMS_AUTH_METHOD", "device");
+    return getValue(TEAMS_AUTH_METHOD, "device");
   }
 
   public int getTeamsAuthPort() {
-    String value = getValue("TEAMS_AUTH_PORT");
+    String value = getValue(TEAMS_AUTH_PORT);
     if (value == null || value.trim().isEmpty()) {
       return 8080;
     }
@@ -1060,11 +1195,11 @@ public class PropertyReader {
   }
 
   public String getTeamsTokenCachePath() {
-    return getValue("TEAMS_TOKEN_CACHE_PATH", "./teams.token");
+    return getValue(TEAMS_TOKEN_CACHE_PATH, "./teams.token");
   }
 
   public String getTeamsRefreshToken() {
-    return getValue("TEAMS_REFRESH_TOKEN");
+    return getValue(TEAMS_REFRESH_TOKEN);
   }
 
   // Microsoft SharePoint configuration (reuses Teams auth, adds Files.Read)
@@ -1142,12 +1277,15 @@ public class PropertyReader {
     }
   }
 
+  public static final String ANTHROPIC_CUSTOM_HEADER_NAMES = "ANTHROPIC_CUSTOM_HEADER_NAMES";
+  public static final String ANTHROPIC_CUSTOM_HEADER_VALUES = "ANTHROPIC_CUSTOM_HEADER_VALUES";
+
   public String getAnthropicCustomHeaderNames() {
-    return getValue("ANTHROPIC_CUSTOM_HEADER_NAMES");
+    return getValue(ANTHROPIC_CUSTOM_HEADER_NAMES);
   }
 
   public String getAnthropicCustomHeaderValues() {
-    return getValue("ANTHROPIC_CUSTOM_HEADER_VALUES");
+    return getValue(ANTHROPIC_CUSTOM_HEADER_VALUES);
   }
 
   // Bedrock configuration
@@ -1316,27 +1454,32 @@ public class PropertyReader {
 
   // TestRail configuration methods
   public String getTestRailBasePath() {
-    return getValue("TESTRAIL_BASE_PATH");
+    return getValue(TESTRAIL_BASE_PATH);
   }
 
   public String getTestRailUsername() {
-    return getValue("TESTRAIL_USERNAME");
+    return getValue(TESTRAIL_USERNAME);
   }
 
   public String getTestRailApiKey() {
-    return getValue("TESTRAIL_API_KEY");
+    return getValue(TESTRAIL_API_KEY);
   }
 
   public String getTestRailProject() {
-    return getValue("TESTRAIL_PROJECT");
+    return getValue(TESTRAIL_PROJECT);
   }
 
   public boolean isTestRailLoggingEnabled() {
-    String value = getValue("TESTRAIL_LOGGING_ENABLED");
+    String value = getValue(TESTRAIL_LOGGING_ENABLED);
     if (value == null) {
       return false;
     }
     return Boolean.parseBoolean(value);
+  }
+
+  public String getTestRailDefaultFormat() {
+    String value = getValue(TESTRAIL_DEFAULT_FORMAT);
+    return (value == null || value.isBlank()) ? "html" : value;
   }
 
   // -------------------------------------------------------------------------
@@ -1344,11 +1487,11 @@ public class PropertyReader {
   // -------------------------------------------------------------------------
 
   public String getBitriseToken() {
-    return getValue("BITRISE_TOKEN");
+    return getValue(BITRISE_TOKEN);
   }
 
   public String getBitriseBasePath() {
-    String value = getValue("BITRISE_BASE_PATH");
+    String value = getValue(BITRISE_BASE_PATH);
     if (value == null || value.isEmpty()) {
       return "https://api.bitrise.io/v0.1";
     }
@@ -1356,6 +1499,6 @@ public class PropertyReader {
   }
 
   public String getBitriseAppSlug() {
-    return getValue("BITRISE_APP_SLUG");
+    return getValue(BITRISE_APP_SLUG);
   }
 }

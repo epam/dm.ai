@@ -10,6 +10,7 @@ import com.github.istin.dmtools.common.networking.GenericRequest;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -276,4 +277,105 @@ public class ConfluenceTest {
     // If token extraction logic needs testing, it should be tested through public API methods
     // (e.g., Confluence initialization with different auth configs) or via AtlassianRestClient tests.
 
+
+    /**
+     * Builds a minimal Confluence page JSON with the given storage-format body.
+     */
+    private String buildPageJson(String storageValue) {
+        return new JSONObject()
+            .put("id", "123")
+            .put("title", "Test Page")
+            .put("body", new JSONObject()
+                .put("storage", new JSONObject()
+                    .put("value", storageValue)
+                    .put("representation", "storage")))
+            .toString();
+    }
+
+    /**
+     * Builds a minimal Confluence content result JSON containing one page.
+     */
+    private String buildContentResultJson(String storageValue) {
+        return new JSONObject()
+            .put("results", new org.json.JSONArray()
+                .put(new JSONObject()
+                    .put("id", "123")
+                    .put("title", "Test Page")
+                    .put("body", new JSONObject()
+                        .put("storage", new JSONObject()
+                            .put("value", storageValue)
+                            .put("representation", "storage")))))
+            .toString();
+    }
+
+    @Test
+    public void testContentById_MarkdownFormatConvertsBody() throws IOException {
+        String html = "<p>Hello <ac:image><ri:attachment ri:filename=\"img.png\"/></ac:image></p>";
+        String expected = ConfluenceStorageMarkdown.toMarkdown(html);
+        doReturn(buildPageJson(html)).when(confluence).execute(any(GenericRequest.class));
+
+        Content result = confluence.contentById("123", "md");
+
+        assertNotNull(result);
+        assertEquals(expected, result.getStorage().getValue());
+        assertEquals("markdown", result.getJSONObject().getJSONObject("body").getJSONObject("storage").getString("representation"));
+    }
+
+    @Test
+    public void testContentById_NullFormatKeepsStorageHtml() throws IOException {
+        String html = "<p>Hello World</p>";
+        doReturn(buildPageJson(html)).when(confluence).execute(any(GenericRequest.class));
+
+        Content result = confluence.contentById("123", null);
+
+        assertEquals(html, result.getStorage().getValue());
+        assertEquals("storage", result.getJSONObject().getJSONObject("body").getJSONObject("storage").getString("representation"));
+    }
+
+    @Test
+    public void testContentsByUrls_MarkdownFormatConvertsEachBody() throws IOException {
+        String html = "<p>Page <strong>body</strong></p>";
+        Content page = new Content(buildPageJson(html));
+        doReturn(page).when(confluence).contentByUrl(anyString());
+
+        List<Content> result = confluence.contentsByUrls(new String[]{"http://example.com/x/123"}, "md");
+
+        assertEquals(1, result.size());
+        assertEquals(ConfluenceStorageMarkdown.toMarkdown(html), result.get(0).getStorage().getValue());
+        assertEquals("markdown", result.get(0).getJSONObject().getJSONObject("body").getJSONObject("storage").getString("representation"));
+    }
+
+    @Test
+    public void testContentByTitleAndSpace_MarkdownFormatConvertsBody() throws IOException {
+        String html = "<p>Title page</p>";
+        doReturn(buildContentResultJson(html)).when(confluence).execute(any(GenericRequest.class));
+
+        ContentResult result = confluence.content("Title", "SPACE", "md");
+
+        List<Content> contents = result.getContents();
+        assertEquals(1, contents.size());
+        assertEquals(ConfluenceStorageMarkdown.toMarkdown(html), contents.get(0).getStorage().getValue());
+    }
+
+    @Test
+    public void testFindContentByTitleAndSpace_MarkdownFormatConvertsBody() throws IOException {
+        String html = "<p>Find me</p>";
+        doReturn(buildContentResultJson(html)).when(confluence).execute(any(GenericRequest.class));
+
+        Content result = confluence.findContent("Title", "SPACE", "md");
+
+        assertNotNull(result);
+        assertEquals(ConfluenceStorageMarkdown.toMarkdown(html), result.getStorage().getValue());
+    }
+
+    @Test
+    public void testGetChildrenOfContentById_MarkdownFormatConvertsBodies() throws IOException {
+        String html = "<p>Child page</p>";
+        doReturn(buildContentResultJson(html)).when(confluence).execute(any(GenericRequest.class));
+
+        List<Content> result = confluence.getChildrenOfContentById("123", "md");
+
+        assertEquals(1, result.size());
+        assertEquals(ConfluenceStorageMarkdown.toMarkdown(html), result.get(0).getStorage().getValue());
+    }
 }

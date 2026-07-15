@@ -17,7 +17,7 @@ jobs:
     
     steps:
       - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-artifacts
           path: build-artifacts/
@@ -54,7 +54,7 @@ jobs:
           ls -lh cli-release/
       
       - name: Upload CLI Package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cli-package
           path: cli-release/

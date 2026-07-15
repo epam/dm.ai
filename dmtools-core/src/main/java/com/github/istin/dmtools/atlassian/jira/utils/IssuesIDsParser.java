@@ -8,11 +8,14 @@ import lombok.Setter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class IssuesIDsParser {
     private static final Logger logger = LogManager.getLogger(IssuesIDsParser.class);
@@ -80,6 +83,11 @@ public class IssuesIDsParser {
     }
 
     public static Set<String> extractAllJiraIDs(String text) {
+        PropertyReader propertyReader = new PropertyReader();
+        return extractAllJiraIDs(text, propertyReader.getJiraIssueIgnorePrefixes(), propertyReader.getJiraIssueAllowedPrefixes());
+    }
+
+    public static Set<String> extractAllJiraIDs(String text, Set<String> ignorePrefixes, Set<String> allowedPrefixes) {
         if (text == null || text.isEmpty()) {
             return Collections.emptySet();
         }
@@ -88,9 +96,8 @@ public class IssuesIDsParser {
         String jiraKeyPattern = "(?:\\b|\\/browse\\/)[A-Z]+-\\d+\\b";
 
         Set<String> keys = new HashSet<>();
-        if (text == null) {
-            return keys;
-        }
+        Set<String> normalizedIgnorePrefixes = normalizePrefixes(ignorePrefixes);
+        Set<String> normalizedAllowedPrefixes = normalizePrefixes(allowedPrefixes);
 
         Pattern pattern = Pattern.compile(jiraKeyPattern);
         Matcher matcher = pattern.matcher(text);
@@ -102,10 +109,29 @@ public class IssuesIDsParser {
             if (found.contains("/browse/")) {
                 found = found.substring(found.indexOf("/browse/") + 8);
             }
+            String prefix = found.split("-")[0].toUpperCase(Locale.ROOT);
+            if (!normalizedAllowedPrefixes.isEmpty() && !normalizedAllowedPrefixes.contains(prefix)) {
+                logger.debug("Skipping JIRA key {} because prefix {} is not in allowed list", found, prefix);
+                continue;
+            }
+            if (!normalizedIgnorePrefixes.isEmpty() && normalizedIgnorePrefixes.contains(prefix)) {
+                logger.debug("Skipping JIRA key {} because prefix {} is in ignore list", found, prefix);
+                continue;
+            }
             keys.add(found);
             logger.info("Found JIRA Key: {}", found);
         }
         return keys;
+    }
+
+    private static Set<String> normalizePrefixes(Set<String> prefixes) {
+        if (prefixes == null || prefixes.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return prefixes.stream()
+                .map(prefix -> prefix.trim().toUpperCase(Locale.ROOT))
+                .filter(prefix -> !prefix.isEmpty())
+                .collect(Collectors.toSet());
     }
 
     public static Set<String> extractAttachmentUrls(String basePath, String jiraJson) {

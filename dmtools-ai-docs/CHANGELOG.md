@@ -1,3 +1,23 @@
+## [skill-v1.0.30] - 2026-07-04
+
+### Added
+
+- **New GitLab release/artefact MCP tools** (mirroring GitHub's release-asset tools, adapted to GitLab's Generic Package Registry + Release Links model):
+  - `gitlab_get_or_create_release` — find an existing GitLab release by tag, or create one if missing.
+  - `gitlab_upload_release_asset` — publish a local file to the project's Generic Package Registry and attach it to the release as an asset link; supports `overwrite=true` to replace an existing asset (GitLab rejects duplicate uploads with 409 Conflict otherwise).
+  - `gitlab_list_release_assets` — list all asset links attached to a release.
+  - `gitlab_delete_release_asset` — delete an asset's release link and its underlying Generic Package Registry file by name.
+  - `gitlab_download_release_asset` — download a release asset to a local file path.
+  - Enables GitLab-backed repositories to use the same "stable release as artefact storage" pattern already supported for GitHub via `github_get_or_create_draft_release`/`github_upload_release_asset`.
+- Updated **Total tools** count in `gitlab-tools.md`: 23 → 28
+
+## [skill-v1.0.29] - 2026-07-03
+
+### Added
+
+- **New GitLab MCP tool**: `gitlab_get_mr_diff_text` — returns the raw unified diff text for a GitLab merge request (as a `String`), suitable for locating file/line positions (e.g. inline PR review comments). Complements the existing `gitlab_get_mr_diff` (returns `IDiffStats`, stats-only) the same way `github_get_pr_diff_text` complements `github_get_pr_diff` on the GitHub side.
+- Updated **Total tools** count in `gitlab-tools.md`: 22 → 23, and in `mcp-tools/README.md`: 270 → 271
+
 ## [skill-v1.0.28] - 2026-05-01
 
 ### Changed

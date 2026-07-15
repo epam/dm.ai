@@ -194,5 +194,212 @@ public class ConfluenceHtmlToMarkdownTest {
         System.out.printf("Input HTML: %d chars → Output Markdown: %d chars%n",
             SAMPLE_CONFLUENCE_HTML.length(), markdown.length());
     }
-}
 
+    @Test
+    public void testToMarkdown_convertsTableToMarkdownTable() {
+        String html = "<table>" +
+            "<tbody>" +
+            "<tr><th>Name</th><th>Value</th></tr>" +
+            "<tr><td>A</td><td>1</td></tr>" +
+            "<tr><td>B</td><td>2</td></tr>" +
+            "</tbody>" +
+            "</table>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should contain table header row with pipes", markdown.contains("| Name | Value |"));
+        assertTrue("Should contain separator row", markdown.contains("|---|"));
+        assertTrue("Should contain data row A", markdown.contains("| A | 1 |"));
+        assertTrue("Should contain data row B", markdown.contains("| B | 2 |"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesAcLinkWithLinkBody() {
+        String html = "<p>See <ac:link><ri:page ri:content-title=\"Target Page\"/>" +
+            "<ac:link-body>click here</ac:link-body></ac:link> for details.</p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve link text and target", markdown.contains("[click here](Target Page)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesAcLinkWithPlainTextLinkBody() {
+        String html = "<p><ac:link><ri:page ri:content-title=\"Target Page\"/>" +
+            "<ac:plain-text-link-body><![CDATA[plain <text> link]]></ac:plain-text-link-body></ac:link></p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve plain text link body", markdown.contains("[plain <text> link](Target Page)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesAcLinkToAttachment() {
+        String html = "<p><ac:link><ri:attachment ri:filename=\"doc.pdf\"/>" +
+            "<ac:link-body>Download</ac:link-body></ac:link></p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve attachment link", markdown.contains("[Download](doc.pdf)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesStandardExternalLink() {
+        String html = "<p>Visit <a href=\"http://example.com\">Example</a></p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve external link", markdown.contains("[Example](http://example.com)"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesTableWithLinksInsideCells() {
+        String html = "<table><tbody>" +
+            "<tr><th>Page</th></tr>" +
+            "<tr><td><ac:link><ri:page ri:content-title=\"Home\"/><ac:link-body>Home</ac:link-body></ac:link></td></tr>" +
+            "</tbody></table>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should contain table header", markdown.contains("| Page |"));
+        assertTrue("Should contain link inside table cell", markdown.contains("[Home](Home)"));
+    }
+
+    @Test
+    public void testToMarkdown_convertsCodeMacro() {
+        String html = "<ac:structured-macro ac:name=\"code\">" +
+            "<ac:parameter ac:name=\"language\">java</ac:parameter>" +
+            "<ac:plain-text-body><![CDATA[System.out.println(\"hello\");]]></ac:plain-text-body>" +
+            "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should preserve code body", markdown.contains("System.out.println"));
+        assertTrue("Should preserve hello string", markdown.contains("hello"));
+    }
+
+    @Test
+    public void testToMarkdown_childrenMacroReplacedWithPlaceholder() {
+        String html = "<p>Other Templates</p>" +
+            "<ac:structured-macro ac:name=\"children\">" +
+            "<ac:parameter ac:name=\"allChildren\">true</ac:parameter>" +
+            "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should keep heading", markdown.contains("Other Templates"));
+        assertTrue("Should replace children macro with placeholder", markdown.contains("Child pages"));
+        assertFalse("Should not leak parameter value", markdown.contains("allChildren"));
+        assertFalse("Should not leak parameter value", markdown.contains("true"));
+    }
+
+    // Reproduces a real-world pattern from third-party "live table" macros (e.g. the
+    // Table Filter/Charts family: table-excerpt-include, livesearch, pivot-table,
+    // sparkline). These wrap a nested configuration macro (with its own
+    // <ac:parameter> flags/filters) inside an outer macro's <ac:rich-text-body>.
+    // A single, non-recursive unwrap pass used to leave the nested macro/parameters
+    // untouched, and their raw boolean/text values leaked into the Markdown output.
+    @Test
+    public void testToMarkdown_nestedMacroInsideRichTextBodyDoesNotLeakParameters() {
+        String html = "<h2>Linked Table</h2>" +
+            "<ac:structured-macro ac:name=\"outer-live-table\">" +
+            "  <ac:parameter ac:name=\"source\">Some Other Page</ac:parameter>" +
+            "  <ac:rich-text-body>" +
+            "    <ac:structured-macro ac:name=\"inner-sort-config\">" +
+            "      <ac:parameter ac:name=\"disableSorting\">false</ac:parameter>" +
+            "      <ac:parameter ac:name=\"enableSparkline\">true</ac:parameter>" +
+            "      <ac:parameter ac:name=\"columnFilter\">Workflow Type</ac:parameter>" +
+            "    </ac:structured-macro>" +
+            "    <p>Fallback text</p>" +
+            "  </ac:rich-text-body>" +
+            "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should keep heading", markdown.contains("Linked Table"));
+        assertTrue("Should keep fallback body text", markdown.contains("Fallback text"));
+        assertFalse("Should not leak nested macro parameter values",
+            markdown.contains("disableSorting"));
+        assertFalse("Should not leak nested macro parameter values",
+            markdown.contains("enableSparkline"));
+        assertFalse("Should not leak nested macro parameter values",
+            markdown.contains("columnFilter"));
+        assertFalse("Should not leak concatenated boolean noise",
+            markdown.toLowerCase().contains("falsetrue"));
+    }
+
+    // --- toMarkdownWithRenderedFallback: recovering "live" tables via body.export_view ---
+    //
+    // Third-party "live table" macros (table filter/aggregation-style: transclusion,
+    // pivot, sparkline, live search, etc.) only store their configuration in
+    // body.storage; the actual rows only exist once Confluence renders the page
+    // (body.export_view). These tests use a synthetic macro name/structure — not tied
+    // to any specific real-world page or plugin — to verify the generic recovery logic.
+
+    @Test
+    public void testToMarkdownWithRenderedFallback_recoversTableFromExportView() {
+        String storageHtml =
+            "<h2>Overview</h2>" +
+            "<p>Some description.</p>" +
+            "<h2>Linked Table</h2>" +
+            "<ac:structured-macro ac:name=\"live-table-include\" ac:schema-version=\"2\">" +
+            "  <ac:parameter ac:name=\"name\">Source Table Name</ac:parameter>" +
+            "  <ac:parameter ac:name=\"disableSorting\">false</ac:parameter>" +
+            "</ac:structured-macro>" +
+            "<h2>Next Section</h2>" +
+            "<p>Trailing content</p>";
+
+        String exportViewHtml =
+            "<h2>Overview</h2>" +
+            "<p>Some description.</p>" +
+            "<h2>Linked Table</h2>" +
+            "<table><tbody>" +
+            "<tr><th>Col A</th><th>Col B</th></tr>" +
+            "<tr><td>1</td><td>2</td></tr>" +
+            "</tbody></table>" +
+            "<h2>Next Section</h2>" +
+            "<p>Trailing content</p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdownWithRenderedFallback(storageHtml, exportViewHtml);
+
+        assertTrue("Should keep unrelated headings/paragraphs", markdown.contains("Overview"));
+        assertTrue("Should keep unrelated headings/paragraphs", markdown.contains("Some description."));
+        assertTrue("Should keep unrelated headings/paragraphs", markdown.contains("Next Section"));
+        assertTrue("Should keep unrelated headings/paragraphs", markdown.contains("Trailing content"));
+        assertTrue("Should recover the live table's header cell", markdown.contains("Col A"));
+        assertTrue("Should recover the live table's header cell", markdown.contains("Col B"));
+        assertTrue("Should recover the live table's data row", markdown.contains("1"));
+        assertTrue("Should recover the live table's data row", markdown.contains("2"));
+        assertFalse("Should not leak the macro's own parameter values",
+            markdown.contains("Source Table Name"));
+        assertFalse("Should not leak the macro's own parameter values",
+            markdown.contains("disableSorting"));
+    }
+
+    @Test
+    public void testToMarkdownWithRenderedFallback_leavesResolvedSectionsUntouched() {
+        // Section without any unresolved macro: even though export_view has different
+        // wording, the storage-format text must win (minimal-risk behavior — only
+        // sections that actually need it get swapped).
+        String storageHtml = "<h2>Section</h2><p>Original storage text.</p>";
+        String exportViewHtml = "<h2>Section</h2><p>Different rendered text.</p>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdownWithRenderedFallback(storageHtml, exportViewHtml);
+
+        assertTrue("Should keep the storage-format text", markdown.contains("Original storage text."));
+        assertFalse("Should not use export_view text for already-resolved sections",
+            markdown.contains("Different rendered text."));
+    }
+
+    @Test
+    public void testToMarkdownWithRenderedFallback_fallsBackToStorageOnlyWhenExportViewMissing() {
+        String storageHtml = "<h2>Section</h2><p>Only storage available.</p>";
+
+        String withNull = ConfluenceStorageMarkdown.toMarkdownWithRenderedFallback(storageHtml, null);
+        String withBlank = ConfluenceStorageMarkdown.toMarkdownWithRenderedFallback(storageHtml, "  ");
+        String plain = ConfluenceStorageMarkdown.toMarkdown(storageHtml);
+
+        assertEquals(plain, withNull);
+        assertEquals(plain, withBlank);
+    }
+}

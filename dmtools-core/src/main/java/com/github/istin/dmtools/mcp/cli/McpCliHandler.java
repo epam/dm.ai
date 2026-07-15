@@ -11,6 +11,7 @@ import com.github.istin.dmtools.di.AIComponentsModule;
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
 import com.github.istin.dmtools.atlassian.jira.xray.XrayClient;
+import com.github.istin.dmtools.atlassian.bitbucket.BasicBitbucket;
 import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
@@ -30,6 +31,7 @@ import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import com.github.istin.dmtools.mcp.generated.MCPToolRegistry;
 import com.github.istin.dmtools.mcp.MCPToolDefinition;
+import com.github.istin.dmtools.broadcom.rally.BasicRallyClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -61,6 +63,14 @@ public class McpCliHandler {
         configureCLILogging();
         // Don't initialize clients in constructor - use lazy initialization
         // This significantly improves startup time for list commands
+    }
+
+    /**
+     * Public accessor used by JobRunner.doctor to run connectivity tests.
+     */
+    public Map<String, Object> createClientInstancesForDoctor() {
+        ensureClientInstances();
+        return clientInstances;
     }
 
     /**
@@ -347,6 +357,11 @@ public class McpCliHandler {
             if (("--data".equals(arg) || "--stdin-data".equals(arg)) && i + 1 < args.length) {
                 parseJsonIntoArguments(args[i + 1], arg.substring(2), arguments);
                 i++; // Skip next argument as it was consumed
+            } else if ("--format".equals(arg) && i + 1 < args.length) {
+                arguments.put("format", args[i + 1]);
+                i++; // Skip next argument as it was consumed
+            } else if ("--md".equals(arg)) {
+                arguments.put("format", "md");
             } else if ("--verbose".equals(arg) || "--debug".equals(arg)) {
                 // Shell-level flags handled by dmtools.sh; ignored here
             } else if (arg.startsWith("--")) {
@@ -388,6 +403,8 @@ public class McpCliHandler {
      * Maps positional arguments to named parameters based on the tool's schema.
      * Uses parameter order from method declaration (via annotation processor).
      * Handles varargs/array parameters by collecting all remaining args into an array.
+     * Array parameters that are not last reserve one argument for each trailing parameter
+     * so that optional trailing parameters (e.g. {@code format}) can still be provided positionally.
      */
     private void mapPositionalArguments(String toolName, List<String> positionalArgs, Map<String, Object> arguments) {
         try {
@@ -409,25 +426,40 @@ public class McpCliHandler {
             // Map positional args to parameter names in declaration order
             int numParams = paramNames.size();
             int numArgs = positionalArgs.size();
+            int argIndex = 0;
             
-            for (int i = 0; i < numParams; i++) {
+            for (int i = 0; i < numParams && argIndex < numArgs; i++) {
                 String paramName = paramNames.get(i);
                 boolean isArrayParam = isArrayParameter(toolSchema, paramName);
                 boolean isLastParam = (i == numParams - 1);
                 
-                if (isArrayParam && isLastParam && i < numArgs) {
-                    // Varargs/array parameter: collect all remaining positional args into an array
-                    List<String> remainingArgs = positionalArgs.subList(i, numArgs);
+                if (isArrayParam && isLastParam) {
+                    // Last array parameter: collect all remaining positional args into an array
+                    List<String> remainingArgs = positionalArgs.subList(argIndex, numArgs);
                     String[] arrayValue = remainingArgs.toArray(new String[0]);
                     arguments.put(paramName, arrayValue);
                     logger.debug("Mapped {} positional args to array parameter '{}' for tool '{}'", 
                                remainingArgs.size(), paramName, toolName);
                     break; // All remaining args consumed
-                } else if (i < numArgs) {
+                } else if (isArrayParam) {
+                    // Array parameter followed by other parameters: reserve one positional arg
+                    // for each trailing parameter and assign the rest to the array.
+                    int trailingParams = numParams - i - 1;
+                    int arrayEnd = numArgs - trailingParams;
+                    if (arrayEnd < argIndex) {
+                        arrayEnd = argIndex; // not enough args; array will be empty
+                    }
+                    List<String> arrayArgs = positionalArgs.subList(argIndex, arrayEnd);
+                    arguments.put(paramName, arrayArgs.toArray(new String[0]));
+                    logger.debug("Mapped {} positional args to array parameter '{}' for tool '{}' (reserved {} for trailing params)", 
+                               arrayArgs.size(), paramName, toolName, trailingParams);
+                    argIndex = arrayEnd;
+                } else {
                     // Regular parameter: map single value
-                    String paramValue = positionalArgs.get(i);
+                    String paramValue = positionalArgs.get(argIndex);
                     Object convertedValue = convertParameterValue(paramName, paramValue);
                     arguments.put(paramName, convertedValue);
+                    argIndex++;
                 }
             }
             
@@ -570,6 +602,28 @@ public class McpCliHandler {
             logger.debug("Created BasicGitLab instance");
         } catch (IOException e) {
             logger.warn("Failed to create BasicGitLab: {}", e.getMessage());
+        }
+
+        try {
+            // Create Bitbucket client
+            clients.put("bitbucket", BasicBitbucket.getInstance());
+            logger.debug("Created BasicBitbucket instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicBitbucket: {}", e.getMessage());
+        }
+
+        try {
+            // Create Rally client
+            TrackerClient<?> rallyClient = BasicRallyClient.getInstance();
+            if (rallyClient == null) {
+                // Create a placeholder so that rally_test can report a graceful failure
+                // when Rally is not configured. Real Rally tools will fail at execution.
+                rallyClient = BasicRallyClient.createInstance("", "");
+            }
+            clients.put("rally", rallyClient);
+            logger.debug("Created BasicRallyClient instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicRallyClient: {}", e.getMessage());
         }
 
         try {
@@ -820,15 +874,10 @@ public class McpCliHandler {
             }
         }
 
-        // If no environment variable, return all possible integrations
+        // If no environment variable, return all known integration types from the generated registry
         // Do NOT create clients just to check - this is for listing only
         if (integrations.isEmpty()) {
-            // Return all known integration types without creating clients
-            integrations.addAll(Arrays.asList(
-                "jira", "jira_xray", "ado", "confluence", "figma",
-                "teams", "teams_auth", "sharepoint", "testrail", "ai", "cli",
-                "file", "kb", "mermaid", "github", "gitlab", "bitrise"
-            ));
+            integrations.addAll(MCPToolRegistry.getAvailableIntegrations());
         }
         logger.debug("Available integrations: {}", integrations);
         return integrations;

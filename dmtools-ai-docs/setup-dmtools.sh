@@ -114,7 +114,6 @@ if [ -f ".gitignore" ]; then
 # DMtools configuration (contains secrets)
 dmtools.env
 dmtools-local.env
-.dmtools/
 EOF
         echo -e "${GREEN}✓${NC} Added DMtools files to .gitignore"
     fi
@@ -125,7 +124,6 @@ else
 # DMtools configuration (contains secrets)
 dmtools.env
 dmtools-local.env
-.dmtools/
 EOF
     echo -e "${GREEN}✓${NC} Created .gitignore with DMtools files"
 fi

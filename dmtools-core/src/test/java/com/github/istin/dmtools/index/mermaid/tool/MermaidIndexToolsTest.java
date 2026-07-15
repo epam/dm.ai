@@ -175,14 +175,34 @@ class MermaidIndexToolsTest {
     }
 
     @Test
-    void testRead_WithUnsupportedIntegration_ThrowsException() {
+    void testRead_WithUnsupportedIntegration_ReturnsEmptyList() throws IOException {
         // Given
         Path storagePath = tempDir.resolve("test-storage");
+        Files.createDirectories(storagePath);
         
-        // When/Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            tools.read("unsupported", storagePath.toString());
-        }, "Should throw IllegalArgumentException for unsupported integration");
+        // When
+        List<ToText> result = tools.read("unsupported", storagePath.toString());
+        
+        // Then
+        assertTrue(result.isEmpty(), "Should return empty list when integration subfolder does not exist");
+    }
+
+    @Test
+    void testRead_WithTestRailIntegration_ReturnsMmdFiles() throws IOException {
+        // Given
+        Path storagePath = tempDir.resolve("test-storage");
+        Path testrailPath = storagePath.resolve("testrail");
+        Path casePath = testrailPath.resolve("C1");
+        Files.createDirectories(casePath);
+        
+        Path diagram = casePath.resolve("TestCase.mmd");
+        Files.write(diagram, "flowchart TD\nA --> B".getBytes(StandardCharsets.UTF_8));
+        
+        // When
+        List<ToText> result = tools.read("testrail", storagePath.toString());
+        
+        // Then
+        assertEquals(1, result.size(), "Should find .mmd files under testrail subfolder");
     }
 
     @Test
@@ -265,18 +285,19 @@ class MermaidIndexToolsTest {
     }
 
     @Test
-    void testMermaidIndexRead_WithUnsupportedIntegration_ReturnsErrorJson() {
+    void testMermaidIndexRead_WithUnsupportedIntegration_ReturnsEmptySuccessJson() throws IOException {
         // Given
         Path storagePath = tempDir.resolve("test-storage");
+        Files.createDirectories(storagePath);
         
         // When
         String result = tools.mermaidIndexRead("unsupported", storagePath.toString());
         
         // Then
         assertNotNull(result);
-        assertTrue(result.contains("\"success\": false"));
-        assertTrue(result.contains("error"));
-        assertTrue(result.contains("Unsupported integration"));
+        assertTrue(result.contains("\"success\": true"));
+        assertTrue(result.contains("\"count\": 0"));
+        assertTrue(result.contains("\"diagrams\":[]") || result.contains("\"diagrams\": []"));
     }
 
     @Test

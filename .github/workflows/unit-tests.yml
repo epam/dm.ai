@@ -5,6 +5,73 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js (for jscpd)
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install jscpd
+        run: npm install -g jscpd@5.0.11
+
+      - name: Check Java file sizes
+        run: |
+          MAX_LINES=2800
+          FAILED=0
+          while IFS= read -r file; do
+            case "$file" in
+              *.java)
+                # Only fail if the file is currently over the limit AND was not
+                # already over the limit on the base branch. This lets legacy
+                # large files improve gradually while preventing new violations.
+                head_lines=$(wc -l < "$file")
+                base_lines=$(git show origin/${{ github.base_ref }}:"$file" 2>/dev/null | wc -l || echo 0)
+                if (( head_lines > MAX_LINES && base_lines <= MAX_LINES )); then
+                  echo "❌ $file: $head_lines lines (max $MAX_LINES); was $base_lines on ${{ github.base_ref }}"
+                  FAILED=1
+                fi
+                ;;
+            esac
+          done < <(git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD)
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Quality gate failed: changed Java files exceed $MAX_LINES lines."
+            exit 1
+          fi
+
+      - name: Check code duplication against baseline
+        run: |
+          jscpd --min-tokens 50 --min-lines 5 --reporters json --output /tmp/jscpd-check dmtools-core/src/main/java/ >/dev/null 2>&1 || true
+          CURRENT=$(python3 -c '
+          import json,sys
+          try:
+              with open("/tmp/jscpd-check/jscpd-report.json") as f:
+                  d=json.load(f)
+              print(d["statistics"]["total"]["percentage"])
+          except: print("0.0")
+          ')
+          BASELINE=$(python3 -c '
+          import json,sys
+          try:
+              with open("scripts/jscpd-baseline.json") as f:
+                  d=json.load(f)
+              print(d.get("percentage", 999.0))
+          except: print("999.0")
+          ')
+          echo "Current duplication: $CURRENT%"
+          echo "Baseline: $BASELINE%"
+          python3 -c "import sys; sys.exit(0 if float('$CURRENT') <= float('$BASELINE') else 1)"
+
   test:
     name: Java unit tests
     runs-on: ubuntu-latest
@@ -14,10 +81,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -34,7 +101,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test Report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         continue-on-error: true
         with:
@@ -42,3 +109,62 @@ jobs:
           path: '**/build/test-results/test/TEST-*.xml'
           reporter: java-junit
           fail-on-error: false
+
+  dmtools-agents-js-tests:
+    name: DMTools Agents JS unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Configure Git for tests
+        run: |
+          git config --global user.name "dm.ai"
+          git config --global user.email "dm.ai@epam.com"
+
+      - name: Build DMTools shadow JAR
+        run: ./gradlew :dmtools-core:shadowJar --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install DMTools CLI for agents tests
+        run: |
+          mkdir -p "$HOME/.dmtools"
+          cp "build/libs/dmtools-v$(grep '^version=' gradle.properties | cut -d'=' -f2)-all.jar" "$HOME/.dmtools/dmtools.jar"
+          echo "Installed DMTools CLI:"
+          java -jar "$HOME/.dmtools/dmtools.jar" --version
+
+      - name: Run DMTools Agents JS unit tests
+        id: agents_tests
+        run: |
+          cd agents
+          ../dmtools.sh run js/unit-tests/run_all.json > ../agents-test-output.json 2>&1 || true
+          cat ../agents-test-output.json
+
+      - name: Validate agents test results
+        run: |
+          PASSED=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
+          FAILED=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
+          echo "Agents JS tests: $PASSED passed, $FAILED failed"
+          if [ -z "$PASSED" ] || [ -z "$FAILED" ]; then
+            echo "Could not parse agents test results"
+            exit 1
+          fi
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Some agents JS tests failed. See output above for details."
+            exit 1
+          fi

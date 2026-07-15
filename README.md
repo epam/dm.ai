@@ -10,7 +10,17 @@ Enterprise dark-factory orchestrator for automating delivery workflows across tr
 >
 > PowerShell: https://github.com/epam/dm.ai/releases/latest/download/install.ps1
 
-[![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest) [![codecov](https://codecov.io/gh/epam/dm.ai/branch/main/graph/badge.svg)](https://codecov.io/gh/epam/dm.ai) [![](https://jitpack.io/v/epam/dm.ai.svg)](https://jitpack.io/#epam/dm.ai)
+[![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest)
+[![Coverage](.github/badges/jacoco.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
+[![Branches](.github/badges/branches.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
+[![GitHub stars](https://img.shields.io/github/stars/epam/dm.ai)](https://github.com/epam/dm.ai/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/epam/dm.ai)](https://github.com/epam/dm.ai/network/members)
+[![Contributors](https://img.shields.io/github/contributors/epam/dm.ai)](https://github.com/epam/dm.ai/graphs/contributors)
+[![Downloads](https://img.shields.io/github/downloads/epam/dm.ai/total)](https://github.com/epam/dm.ai/releases)
+[![Last commit](https://img.shields.io/github/last-commit/epam/dm.ai)](https://github.com/epam/dm.ai/commits/main)
+[![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://adoptium.net/)
 
 > DMTools is orchestration layer for enterprise dark factories. It is designed for self-hosted and enterprise environments where teams need repeatable AI-assisted workflows instead of one-off scripts or server-first demos.
 
@@ -88,6 +98,65 @@ dmtools list
 
 ### Minimal configuration
 
+Create `dmtools.env` in your project root (or export the same variables in your shell). You only need the variables for the integrations you actually use — there is no single required set, and the AI provider key is optional (required only for AI-powered jobs and agents).
+
+**Jira** — [full guide](dmtools-ai-docs/references/configuration/integrations/jira.md)
+
+```bash
+JIRA_BASE_PATH=https://your-company.atlassian.net
+JIRA_EMAIL=your-email@company.com
+JIRA_API_TOKEN=your-jira-api-token
+```
+
+**Azure DevOps** — [full guide](dmtools-ai-docs/references/configuration/integrations/ado.md)
+
+```bash
+ADO_BASE_PATH=https://dev.azure.com/your-organization
+ADO_PAT=your-personal-access-token
+ADO_PROJECT=YourProject
+```
+
+**GitHub** — [full guide](dmtools-ai-docs/references/configuration/integrations/github.md)
+
+```bash
+SOURCE_GITHUB_TOKEN=ghp_your_token
+```
+
+**Confluence**
+
+```bash
+CONFLUENCE_BASE_PATH=https://your-company.atlassian.net/wiki
+CONFLUENCE_EMAIL=your-email@company.com
+CONFLUENCE_API_TOKEN=your-confluence-api-token
+```
+
+**TestRail** — [full guide](dmtools-ai-docs/references/configuration/integrations/testrail.md)
+
+```bash
+TESTRAIL_BASE_PATH=https://your-company.testrail.io
+TESTRAIL_USERNAME=your-email@company.com
+TESTRAIL_API_KEY=your-testrail-api-key
+```
+
+**Figma**
+
+```bash
+FIGMA_TOKEN=your-figma-personal-access-token
+```
+
+**AI provider** (optional — only needed for AI-powered jobs and agents). Configure one:
+
+```bash
+# Gemini (free tier available)
+GEMINI_API_KEY=your-gemini-api-key
+# OpenAI
+# OPEN_AI_API_KEY=sk-...
+# Enterprise gateway / AWS Bedrock / local models
+# DIAL_API_KEY=...   # or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or OLLAMA_BASE_URL
+```
+
+Example combined `dmtools.env` (Jira + Gemini):
+
 ```bash
 cat > dmtools.env << EOF
 JIRA_BASE_PATH=https://your-company.atlassian.net
@@ -95,11 +164,10 @@ JIRA_EMAIL=your-email@company.com
 JIRA_API_TOKEN=your-jira-api-token
 GEMINI_API_KEY=your-gemini-api-key
 EOF
-
 chmod 600 dmtools.env
 ```
 
-For provider-specific and integration-specific setup, use the maintained docs instead of copying old snippets from the repository root:
+For the full variable list, auth setup (token generation, PAT scopes, base64 credentials), and per-integration options, use the maintained docs instead of copying old snippets from the repository root:
 
 - [Configuration overview](dmtools-ai-docs/references/configuration/README.md)
 - [Integration setup guides](dmtools-ai-docs/references/configuration/integrations/)
@@ -145,3 +213,13 @@ set DMTOOLS_VERSION=v1.7.179 && curl -fsSL https://github.com/epam/dm.ai/release
 ```
 
 See the [installation guide](dmtools-ai-docs/references/installation/README.md) for local development installation details.
+
+## Star History
+
+<a href="https://star-history.com/#epam/dm.ai&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=epam/dm.ai&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=epam/dm.ai&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=epam/dm.ai&type=Date" />
+  </picture>
+</a>

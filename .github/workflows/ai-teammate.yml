@@ -47,19 +47,19 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -71,7 +71,7 @@ jobs:
 
       - name: Cache npm global packages
         if: vars.AI_AGENT_PROVIDER == 'copilot'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.npm-global
@@ -114,7 +114,7 @@ jobs:
         run: bash agents/setup/cache.sh keys dmtools:v1.7.196 codegraph
 
       - name: Cache DMTools
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.DMTOOLS_CACHE_PATH }}
           key: ${{ env.DMTOOLS_CACHE_KEY }}
@@ -122,7 +122,7 @@ jobs:
             dmtools-
 
       - name: Cache CodeGraph binary
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CODEGRAPH_CACHE_PATH }}
           key: ${{ env.CODEGRAPH_CACHE_KEY }}
@@ -131,7 +131,7 @@ jobs:
             ${{ runner.os }}-npm-global-
 
       - name: Cache CodeGraph index
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CODEGRAPH_INDEX_CACHE_PATH }}
           key: ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-${{ github.sha }}
@@ -206,6 +206,7 @@ jobs:
 
           # DMTools Integration Settings
           DMTOOLS_INTEGRATIONS: "jira,confluence,ado,figma,ai,cli,file,github"
+          DEFAULT_TRACKER: "jira"
 
           # Encoded config input
           ENCODED_CONFIG: ${{ inputs.encoded_config }}

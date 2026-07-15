@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set version
         id: version
@@ -171,7 +171,7 @@ jobs:
           sed -i "s/\$VERSION/$VERSION/g" dist/release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && format('skill-v{0}', github.event.inputs.version) || github.ref_name }}
           name: DMtools Agent Skill v${{ steps.version.outputs.VERSION }}
@@ -200,10 +200,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'

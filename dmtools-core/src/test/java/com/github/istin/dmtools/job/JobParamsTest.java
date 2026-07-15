@@ -5,7 +5,6 @@ package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.common.model.JSONModel;
 import com.github.istin.dmtools.documentation.DocumentationGeneratorParams;
-import com.github.istin.dmtools.estimations.JEstimatorParams;
 import org.junit.Test;
 import org.mockito.Mockito;
 import org.json.JSONObject;

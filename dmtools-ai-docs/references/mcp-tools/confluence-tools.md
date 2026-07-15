@@ -1,6 +1,6 @@
 # CONFLUENCE MCP Tools
 
-**Total Tools**: 17
+**Total Tools**: 18
 
 ## Quick Reference
 
@@ -25,21 +25,22 @@ const result = confluence_content_by_id(...);
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
-| `confluence_content_by_id` | Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata. | `contentId` (string, **required**) |
-| `confluence_content_by_title` | Get Confluence content by title in the default space. Returns content result with metadata and body information. | `title` (string, **required**) |
-| `confluence_content_by_title_and_space` | Get Confluence content by title and space key. Returns content result with metadata and body information. | `title` (string, **required**)<br>`space` (string, **required**) |
-| `confluence_contents_by_urls` | Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. | `urlStrings` (array, **required**) |
+| `confluence_content_by_id` | Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata. Use format=md to convert body.storage.value to Markdown. | `contentId` (string, **required**)<br>`format` (string, optional) |
+| `confluence_content_by_title` | Get Confluence content by title in the default space. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional) |
+| `confluence_content_by_title_and_space` | Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional)<br>`space` (string, **required**) |
+| `confluence_contents_by_urls` | Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown. | `format` (string, optional)<br>`urlStrings` (array, **required**) |
 | `confluence_create_page` | Create a new Confluence page with specified title, parent, body content, and space. Returns the created content object. | `title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
 | `confluence_download_attachment` | Download an attachment file from Confluence to a specified directory. | `attachment` (object, **required**)<br>`targetDir` (object, **required**) |
-| `confluence_find_content` | Find a Confluence page by title in the default space. Returns the page content if found. | `title` (string, **required**) |
-| `confluence_find_content_by_title_and_space` | Find Confluence content by title and space key. Returns the first matching content or null if not found. | `title` (string, **required**)<br>`space` (string, **required**) |
+| `confluence_download_pages` | Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth. | `urlStrings` (array, **required**)<br>`depth` (number, optional)<br>`downloadAttachments` (boolean, optional)<br>`outputPath` (string, **required**) |
+| `confluence_find_content` | Find a Confluence page by title in the default space. Returns the page content if found. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional) |
+| `confluence_find_content_by_title_and_space` | Find Confluence content by title and space key. Returns the first matching content or null if not found. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional)<br>`space` (string, **required**) |
 | `confluence_find_or_create` | Find a Confluence page by title in the default space, or create it if it doesn't exist. Returns the found or created content. | `title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**) |
-| `confluence_get_children_by_id` | Get child pages of a Confluence page by content ID. Returns a list of child content objects. | `contentId` (string, **required**) |
-| `confluence_get_children_by_name` | Get child pages of a Confluence page by space key and content name. Returns a list of child content objects. | `spaceKey` (string, **required**)<br>`contentName` (string, **required**) |
+| `confluence_get_children_by_id` | Get child pages of a Confluence page by content ID. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown. | `contentId` (string, **required**)<br>`format` (string, optional) |
+| `confluence_get_children_by_name` | Get child pages of a Confluence page by space key and content name. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown. | `spaceKey` (string, **required**)<br>`format` (string, optional)<br>`contentName` (string, **required**) |
 | `confluence_get_content_attachments` | Get all attachments for a specific Confluence content. Returns a list of attachment objects with metadata. | `contentId` (string, **required**) |
 | `confluence_get_current_user_profile` | Get the current user's profile information from Confluence. Returns user details for the authenticated user. | None |
 | `confluence_get_user_profile_by_id` | Get a specific user's profile information from Confluence by user ID. Returns user details for the specified user. | `userId` (string, **required**) |
-| `confluence_search_content_by_text` | Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. | `limit` (number, **required**)<br>`query` (string, **required**) |
+| `confluence_search_content_by_text` | Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified. | `limit` (number, optional)<br>`query` (string, **required**) |
 | `confluence_update_page` | Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
 | `confluence_update_page_with_history` | Update an existing Confluence page with new content and add a history comment. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`historyComment` (string, **required**) |
 
@@ -47,7 +48,7 @@ const result = confluence_content_by_id(...);
 
 ### `confluence_content_by_id`
 
-Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata.
+Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
 
@@ -55,21 +56,25 @@ Get Confluence content by its unique content ID. Returns detailed content inform
   - The unique content ID of the Confluence page
   - Example: `123456`
 
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
+
 **Example:**
 ```bash
-dmtools confluence_content_by_id "value"
+dmtools confluence_content_by_id "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_content_by_id("contentId");
+const result = confluence_content_by_id("contentId", "format");
 ```
 
 ---
 
 ### `confluence_content_by_title`
 
-Get Confluence content by title in the default space. Returns content result with metadata and body information.
+Get Confluence content by title in the default space. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
 
@@ -77,27 +82,35 @@ Get Confluence content by title in the default space. Returns content result wit
   - Title of the Confluence page to get
   - Example: `Project Documentation`
 
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
+
 **Example:**
 ```bash
-dmtools confluence_content_by_title "value"
+dmtools confluence_content_by_title "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_content_by_title("title");
+const result = confluence_content_by_title("title", "format");
 ```
 
 ---
 
 ### `confluence_content_by_title_and_space`
 
-Get Confluence content by title and space key. Returns content result with metadata and body information.
+Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
 
 - **`title`** (string) 🔴 Required
   - The title of the Confluence page
   - Example: `Project Documentation`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 - **`space`** (string) 🔴 Required
   - The space key where the content is located
@@ -110,16 +123,20 @@ dmtools confluence_content_by_title_and_space "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_content_by_title_and_space("title", "space");
+const result = confluence_content_by_title_and_space("title", "format");
 ```
 
 ---
 
 ### `confluence_contents_by_urls`
 
-Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL.
+Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 - **`urlStrings`** (array) 🔴 Required
   - Array of Confluence URLs to retrieve content from
@@ -127,12 +144,12 @@ Get Confluence content by multiple URLs. Returns a list of content objects for e
 
 **Example:**
 ```bash
-dmtools confluence_contents_by_urls "value"
+dmtools confluence_contents_by_urls "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_contents_by_urls("urlStrings");
+const result = confluence_contents_by_urls("format", "urlStrings");
 ```
 
 ---
@@ -196,9 +213,43 @@ const result = confluence_download_attachment("attachment", "targetDir");
 
 ---
 
+### `confluence_download_pages`
+
+Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth.
+
+**Parameters:**
+
+- **`urlStrings`** (array) 🔴 Required
+  - Array of Confluence page URLs to download
+  - Example: `['https://wiki.example.com/wiki/spaces/SPACE/pages/123/Page']`
+
+- **`depth`** (number) ⚪ Optional
+  - How many levels of linked/child pages to follow. Default is 1.
+  - Example: `1`
+
+- **`downloadAttachments`** (boolean) ⚪ Optional
+  - Whether to download page attachments. Default is true.
+  - Example: `true`
+
+- **`outputPath`** (string) 🔴 Required
+  - Local folder path where pages and attachments will be saved
+  - Example: `/tmp/confluence-pages`
+
+**Example:**
+```bash
+dmtools confluence_download_pages "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_download_pages("urlStrings", "depth");
+```
+
+---
+
 ### `confluence_find_content`
 
-Find a Confluence page by title in the default space. Returns the page content if found.
+Find a Confluence page by title in the default space. Returns the page content if found. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
 
@@ -206,27 +257,35 @@ Find a Confluence page by title in the default space. Returns the page content i
   - Title of the Confluence page to find
   - Example: `Project Documentation`
 
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
+
 **Example:**
 ```bash
-dmtools confluence_find_content "value"
+dmtools confluence_find_content "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_find_content("title");
+const result = confluence_find_content("title", "format");
 ```
 
 ---
 
 ### `confluence_find_content_by_title_and_space`
 
-Find Confluence content by title and space key. Returns the first matching content or null if not found.
+Find Confluence content by title and space key. Returns the first matching content or null if not found. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
 
 - **`title`** (string) 🔴 Required
   - The title of the content to find
   - Example: `Project Documentation`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 - **`space`** (string) 🔴 Required
   - The space key where to search for the content
@@ -239,7 +298,7 @@ dmtools confluence_find_content_by_title_and_space "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_find_content_by_title_and_space("title", "space");
+const result = confluence_find_content_by_title_and_space("title", "format");
 ```
 
 ---
@@ -276,7 +335,7 @@ const result = confluence_find_or_create("title", "body");
 
 ### `confluence_get_children_by_id`
 
-Get child pages of a Confluence page by content ID. Returns a list of child content objects.
+Get child pages of a Confluence page by content ID. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
 
@@ -284,27 +343,35 @@ Get child pages of a Confluence page by content ID. Returns a list of child cont
   - The content ID of the parent page
   - Example: `123456`
 
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
+
 **Example:**
 ```bash
-dmtools confluence_get_children_by_id "value"
+dmtools confluence_get_children_by_id "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_get_children_by_id("contentId");
+const result = confluence_get_children_by_id("contentId", "format");
 ```
 
 ---
 
 ### `confluence_get_children_by_name`
 
-Get child pages of a Confluence page by space key and content name. Returns a list of child content objects.
+Get child pages of a Confluence page by space key and content name. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown.
 
 **Parameters:**
 
 - **`spaceKey`** (string) 🔴 Required
   - The space key where the parent page is located
   - Example: `PROJ`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 - **`contentName`** (string) 🔴 Required
   - The name/title of the parent page
@@ -317,7 +384,7 @@ dmtools confluence_get_children_by_name "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_get_children_by_name("spaceKey", "contentName");
+const result = confluence_get_children_by_name("spaceKey", "format");
 ```
 
 ---
@@ -386,12 +453,12 @@ const result = confluence_get_user_profile_by_id("userId");
 
 ### `confluence_search_content_by_text`
 
-Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts.
+Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified.
 
 **Parameters:**
 
-- **`limit`** (number) 🔴 Required
-  - Maximum number of search results to return
+- **`limit`** (number) ⚪ Optional
+  - Maximum number of search results to return. Default is 20 if not provided.
   - Example: `10`
 
 - **`query`** (string) 🔴 Required

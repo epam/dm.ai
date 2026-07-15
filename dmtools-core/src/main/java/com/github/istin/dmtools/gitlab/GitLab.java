@@ -19,11 +19,16 @@ import org.jetbrains.annotations.NotNull;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -50,15 +55,61 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
                 .header("Content-Type", "application/json");
     }
 
+    @MCPTool(
+            name = "gitlab_test",
+            description = "Test GitLab connectivity by fetching the current user's profile",
+            integration = "gitlab",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            GenericRequest getRequest = new GenericRequest(this, path("user"));
+            String response = execute(getRequest);
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                if (jsonResponse.has("id") || jsonResponse.has("username")) {
+                    result.put("success", true);
+                    result.put("message", "GitLab API connection successful");
+                    result.put("user", jsonResponse.optString("username", "unknown"));
+                    result.put("userId", jsonResponse.optString("id", "unknown"));
+                    result.put("email", jsonResponse.optString("email", "unknown"));
+                } else {
+                    result.put("success", false);
+                    result.put("message", "Unexpected response format from GitLab API");
+                }
+            } else {
+                result.put("success", false);
+                result.put("message", "Empty response from GitLab API");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "GitLab API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("GitLab connection test failed", e);
+        }
+        return result;
+    }
+
     @Override
     public List<IPullRequest> pullRequests(String workspace, String repository, String state, boolean checkAllRequests, Calendar startDate) throws IOException {
         List<IPullRequest> allPullRequests = new ArrayList<>();
         int page = 1;
         int perPage = 100; // Adjust as needed, GitLab default is 20, max is 100
 
+        // Build base URL with optional created_after for server-side filtering.
+        // Sort ascending (oldest first) so early pages are stable between daily runs
+        // and the HTTP cache only misses on the last page (newest MRs).
+        String baseUrl = String.format("projects/%s/merge_requests?state=%s&per_page=%d&order_by=created_at&sort=asc",
+                getEncodedProject(workspace, repository), state, perPage);
+        if (startDate != null) {
+            String createdAfter = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                    .format(startDate.getTime());
+            baseUrl += "&created_after=" + createdAfter;
+        }
+
         do {
-            String path = path(String.format("projects/%s/merge_requests?state=%s&per_page=%d&page=%d",
-                    getEncodedProject(workspace, repository), state, perPage, page));
+            String path = path(baseUrl + "&page=" + page);
 
             GenericRequest getRequest = new GenericRequest(this, path);
             String response = execute(getRequest);
@@ -69,11 +120,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
             List<IPullRequest> pullRequests = JSONModel.convertToModels(GitLabPullRequest.class, new JSONArray(response));
             allPullRequests.addAll(pullRequests);
-            if (startDate != null && !pullRequests.isEmpty() && pullRequests.get(pullRequests.size() - 1).getCreatedDate() < startDate.getTimeInMillis()) {
-                break;
-            }
             if (!checkAllRequests || pullRequests.size() < perPage) {
-                // Stop if we are not checking all requests or if there are fewer pull requests than the perPage limit
                 break;
             }
 
@@ -175,7 +222,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
     @MCPTool(
         name = "gitlab_get_mr_activities",
-        description = "Get all activities for a GitLab merge request including approvals and general discussion notes.",
+        description = "Get all activities for a GitLab merge request. Approvals are fetched from the real GitLab Approvals API. General discussion notes are also included.",
         integration = "gitlab",
         category = "merge_requests",
         aliases = {"source_code_get_pr_activities"}
@@ -185,33 +232,41 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestId) throws IOException {
-        List<IComment> pullRequestNotes = getPullRequestNotes(workspace, repository, pullRequestId);
-        return pullRequestNotes.stream()
-                .filter(comment -> !((GitLabComment)comment).isSystem())
-                .map(new Function<IComment, IActivity>() {
-                    @Override
-                    public IActivity apply(IComment comment) {
-                        final String action = comment.getBody() != null && comment.getBody().toLowerCase().contains("approved")
-                                ? "APPROVED" : "COMMENTED";
-                        return new IActivity() {
-                            @Override
-                            public String getAction() {
-                                return action;
-                            }
+        List<IActivity> activities = new ArrayList<>();
 
-                            @Override
-                            public IComment getComment() {
-                                return comment;
-                            }
+        // Fetch real approvals via the GitLab MR Approvals API
+        // GET /projects/:id/merge_requests/:iid/approvals → { "approved_by": [ { "user": {...} } ] }
+        String approvalsPath = path(String.format("projects/%s/merge_requests/%s/approvals",
+                getEncodedProject(workspace, repository), pullRequestId));
+        GenericRequest approvalsRequest = new GenericRequest(this, approvalsPath);
+        String approvalsResponse = execute(approvalsRequest);
+        if (approvalsResponse != null && !approvalsResponse.isEmpty()) {
+            JSONArray approvedBy = new JSONObject(approvalsResponse).optJSONArray("approved_by");
+            if (approvedBy != null) {
+                for (int i = 0; i < approvedBy.length(); i++) {
+                    GitLabMRApproval approval = new GitLabMRApproval(approvedBy.getJSONObject(i));
+                    IUser approver = approval.getUser();
+                    activities.add(new IActivity() {
+                        @Override public String getAction() { return "APPROVED"; }
+                        @Override public IComment getComment() { return null; }
+                        @Override public IUser getApproval() { return approver; }
+                    });
+                }
+            }
+        }
 
-                            @Override
-                            public IUser getApproval() {
-                                return comment.getAuthor();
-                            }
-                        };
-                    }
-            })
-            .collect(Collectors.toList());
+        // Also include non-system discussion notes as COMMENTED activities
+        List<IComment> notes = getPullRequestNotes(workspace, repository, pullRequestId);
+        for (IComment note : notes) {
+            if (((GitLabComment) note).isSystem()) continue;
+            activities.add(new IActivity() {
+                @Override public String getAction() { return "COMMENTED"; }
+                @Override public IComment getComment() { return note; }
+                @Override public IUser getApproval() { return null; }
+            });
+        }
+
+        return activities;
     }
 
     @Override
@@ -323,13 +378,29 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
 
     @Override
     public List<ICommit> getCommitsFromBranch(String workspace, String repository, String branchName, String startDate, String endDate) throws IOException {
-        String path = path(String.format("projects/%s/repository/commits?ref_name=%s", getEncodedProject(workspace, repository), branchName));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
-        if (response == null) {
-            return Collections.emptyList();
-        }
-        return JSONModel.convertToModels(GitLabCommit.class, new JSONArray(response));
+        List<ICommit> allCommits = new ArrayList<>();
+        int page = 1;
+        int perPage = 100;
+        do {
+            StringBuilder urlBuilder = new StringBuilder(
+                    String.format("projects/%s/repository/commits?ref_name=%s&per_page=%d&page=%d&with_stats=true",
+                            getEncodedProject(workspace, repository), branchName, perPage, page));
+            if (startDate != null && !startDate.isEmpty()) {
+                urlBuilder.append("&since=").append(startDate);
+            }
+            GenericRequest getRequest = new GenericRequest(this, path(urlBuilder.toString()));
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            List<ICommit> commits = JSONModel.convertToModels(GitLabCommit.class, new JSONArray(response));
+            allCommits.addAll(commits);
+            if (commits.size() < perPage) {
+                break;
+            }
+            page++;
+        } while (true);
+        return allCommits;
     }
 
     @Override
@@ -364,6 +435,66 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             return new IDiffStats.Empty();
         }
         return parseDiffStats(new JSONObject(mergeRequestChanges));
+    }
+
+    @MCPTool(
+        name = "gitlab_get_mr_diff_text",
+        description = "Get the raw unified diff text for a GitLab merge request (suitable for locating file/line positions, e.g. for inline review comments).",
+        integration = "gitlab",
+        category = "merge_requests"
+    )
+    public String getPullRequestDiffText(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "pullRequestId", description = "Merge request IID", required = true, example = "42") String pullRequestID) throws IOException {
+        String mergeRequestChanges = getMergeRequestChanges(workspace, repository, pullRequestID);
+        if (mergeRequestChanges == null) {
+            return "";
+        }
+        return buildUnifiedDiffText(new JSONObject(mergeRequestChanges));
+    }
+
+    /**
+     * The GitLab "changes" API returns each file's diff as a bare hunk body (starting at
+     * {@code @@ ... @@}), without the leading {@code diff --git a/... b/...} / {@code --- a/...}
+     * / {@code +++ b/...} header lines that a standard {@code git diff}/unified diff produces.
+     * Callers that parse unified diff text (e.g. to map an inline review comment to a specific
+     * file/line) need those headers to identify which file a hunk belongs to, so we reconstruct
+     * them here from the per-change metadata.
+     */
+    private static String buildUnifiedDiffText(JSONObject response) {
+        JSONArray changes = response.optJSONArray("changes");
+        if (changes == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < changes.length(); i++) {
+            JSONObject change = changes.getJSONObject(i);
+            String oldPath = change.optString("old_path", change.optString("new_path", ""));
+            String newPath = change.optString("new_path", oldPath);
+            boolean isNewFile = change.optBoolean("new_file", false);
+            boolean isDeletedFile = change.optBoolean("deleted_file", false);
+            String diff = change.optString("diff", "");
+
+            sb.append("diff --git a/").append(oldPath).append(" b/").append(newPath).append("\n");
+            if (isNewFile) {
+                sb.append("new file mode 100644\n");
+                sb.append("--- /dev/null\n");
+                sb.append("+++ b/").append(newPath).append("\n");
+            } else if (isDeletedFile) {
+                sb.append("deleted file mode 100644\n");
+                sb.append("--- a/").append(oldPath).append("\n");
+                sb.append("+++ /dev/null\n");
+            } else {
+                sb.append("--- a/").append(oldPath).append("\n");
+                sb.append("+++ b/").append(newPath).append("\n");
+            }
+            sb.append(diff);
+            if (!diff.endsWith("\n")) {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
     }
 
     private boolean isMRChangesError = false;
@@ -948,6 +1079,323 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         GenericRequest getRequest = new GenericRequest(this, path);
         String response = execute(getRequest);
         return response != null ? response : "";
+    }
+
+    @MCPTool(
+        name = "gitlab_get_or_create_release",
+        description = "Find an existing GitLab release by tag, or create one if it does not exist. Useful for a stable artefact storage release (mirrors github_get_or_create_draft_release). Note: GitLab releases have no draft concept; releases are visible as soon as they are created.",
+        integration = "gitlab",
+        category = "releases"
+    )
+    public String getOrCreateRelease(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "tagName", description = "The Git tag name for the release. Reused to find an existing release.", required = true, example = "pr-attachments-storage") String tagName,
+            @MCPParam(name = "releaseName", description = "The human-readable release name. If empty, tagName is used.", required = false, example = "PR Attachments Storage") String releaseName,
+            @MCPParam(name = "targetCommitish", description = "Optional branch or commit SHA the release's tag should point to when created (GitLab 'ref'). Required if the tag does not already exist.", required = false, example = "main") String targetCommitish,
+            @MCPParam(name = "body", description = "Optional Markdown release notes/description.", required = false, example = "Internal storage release for PR attachments.") String body) throws IOException {
+        String normalizedReleaseName = isBlank(releaseName) ? tagName : releaseName.trim();
+        JSONObject existingRelease = findReleaseByTag(workspace, repository, tagName);
+        if (existingRelease != null) {
+            return existingRelease.toString();
+        }
+        return createRelease(workspace, repository, tagName, normalizedReleaseName, targetCommitish, body);
+    }
+
+    @MCPTool(
+        name = "gitlab_upload_release_asset",
+        description = "Upload a local file as a GitLab release asset. Internally publishes the file to the project's Generic Package Registry and attaches it to the release as an asset link, so it is discoverable the same way as a GitHub release asset. Returns the release link metadata including direct_asset_url. Set overwrite=true to automatically replace an existing asset with the same name before uploading (GitLab's Generic Package Registry rejects duplicate uploads with 409 Conflict otherwise).",
+        integration = "gitlab",
+        category = "releases"
+    )
+    public String uploadReleaseAsset(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "tagName", description = "The tag name of the release returned by gitlab_get_or_create_release.", required = true, example = "pr-attachments-storage") String tagName,
+            @MCPParam(name = "filePath", description = "Absolute or relative path to the local file to upload.", required = true, example = "/tmp/preview.png") String filePath,
+            @MCPParam(name = "assetName", description = "Optional asset filename shown in GitLab. Defaults to the local filename.", required = false, example = "clip_123.png") String assetName,
+            @MCPParam(name = "contentType", description = "Optional MIME type. Defaults to detected type or application/octet-stream.", required = false, example = "image/png") String contentType,
+            @MCPParam(name = "packageName", description = "Optional Generic Package Registry package name used to group the uploaded files. Defaults to 'release-assets'.", required = false, example = "release-assets") String packageName,
+            @MCPParam(name = "overwrite", description = "If true, delete any existing asset (release link + underlying generic package file) with the same name before uploading. Defaults to false.", required = false, example = "true") String overwrite) throws IOException {
+        File assetFile = new File(filePath);
+        if (!assetFile.exists()) {
+            throw new FileNotFoundException("Release asset file not found: " + assetFile.getAbsolutePath());
+        }
+        if (!assetFile.isFile()) {
+            throw new IllegalArgumentException("Release asset path must point to a file: " + assetFile.getAbsolutePath());
+        }
+        String resolvedAssetName = isBlank(assetName) ? assetFile.getName() : assetName.trim();
+        String resolvedPackageName = sanitizePackageComponent(isBlank(packageName) ? "release-assets" : packageName.trim());
+        String packageVersion = sanitizePackageComponent(tagName);
+        if (Boolean.parseBoolean(overwrite)) {
+            deleteExistingAssetByName(workspace, repository, tagName, resolvedPackageName, packageVersion, resolvedAssetName);
+        }
+        String resolvedContentType = resolveAssetContentType(assetFile, contentType);
+        String uploadUrl = path(String.format("projects/%s/packages/generic/%s/%s/%s",
+                getEncodedProject(workspace, repository), resolvedPackageName, packageVersion, urlEncodePathSegment(resolvedAssetName)));
+        uploadGenericPackageBinary(uploadUrl, assetFile, resolvedContentType);
+
+        String directAssetPath = "/" + resolvedPackageName + "/" + packageVersion + "/" + resolvedAssetName;
+        String downloadUrl = uploadUrl;
+
+        String linksPath = path(String.format("projects/%s/releases/%s/assets/links",
+                getEncodedProject(workspace, repository), urlEncodePathSegment(tagName)));
+        GenericRequest postRequest = new GenericRequest(this, linksPath);
+        JSONObject linkBody = new JSONObject();
+        linkBody.put("name", resolvedAssetName);
+        linkBody.put("url", downloadUrl);
+        linkBody.put("direct_asset_path", directAssetPath);
+        linkBody.put("link_type", "package");
+        postRequest.setBody(linkBody.toString());
+        return post(postRequest);
+    }
+
+    @MCPTool(
+        name = "gitlab_list_release_assets",
+        description = "List all assets (asset links) attached to a GitLab release. Returns a JSON array of link objects including id, name, url, and direct_asset_url.",
+        integration = "gitlab",
+        category = "releases"
+    )
+    public String listReleaseAssets(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "tagName", description = "The tag name of the release.", required = true, example = "pr-attachments-storage") String tagName) throws IOException {
+        String path = path(String.format("projects/%s/releases/%s/assets/links",
+                getEncodedProject(workspace, repository), urlEncodePathSegment(tagName)));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        String response = execute(getRequest);
+        return response != null ? response : "[]";
+    }
+
+    @MCPTool(
+        name = "gitlab_delete_release_asset",
+        description = "Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names.",
+        integration = "gitlab",
+        category = "releases"
+    )
+    public void deleteReleaseAsset(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "tagName", description = "The tag name of the release.", required = true, example = "pr-attachments-storage") String tagName,
+            @MCPParam(name = "assetName", description = "The name of the asset to delete, as returned by gitlab_list_release_assets.", required = true, example = "clip_123.png") String assetName,
+            @MCPParam(name = "packageName", description = "Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.", required = false, example = "release-assets") String packageName) throws IOException {
+        String resolvedPackageName = sanitizePackageComponent(isBlank(packageName) ? "release-assets" : packageName.trim());
+        String packageVersion = sanitizePackageComponent(tagName);
+        deleteExistingAssetByName(workspace, repository, tagName, resolvedPackageName, packageVersion, assetName);
+    }
+
+    @MCPTool(
+        name = "gitlab_download_release_asset",
+        description = "Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path.",
+        integration = "gitlab",
+        category = "releases"
+    )
+    public String downloadReleaseAsset(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "tagName", description = "The tag name of the release.", required = true, example = "pr-attachments-storage") String tagName,
+            @MCPParam(name = "assetName", description = "The name of the asset to download, as returned by gitlab_list_release_assets.", required = true, example = "clip_123.png") String assetName,
+            @MCPParam(name = "targetFilePath", description = "Local file path where the downloaded asset should be saved.", required = true, example = "/tmp/downloaded_clip_123.png") String targetFilePath,
+            @MCPParam(name = "packageName", description = "Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.", required = false, example = "release-assets") String packageName) throws IOException {
+        String resolvedPackageName = sanitizePackageComponent(isBlank(packageName) ? "release-assets" : packageName.trim());
+        String packageVersion = sanitizePackageComponent(tagName);
+        String downloadPath = path(String.format("projects/%s/packages/generic/%s/%s/%s",
+                getEncodedProject(workspace, repository), resolvedPackageName, packageVersion, urlEncodePathSegment(assetName)));
+        return downloadBinaryToFile(downloadPath, new File(targetFilePath));
+    }
+
+    private JSONObject findReleaseByTag(String workspace, String repository, String tagName) throws IOException {
+        int perPage = 100;
+        int page = 1;
+        while (true) {
+            String releasesPath = path(String.format("projects/%s/releases", getEncodedProject(workspace, repository)));
+            GenericRequest getRequest = new GenericRequest(this, releasesPath);
+            getRequest.param("per_page", perPage);
+            getRequest.param("page", page);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                return null;
+            }
+            JSONArray releases = new JSONArray(response);
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.getJSONObject(i);
+                if (tagName.equals(release.optString("tag_name"))) {
+                    return release;
+                }
+            }
+            if (releases.length() < perPage) {
+                return null;
+            }
+            page++;
+        }
+    }
+
+    private String createRelease(String workspace, String repository, String tagName, String releaseName,
+                                  String targetCommitish, String body) throws IOException {
+        String releasesPath = path(String.format("projects/%s/releases", getEncodedProject(workspace, repository)));
+        GenericRequest postRequest = new GenericRequest(this, releasesPath);
+        JSONObject releaseBody = new JSONObject();
+        releaseBody.put("tag_name", tagName);
+        releaseBody.put("name", releaseName);
+        // GitLab's release-create API requires 'ref' when the tag does not already exist
+        // (returns 422 "Ref is not specified" otherwise). Fall back to the project's
+        // default branch when the caller doesn't specify one.
+        String ref = !isBlank(targetCommitish) ? targetCommitish.trim() : resolveDefaultBranch(workspace, repository);
+        releaseBody.put("ref", ref);
+        if (!isBlank(body)) {
+            releaseBody.put("description", body);
+        }
+        postRequest.setBody(releaseBody.toString());
+        return post(postRequest);
+    }
+
+    /**
+     * Resolves the project's default branch, used as the release 'ref' when the caller
+     * does not specify a targetCommitish. Falls back to "main" if the project's default
+     * branch cannot be determined (e.g. transient API error).
+     */
+    private String resolveDefaultBranch(String workspace, String repository) {
+        try {
+            String projectPath = path(String.format("projects/%s", getEncodedProject(workspace, repository)));
+            GenericRequest getRequest = new GenericRequest(this, projectPath);
+            String response = execute(getRequest);
+            if (response != null && !response.isEmpty()) {
+                JSONObject project = new JSONObject(response);
+                String defaultBranch = project.optString("default_branch", null);
+                if (!isBlank(defaultBranch)) {
+                    return defaultBranch;
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Could not resolve default branch for {}/{}: {}", workspace, repository, e.getMessage());
+        }
+        return "main";
+    }
+
+    private void deleteExistingAssetByName(String workspace, String repository, String tagName,
+                                            String packageName, String packageVersion, String assetName) throws IOException {
+        // Delete the release link first (if present), then the underlying generic package file.
+        String linksPath = path(String.format("projects/%s/releases/%s/assets/links",
+                getEncodedProject(workspace, repository), urlEncodePathSegment(tagName)));
+        GenericRequest getLinksRequest = new GenericRequest(this, linksPath);
+        String linksResponse = execute(getLinksRequest);
+        if (linksResponse != null && !linksResponse.isEmpty()) {
+            JSONArray links = new JSONArray(linksResponse);
+            for (int i = 0; i < links.length(); i++) {
+                JSONObject link = links.getJSONObject(i);
+                if (assetName.equals(link.optString("name"))) {
+                    String linkId = String.valueOf(link.getLong("id"));
+                    String deleteLinkPath = path(String.format("projects/%s/releases/%s/assets/links/%s",
+                            getEncodedProject(workspace, repository), urlEncodePathSegment(tagName), linkId));
+                    GenericRequest deleteLinkRequest = new GenericRequest(this, deleteLinkPath);
+                    delete(deleteLinkRequest);
+                    break;
+                }
+            }
+        }
+
+        String packageId = findGenericPackageId(workspace, repository, packageName, packageVersion);
+        if (packageId != null) {
+            String deletePackagePath = path(String.format("projects/%s/packages/%s",
+                    getEncodedProject(workspace, repository), packageId));
+            GenericRequest deletePackageRequest = new GenericRequest(this, deletePackagePath);
+            delete(deletePackageRequest);
+        }
+    }
+
+    private String findGenericPackageId(String workspace, String repository, String packageName, String packageVersion) throws IOException {
+        String packagesPath = path(String.format("projects/%s/packages", getEncodedProject(workspace, repository)));
+        GenericRequest getRequest = new GenericRequest(this, packagesPath);
+        getRequest.param("package_type", "generic");
+        getRequest.param("package_name", packageName);
+        getRequest.param("package_version", packageVersion);
+        String response = execute(getRequest);
+        if (response == null || response.isEmpty()) {
+            return null;
+        }
+        JSONArray packages = new JSONArray(response);
+        for (int i = 0; i < packages.length(); i++) {
+            JSONObject pkg = packages.getJSONObject(i);
+            if (packageName.equals(pkg.optString("name")) && packageVersion.equals(pkg.optString("version"))) {
+                return String.valueOf(pkg.getLong("id"));
+            }
+        }
+        return null;
+    }
+
+    private String resolveAssetContentType(File assetFile, String explicitContentType) throws IOException {
+        if (!isBlank(explicitContentType)) {
+            return explicitContentType.trim();
+        }
+        String detected = Files.probeContentType(assetFile.toPath());
+        if (isBlank(detected)) {
+            detected = java.net.URLConnection.guessContentTypeFromName(assetFile.getName());
+        }
+        return isBlank(detected) ? "application/octet-stream" : detected;
+    }
+
+    protected String uploadGenericPackageBinary(String uploadUrl, File assetFile, String contentType) throws IOException {
+        okhttp3.MediaType mediaType = okhttp3.MediaType.parse(contentType);
+        if (mediaType == null) {
+            throw new IllegalArgumentException("Invalid content type for release asset upload: " + contentType);
+        }
+        okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(assetFile, mediaType);
+        okhttp3.Request request = sign(new okhttp3.Request.Builder())
+                .url(uploadUrl)
+                .header("Content-Type", contentType)
+                .put(requestBody)
+                .build();
+        try (okhttp3.Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw AbstractRestClient.printAndCreateException(request, response);
+            }
+            return response.body() != null ? response.body().string() : "";
+        }
+    }
+
+    protected String downloadBinaryToFile(String downloadUrl, File targetFile) throws IOException {
+        okhttp3.Request request = sign(new okhttp3.Request.Builder())
+                .url(downloadUrl)
+                .get()
+                .build();
+        try (okhttp3.Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw AbstractRestClient.printAndCreateException(request, response);
+            }
+            File parentDir = targetFile.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            try (java.io.InputStream inputStream = response.body() != null ? response.body().byteStream() : null) {
+                if (inputStream == null) {
+                    throw new IOException("Empty response body while downloading: " + downloadUrl);
+                }
+                Files.copy(inputStream, targetFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+        return targetFile.getAbsolutePath();
+    }
+
+
+    // GitLab Generic Package Registry names/versions only allow letters, digits, '.', '_', '+', '-'.
+    private String sanitizePackageComponent(String value) {
+        if (value == null) {
+            return "unknown";
+        }
+        String sanitized = value.trim().replaceAll("[^a-zA-Z0-9_.+-]", "-");
+        return sanitized.isEmpty() ? "unknown" : sanitized;
+    }
+
+    private String urlEncodePathSegment(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20");
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private String normalizePipelineStatus(String status) {

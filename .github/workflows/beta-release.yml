@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -70,7 +70,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Update version in skill metadata
         run: |
@@ -114,7 +114,7 @@ jobs:
           cat skill-checksums.sha256
 
       - name: Upload skill artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skill-package
           path: |
@@ -134,16 +134,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download CLI Package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cli-package
           path: cli/
 
       - name: Download Skill Package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: skill-package
           path: skill/

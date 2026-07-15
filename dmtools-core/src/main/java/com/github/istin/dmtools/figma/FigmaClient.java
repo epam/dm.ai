@@ -133,7 +133,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         category = "auth"
     )
     public String oauth2GetAuthUrl(
-        @MCPParam(name = "redirectUri", description = "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback)", required = true, example = "http://localhost:8080/callback") String redirectUri,
+        @MCPParam(name = "redirectUri", description = "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback). If omitted, uses FIGMA_REDIRECT_URI env variable.", required = false, example = "http://localhost:8080/callback") String redirectUri,
         @MCPParam(name = "state", description = "Random state string for CSRF protection", required = false, example = "random_state_123") String state,
         @MCPParam(name = "scope", description = "Optional OAuth scope list (space-separated), e.g. file_content:read file_metadata:read. If omitted, uses FIGMA_SCOPE (or FIGMA_OAUTH_SCOPES) env or default minimal read scope.", required = false, example = "file_content:read file_metadata:read") String scope
     ) {
@@ -148,6 +148,14 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         if (clientSecret == null || clientSecret.isEmpty()) {
             return new JSONObject()
                     .put("error", "FIGMA_CLIENT_SECRET is not configured")
+                    .toString();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            redirectUri = propertyReader.getFigmaRedirectUri();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            return new JSONObject()
+                    .put("error", "redirectUri is required (or set FIGMA_REDIRECT_URI in dmtools.env)")
                     .toString();
         }
         if (state == null || state.isEmpty()) {
@@ -175,7 +183,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
     )
     public String oauth2ExchangeCode(
         @MCPParam(name = "code", description = "Authorization code received from Figma OAuth2 redirect", required = true, example = "figma_auth_code_abc123") String code,
-        @MCPParam(name = "redirectUri", description = "Same redirect URI used in figma_oauth2_get_auth_url", required = true, example = "http://localhost:8080/callback") String redirectUri
+        @MCPParam(name = "redirectUri", description = "Same redirect URI used in figma_oauth2_get_auth_url. If omitted, uses FIGMA_REDIRECT_URI env variable.", required = false, example = "http://localhost:8080/callback") String redirectUri
     ) {
         com.github.istin.dmtools.common.utils.PropertyReader propertyReader = new com.github.istin.dmtools.common.utils.PropertyReader();
         String clientId = propertyReader.getFigmaClientId();
@@ -183,6 +191,14 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         if (clientId == null || clientId.isEmpty() || clientSecret == null || clientSecret.isEmpty()) {
             return new JSONObject()
                     .put("error", "FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET must be configured")
+                    .toString();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            redirectUri = propertyReader.getFigmaRedirectUri();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            return new JSONObject()
+                    .put("error", "redirectUri is required (or set FIGMA_REDIRECT_URI in dmtools.env)")
                     .toString();
         }
         try {
@@ -203,6 +219,16 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
                     .put("error", "Token exchange failed: " + e.getMessage())
                     .toString();
         }
+    }
+
+    @MCPTool(
+        name = "figma_test",
+        description = "Test Figma connectivity by fetching the current user's profile",
+        integration = "figma",
+        category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        return me();
     }
 
     @MCPTool(

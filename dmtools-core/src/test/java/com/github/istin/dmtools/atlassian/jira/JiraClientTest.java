@@ -148,6 +148,68 @@ public class JiraClientTest {
     }
 
     @Test
+    public void testUpdateFieldAsAdf_wrapsPlainTextAndCallsV3Endpoint() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doNothing().when(spyClient).log(anyString());
+        doReturn(mockRequest).when(spyClient).createV3IssueRequest("TEST-123");
+        when(mockRequest.put()).thenReturn("");
+
+        String result = spyClient.updateFieldAsAdf("TEST-123", "description", "Plain text");
+
+        assertEquals("Field 'description' updated as ADF successfully on ticket TEST-123", result);
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockRequest).setBody(bodyCaptor.capture());
+
+        JSONObject requestBody = new JSONObject(bodyCaptor.getValue());
+        JSONObject setValue = requestBody.getJSONObject("update")
+                .getJSONArray("description")
+                .getJSONObject(0)
+                .getJSONObject("set");
+
+        assertEquals("doc", setValue.getString("type"));
+        assertEquals("Plain text",
+                setValue.getJSONArray("content")
+                        .getJSONObject(0)
+                        .getJSONArray("content")
+                        .getJSONObject(0)
+                        .getString("text"));
+    }
+
+    @Test
+    public void testUpdateFieldAsAdf_passesThroughAdfJson() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doNothing().when(spyClient).log(anyString());
+        doReturn(mockRequest).when(spyClient).createV3IssueRequest("TEST-123");
+        when(mockRequest.put()).thenReturn("");
+
+        String adfJson = "{\"version\":1,\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"ADF\"}]}]}";
+        spyClient.updateFieldAsAdf("TEST-123", "description", adfJson);
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockRequest).setBody(bodyCaptor.capture());
+
+        JSONObject requestBody = new JSONObject(bodyCaptor.getValue());
+        JSONObject setValue = requestBody.getJSONObject("update")
+                .getJSONArray("description")
+                .getJSONObject(0)
+                .getJSONObject("set");
+
+        assertEquals("ADF",
+                setValue.getJSONArray("content")
+                        .getJSONObject(0)
+                        .getJSONArray("content")
+                        .getJSONObject(0)
+                        .getString("text"));
+    }
+
+    @Test
+    public void testCreateV3IssueRequest_buildsV3Url() {
+        GenericRequest request = jiraClient.createV3IssueRequest("TEST-123");
+        assertEquals("http://example.com/rest/api/3/issue/TEST-123", request.url());
+    }
+
+    @Test
     public void testUpdateField_MultiselectCustomFieldWrapsStringValueAsOptionArray() throws IOException {
         JiraClient<Ticket> spyClient = spy(jiraClient);
         doNothing().when(spyClient).log(anyString());
@@ -313,6 +375,19 @@ public class JiraClientTest {
         doReturn(true).when(spyClient).isImageAttachment(anyString());
 
         assertTrue(spyClient.isValidImageUrl(validUrl));
+    }
+
+    @Test
+    public void testExtractProjectKeyFromJQLIgnoresKeywords() throws Exception {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doReturn(Arrays.asList("IN", "PROJ", "TEAM")).when(spyClient).getKnownProjectKeys();
+
+        Method method = JiraClient.class.getDeclaredMethod("extractProjectKeyFromJQL", String.class);
+        method.setAccessible(true);
+
+        assertNotEquals("IN", method.invoke(spyClient, "parent in (PSR-18,PSR-17)"));
+        assertEquals("PROJ", method.invoke(spyClient, "project = PROJ AND status = Open"));
+        assertEquals("TEAM", method.invoke(spyClient, "key = TEAM-123"));
     }
 
 }

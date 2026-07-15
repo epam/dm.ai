@@ -1,6 +1,6 @@
 # JIRA MCP Tools
 
-**Total Tools**: 52
+**Total Tools**: 67
 
 ## Quick Reference
 
@@ -27,13 +27,18 @@ const result = jira_xray_get_test_details(...);
 |-----------|-------------|------------|
 | `jira_add_fix_version` | Add a fix version to a Jira ticket (without removing existing ones) | `fixVersion` (string, **required**)<br>`key` (string, **required**) |
 | `jira_add_label` | Adding label to specific ticket key | `key` (string, **required**)<br>`label` (string, **required**) |
-| `jira_remove_label` | Remove a label from a specific Jira ticket. Fetches current labels and removes the specified one. | `key` (string, **required**)<br>`label` (string, **required**) |
+| `jira_assign_issue_type_scheme` | Assign an issue type scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin. | `issueTypeSchemeId` (string, **required**)<br>`projectId` (string, **required**) |
 | `jira_assign_ticket_to` | Assigns a Jira ticket to user | `accountId` (string, **required**)<br>`key` (string, **required**) |
+| `jira_assign_workflow_scheme` | Assign a workflow scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin. | `projectId` (string, **required**)<br>`workflowSchemeId` (string, **required**) |
 | `jira_attach_file_to_ticket` | Attach a file to a Jira ticket from a local file path. The file will only be attached if a file with the same name doesn't already exist | `name` (string, **required**)<br>`ticketKey` (string, **required**)<br>`contentType` (string, optional)<br>`filePath` (string, **required**) |
 | `jira_clear_field` | Clear (delete value) a specific field value in a Jira ticket | `field` (string, **required**)<br>`key` (string, **required**) |
+| `jira_clone_project` | Create a brand-new team-managed (next-gen) Jira project that mirrors the source project. Default issue types are auto-created; custom types must be added manually. To reuse an existing key, permanently delete the old project from Jira Admin > System > Trash first. | `sourceProjectKey` (string, **required**)<br>`newProjectKey` (string, **required**)<br>`newProjectName` (string, optional) |
+| `jira_copy_project_structure` | Copy issue types and workflow setup from a source Jira project to a target Jira project (e.g. MYTUBE → TP) | `sourceProjectKey` (string, **required**)<br>`targetProjectKey` (string, **required**) |
+| `jira_create_project_issue_type` | Create a project-scoped issue type in a next-gen Jira project. Use type 'subtask' for subtasks and 'standard' for all others. Skips if the name already exists. Requires Jira admin. | `name` (string, **required**)<br>`description` (string, optional)<br>`projectKey` (string, **required**)<br>`type` (string, optional) |
 | `jira_create_ticket_basic` | Create a new Jira ticket with basic fields (project, issue type, summary, description) | `issueType` (string, **required**)<br>`summary` (string, **required**)<br>`project` (string, **required**)<br>`description` (string, **required**) |
 | `jira_create_ticket_with_json` | Create a new Jira ticket with custom fields using JSON configuration | `project` (string, **required**)<br>`fieldsJson` (object, **required**) |
 | `jira_create_ticket_with_parent` | Create a new Jira ticket with a parent relationship | `issueType` (string, **required**)<br>`summary` (string, **required**)<br>`project` (string, **required**)<br>`description` (string, **required**)<br>`parentKey` (string, **required**) |
+| `jira_delete_project` | Delete a Jira project by moving it to trash. The project key remains reserved until permanently deleted from Jira Admin > System > Trash. Set confirmDelete to 'true' to proceed. | `projectKey` (string, **required**)<br>`confirmDelete` (string, **required**) |
 | `jira_delete_ticket` | Delete a Jira ticket by key | `key` (string, **required**) |
 | `jira_download_attachment` | Download a Jira attachment by URL and save it as a file | `href` (string, **required**) |
 | `jira_execute_request` | Execute a custom HTTP GET request to Jira API with auth. Can be used to perform any jira get requests which are required auth. | `url` (string, **required**) |
@@ -47,7 +52,11 @@ const result = jira_xray_get_test_details(...);
 | `jira_get_issue_link_types` | Get all available issue link types/relationships in Jira | None |
 | `jira_get_issue_types` | Get all available issue types for a specific Jira project | `project` (string, **required**) |
 | `jira_get_my_profile` | Get the current user's profile information from Jira | None |
+| `jira_get_project_board_config` | Read the board column configuration (workflow) of a Jira project — returns columns with status names and categories, useful for comparing or replicating project workflow | `projectKey` (string, **required**) |
+| `jira_get_project_details` | Get full details of a Jira project including its numeric ID, key, name, style and issue types | `projectKey` (string, **required**) |
+| `jira_get_project_issue_type_scheme` | Get the issue type scheme (or equivalent) assigned to a Jira project | `projectKey` (string, **required**) |
 | `jira_get_project_statuses` | Get all statuses for a specific Jira project | `project` (string, **required**) |
+| `jira_get_project_workflow_scheme` | Get the workflow scheme (or equivalent) assigned to a Jira project | `projectKey` (string, **required**) |
 | `jira_get_subtasks` | Get all subtasks of a specific Jira ticket using jql: parent = PRJ-123 and issueType in (subtask, sub-task, 'sub task') | `key` (string, **required**) |
 | `jira_get_ticket` | Get a specific Jira ticket by key with optional field filtering | `fields` (array, optional)<br>`key` (string, **required**) |
 | `jira_get_transitions` | Get all available transitions(statuses, workflows) for a Jira ticket | `key` (string, **required**) |
@@ -58,14 +67,19 @@ const result = jira_xray_get_test_details(...);
 | `jira_post_comment` | Post a comment to a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists | `key` (string, **required**)<br>`comment` (string, **required**) |
 | `jira_post_comment_if_not_exists` | Post a comment to a Jira ticket only if it doesn't already exist. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists | `key` (string, **required**)<br>`comment` (string, **required**) |
 | `jira_remove_fix_version` | Remove a fix version from a Jira ticket | `fixVersion` (string, **required**)<br>`key` (string, **required**) |
+| `jira_remove_label` | Remove a label from a specific Jira ticket. Fetches current labels and removes the specified one. | `key` (string, **required**)<br>`label` (string, **required**) |
+| `jira_restore_project` | Restore a Jira project that was previously moved to trash using jira_delete_project | `projectKey` (string, **required**) |
 | `jira_search_by_jql` | Search for Jira tickets using JQL and returns all results | `jql` (string, **required**)<br>`fields` (array, optional) |
 | `jira_search_by_page` | Search for Jira tickets using JQL with paging support | `jql` (string, **required**)<br>`fields` (array, **required**)<br>`nextPageToken` (string, **required**) |
 | `jira_search_with_pagination` | [Deprecated] Search for Jira tickets using JQL with pagination support | `jql` (string, **required**)<br>`fields` (array, **required**)<br>`startAt` (number, **required**) |
 | `jira_set_fix_version` | Set the fix version for a Jira ticket | `fixVersion` (string, **required**)<br>`key` (string, **required**) |
 | `jira_set_priority` | Set the priority for a Jira ticket | `priority` (string, **required**)<br>`key` (string, **required**) |
+| `jira_setup_project_workflow` | Set up a project's workflow using an explicit list of statuses (no source project needed). Accepts a JSON array of {name, category} objects and applies them to the target project's workflow. Valid categories: TODO, IN_PROGRESS, DONE. Works with team-managed (next-gen) Jira projects. | `projectKey` (string, **required**)<br>`statusDefinitions` (string, **required**) |
+| `jira_sync_project_workflow` | Sync the workflow (statuses) of a target project to exactly match the source project using Jira's bulk workflow update API. Replaces the target workflow's statuses and transitions with those from the source project. Existing issues with removed statuses are automatically migrated to the closest matching new status. Works with team-managed (next-gen) Jira projects. | `sourceProjectKey` (string, **required**)<br>`targetProjectKey` (string, **required**) |
 | `jira_update_all_fields_with_name` | Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name. | `value` (object, **required**)<br>`key` (string, **required**)<br>`fieldName` (string, **required**) |
 | `jira_update_description` | Update the description of a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists | `description` (string, **required**)<br>`key` (string, **required**) |
 | `jira_update_field` | Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field. | `field` (string, **required**)<br>`value` (object, **required**)<br>`key` (string, **required**) |
+| `jira_update_field_as_adf` | Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud. | `field` (string, **required**)<br>`value` (object, **required**)<br>`key` (string, **required**) |
 | `jira_update_ticket` | Update a Jira ticket using JSON parameters following the standard Jira REST API format | `params` (object, **required**)<br>`key` (string, **required**) |
 | `jira_update_ticket_parent` | Update the parent of a Jira ticket. Can be used for setting up epic relationships and parent-child relationships for subtasks | `key` (string, **required**)<br>`parentKey` (string, **required**) |
 | `jira_xray_add_precondition_to_test` | Add a single precondition to a test issue using X-ray GraphQL API. Returns JSONObject with result. | `testIssueId` (string, **required**)<br>`preconditionIssueId` (string, **required**) |
@@ -131,28 +145,26 @@ const result = jira_add_label("key", "label");
 
 ---
 
-### `jira_remove_label`
+### `jira_assign_issue_type_scheme`
 
-Remove a label from a specific Jira ticket. Fetches current labels and removes the specified one.
+Assign an issue type scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin.
 
 **Parameters:**
 
-- **`key`** (string) 🔴 Required
-  - The Jira ticket key to remove label from
-  - Example: `PRJ-123`
+- **`issueTypeSchemeId`** (string) 🔴 Required
+  - Numeric ID of the issue type scheme
 
-- **`label`** (string) 🔴 Required
-  - The label to be removed from the ticket
-  - Example: `custom_label`
+- **`projectId`** (string) 🔴 Required
+  - Numeric ID of the target Jira project
 
 **Example:**
 ```bash
-dmtools jira_remove_label "value" "value"
+dmtools jira_assign_issue_type_scheme "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = jira_remove_label("key", "label");
+const result = jira_assign_issue_type_scheme("issueTypeSchemeId", "projectId");
 ```
 
 ---
@@ -179,6 +191,30 @@ dmtools jira_assign_ticket_to "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_assign_ticket_to("accountId", "key");
+```
+
+---
+
+### `jira_assign_workflow_scheme`
+
+Assign a workflow scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin.
+
+**Parameters:**
+
+- **`projectId`** (string) 🔴 Required
+  - Numeric ID of the target Jira project
+
+- **`workflowSchemeId`** (string) 🔴 Required
+  - Numeric ID of the workflow scheme
+
+**Example:**
+```bash
+dmtools jira_assign_workflow_scheme "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_assign_workflow_scheme("projectId", "workflowSchemeId");
 ```
 
 ---
@@ -237,6 +273,87 @@ dmtools jira_clear_field "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_clear_field("field", "key");
+```
+
+---
+
+### `jira_clone_project`
+
+Create a brand-new team-managed (next-gen) Jira project that mirrors the source project. Default issue types are auto-created; custom types must be added manually. To reuse an existing key, permanently delete the old project from Jira Admin > System > Trash first.
+
+**Parameters:**
+
+- **`sourceProjectKey`** (string) 🔴 Required
+  - Key of the source project to mirror, e.g. MYTUBE
+
+- **`newProjectKey`** (string) 🔴 Required
+  - Key for the new project, e.g. TP2
+
+- **`newProjectName`** (string) ⚪ Optional
+  - Name for the new project. If empty, uses source project name
+
+**Example:**
+```bash
+dmtools jira_clone_project "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_clone_project("sourceProjectKey", "newProjectKey");
+```
+
+---
+
+### `jira_copy_project_structure`
+
+Copy issue types and workflow setup from a source Jira project to a target Jira project (e.g. MYTUBE → TP)
+
+**Parameters:**
+
+- **`sourceProjectKey`** (string) 🔴 Required
+  - Key of the source Jira project to copy structure from, e.g. MYTUBE
+
+- **`targetProjectKey`** (string) 🔴 Required
+  - Key of the target Jira project to apply structure to, e.g. TP
+
+**Example:**
+```bash
+dmtools jira_copy_project_structure "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_copy_project_structure("sourceProjectKey", "targetProjectKey");
+```
+
+---
+
+### `jira_create_project_issue_type`
+
+Create a project-scoped issue type in a next-gen Jira project. Use type 'subtask' for subtasks and 'standard' for all others. Skips if the name already exists. Requires Jira admin.
+
+**Parameters:**
+
+- **`name`** (string) 🔴 Required
+  - Name of the issue type, e.g. Story
+
+- **`description`** (string) ⚪ Optional
+  - Optional description
+
+- **`projectKey`** (string) 🔴 Required
+  - Key of the target Jira project, e.g. TP
+
+- **`type`** (string) ⚪ Optional
+  - Issue type kind: 'standard' or 'subtask'. Defaults to 'standard'.
+
+**Example:**
+```bash
+dmtools jira_create_project_issue_type "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_create_project_issue_type("name", "description");
 ```
 
 ---
@@ -324,6 +441,30 @@ dmtools jira_create_ticket_with_parent "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_create_ticket_with_parent("issueType", "summary");
+```
+
+---
+
+### `jira_delete_project`
+
+Delete a Jira project by moving it to trash. The project key remains reserved until permanently deleted from Jira Admin > System > Trash. Set confirmDelete to 'true' to proceed.
+
+**Parameters:**
+
+- **`projectKey`** (string) 🔴 Required
+  - Key of the Jira project to delete, e.g. TP
+
+- **`confirmDelete`** (string) 🔴 Required
+  - Must be 'true' to confirm deletion
+
+**Example:**
+```bash
+dmtools jira_delete_project "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_delete_project("projectKey", "confirmDelete");
 ```
 
 ---
@@ -606,6 +747,69 @@ const result = jira_get_my_profile();
 
 ---
 
+### `jira_get_project_board_config`
+
+Read the board column configuration (workflow) of a Jira project — returns columns with status names and categories, useful for comparing or replicating project workflow
+
+**Parameters:**
+
+- **`projectKey`** (string) 🔴 Required
+  - Key of the Jira project, e.g. MYTUBE
+
+**Example:**
+```bash
+dmtools jira_get_project_board_config "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_get_project_board_config("projectKey");
+```
+
+---
+
+### `jira_get_project_details`
+
+Get full details of a Jira project including its numeric ID, key, name, style and issue types
+
+**Parameters:**
+
+- **`projectKey`** (string) 🔴 Required
+  - The Jira project key, e.g. TP
+
+**Example:**
+```bash
+dmtools jira_get_project_details "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_get_project_details("projectKey");
+```
+
+---
+
+### `jira_get_project_issue_type_scheme`
+
+Get the issue type scheme (or equivalent) assigned to a Jira project
+
+**Parameters:**
+
+- **`projectKey`** (string) 🔴 Required
+  - The Jira project key, e.g. TP
+
+**Example:**
+```bash
+dmtools jira_get_project_issue_type_scheme "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_get_project_issue_type_scheme("projectKey");
+```
+
+---
+
 ### `jira_get_project_statuses`
 
 Get all statuses for a specific Jira project
@@ -623,6 +827,27 @@ dmtools jira_get_project_statuses "value"
 ```javascript
 // In JavaScript agent
 const result = jira_get_project_statuses("project");
+```
+
+---
+
+### `jira_get_project_workflow_scheme`
+
+Get the workflow scheme (or equivalent) assigned to a Jira project
+
+**Parameters:**
+
+- **`projectKey`** (string) 🔴 Required
+  - The Jira project key, e.g. TP
+
+**Example:**
+```bash
+dmtools jira_get_project_workflow_scheme "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_get_project_workflow_scheme("projectKey");
 ```
 
 ---
@@ -864,6 +1089,53 @@ const result = jira_remove_fix_version("fixVersion", "key");
 
 ---
 
+### `jira_remove_label`
+
+Remove a label from a specific Jira ticket. Fetches current labels and removes the specified one.
+
+**Parameters:**
+
+- **`key`** (string) 🔴 Required
+  - The Jira ticket key to remove label from
+  - Example: `PRJ-123`
+
+- **`label`** (string) 🔴 Required
+  - The label to be removed from the ticket
+  - Example: `custom_label`
+
+**Example:**
+```bash
+dmtools jira_remove_label "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_remove_label("key", "label");
+```
+
+---
+
+### `jira_restore_project`
+
+Restore a Jira project that was previously moved to trash using jira_delete_project
+
+**Parameters:**
+
+- **`projectKey`** (string) 🔴 Required
+  - Key of the trashed Jira project to restore, e.g. TP
+
+**Example:**
+```bash
+dmtools jira_restore_project "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_restore_project("projectKey");
+```
+
+---
+
 ### `jira_search_by_jql`
 
 Search for Jira tickets using JQL and returns all results
@@ -998,6 +1270,54 @@ const result = jira_set_priority("priority", "key");
 
 ---
 
+### `jira_setup_project_workflow`
+
+Set up a project's workflow using an explicit list of statuses (no source project needed). Accepts a JSON array of {name, category} objects and applies them to the target project's workflow. Valid categories: TODO, IN_PROGRESS, DONE. Works with team-managed (next-gen) Jira projects.
+
+**Parameters:**
+
+- **`projectKey`** (string) 🔴 Required
+  - Key of the target Jira project, e.g. TP
+
+- **`statusDefinitions`** (string) 🔴 Required
+  - JSON array of status definitions, e.g. [{"name":"Backlog","category":"TODO"},...]. Valid categories: TODO, IN_PROGRESS, DONE.
+
+**Example:**
+```bash
+dmtools jira_setup_project_workflow "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_setup_project_workflow("projectKey", "statusDefinitions");
+```
+
+---
+
+### `jira_sync_project_workflow`
+
+Sync the workflow (statuses) of a target project to exactly match the source project using Jira's bulk workflow update API. Replaces the target workflow's statuses and transitions with those from the source project. Existing issues with removed statuses are automatically migrated to the closest matching new status. Works with team-managed (next-gen) Jira projects.
+
+**Parameters:**
+
+- **`sourceProjectKey`** (string) 🔴 Required
+  - Key of the source project to copy workflow from, e.g. MYTUBE
+
+- **`targetProjectKey`** (string) 🔴 Required
+  - Key of the target project to update workflow for, e.g. TP
+
+**Example:**
+```bash
+dmtools jira_sync_project_workflow "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_sync_project_workflow("sourceProjectKey", "targetProjectKey");
+```
+
+---
+
 ### `jira_update_all_fields_with_name`
 
 Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name.
@@ -1072,6 +1392,59 @@ dmtools jira_update_field "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_update_field("field", "value");
+```
+
+---
+
+### `jira_update_field_as_adf`
+
+Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud.
+
+**Parameters:**
+
+- **`field`** (string) 🔴 Required
+  - The rich-text field to update, e.g. 'description' or 'comment'
+
+- **`value`** (object) 🔴 Required
+  - Plain text or ADF JSON. Plain text is wrapped into an ADF paragraph; JSON object is sent as-is; JSON array is used as the ADF content.
+
+- **`key`** (string) 🔴 Required
+  - The Jira ticket key to update
+
+**Example:**
+
+```bash
+# Plain text (wrapped into ADF automatically)
+dmtools jira_update_field_as_adf --data '{"key":"TP-1523","field":"description","value":"Plain text description"}'
+
+# ADF with interactive task-list checkboxes
+./dmtools.sh jira_update_field_as_adf --data '{"key":"TP-1523","field":"description","value":"{\"version\":1,\"type\":\"doc\",\"content\":[{\"type\":\"taskList\",\"attrs\":{\"localId\":\"\"},\"content\":[{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"DONE\"},\"content\":[{\"type\":\"text\",\"text\":\"E2E\"}]},{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"TODO\"},\"content\":[{\"type\":\"text\",\"text\":\"Component\"}]},{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"TODO\"},\"content\":[{\"type\":\"text\",\"text\":\"Unit\"}]}]}]}"}'
+```
+
+```javascript
+// In JavaScript agent
+const adfDoc = {
+    version: 1,
+    type: "doc",
+    content: [
+        { type: "paragraph", content: [{ type: "text", text: "Test Levels:" }] },
+        {
+            type: "taskList",
+            attrs: { localId: "" },
+            content: [
+                { type: "taskItem", attrs: { localId: "", state: "DONE" }, content: [{ type: "text", text: "E2E" }] },
+                { type: "taskItem", attrs: { localId: "", state: "TODO" }, content: [{ type: "text", text: "Component" }] },
+                { type: "taskItem", attrs: { localId: "", state: "TODO" }, content: [{ type: "text", text: "Unit" }] }
+            ]
+        }
+    ]
+};
+
+const result = jira_update_field_as_adf({
+    key: "TP-1523",
+    field: "description",
+    value: JSON.stringify(adfDoc)
+});
 ```
 
 ---

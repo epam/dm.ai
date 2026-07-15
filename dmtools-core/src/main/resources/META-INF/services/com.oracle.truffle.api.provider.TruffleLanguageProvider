@@ -1,0 +1,6 @@
+# GraalVM/Truffle language providers registered in the fat JAR.
+# The Shadow plugin does not always merge these service files, so we list
+# the languages explicitly. Required for JavaScript regex literals (/.../)
+# because GraalVM 25 registers regex as a separate Truffle language.
+com.oracle.truffle.js.lang.JavaScriptLanguageProvider
+com.oracle.truffle.regex.RegexLanguageProvider

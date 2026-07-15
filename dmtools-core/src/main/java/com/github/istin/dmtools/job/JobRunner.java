@@ -6,17 +6,18 @@ package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.model.Metadata;
+import com.github.istin.dmtools.common.config.ApplicationConfiguration;
+import com.github.istin.dmtools.common.config.PropertyReaderConfiguration;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.ba.BusinessAnalyticDORGeneration;
 import com.github.istin.dmtools.ba.RequirementsCollector;
 import com.github.istin.dmtools.ba.UserStoryGenerator;
 import com.github.istin.dmtools.dev.CodeGeneratorCompatibilityJob;
-import com.github.istin.dmtools.dev.CommitsTriage;
 import com.github.istin.dmtools.dev.UnitTestsGenerator;
 import com.github.istin.dmtools.diagram.DiagramsCreator;
 import com.github.istin.dmtools.documentation.DocumentationGenerator;
-import com.github.istin.dmtools.estimations.JEstimator;
 import com.github.istin.dmtools.expert.Expert;
+import com.github.istin.dmtools.job.doctor.DoctorCommand;
 import com.github.istin.dmtools.presale.PreSaleSupport;
 import com.github.istin.dmtools.qa.TestCasesGenerator;
 import com.github.istin.dmtools.qa.InstructionsGenerator;
@@ -25,24 +26,25 @@ import com.github.istin.dmtools.report.productivity.DevProductivityReport;
 import com.github.istin.dmtools.report.productivity.QAProductivityReport;
 import com.github.istin.dmtools.reporting.ReportGeneratorJob;
 import com.github.istin.dmtools.sa.SolutionArchitectureCreator;
-import com.github.istin.dmtools.sm.ScrumMasterDaily;
 import com.github.istin.dmtools.sync.SourceCodeCommitTrackerSyncJob;
 import com.github.istin.dmtools.sync.SourceCodeTrackerSyncJob;
 import com.github.istin.dmtools.teammate.Teammate;
 import com.github.istin.dmtools.js.JSRunner;
 import com.github.istin.dmtools.kb.KBProcessingJob;
 import com.github.istin.dmtools.mcp.cli.McpCliHandler;
+import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import com.github.istin.dmtools.common.utils.JSONUtils;
-import com.github.istin.dmtools.teammate.Teammate;
-import com.github.istin.dmtools.js.JSRunner;
-import com.github.istin.dmtools.kb.KBProcessingJob;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONException;
@@ -61,7 +63,6 @@ public class JobRunner {
             case "presalesupport": return new PreSaleSupport();
             case "documentationgenerator": return new DocumentationGenerator();
             case "requirementscollector": return new RequirementsCollector();
-            case "jestimator": return new JEstimator();
             case "testcasesgenerator": return new TestCasesGenerator();
             case "instructionsgenerator": return new InstructionsGenerator();
             case "solutionarchitecturecreator": return new SolutionArchitectureCreator();
@@ -75,14 +76,12 @@ public class JobRunner {
             case "reportgeneratorjob": return new ReportGeneratorJob();
             case "reportvisualizer":
             case "reportvisualizerjob": return new com.github.istin.dmtools.reporting.ReportVisualizerJob();
-            case "scrummasterdaily": return new ScrumMasterDaily();
             case "expert": return new Expert();
             case "teammate": return new Teammate();
             case "sourcecodetrackersyncjob": return new SourceCodeTrackerSyncJob();
             case "sourcecodecommittrackersyncjob": return new SourceCodeCommitTrackerSyncJob();
             case "userstorygenerator": return new UserStoryGenerator();
             case "unittestsgenerator": return new UnitTestsGenerator();
-            case "commitstriage": return new CommitsTriage();
             case "jsrunner": return new JSRunner();
             case "kbprocessing":
             case "kbprocessingjob": return new KBProcessingJob();
@@ -110,7 +109,7 @@ public class JobRunner {
      *
      * @return List of available jobs
      */
-    private static List<Job> getJobs() {
+    public static List<Job> getJobs() {
         if (JOBS == null) {
             synchronized (JobRunner.class) {
                 if (JOBS == null) {
@@ -120,7 +119,6 @@ public class JobRunner {
                             new PreSaleSupport(),
                             new DocumentationGenerator(),
                             new RequirementsCollector(),
-                            new JEstimator(),
                             new TestCasesGenerator(),
                             new InstructionsGenerator(),
                             new SolutionArchitectureCreator(),
@@ -132,14 +130,12 @@ public class JobRunner {
                             new QAProductivityReport(),
                             new ReportGeneratorJob(),
                             new com.github.istin.dmtools.reporting.ReportVisualizerJob(),
-                            new ScrumMasterDaily(),
                             new Expert(),
                             new Teammate(),
                             new SourceCodeTrackerSyncJob(),
                             new SourceCodeCommitTrackerSyncJob(),
                             new UserStoryGenerator(),
                             new UnitTestsGenerator(),
-                            new CommitsTriage(),
                             new JSRunner(),
                             new KBProcessingJob()
                     );
@@ -169,6 +165,10 @@ public class JobRunner {
                 listJobs();
                 return;
             }
+            if ("doctor".equals(firstArg)) {
+                new DoctorCommand().run();
+                return;
+            }
             if ("mcp".equals(firstArg)) {
                 // Handle MCP CLI commands
                 McpCliHandler mcpHandler = new McpCliHandler();
@@ -189,10 +189,18 @@ public class JobRunner {
                 }
                 System.exit(1);
             }
+            if ("interactive".equals(firstArg) || "i".equals(firstArg)) {
+                launchInteractive();
+                return;
+            }
         }
         
         if (args.length == 0) {
-            printHelp();
+            if (System.console() != null) {
+                launchInteractive();
+            } else {
+                printHelp();
+            }
             return;
         }
         
@@ -241,11 +249,23 @@ public class JobRunner {
             Object paramsByClass = jobParams.getParamsByClass(job.getParamsClass());
             
             // Apply per-job env variable overrides (from envVariables in JSON params)
+            // Job-level params take precedence over envVariables.
             if (paramsByClass instanceof TrackerParams) {
-                java.util.Map<String, String> envVariables = ((TrackerParams) paramsByClass).getEnvVariables();
+                TrackerParams trackerParams = (TrackerParams) paramsByClass;
+                java.util.Map<String, String> overrides = new java.util.LinkedHashMap<>();
+                java.util.Map<String, String> envVariables = trackerParams.getEnvVariables();
                 if (envVariables != null && !envVariables.isEmpty()) {
-                    logger.info("Applying {} env variable override(s) for job: {}", envVariables.size(), jobParams.getName());
-                    PropertyReader.setOverrides(envVariables);
+                    overrides.putAll(envVariables);
+                }
+                if (trackerParams.getIssueIgnorePrefixes() != null && !trackerParams.getIssueIgnorePrefixes().isBlank()) {
+                    overrides.put(PropertyReader.JIRA_ISSUE_IGNORE_PREFIXES, trackerParams.getIssueIgnorePrefixes());
+                }
+                if (trackerParams.getIssueAllowedPrefixes() != null && !trackerParams.getIssueAllowedPrefixes().isBlank()) {
+                    overrides.put(PropertyReader.JIRA_ISSUE_ALLOWED_PREFIXES, trackerParams.getIssueAllowedPrefixes());
+                }
+                if (!overrides.isEmpty()) {
+                    logger.info("Applying {} env variable override(s) for job: {}", overrides.size(), jobParams.getName());
+                    PropertyReader.setOverrides(overrides);
                 }
             }
 
@@ -278,6 +298,7 @@ public class JobRunner {
         System.out.println();
         System.out.println("Usage:");
         System.out.println("  dmtools list                           # List available MCP tools");
+        System.out.println("  dmtools doctor                         # Check current directory configuration");
         System.out.println("  dmtools run <json-file>                # Execute job with JSON config file");
         System.out.println("  dmtools run <job-name> [--key value]   # Execute a registered job without a config file");
         System.out.println("  dmtools run <json-file> <encoded>      # Execute job with file + encoded overrides");
@@ -292,6 +313,7 @@ public class JobRunner {
         System.out.println();
         System.out.println("Examples:");
         System.out.println("  dmtools list");
+        System.out.println("  dmtools doctor");
         System.out.println("  dmtools run job-config.json");
         System.out.println("  dmtools run codegenerator --param1 test");
         System.out.println("  dmtools run job-config.json \"eyJvdmVycmlkZSI6InZhbHVlIn0=\"  # base64 encoded");
@@ -335,6 +357,19 @@ public class JobRunner {
         System.out.println("  curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash");
         System.out.println();
         System.out.println("DM.ai uses DMTools. Do you?");
+    }
+
+    private static void launchInteractive() {
+        com.github.istin.dmtools.mcp.cli.interactive.Terminal terminal =
+                com.github.istin.dmtools.mcp.cli.interactive.Terminal.create();
+        com.github.istin.dmtools.mcp.cli.interactive.CommandSource source =
+                new com.github.istin.dmtools.mcp.cli.interactive.CommandSource();
+        com.github.istin.dmtools.mcp.cli.interactive.InteractiveCli cli =
+                new com.github.istin.dmtools.mcp.cli.interactive.InteractiveCli(terminal, source);
+        String command = cli.run();
+        if (command != null && !command.isEmpty()) {
+            System.out.println(command);
+        }
     }
 
     private static void listJobs() {
