@@ -1,6 +1,6 @@
 plugins {
     id 'java-library'
-    id 'com.gradleup.shadow' version '9.4.3'
+    id 'com.gradleup.shadow' version '9.5.1'
     id 'jacoco'
 }
 
@@ -19,7 +19,7 @@ def versions = [
         graalvm  : '25.1.3',
         mockito  : '5.23.0',
         junit    : '6.1.1',
-        jackson  : '2.22.0',
+        jackson  : '2.22.1',
         jackson3 : '3.2.0',
         poi      : '5.5.1'
 ]
@@ -123,7 +123,7 @@ dependencies {
     api 'software.amazon.awssdk:regions:2.46.21'
 
     // Google Cloud authentication for Vertex AI
-    api 'com.google.auth:google-auth-library-oauth2-http:1.48.0'
+    api 'com.google.auth:google-auth-library-oauth2-http:1.49.0'
     api 'com.google.cloud:google-cloud-core:2.72.0'
 
     // TOON format serialization for LLM-optimized CLI output (2.0.0 uses Jackson 3.1.3+)
