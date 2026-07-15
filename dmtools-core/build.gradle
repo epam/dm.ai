@@ -124,7 +124,7 @@ dependencies {
 
     // Google Cloud authentication for Vertex AI
     api 'com.google.auth:google-auth-library-oauth2-http:1.49.0'
-    api 'com.google.cloud:google-cloud-core:2.71.0'
+    api 'com.google.cloud:google-cloud-core:2.72.0'
 
     // TOON format serialization for LLM-optimized CLI output (2.0.0 uses Jackson 3.1.3+)
     api 'dev.toonformat:jtoon:2.0.1'
