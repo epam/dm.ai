@@ -145,12 +145,12 @@ public class TeammateCliIntegrationTest {
             if (Files.exists(inputFolder)) {
                 FileUtils.deleteDirectory(inputFolder.toFile());
             }
-            Path outputFolder = tempDir.resolve("output");
+            Path outputFolder = tempDir.resolve("outputs");
             if (Files.exists(outputFolder)) {
                 FileUtils.deleteDirectory(outputFolder.toFile());
             }
-            // Also cleanup legacy outputs folder
-            Path legacyOutputFolder = tempDir.resolve("outputs");
+            // Also cleanup legacy output folder
+            Path legacyOutputFolder = tempDir.resolve("output");
             if (Files.exists(legacyOutputFolder)) {
                 FileUtils.deleteDirectory(legacyOutputFolder.toFile());
             }
@@ -206,7 +206,7 @@ public class TeammateCliIntegrationTest {
         params.setSkipAIProcessing(true);
         
         // Create output response file
-        Path outputDir = tempDir.resolve("output");  // Changed from "outputs" to "output"
+        Path outputDir = tempDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         Files.write(responseFile, "CLI output response".getBytes(StandardCharsets.UTF_8));

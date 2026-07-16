@@ -8,6 +8,7 @@ import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.CliExecutionStoppedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -25,6 +26,10 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -241,8 +246,8 @@ public class CliExecutionHelperTest {
     
     @Test
     void testProcessOutputResponse_FileExists() throws IOException {
-        // Arrange - use new "output" folder
-        Path outputDir = tempDir.resolve("output");
+        // Arrange - use primary "outputs" folder
+        Path outputDir = tempDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String expectedContent = "CLI response content";
@@ -257,8 +262,8 @@ public class CliExecutionHelperTest {
 
     @Test
     void testProcessOutputResponse_LegacyFolder() throws IOException {
-        // Arrange - test backward compatibility with "outputs" folder
-        Path outputDir = tempDir.resolve("outputs");
+        // Arrange - test backward compatibility with "output" folder
+        Path outputDir = tempDir.resolve("output");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String expectedContent = "Legacy CLI response content";
@@ -268,34 +273,34 @@ public class CliExecutionHelperTest {
         String result = cliHelper.processOutputResponse(tempDir);
 
         // Assert
-        assertEquals(expectedContent, result, "Should support legacy 'outputs/' folder for backward compatibility");
+        assertEquals(expectedContent, result, "Should support legacy 'output/' folder for backward compatibility");
     }
 
     @Test
     void testProcessOutputResponse_PreferNewOverLegacy() throws IOException {
-        // Arrange - both folders exist, new should take precedence
-        Path newOutputDir = tempDir.resolve("output");
+        // Arrange - both folders exist, primary outputs/ should take precedence
+        Path newOutputDir = tempDir.resolve("outputs");
         Files.createDirectories(newOutputDir);
         Path newResponseFile = newOutputDir.resolve("response.md");
-        String newContent = "New output folder content";
+        String newContent = "New outputs folder content";
         Files.write(newResponseFile, newContent.getBytes(StandardCharsets.UTF_8));
 
-        Path legacyOutputDir = tempDir.resolve("outputs");
+        Path legacyOutputDir = tempDir.resolve("output");
         Files.createDirectories(legacyOutputDir);
         Path legacyResponseFile = legacyOutputDir.resolve("response.md");
-        String legacyContent = "Legacy outputs folder content";
+        String legacyContent = "Legacy output folder content";
         Files.write(legacyResponseFile, legacyContent.getBytes(StandardCharsets.UTF_8));
 
         // Act
         String result = cliHelper.processOutputResponse(tempDir);
 
         // Assert
-        assertEquals(newContent, result, "Should prefer new 'output/' folder over legacy 'outputs/' folder");
+        assertEquals(newContent, result, "Should prefer primary 'outputs/' folder over legacy 'output/' folder");
     }
 
     @Test
     void testProcessOutputResponse_FileNotExists() {
-        // Act - test with a directory that doesn't have output/response.md
+        // Act - test with a directory that doesn't have outputs/response.md
         String result = cliHelper.processOutputResponse(tempDir);
 
         // Assert
@@ -304,8 +309,8 @@ public class CliExecutionHelperTest {
 
     @Test
     void testProcessOutputResponse_EmptyFile() throws IOException {
-        // Arrange - use new "output" folder
-        Path outputDir = tempDir.resolve("output");
+        // Arrange - use primary "outputs" folder
+        Path outputDir = tempDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         Files.write(responseFile, "".getBytes(StandardCharsets.UTF_8));
@@ -392,7 +397,7 @@ public class CliExecutionHelperTest {
             assertNotNull(result);
             assertTrue(result.getCommandResponses().toString().contains("hello"));
             assertTrue(result.getCommandResponses().toString().contains("world"));
-            assertFalse(result.hasOutputResponse()); // No output/response.md file created
+            assertFalse(result.hasOutputResponse()); // No outputs/response.md file created
             assertNull(result.getOutputResponse());
         }
     }
@@ -401,7 +406,7 @@ public class CliExecutionHelperTest {
     void testExecuteCliCommandsWithResult_WithOutputFile() throws IOException {
         // Arrange
         Path workingDir = Files.createTempDirectory(tempDir, "working");
-        Path outputDir = workingDir.resolve("output");  // Changed from "outputs" to "output"
+        Path outputDir = workingDir.resolve("outputs");
         Files.createDirectories(outputDir);
         Path responseFile = outputDir.resolve("response.md");
         String outputContent = "CLI generated response content";
@@ -888,6 +893,141 @@ public class CliExecutionHelperTest {
         }
     }
 
+    // ── env variable exclusion tests ─────────────────────────────────────────
+
+    @Test
+    void testFilterEnvVariables_ExactAndRegex() {
+        Map<String, String> env = Map.of(
+                "OPENAI_API_KEY", "secret1",
+                "ANTHROPIC_API_KEY", "secret2",
+                "CURSOR_API_KEY", "secret3",
+                "PUBLIC_VAR", "visible"
+        );
+
+        Map<String, String> result = CliExecutionHelper.filterEnvVariables(
+                env,
+                new String[]{"OPENAI_API_KEY"},
+                new String[]{".*_API_KEY"}
+        );
+
+        assertFalse(result.containsKey("OPENAI_API_KEY"));
+        assertFalse(result.containsKey("ANTHROPIC_API_KEY"));
+        assertFalse(result.containsKey("CURSOR_API_KEY"));
+        assertTrue(result.containsKey("PUBLIC_VAR"));
+        assertEquals("visible", result.get("PUBLIC_VAR"));
+    }
+
+    @Test
+    void testFilterEnvVariables_NullOrEmptyInputs_ReturnsOriginal() {
+        Map<String, String> env = Map.of("KEY", "value");
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, null, null));
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, new String[0], new String[0]));
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, new String[]{"   "}, new String[]{""}));
+    }
+
+    @Test
+    void testExecuteCliCommands_ExcludesEnvVariablesByExactName() {
+        String[] commands = {"echo test"};
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of("KEEP_ME", "keep", "DROP_ME", "drop"));
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                    .thenReturn("test");
+
+            cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                    new String[]{"DROP_ME"}, null);
+
+            mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                    anyString(),
+                    isNull(),
+                    argThat((Map<String, String> env) ->
+                            env.containsKey("KEEP_ME") && !env.containsKey("DROP_ME")
+                    ),
+                    any()
+            ));
+        }
+    }
+
+    @Test
+    void testExecuteCliCommands_ExcludesEnvVariablesByRegex() {
+        String[] commands = {"echo test"};
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of("SECRET_TOKEN", "x", "PUBLIC", "y"));
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                    .thenReturn("test");
+
+            cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                    null, new String[]{".*TOKEN"});
+
+            mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                    anyString(),
+                    isNull(),
+                    argThat((Map<String, String> env) ->
+                            !env.containsKey("SECRET_TOKEN") && env.containsKey("PUBLIC")
+                    ),
+                    any()
+            ));
+        }
+    }
+
+    @Test
+    void testExecuteCliCommandsWithResult_TimerActionFired() throws Exception {
+        Path workingDir = Files.createTempDirectory(tempDir, "working");
+        String[] commands = {"echo hello"};
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger fireCount = new AtomicInteger(0);
+
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of());
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), any(File.class), any(Map.class), any()))
+                    .thenReturn("hello");
+
+            Runnable timerAction = () -> {
+                fireCount.incrementAndGet();
+                latch.countDown();
+            };
+
+            cliHelper.executeCliCommandsWithResult(commands, workingDir, "dmtools.env",
+                    timerAction, 1, null, false, null, null);
+
+            assertTrue(latch.await(5, TimeUnit.SECONDS), "Timer action should fire within 5 seconds");
+            assertTrue(fireCount.get() >= 1, "Timer action should have fired at least once");
+        }
+    }
+
+    @Test
+    void testExecuteCliCommands_LineStopPredicate_StopsExecution() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        String[] commands = {"echo line1", "echo line2"};
+
+        CliExecutionStoppedException exception = assertThrows(CliExecutionStoppedException.class,
+                () -> cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                        null, null, null, "line1"::equals));
+
+        String responses = exception.getMessage();
+        assertTrue(responses.contains("line1") || responses.contains("Stopped"));
+    }
+
+    @Test
+    void testExecuteCliCommands_ErrorHandler_InvokedOnFailure() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        String[] commands = {"false"}; // exits with code 1
+        AtomicBoolean handlerCalled = new AtomicBoolean(false);
+
+        cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
+                null, null, e -> handlerCalled.set(true), null);
+
+        assertTrue(handlerCalled.get(), "errorHandler should be invoked when a command fails");
+    }
+
     // ── writeConfluencePagesFile tests ────────────────────────────────────────
 
     @Test
@@ -1178,7 +1318,7 @@ public class CliExecutionHelperTest {
     }
 
     @Test
-    void testExecuteCliCommands_ExcludesEnvVariablesByRegex() {
+    void testExecuteCliCommands_ExcludesEnvVariablesByRegex_WithOverrides() {
         com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(
                 Map.of("API_KEY", "secret1", "MY_API_KEY", "secret2", "PUBLIC", "ok")
         );
