@@ -72,7 +72,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         private String cliPrompt;
 
         @SerializedName("cliPrompts")
-        private String[] cliPrompts;
+        private CliPromptsConfig cliPrompts;
 
         @SerializedName("cliPromptsByTracker")
         private Map<String, String[]> cliPromptsByTracker;
@@ -184,6 +184,36 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @Override
         public boolean isWriteAgentParamsToFiles() {
             return writeAgentParamsToFiles;
+        }
+
+        // ----- Backward-compatible accessors for cliPrompts -----
+
+        /**
+         * Returns cliPrompts as a flat string array for backward compatibility.
+         */
+        public String[] getCliPrompts() {
+            return cliPrompts != null ? cliPrompts.toStringArray() : null;
+        }
+
+        /**
+         * Sets cliPrompts from a plain string array (backward compatibility).
+         */
+        public void setCliPrompts(String[] cliPrompts) {
+            this.cliPrompts = CliPromptsConfig.fromStrings(cliPrompts);
+        }
+
+        /**
+         * Returns the structured cliPrompts config.
+         */
+        public CliPromptsConfig getCliPromptsConfig() {
+            return cliPrompts;
+        }
+
+        /**
+         * Sets the structured cliPrompts config.
+         */
+        public void setCliPromptsConfig(CliPromptsConfig cliPrompts) {
+            this.cliPrompts = cliPrompts;
         }
 
     }
@@ -551,7 +581,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     String[] finalCliCommands = cliCommandBuilder.buildCommands(
                             cliCommands,
                             expertParams.getCliPrompt(),
-                            expertParams.getCliPrompts(),
+                            expertParams.getCliPromptsConfig(),
                             expertParams.getCliPromptsByTracker());
 
                     // Create input context for CLI commands via shared builder.

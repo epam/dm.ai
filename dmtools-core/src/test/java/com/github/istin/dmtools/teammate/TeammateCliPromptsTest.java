@@ -229,4 +229,58 @@ class TeammateCliPromptsTest {
         String[] result = Teammate.resolveCliPrompts(base, byTracker, "jira");
         assertSame(base, result);
     }
+
+    // -------------------------------------------------------------------------
+    // Structured cliPrompts (new format)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testTeammateParams_DeserializesStructuredCliPrompts() {
+        String json = """
+                {
+                  "cliPrompts": [
+                    "base prompt",
+                    {"id": "input",  "prompts": ["input one", "input two"]},
+                    {"id": "output", "prompts": ["output one"], "mergeStrategy": "prepend"}
+                  ]
+                }
+                """;
+        Teammate.TeammateParams params = new Gson().fromJson(json, Teammate.TeammateParams.class);
+        assertNotNull(params.getCliPromptsConfig());
+        assertEquals(3, params.getCliPromptsConfig().getItems().size());
+        assertArrayEquals(
+                new String[]{"base prompt", "input one", "input two", "output one"},
+                params.getCliPrompts());
+    }
+
+    @Test
+    void testTeammateParams_StructuredCliPromptsRoundTrip() {
+        String json = """
+                {
+                  "cliPrompts": [
+                    "base",
+                    {"id": "input", "prompts": ["in1"]},
+                    "tail"
+                  ]
+                }
+                """;
+        Teammate.TeammateParams params = new Gson().fromJson(json, Teammate.TeammateParams.class);
+        String serialized = new Gson().toJson(params.getCliPromptsConfig());
+        assertEquals(
+                "[\"base\",{\"id\":\"input\",\"prompts\":[\"in1\"]},\"tail\"]",
+                serialized);
+    }
+
+    @Test
+    void testTeammateParams_MergeStructuredCliPrompts() {
+        Teammate.TeammateParams base = new Gson().fromJson(
+                "{\"cliPrompts\":[\"a\",{\"id\":\"input\",\"prompts\":[\"in1\"]},\"b\"]}",
+                Teammate.TeammateParams.class);
+        Teammate.TeammateParams override = new Gson().fromJson(
+                "{\"cliPrompts\":[{\"id\":\"input\",\"prompts\":[\"in2\"]},\"c\"]}",
+                Teammate.TeammateParams.class);
+
+        CliPromptsConfig merged = base.getCliPromptsConfig().merge(override.getCliPromptsConfig());
+        assertArrayEquals(new String[]{"a", "in1", "in2", "b", "c"}, merged.toStringArray());
+    }
 }

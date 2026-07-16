@@ -4,10 +4,14 @@
 package com.github.istin.dmtools.cliagent;
 
 import com.github.istin.dmtools.job.TrackerParams;
+import com.github.istin.dmtools.teammate.CliPromptsConfig;
 import com.google.gson.annotations.SerializedName;
+import lombok.AccessLevel;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.Map;
 
@@ -53,7 +57,9 @@ public class CliAgentParams extends TrackerParams {
     private String cliPrompt;
 
     @SerializedName(CLI_PROMPTS)
-    private String[] cliPrompts;
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private CliPromptsConfig cliPrompts;
 
     @SerializedName(CLI_PROMPTS_BY_TRACKER)
     private Map<String, String[]> cliPromptsByTracker;
@@ -99,4 +105,34 @@ public class CliAgentParams extends TrackerParams {
 
     @SerializedName(CLI_OUTPUT_LINE_JS_ACTION)
     private String cliOutputLineJSAction;
+
+    // ----- Backward-compatible accessors for cliPrompts -----
+
+    /**
+     * Returns cliPrompts as a flat string array for backward compatibility.
+     */
+    public String[] getCliPrompts() {
+        return cliPrompts != null ? cliPrompts.toStringArray() : null;
+    }
+
+    /**
+     * Sets cliPrompts from a plain string array (backward compatibility).
+     */
+    public void setCliPrompts(String[] cliPrompts) {
+        this.cliPrompts = CliPromptsConfig.fromStrings(cliPrompts);
+    }
+
+    /**
+     * Returns the structured cliPrompts config.
+     */
+    public CliPromptsConfig getCliPromptsConfig() {
+        return cliPrompts;
+    }
+
+    /**
+     * Sets the structured cliPrompts config.
+     */
+    public void setCliPromptsConfig(CliPromptsConfig cliPrompts) {
+        this.cliPrompts = cliPrompts;
+    }
 }

@@ -617,6 +617,34 @@ class CliAgentTest {
         assertArrayEquals(new String[]{"confluence"}, params.getInput().getSources());
     }
 
+    @Test
+    void testCliPromptsLegacyArrayDeserialization() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        CliAgentParams params = gson.fromJson(
+                "{\"cliPrompts\":[\"a\",\"b\"]}", CliAgentParams.class);
+        assertArrayEquals(new String[]{"a", "b"}, params.getCliPrompts());
+    }
+
+    @Test
+    void testCliPromptsStructuredDeserialization() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        CliAgentParams params = gson.fromJson(
+                "{\"cliPrompts\":[\"base\",{\"id\":\"input\",\"prompts\":[\"in1\",\"in2\"]},\"tail\"]}",
+                CliAgentParams.class);
+        assertArrayEquals(new String[]{"base", "in1", "in2", "tail"}, params.getCliPrompts());
+        assertNotNull(params.getCliPromptsConfig());
+        assertEquals(3, params.getCliPromptsConfig().getItems().size());
+    }
+
+    @Test
+    void testCliPromptsStructuredRoundTrip() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        String json = "{\"cliPrompts\":[\"base\",{\"id\":\"input\",\"prompts\":[\"in1\"]},\"tail\"]}";
+        CliAgentParams params = gson.fromJson(json, CliAgentParams.class);
+        String serialized = gson.toJson(params.getCliPromptsConfig());
+        assertEquals("[\"base\",{\"id\":\"input\",\"prompts\":[\"in1\"]},\"tail\"]", serialized);
+    }
+
     private TrackerClient<ITicket> mockTrackerClient() throws Exception {
         TrackerClient<ITicket> trackerClient = mock(TrackerClient.class);
         ITicket ticket = mockTicket("PROJ-123", "Summary");
