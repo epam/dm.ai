@@ -188,6 +188,19 @@ public class JobJavaScriptBridge {
             logger.debug("BasicBitrise not initialized: {}. Bitrise tools will not be available.", e.getMessage());
         }
 
+        // Initialize Jenkins client if configured
+        try {
+            com.github.istin.dmtools.jenkins.BasicJenkins jenkinsInstance = com.github.istin.dmtools.jenkins.BasicJenkins.getInstance();
+            if (jenkinsInstance != null) {
+                this.clientInstances.put("jenkins", jenkinsInstance);
+                logger.debug("BasicJenkins initialized for JavaScript bridge");
+            } else {
+                logger.debug("BasicJenkins not configured (JENKINS_BASE_PATH/JENKINS_USER/JENKINS_API_TOKEN not set). Jenkins tools will not be available.");
+            }
+        } catch (Exception e) {
+            logger.debug("BasicJenkins not initialized: {}. Jenkins tools will not be available.", e.getMessage());
+        }
+
         // Don't initialize JavaScript context in constructor - use lazy initialization instead
         // This significantly improves startup time for commands that don't need JS execution
         // initializeJavaScriptContext();
@@ -443,7 +456,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "gitlab", "bitrise"));
+        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "gitlab", "bitrise", "jenkins"));
         // Add jira_xray if XrayClient is available
         if (trackerClient instanceof com.github.istin.dmtools.atlassian.jira.xray.XrayClient) {
             integrations.add("jira_xray");

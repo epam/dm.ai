@@ -23,6 +23,11 @@ JIRA_CLEAR_CACHE=true
 JIRA_EXTRA_FIELDS=summary,description,status
 JIRA_EXTRA_FIELDS_PROJECT=customfield_10001,customfield_10002
 
+# Jenkins CI/CD Integration
+JENKINS_BASE_PATH=https://jenkins.example.com
+JENKINS_USER=jenkins-user
+JENKINS_API_TOKEN=${JENKINS_API_TOKEN}
+
 # AI Integration
 OPEN_AI_BATH_PATH=https://api.openai.com/v1
 OPEN_AI_API_KEY=${OPENAI_KEY}
@@ -98,6 +103,11 @@ export JIRA_TOKEN="your-jira-token"
 export JIRA_EXTRA_FIELDS="summary,description,status"
 export JIRA_EXTRA_FIELDS_PROJECT="customfield_10001,customfield_10002"
 
+# Jenkins Integration
+export JENKINS_BASE_PATH="https://jenkins.example.com"
+export JENKINS_USER="jenkins-user"
+export JENKINS_API_TOKEN="your-jenkins-api-token"
+
 # OpenAI Integration
 export OPENAI_BASE_PATH="https://api.openai.com/v1"
 export OPENAI_KEY="your-openai-key"
@@ -160,6 +170,11 @@ export AI_RETRY_DELAY_STEP="20000"
 - `JIRA_EXTRA_FIELDS`: Comma-separated list of additional fields to fetch
 - `JIRA_EXTRA_FIELDS_PROJECT`: Project-specific extra fields (defaults to `TS` when unset)
 - `JIRA_TRANSFORM_CUSTOM_FIELDS_TO_NAMES`: Rename `customfield_XXXX` keys to their human-readable names (defaults to `true` when unset)
+
+### Jenkins Integration
+- `JENKINS_BASE_PATH`: Jenkins instance URL (defaults to `http://localhost:8080`)
+- `JENKINS_USER`: Jenkins user name for Basic auth
+- `JENKINS_API_TOKEN`: Jenkins API token for Basic auth
 
 ### Confluence Integration
 - `CONFLUENCE_LOGIN_PASS_TOKEN`: Confluence API Token

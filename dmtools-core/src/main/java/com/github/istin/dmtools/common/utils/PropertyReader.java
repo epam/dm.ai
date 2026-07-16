@@ -1106,6 +1106,11 @@ public class PropertyReader {
   public static final String BITRISE_BASE_PATH = "BITRISE_BASE_PATH";
   public static final String BITRISE_APP_SLUG = "BITRISE_APP_SLUG";
 
+  // Jenkins configuration
+  public static final String JENKINS_BASE_PATH = "JENKINS_BASE_PATH";
+  public static final String JENKINS_USER = "JENKINS_USER";
+  public static final String JENKINS_API_TOKEN = "JENKINS_API_TOKEN";
+
   // Xray configuration
   public static final String XRAY_CLIENT_ID = "XRAY_CLIENT_ID";
   public static final String XRAY_CLIENT_SECRET = "XRAY_CLIENT_SECRET";
@@ -1500,5 +1505,25 @@ public class PropertyReader {
 
   public String getBitriseAppSlug() {
     return getValue(BITRISE_APP_SLUG);
+  }
+
+  // -------------------------------------------------------------------------
+  // Jenkins
+  // -------------------------------------------------------------------------
+
+  public String getJenkinsBasePath() {
+    String value = getValue(JENKINS_BASE_PATH);
+    if (value == null || value.isEmpty()) {
+      return "http://localhost:8080";
+    }
+    return value;
+  }
+
+  public String getJenkinsUser() {
+    return getValue(JENKINS_USER);
+  }
+
+  public String getJenkinsApiToken() {
+    return getValue(JENKINS_API_TOKEN);
   }
 }
