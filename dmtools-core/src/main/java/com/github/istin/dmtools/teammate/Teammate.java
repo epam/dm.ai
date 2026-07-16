@@ -791,15 +791,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     }
 
 
-    /**
-     * Resolves the effective CLI prompts by merging base {@code cliPrompts} with tracker-specific
-     * prompts from {@code cliPromptsByTracker} when a matching tracker type is configured.
-     *
-     * @param baseCliPrompts      the base CLI prompts array (may be null)
-     * @param cliPromptsByTracker map of tracker type → tracker-specific prompts (may be null)
-     * @param trackerType         the current tracker type from configuration (may be null)
-     * @return merged array of CLI prompts, or base prompts if no tracker-specific match found
-     */
+    /** Backward-compatible wrapper delegating to {@link CliCommandBuilder}. */
     static String[] resolveCliPrompts(String[] baseCliPrompts, Map<String, String[]> cliPromptsByTracker, String trackerType) {
         return CliCommandBuilder.resolveCliPrompts(baseCliPrompts, cliPromptsByTracker, trackerType);
     }

@@ -70,13 +70,8 @@ public class CliExecutionHelper {
 
     /**
      * Creates input context folder and files for CLI command execution.
-     * All attachments (including videos) are downloaded so the CLI tool has full access.
-     *
-     * @param ticket The ticket to create context for
-     * @param inputParams The input parameters to save as request.md
-     * @param trackerClient The tracker client for downloading attachments
-     * @return Path to the created input folder
-     * @throws IOException if folder/file creation fails
+     * <p>
+     * Shortcut for {@link #createInputContext(ITicket, String, TrackerClient, Path, List)}.
      */
     public Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient) throws IOException {
         return createInputContext(ticket, inputParams, trackerClient, null);
@@ -84,14 +79,8 @@ public class CliExecutionHelper {
 
     /**
      * Creates input context folder and files for CLI command execution under an optional base directory.
-     * All attachments (including videos) are downloaded so the CLI tool has full access.
-     *
-     * @param ticket The ticket to create context for
-     * @param inputParams The input parameters to save as request.md
-     * @param trackerClient The tracker client for downloading attachments
-     * @param baseDirectory Base directory for the {@code input/} folder; if null, uses the current working directory
-     * @return Path to the created input folder
-     * @throws IOException if folder/file creation fails
+     * <p>
+     * Shortcut for {@link #createInputContext(ITicket, String, TrackerClient, Path, List)}.
      */
     public Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient, Path baseDirectory) throws IOException {
         return createInputContext(ticket, inputParams, trackerClient, baseDirectory, null);
@@ -336,10 +325,8 @@ public class CliExecutionHelper {
     
     /**
      * Executes CLI commands and collects their responses.
-     * 
-     * @param cliCommands Array of CLI commands to execute
-     * @param workingDirectory Working directory for command execution (optional)
-     * @return StringBuilder containing all command responses
+     * <p>
+     * Shortcut for {@link #executeCliCommands(String[], Path, String, AtomicReference, boolean, String[], String[], Consumer, Predicate)}.
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
         return executeCliCommands(cliCommands, workingDirectory, envVariablesFile, null, false, null, null, null, null);
@@ -347,14 +334,8 @@ public class CliExecutionHelper {
 
     /**
      * Executes CLI commands and collects their responses.
-     * Each output line is also published to {@code liveOutput} (if non-null) so that a
-     * concurrent timer thread can read accumulated output between command lines.
-     *
-     * @param cliCommands      Array of CLI commands to execute
-     * @param workingDirectory Working directory for command execution (optional)
-     * @param envVariablesFile Path to environment file (null → resolve dmtools.env relative to workingDirectory)
-     * @param liveOutput       Optional AtomicReference updated with accumulated output after each line
-     * @return StringBuilder containing all command responses
+     * <p>
+     * Shortcut for {@link #executeCliCommands(String[], Path, String, AtomicReference, boolean, String[], String[], Consumer, Predicate)}.
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput) {
@@ -363,16 +344,8 @@ public class CliExecutionHelper {
 
     /**
      * Executes CLI commands and collects their responses.
-     * Each output line is also published to {@code liveOutput} (if non-null) so that a
-     * concurrent timer thread can read accumulated output between command lines.
-     *
-     * @param cliCommands      Array of CLI commands to execute
-     * @param workingDirectory Working directory for command execution (optional)
-     * @param envVariablesFile Path to environment file (null → resolve dmtools.env relative to workingDirectory)
-     * @param liveOutput       Optional AtomicReference updated with accumulated output after each line
-     * @param allowAnyCommand  When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
-     *                         Use only for trusted job configs.
-     * @return StringBuilder containing all command responses
+     * <p>
+     * Shortcut for {@link #executeCliCommands(String[], Path, String, AtomicReference, boolean, String[], String[], Consumer, Predicate)}.
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput, boolean allowAnyCommand) {
@@ -381,18 +354,8 @@ public class CliExecutionHelper {
 
     /**
      * Executes CLI commands and collects their responses.
-     * Each output line is also published to {@code liveOutput} (if non-null) so that a
-     * concurrent timer thread can read accumulated output between command lines.
-     *
-     * @param cliCommands            Array of CLI commands to execute
-     * @param workingDirectory       Working directory for command execution (optional)
-     * @param envVariablesFile       Path to environment file (null → resolve dmtools.env relative to workingDirectory)
-     * @param liveOutput             Optional AtomicReference updated with accumulated output after each line
-     * @param allowAnyCommand        When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
-     *                               Use only for trusted job configs.
-     * @param excludedEnvVariables   Exact env variable names to exclude from the subprocess
-     * @param excludedEnvRegexes     Regex patterns; matching env variable names are excluded
-     * @return StringBuilder containing all command responses
+     * <p>
+     * Shortcut for {@link #executeCliCommands(String[], Path, String, AtomicReference, boolean, String[], String[], Consumer, Predicate)}.
      */
     public StringBuilder executeCliCommands(String[] cliCommands, Path workingDirectory, String envVariablesFile,
                                             AtomicReference<String> liveOutput, boolean allowAnyCommand,
@@ -548,62 +511,25 @@ public class CliExecutionHelper {
         return cliResponses;
     }
     
-    /**
-     * Executes CLI commands in the specified working directory and processes output response.
-     *
-     * @param cliCommands      Array of CLI commands to execute
-     * @param workingDirectory Working directory for command execution (optional)
-     * @param envVariablesFile Path to environment file (null → auto-resolve)
-     * @return CliExecutionResult containing command responses and output response
-     */
+    /** Executes CLI commands with default settings and no background timer. */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory, String envVariablesFile) {
         return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, false, null, null, null, null);
     }
 
-    /**
-     * Executes CLI commands in the specified working directory and processes output response,
-     * allowing arbitrary shell syntax when {@code allowAnyCommand} is {@code true}.
-     */
+    /** Executes CLI commands with optional shell-injection validation bypass. */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile, boolean allowAnyCommand) {
         return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, null, 0, null, allowAnyCommand, null, null, null, null);
     }
 
-    /**
-     * Executes CLI commands with an optional background timer that fires a JS action periodically.
-     *
-     * <p>If {@code timerAction} is non-null and {@code timerIntervalSeconds > 0}, a single-daemon-thread
-     * {@link ScheduledExecutorService} fires {@code timerAction.run()} every {@code timerIntervalSeconds}
-     * seconds starting after the first interval. The action receives the accumulated CLI output so far
-     * via the {@code Runnable} closure (see {@code Teammate.runJobImpl} for how this is wired).
-     * Timer exceptions are caught and logged; they never interrupt CLI execution.
-     * The executor is shut down (with a 5-second grace period) once all CLI commands finish.
-     *
-     * @param cliCommands          Array of CLI commands to execute
-     * @param workingDirectory     Working directory for command execution (optional)
-     * @param envVariablesFile     Path to environment file (null → auto-resolve)
-     * @param timerAction          Optional runnable executed on the timer thread; receives live output via closure
-     * @param timerIntervalSeconds Interval between timer firings in seconds; timer is disabled if &lt;= 0
-     * @return CliExecutionResult containing command responses and output response
-     */
+    /** Executes CLI commands with an optional periodic background timer. */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds) {
         return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds, null, false, null, null, null, null);
     }
 
-    /**
-     * Executes CLI commands with an optional background timer and shared live output reference.
-     *
-     * @param cliCommands          Array of CLI commands to execute
-     * @param workingDirectory     Working directory for command execution (optional)
-     * @param envVariablesFile     Path to environment file (null → auto-resolve)
-     * @param timerAction          Optional runnable executed on the timer thread
-     * @param timerIntervalSeconds Interval between timer firings in seconds; timer is disabled if &lt;= 0
-     * @param liveCliOutput        Optional shared AtomicReference updated with accumulated CLI output;
-     *                             if null, an internal reference is created when timerAction is non-null
-     * @return CliExecutionResult containing command responses and output response
-     */
+    /** Executes CLI commands with a background timer and shared live-output reference. */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds,
@@ -612,21 +538,7 @@ public class CliExecutionHelper {
                 timerIntervalSeconds, liveCliOutput, false, null, null, null, null);
     }
 
-    /**
-     * Executes CLI commands with an optional background timer, shared live output reference,
-     * and optional shell-injection validation bypass.
-     *
-     * @param cliCommands          Array of CLI commands to execute
-     * @param workingDirectory     Working directory for command execution (optional)
-     * @param envVariablesFile     Path to environment file (null → auto-resolve)
-     * @param timerAction          Optional runnable executed on the timer thread
-     * @param timerIntervalSeconds Interval between timer firings in seconds; timer is disabled if &lt; 0
-     * @param liveCliOutput        Optional shared AtomicReference updated with accumulated CLI output;
-     *                             if null, an internal reference is created when timerAction is non-null
-     * @param allowAnyCommand      When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
-     *                             Use only for trusted job configs.
-     * @return CliExecutionResult containing command responses and output response
-     */
+    /** Executes CLI commands with a background timer, shared live-output reference, and optional validation bypass. */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds,
@@ -636,23 +548,7 @@ public class CliExecutionHelper {
                 timerIntervalSeconds, liveCliOutput, allowAnyCommand, null, null, null, null);
     }
 
-    /**
-     * Executes CLI commands with an optional background timer, shared live output reference,
-     * optional shell-injection validation bypass, and optional env variable exclusion.
-     *
-     * @param cliCommands            Array of CLI commands to execute
-     * @param workingDirectory       Working directory for command execution (optional)
-     * @param envVariablesFile       Path to environment file (null → auto-resolve)
-     * @param timerAction            Optional runnable executed on the timer thread
-     * @param timerIntervalSeconds   Interval between timer firings in seconds; timer is disabled if &lt;= 0
-     * @param liveCliOutput          Optional shared AtomicReference updated with accumulated CLI output;
-     *                               if null, an internal reference is created when timerAction is non-null
-     * @param allowAnyCommand        When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
-     *                               Use only for trusted job configs.
-     * @param excludedEnvVariables   Exact env variable names to exclude from the subprocess
-     * @param excludedEnvRegexes     Regex patterns; matching env variable names are excluded
-     * @return CliExecutionResult containing command responses and output response
-     */
+    /** Executes CLI commands with a background timer, shared live-output reference, and optional env exclusion. */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
                                                            String envVariablesFile,
                                                            Runnable timerAction, int timerIntervalSeconds,
@@ -665,23 +561,15 @@ public class CliExecutionHelper {
     }
 
     /**
-     * Executes CLI commands with an optional background timer, shared live output reference,
-     * optional shell-injection validation bypass, optional env variable exclusion,
-     * optional error handler, and optional per-line stop predicate.
+     * Executes CLI commands and processes output response.
+     * <p>
+     * Full-option overload. Shared parameters are documented in
+     * {@link #executeCliCommands(String[], Path, String, AtomicReference, boolean, String[], String[], Consumer, Predicate)}.
      *
-     * @param cliCommands            Array of CLI commands to execute
-     * @param workingDirectory       Working directory for command execution (optional)
-     * @param envVariablesFile       Path to environment file (null → auto-resolve)
      * @param timerAction            Optional runnable executed on the timer thread
      * @param timerIntervalSeconds   Interval between timer firings in seconds; timer is disabled if &lt;= 0
      * @param liveCliOutput          Optional shared AtomicReference updated with accumulated CLI output;
      *                               if null, an internal reference is created when timerAction is non-null
-     * @param allowAnyCommand        When {@code true}, skips shell-injection validation so arbitrary shell syntax is allowed.
-     *                               Use only for trusted job configs.
-     * @param excludedEnvVariables   Exact env variable names to exclude from the subprocess
-     * @param excludedEnvRegexes     Regex patterns; matching env variable names are excluded
-     * @param errorHandler           Optional consumer invoked when a CLI command fails
-     * @param lineStopPredicate      Optional predicate invoked for each output line; returning {@code true} stops execution
      * @return CliExecutionResult containing command responses and output response
      */
     public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
