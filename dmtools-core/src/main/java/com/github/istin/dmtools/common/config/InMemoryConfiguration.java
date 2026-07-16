@@ -910,6 +910,23 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         return getValue(PropertyReader.BITRISE_APP_SLUG);
     }
 
+    // JenkinsConfiguration
+
+    @Override
+    public String getJenkinsBasePath() {
+        return getValue(PropertyReader.JENKINS_BASE_PATH, "http://localhost:8080");
+    }
+
+    @Override
+    public String getJenkinsUser() {
+        return getValue(PropertyReader.JENKINS_USER);
+    }
+
+    @Override
+    public String getJenkinsApiToken() {
+        return getValue(PropertyReader.JENKINS_API_TOKEN);
+    }
+
     // XrayConfiguration
 
     @Override

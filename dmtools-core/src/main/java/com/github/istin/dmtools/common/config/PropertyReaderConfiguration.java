@@ -607,6 +607,21 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
 
     @Override
+    public String getJenkinsBasePath() {
+        return propertyReader.getJenkinsBasePath();
+    }
+
+    @Override
+    public String getJenkinsUser() {
+        return propertyReader.getJenkinsUser();
+    }
+
+    @Override
+    public String getJenkinsApiToken() {
+        return propertyReader.getJenkinsApiToken();
+    }
+
+    @Override
     public String getXrayClientId() {
         return propertyReader.getXrayClientId();
     }
