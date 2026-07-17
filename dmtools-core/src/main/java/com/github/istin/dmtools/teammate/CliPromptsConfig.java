@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.teammate;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
@@ -66,6 +67,27 @@ public class CliPromptsConfig {
             result.add(Item.unnamed(prompt));
         }
         return new CliPromptsConfig(result);
+    }
+
+    /**
+     * Deserializes a {@link CliPromptsConfig} from a JSON array.
+     */
+    public static CliPromptsConfig fromJsonArray(org.json.JSONArray jsonArray) {
+        if (jsonArray == null) {
+            return new CliPromptsConfig();
+        }
+        return new Gson().fromJson(jsonArray.toString(), CliPromptsConfig.class);
+    }
+
+    /**
+     * Serializes a {@link CliPromptsConfig} into a JSON array.
+     */
+    public static org.json.JSONArray toJsonArray(CliPromptsConfig config) {
+        if (config == null) {
+            return new org.json.JSONArray();
+        }
+        String json = new Gson().toJson(config);
+        return new org.json.JSONArray(json);
     }
 
     /**
