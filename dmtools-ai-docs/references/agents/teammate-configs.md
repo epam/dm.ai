@@ -359,6 +359,67 @@ This solves the `ConfigurationMerger` limitation: when you override a config wit
 
 See [CLI Integration Guide](cli-integration.md) for complete documentation.
 
+#### Structured `cliPrompts` with named sections (NEW)
+
+`cliPrompts` can also be a mixed array of plain strings and named section objects. Named sections let you group related prompts and override only specific parts when inheriting configs.
+
+**Format:**
+```json
+{
+  "cliPrompts": [
+    "./agents/prompts/base.md",
+    { "id": "input",    "prompts": ["./agents/prompts/input.md"] },
+    { "id": "output",   "prompts": ["./agents/prompts/output.md"], "mergeStrategy": "append" },
+    { "id": "template", "prompts": ["./agents/prompts/template.md"] }
+  ]
+}
+```
+
+**Merge rules when a child config inherits from a parent:**
+- Unnamed strings keep their original position in the array.
+- Sections with the same `id` are merged according to `mergeStrategy`:
+  - `append` (default) — child prompts are appended to parent prompts
+  - `prepend` — child prompts are inserted before parent prompts
+  - `replace` — child prompts completely replace parent prompts
+- Sections with new `id`s and unnamed strings from the child config are appended to the end.
+
+**Example — base agent config:**
+```json
+{
+  "name": "base_agent",
+  "params": {
+    "cliPrompts": [
+      "./prompts/common/role.md",
+      { "id": "input",  "prompts": ["./prompts/common/input.md"] },
+      { "id": "output", "prompts": ["./prompts/common/output.md"] }
+    ]
+  }
+}
+```
+
+**Example — child config overriding only `output`:**
+```json
+{
+  "extends": "base_agent",
+  "params": {
+    "cliPrompts": [
+      { "id": "output", "prompts": ["./prompts/specialized/output.md"], "mergeStrategy": "replace" }
+    ]
+  }
+}
+```
+
+The resulting merged `cliPrompts` would be equivalent to:
+```json
+[
+  "./prompts/common/role.md",
+  { "id": "input",  "prompts": ["./prompts/common/input.md"] },
+  { "id": "output", "prompts": ["./prompts/specialized/output.md"] }
+]
+```
+
+Plain string arrays are still fully supported and are treated as unnamed prompts.
+
 #### `writeAgentParamsToFiles`
 
 When `true`, instead of embedding all agent params inside `request.md`, each configuration item is extracted and written as a separate file in the `input/[TICKET]/` folder. This keeps `request.md` small (ticket info only) and lets CLI agents read large context files directly.

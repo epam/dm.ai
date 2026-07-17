@@ -597,6 +597,23 @@ setup → preJSAction → preCliJSAction → cliCommands → postJSAction → ca
 >
 > When `input` is not configured, the `input/{contextId}/` folder is created empty under `workingDirectory` before `preCliJSAction` runs. Use `preCliJSAction` to populate it if your CLI agent reads files from that location.
 
+**Structured `cliPrompts` (new format)**:
+`cliPrompts` can be either a plain array of strings (backward compatible) or a mixed array of strings and named section objects. Named sections allow partial overrides when inheriting configs.
+
+```json
+"cliPrompts": [
+  "./agents/prompts/base.md",
+  { "id": "input",    "prompts": ["./agents/prompts/input.md"] },
+  { "id": "output",   "prompts": ["./agents/prompts/output.md"], "mergeStrategy": "append" },
+  { "id": "template", "prompts": ["./agents/prompts/template.md"] }
+]
+```
+
+Merge rules when a child config inherits from a parent:
+- Unnamed strings keep their position.
+- Sections with the same `id` are merged according to `mergeStrategy` (`append` by default, `prepend` or `replace` optional).
+- New items from the child config are appended to the end.
+
 **Smart Input Context**:
 `CliAgent` can automatically prepare an `input/{TICKET-KEY}/` folder from a tracker ticket, including comments, attachments, and linked Confluence/Figma content. This keeps existing `preCliJSAction` scripts compatible because the folder is still named after the ticket key and the script receives both `inputFolderPath` and `ticket`.
 
