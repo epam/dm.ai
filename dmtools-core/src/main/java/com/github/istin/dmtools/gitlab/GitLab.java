@@ -973,29 +973,11 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "limit", description = "Maximum number of pipelines to return", required = false, example = "50") String limit) throws IOException {
         int maxResults = parsePositiveInt(limit, 50);
         int perPage = Math.min(maxResults, 100);
-        int page = 1;
-        JSONArray pipelines = new JSONArray();
-        while (pipelines.length() < maxResults) {
-            String path = path(String.format("projects/%s/pipelines", getEncodedProject(workspace, repository)));
-            GenericRequest getRequest = new GenericRequest(this, path);
-            getRequest.param("status", normalizePipelineStatus(status));
-            getRequest.param("ref", ref);
-            getRequest.param("per_page", perPage);
-            getRequest.param("page", page);
-            String response = execute(getRequest);
-            if (response == null || response.isEmpty()) {
-                break;
-            }
-            JSONArray pageArray = new JSONArray(response);
-            for (int i = 0; i < pageArray.length() && pipelines.length() < maxResults; i++) {
-                pipelines.put(pageArray.get(i));
-            }
-            if (pageArray.length() < perPage) {
-                break;
-            }
-            page++;
-        }
-        return pipelines.toString();
+        String path = path(String.format("projects/%s/pipelines", getEncodedProject(workspace, repository)));
+        java.util.Map<String, String> queryParams = new java.util.LinkedHashMap<>();
+        queryParams.put("status", normalizePipelineStatus(status));
+        queryParams.put("ref", ref);
+        return fetchAllPages(path, queryParams, perPage, maxResults).toString();
     }
 
     @MCPTool(
@@ -1040,28 +1022,8 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "pipelineId", description = "GitLab pipeline ID", required = true, example = "123456") String pipelineId) throws IOException {
-        int perPage = 100;
-        int page = 1;
-        JSONArray allJobs = new JSONArray();
-        while (true) {
-            String path = path(String.format("projects/%s/pipelines/%s/jobs", getEncodedProject(workspace, repository), pipelineId));
-            GenericRequest getRequest = new GenericRequest(this, path);
-            getRequest.param("per_page", perPage);
-            getRequest.param("page", page);
-            String response = execute(getRequest);
-            if (response == null || response.isEmpty()) {
-                break;
-            }
-            JSONArray pageArray = new JSONArray(response);
-            for (int i = 0; i < pageArray.length(); i++) {
-                allJobs.put(pageArray.get(i));
-            }
-            if (pageArray.length() < perPage) {
-                break;
-            }
-            page++;
-        }
-        return allJobs.toString();
+        String path = path(String.format("projects/%s/pipelines/%s/jobs", getEncodedProject(workspace, repository), pipelineId));
+        return fetchAllPages(path, null, 100, null).toString();
     }
 
     @MCPTool(
@@ -1078,12 +1040,27 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "commitSha", description = "The commit SHA to get statuses for", required = true, example = "abc123...") String commitSha) throws IOException {
-        int perPage = 100;
+        String path = path(String.format("projects/%s/repository/commits/%s/statuses", getEncodedProject(workspace, repository), commitSha));
+        JSONArray allStatuses = fetchAllPages(path, null, 100, null);
+        return latestStatusPerName(allStatuses).toString();
+    }
+
+    /**
+     * Shared pagination helper for GitLab list endpoints using the standard
+     * per_page/page query params. Follows pages until a short page is returned
+     * (fewer items than perPage) or maxResults items have been collected
+     * (maxResults == null means "collect everything").
+     */
+    private JSONArray fetchAllPages(String path, java.util.Map<String, String> queryParams, int perPage, Integer maxResults) throws IOException {
         int page = 1;
-        JSONArray allStatuses = new JSONArray();
-        while (true) {
-            String path = path(String.format("projects/%s/repository/commits/%s/statuses", getEncodedProject(workspace, repository), commitSha));
+        JSONArray all = new JSONArray();
+        while (maxResults == null || all.length() < maxResults) {
             GenericRequest getRequest = new GenericRequest(this, path);
+            if (queryParams != null) {
+                for (java.util.Map.Entry<String, String> entry : queryParams.entrySet()) {
+                    getRequest.param(entry.getKey(), entry.getValue());
+                }
+            }
             getRequest.param("per_page", perPage);
             getRequest.param("page", page);
             String response = execute(getRequest);
@@ -1091,15 +1068,15 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
                 break;
             }
             JSONArray pageArray = new JSONArray(response);
-            for (int i = 0; i < pageArray.length(); i++) {
-                allStatuses.put(pageArray.get(i));
+            for (int i = 0; i < pageArray.length() && (maxResults == null || all.length() < maxResults); i++) {
+                all.put(pageArray.get(i));
             }
             if (pageArray.length() < perPage) {
                 break;
             }
             page++;
         }
-        return latestStatusPerName(allStatuses).toString();
+        return all;
     }
 
     /**
