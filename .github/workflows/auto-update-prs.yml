@@ -18,8 +18,8 @@ on:
 
 concurrency:
   # Serialize updates but never cancel an in-progress run.
-  # Push to main updates all PRs; pull_request updates only the triggering PR.
-  group: auto-update-prs-${{ github.event_name == 'push' && 'push' || github.event.pull_request.number }}
+  # Push/schedule/workflow_dispatch update all PRs; pull_request updates only the triggering PR.
+  group: auto-update-prs-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name }}
   cancel-in-progress: false
 
 jobs:
@@ -30,8 +30,8 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Update all open PRs that are behind main (push to main)
-        if: github.event_name == 'push'
+      - name: Update all open PRs that are behind main
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
