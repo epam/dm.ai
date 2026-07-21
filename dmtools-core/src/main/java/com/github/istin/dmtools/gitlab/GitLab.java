@@ -1065,6 +1065,83 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
     }
 
     @MCPTool(
+        name = "gitlab_get_commit_statuses",
+        description = "Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per status report " +
+                "(e.g. posted by an external CI like Jenkins via the gitlabBuilds plugin, or GitLab's own pipeline). " +
+                "Equivalent of GitHub's 'check runs' for GitLab. When the same status name was reported more than once " +
+                "for this commit (e.g. a CI job was retried), only the most recent report per name is returned.",
+        integration = "gitlab",
+        category = "ci",
+        aliases = {"source_code_get_commit_check_runs"}
+    )
+    public String getCommitStatuses(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "commitSha", description = "The commit SHA to get statuses for", required = true, example = "abc123...") String commitSha) throws IOException {
+        int perPage = 100;
+        int page = 1;
+        JSONArray allStatuses = new JSONArray();
+        while (true) {
+            String path = path(String.format("projects/%s/repository/commits/%s/statuses", getEncodedProject(workspace, repository), commitSha));
+            GenericRequest getRequest = new GenericRequest(this, path);
+            getRequest.param("per_page", perPage);
+            getRequest.param("page", page);
+            String response = execute(getRequest);
+            if (response == null || response.isEmpty()) {
+                break;
+            }
+            JSONArray pageArray = new JSONArray(response);
+            for (int i = 0; i < pageArray.length(); i++) {
+                allStatuses.put(pageArray.get(i));
+            }
+            if (pageArray.length() < perPage) {
+                break;
+            }
+            page++;
+        }
+        return latestStatusPerName(allStatuses).toString();
+    }
+
+    /**
+     * GitLab's commit-statuses endpoint returns the full history of every status ever
+     * reported for a commit, not just the current one. If a CI job is retried on the
+     * same commit (no new push), the same status "name" can appear multiple times with
+     * different outcomes. Callers care about the current state, so keep only the entry
+     * with the latest created_at (falling back to the last-seen entry per name if
+     * created_at is missing/unparseable) for each distinct name.
+     */
+    private static JSONArray latestStatusPerName(JSONArray statuses) {
+        java.util.LinkedHashMap<String, JSONObject> latestByName = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Long> latestTimestampByName = new java.util.HashMap<>();
+        for (int i = 0; i < statuses.length(); i++) {
+            JSONObject status = statuses.getJSONObject(i);
+            String name = status.optString("name", "unknown");
+            long createdAt = parseTimestamp(status.optString("created_at", null));
+            Long previousTimestamp = latestTimestampByName.get(name);
+            if (previousTimestamp == null || createdAt >= previousTimestamp) {
+                latestByName.put(name, status);
+                latestTimestampByName.put(name, createdAt);
+            }
+        }
+        JSONArray result = new JSONArray();
+        for (JSONObject status : latestByName.values()) {
+            result.put(status);
+        }
+        return result;
+    }
+
+    private static long parseTimestamp(String isoDate) {
+        if (isoDate == null || isoDate.isEmpty()) {
+            return 0L;
+        }
+        try {
+            return java.time.Instant.parse(isoDate).toEpochMilli();
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    @MCPTool(
         name = "gitlab_get_job_logs",
         description = "Get GitLab CI job trace logs.",
         integration = "gitlab",
