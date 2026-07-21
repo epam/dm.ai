@@ -620,6 +620,16 @@ public class JobJavaScriptBridge {
     }
 
     /**
+     * Whether generated JS tool wrappers should console.log their full args (including
+     * file contents / large logs) on every call. Off by default to keep CI logs readable;
+     * opt in with DMTOOLS_JS_LOG_TOOL_CALLS=true (or "1") for local debugging.
+     */
+    private static boolean isToolCallArgsLoggingEnabled() {
+        String value = System.getenv("DMTOOLS_JS_LOG_TOOL_CALLS");
+        return "true".equalsIgnoreCase(value) || "1".equals(value);
+    }
+
+    /**
      * Expose a single MCP tool to JavaScript context using generated executor
      */
     private void exposeToolToJS(String toolName, Map<String, Object> toolSchema) {
@@ -642,6 +652,12 @@ public class JobJavaScriptBridge {
             }
         }
         
+        // Logging full tool-call args (including file contents, large logs, etc.) can
+        // flood CI output. Off by default; opt in via DMTOOLS_JS_LOG_TOOL_CALLS=true.
+        String toolCallLogStatement = isToolCallArgsLoggingEnabled()
+            ? String.format("console.log('Calling tool %s with args:', JSON.stringify(args));", toolName)
+            : "";
+
         // Create a JavaScript function that calls the generated MCP executor
         String jsFunction = String.format("""
             function %s() {
@@ -659,10 +675,10 @@ public class JobJavaScriptBridge {
                         args.message = arguments[0];
                     }
                 }
-                console.log('Calling tool %s with args:', JSON.stringify(args));
+                %s
                 return executeToolViaJava('%s', args);
             }
-            """, toolName, parameterMappingLogic.toString(), toolName, toolName, toolName);
+            """, toolName, parameterMappingLogic.toString(), toolName, toolCallLogStatement, toolName);
             
         try {
             jsContext.eval("js", jsFunction);
