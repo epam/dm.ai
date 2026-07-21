@@ -13,25 +13,27 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: auto-update-prs
-  cancel-in-progress: true
+  # Serialize updates but never cancel an in-progress run.
+  # Push to main updates all PRs; pull_request updates only the triggering PR.
+  group: auto-update-prs-${{ github.event_name == 'push' && 'push' || github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
   update-prs:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     steps:
-      - name: Update open PRs that are behind main
+      - name: Update all open PRs that are behind main (push to main)
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          # After a push to main or when a PR is changed, GitHub invalidates cached
-          # mergeability for all open PRs and recomputes asynchronously — returning
-          # "UNKNOWN" until ready. Retry until no PRs are stuck in UNKNOWN (up to ~90s)
-          # so the MERGEABLE filter doesn't miss them.
+          # After a push to main, GitHub invalidates cached mergeability for all open PRs
+          # and recomputes asynchronously — returning "UNKNOWN" until ready. Retry until
+          # no PRs are stuck in UNKNOWN (up to ~90s) so the MERGEABLE filter doesn't miss them.
           for attempt in $(seq 1 6); do
             unknown=$(gh pr list --repo ${{ github.repository }} --state open --base main \
               --json number,mergeable \
@@ -59,3 +61,13 @@ jobs:
             gh pr update-branch "$pr" --repo ${{ github.repository }} \
               || echo "PR #$pr skipped (already up to date or conflict)"
           done
+
+      - name: Update triggering PR if it is behind main
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Attempting to update PR #$PR_NUMBER..."
+          gh pr update-branch "$PR_NUMBER" --repo ${{ github.repository }} \
+            || echo "PR #$PR_NUMBER skipped (already up to date or conflict)"
