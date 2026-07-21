@@ -10,6 +10,10 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+  schedule:
+    # Fallback: auto-merge commits made via PAT still may not trigger push events
+    # in some edge cases. Poll every 5 minutes (offset to avoid the :00/:30 herd).
+    - cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *'
   workflow_dispatch: {}
 
 concurrency:
