@@ -1,6 +1,6 @@
 # TESTRAIL MCP Tools
 
-**Total Tools**: 16
+**Total Tools**: 17
 
 ## Quick Reference
 
@@ -9,16 +9,15 @@
 dmtools list | jq '.tools[] | select(.name | startswith("testrail_"))'
 
 # Example usage
-dmtools testrail_get_projects [arguments]
+dmtools testrail_test [arguments]
 ```
 
 ## Usage in JavaScript Agents
 
 ```javascript
 // Direct function calls for testrail tools
+const result = testrail_test(...);
 const result = testrail_get_projects(...);
-const result = testrail_get_case(...);
-const result = testrail_get_all_cases(...);
 const result = testrail_get_suites(...);
 ```
 
@@ -39,7 +38,8 @@ const result = testrail_get_suites(...);
 | `testrail_get_projects` | Get list of all projects in TestRail | None |
 | `testrail_get_suites` | Get all test suites for a TestRail project | `project_name` (string, **required**) |
 | `testrail_link_to_requirement` | Link a test case to a requirement by updating refs field | `case_id` (string, **required**)<br>`requirement_key` (string, **required**) |
-| `testrail_search_cases` | Search TestRail test cases by project and optional filters. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML. | `project_name` (string, **required**)<br>`section_id` (string, optional)<br>`suite_id` (string, optional)<br>`format` (string, optional) |
+| `testrail_search_cases` | Search TestRail test cases by project and optional filters. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML. | `format` (string, optional)<br>`project_name` (string, **required**)<br>`section_id` (string, optional)<br>`suite_id` (string, optional) |
+| `testrail_test` | Test TestRail connectivity by fetching projects | None |
 | `testrail_update_case` | Update a test case in TestRail | `case_id` (string, **required**)<br>`priority_id` (string, optional)<br>`title` (string, optional)<br>`refs` (string, optional) |
 | `testrail_update_label` | Update a label title in TestRail. Maximum 20 characters allowed. | `project_name` (string, **required**)<br>`title` (string, **required**)<br>`label_id` (string, **required**) |
 
@@ -222,7 +222,7 @@ Get ALL test cases in a project (uses pagination to retrieve all cases). Set for
   - Example: `My Project`
 
 - **`format`** (string) ⚪ Optional
-  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the `TESTRAIL_DEFAULT_FORMAT` env var (defaults to 'html' when unset).
+  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).
   - Example: `markdown`
 
 **Example:**
@@ -248,7 +248,7 @@ Get a TestRail test case by ID. Set format='markdown' to receive preconditions/s
   - Example: `123`
 
 - **`format`** (string) ⚪ Optional
-  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the `TESTRAIL_DEFAULT_FORMAT` env var (defaults to 'html' when unset).
+  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).
   - Example: `markdown`
 
 **Example:**
@@ -423,30 +423,48 @@ Search TestRail test cases by project and optional filters. Set format='markdown
 
 **Parameters:**
 
+- **`format`** (string) ⚪ Optional
+  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).
+  - Example: `markdown`
+
 - **`project_name`** (string) 🔴 Required
   - Project name to search in
   - Example: `My Project`
-
-- **`suite_id`** (string) ⚪ Optional
-  - Suite ID to filter by (optional)
-  - Example: `1`
 
 - **`section_id`** (string) ⚪ Optional
   - Section ID to filter by (optional)
   - Example: `10`
 
-- **`format`** (string) ⚪ Optional
-  - Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown — much smaller and easier to read or feed to an LLM). If omitted, falls back to the `TESTRAIL_DEFAULT_FORMAT` env var (defaults to 'html' when unset).
-  - Example: `markdown`
+- **`suite_id`** (string) ⚪ Optional
+  - Suite ID to filter by (optional)
+  - Example: `1`
 
 **Example:**
 ```bash
-dmtools testrail_search_cases "value" "value" "value" "value"
+dmtools testrail_search_cases "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = testrail_search_cases("project_name", "suite_id", "section_id", "format");
+const result = testrail_search_cases("format", "project_name");
+```
+
+---
+
+### `testrail_test`
+
+Test TestRail connectivity by fetching projects
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools testrail_test
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_test();
 ```
 
 ---

@@ -449,6 +449,43 @@ public class GitLabTest {
         verify(gitLab, times(2)).execute(any(GenericRequest.class));
     }
 
+    @Test
+    public void testGetCommitStatusesReturnsAllDistinctNames() throws IOException {
+        JSONArray statuses = new JSONArray()
+                .put(new JSONObject().put("name", "Build").put("status", "failed").put("created_at", "2026-07-21T07:49:15.444Z"))
+                .put(new JSONObject().put("name", "Analysis").put("status", "success").put("created_at", "2026-07-21T07:49:15.679Z"));
+        doReturn(statuses.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        String result = gitLab.getCommitStatuses("workspace", "repo", "abc123");
+        JSONArray parsed = new JSONArray(result);
+        assertEquals(2, parsed.length());
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).execute(requestCaptor.capture());
+        assertTrue(requestCaptor.getValue().url().contains("repository/commits/abc123/statuses"));
+    }
+
+    @Test
+    public void testGetCommitStatusesKeepsOnlyLatestPerName() throws IOException {
+        // Same job name reported twice for the same commit (e.g. retried in Jenkins
+        // without a new push) — the older failure must not shadow the newer success.
+        JSONArray statuses = new JSONArray()
+                .put(new JSONObject().put("name", "Jenkins MR check").put("status", "failed").put("created_at", "2026-07-21T07:00:00.000Z"))
+                .put(new JSONObject().put("name", "Jenkins MR check").put("status", "success").put("created_at", "2026-07-21T08:00:00.000Z"));
+        doReturn(statuses.toString()).when(gitLab).execute(any(GenericRequest.class));
+
+        String result = gitLab.getCommitStatuses("workspace", "repo", "abc123");
+        JSONArray parsed = new JSONArray(result);
+        assertEquals(1, parsed.length());
+        assertEquals("success", parsed.getJSONObject(0).getString("status"));
+    }
+
+    @Test
+    public void testGetCommitStatusesReturnsEmptyArrayWhenNoStatuses() throws IOException {
+        doReturn(null).when(gitLab).execute(any(GenericRequest.class));
+        assertEquals("[]", gitLab.getCommitStatuses("workspace", "repo", "abc123"));
+    }
+
     private JSONObject createNonSystemNote(int id, String body) {
         return new JSONObject()
                 .put("id", id)

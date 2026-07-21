@@ -1,7 +1,9 @@
 {"tools": [
   {
     "name": "cli_execute_command",
+    "integration": "cli",
     "description": "Execute CLI commands from JavaScript post-actions. Base whitelist: git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az. Additional commands can be enabled via CLI_ALLOWED_COMMANDS env var (comma-separated) in dmtools.env or agent envVariables, e.g. CLI_ALLOWED_COMMANDS=find,ls,cat,pytest,python3,curl,bash,run-cursor-agent.sh. Returns command output as string.",
+    "category": "system",
     "inputSchema": {
       "type": "object",
       "required": ["command"],
@@ -20,8 +22,21 @@
     }
   },
   {
+    "name": "github_test",
+    "integration": "github",
+    "description": "Test GitHub connectivity by fetching the current user's profile",
+    "category": "system",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
     "name": "github_list_prs",
+    "integration": "github",
     "description": "List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -50,7 +65,9 @@
   },
   {
     "name": "github_list_prs_filtered",
+    "integration": "github",
     "description": "List pull requests in a GitHub repository filtered by a regex pattern on the PR title. Fetches all PRs matching the given state and returns only those whose title matches the regex. Useful for large repos to narrow down results without loading entire history.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -85,7 +102,9 @@
   },
   {
     "name": "github_get_commits_from_branches",
+    "integration": "github",
     "description": "Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually.",
+    "category": "commits",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -119,7 +138,9 @@
   },
   {
     "name": "github_get_pr",
+    "integration": "github",
     "description": "Get details of a GitHub pull request including title, description, status, author, branches, and merge info.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -148,7 +169,9 @@
   },
   {
     "name": "github_repository_dispatch",
+    "integration": "github",
     "description": "Trigger a GitHub repository dispatch event. Workflows listening to 'on: repository_dispatch' with the matching event_type will be triggered.",
+    "category": "actions",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -182,7 +205,9 @@
   },
   {
     "name": "github_trigger_workflow",
+    "integration": "github",
     "description": "Trigger a specific GitHub Actions workflow by filename (workflow dispatch). The workflow must have 'on: workflow_dispatch' configured.",
+    "category": "actions",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -221,7 +246,9 @@
   },
   {
     "name": "github_get_or_create_draft_release",
+    "integration": "github",
     "description": "Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release.",
+    "category": "releases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -265,7 +292,9 @@
   },
   {
     "name": "github_upload_release_asset",
+    "integration": "github",
     "description": "Upload a local file as a GitHub release asset. Returns the uploaded asset metadata including browser_download_url. Set overwrite=true to automatically delete an existing asset with the same name before uploading.",
+    "category": "releases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -320,7 +349,9 @@
   },
   {
     "name": "github_delete_release_asset",
+    "integration": "github",
     "description": "Delete a GitHub release asset by its asset ID. Use github_list_release_assets to find asset IDs.",
+    "category": "releases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -349,7 +380,9 @@
   },
   {
     "name": "github_list_release_assets",
+    "integration": "github",
     "description": "List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url.",
+    "category": "releases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -378,7 +411,9 @@
   },
   {
     "name": "github_get_pr_comments",
+    "integration": "github",
     "description": "Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -407,7 +442,9 @@
   },
   {
     "name": "github_get_pr_conversations",
+    "integration": "github",
     "description": "Get all review conversations (inline code comment threads) for a GitHub pull request. Groups inline code review comments into threads showing root comment and replies. Also includes general PR discussion comments as separate entries.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -436,7 +473,9 @@
   },
   {
     "name": "github_get_pr_activities",
+    "integration": "github",
     "description": "Get all activities for a GitHub pull request including reviews (approvals, change requests), inline code comments, and general discussion comments.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -465,7 +504,9 @@
   },
   {
     "name": "github_add_pr_comment",
+    "integration": "github",
     "description": "Add a comment to a GitHub pull request discussion.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -500,7 +541,9 @@
   },
   {
     "name": "github_update_pr_comment",
+    "integration": "github",
     "description": "Update (edit) an existing comment on a GitHub pull request or issue by its comment ID.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -535,7 +578,9 @@
   },
   {
     "name": "github_delete_pr_comment",
+    "integration": "github",
     "description": "Delete a comment on a GitHub pull request or issue by its comment ID.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -564,7 +609,9 @@
   },
   {
     "name": "github_reply_to_pr_thread",
+    "integration": "github",
     "description": "Reply to an existing inline code review comment thread in a GitHub pull request. Use the comment ID of the root comment (or any comment) in the thread as inReplyToId.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -605,7 +652,9 @@
   },
   {
     "name": "github_add_inline_comment",
+    "integration": "github",
     "description": "Create a new inline code review comment on a specific file and line in a GitHub pull request. To comment on a range of lines, provide both startLine and line. Side is 'RIGHT' for new code (default) or 'LEFT' for old code.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -667,7 +716,9 @@
   },
   {
     "name": "github_get_pr_review_threads",
+    "integration": "github",
     "description": "Get all review threads for a GitHub pull request via GraphQL, including each thread's node ID (needed for resolving), resolved status, file path, line, and comments. Use the returned thread 'id' with github_resolve_pr_thread.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -696,7 +747,9 @@
   },
   {
     "name": "github_resolve_pr_thread",
+    "integration": "github",
     "description": "Resolve a review thread in a GitHub pull request. Requires the thread's GraphQL node ID, which can be obtained from github_get_pr_review_threads (the 'id' field of each thread).",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": ["threadId"],
@@ -709,7 +762,9 @@
   },
   {
     "name": "github_get_commit_check_runs",
+    "integration": "github",
     "description": "Get all check runs (CI/CD status checks) for a commit SHA in a GitHub repository. Returns details about each check including status, conclusion, and output.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -738,7 +793,9 @@
   },
   {
     "name": "github_create_commit_status",
+    "integration": "github",
     "description": "Create a commit status (the colored dot in PR checks). Use state=pending when AI analysis starts, success/failure/error when complete. The 'context' field acts as the status name and must be unique per check.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -788,7 +845,9 @@
   },
   {
     "name": "github_create_check_run",
+    "integration": "github",
     "description": "Create a GitHub Check Run \u2014 a rich CI check with progress, annotations, and a full log visible in the PR 'Checks' tab. Use status=in_progress when starting, then call github_update_check_run to complete it.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -848,7 +907,9 @@
   },
   {
     "name": "github_update_check_run",
+    "integration": "github",
     "description": "Update an existing GitHub Check Run \u2014 set it to completed with success/failure conclusion, update summary and detailed text. Call this after github_create_check_run to finalize the check.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -903,7 +964,9 @@
   },
   {
     "name": "github_get_workflow_run",
+    "integration": "github",
     "description": "Get details of a specific GitHub Actions workflow run by ID. Returns status, conclusion, logs URL, and timing information.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -932,7 +995,9 @@
   },
   {
     "name": "github_get_workflow_run_jobs",
+    "integration": "github",
     "description": "Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -961,7 +1026,9 @@
   },
   {
     "name": "github_list_workflow_runs",
+    "integration": "github",
     "description": "List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file. Use status='failure' to get all failed runs.",
+    "category": "actions",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1009,7 +1076,9 @@
   },
   {
     "name": "github_get_job_logs",
+    "integration": "github",
     "description": "Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1038,7 +1107,9 @@
   },
   {
     "name": "github_get_workflow_run_logs",
+    "integration": "github",
     "description": "Download and extract complete logs for all jobs in a GitHub Actions workflow run. Returns full untruncated log content from the ZIP archive GitHub provides.",
+    "category": "actions",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1067,7 +1138,9 @@
   },
   {
     "name": "github_add_pr_label",
+    "integration": "github",
     "description": "Add a label to a GitHub pull request.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1102,7 +1175,9 @@
   },
   {
     "name": "github_remove_pr_label",
+    "integration": "github",
     "description": "Remove a label from a GitHub pull request.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1137,7 +1212,9 @@
   },
   {
     "name": "github_merge_pr",
+    "integration": "github",
     "description": "Merge a GitHub pull request. Supports merge, squash, and rebase merge methods.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1181,7 +1258,40 @@
   },
   {
     "name": "github_get_pr_diff",
+    "integration": "github",
     "description": "Get the diff statistics for a GitHub pull request (files changed, additions, deletions). Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled.",
+    "category": "pull_requests",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestID"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "The GitHub repository name",
+          "example": "dmtools"
+        },
+        "pullRequestID": {
+          "type": "string",
+          "description": "The pull request number",
+          "example": "74"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "The GitHub owner/organization name",
+          "example": "IstiN"
+        }
+      }
+    }
+  },
+  {
+    "name": "github_get_pr_diff_text",
+    "integration": "github",
+    "description": "Get the raw unified diff text for a GitHub pull request. Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1210,7 +1320,9 @@
   },
   {
     "name": "confluence_contents_by_urls",
+    "integration": "confluence",
     "description": "Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["urlStrings"],
@@ -1230,7 +1342,9 @@
   },
   {
     "name": "confluence_search_content_by_text",
+    "integration": "confluence",
     "description": "Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified.",
+    "category": "search",
     "inputSchema": {
       "type": "object",
       "required": ["query"],
@@ -1250,7 +1364,9 @@
   },
   {
     "name": "confluence_content_by_id",
+    "integration": "confluence",
     "description": "Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["contentId"],
@@ -1270,7 +1386,9 @@
   },
   {
     "name": "confluence_content_by_title_and_space",
+    "integration": "confluence",
     "description": "Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1297,8 +1415,21 @@
     }
   },
   {
+    "name": "confluence_test",
+    "integration": "confluence",
+    "description": "Test Confluence connectivity by fetching the current user's profile",
+    "category": "system",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
     "name": "confluence_get_current_user_profile",
+    "integration": "confluence",
     "description": "Get the current user's profile information from Confluence. Returns user details for the authenticated user.",
+    "category": "user_management",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1307,7 +1438,9 @@
   },
   {
     "name": "confluence_get_user_profile_by_id",
+    "integration": "confluence",
     "description": "Get a specific user's profile information from Confluence by user ID. Returns user details for the specified user.",
+    "category": "user_management",
     "inputSchema": {
       "type": "object",
       "required": ["userId"],
@@ -1320,7 +1453,9 @@
   },
   {
     "name": "confluence_get_content_attachments",
+    "integration": "confluence",
     "description": "Get all attachments for a specific Confluence content. Returns a list of attachment objects with metadata.",
+    "category": "content_management",
     "inputSchema": {
       "type": "object",
       "required": ["contentId"],
@@ -1333,7 +1468,9 @@
   },
   {
     "name": "confluence_find_content_by_title_and_space",
+    "integration": "confluence",
     "description": "Find Confluence content by title and space key. Returns the first matching content or null if not found. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1361,7 +1498,9 @@
   },
   {
     "name": "confluence_create_page",
+    "integration": "confluence",
     "description": "Create a new Confluence page with specified title, parent, body content, and space. Returns the created content object.",
+    "category": "content_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1396,7 +1535,9 @@
   },
   {
     "name": "confluence_update_page",
+    "integration": "confluence",
     "description": "Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object.",
+    "category": "content_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1437,7 +1578,9 @@
   },
   {
     "name": "confluence_update_page_with_history",
+    "integration": "confluence",
     "description": "Update an existing Confluence page with new content and add a history comment. Returns the updated content object.",
+    "category": "content_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1484,7 +1627,9 @@
   },
   {
     "name": "confluence_get_children_by_name",
+    "integration": "confluence",
     "description": "Get child pages of a Confluence page by space key and content name. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1512,7 +1657,9 @@
   },
   {
     "name": "confluence_get_children_by_id",
+    "integration": "confluence",
     "description": "Get child pages of a Confluence page by content ID. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["contentId"],
@@ -1532,7 +1679,9 @@
   },
   {
     "name": "confluence_download_attachment",
+    "integration": "confluence",
     "description": "Download an attachment file from Confluence to a specified directory.",
+    "category": "content_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1554,7 +1703,9 @@
   },
   {
     "name": "confluence_download_pages",
+    "integration": "confluence",
     "description": "Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth.",
+    "category": "content_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1587,7 +1738,9 @@
   },
   {
     "name": "confluence_find_content",
+    "integration": "confluence",
     "description": "Find a Confluence page by title in the default space. Returns the page content if found. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["title"],
@@ -1607,7 +1760,9 @@
   },
   {
     "name": "confluence_find_or_create",
+    "integration": "confluence",
     "description": "Find a Confluence page by title in the default space, or create it if it doesn't exist. Returns the found or created content.",
+    "category": "content_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1636,7 +1791,9 @@
   },
   {
     "name": "confluence_content_by_title",
+    "integration": "confluence",
     "description": "Get Confluence content by title in the default space. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown.",
+    "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["title"],
@@ -1655,8 +1812,21 @@
     }
   },
   {
+    "name": "teams_test",
+    "integration": "teams",
+    "description": "Test Microsoft Teams connectivity by fetching the current user's profile",
+    "category": "system",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
     "name": "teams_chats_raw",
+    "integration": "teams",
     "description": "List chats for the current user with topic, type, and participant information (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1669,7 +1839,9 @@
   },
   {
     "name": "teams_chats",
+    "integration": "teams",
     "description": "List chats showing only chat/contact names, last message (truncated to 100 chars), and date",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1682,7 +1854,9 @@
   },
   {
     "name": "teams_recent_chats",
+    "integration": "teams",
     "description": "Get recent chats sorted by last activity showing chat/contact names, last message with author, and date. Shows 'new: true' for unread messages. Filter by type: 'oneOnOne' for 1-on-1 chats, 'group' for group chats, 'meeting' for meeting chats, or 'all' (default). Only shows chats with activity in the last 90 days.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1702,7 +1876,9 @@
   },
   {
     "name": "teams_messages_by_chat_id_raw",
+    "integration": "teams",
     "description": "Get messages from a chat by ID with optional server-side filtering. Use $filter syntax with lastModifiedDateTime: 'lastModifiedDateTime gt 2025-01-01T00:00:00Z' (returns raw JSON). Note: createdDateTime is not supported in filters.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["chatId"],
@@ -1726,7 +1902,9 @@
   },
   {
     "name": "teams_chat_by_name_raw",
+    "integration": "teams",
     "description": "Find a chat by topic/name or participant name (case-insensitive partial match). Works for group chats and 1-on-1 chats. (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["chatName"],
@@ -1738,7 +1916,9 @@
   },
   {
     "name": "teams_messages_raw",
+    "integration": "teams",
     "description": "Get messages from a chat by name (combines find + get messages) (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["chatName"],
@@ -1757,7 +1937,9 @@
   },
   {
     "name": "teams_messages",
+    "integration": "teams",
     "description": "Get messages from a chat with simplified output showing only: author, body, date, reactions, mentions, and attachments",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["chatName"],
@@ -1781,7 +1963,9 @@
   },
   {
     "name": "teams_messages_since_by_id",
+    "integration": "teams",
     "description": "Get messages from a chat starting from a specific date (ISO 8601 format, e.g., '2025-10-08T00:00:00Z'). Returns simplified format. Uses smart pagination with early exit for performance.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1808,7 +1992,9 @@
   },
   {
     "name": "teams_messages_since",
+    "integration": "teams",
     "description": "Get messages from a chat by name starting from a specific date (ISO 8601 format). Returns simplified format. Uses smart pagination with early exit for performance.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1835,7 +2021,9 @@
   },
   {
     "name": "teams_send_message_by_id",
+    "integration": "teams",
     "description": "Send a message to a chat by ID (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1856,7 +2044,9 @@
   },
   {
     "name": "teams_send_message",
+    "integration": "teams",
     "description": "Send a message to a chat by name or participant name (finds chat, then sends message)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1877,7 +2067,9 @@
   },
   {
     "name": "teams_myself_messages_raw",
+    "integration": "teams",
     "description": "Get messages from your personal self chat (notes to yourself) with full raw data",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1890,7 +2082,9 @@
   },
   {
     "name": "teams_myself_messages",
+    "integration": "teams",
     "description": "Get messages from your personal self chat (notes to yourself) with simplified output",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1903,7 +2097,9 @@
   },
   {
     "name": "teams_send_myself_message",
+    "integration": "teams",
     "description": "Send a message to your personal self chat (notes to yourself)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["content"],
@@ -1915,7 +2111,9 @@
   },
   {
     "name": "teams_download_file",
+    "integration": "teams",
     "description": "Download a file from Teams (Graph API hostedContents or SharePoint sharing URL). Auto-detects URL type and uses appropriate method.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1938,7 +2136,9 @@
   },
   {
     "name": "teams_get_message_hosted_contents",
+    "integration": "teams",
     "description": "Get hosted contents (files/transcripts) for a specific message. Returns list of files with download URLs.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1959,7 +2159,9 @@
   },
   {
     "name": "teams_get_call_transcripts",
+    "integration": "teams",
     "description": "Get transcripts for a call/meeting using Call Records API. Returns list of transcripts with download URLs.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["callId"],
@@ -1971,7 +2173,9 @@
   },
   {
     "name": "teams_search_user_drive_files",
+    "integration": "teams",
     "description": "Search for files in a user's OneDrive (e.g., meeting transcripts/recordings). Returns list of files with download URLs.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -1992,7 +2196,9 @@
   },
   {
     "name": "teams_get_recording_transcripts",
+    "integration": "teams",
     "description": "Get transcript metadata for a recording file. Returns list of available transcripts with download URLs.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2013,7 +2219,9 @@
   },
   {
     "name": "teams_list_recording_transcripts",
+    "integration": "teams",
     "description": "List available transcripts for a recording file. Returns transcript IDs that can be downloaded.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2034,7 +2242,9 @@
   },
   {
     "name": "teams_extract_transcript_from_sharepoint",
+    "integration": "teams",
     "description": "Extract transcript information by parsing SharePoint HTML page. Useful for finding transcript IDs.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["webUrl"],
@@ -2046,7 +2256,9 @@
   },
   {
     "name": "teams_download_recording_transcript",
+    "integration": "teams",
     "description": "Download transcript (VTT) file from a Teams recording using SharePoint API. Requires driveId, itemId, and transcriptId.",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2077,7 +2289,9 @@
   },
   {
     "name": "teams_get_joined_teams_raw",
+    "integration": "teams",
     "description": "List teams the user is a member of (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2086,7 +2300,9 @@
   },
   {
     "name": "teams_get_team_channels_raw",
+    "integration": "teams",
     "description": "Get channels in a specific team (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["teamId"],
@@ -2098,7 +2314,9 @@
   },
   {
     "name": "teams_find_team_by_name_raw",
+    "integration": "teams",
     "description": "Find a team by display name (case-insensitive partial match) (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": ["teamName"],
@@ -2110,7 +2328,9 @@
   },
   {
     "name": "teams_find_channel_by_name_raw",
+    "integration": "teams",
     "description": "Find a channel by name within a team (case-insensitive partial match) (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2131,7 +2351,9 @@
   },
   {
     "name": "teams_get_channel_messages_by_name_raw",
+    "integration": "teams",
     "description": "Get messages from a channel by team and channel names (returns raw JSON)",
+    "category": "communication",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2157,7 +2379,9 @@
   },
   {
     "name": "gemini_ai_chat",
+    "integration": "ai",
     "description": "Send a text message to Gemini AI and get response",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["message"],
@@ -2169,7 +2393,9 @@
   },
   {
     "name": "gemini_ai_chat_with_files",
+    "integration": "ai",
     "description": "Send a text message to Gemini AI with file attachments. Supports images, documents, and other file types for analysis and questions.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2192,7 +2418,9 @@
   },
   {
     "name": "vertex_ai_gemini_chat",
+    "integration": "ai",
     "description": "Send a text message to Google Vertex AI Gemini (service account auth)",
+    "category": "Vertex AI",
     "inputSchema": {
       "type": "object",
       "required": ["message"],
@@ -2204,7 +2432,9 @@
   },
   {
     "name": "vertex_ai_gemini_chat_with_files",
+    "integration": "ai",
     "description": "Send message with file attachments to Vertex AI Gemini. Supports images, documents, and other file types.",
+    "category": "Vertex AI",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2227,7 +2457,9 @@
   },
   {
     "name": "bedrock_ai_chat",
+    "integration": "ai",
     "description": "Send a text message to AWS Bedrock AI and get response",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["message"],
@@ -2239,7 +2471,9 @@
   },
   {
     "name": "bedrock_list_models",
+    "integration": "ai",
     "description": "Get a list of available AWS Bedrock foundation models",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2248,7 +2482,9 @@
   },
   {
     "name": "dial_ai_chat",
+    "integration": "ai",
     "description": "Send a text message to Dial AI and get response",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["message"],
@@ -2260,7 +2496,9 @@
   },
   {
     "name": "dial_ai_chat_with_files",
+    "integration": "ai",
     "description": "Send a text message to Dial AI with file attachments. Supports images and documents for analysis and questions.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2283,7 +2521,9 @@
   },
   {
     "name": "anthropic_ai_chat",
+    "integration": "ai",
     "description": "Send a text message to Anthropic Claude AI and get response",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["message"],
@@ -2295,7 +2535,9 @@
   },
   {
     "name": "anthropic_ai_chat_with_files",
+    "integration": "ai",
     "description": "Send a text message to Anthropic Claude AI with file attachments. Supports images, documents, and other file types for analysis and questions.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2318,7 +2560,9 @@
   },
   {
     "name": "anthropic_list_models",
+    "integration": "ai",
     "description": "Get a list of available anthropic foundation models",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2327,7 +2571,9 @@
   },
   {
     "name": "ollama_ai_chat",
+    "integration": "ai",
     "description": "Send a text message to Ollama AI and get response",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["message"],
@@ -2339,7 +2585,9 @@
   },
   {
     "name": "ollama_ai_chat_with_files",
+    "integration": "ai",
     "description": "Send a text message to Ollama AI with file attachments. Supports images and other file types for analysis and questions.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2362,7 +2610,9 @@
   },
   {
     "name": "openai_ai_chat",
+    "integration": "ai",
     "description": "Send a text message to OpenAI and get response",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["message"],
@@ -2374,7 +2624,9 @@
   },
   {
     "name": "openai_ai_chat_with_files",
+    "integration": "ai",
     "description": "Send a text message to OpenAI with file attachments. Supports images for vision models (gpt-4-vision-preview, gpt-4-turbo, etc.).",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2397,7 +2649,9 @@
   },
   {
     "name": "sharepoint_get_drive_item",
+    "integration": "sharepoint",
     "description": "Get DriveItem information from a SharePoint sharing URL. Returns metadata about the shared file including download URLs.",
+    "category": "storage",
     "inputSchema": {
       "type": "object",
       "required": ["sharingUrl"],
@@ -2410,7 +2664,9 @@
   },
   {
     "name": "sharepoint_download_file",
+    "integration": "sharepoint",
     "description": "Download a file from a SharePoint sharing URL to a local file path. Works with OneDrive and SharePoint sharing links.",
+    "category": "storage",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2433,7 +2689,9 @@
   },
   {
     "name": "ado_get_work_item",
+    "integration": "ado",
     "description": "Get a specific Azure DevOps work item by ID with optional field filtering",
+    "category": "work_item_management",
     "inputSchema": {
       "type": "object",
       "required": ["id"],
@@ -2452,7 +2710,9 @@
   },
   {
     "name": "ado_search_by_wiql",
+    "integration": "ado",
     "description": "Search for work items using WIQL (Work Item Query Language)",
+    "category": "search",
     "inputSchema": {
       "type": "object",
       "required": ["wiql"],
@@ -2471,7 +2731,9 @@
   },
   {
     "name": "ado_get_comments",
+    "integration": "ado",
     "description": "Get all comments for a work item",
+    "category": "comment_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2492,7 +2754,9 @@
   },
   {
     "name": "ado_post_comment",
+    "integration": "ado",
     "description": "Post a comment to a work item",
+    "category": "comment_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2513,7 +2777,9 @@
   },
   {
     "name": "ado_assign_work_item",
+    "integration": "ado",
     "description": "Assign a work item to a user",
+    "category": "work_item_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2534,7 +2800,9 @@
   },
   {
     "name": "ado_update_description",
+    "integration": "ado",
     "description": "Update the description of a work item",
+    "category": "work_item_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2555,7 +2823,9 @@
   },
   {
     "name": "ado_update_tags",
+    "integration": "ado",
     "description": "Update the tags of a work item (semicolon-separated string)",
+    "category": "work_item_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2576,7 +2846,9 @@
   },
   {
     "name": "ado_move_to_state",
+    "integration": "ado",
     "description": "Move a work item to a specific state",
+    "category": "work_item_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2598,7 +2870,9 @@
   },
   {
     "name": "ado_link_work_items",
+    "integration": "ado",
     "description": "Link two work items with a relationship (e.g., Parent-Child, Related, Tested By)",
+    "category": "work_item_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2625,7 +2899,9 @@
   },
   {
     "name": "ado_create_work_item",
+    "integration": "ado",
     "description": "Create a new work item in Azure DevOps",
+    "category": "work_item_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2659,7 +2935,9 @@
   },
   {
     "name": "ado_get_changelog",
+    "integration": "ado",
     "description": "Get the complete history/changelog of a work item",
+    "category": "history",
     "inputSchema": {
       "type": "object",
       "required": ["id"],
@@ -2677,7 +2955,9 @@
   },
   {
     "name": "ado_download_attachment",
+    "integration": "ado",
     "description": "Download an ADO work item attachment by URL and save it as a file",
+    "category": "file_management",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -2689,7 +2969,9 @@
   },
   {
     "name": "ado_get_user_by_email",
+    "integration": "ado",
     "description": "Get user information by email address in Azure DevOps",
+    "category": "user_management",
     "inputSchema": {
       "type": "object",
       "required": ["email"],
@@ -2700,8 +2982,21 @@
     }
   },
   {
+    "name": "ado_test",
+    "integration": "ado",
+    "description": "Test Azure DevOps connectivity by fetching the current user's profile",
+    "category": "system",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
     "name": "ado_get_my_profile",
+    "integration": "ado",
     "description": "Get the current user's profile information from Azure DevOps",
+    "category": "user_management",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2710,7 +3005,9 @@
   },
   {
     "name": "ado_list_prs",
+    "integration": "ado",
     "description": "List pull requests in an Azure DevOps Git repository by status. Status can be 'active', 'completed', or 'abandoned'.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2733,7 +3030,9 @@
   },
   {
     "name": "ado_get_pr",
+    "integration": "ado",
     "description": "Get details of an Azure DevOps pull request including title, description, status, author, reviewers, branches, and merge info.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2756,7 +3055,9 @@
   },
   {
     "name": "ado_get_pr_comments",
+    "integration": "ado",
     "description": "Get all comment threads for an Azure DevOps pull request. Each thread contains comments, file context for inline comments, and status (active, fixed, closed, etc.).",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2779,7 +3080,9 @@
   },
   {
     "name": "ado_add_pr_comment",
+    "integration": "ado",
     "description": "Add a general comment to an Azure DevOps pull request (creates a new thread). For inline code comments, use ado_add_inline_comment instead.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2808,7 +3111,9 @@
   },
   {
     "name": "ado_reply_to_pr_thread",
+    "integration": "ado",
     "description": "Reply to an existing comment thread in an Azure DevOps pull request. Use the threadId from ado_get_pr_comments.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2843,7 +3148,9 @@
   },
   {
     "name": "ado_add_inline_comment",
+    "integration": "ado",
     "description": "Create a new inline code comment on a specific file and line range in an Azure DevOps pull request. Creates a new thread with file context.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2894,7 +3201,9 @@
   },
   {
     "name": "ado_resolve_pr_thread",
+    "integration": "ado",
     "description": "Resolve (close) a comment thread in an Azure DevOps pull request. Sets the thread status to 'fixed'. Other statuses: 'active', 'closed', 'byDesign', 'pending', 'wontFix'.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2928,7 +3237,9 @@
   },
   {
     "name": "ado_update_pr_comment",
+    "integration": "ado",
     "description": "Update (edit) an existing comment in a pull request thread. Requires both threadId and commentId.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2969,7 +3280,9 @@
   },
   {
     "name": "ado_delete_pr_comment",
+    "integration": "ado",
     "description": "Delete a comment from a pull request thread. Requires both threadId and commentId.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3004,7 +3317,9 @@
   },
   {
     "name": "ado_get_pr_diff",
+    "integration": "ado",
     "description": "Get the diff/changes for an Azure DevOps pull request. Returns the list of changed files with change types.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3027,7 +3342,9 @@
   },
   {
     "name": "ado_merge_pr",
+    "integration": "ado",
     "description": "Complete (merge) an Azure DevOps pull request. Sets status to 'completed' with the specified merge strategy.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3065,7 +3382,9 @@
   },
   {
     "name": "ado_add_pr_label",
+    "integration": "ado",
     "description": "Add a label (tag) to an Azure DevOps pull request.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3094,7 +3413,9 @@
   },
   {
     "name": "ado_remove_pr_label",
+    "integration": "ado",
     "description": "Remove a label (tag) from an Azure DevOps pull request. Requires the labelId (from ado_get_pr or ado_list_prs labels array).",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3123,7 +3444,9 @@
   },
   {
     "name": "ado_get_pr_reviewers",
+    "integration": "ado",
     "description": "Get all reviewers for an Azure DevOps pull request with their vote status. Vote: 10=approved, 5=approved with suggestions, 0=no vote, -5=waiting for author, -10=rejected.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3146,7 +3469,9 @@
   },
   {
     "name": "ado_add_pr_reviewer",
+    "integration": "ado",
     "description": "Add a reviewer to an Azure DevOps pull request. Optionally set their initial vote.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3180,7 +3505,9 @@
   },
   {
     "name": "ado_set_pr_vote",
+    "integration": "ado",
     "description": "Set the current user's vote on a pull request. Vote values: 10=approve, 5=approve with suggestions, 0=reset/no vote, -5=wait for author, -10=reject.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3215,7 +3542,9 @@
   },
   {
     "name": "ado_update_pr",
+    "integration": "ado",
     "description": "Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3253,7 +3582,9 @@
   },
   {
     "name": "ado_get_pr_work_items",
+    "integration": "ado",
     "description": "Get work items linked to an Azure DevOps pull request.",
+    "category": "pull_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3276,7 +3607,9 @@
   },
   {
     "name": "ado_list_pipelines",
+    "integration": "ado",
     "description": "List all pipelines defined in the ADO project.",
+    "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -3285,7 +3618,9 @@
   },
   {
     "name": "ado_trigger_pipeline",
+    "integration": "ado",
     "description": "Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow.",
+    "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
       "required": ["pipelineId"],
@@ -3307,7 +3642,9 @@
   },
   {
     "name": "ado_list_pipeline_runs",
+    "integration": "ado",
     "description": "List recent runs of a pipeline. Equivalent to github_list_workflow_runs.",
+    "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
       "required": ["pipelineId"],
@@ -3325,7 +3662,9 @@
   },
   {
     "name": "ado_get_pipeline_run",
+    "integration": "ado",
     "description": "Get details of a specific pipeline run including state and result.",
+    "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3346,7 +3685,9 @@
   },
   {
     "name": "ado_get_pipeline_logs",
+    "integration": "ado",
     "description": "Get combined logs for all tasks in a pipeline run (build ID). Equivalent to github_get_job_logs.",
+    "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
       "required": ["buildId"],
@@ -3368,7 +3709,9 @@
   },
   {
     "name": "mermaid_index_generate",
+    "integration": "mermaid",
     "description": "Generate Mermaid diagrams from content sources (Confluence or Jira) based on include/exclude patterns. Processes content recursively and stores diagrams in hierarchical file structure.",
+    "category": "diagram_generation",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3379,12 +3722,12 @@
       "properties": {
         "integration": {
           "type": "string",
-          "description": "Integration type: 'confluence', 'jira', or 'jira_xray'",
+          "description": "Integration type: 'confluence', 'jira', 'jira_xray', or 'testrail'",
           "example": "confluence"
         },
         "include_patterns": {
           "type": "array",
-          "description": "Array of include patterns. For Confluence: [\"SPACE/pages/PAGE_ID/PAGE_NAME/**\"]. For Jira: [\"JQL query\"]",
+          "description": "Array of include patterns. For Confluence: [\"SPACE/pages/PAGE_ID/PAGE_NAME/**\"]. For Jira: [\"JQL query\"]. For TestRail: [\"project_id=5&suite_id=3\"]",
           "example": "[\"AINA/pages/11665522/Templates/**\"]"
         },
         "exclude_patterns": {
@@ -3412,7 +3755,9 @@
   },
   {
     "name": "mermaid_index_read_list",
+    "integration": "mermaid",
     "description": "Read all Mermaid diagram files (.mmd) from storage path recursively. Returns list of ToText objects with paths and content.",
+    "category": "diagram_retrieval",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3422,7 +3767,7 @@
       "properties": {
         "integration": {
           "type": "string",
-          "description": "Integration type (currently only 'confluence' is supported)",
+          "description": "Integration type (used as subfolder name under storage path)",
           "example": "confluence"
         },
         "storage_path": {
@@ -3435,7 +3780,9 @@
   },
   {
     "name": "mermaid_index_read",
+    "integration": "mermaid",
     "description": "Read all Mermaid diagram files (.mmd) from storage path recursively. Returns list of diagrams with their paths and content.",
+    "category": "diagram_retrieval",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3445,7 +3792,7 @@
       "properties": {
         "integration": {
           "type": "string",
-          "description": "Integration type (currently only 'confluence' is supported)",
+          "description": "Integration type (used as subfolder name under storage path)",
           "example": "confluence"
         },
         "storage_path": {
@@ -3457,8 +3804,21 @@
     }
   },
   {
+    "name": "jira_xray_test",
+    "integration": "jira_xray",
+    "description": "Test X-ray connectivity by obtaining an access token",
+    "category": "system",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
     "name": "jira_xray_create_precondition",
+    "integration": "jira_xray",
     "description": "Create a Precondition issue in Xray with optional steps (converted to definition). Returns the created ticket key.",
+    "category": "xray_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3490,7 +3850,9 @@
   },
   {
     "name": "jira_xray_search_tickets",
+    "integration": "jira_xray",
     "description": "Search for Jira tickets using JQL query and enrich Test/Precondition issues with X-ray test steps and preconditions. Returns list of tickets with X-ray data.",
+    "category": "search",
     "inputSchema": {
       "type": "object",
       "required": ["searchQueryJQL"],
@@ -3510,7 +3872,9 @@
   },
   {
     "name": "jira_xray_get_test_details",
+    "integration": "jira_xray",
     "description": "Get test details including steps and preconditions using X-ray GraphQL API. Returns JSONObject with test details.",
+    "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["testKey"],
@@ -3523,7 +3887,9 @@
   },
   {
     "name": "jira_xray_get_test_steps",
+    "integration": "jira_xray",
     "description": "Get test steps for a test issue using X-ray GraphQL API. Returns JSONArray of test steps.",
+    "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["testKey"],
@@ -3536,7 +3902,9 @@
   },
   {
     "name": "jira_xray_get_preconditions",
+    "integration": "jira_xray",
     "description": "Get preconditions for a test issue using X-ray GraphQL API. Returns JSONArray of precondition objects.",
+    "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["testKey"],
@@ -3549,7 +3917,9 @@
   },
   {
     "name": "jira_xray_get_precondition_details",
+    "integration": "jira_xray",
     "description": "Get Precondition details including definition using X-ray GraphQL API. Returns JSONObject with precondition details.",
+    "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
       "required": ["preconditionKey"],
@@ -3562,7 +3932,9 @@
   },
   {
     "name": "jira_xray_add_test_step",
+    "integration": "jira_xray",
     "description": "Add a single test step to a test issue using X-ray GraphQL API. Returns JSONObject with created step details.",
+    "category": "test_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3595,7 +3967,9 @@
   },
   {
     "name": "jira_xray_add_test_steps",
+    "integration": "jira_xray",
     "description": "Add multiple test steps to a test issue using X-ray GraphQL API. Returns JSONArray of created step objects.",
+    "category": "test_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3618,7 +3992,9 @@
   },
   {
     "name": "jira_xray_add_precondition_to_test",
+    "integration": "jira_xray",
     "description": "Add a single precondition to a test issue using X-ray GraphQL API. Returns JSONObject with result.",
+    "category": "test_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3641,7 +4017,9 @@
   },
   {
     "name": "jira_xray_add_preconditions_to_test",
+    "integration": "jira_xray",
     "description": "Add multiple preconditions to a test issue using X-ray GraphQL API. Returns JSONArray of results.",
+    "category": "test_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3664,7 +4042,9 @@
   },
   {
     "name": "file_read",
+    "integration": "file",
     "description": "Read file content from working directory (supports input/ and outputs/ folders). Returns file content as string or null if file doesn't exist or is inaccessible. All file formats supported as UTF-8 text.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["path"],
@@ -3677,7 +4057,9 @@
   },
   {
     "name": "file_write",
+    "integration": "file",
     "description": "Write content to file in working directory. Creates parent directories automatically. Returns success message or null on failure.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3700,7 +4082,9 @@
   },
   {
     "name": "file_delete",
+    "integration": "file",
     "description": "Delete file or directory from working directory. Returns success message or null on failure.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["path"],
@@ -3713,7 +4097,9 @@
   },
   {
     "name": "file_validate_json",
+    "integration": "file",
     "description": "Validate JSON string and return detailed error information if invalid. Returns JSON string with validation result: {\"valid\": true} for valid JSON, or {\"valid\": false, \"error\": \"error message\", \"line\": line_number, \"column\": column_number, \"position\": character_position, \"context\": \"context around error\"} for invalid JSON.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["json"],
@@ -3726,7 +4112,9 @@
   },
   {
     "name": "file_validate_json_file",
+    "integration": "file",
     "description": "Validate JSON file and return detailed error information if invalid. Reads file from working directory and validates its JSON content. Returns JSON string with validation result including file path.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["path"],
@@ -3739,14 +4127,16 @@
   },
   {
     "name": "figma_oauth2_get_auth_url",
+    "integration": "figma",
     "description": "Generates the Figma OAuth2 authorization URL for the initial authorization code flow. Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. Then call figma_oauth2_exchange_code to get access and refresh tokens. Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured. Optional scope can be passed explicitly or via FIGMA_SCOPE/FIGMA_OAUTH_SCOPES env variable.",
+    "category": "auth",
     "inputSchema": {
       "type": "object",
-      "required": ["redirectUri"],
+      "required": [],
       "properties": {
         "redirectUri": {
           "type": "string",
-          "description": "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback)",
+          "description": "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback). If omitted, uses FIGMA_REDIRECT_URI env variable.",
           "example": "http://localhost:8080/callback"
         },
         "state": {
@@ -3764,17 +4154,16 @@
   },
   {
     "name": "figma_oauth2_exchange_code",
+    "integration": "figma",
     "description": "Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh.",
+    "category": "auth",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "code",
-        "redirectUri"
-      ],
+      "required": ["code"],
       "properties": {
         "redirectUri": {
           "type": "string",
-          "description": "Same redirect URI used in figma_oauth2_get_auth_url",
+          "description": "Same redirect URI used in figma_oauth2_get_auth_url. If omitted, uses FIGMA_REDIRECT_URI env variable.",
           "example": "http://localhost:8080/callback"
         },
         "code": {
@@ -3786,8 +4175,21 @@
     }
   },
   {
+    "name": "figma_test",
+    "integration": "figma",
+    "description": "Test Figma connectivity by fetching the current user's profile",
+    "category": "system",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
     "name": "figma_me",
+    "integration": "figma",
     "description": "Gets current user information from the Figma API using the /me endpoint. Returns user details including id, handle, and email. Can also be used to verify API connectivity.",
+    "category": "user",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -3796,7 +4198,9 @@
   },
   {
     "name": "figma_get_screen_source",
+    "integration": "figma",
     "description": "Get screen source content by URL. Returns the image URL for the specified Figma design node.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": ["url"],
@@ -3809,7 +4213,9 @@
   },
   {
     "name": "figma_download_node_image",
+    "integration": "figma",
     "description": "Download image of specific node/component. Useful for visual preview of design pieces before processing structure.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3838,7 +4244,9 @@
   },
   {
     "name": "figma_download_image_of_file",
+    "integration": "figma",
     "description": "Download image by URL as File type. Converts Figma design URL to downloadable image file.",
+    "category": "file_management",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -3851,7 +4259,9 @@
   },
   {
     "name": "figma_get_file_structure",
+    "integration": "figma",
     "description": "Get full JSON structure of a Figma design file by URL. Returns the complete document tree (nodes, frames, components, text, styles). Response is large by design \u2014 intended for pre-CLI artifact preparation and file output, not inline AI context. If the URL contains node-id, returns only that subtree.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -3863,7 +4273,9 @@
   },
   {
     "name": "figma_get_icons",
+    "integration": "figma",
     "description": "Find and extract all exportable visual elements (vectors, shapes, graphics, text) from Figma design by URL. Focuses on actual visual elements to avoid complex component references.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -3876,7 +4288,9 @@
   },
   {
     "name": "figma_get_image_fills",
+    "integration": "figma",
     "description": "Get original image fill URLs for all imageRefs in a Figma file. Resolves imageRef placeholders to actual downloadable S3 URLs. Use after inspecting file structure to download original photos/images embedded by the designer.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -3888,7 +4302,9 @@
   },
   {
     "name": "figma_render_nodes",
+    "integration": "figma",
     "description": "Render multiple Figma nodes as images in a single batched API call. Automatically batches up to 100 node IDs per request. Returns map of nodeId to render URL. Use for exporting many icons or frames efficiently.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3913,7 +4329,9 @@
   },
   {
     "name": "figma_download_image_as_file",
+    "integration": "figma",
     "description": "Download image as file by node ID and format. Use this after figma_get_icons to download actual icon files.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3942,7 +4360,9 @@
   },
   {
     "name": "figma_get_svg_content",
+    "integration": "figma",
     "description": "Get SVG content as text by node ID. Use this after figma_get_icons to get SVG code for vector icons.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3965,7 +4385,9 @@
   },
   {
     "name": "figma_get_node_details",
+    "integration": "figma",
     "description": "Get detailed properties for specific node(s) including colors, fonts, text, dimensions, and styles. Returns small focused response.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -3986,7 +4408,9 @@
   },
   {
     "name": "figma_get_text_content",
+    "integration": "figma",
     "description": "Extract text content from text nodes. Returns map of nodeId to text content.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4007,7 +4431,9 @@
   },
   {
     "name": "figma_get_styles",
+    "integration": "figma",
     "description": "Get design tokens (colors, text styles) defined in Figma file.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -4019,7 +4445,9 @@
   },
   {
     "name": "figma_get_layers",
+    "integration": "figma",
     "description": "Get first-level layers (direct children) to understand structure. Returns layer names, IDs, types, sizes. Essential first step before getting details.",
+    "category": "structure_analysis",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -4031,7 +4459,9 @@
   },
   {
     "name": "figma_get_layers_batch",
+    "integration": "figma",
     "description": "Get layers for multiple nodes at once. More efficient for analyzing multiple screens/containers. Returns map of nodeId to layers.",
+    "category": "structure_analysis",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4052,7 +4482,9 @@
   },
   {
     "name": "figma_get_node_children",
+    "integration": "figma",
     "description": "Get immediate children IDs and basic info for a node. Non-recursive, returns only direct children.",
+    "category": "content_access",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -4063,8 +4495,10 @@
     }
   },
   {
-    "name": "testrail_get_projects",
-    "description": "Get list of all projects in TestRail",
+    "name": "testrail_test",
+    "integration": "testrail",
+    "description": "Test TestRail connectivity by fetching projects",
+    "category": "system",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4072,38 +4506,89 @@
     }
   },
   {
-    "name": "testrail_get_case",
-    "description": "Get a TestRail test case by ID",
+    "name": "testrail_get_projects",
+    "integration": "testrail",
+    "description": "Get list of all projects in TestRail",
+    "category": "projects",
     "inputSchema": {
       "type": "object",
-      "required": ["case_id"],
-      "properties": {"case_id": {
-        "type": "string",
-        "description": "The test case ID (numeric, without 'C' prefix)",
-        "example": "123"
-      }}
+      "required": [],
+      "properties": {}
     }
   },
   {
-    "name": "testrail_get_all_cases",
-    "description": "Get ALL test cases in a project (uses pagination to retrieve all cases)",
+    "name": "testrail_get_suites",
+    "integration": "testrail",
+    "description": "Get all test suites for a TestRail project",
+    "category": "suites",
     "inputSchema": {
       "type": "object",
       "required": ["project_name"],
       "properties": {"project_name": {
         "type": "string",
-        "description": "Project name to get all cases from",
+        "description": "Project name to get suites from",
         "example": "My Project"
       }}
     }
   },
   {
-    "name": "testrail_search_cases",
-    "description": "Search TestRail test cases by project and optional filters",
+    "name": "testrail_get_case",
+    "integration": "testrail",
+    "description": "Get a TestRail test case by ID. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML \u2014 raw HTML pasted from Google Docs/browsers can be 20-30x larger than necessary due to inline CSS styling on every tag.",
+    "category": "test_cases",
+    "inputSchema": {
+      "type": "object",
+      "required": ["case_id"],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "description": "The test case ID (numeric, without 'C' prefix)",
+          "example": "123"
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown \u2014 much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).",
+          "example": "markdown"
+        }
+      }
+    }
+  },
+  {
+    "name": "testrail_get_all_cases",
+    "integration": "testrail",
+    "description": "Get ALL test cases in a project (uses pagination to retrieve all cases). Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML.",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": ["project_name"],
       "properties": {
+        "project_name": {
+          "type": "string",
+          "description": "Project name to get all cases from",
+          "example": "My Project"
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown \u2014 much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).",
+          "example": "markdown"
+        }
+      }
+    }
+  },
+  {
+    "name": "testrail_search_cases",
+    "integration": "testrail",
+    "description": "Search TestRail test cases by project and optional filters. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML.",
+    "category": "test_cases",
+    "inputSchema": {
+      "type": "object",
+      "required": ["project_name"],
+      "properties": {
+        "format": {
+          "type": "string",
+          "description": "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown \u2014 much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).",
+          "example": "markdown"
+        },
         "project_name": {
           "type": "string",
           "description": "Project name to search in",
@@ -4124,7 +4609,9 @@
   },
   {
     "name": "testrail_get_cases_by_refs",
+    "integration": "testrail",
     "description": "Get test cases linked to a requirement/story via refs field",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4147,7 +4634,9 @@
   },
   {
     "name": "testrail_create_case",
+    "integration": "testrail",
     "description": "Create a new test case in TestRail",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4185,7 +4674,9 @@
   },
   {
     "name": "testrail_create_case_detailed",
+    "integration": "testrail",
     "description": "Create a new test case in TestRail with detailed fields (preconditions, steps, expected results, labels, type). Note: TestRail uses its own table format in text fields: |||:Col 1|:Col 2|:Col 3\\n||val1|val2|val3. Standard Markdown tables (| Col | Col |) will be auto-converted to TestRail format.",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4243,7 +4734,9 @@
   },
   {
     "name": "testrail_create_case_steps",
+    "integration": "testrail",
     "description": "Create a TestRail test case using the 'Test Case (Steps)' template (template_id=2). Steps are provided as a JSON array: [{\"content\":\"step text\",\"expected\":\"expected result\"}, ...]. Markdown tables in step content or expected are auto-converted to HTML tables. Use testrail_get_case_types for type_id, testrail_get_labels for label_ids.",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4297,7 +4790,9 @@
   },
   {
     "name": "testrail_update_case",
+    "integration": "testrail",
     "description": "Update a test case in TestRail",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": ["case_id"],
@@ -4327,7 +4822,9 @@
   },
   {
     "name": "testrail_delete_case",
+    "integration": "testrail",
     "description": "Delete a test case in TestRail by case ID",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": ["case_id"],
@@ -4340,7 +4837,9 @@
   },
   {
     "name": "testrail_link_to_requirement",
+    "integration": "testrail",
     "description": "Link a test case to a requirement by updating refs field",
+    "category": "test_cases",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4363,7 +4862,9 @@
   },
   {
     "name": "testrail_get_labels",
+    "integration": "testrail",
     "description": "Get all labels for a project in TestRail",
+    "category": "labels",
     "inputSchema": {
       "type": "object",
       "required": ["project_name"],
@@ -4376,7 +4877,9 @@
   },
   {
     "name": "testrail_get_label",
+    "integration": "testrail",
     "description": "Get a single label by ID",
+    "category": "labels",
     "inputSchema": {
       "type": "object",
       "required": ["label_id"],
@@ -4389,7 +4892,9 @@
   },
   {
     "name": "testrail_update_label",
+    "integration": "testrail",
     "description": "Update a label title in TestRail. Maximum 20 characters allowed.",
+    "category": "labels",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4418,7 +4923,9 @@
   },
   {
     "name": "testrail_get_case_types",
+    "integration": "testrail",
     "description": "Get all available case types in TestRail (e.g., Automated, Functionality, Other)",
+    "category": "case_types",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4427,7 +4934,9 @@
   },
   {
     "name": "kb_get",
+    "integration": "kb",
     "description": "Get last sync date for a knowledge base source. Returns ISO 8601 date string or 'Source not found' message.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": ["source_name"],
@@ -4447,7 +4956,9 @@
   },
   {
     "name": "kb_build",
+    "integration": "kb",
     "description": "Build or update knowledge base from input file. Processes chat messages, documentation, or any text data to create indexed, searchable knowledge base. Returns JSON with statistics.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4486,7 +4997,9 @@
   },
   {
     "name": "kb_process",
+    "integration": "kb",
     "description": "Process input file and build KB structure WITHOUT generating AI descriptions (fast mode). Use this for bulk data processing. Run kb_aggregate later to generate descriptions.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4525,7 +5038,9 @@
   },
   {
     "name": "kb_aggregate",
+    "integration": "kb",
     "description": "Generate AI descriptions for existing KB structure WITHOUT processing new data. Use this after kb_process to add AI-generated descriptions for people and topics.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4550,7 +5065,9 @@
   },
   {
     "name": "kb_process_inbox",
+    "integration": "kb",
     "description": "Scan inbox/raw/ folders and process all unprocessed files automatically. Files are processed in place. Returns JSON with processed and skipped file details.",
+    "category": "",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4575,7 +5092,9 @@
   },
   {
     "name": "teams_auth_start",
+    "integration": "teams_auth",
     "description": "Start device code authentication for Microsoft Teams. Returns URL and code for user to authenticate.",
+    "category": "authentication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4584,7 +5103,9 @@
   },
   {
     "name": "teams_auth_complete",
+    "integration": "teams_auth",
     "description": "Complete device code authentication after user approval. Polls for tokens and saves refresh token.",
+    "category": "authentication",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4593,7 +5114,20 @@
   },
   {
     "name": "teams_auth_status",
+    "integration": "teams_auth",
     "description": "Check current Microsoft Teams authentication status and configuration.",
+    "category": "authentication",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
+    "name": "gitlab_test",
+    "integration": "gitlab",
+    "description": "Test GitLab connectivity by fetching the current user's profile",
+    "category": "system",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4602,7 +5136,9 @@
   },
   {
     "name": "gitlab_get_mr_comments",
+    "integration": "gitlab",
     "description": "Get all comments for a GitLab merge request, including both inline code review comments (DiffNote) and general discussion notes. Excludes system-generated notes.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4631,7 +5167,9 @@
   },
   {
     "name": "gitlab_add_mr_label",
+    "integration": "gitlab",
     "description": "Add a label to a GitLab merge request.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4666,7 +5204,9 @@
   },
   {
     "name": "gitlab_remove_mr_label",
+    "integration": "gitlab",
     "description": "Remove a label from a GitLab merge request.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4701,7 +5241,9 @@
   },
   {
     "name": "gitlab_get_mr_activities",
-    "description": "Get all activities for a GitLab merge request including approvals and general discussion notes.",
+    "integration": "gitlab",
+    "description": "Get all activities for a GitLab merge request. Approvals are fetched from the real GitLab Approvals API. General discussion notes are also included.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4730,7 +5272,9 @@
   },
   {
     "name": "gitlab_add_mr_comment",
+    "integration": "gitlab",
     "description": "Add a general discussion comment to a GitLab merge request.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4765,7 +5309,40 @@
   },
   {
     "name": "gitlab_get_mr_diff",
+    "integration": "gitlab",
     "description": "Get diff stats and changed files for a GitLab merge request.",
+    "category": "merge_requests",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "Repository name",
+          "example": "myrepo"
+        },
+        "pullRequestId": {
+          "type": "string",
+          "description": "Merge request IID",
+          "example": "42"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "GitLab group or namespace",
+          "example": "mygroup"
+        }
+      }
+    }
+  },
+  {
+    "name": "gitlab_get_mr_diff_text",
+    "integration": "gitlab",
+    "description": "Get the raw unified diff text for a GitLab merge request (suitable for locating file/line positions, e.g. for inline review comments).",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4794,7 +5371,9 @@
   },
   {
     "name": "gitlab_get_mr",
+    "integration": "gitlab",
     "description": "Get details of a specific GitLab merge request including title, description, state, author, diff_refs (base_sha, head_sha, start_sha needed for inline comments).",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4823,7 +5402,9 @@
   },
   {
     "name": "gitlab_list_mrs",
+    "integration": "gitlab",
     "description": "List merge requests for a GitLab project. State can be 'opened', 'closed', 'merged', or 'all'.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4852,7 +5433,9 @@
   },
   {
     "name": "gitlab_create_mr",
+    "integration": "gitlab",
     "description": "Create a GitLab merge request from a source branch into a target branch.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4903,7 +5486,9 @@
   },
   {
     "name": "gitlab_get_mr_discussions",
+    "integration": "gitlab",
     "description": "Get all discussion threads for a GitLab merge request. Each discussion contains notes (comments) and a resolved status. Use the discussion id with gitlab_resolve_mr_thread.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4932,7 +5517,9 @@
   },
   {
     "name": "gitlab_reply_to_mr_thread",
+    "integration": "gitlab",
     "description": "Reply to an existing discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -4973,7 +5560,9 @@
   },
   {
     "name": "gitlab_add_inline_mr_comment",
+    "integration": "gitlab",
     "description": "Create a new inline code review comment on a specific file and line in a GitLab merge request. Requires base_sha, head_sha, start_sha from the MR diff refs (use gitlab_get_mr to get them from diff_refs).",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5038,7 +5627,9 @@
   },
   {
     "name": "gitlab_resolve_mr_thread",
+    "integration": "gitlab",
     "description": "Resolve (close) a review discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5073,7 +5664,9 @@
   },
   {
     "name": "gitlab_approve_mr",
+    "integration": "gitlab",
     "description": "Approve a GitLab merge request. Adds your approval to the MR.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5102,7 +5695,9 @@
   },
   {
     "name": "gitlab_merge_mr",
+    "integration": "gitlab",
     "description": "Merge a GitLab merge request. Optionally provide a custom merge commit message.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5136,7 +5731,9 @@
   },
   {
     "name": "gitlab_rebase_mr",
+    "integration": "gitlab",
     "description": "Ask GitLab to rebase/update a merge request source branch with its target branch.",
+    "category": "merge_requests",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5165,7 +5762,9 @@
   },
   {
     "name": "gitlab_list_project_jobs",
+    "integration": "gitlab",
     "description": "List recent GitLab CI jobs for a project.",
+    "category": "ci",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5188,7 +5787,9 @@
   },
   {
     "name": "gitlab_cancel_job",
+    "integration": "gitlab",
     "description": "Cancel a GitLab CI job.",
+    "category": "ci",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5217,7 +5818,9 @@
   },
   {
     "name": "gitlab_list_pipeline_runs",
+    "integration": "gitlab",
     "description": "List recent GitLab CI pipelines. Optionally filter by status, ref, and limit.",
+    "category": "ci",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5255,7 +5858,9 @@
   },
   {
     "name": "gitlab_trigger_pipeline",
+    "integration": "gitlab",
     "description": "Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token.",
+    "category": "ci",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5289,7 +5894,9 @@
   },
   {
     "name": "gitlab_get_pipeline_jobs",
+    "integration": "gitlab",
     "description": "List jobs for a GitLab CI pipeline.",
+    "category": "ci",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5317,8 +5924,41 @@
     }
   },
   {
+    "name": "gitlab_get_commit_statuses",
+    "integration": "gitlab",
+    "description": "Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per status report (e.g. posted by an external CI like Jenkins via the gitlabBuilds plugin, or GitLab's own pipeline). Equivalent of GitHub's 'check runs' for GitLab. When the same status name was reported more than once for this commit (e.g. a CI job was retried), only the most recent report per name is returned.",
+    "category": "ci",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "commitSha"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "Repository name",
+          "example": "myrepo"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "GitLab group or namespace",
+          "example": "mygroup"
+        },
+        "commitSha": {
+          "type": "string",
+          "description": "The commit SHA to get statuses for",
+          "example": "abc123..."
+        }
+      }
+    }
+  },
+  {
     "name": "gitlab_get_job_logs",
+    "integration": "gitlab",
     "description": "Get GitLab CI job trace logs.",
+    "category": "ci",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5346,8 +5986,234 @@
     }
   },
   {
+    "name": "gitlab_get_or_create_release",
+    "integration": "gitlab",
+    "description": "Find an existing GitLab release by tag, or create one if it does not exist. Useful for a stable artefact storage release (mirrors github_get_or_create_draft_release). Note: GitLab releases have no draft concept; releases are visible as soon as they are created.",
+    "category": "releases",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "tagName"
+      ],
+      "properties": {
+        "workspace": {
+          "type": "string",
+          "description": "GitLab group or namespace",
+          "example": "mygroup"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Repository name",
+          "example": "myrepo"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "The Git tag name for the release. Reused to find an existing release.",
+          "example": "pr-attachments-storage"
+        },
+        "targetCommitish": {
+          "type": "string",
+          "description": "Optional branch or commit SHA the release's tag should point to when created (GitLab 'ref'). Required if the tag does not already exist.",
+          "example": "main"
+        },
+        "body": {
+          "type": "string",
+          "description": "Optional Markdown release notes/description.",
+          "example": "Internal storage release for PR attachments."
+        },
+        "releaseName": {
+          "type": "string",
+          "description": "The human-readable release name. If empty, tagName is used.",
+          "example": "PR Attachments Storage"
+        }
+      }
+    }
+  },
+  {
+    "name": "gitlab_upload_release_asset",
+    "integration": "gitlab",
+    "description": "Upload a local file as a GitLab release asset. Internally publishes the file to the project's Generic Package Registry and attaches it to the release as an asset link, so it is discoverable the same way as a GitHub release asset. Returns the release link metadata including direct_asset_url. Set overwrite=true to automatically replace an existing asset with the same name before uploading (GitLab's Generic Package Registry rejects duplicate uploads with 409 Conflict otherwise).",
+    "category": "releases",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "tagName",
+        "filePath"
+      ],
+      "properties": {
+        "workspace": {
+          "type": "string",
+          "description": "GitLab group or namespace",
+          "example": "mygroup"
+        },
+        "filePath": {
+          "type": "string",
+          "description": "Absolute or relative path to the local file to upload.",
+          "example": "/tmp/preview.png"
+        },
+        "assetName": {
+          "type": "string",
+          "description": "Optional asset filename shown in GitLab. Defaults to the local filename.",
+          "example": "clip_123.png"
+        },
+        "packageName": {
+          "type": "string",
+          "description": "Optional Generic Package Registry package name used to group the uploaded files. Defaults to 'release-assets'.",
+          "example": "release-assets"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Repository name",
+          "example": "myrepo"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "The tag name of the release returned by gitlab_get_or_create_release.",
+          "example": "pr-attachments-storage"
+        },
+        "contentType": {
+          "type": "string",
+          "description": "Optional MIME type. Defaults to detected type or application/octet-stream.",
+          "example": "image/png"
+        },
+        "overwrite": {
+          "type": "string",
+          "description": "If true, delete any existing asset (release link + underlying generic package file) with the same name before uploading. Defaults to false.",
+          "example": "true"
+        }
+      }
+    }
+  },
+  {
+    "name": "gitlab_list_release_assets",
+    "integration": "gitlab",
+    "description": "List all assets (asset links) attached to a GitLab release. Returns a JSON array of link objects including id, name, url, and direct_asset_url.",
+    "category": "releases",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "tagName"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "Repository name",
+          "example": "myrepo"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "The tag name of the release.",
+          "example": "pr-attachments-storage"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "GitLab group or namespace",
+          "example": "mygroup"
+        }
+      }
+    }
+  },
+  {
+    "name": "gitlab_delete_release_asset",
+    "integration": "gitlab",
+    "description": "Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names.",
+    "category": "releases",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "tagName",
+        "assetName"
+      ],
+      "properties": {
+        "assetName": {
+          "type": "string",
+          "description": "The name of the asset to delete, as returned by gitlab_list_release_assets.",
+          "example": "clip_123.png"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "GitLab group or namespace",
+          "example": "mygroup"
+        },
+        "packageName": {
+          "type": "string",
+          "description": "Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.",
+          "example": "release-assets"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Repository name",
+          "example": "myrepo"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "The tag name of the release.",
+          "example": "pr-attachments-storage"
+        }
+      }
+    }
+  },
+  {
+    "name": "gitlab_download_release_asset",
+    "integration": "gitlab",
+    "description": "Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path.",
+    "category": "releases",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "workspace",
+        "repository",
+        "tagName",
+        "assetName",
+        "targetFilePath"
+      ],
+      "properties": {
+        "assetName": {
+          "type": "string",
+          "description": "The name of the asset to download, as returned by gitlab_list_release_assets.",
+          "example": "clip_123.png"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "GitLab group or namespace",
+          "example": "mygroup"
+        },
+        "targetFilePath": {
+          "type": "string",
+          "description": "Local file path where the downloaded asset should be saved.",
+          "example": "/tmp/downloaded_clip_123.png"
+        },
+        "packageName": {
+          "type": "string",
+          "description": "Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.",
+          "example": "release-assets"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Repository name",
+          "example": "myrepo"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "The tag name of the release.",
+          "example": "pr-attachments-storage"
+        }
+      }
+    }
+  },
+  {
     "name": "jira_delete_ticket",
+    "integration": "jira",
     "description": "Delete a Jira ticket by key",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": ["key"],
@@ -5360,7 +6226,9 @@
   },
   {
     "name": "jira_get_account_by_email",
+    "integration": "jira",
     "description": "Gets account details by email",
+    "category": "information",
     "inputSchema": {
       "type": "object",
       "required": ["email"],
@@ -5373,7 +6241,9 @@
   },
   {
     "name": "jira_assign_ticket_to",
+    "integration": "jira",
     "description": "Assigns a Jira ticket to user",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5396,7 +6266,9 @@
   },
   {
     "name": "jira_add_label",
+    "integration": "jira",
     "description": "Adding label to specific ticket key",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5419,7 +6291,9 @@
   },
   {
     "name": "jira_remove_label",
+    "integration": "jira",
     "description": "Remove a label from a specific Jira ticket. Fetches current labels and removes the specified one.",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5442,7 +6316,9 @@
   },
   {
     "name": "jira_search_by_jql",
+    "integration": "jira",
     "description": "Search for Jira tickets using JQL and returns all results",
+    "category": "search",
     "inputSchema": {
       "type": "object",
       "required": ["jql"],
@@ -5454,7 +6330,7 @@
         },
         "fields": {
           "type": "array",
-          "description": "Optional array of field names to include in response",
+          "description": "Optional array of field names to include in response. When omitted, the project's extended default fields are used.",
           "example": "[\"summary\", \"status\", \"assignee\"]"
         }
       }
@@ -5462,7 +6338,9 @@
   },
   {
     "name": "jira_search_with_pagination",
+    "integration": "jira",
     "description": "[Deprecated] Search for Jira tickets using JQL with pagination support",
+    "category": "search",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5491,7 +6369,9 @@
   },
   {
     "name": "jira_search_by_page",
+    "integration": "jira",
     "description": "Search for Jira tickets using JQL with paging support",
+    "category": "search",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5519,8 +6399,21 @@
     }
   },
   {
+    "name": "jira_test",
+    "integration": "jira",
+    "description": "Test Jira connectivity by fetching the current user's profile",
+    "category": "system",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
     "name": "jira_get_my_profile",
+    "integration": "jira",
     "description": "Get the current user's profile information from Jira",
+    "category": "user_management",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5529,7 +6422,9 @@
   },
   {
     "name": "jira_get_user_profile",
+    "integration": "jira",
     "description": "Get a specific user's profile information from Jira",
+    "category": "user_management",
     "inputSchema": {
       "type": "object",
       "required": ["userId"],
@@ -5541,14 +6436,16 @@
   },
   {
     "name": "jira_get_ticket",
+    "integration": "jira",
     "description": "Get a specific Jira ticket by key with optional field filtering",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": ["key"],
       "properties": {
         "fields": {
           "type": "array",
-          "description": "Optional array of fields to include in the response"
+          "description": "Optional array of fields to include in the response. When omitted, the project's extended default fields are used."
         },
         "key": {
           "type": "string",
@@ -5559,7 +6456,9 @@
   },
   {
     "name": "jira_get_subtasks",
+    "integration": "jira",
     "description": "Get all subtasks of a specific Jira ticket using jql: parent = PRJ-123 and issueType in (subtask, sub-task, 'sub task')",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": ["key"],
@@ -5571,7 +6470,9 @@
   },
   {
     "name": "jira_post_comment_if_not_exists",
+    "integration": "jira",
     "description": "Post a comment to a Jira ticket only if it doesn't already exist. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists",
+    "category": "comment_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5592,7 +6493,9 @@
   },
   {
     "name": "jira_get_comments",
+    "integration": "jira",
     "description": "Get all comments for a specific Jira ticket",
+    "category": "comment_management",
     "inputSchema": {
       "type": "object",
       "required": ["key"],
@@ -5610,7 +6513,9 @@
   },
   {
     "name": "jira_post_comment",
+    "integration": "jira",
     "description": "Post a comment to a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists",
+    "category": "comment_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5631,7 +6536,9 @@
   },
   {
     "name": "jira_get_fix_versions",
+    "integration": "jira",
     "description": "Get all fix versions for a specific Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["project"],
@@ -5643,7 +6550,9 @@
   },
   {
     "name": "jira_get_components",
+    "integration": "jira",
     "description": "Get all components for a specific Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["project"],
@@ -5655,7 +6564,9 @@
   },
   {
     "name": "jira_get_project_statuses",
+    "integration": "jira",
     "description": "Get all statuses for a specific Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["project"],
@@ -5667,7 +6578,9 @@
   },
   {
     "name": "jira_create_ticket_with_parent",
+    "integration": "jira",
     "description": "Create a new Jira ticket with a parent relationship",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5703,7 +6616,9 @@
   },
   {
     "name": "jira_create_ticket_basic",
+    "integration": "jira",
     "description": "Create a new Jira ticket with basic fields (project, issue type, summary, description)",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5734,7 +6649,9 @@
   },
   {
     "name": "jira_create_ticket_with_json",
+    "integration": "jira",
     "description": "Create a new Jira ticket with custom fields using JSON configuration",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5755,7 +6672,9 @@
   },
   {
     "name": "jira_update_description",
+    "integration": "jira",
     "description": "Update the description of a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5776,7 +6695,9 @@
   },
   {
     "name": "jira_update_ticket_parent",
+    "integration": "jira",
     "description": "Update the parent of a Jira ticket. Can be used for setting up epic relationships and parent-child relationships for subtasks",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5797,7 +6718,9 @@
   },
   {
     "name": "jira_update_ticket",
+    "integration": "jira",
     "description": "Update a Jira ticket using JSON parameters following the standard Jira REST API format",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5818,7 +6741,9 @@
   },
   {
     "name": "jira_update_field",
+    "integration": "jira",
     "description": "Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field.",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5843,8 +6768,38 @@
     }
   },
   {
+    "name": "jira_update_field_as_adf",
+    "integration": "jira",
+    "description": "Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud.",
+    "category": "ticket_management",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "key",
+        "field",
+        "value"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "The rich-text field to update, e.g. 'description' or 'comment'"
+        },
+        "value": {
+          "type": "object",
+          "description": "Plain text or ADF JSON. Plain text is wrapped into an ADF paragraph; JSON object is sent as-is; JSON array is used as the ADF content."
+        },
+        "key": {
+          "type": "string",
+          "description": "The Jira ticket key to update"
+        }
+      }
+    }
+  },
+  {
     "name": "jira_update_all_fields_with_name",
+    "integration": "jira",
     "description": "Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name.",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5870,7 +6825,9 @@
   },
   {
     "name": "jira_get_all_fields_with_name",
+    "integration": "jira",
     "description": "Get all custom field IDs that have the same display name in a Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5891,7 +6848,9 @@
   },
   {
     "name": "jira_execute_request",
+    "integration": "jira",
     "description": "Execute a custom HTTP GET request to Jira API with auth. Can be used to perform any jira get requests which are required auth.",
+    "category": "api_operations",
     "inputSchema": {
       "type": "object",
       "required": ["url"],
@@ -5903,7 +6862,9 @@
   },
   {
     "name": "jira_attach_file_to_ticket",
+    "integration": "jira",
     "description": "Attach a file to a Jira ticket from a local file path. The file will only be attached if a file with the same name doesn't already exist",
+    "category": "file_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5937,7 +6898,9 @@
   },
   {
     "name": "jira_get_transitions",
+    "integration": "jira",
     "description": "Get all available transitions(statuses, workflows) for a Jira ticket",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": ["key"],
@@ -5949,7 +6912,9 @@
   },
   {
     "name": "jira_move_to_status",
+    "integration": "jira",
     "description": "Move a Jira ticket to a specific status (workflow, transition)",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5970,7 +6935,9 @@
   },
   {
     "name": "jira_move_to_status_with_resolution",
+    "integration": "jira",
     "description": "Move a Jira ticket to a specific status (workflow, transition) with resolution",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -5996,7 +6963,9 @@
   },
   {
     "name": "jira_clear_field",
+    "integration": "jira",
     "description": "Clear (delete value) a specific field value in a Jira ticket",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6017,7 +6986,9 @@
   },
   {
     "name": "jira_set_fix_version",
+    "integration": "jira",
     "description": "Set the fix version for a Jira ticket",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6038,7 +7009,9 @@
   },
   {
     "name": "jira_add_fix_version",
+    "integration": "jira",
     "description": "Add a fix version to a Jira ticket (without removing existing ones)",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6059,7 +7032,9 @@
   },
   {
     "name": "jira_set_priority",
+    "integration": "jira",
     "description": "Set the priority for a Jira ticket",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6080,7 +7055,9 @@
   },
   {
     "name": "jira_remove_fix_version",
+    "integration": "jira",
     "description": "Remove a fix version from a Jira ticket",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6101,7 +7078,9 @@
   },
   {
     "name": "jira_download_attachment",
+    "integration": "jira",
     "description": "Download a Jira attachment by URL and save it as a file",
+    "category": "file_management",
     "inputSchema": {
       "type": "object",
       "required": ["href"],
@@ -6113,7 +7092,9 @@
   },
   {
     "name": "jira_get_fields",
+    "integration": "jira",
     "description": "Get all available fields for a Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["project"],
@@ -6125,7 +7106,9 @@
   },
   {
     "name": "jira_get_issue_types",
+    "integration": "jira",
     "description": "Get all available issue types for a specific Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["project"],
@@ -6137,7 +7120,9 @@
   },
   {
     "name": "jira_get_field_custom_code",
+    "integration": "jira",
     "description": "Get the custom field code for a human friendly field name in a Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6158,7 +7143,9 @@
   },
   {
     "name": "jira_get_issue_link_types",
+    "integration": "jira",
     "description": "Get all available issue link types/relationships in Jira",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -6167,7 +7154,9 @@
   },
   {
     "name": "jira_link_issues",
+    "integration": "jira",
     "description": "Link two Jira issues with a specific relationship type",
+    "category": "ticket_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6193,7 +7182,9 @@
   },
   {
     "name": "jira_get_project_details",
+    "integration": "jira",
     "description": "Get full details of a Jira project including its numeric ID, key, name, style and issue types",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["projectKey"],
@@ -6205,7 +7196,9 @@
   },
   {
     "name": "jira_get_project_issue_type_scheme",
+    "integration": "jira",
     "description": "Get the issue type scheme (or equivalent) assigned to a Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["projectKey"],
@@ -6217,7 +7210,9 @@
   },
   {
     "name": "jira_get_project_workflow_scheme",
+    "integration": "jira",
     "description": "Get the workflow scheme (or equivalent) assigned to a Jira project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["projectKey"],
@@ -6229,7 +7224,9 @@
   },
   {
     "name": "jira_assign_issue_type_scheme",
+    "integration": "jira",
     "description": "Assign an issue type scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin.",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6250,7 +7247,9 @@
   },
   {
     "name": "jira_assign_workflow_scheme",
+    "integration": "jira",
     "description": "Assign a workflow scheme (by its numeric ID) to a classic Jira project (by its numeric project ID). Requires Jira admin.",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6271,7 +7270,9 @@
   },
   {
     "name": "jira_create_project_issue_type",
+    "integration": "jira",
     "description": "Create a project-scoped issue type in a next-gen Jira project. Use type 'subtask' for subtasks and 'standard' for all others. Skips if the name already exists. Requires Jira admin.",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6300,7 +7301,9 @@
   },
   {
     "name": "jira_copy_project_structure",
+    "integration": "jira",
     "description": "Copy issue types and workflow setup from a source Jira project to a target Jira project (e.g. MYTUBE → TP)",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6321,7 +7324,9 @@
   },
   {
     "name": "jira_delete_project",
+    "integration": "jira",
     "description": "Delete a Jira project by moving it to trash. The project key remains reserved until permanently deleted from Jira Admin > System > Trash. Set confirmDelete to 'true' to proceed.",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6342,7 +7347,9 @@
   },
   {
     "name": "jira_restore_project",
+    "integration": "jira",
     "description": "Restore a Jira project that was previously moved to trash using jira_delete_project",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["projectKey"],
@@ -6354,7 +7361,9 @@
   },
   {
     "name": "jira_clone_project",
+    "integration": "jira",
     "description": "Create a brand-new team-managed (next-gen) Jira project that mirrors the source project. Default issue types are auto-created; custom types must be added manually. To reuse an existing key, permanently delete the old project from Jira Admin > System > Trash first.",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6379,7 +7388,9 @@
   },
   {
     "name": "jira_get_project_board_config",
+    "integration": "jira",
     "description": "Read the board column configuration (workflow) of a Jira project \u2014 returns columns with status names and categories, useful for comparing or replicating project workflow",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": ["projectKey"],
@@ -6391,7 +7402,9 @@
   },
   {
     "name": "jira_setup_project_workflow",
+    "integration": "jira",
     "description": "Set up a project's workflow using an explicit list of statuses (no source project needed). Accepts a JSON array of {name, category} objects and applies them to the target project's workflow. Valid categories: TODO, IN_PROGRESS, DONE. Works with team-managed (next-gen) Jira projects.",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -6412,7 +7425,9 @@
   },
   {
     "name": "jira_sync_project_workflow",
+    "integration": "jira",
     "description": "Sync the workflow (statuses) of a target project to exactly match the source project using Jira's bulk workflow update API. Replaces the target workflow's statuses and transitions with those from the source project. Existing issues with removed statuses are automatically migrated to the closest matching new status. Works with team-managed (next-gen) Jira projects.",
+    "category": "project_management",
     "inputSchema": {
       "type": "object",
       "required": [

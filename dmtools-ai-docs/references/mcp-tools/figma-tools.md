@@ -1,6 +1,6 @@
 # FIGMA MCP Tools
 
-**Total Tools**: 18
+**Total Tools**: 19
 
 ## Quick Reference
 
@@ -18,7 +18,7 @@ dmtools figma_oauth2_get_auth_url [arguments]
 // Direct function calls for figma tools
 const result = figma_oauth2_get_auth_url(...);
 const result = figma_oauth2_exchange_code(...);
-const result = figma_me(...);
+const result = figma_test(...);
 ```
 
 ## Available Tools
@@ -40,9 +40,10 @@ const result = figma_me(...);
 | `figma_get_svg_content` | Get SVG content as text by node ID. Use this after figma_get_icons to get SVG code for vector icons. | `nodeId` (string, **required**)<br>`href` (string, **required**) |
 | `figma_get_text_content` | Extract text content from text nodes. Returns map of nodeId to text content. | `nodeIds` (string, **required**)<br>`href` (string, **required**) |
 | `figma_me` | Gets current user information from the Figma API using the /me endpoint. Returns user details including id, handle, and email. Can also be used to verify API connectivity. | None |
-| `figma_oauth2_exchange_code` | Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh. | `redirectUri` (string, **required**)<br>`code` (string, **required**) |
-| `figma_oauth2_get_auth_url` | Generates the Figma OAuth2 authorization URL for the initial authorization code flow. Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. Then call figma_oauth2_exchange_code to get access and refresh tokens. Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured. Optional scope can be passed explicitly or via FIGMA_SCOPE/FIGMA_OAUTH_SCOPES env variable. | `redirectUri` (string, **required**)<br>`state` (string, optional)<br>`scope` (string, optional) |
+| `figma_oauth2_exchange_code` | Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh. | `redirectUri` (string, optional)<br>`code` (string, **required**) |
+| `figma_oauth2_get_auth_url` | Generates the Figma OAuth2 authorization URL for the initial authorization code flow. Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. Then call figma_oauth2_exchange_code to get access and refresh tokens. Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured. Optional scope can be passed explicitly or via FIGMA_SCOPE/FIGMA_OAUTH_SCOPES env variable. | `redirectUri` (string, optional)<br>`state` (string, optional)<br>`scope` (string, optional) |
 | `figma_render_nodes` | Render multiple Figma nodes as images in a single batched API call. Automatically batches up to 100 node IDs per request. Returns map of nodeId to render URL. Use for exporting many icons or frames efficiently. | `format` (string, optional)<br>`nodeIds` (string, **required**)<br>`href` (string, **required**) |
+| `figma_test` | Test Figma connectivity by fetching the current user's profile | None |
 
 ## Detailed Parameter Information
 
@@ -399,8 +400,8 @@ Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use t
 
 **Parameters:**
 
-- **`redirectUri`** (string) 🔴 Required
-  - Same redirect URI used in figma_oauth2_get_auth_url
+- **`redirectUri`** (string) ⚪ Optional
+  - Same redirect URI used in figma_oauth2_get_auth_url. If omitted, uses FIGMA_REDIRECT_URI env variable.
   - Example: `http://localhost:8080/callback`
 
 - **`code`** (string) 🔴 Required
@@ -425,8 +426,8 @@ Generates the Figma OAuth2 authorization URL for the initial authorization code 
 
 **Parameters:**
 
-- **`redirectUri`** (string) 🔴 Required
-  - Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback)
+- **`redirectUri`** (string) ⚪ Optional
+  - Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback). If omitted, uses FIGMA_REDIRECT_URI env variable.
   - Example: `http://localhost:8080/callback`
 
 - **`state`** (string) ⚪ Optional
@@ -472,6 +473,24 @@ dmtools figma_render_nodes "value" "value"
 ```javascript
 // In JavaScript agent
 const result = figma_render_nodes("format", "nodeIds");
+```
+
+---
+
+### `figma_test`
+
+Test Figma connectivity by fetching the current user's profile
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools figma_test
+```
+
+```javascript
+// In JavaScript agent
+const result = figma_test();
 ```
 
 ---
