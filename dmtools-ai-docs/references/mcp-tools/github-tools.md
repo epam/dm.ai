@@ -1,6 +1,6 @@
 # GITHUB MCP Tools
 
-**Total Tools**: 33
+**Total Tools**: 35
 
 ## Quick Reference
 
@@ -9,16 +9,16 @@
 dmtools list | jq '.tools[] | select(.name | startswith("github_"))'
 
 # Example usage
-dmtools github_list_prs [arguments]
+dmtools github_test [arguments]
 ```
 
 ## Usage in JavaScript Agents
 
 ```javascript
 // Direct function calls for github tools
+const result = github_test(...);
 const result = github_list_prs(...);
 const result = github_list_prs_filtered(...);
-const result = github_get_commits_from_branches(...);
 ```
 
 ## Available Tools
@@ -41,6 +41,7 @@ const result = github_get_commits_from_branches(...);
 | `github_get_pr_comments` | Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `github_get_pr_conversations` | Get all review conversations (inline code comment threads) for a GitHub pull request. Groups inline code review comments into threads showing root comment and replies. Also includes general PR discussion comments as separate entries. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `github_get_pr_diff` | Get the diff statistics for a GitHub pull request (files changed, additions, deletions). Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled. | `repository` (string, **required**)<br>`pullRequestID` (string, **required**)<br>`workspace` (string, **required**) |
+| `github_get_pr_diff_text` | Get the raw unified diff text for a GitHub pull request. Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled. | `repository` (string, **required**)<br>`pullRequestID` (string, **required**)<br>`workspace` (string, **required**) |
 | `github_get_pr_review_threads` | Get all review threads for a GitHub pull request via GraphQL, including each thread's node ID (needed for resolving), resolved status, file path, line, and comments. Use the returned thread 'id' with github_resolve_pr_thread. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `github_get_workflow_run` | Get details of a specific GitHub Actions workflow run by ID. Returns status, conclusion, logs URL, and timing information. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`runId` (string, **required**) |
 | `github_get_workflow_run_jobs` | Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`runId` (string, **required**) |
@@ -54,6 +55,7 @@ const result = github_get_commits_from_branches(...);
 | `github_reply_to_pr_thread` | Reply to an existing inline code review comment thread in a GitHub pull request. Use the comment ID of the root comment (or any comment) in the thread as inReplyToId. | `workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`inReplyToId` (string, **required**) |
 | `github_repository_dispatch` | Trigger a GitHub repository dispatch event. Workflows listening to 'on: repository_dispatch' with the matching event_type will be triggered. | `workspace` (string, **required**)<br>`eventType` (string, **required**)<br>`clientPayload` (string, optional)<br>`repository` (string, **required**) |
 | `github_resolve_pr_thread` | Resolve a review thread in a GitHub pull request. Requires the thread's GraphQL node ID, which can be obtained from github_get_pr_review_threads (the 'id' field of each thread). | `threadId` (string, **required**) |
+| `github_test` | Test GitHub connectivity by fetching the current user's profile | None |
 | `github_trigger_workflow` | Trigger a specific GitHub Actions workflow by filename (workflow dispatch). The workflow must have 'on: workflow_dispatch' configured. | `workspace` (string, **required**)<br>`ref` (string, optional)<br>`repository` (string, **required**)<br>`workflowId` (string, **required**)<br>`inputs` (string, optional) |
 | `github_update_check_run` | Update an existing GitHub Check Run — set it to completed with success/failure conclusion, update summary and detailed text. Call this after github_create_check_run to finalize the check. | `conclusion` (string, optional)<br>`summary` (string, optional)<br>`workspace` (string, **required**)<br>`checkRunId` (string, **required**)<br>`text` (string, optional)<br>`repository` (string, **required**)<br>`title` (string, optional)<br>`status` (string, **required**) |
 | `github_update_pr_comment` | Update (edit) an existing comment on a GitHub pull request or issue by its comment ID. | `commentId` (string, **required**)<br>`workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**) |
@@ -629,6 +631,36 @@ const result = github_get_pr_diff("repository", "pullRequestID");
 
 ---
 
+### `github_get_pr_diff_text`
+
+Get the raw unified diff text for a GitHub pull request. Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestID`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+**Example:**
+```bash
+dmtools github_get_pr_diff_text "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_get_pr_diff_text("repository", "pullRequestID");
+```
+
+---
+
 ### `github_get_pr_review_threads`
 
 Get all review threads for a GitHub pull request via GraphQL, including each thread's node ID (needed for resolving), resolved status, file path, line, and comments. Use the returned thread 'id' with github_resolve_pr_thread.
@@ -1055,6 +1087,24 @@ dmtools github_resolve_pr_thread "value"
 ```javascript
 // In JavaScript agent
 const result = github_resolve_pr_thread("threadId");
+```
+
+---
+
+### `github_test`
+
+Test GitHub connectivity by fetching the current user's profile
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools github_test
+```
+
+```javascript
+// In JavaScript agent
+const result = github_test();
 ```
 
 ---

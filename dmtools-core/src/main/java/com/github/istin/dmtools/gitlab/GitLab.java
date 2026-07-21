@@ -973,29 +973,11 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "limit", description = "Maximum number of pipelines to return", required = false, example = "50") String limit) throws IOException {
         int maxResults = parsePositiveInt(limit, 50);
         int perPage = Math.min(maxResults, 100);
-        int page = 1;
-        JSONArray pipelines = new JSONArray();
-        while (pipelines.length() < maxResults) {
-            String path = path(String.format("projects/%s/pipelines", getEncodedProject(workspace, repository)));
-            GenericRequest getRequest = new GenericRequest(this, path);
-            getRequest.param("status", normalizePipelineStatus(status));
-            getRequest.param("ref", ref);
-            getRequest.param("per_page", perPage);
-            getRequest.param("page", page);
-            String response = execute(getRequest);
-            if (response == null || response.isEmpty()) {
-                break;
-            }
-            JSONArray pageArray = new JSONArray(response);
-            for (int i = 0; i < pageArray.length() && pipelines.length() < maxResults; i++) {
-                pipelines.put(pageArray.get(i));
-            }
-            if (pageArray.length() < perPage) {
-                break;
-            }
-            page++;
-        }
-        return pipelines.toString();
+        String path = path(String.format("projects/%s/pipelines", getEncodedProject(workspace, repository)));
+        java.util.Map<String, String> queryParams = new java.util.LinkedHashMap<>();
+        queryParams.put("status", normalizePipelineStatus(status));
+        queryParams.put("ref", ref);
+        return fetchAllPages(path, queryParams, perPage, maxResults).toString();
     }
 
     @MCPTool(
@@ -1040,12 +1022,45 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
             @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
             @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
             @MCPParam(name = "pipelineId", description = "GitLab pipeline ID", required = true, example = "123456") String pipelineId) throws IOException {
-        int perPage = 100;
+        String path = path(String.format("projects/%s/pipelines/%s/jobs", getEncodedProject(workspace, repository), pipelineId));
+        return fetchAllPages(path, null, 100, null).toString();
+    }
+
+    @MCPTool(
+        name = "gitlab_get_commit_statuses",
+        description = "Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per status report " +
+                "(e.g. posted by an external CI like Jenkins via the gitlabBuilds plugin, or GitLab's own pipeline). " +
+                "Equivalent of GitHub's 'check runs' for GitLab. When the same status name was reported more than once " +
+                "for this commit (e.g. a CI job was retried), only the most recent report per name is returned.",
+        integration = "gitlab",
+        category = "ci",
+        aliases = {"source_code_get_commit_check_runs"}
+    )
+    public String getCommitStatuses(
+            @MCPParam(name = "workspace", description = "GitLab group or namespace", required = true, example = "mygroup") String workspace,
+            @MCPParam(name = "repository", description = "Repository name", required = true, example = "myrepo") String repository,
+            @MCPParam(name = "commitSha", description = "The commit SHA to get statuses for", required = true, example = "abc123...") String commitSha) throws IOException {
+        String path = path(String.format("projects/%s/repository/commits/%s/statuses", getEncodedProject(workspace, repository), commitSha));
+        JSONArray allStatuses = fetchAllPages(path, null, 100, null);
+        return latestStatusPerName(allStatuses).toString();
+    }
+
+    /**
+     * Shared pagination helper for GitLab list endpoints using the standard
+     * per_page/page query params. Follows pages until a short page is returned
+     * (fewer items than perPage) or maxResults items have been collected
+     * (maxResults == null means "collect everything").
+     */
+    private JSONArray fetchAllPages(String path, java.util.Map<String, String> queryParams, int perPage, Integer maxResults) throws IOException {
         int page = 1;
-        JSONArray allJobs = new JSONArray();
-        while (true) {
-            String path = path(String.format("projects/%s/pipelines/%s/jobs", getEncodedProject(workspace, repository), pipelineId));
+        JSONArray all = new JSONArray();
+        while (maxResults == null || all.length() < maxResults) {
             GenericRequest getRequest = new GenericRequest(this, path);
+            if (queryParams != null) {
+                for (java.util.Map.Entry<String, String> entry : queryParams.entrySet()) {
+                    getRequest.param(entry.getKey(), entry.getValue());
+                }
+            }
             getRequest.param("per_page", perPage);
             getRequest.param("page", page);
             String response = execute(getRequest);
@@ -1053,15 +1068,54 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
                 break;
             }
             JSONArray pageArray = new JSONArray(response);
-            for (int i = 0; i < pageArray.length(); i++) {
-                allJobs.put(pageArray.get(i));
+            for (int i = 0; i < pageArray.length() && (maxResults == null || all.length() < maxResults); i++) {
+                all.put(pageArray.get(i));
             }
             if (pageArray.length() < perPage) {
                 break;
             }
             page++;
         }
-        return allJobs.toString();
+        return all;
+    }
+
+    /**
+     * GitLab's commit-statuses endpoint returns the full history of every status ever
+     * reported for a commit, not just the current one. If a CI job is retried on the
+     * same commit (no new push), the same status "name" can appear multiple times with
+     * different outcomes. Callers care about the current state, so keep only the entry
+     * with the latest created_at (falling back to the last-seen entry per name if
+     * created_at is missing/unparseable) for each distinct name.
+     */
+    private static JSONArray latestStatusPerName(JSONArray statuses) {
+        java.util.LinkedHashMap<String, JSONObject> latestByName = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Long> latestTimestampByName = new java.util.HashMap<>();
+        for (int i = 0; i < statuses.length(); i++) {
+            JSONObject status = statuses.getJSONObject(i);
+            String name = status.optString("name", "unknown");
+            long createdAt = parseTimestamp(status.optString("created_at", null));
+            Long previousTimestamp = latestTimestampByName.get(name);
+            if (previousTimestamp == null || createdAt >= previousTimestamp) {
+                latestByName.put(name, status);
+                latestTimestampByName.put(name, createdAt);
+            }
+        }
+        JSONArray result = new JSONArray();
+        for (JSONObject status : latestByName.values()) {
+            result.put(status);
+        }
+        return result;
+    }
+
+    private static long parseTimestamp(String isoDate) {
+        if (isoDate == null || isoDate.isEmpty()) {
+            return 0L;
+        }
+        try {
+            return java.time.Instant.parse(isoDate).toEpochMilli();
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 
     @MCPTool(

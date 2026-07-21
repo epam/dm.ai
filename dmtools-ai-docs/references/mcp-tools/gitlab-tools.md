@@ -1,6 +1,6 @@
 # GITLAB MCP Tools
 
-**Total Tools**: 28
+**Total Tools**: 30
 
 ## Quick Reference
 
@@ -9,16 +9,16 @@
 dmtools list | jq '.tools[] | select(.name | startswith("gitlab_"))'
 
 # Example usage
-dmtools gitlab_get_mr_comments [arguments]
+dmtools gitlab_test [arguments]
 ```
 
 ## Usage in JavaScript Agents
 
 ```javascript
 // Direct function calls for gitlab tools
+const result = gitlab_test(...);
 const result = gitlab_get_mr_comments(...);
 const result = gitlab_add_mr_label(...);
-const result = gitlab_remove_mr_label(...);
 ```
 
 ## Available Tools
@@ -31,28 +31,30 @@ const result = gitlab_remove_mr_label(...);
 | `gitlab_approve_mr` | Approve a GitLab merge request. Adds your approval to the MR. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_cancel_job` | Cancel a GitLab CI job. | `repository` (string, **required**)<br>`jobId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_create_mr` | Create a GitLab merge request from a source branch into a target branch. | `removeSourceBranch` (string, optional)<br>`workspace` (string, **required**)<br>`targetBranch` (string, **required**)<br>`sourceBranch` (string, **required**)<br>`description` (string, optional)<br>`repository` (string, **required**)<br>`title` (string, **required**) |
-| `gitlab_delete_release_asset` | Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`assetName` (string, **required**)<br>`packageName` (string, optional) |
-| `gitlab_download_release_asset` | Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`assetName` (string, **required**)<br>`targetFilePath` (string, **required**)<br>`packageName` (string, optional) |
+| `gitlab_delete_release_asset` | Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names. | `assetName` (string, **required**)<br>`workspace` (string, **required**)<br>`packageName` (string, optional)<br>`repository` (string, **required**)<br>`tagName` (string, **required**) |
+| `gitlab_download_release_asset` | Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path. | `assetName` (string, **required**)<br>`workspace` (string, **required**)<br>`targetFilePath` (string, **required**)<br>`packageName` (string, optional)<br>`repository` (string, **required**)<br>`tagName` (string, **required**) |
+| `gitlab_get_commit_statuses` | Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per status report (e.g. posted by an external CI like Jenkins via the gitlabBuilds plugin, or GitLab's own pipeline). Equivalent of GitHub's 'check runs' for GitLab. When the same status name was reported more than once for this commit (e.g. a CI job was retried), only the most recent report per name is returned. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`commitSha` (string, **required**) |
 | `gitlab_get_job_logs` | Get GitLab CI job trace logs. | `repository` (string, **required**)<br>`jobId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr` | Get details of a specific GitLab merge request including title, description, state, author, diff_refs (base_sha, head_sha, start_sha needed for inline comments). | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
-| `gitlab_get_mr_activities` | Get all activities for a GitLab merge request including approvals and general discussion notes. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
+| `gitlab_get_mr_activities` | Get all activities for a GitLab merge request. Approvals are fetched from the real GitLab Approvals API. General discussion notes are also included. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr_comments` | Get all comments for a GitLab merge request, including both inline code review comments (DiffNote) and general discussion notes. Excludes system-generated notes. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr_diff` | Get diff stats and changed files for a GitLab merge request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr_diff_text` | Get the raw unified diff text for a GitLab merge request (suitable for locating file/line positions, e.g. for inline review comments). | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_get_mr_discussions` | Get all discussion threads for a GitLab merge request. Each discussion contains notes (comments) and a resolved status. Use the discussion id with gitlab_resolve_mr_thread. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
-| `gitlab_get_or_create_release` | Find an existing GitLab release by tag, or create one if it does not exist. Useful for a stable artefact storage release (mirrors github_get_or_create_draft_release). Note: GitLab releases have no draft concept; releases are visible as soon as they are created. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`releaseName` (string, optional)<br>`targetCommitish` (string, optional)<br>`body` (string, optional) |
+| `gitlab_get_or_create_release` | Find an existing GitLab release by tag, or create one if it does not exist. Useful for a stable artefact storage release (mirrors github_get_or_create_draft_release). Note: GitLab releases have no draft concept; releases are visible as soon as they are created. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`targetCommitish` (string, optional)<br>`body` (string, optional)<br>`releaseName` (string, optional) |
 | `gitlab_get_pipeline_jobs` | List jobs for a GitLab CI pipeline. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`pipelineId` (string, **required**) |
 | `gitlab_list_mrs` | List merge requests for a GitLab project. State can be 'opened', 'closed', 'merged', or 'all'. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`state` (string, **required**) |
 | `gitlab_list_pipeline_runs` | List recent GitLab CI pipelines. Optionally filter by status, ref, and limit. | `limit` (string, optional)<br>`workspace` (string, **required**)<br>`ref` (string, optional)<br>`repository` (string, **required**)<br>`status` (string, optional) |
 | `gitlab_list_project_jobs` | List recent GitLab CI jobs for a project. | `repository` (string, **required**)<br>`workspace` (string, **required**) |
-| `gitlab_list_release_assets` | List all assets (asset links) attached to a GitLab release. Returns a JSON array of link objects including id, name, url, and direct_asset_url. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**) |
+| `gitlab_list_release_assets` | List all assets (asset links) attached to a GitLab release. Returns a JSON array of link objects including id, name, url, and direct_asset_url. | `repository` (string, **required**)<br>`tagName` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_merge_mr` | Merge a GitLab merge request. Optionally provide a custom merge commit message. | `workspace` (string, **required**)<br>`mergeCommitMessage` (string, optional)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_rebase_mr` | Ask GitLab to rebase/update a merge request source branch with its target branch. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
 | `gitlab_remove_mr_label` | Remove a label from a GitLab merge request. | `workspace` (string, **required**)<br>`label` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_reply_to_mr_thread` | Reply to an existing discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions. | `workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`discussionId` (string, **required**) |
 | `gitlab_resolve_mr_thread` | Resolve (close) a review discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`discussionId` (string, **required**) |
+| `gitlab_test` | Test GitLab connectivity by fetching the current user's profile | None |
 | `gitlab_trigger_pipeline` | Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token. | `variablesJson` (string, optional)<br>`workspace` (string, **required**)<br>`ref` (string, **required**)<br>`repository` (string, **required**) |
-| `gitlab_upload_release_asset` | Upload a local file as a GitLab release asset. Internally publishes the file to the project's Generic Package Registry and attaches it to the release as an asset link, so it is discoverable the same way as a GitHub release asset. Returns the release link metadata including direct_asset_url. Set overwrite=true to automatically replace an existing asset with the same name before uploading (GitLab's Generic Package Registry rejects duplicate uploads with 409 Conflict otherwise). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`filePath` (string, **required**)<br>`assetName` (string, optional)<br>`contentType` (string, optional)<br>`packageName` (string, optional)<br>`overwrite` (string, optional) |
+| `gitlab_upload_release_asset` | Upload a local file as a GitLab release asset. Internally publishes the file to the project's Generic Package Registry and attaches it to the release as an asset link, so it is discoverable the same way as a GitHub release asset. Returns the release link metadata including direct_asset_url. Set overwrite=true to automatically replace an existing asset with the same name before uploading (GitLab's Generic Package Registry rejects duplicate uploads with 409 Conflict otherwise). | `workspace` (string, **required**)<br>`filePath` (string, **required**)<br>`assetName` (string, optional)<br>`packageName` (string, optional)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`contentType` (string, optional)<br>`overwrite` (string, optional) |
 
 ## Detailed Parameter Information
 
@@ -284,6 +286,116 @@ const result = gitlab_create_mr("removeSourceBranch", "workspace");
 
 ---
 
+### `gitlab_delete_release_asset`
+
+Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names.
+
+**Parameters:**
+
+- **`assetName`** (string) 🔴 Required
+  - The name of the asset to delete, as returned by gitlab_list_release_assets.
+  - Example: `clip_123.png`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`packageName`** (string) ⚪ Optional
+  - Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.
+  - Example: `release-assets`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`tagName`** (string) 🔴 Required
+  - The tag name of the release.
+  - Example: `pr-attachments-storage`
+
+**Example:**
+```bash
+dmtools gitlab_delete_release_asset "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_delete_release_asset("assetName", "workspace");
+```
+
+---
+
+### `gitlab_download_release_asset`
+
+Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path.
+
+**Parameters:**
+
+- **`assetName`** (string) 🔴 Required
+  - The name of the asset to download, as returned by gitlab_list_release_assets.
+  - Example: `clip_123.png`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`targetFilePath`** (string) 🔴 Required
+  - Local file path where the downloaded asset should be saved.
+  - Example: `/tmp/downloaded_clip_123.png`
+
+- **`packageName`** (string) ⚪ Optional
+  - Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.
+  - Example: `release-assets`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`tagName`** (string) 🔴 Required
+  - The tag name of the release.
+  - Example: `pr-attachments-storage`
+
+**Example:**
+```bash
+dmtools gitlab_download_release_asset "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_download_release_asset("assetName", "workspace");
+```
+
+---
+
+### `gitlab_get_commit_statuses`
+
+Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per status report (e.g. posted by an external CI like Jenkins via the gitlabBuilds plugin, or GitLab's own pipeline). Equivalent of GitHub's 'check runs' for GitLab. When the same status name was reported more than once for this commit (e.g. a CI job was retried), only the most recent report per name is returned.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`commitSha`** (string) 🔴 Required
+  - The commit SHA to get statuses for
+  - Example: `abc123...`
+
+**Example:**
+```bash
+dmtools gitlab_get_commit_statuses "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_commit_statuses("repository", "workspace");
+```
+
+---
+
 ### `gitlab_get_job_logs`
 
 Get GitLab CI job trace logs.
@@ -346,7 +458,7 @@ const result = gitlab_get_mr("repository", "pullRequestId");
 
 ### `gitlab_get_mr_activities`
 
-Get all activities for a GitLab merge request including approvals and general discussion notes.
+Get all activities for a GitLab merge request. Approvals are fetched from the real GitLab Approvals API. General discussion notes are also included.
 
 **Parameters:**
 
@@ -494,6 +606,48 @@ const result = gitlab_get_mr_discussions("repository", "pullRequestId");
 
 ---
 
+### `gitlab_get_or_create_release`
+
+Find an existing GitLab release by tag, or create one if it does not exist. Useful for a stable artefact storage release (mirrors github_get_or_create_draft_release). Note: GitLab releases have no draft concept; releases are visible as soon as they are created.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`tagName`** (string) 🔴 Required
+  - The Git tag name for the release. Reused to find an existing release.
+  - Example: `pr-attachments-storage`
+
+- **`targetCommitish`** (string) ⚪ Optional
+  - Optional branch or commit SHA the release's tag should point to when created (GitLab 'ref'). Required if the tag does not already exist.
+  - Example: `main`
+
+- **`body`** (string) ⚪ Optional
+  - Optional Markdown release notes/description.
+  - Example: `Internal storage release for PR attachments.`
+
+- **`releaseName`** (string) ⚪ Optional
+  - The human-readable release name. If empty, tagName is used.
+  - Example: `PR Attachments Storage`
+
+**Example:**
+```bash
+dmtools gitlab_get_or_create_release "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_or_create_release("workspace", "repository");
+```
+
+---
+
 ### `gitlab_get_pipeline_jobs`
 
 List jobs for a GitLab CI pipeline.
@@ -614,6 +768,36 @@ dmtools gitlab_list_project_jobs "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_list_project_jobs("repository", "workspace");
+```
+
+---
+
+### `gitlab_list_release_assets`
+
+List all assets (asset links) attached to a GitLab release. Returns a JSON array of link objects including id, name, url, and direct_asset_url.
+
+**Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`tagName`** (string) 🔴 Required
+  - The tag name of the release.
+  - Example: `pr-attachments-storage`
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+**Example:**
+```bash
+dmtools gitlab_list_release_assets "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_list_release_assets("repository", "tagName");
 ```
 
 ---
@@ -788,6 +972,24 @@ const result = gitlab_resolve_mr_thread("workspace", "repository");
 
 ---
 
+### `gitlab_test`
+
+Test GitLab connectivity by fetching the current user's profile
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools gitlab_test
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_test();
+```
+
+---
+
 ### `gitlab_trigger_pipeline`
 
 Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token.
@@ -822,49 +1024,6 @@ const result = gitlab_trigger_pipeline("variablesJson", "workspace");
 
 ---
 
-
-### `gitlab_get_or_create_release`
-
-Find an existing GitLab release by tag, or create one if it does not exist. Useful for a stable artefact storage release (mirrors github_get_or_create_draft_release). Note: GitLab releases have no draft concept; releases are visible as soon as they are created.
-
-**Parameters:**
-
-- **`workspace`** (string) 🔴 Required
-  - GitLab group or namespace
-  - Example: `mygroup`
-
-- **`repository`** (string) 🔴 Required
-  - Repository name
-  - Example: `myrepo`
-
-- **`tagName`** (string) 🔴 Required
-  - The Git tag name for the release. Reused to find an existing release.
-  - Example: `pr-attachments-storage`
-
-- **`releaseName`** (string) ⚪ Optional
-  - The human-readable release name. If empty, tagName is used.
-  - Example: `PR Attachments Storage`
-
-- **`targetCommitish`** (string) ⚪ Optional
-  - Optional branch or commit SHA the release's tag should point to when created (GitLab 'ref'). Required if the tag does not already exist.
-  - Example: `main`
-
-- **`body`** (string) ⚪ Optional
-  - Optional Markdown release notes/description.
-  - Example: `Internal storage release for PR attachments.`
-
-**Example:**
-```bash
-dmtools gitlab_get_or_create_release "value" "value" "value"
-```
-
-```javascript
-// In JavaScript agent
-const result = gitlab_get_or_create_release("workspace", "repository", "tagName");
-```
-
----
-
 ### `gitlab_upload_release_asset`
 
 Upload a local file as a GitLab release asset. Internally publishes the file to the project's Generic Package Registry and attaches it to the release as an asset link, so it is discoverable the same way as a GitHub release asset. Returns the release link metadata including direct_asset_url. Set overwrite=true to automatically replace an existing asset with the same name before uploading (GitLab's Generic Package Registry rejects duplicate uploads with 409 Conflict otherwise).
@@ -875,14 +1034,6 @@ Upload a local file as a GitLab release asset. Internally publishes the file to 
   - GitLab group or namespace
   - Example: `mygroup`
 
-- **`repository`** (string) 🔴 Required
-  - Repository name
-  - Example: `myrepo`
-
-- **`tagName`** (string) 🔴 Required
-  - The tag name of the release returned by gitlab_get_or_create_release.
-  - Example: `pr-attachments-storage`
-
 - **`filePath`** (string) 🔴 Required
   - Absolute or relative path to the local file to upload.
   - Example: `/tmp/preview.png`
@@ -891,13 +1042,21 @@ Upload a local file as a GitLab release asset. Internally publishes the file to 
   - Optional asset filename shown in GitLab. Defaults to the local filename.
   - Example: `clip_123.png`
 
-- **`contentType`** (string) ⚪ Optional
-  - Optional MIME type. Defaults to detected type or application/octet-stream.
-  - Example: `image/png`
-
 - **`packageName`** (string) ⚪ Optional
   - Optional Generic Package Registry package name used to group the uploaded files. Defaults to 'release-assets'.
   - Example: `release-assets`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`tagName`** (string) 🔴 Required
+  - The tag name of the release returned by gitlab_get_or_create_release.
+  - Example: `pr-attachments-storage`
+
+- **`contentType`** (string) ⚪ Optional
+  - Optional MIME type. Defaults to detected type or application/octet-stream.
+  - Example: `image/png`
 
 - **`overwrite`** (string) ⚪ Optional
   - If true, delete any existing asset (release link + underlying generic package file) with the same name before uploading. Defaults to false.
@@ -905,122 +1064,13 @@ Upload a local file as a GitLab release asset. Internally publishes the file to 
 
 **Example:**
 ```bash
-dmtools gitlab_upload_release_asset "value" "value" "value"
+dmtools gitlab_upload_release_asset "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = gitlab_upload_release_asset("workspace", "repository", "tagName");
+const result = gitlab_upload_release_asset("workspace", "filePath");
 ```
 
 ---
 
-### `gitlab_list_release_assets`
-
-List all assets (asset links) attached to a GitLab release. Returns a JSON array of link objects including id, name, url, and direct_asset_url.
-
-**Parameters:**
-
-- **`workspace`** (string) 🔴 Required
-  - GitLab group or namespace
-  - Example: `mygroup`
-
-- **`repository`** (string) 🔴 Required
-  - Repository name
-  - Example: `myrepo`
-
-- **`tagName`** (string) 🔴 Required
-  - The tag name of the release.
-  - Example: `pr-attachments-storage`
-
-**Example:**
-```bash
-dmtools gitlab_list_release_assets "value" "value" "value"
-```
-
-```javascript
-// In JavaScript agent
-const result = gitlab_list_release_assets("workspace", "repository", "tagName");
-```
-
----
-
-### `gitlab_delete_release_asset`
-
-Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names.
-
-**Parameters:**
-
-- **`workspace`** (string) 🔴 Required
-  - GitLab group or namespace
-  - Example: `mygroup`
-
-- **`repository`** (string) 🔴 Required
-  - Repository name
-  - Example: `myrepo`
-
-- **`tagName`** (string) 🔴 Required
-  - The tag name of the release.
-  - Example: `pr-attachments-storage`
-
-- **`assetName`** (string) 🔴 Required
-  - The name of the asset to delete, as returned by gitlab_list_release_assets.
-  - Example: `clip_123.png`
-
-- **`packageName`** (string) ⚪ Optional
-  - Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.
-  - Example: `release-assets`
-
-**Example:**
-```bash
-dmtools gitlab_delete_release_asset "value" "value" "value"
-```
-
-```javascript
-// In JavaScript agent
-const result = gitlab_delete_release_asset("workspace", "repository", "tagName");
-```
-
----
-
-### `gitlab_download_release_asset`
-
-Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path.
-
-**Parameters:**
-
-- **`workspace`** (string) 🔴 Required
-  - GitLab group or namespace
-  - Example: `mygroup`
-
-- **`repository`** (string) 🔴 Required
-  - Repository name
-  - Example: `myrepo`
-
-- **`tagName`** (string) 🔴 Required
-  - The tag name of the release.
-  - Example: `pr-attachments-storage`
-
-- **`assetName`** (string) 🔴 Required
-  - The name of the asset to download, as returned by gitlab_list_release_assets.
-  - Example: `clip_123.png`
-
-- **`targetFilePath`** (string) 🔴 Required
-  - Local file path where the downloaded asset should be saved.
-  - Example: `/tmp/downloaded_clip_123.png`
-
-- **`packageName`** (string) ⚪ Optional
-  - Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.
-  - Example: `release-assets`
-
-**Example:**
-```bash
-dmtools gitlab_download_release_asset "value" "value" "value"
-```
-
-```javascript
-// In JavaScript agent
-const result = gitlab_download_release_asset("workspace", "repository", "tagName");
-```
-
----
