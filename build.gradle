@@ -1,7 +1,7 @@
 // Root build.gradle - Multi-project coordinator
 plugins {
     id 'io.spring.dependency-management' version '1.1.7' apply false
-    id 'com.gradleup.shadow' version '9.5.1' apply false
+    id 'com.gradleup.shadow' version '9.6.0' apply false
     id 'org.owasp.dependencycheck' version '12.2.2'
 }
 
