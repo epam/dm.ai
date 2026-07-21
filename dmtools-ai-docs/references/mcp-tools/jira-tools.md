@@ -1,6 +1,6 @@
 # JIRA MCP Tools
 
-**Total Tools**: 67
+**Total Tools**: 69
 
 ## Quick Reference
 
@@ -9,16 +9,16 @@
 dmtools list | jq '.tools[] | select(.name | startswith("jira_"))'
 
 # Example usage
-dmtools jira_xray_create_precondition [arguments]
+dmtools jira_xray_test [arguments]
 ```
 
 ## Usage in JavaScript Agents
 
 ```javascript
 // Direct function calls for jira tools
+const result = jira_xray_test(...);
 const result = jira_xray_create_precondition(...);
 const result = jira_xray_search_tickets(...);
-const result = jira_xray_get_test_details(...);
 ```
 
 ## Available Tools
@@ -76,6 +76,7 @@ const result = jira_xray_get_test_details(...);
 | `jira_set_priority` | Set the priority for a Jira ticket | `priority` (string, **required**)<br>`key` (string, **required**) |
 | `jira_setup_project_workflow` | Set up a project's workflow using an explicit list of statuses (no source project needed). Accepts a JSON array of {name, category} objects and applies them to the target project's workflow. Valid categories: TODO, IN_PROGRESS, DONE. Works with team-managed (next-gen) Jira projects. | `projectKey` (string, **required**)<br>`statusDefinitions` (string, **required**) |
 | `jira_sync_project_workflow` | Sync the workflow (statuses) of a target project to exactly match the source project using Jira's bulk workflow update API. Replaces the target workflow's statuses and transitions with those from the source project. Existing issues with removed statuses are automatically migrated to the closest matching new status. Works with team-managed (next-gen) Jira projects. | `sourceProjectKey` (string, **required**)<br>`targetProjectKey` (string, **required**) |
+| `jira_test` | Test Jira connectivity by fetching the current user's profile | None |
 | `jira_update_all_fields_with_name` | Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name. | `value` (object, **required**)<br>`key` (string, **required**)<br>`fieldName` (string, **required**) |
 | `jira_update_description` | Update the description of a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists | `description` (string, **required**)<br>`key` (string, **required**) |
 | `jira_update_field` | Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field. | `field` (string, **required**)<br>`value` (object, **required**)<br>`key` (string, **required**) |
@@ -92,6 +93,7 @@ const result = jira_xray_get_test_details(...);
 | `jira_xray_get_test_details` | Get test details including steps and preconditions using X-ray GraphQL API. Returns JSONObject with test details. | `testKey` (string, **required**) |
 | `jira_xray_get_test_steps` | Get test steps for a test issue using X-ray GraphQL API. Returns JSONArray of test steps. | `testKey` (string, **required**) |
 | `jira_xray_search_tickets` | Search for Jira tickets using JQL query and enrich Test/Precondition issues with X-ray test steps and preconditions. Returns list of tickets with X-ray data. | `fields` (array, optional)<br>`searchQueryJQL` (string, **required**) |
+| `jira_xray_test` | Test X-ray connectivity by obtaining an access token | None |
 
 ## Detailed Parameter Information
 
@@ -880,7 +882,7 @@ Get a specific Jira ticket by key with optional field filtering
 **Parameters:**
 
 - **`fields`** (array) ⚪ Optional
-  - Optional array of fields to include in the response
+  - Optional array of fields to include in the response. When omitted, the project's extended default fields are used.
 
 - **`key`** (string) 🔴 Required
   - The Jira ticket key to retrieve
@@ -1147,7 +1149,7 @@ Search for Jira tickets using JQL and returns all results
   - Example: `project = DEMO AND status = Open`
 
 - **`fields`** (array) ⚪ Optional
-  - Optional array of field names to include in response
+  - Optional array of field names to include in response. When omitted, the project's extended default fields are used.
   - Example: `["summary", "status", "assignee"]`
 
 **Example:**
@@ -1318,6 +1320,24 @@ const result = jira_sync_project_workflow("sourceProjectKey", "targetProjectKey"
 
 ---
 
+### `jira_test`
+
+Test Jira connectivity by fetching the current user's profile
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools jira_test
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_test();
+```
+
+---
+
 ### `jira_update_all_fields_with_name`
 
 Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name.
@@ -1412,39 +1432,13 @@ Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Docume
   - The Jira ticket key to update
 
 **Example:**
-
 ```bash
-# Plain text (wrapped into ADF automatically)
-dmtools jira_update_field_as_adf --data '{"key":"TP-1523","field":"description","value":"Plain text description"}'
-
-# ADF with interactive task-list checkboxes
-./dmtools.sh jira_update_field_as_adf --data '{"key":"TP-1523","field":"description","value":"{\"version\":1,\"type\":\"doc\",\"content\":[{\"type\":\"taskList\",\"attrs\":{\"localId\":\"\"},\"content\":[{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"DONE\"},\"content\":[{\"type\":\"text\",\"text\":\"E2E\"}]},{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"TODO\"},\"content\":[{\"type\":\"text\",\"text\":\"Component\"}]},{\"type\":\"taskItem\",\"attrs\":{\"localId\":\"\",\"state\":\"TODO\"},\"content\":[{\"type\":\"text\",\"text\":\"Unit\"}]}]}]}"}'
+dmtools jira_update_field_as_adf "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const adfDoc = {
-    version: 1,
-    type: "doc",
-    content: [
-        { type: "paragraph", content: [{ type: "text", text: "Test Levels:" }] },
-        {
-            type: "taskList",
-            attrs: { localId: "" },
-            content: [
-                { type: "taskItem", attrs: { localId: "", state: "DONE" }, content: [{ type: "text", text: "E2E" }] },
-                { type: "taskItem", attrs: { localId: "", state: "TODO" }, content: [{ type: "text", text: "Component" }] },
-                { type: "taskItem", attrs: { localId: "", state: "TODO" }, content: [{ type: "text", text: "Unit" }] }
-            ]
-        }
-    ]
-};
-
-const result = jira_update_field_as_adf({
-    key: "TP-1523",
-    field: "description",
-    value: JSON.stringify(adfDoc)
-});
+const result = jira_update_field_as_adf("field", "value");
 ```
 
 ---
@@ -1752,6 +1746,24 @@ dmtools jira_xray_search_tickets "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_xray_search_tickets("fields", "searchQueryJQL");
+```
+
+---
+
+### `jira_xray_test`
+
+Test X-ray connectivity by obtaining an access token
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools jira_xray_test
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_xray_test();
 ```
 
 ---
