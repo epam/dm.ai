@@ -1,6 +1,6 @@
 # CONFLUENCE MCP Tools
 
-**Total Tools**: 18
+**Total Tools**: 19
 
 ## Quick Reference
 
@@ -41,6 +41,7 @@ const result = confluence_content_by_id(...);
 | `confluence_get_current_user_profile` | Get the current user's profile information from Confluence. Returns user details for the authenticated user. | None |
 | `confluence_get_user_profile_by_id` | Get a specific user's profile information from Confluence by user ID. Returns user details for the specified user. | `userId` (string, **required**) |
 | `confluence_search_content_by_text` | Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified. | `limit` (number, optional)<br>`query` (string, **required**) |
+| `confluence_test` | Test Confluence connectivity by fetching the current user's profile | None |
 | `confluence_update_page` | Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
 | `confluence_update_page_with_history` | Update an existing Confluence page with new content and add a history comment. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`historyComment` (string, **required**) |
 
@@ -473,6 +474,24 @@ dmtools confluence_search_content_by_text "value" "value"
 ```javascript
 // In JavaScript agent
 const result = confluence_search_content_by_text("limit", "query");
+```
+
+---
+
+### `confluence_test`
+
+Test Confluence connectivity by fetching the current user's profile
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools confluence_test
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_test();
 ```
 
 ---

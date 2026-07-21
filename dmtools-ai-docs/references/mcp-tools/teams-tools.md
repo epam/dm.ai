@@ -1,6 +1,6 @@
 # TEAMS MCP Tools
 
-**Total Tools**: 30
+**Total Tools**: 31
 
 ## Quick Reference
 
@@ -9,16 +9,16 @@
 dmtools list | jq '.tools[] | select(.name | startswith("teams_"))'
 
 # Example usage
-dmtools teams_chats_raw [arguments]
+dmtools teams_test [arguments]
 ```
 
 ## Usage in JavaScript Agents
 
 ```javascript
 // Direct function calls for teams tools
+const result = teams_test(...);
 const result = teams_chats_raw(...);
 const result = teams_chats(...);
-const result = teams_recent_chats(...);
 ```
 
 ## Available Tools
@@ -55,6 +55,7 @@ const result = teams_recent_chats(...);
 | `teams_send_message` | Send a message to a chat by name or participant name (finds chat, then sends message) | `chatName` (string, **required**)<br>`content` (string, **required**) |
 | `teams_send_message_by_id` | Send a message to a chat by ID (returns raw JSON) | `chatId` (string, **required**)<br>`content` (string, **required**) |
 | `teams_send_myself_message` | Send a message to your personal self chat (notes to yourself) | `content` (string, **required**) |
+| `teams_test` | Test Microsoft Teams connectivity by fetching the current user's profile | None |
 
 ## Detailed Parameter Information
 
@@ -759,6 +760,24 @@ dmtools teams_send_myself_message "value"
 ```javascript
 // In JavaScript agent
 const result = teams_send_myself_message("content");
+```
+
+---
+
+### `teams_test`
+
+Test Microsoft Teams connectivity by fetching the current user's profile
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools teams_test
+```
+
+```javascript
+// In JavaScript agent
+const result = teams_test();
 ```
 
 ---

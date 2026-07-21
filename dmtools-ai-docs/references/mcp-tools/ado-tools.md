@@ -1,6 +1,6 @@
 # ADO MCP Tools
 
-**Total Tools**: 37
+**Total Tools**: 38
 
 ## Quick Reference
 
@@ -57,6 +57,7 @@ const result = ado_get_comments(...);
 | `ado_resolve_pr_thread` | Resolve (close) a comment thread in an Azure DevOps pull request. Sets the thread status to 'fixed'. Other statuses: 'active', 'closed', 'byDesign', 'pending', 'wontFix'. | `threadId` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`status` (string, optional) |
 | `ado_search_by_wiql` | Search for work items using WIQL (Work Item Query Language) | `fields` (array, optional)<br>`wiql` (string, **required**) |
 | `ado_set_pr_vote` | Set the current user's vote on a pull request. Vote values: 10=approve, 5=approve with suggestions, 0=reset/no vote, -5=wait for author, -10=reject. | `reviewerId` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`vote` (string, **required**) |
+| `ado_test` | Test Azure DevOps connectivity by fetching the current user's profile | None |
 | `ado_trigger_pipeline` | Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow. | `branch` (string, optional)<br>`variables` (string, optional)<br>`pipelineId` (number, **required**) |
 | `ado_update_description` | Update the description of a work item | `description` (string, **required**)<br>`id` (string, **required**) |
 | `ado_update_pr` | Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate. | `description` (string, optional)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`title` (string, optional)<br>`status` (string, optional) |
@@ -946,6 +947,24 @@ dmtools ado_set_pr_vote "value" "value"
 ```javascript
 // In JavaScript agent
 const result = ado_set_pr_vote("reviewerId", "repository");
+```
+
+---
+
+### `ado_test`
+
+Test Azure DevOps connectivity by fetching the current user's profile
+
+**Parameters:** None
+
+**Example:**
+```bash
+dmtools ado_test
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_test();
 ```
 
 ---

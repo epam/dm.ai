@@ -25,7 +25,7 @@ const result = mermaid_index_read(...);
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
-| `mermaid_index_generate` | Generate Mermaid diagrams from content sources (Confluence, Jira, Jira Xray, or TestRail) based on include/exclude patterns. Processes content recursively and stores diagrams in hierarchical file structure. | `integration` (string, **required**)<br>`include_patterns` (array, **required**)<br>`exclude_patterns` (array, optional)<br>`storage_path` (string, **required**)<br>`custom_fields` (array, optional)<br>`include_comments` (boolean, optional) |
+| `mermaid_index_generate` | Generate Mermaid diagrams from content sources (Confluence or Jira) based on include/exclude patterns. Processes content recursively and stores diagrams in hierarchical file structure. | `integration` (string, **required**)<br>`include_patterns` (array, **required**)<br>`exclude_patterns` (array, optional)<br>`storage_path` (string, **required**)<br>`custom_fields` (array, optional)<br>`include_comments` (boolean, optional) |
 | `mermaid_index_read` | Read all Mermaid diagram files (.mmd) from storage path recursively. Returns list of diagrams with their paths and content. | `integration` (string, **required**)<br>`storage_path` (string, **required**) |
 | `mermaid_index_read_list` | Read all Mermaid diagram files (.mmd) from storage path recursively. Returns list of ToText objects with paths and content. | `integration` (string, **required**)<br>`storage_path` (string, **required**) |
 
@@ -33,7 +33,7 @@ const result = mermaid_index_read(...);
 
 ### `mermaid_index_generate`
 
-Generate Mermaid diagrams from content sources (Confluence, Jira, Jira Xray, or TestRail) based on include/exclude patterns. Processes content recursively and stores diagrams in hierarchical file structure.
+Generate Mermaid diagrams from content sources (Confluence or Jira) based on include/exclude patterns. Processes content recursively and stores diagrams in hierarchical file structure.
 
 **Parameters:**
 
@@ -42,11 +42,11 @@ Generate Mermaid diagrams from content sources (Confluence, Jira, Jira Xray, or 
   - Example: `confluence`
 
 - **`include_patterns`** (array) 🔴 Required
-  - Array of include patterns. For Confluence: `["SPACE/pages/PAGE_ID/PAGE_NAME/**"]`. For Jira: `["JQL query"]`. For TestRail: `["project_id=5&suite_id=3"]`
+  - Array of include patterns. For Confluence: ["SPACE/pages/PAGE_ID/PAGE_NAME/**"]. For Jira: ["JQL query"]. For TestRail: ["project_id=5&suite_id=3"]
   - Example: `["AINA/pages/11665522/Templates/**"]`
 
 - **`exclude_patterns`** (array) ⚪ Optional
-  - Optional array of exclude patterns to filter out specific content (not used for Jira or TestRail)
+  - Optional array of exclude patterns to filter out specific content (not used for Jira)
   - Example: `[]`
 
 - **`storage_path`** (string) 🔴 Required
@@ -61,26 +61,14 @@ Generate Mermaid diagrams from content sources (Confluence, Jira, Jira Xray, or 
   - Whether to include comments in content (only for Jira integrations, default: false)
   - Example: `false`
 
-**Examples:**
-
-Confluence:
+**Example:**
 ```bash
-dmtools mermaid_index_generate confluence '["SPACE/pages/123/MyPage/**"]' '[]' ./mermaid-diagrams
-```
-
-Jira:
-```bash
-dmtools mermaid_index_generate jira '["project = PROJ AND type = Story"]' '[]' ./mermaid-diagrams
-```
-
-TestRail:
-```bash
-dmtools mermaid_index_generate testrail '["project_id=5&suite_id=3"]' '[]' ./mermaid-diagrams
+dmtools mermaid_index_generate "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = mermaid_index_generate("confluence", ["SPACE/pages/123/MyPage/**"], [], "./mermaid-diagrams");
+const result = mermaid_index_generate("integration", "include_patterns");
 ```
 
 ---
@@ -92,7 +80,7 @@ Read all Mermaid diagram files (.mmd) from storage path recursively. Returns lis
 **Parameters:**
 
 - **`integration`** (string) 🔴 Required
-  - Integration type used as subfolder name under `storage_path`. Supported: 'confluence', 'jira', 'jira_xray', 'testrail', or any integration subfolder you created.
+  - Integration type (used as subfolder name under storage path)
   - Example: `confluence`
 
 - **`storage_path`** (string) 🔴 Required
@@ -101,12 +89,12 @@ Read all Mermaid diagram files (.mmd) from storage path recursively. Returns lis
 
 **Example:**
 ```bash
-dmtools mermaid_index_read confluence ./mermaid-diagrams
+dmtools mermaid_index_read "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = mermaid_index_read("confluence", "./mermaid-diagrams");
+const result = mermaid_index_read("integration", "storage_path");
 ```
 
 ---
@@ -118,7 +106,7 @@ Read all Mermaid diagram files (.mmd) from storage path recursively. Returns lis
 **Parameters:**
 
 - **`integration`** (string) 🔴 Required
-  - Integration type used as subfolder name under `storage_path`. Supported: 'confluence', 'jira', 'jira_xray', 'testrail', or any integration subfolder you created.
+  - Integration type (used as subfolder name under storage path)
   - Example: `confluence`
 
 - **`storage_path`** (string) 🔴 Required
@@ -127,12 +115,12 @@ Read all Mermaid diagram files (.mmd) from storage path recursively. Returns lis
 
 **Example:**
 ```bash
-dmtools mermaid_index_read_list confluence ./mermaid-diagrams
+dmtools mermaid_index_read_list "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = mermaid_index_read_list("confluence", "./mermaid-diagrams");
+const result = mermaid_index_read_list("integration", "storage_path");
 ```
 
 ---
