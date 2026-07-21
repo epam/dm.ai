@@ -284,11 +284,14 @@ public class JobJavaScriptBridge {
      * Execute MCP tool from JavaScript
      */
     public Object executeToolFromJS(String toolName, Object jsArgs) {
+        boolean verboseToolLogging = isToolCallArgsLoggingEnabled();
         try {
             // Convert JavaScript object to Map
             Map<String, Object> argsMap = new HashMap<>();
             if (jsArgs != null) {
-                logger.debug("Converting JS args for tool {}: {} (type: {})", toolName, jsArgs, jsArgs.getClass().getName());
+                if (verboseToolLogging) {
+                    logger.debug("Converting JS args for tool {}: {} (type: {})", toolName, jsArgs, jsArgs.getClass().getName());
+                }
                 
                 Value argsValue = Value.asValue(jsArgs);
                 logger.debug("JS args as Value: hasMembers={}, isHostObject={}", argsValue.hasMembers(), argsValue.isHostObject());
@@ -335,7 +338,9 @@ public class JobJavaScriptBridge {
                             // Otherwise, it's just a regular string - keep it as-is
                         }
                         argsMap.put(key, memberValue);
-                        logger.debug("Converted JS arg: {} = {} (type: {})", key, memberValue, memberValue != null ? memberValue.getClass().getName() : "null");
+                        if (verboseToolLogging) {
+                            logger.debug("Converted JS arg: {} = {} (type: {})", key, memberValue, memberValue != null ? memberValue.getClass().getName() : "null");
+                        }
                     }
                 } else if (argsValue.isHostObject()) {
                     // Handle case where JS object is passed as host object
@@ -376,12 +381,16 @@ public class JobJavaScriptBridge {
                             }
                         }
                         argsMap.putAll(hostMap);
-                        logger.debug("Used host object as Map: {}", argsMap);
+                        if (verboseToolLogging) {
+                            logger.debug("Used host object as Map: {}", argsMap);
+                        }
                     }
                 }
             }
             
-            logger.debug("Final args map for tool {}: {}", toolName, argsMap);
+            if (verboseToolLogging) {
+                logger.debug("Final args map for tool {}: {}", toolName, argsMap);
+            }
             
             // Get tool schema to check parameter types
             Map<String, Object> toolSchema = getToolSchema(toolName);
