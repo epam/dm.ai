@@ -1,34 +1,104 @@
 # DMtools MCP Tools Reference
 
-This documentation is auto-generated from the actual `MCPToolRegistry`.
+Complete reference for all MCP tools available in DMtools.
 
 **Total Integrations**: 20
+**Total Tools**: 289
 
-**Total Tools**: 317
+*Auto-generated from `dmtools list` on: 2026-07-21 17:23:05*
+
+## Quick Start
+
+```bash
+# List all available tools
+dmtools list
+
+# List tools for specific integration
+dmtools list | jq '.tools[] | select(.name | startswith("jira_"))'
+
+# Execute a tool
+dmtools <tool_name> [arguments]
+```
 
 ## Integrations
 
-- [Gitlab](gitlab-tools.md) - 29 tools
-- [File](file-tools.md) - 4 tools
-- [Ado](ado-tools.md) - 38 tools
-- [Sharepoint](sharepoint-tools.md) - 2 tools
-- [Teams_auth](teams_auth-tools.md) - 3 tools
-- [Teams](teams-tools.md) - 28 tools
-- [Rally](rally-tools.md) - 1 tools
-- [Testrail](testrail-tools.md) - 16 tools
-- [Cli](cli-tools.md) - 1 tools
-- [Kb](kb-tools.md) - 5 tools
-- [Github](github-tools.md) - 35 tools
-- [Figma](figma-tools.md) - 19 tools
-- [Jira](jira-tools.md) - 58 tools
-- [Jira_xray](jira_xray-tools.md) - 11 tools
-- [Confluence](confluence-tools.md) - 19 tools
-- [Bitbucket](bitbucket-tools.md) - 1 tools
-- [Ai](ai-tools.md) - 15 tools
-- [Mermaid](mermaid-tools.md) - 3 tools
-- [Jenkins](jenkins-tools.md) - 5 tools
-- [Bitrise](bitrise-tools.md) - 24 tools
+| Integration | Tools | Documentation |
+|-------------|-------|---------------|
+| **ADO** | 38 | [ado-tools.md](ado-tools.md) |
+| **ANTHROPIC** | 3 | [anthropic-tools.md](anthropic-tools.md) |
+| **BEDROCK** | 2 | [bedrock-tools.md](bedrock-tools.md) |
+| **CLI** | 1 | [cli-tools.md](cli-tools.md) |
+| **CONFLUENCE** | 19 | [confluence-tools.md](confluence-tools.md) |
+| **DIAL** | 2 | [dial-tools.md](dial-tools.md) |
+| **FIGMA** | 19 | [figma-tools.md](figma-tools.md) |
+| **FILE** | 5 | [file-tools.md](file-tools.md) |
+| **GEMINI** | 2 | [gemini-tools.md](gemini-tools.md) |
+| **GITHUB** | 35 | [github-tools.md](github-tools.md) |
+| **GITLAB** | 30 | [gitlab-tools.md](gitlab-tools.md) |
+| **JIRA** | 69 | [jira-tools.md](jira-tools.md) |
+| **KB** | 5 | [kb-tools.md](kb-tools.md) |
+| **MERMAID** | 3 | [mermaid-tools.md](mermaid-tools.md) |
+| **OLLAMA** | 2 | [ollama-tools.md](ollama-tools.md) |
+| **OPENAI** | 2 | [openai-tools.md](openai-tools.md) |
+| **SHAREPOINT** | 2 | [sharepoint-tools.md](sharepoint-tools.md) |
+| **TEAMS** | 31 | [teams-tools.md](teams-tools.md) |
+| **TESTRAIL** | 17 | [testrail-tools.md](testrail-tools.md) |
+| **VERTEX** | 2 | [vertex-tools.md](vertex-tools.md) |
 
----
+## Usage in JavaScript Agents
 
-*Generated from MCPToolRegistry on: Tue Jul 14 11:15:11 MSK 2026*
+All MCP tools are directly accessible as JavaScript functions:
+
+```javascript
+// Direct MCP tool access
+const ticket = jira_get_ticket('PROJ-123');
+const workItem = ado_get_work_item(12345);
+const response = gemini_ai_chat('Analyze this');
+file_write('output.txt', 'content');
+```
+
+## Integration Categories
+
+### Issue Tracking
+
+- [JIRA](jira-tools.md) - 69 tools
+- [ADO](ado-tools.md) - 38 tools
+
+### Communication
+
+- [TEAMS](teams-tools.md) - 31 tools
+
+### Design
+
+- [FIGMA](figma-tools.md) - 19 tools
+
+### Documentation
+
+- [CONFLUENCE](confluence-tools.md) - 19 tools
+- [SHAREPOINT](sharepoint-tools.md) - 2 tools
+
+### AI Providers
+
+- [GEMINI](gemini-tools.md) - 2 tools
+- [OPENAI](openai-tools.md) - 2 tools
+- [ANTHROPIC](anthropic-tools.md) - 3 tools
+- [OLLAMA](ollama-tools.md) - 2 tools
+- [BEDROCK](bedrock-tools.md) - 2 tools
+- [DIAL](dial-tools.md) - 2 tools
+
+### Authentication
+
+- [TEAMS](teams-tools.md) - 31 tools
+
+### File Operations
+
+- [FILE](file-tools.md) - 5 tools
+
+### CLI Operations
+
+- [CLI](cli-tools.md) - 1 tools
+
+### Knowledge Base
+
+- [KB](kb-tools.md) - 5 tools
+
