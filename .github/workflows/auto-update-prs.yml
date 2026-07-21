@@ -1,9 +1,15 @@
-name: Auto-update open PRs when main changes
+name: Auto-update open PRs when main or PRs change
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   workflow_dispatch: {}
 
 concurrency:
@@ -22,9 +28,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          # After a push to main, GitHub invalidates cached mergeability for all open PRs
-          # and recomputes asynchronously — returning "UNKNOWN" until ready. Retry until
-          # no PRs are stuck in UNKNOWN (up to ~90s) so the MERGEABLE filter doesn't miss them.
+          # After a push to main or when a PR is changed, GitHub invalidates cached
+          # mergeability for all open PRs and recomputes asynchronously — returning
+          # "UNKNOWN" until ready. Retry until no PRs are stuck in UNKNOWN (up to ~90s)
+          # so the MERGEABLE filter doesn't miss them.
           for attempt in $(seq 1 6); do
             unknown=$(gh pr list --repo ${{ github.repository }} --state open --base main \
               --json number,mergeable \
