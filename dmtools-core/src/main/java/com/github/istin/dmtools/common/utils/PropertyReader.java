@@ -423,6 +423,21 @@ public class PropertyReader {
     return Boolean.parseBoolean(value);
   }
 
+  /**
+   * Whether generated JS MCP tool wrappers should verbosely log at runtime:
+   * the full call args via console.log(...) on every invocation (JobJavaScriptBridge),
+   * and the "Exposed MCP tool X to JavaScript" registration listing at JS context
+   * startup. Off by default — tool args can include large file contents (e.g. an
+   * entire file_write payload), which floods CI logs; opt in for local debugging.
+   */
+  public boolean isJsToolCallLoggingEnabled() {
+    String value = getValue("DMTOOLS_JS_LOG_TOOL_CALLS");
+    if (value == null) {
+      return false;
+    }
+    return Boolean.parseBoolean(value) || "1".equals(value);
+  }
+
   public boolean isXrayCacheGetRequestsEnabled() {
     String value = getValue("XRAY_CACHE_GET_REQUESTS_ENABLED");
     if (value == null) {
