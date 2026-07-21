@@ -8,6 +8,7 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
@@ -621,12 +622,12 @@ public class JobJavaScriptBridge {
 
     /**
      * Whether generated JS tool wrappers should console.log their full args (including
-     * file contents / large logs) on every call. Off by default to keep CI logs readable;
-     * opt in with DMTOOLS_JS_LOG_TOOL_CALLS=true (or "1") for local debugging.
+     * file contents / large logs) on every call, and whether the per-tool "Exposed MCP
+     * tool X to JavaScript" debug line is emitted at startup. Off by default to keep CI
+     * logs readable; opt in with DMTOOLS_JS_LOG_TOOL_CALLS=true (or "1") for local debugging.
      */
     private static boolean isToolCallArgsLoggingEnabled() {
-        String value = System.getenv("DMTOOLS_JS_LOG_TOOL_CALLS");
-        return "true".equalsIgnoreCase(value) || "1".equals(value);
+        return new PropertyReader().isJsToolCallLoggingEnabled();
     }
 
     /**
@@ -652,9 +653,11 @@ public class JobJavaScriptBridge {
             }
         }
         
-        // Logging full tool-call args (including file contents, large logs, etc.) can
-        // flood CI output. Off by default; opt in via DMTOOLS_JS_LOG_TOOL_CALLS=true.
-        String toolCallLogStatement = isToolCallArgsLoggingEnabled()
+        // Verbose logging of tool-call args and per-tool registration can flood CI
+        // output (e.g. args can include large file contents). Off by default; opt in
+        // via DMTOOLS_JS_LOG_TOOL_CALLS=true.
+        boolean verboseToolLogging = isToolCallArgsLoggingEnabled();
+        String toolCallLogStatement = verboseToolLogging
             ? String.format("console.log('Calling tool %s with args:', JSON.stringify(args));", toolName)
             : "";
 
@@ -682,7 +685,9 @@ public class JobJavaScriptBridge {
             
         try {
             jsContext.eval("js", jsFunction);
-            logger.debug("Exposed MCP tool {} to JavaScript", toolName);
+            if (verboseToolLogging) {
+                logger.debug("Exposed MCP tool {} to JavaScript", toolName);
+            }
         } catch (Exception e) {
             logger.error("Failed to expose tool {} to JavaScript", toolName, e);
         }
