@@ -118,11 +118,20 @@ public class CommandLineUtils {
         Process process = processBuilder.start();
 
         // Drain stdout/stderr in real-time so the process doesn't block on a full pipe
+        boolean verboseCommandOutputLogging = new PropertyReader().isJsToolCallLoggingEnabled();
         StringBuilder output = new StringBuilder();
+        int lineCount = 0;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                logger.info(line);
+                lineCount++;
+                // Logging every output line unconditionally at INFO can flood CI logs for
+                // commands with large output (e.g. `git diff`, `mvn test`, `curl` responses).
+                // Full line-by-line output is opt-in via DMTOOLS_JS_LOG_TOOL_CALLS; otherwise
+                // only a line-count summary is logged after the command finishes (below).
+                if (verboseCommandOutputLogging) {
+                    logger.info(line);
+                }
                 output.append(line).append(System.lineSeparator());
                 if (lineConsumer != null) {
                     try {
@@ -135,6 +144,10 @@ public class CommandLineUtils {
         }
 
         int exitCode = process.waitFor();
+        if (!verboseCommandOutputLogging) {
+            logger.debug("Command produced {} line(s) of output ({} chars); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output",
+                    lineCount, output.length());
+        }
         logger.debug("Process exited with code: {}", exitCode);
 
         // Propagate non-zero exit codes so callers are not silently misled.
