@@ -476,4 +476,42 @@ class RunCommandProcessorTest {
         assertEquals("project = UNTOUCHED", result.getParams().getString("inputJql"));
         assertFalse(result.getParams().has("ciRunUrl"));
     }
+
+    @Test
+    void testProcessRunCommand_cliOverrideJsonArray() {
+        String[] args = {"run", "cliagent", "--cliCommands", "[\"cursor-agent\"]", "--cliPrompts", "[\"Implement the feature\"]"};
+
+        JobParams result = runCommandProcessor.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("cliagent", result.getName());
+        org.json.JSONArray commands = result.getParams().getJSONArray("cliCommands");
+        assertEquals(1, commands.length());
+        assertEquals("cursor-agent", commands.getString(0));
+        org.json.JSONArray prompts = result.getParams().getJSONArray("cliPrompts");
+        assertEquals(1, prompts.length());
+        assertEquals("Implement the feature", prompts.getString(0));
+    }
+
+    @Test
+    void testProcessRunCommand_cliOverrideJsonObject() {
+        String[] args = {"run", "cliagent", "--customParams", "{\"mode\":\"test\",\"count\":42}"};
+
+        JobParams result = runCommandProcessor.processRunCommand(args);
+
+        assertNotNull(result);
+        org.json.JSONObject customParams = result.getParams().getJSONObject("customParams");
+        assertEquals("test", customParams.getString("mode"));
+        assertEquals(42, customParams.getInt("count"));
+    }
+
+    @Test
+    void testProcessRunCommand_cliOverridePlainStringNotTreatedAsJson() {
+        String[] args = {"run", "cliagent", "--cliPrompt", "[not json"};
+
+        JobParams result = runCommandProcessor.processRunCommand(args);
+
+        assertNotNull(result);
+        assertEquals("[not json", result.getParams().getString("cliPrompt"));
+    }
 }

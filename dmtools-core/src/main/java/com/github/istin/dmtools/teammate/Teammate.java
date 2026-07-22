@@ -12,7 +12,6 @@ import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.ai.agent.SourceImpactAssessmentAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
-import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
@@ -59,7 +58,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     @Getter
     @Setter
-    public static class TeammateParams extends JobTrackerParams<RequestDecompositionAgent.Result> {
+    public static class TeammateParams extends JobTrackerParams<RequestDecompositionAgent.Result> implements InputContextConfig {
 
         public static final String SYSTEM_REQUEST_COMMENT_ALIAS = "systemRequestCommentAlias";
 
@@ -73,7 +72,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         private String cliPrompt;
 
         @SerializedName("cliPrompts")
-        private String[] cliPrompts;
+        private CliPromptsConfig cliPrompts;
 
         @SerializedName("cliPromptsByTracker")
         private Map<String, String[]> cliPromptsByTracker;
@@ -134,6 +133,88 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
         @SerializedName("excludedEnvRegexes")
         private String[] excludedEnvRegexes;
+
+        // ----- InputContextConfig implementation (preserves existing Teammate behavior) -----
+
+        @Override
+        public boolean isSmart() {
+            return true;
+        }
+
+        @Override
+        public String[] getSources() {
+            return new String[] { "confluence" };
+        }
+
+        @Override
+        public int getDepth() {
+            return 0;
+        }
+
+        @Override
+        public boolean isIncludeComments() {
+            return true;
+        }
+
+        @Override
+        public boolean isIncludeAttachments() {
+            return true;
+        }
+
+        @Override
+        public boolean isIncludeLinkedTickets() {
+            return false;
+        }
+
+        @Override
+        public boolean isSkipVideoAttachments() {
+            return skipVideoAttachments;
+        }
+
+        @Override
+        public boolean isSkipAllAttachments() {
+            return skipAllAttachments;
+        }
+
+        @Override
+        public boolean isIgnoreClonedByRelationship() {
+            return ignoreClonedByRelationship;
+        }
+
+        @Override
+        public boolean isWriteAgentParamsToFiles() {
+            return writeAgentParamsToFiles;
+        }
+
+        // ----- Backward-compatible accessors for cliPrompts -----
+
+        /**
+         * Returns cliPrompts as a flat string array for backward compatibility.
+         */
+        public String[] getCliPrompts() {
+            return cliPrompts != null ? cliPrompts.toStringArray() : null;
+        }
+
+        /**
+         * Sets cliPrompts from a plain string array (backward compatibility).
+         */
+        public void setCliPrompts(String[] cliPrompts) {
+            this.cliPrompts = CliPromptsConfig.fromStrings(cliPrompts);
+        }
+
+        /**
+         * Returns the structured cliPrompts config.
+         */
+        public CliPromptsConfig getCliPromptsConfig() {
+            return cliPrompts;
+        }
+
+        /**
+         * Sets the structured cliPrompts config.
+         */
+        public void setCliPromptsConfig(CliPromptsConfig cliPrompts) {
+            this.cliPrompts = cliPrompts;
+        }
 
     }
 
@@ -495,54 +576,22 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
             if (cliCommands != null && cliCommands.length > 0) {
                 try {
-                    // Merge base cliPrompts with tracker-specific prompts
-                    String[] mergedCliPrompts = resolveCliPrompts(
-                            expertParams.getCliPrompts(), expertParams.getCliPromptsByTracker(), configuration != null ? configuration.getDefaultTracker() : null);
-                    if (mergedCliPrompts != expertParams.getCliPrompts()) {
-                        logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
-                    }
+                    // Build final CLI commands with aggregated prompt (shared logic with CliAgent)
+                    CliCommandBuilder cliCommandBuilder = new CliCommandBuilder(instructionProcessor, configuration);
+                    String[] finalCliCommands = cliCommandBuilder.buildCommands(
+                            cliCommands,
+                            expertParams.getCliPrompt(),
+                            expertParams.getCliPromptsConfig(),
+                            expertParams.getCliPromptsByTracker());
 
-                    // Build combined CLI prompt from cliPrompt + merged cliPrompts via InstructionProcessor
-                    String processedPrompt = instructionProcessor.buildCombinedPrompt(
-                            expertParams.getCliPrompt(), mergedCliPrompts);
-                    if (processedPrompt != null) {
-                        logger.info("Combined CLI prompt ready ({} chars)", processedPrompt.length());
-                    }
-
-                    // Append processed prompt to each CLI command if available
-                    String[] finalCliCommands = cliCommands;
-                    if (processedPrompt != null && !processedPrompt.trim().isEmpty()) {
-                        finalCliCommands = CliExecutionHelper.appendPromptToCommands(cliCommands, processedPrompt);
-                        logger.info("Appended prompt to {} CLI commands", finalCliCommands.length);
-                    }
-
-                    // Create input context for CLI commands
-                    inputContextPath = cliHelper.createInputContext(ticket, inputParams.toString(), trackerClient);
-
-                    // Write comments.md alongside request.md — same toText() format as chunks sent to AI
-                    cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
-
-                    // Write Confluence pages linked in the ticket text (and its parent's text) to input/confluence/
-                    String confluenceScanText = buildConfluenceScanText(
-                        ticket, textFieldsOnly, trackerClient, expertParams.isIncludeParentConfluence());
-                    cliHelper.writeConfluencePagesFile(
-                        confluenceScanText,
-                        inputContextPath,
-                        confluence,
-                        expertParams.getConfluenceDepth(),
-                        expertParams.isConfluenceAttachments()
-                    );
-
-                    // When writeAgentParamsToFiles=true: expand agent params into separate files in the
-                    // input folder, then replace request.md with minimal ticket-only content.
-                    if (expertParams.isWriteAgentParamsToFiles() && originalParams != null) {
-                        agentParamsFileWriter.writeToInputFolder(inputContextPath, originalParams);
-                        // Overwrite request.md with minimal ticket info only
-                        java.nio.file.Path requestMd = inputContextPath.resolve("request.md");
-                        java.nio.file.Files.writeString(requestMd,
-                                textFieldsOnly != null ? textFieldsOnly : "");
-                        logger.info("writeAgentParamsToFiles: rewrote request.md with ticket info only, params in input folder");
-                    }
+                    // Create input context for CLI commands via shared builder.
+                    // Pass null as the base directory so the input folder is created relative to the
+                    // process working directory, preserving the original Teammate behavior.
+                    TicketInputContextBuilder contextBuilder = new TicketInputContextBuilder(instructionProcessor);
+                    TicketInputContextBuilder.Result contextResult = contextBuilder.build(
+                            expertParams, ticket, null,
+                            trackerClient, confluence, null, originalParams);
+                    inputContextPath = contextResult.getPath();
 
                     // Run preCliJSAction to allow extending input folder with extra content before CLI execution
                     String preCliJSAction = expertParams.getPreCliJSAction();
@@ -772,76 +821,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     }
 
 
-    /**
-     * Builds the completion comment text that tags the initiator and references the CI run URL.
-     * If tagging the initiator fails, the comment is built without the tag so the notification
-     * still goes out.
-     */
-    static String buildCompletionComment(String initiator, String ciRunUrl, TrackerClient trackerClient) {
-        if (initiator != null && !initiator.isEmpty()) {
-            try {
-                return trackerClient.tag(initiator) + ", \n\n✅ Teammate run completed. CI Run: " + ciRunUrl;
-            } catch (Exception e) {
-                logger.warn("Failed to tag initiator {} in completion comment — posting without tag. Error: {}",
-                        initiator, e.getMessage());
-            }
-        }
-        return "✅ Teammate run completed. CI Run: " + ciRunUrl;
-    }
-
-    /**
-     * Posts a completion comment to the ticket when a CI run URL is configured.
-     * Tags the initiator if available. Errors are logged and swallowed so the job continues.
-     */
-    void postCompletionComment(TrackerClient trackerClient, String ticketKey, String ciRunUrl, String initiator, TeammateParams params) {
-        if (ciRunUrl == null || ciRunUrl.isEmpty()) {
-            return;
-        }
-        if (!shouldPostComments(params)) {
-            logger.debug("CI run URL provided ({}) but comments disabled - not posting completion comment to ticket {}",
-                    ciRunUrl, ticketKey);
-            return;
-        }
-        try {
-            String completionComment = buildCompletionComment(initiator, ciRunUrl, trackerClient);
-            trackerClient.postComment(ticketKey, agentNamePrefix(params) + completionComment);
-            logger.info("Posted completion comment for ticket {} with CI run trace", ticketKey);
-        } catch (Exception e) {
-            logger.warn("Failed to post completion comment for ticket {} — continuing. Error: {}",
-                    ticketKey, e.getMessage());
-        }
-    }
-
-    /**
-     * Resolves the effective CLI prompts by merging base {@code cliPrompts} with tracker-specific
-     * prompts from {@code cliPromptsByTracker} when a matching tracker type is configured.
-     *
-     * @param baseCliPrompts      the base CLI prompts array (may be null)
-     * @param cliPromptsByTracker map of tracker type → tracker-specific prompts (may be null)
-     * @param trackerType         the current tracker type from configuration (may be null)
-     * @return merged array of CLI prompts, or base prompts if no tracker-specific match found
-     */
+    /** Backward-compatible wrapper delegating to {@link CliCommandBuilder}. */
     static String[] resolveCliPrompts(String[] baseCliPrompts, Map<String, String[]> cliPromptsByTracker, String trackerType) {
-        String effectiveTracker = trackerType;
-        if (effectiveTracker == null || effectiveTracker.isBlank()) {
-            // Default to Markdown-based formatting when no tracker is configured.
-            effectiveTracker = "ado";
-        }
-        if (cliPromptsByTracker == null || !cliPromptsByTracker.containsKey(effectiveTracker)) {
-            return baseCliPrompts;
-        }
-
-        String[] trackerPrompts = cliPromptsByTracker.get(effectiveTracker);
-        if (trackerPrompts == null || trackerPrompts.length == 0) {
-            return baseCliPrompts;
-        }
-
-        List<String> merged = new ArrayList<>();
-        if (baseCliPrompts != null) {
-            merged.addAll(List.of(baseCliPrompts));
-        }
-        merged.addAll(List.of(trackerPrompts));
-        return merged.toArray(new String[0]);
+        return CliCommandBuilder.resolveCliPrompts(baseCliPrompts, cliPromptsByTracker, trackerType);
     }
 
     public void attachResponse(Object orchestratorClass, String file, String result, String ticketKey, String contentType) throws IOException {
@@ -882,42 +864,43 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     }
 
     /**
-     * Builds the text used to discover Confluence URLs for the CLI input folder.
-     * In addition to the current ticket's text fields, it also includes the parent
-     * ticket's text fields (for Jira sub-tasks) so that Confluence pages linked from
-     * the parent story are downloaded too.
-     *
-     * @param ticket                   the ticket being processed
-     * @param textFieldsOnly           the current ticket's text fields
-     * @param trackerClient            tracker client for fetching the parent ticket
-     * @param includeParentConfluence  whether to include the parent ticket's text fields
-     * @return combined text to scan for Confluence URLs
+     * Builds the completion comment text that tags the initiator and references the CI run URL.
+     * If tagging the initiator fails, the comment is built without the tag so the notification
+     * still goes out.
      */
-    private String buildConfluenceScanText(ITicket ticket, String textFieldsOnly,
-                                            TrackerClient<?> trackerClient, boolean includeParentConfluence) {
-        StringBuilder scanText = new StringBuilder(textFieldsOnly != null ? textFieldsOnly : "");
-        if (includeParentConfluence && ticket instanceof Ticket) {
-            Ticket jiraTicket = (Ticket) ticket;
-            if (jiraTicket.getFields() != null) {
-                Ticket parent = jiraTicket.getFields().getParent();
-                if (parent != null && parent.getKey() != null && !parent.getKey().isBlank()) {
-                    String parentKey = parent.getKey();
-                    try {
-                        ITicket parentTicket = trackerClient.performTicket(parentKey, trackerClient.getExtendedQueryFields());
-                        if (parentTicket != null) {
-                            String parentTextFields = trackerClient.getTextFieldsOnly(parentTicket);
-                            if (parentTextFields != null && !parentTextFields.isBlank()) {
-                                scanText.append("\n\n").append(parentTextFields);
-                                logger.info("Including parent ticket {} text in Confluence URL scan", parentKey);
-                            }
-                        }
-                    } catch (Exception e) {
-                        logger.warn("Could not fetch parent ticket {} for Confluence URL scan (skipping): {}", parentKey, e.getMessage());
-                    }
-                }
+    static String buildCompletionComment(String initiator, String ciRunUrl, TrackerClient trackerClient) {
+        if (initiator != null && !initiator.isEmpty()) {
+            try {
+                return trackerClient.tag(initiator) + ", \n\n✅ Teammate run completed. CI Run: " + ciRunUrl;
+            } catch (Exception e) {
+                logger.warn("Failed to tag initiator {} in completion comment — posting without tag. Error: {}",
+                        initiator, e.getMessage());
             }
         }
-        return scanText.toString();
+        return "✅ Teammate run completed. CI Run: " + ciRunUrl;
+    }
+
+    /**
+     * Posts a completion comment to the ticket when a CI run URL is configured.
+     * Tags the initiator if available. Errors are logged and swallowed so the job continues.
+     */
+    void postCompletionComment(TrackerClient trackerClient, String ticketKey, String ciRunUrl, String initiator, TeammateParams params) {
+        if (ciRunUrl == null || ciRunUrl.isEmpty()) {
+            return;
+        }
+        if (!shouldPostComments(params)) {
+            logger.debug("CI run URL provided ({}) but comments disabled - not posting completion comment to ticket {}",
+                    ciRunUrl, ticketKey);
+            return;
+        }
+        try {
+            String completionComment = buildCompletionComment(initiator, ciRunUrl, trackerClient);
+            trackerClient.postComment(ticketKey, agentNamePrefix(params) + completionComment);
+            logger.info("Posted completion comment for ticket {} with CI run trace", ticketKey);
+        } catch (Exception e) {
+            logger.warn("Failed to post completion comment for ticket {} — continuing. Error: {}",
+                    ticketKey, e.getMessage());
+        }
     }
 
 }

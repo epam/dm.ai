@@ -1,3 +1,13 @@
+## [Unreleased]
+
+### Added
+
+- **Structured `cliPrompts` with named sections** — `cliPrompts` now supports a mixed array of plain strings and named section objects (`{"id": "...", "prompts": ["..."], "mergeStrategy": "append|prepend|replace"}`). This allows:
+  - grouping related prompts (e.g., `input`, `output`, `template`) while preserving order
+  - partial overrides when inheriting configs: sections with the same `id` are merged according to `mergeStrategy`, unnamed strings keep their position, and new items are appended to the end
+  - full backward compatibility: plain string arrays are still accepted and treated as unnamed prompts
+- Updated `references/agents/teammate-configs.md` and `references/jobs/README.md` with structured `cliPrompts` documentation and inheritance examples
+
 ## [skill-v1.0.30] - 2026-07-04
 
 ### Added

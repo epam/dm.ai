@@ -352,4 +352,184 @@ class ParentConfigResolverTest {
         resolver.setValueAtPath(obj, "a.b", "new");
         assertEquals("new", obj.getJSONObject("a").getString("b"));
     }
+
+    // -------------------------------------------------------------------------
+    // Structured cliPrompts merge
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testResolve_CliPromptsLegacyArrays_MergedAsPlainAppend() throws Exception {
+        Path parentFile = tempDir.resolve("base.json");
+        Files.writeString(parentFile, """
+                {"params":{"cliPrompts":["base1","base2"]}}
+                """);
+
+        JSONObject child = new JSONObject("""
+                {
+                  "parent":{"path":"base.json"},
+                  "params":{"cliPrompts":["child1"]}
+                }
+                """);
+
+        JSONObject result = resolver.resolve(child, tempDir.resolve("child.json"));
+        JSONArray cliPrompts = result.getJSONObject("params").getJSONArray("cliPrompts");
+
+        assertEquals(3, cliPrompts.length());
+        assertEquals("base1", cliPrompts.getString(0));
+        assertEquals("base2", cliPrompts.getString(1));
+        assertEquals("child1", cliPrompts.getString(2));
+    }
+
+    @Test
+    void testResolve_CliPromptsStructured_SectionsMergedById() throws Exception {
+        Path parentFile = tempDir.resolve("base.json");
+        Files.writeString(parentFile, """
+                {
+                  "params": {
+                    "cliPrompts": [
+                      "base1",
+                      {"id": "input", "prompts": ["in1"]},
+                      "base2"
+                    ]
+                  }
+                }
+                """);
+
+        JSONObject child = new JSONObject("""
+                {
+                  "parent":{"path":"base.json"},
+                  "params": {
+                    "cliPrompts": [
+                      {"id": "input", "prompts": ["in2"]},
+                      "child1"
+                    ]
+                  }
+                }
+                """);
+
+        JSONObject result = resolver.resolve(child, tempDir.resolve("child.json"));
+        JSONArray cliPrompts = result.getJSONObject("params").getJSONArray("cliPrompts");
+
+        // Order: base1, input(in1+in2), base2, child1
+        assertEquals("base1", cliPrompts.getString(0));
+        JSONObject inputSection = cliPrompts.getJSONObject(1);
+        assertEquals("input", inputSection.getString("id"));
+        assertEquals("in1", inputSection.getJSONArray("prompts").getString(0));
+        assertEquals("in2", inputSection.getJSONArray("prompts").getString(1));
+        assertEquals("base2", cliPrompts.getString(2));
+        assertEquals("child1", cliPrompts.getString(3));
+    }
+
+    @Test
+    void testResolve_CliPromptsStructured_MergeStrategyReplace() throws Exception {
+        Path parentFile = tempDir.resolve("base.json");
+        Files.writeString(parentFile, """
+                {
+                  "params": {
+                    "cliPrompts": [
+                      {"id": "output", "prompts": ["out1"]}
+                    ]
+                  }
+                }
+                """);
+
+        JSONObject child = new JSONObject("""
+                {
+                  "parent":{"path":"base.json"},
+                  "params": {
+                    "cliPrompts": [
+                      {"id": "output", "prompts": ["out2"], "mergeStrategy": "replace"}
+                    ]
+                  }
+                }
+                """);
+
+        JSONObject result = resolver.resolve(child, tempDir.resolve("child.json"));
+        JSONArray cliPrompts = result.getJSONObject("params").getJSONArray("cliPrompts");
+
+        assertEquals(1, cliPrompts.length());
+        JSONObject outputSection = cliPrompts.getJSONObject(0);
+        assertEquals("output", outputSection.getString("id"));
+        assertEquals(1, outputSection.getJSONArray("prompts").length());
+        assertEquals("out2", outputSection.getJSONArray("prompts").getString(0));
+    }
+
+    @Test
+    void testResolve_CliPromptsStructured_NewSectionsAppended() throws Exception {
+        Path parentFile = tempDir.resolve("base.json");
+        Files.writeString(parentFile, """
+                {
+                  "params": {
+                    "cliPrompts": [
+                      {"id": "input", "prompts": ["in1"]}
+                    ]
+                  }
+                }
+                """);
+
+        JSONObject child = new JSONObject("""
+                {
+                  "parent":{"path":"base.json"},
+                  "params": {
+                    "cliPrompts": [
+                      {"id": "output", "prompts": ["out1"]},
+                      "tail"
+                    ]
+                  }
+                }
+                """);
+
+        JSONObject result = resolver.resolve(child, tempDir.resolve("child.json"));
+        JSONArray cliPrompts = result.getJSONObject("params").getJSONArray("cliPrompts");
+
+        assertEquals(3, cliPrompts.length());
+        assertEquals("input", cliPrompts.getJSONObject(0).getString("id"));
+        assertEquals("output", cliPrompts.getJSONObject(1).getString("id"));
+        assertEquals("tail", cliPrompts.getString(2));
+    }
+
+    @Test
+    void testResolve_CliPromptsOnlyInParent_ParentKept() throws Exception {
+        Path parentFile = tempDir.resolve("base.json");
+        Files.writeString(parentFile, """
+                {
+                  "params": {
+                    "cliPrompts": ["a", "b"]
+                  }
+                }
+                """);
+
+        JSONObject child = new JSONObject("""
+                {
+                  "parent":{"path":"base.json"},
+                  "params":{}
+                }
+                """);
+
+        JSONObject result = resolver.resolve(child, tempDir.resolve("child.json"));
+        JSONArray cliPrompts = result.getJSONObject("params").getJSONArray("cliPrompts");
+        assertEquals(2, cliPrompts.length());
+        assertEquals("a", cliPrompts.getString(0));
+        assertEquals("b", cliPrompts.getString(1));
+    }
+
+    @Test
+    void testResolve_CliPromptsOnlyInChild_ChildKept() throws Exception {
+        Path parentFile = tempDir.resolve("base.json");
+        Files.writeString(parentFile, """
+                {"params":{}}
+                """);
+
+        JSONObject child = new JSONObject("""
+                {
+                  "parent":{"path":"base.json"},
+                  "params":{"cliPrompts":["only child"]}
+                }
+                """);
+
+        JSONObject result = resolver.resolve(child, tempDir.resolve("child.json"));
+        JSONArray cliPrompts = result.getJSONObject("params").getJSONArray("cliPrompts");
+        assertEquals(1, cliPrompts.length());
+        assertEquals("only child", cliPrompts.getString(0));
+    }
 }
