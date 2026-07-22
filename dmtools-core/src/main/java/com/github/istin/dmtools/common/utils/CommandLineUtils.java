@@ -67,6 +67,11 @@ public class CommandLineUtils {
 
     /**
      * Runs a command-line command with full options and an optional per-line output consumer.
+     * Logs every output line at INFO by default (maxLinesToLog = -1, i.e. no cap) — use this
+     * overload for callers where the live output IS the thing operators want to see (e.g. an
+     * interactive CLI agent session such as run-agent.sh). For callers whose output is often
+     * large/noisy raw command output (e.g. a `git diff` or `mvn` invocation from a JS tool
+     * call), use {@link #runCommand(String, File, Map, Consumer, int)} with a small cap instead.
      *
      * @param command The command to run
      * @param workingDirectory The working directory for the command (null to use current directory)
@@ -78,6 +83,32 @@ public class CommandLineUtils {
      */
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
                                     Consumer<String> lineConsumer)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, -1);
+    }
+
+    /**
+     * Runs a command-line command with full options, an optional per-line output consumer, and
+     * a cap on how many output lines get logged at INFO level by default.
+     *
+     * @param command The command to run
+     * @param workingDirectory The working directory for the command (null to use current directory)
+     * @param additionalEnv Additional environment variables to set
+     * @param lineConsumer Optional consumer called for each output line as it is produced (null to skip)
+     * @param maxLinesToLog Caps how many output lines are logged at INFO level when
+     *                      DMTOOLS_JS_LOG_TOOL_CALLS is not enabled. Use -1 for "no cap - always
+     *                      log every line" (e.g. an interactive CLI agent session whose live
+     *                      output is the point). Use a small positive value (e.g. 50) for
+     *                      callers whose output is often large/noisy raw command output (e.g.
+     *                      `git diff`, `mvn`) where only a preview is useful by default; the
+     *                      full output is always still returned/available to the caller and to
+     *                      DMTOOLS_JS_LOG_TOOL_CALLS=true regardless of this cap.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, int maxLinesToLog)
             throws IOException, InterruptedException {
 
         logger.debug("Running command: {}", SecurityUtils.maskCommand(command));
@@ -118,11 +149,28 @@ public class CommandLineUtils {
         Process process = processBuilder.start();
 
         // Drain stdout/stderr in real-time so the process doesn't block on a full pipe
+        boolean verboseCommandOutputLogging = new PropertyReader().isJsToolCallLoggingEnabled();
         StringBuilder output = new StringBuilder();
+        int lineCount = 0;
+        int loggedLineCount = 0;
+        boolean truncationNoticeLogged = false;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                logger.info(line);
+                lineCount++;
+                // Logging every output line unconditionally at INFO can flood CI logs for
+                // commands with large output (e.g. `git diff`, `mvn test`, `curl` responses).
+                // maxLinesToLog < 0 means "no cap" (always log, e.g. an interactive CLI agent
+                // session); otherwise once DMTOOLS_JS_LOG_TOOL_CALLS is not set, only the first
+                // maxLinesToLog lines are logged and a single truncation notice follows.
+                boolean withinCap = maxLinesToLog < 0 || loggedLineCount < maxLinesToLog;
+                if (verboseCommandOutputLogging || withinCap) {
+                    logger.info(line);
+                    loggedLineCount++;
+                } else if (!truncationNoticeLogged) {
+                    logger.info("... output truncated after {} line(s); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output ...", maxLinesToLog);
+                    truncationNoticeLogged = true;
+                }
                 output.append(line).append(System.lineSeparator());
                 if (lineConsumer != null) {
                     try {
@@ -135,6 +183,10 @@ public class CommandLineUtils {
         }
 
         int exitCode = process.waitFor();
+        if (!verboseCommandOutputLogging) {
+            logger.debug("Command produced {} line(s) of output ({} chars), {} logged; set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output",
+                    lineCount, output.length(), loggedLineCount);
+        }
         logger.debug("Process exited with code: {}", exitCode);
 
         // Propagate non-zero exit codes so callers are not silently misled.
