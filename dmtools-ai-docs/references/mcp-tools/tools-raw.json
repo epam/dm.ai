@@ -6,7 +6,6 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": ["command"],
       "properties": {
         "workingDirectory": {
           "type": "string",
@@ -18,7 +17,8 @@
           "description": "CLI command to execute. Must start with a whitelisted command. Extend the whitelist via CLI_ALLOWED_COMMANDS in dmtools.env.",
           "example": "git commit -m 'Automated update'"
         }
-      }
+      },
+      "required": ["command"]
     }
   },
   {
@@ -28,8 +28,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -39,11 +39,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "state"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -60,7 +55,12 @@
           "description": "The state of pull requests to list: 'open', 'closed', or 'merged'. 'opened' is accepted as a synonym for 'open'.",
           "example": "open"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "state"
+      ]
     }
   },
   {
@@ -70,12 +70,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "state",
-        "titleRegex"
-      ],
       "properties": {
         "titleRegex": {
           "type": "string",
@@ -97,7 +91,13 @@
           "description": "The GitHub repository name",
           "example": "dmtools"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "state",
+        "titleRegex"
+      ]
     }
   },
   {
@@ -107,11 +107,6 @@
     "category": "commits",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "branchNameRegex"
-      ],
       "properties": {
         "branchNameRegex": {
           "type": "string",
@@ -133,7 +128,12 @@
           "description": "Optional ISO date (yyyy-MM-dd) to limit commits to those after this date.",
           "example": "2024-01-01"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "branchNameRegex"
+      ]
     }
   },
   {
@@ -143,11 +143,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -164,7 +159,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -174,11 +174,6 @@
     "category": "actions",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "eventType"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -200,7 +195,12 @@
           "description": "The GitHub repository name",
           "example": "dmtools"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "eventType"
+      ]
     }
   },
   {
@@ -210,11 +210,6 @@
     "category": "actions",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "workflowId"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -241,7 +236,12 @@
           "description": "JSON string with workflow inputs (e.g. {\"user_request\":\"...\",\"branch\":\"main\"})",
           "example": "{\"user_request\":\"Please rework PROJ-123\"}"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "workflowId"
+      ]
     }
   },
   {
@@ -251,11 +251,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "tagName"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -287,7 +282,12 @@
           "description": "The human-readable release name. If empty, tagName is used.",
           "example": "PR Attachments Storage"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "tagName"
+      ]
     }
   },
   {
@@ -297,12 +297,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "releaseId",
-        "filePath"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -344,7 +338,13 @@
           "description": "If true, delete any existing asset with the same name before uploading. Defaults to false.",
           "example": "true"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "releaseId",
+        "filePath"
+      ]
     }
   },
   {
@@ -354,11 +354,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "assetId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -375,7 +370,12 @@
           "description": "The numeric asset ID to delete.",
           "example": "422721847"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "assetId"
+      ]
     }
   },
   {
@@ -385,11 +385,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "releaseId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -406,7 +401,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "releaseId"
+      ]
     }
   },
   {
@@ -416,11 +416,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -437,7 +432,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -447,11 +447,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -468,7 +463,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -478,11 +478,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -499,7 +494,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -509,12 +509,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "text"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -536,7 +530,13 @@
           "description": "The pull request number",
           "example": "74"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "text"
+      ]
     }
   },
   {
@@ -546,12 +546,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "commentId",
-        "text"
-      ],
       "properties": {
         "commentId": {
           "type": "string",
@@ -573,7 +567,13 @@
           "description": "The GitHub repository name",
           "example": "dmtools"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "commentId",
+        "text"
+      ]
     }
   },
   {
@@ -583,11 +583,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "commentId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -604,7 +599,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "commentId"
+      ]
     }
   },
   {
@@ -614,13 +614,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "inReplyToId",
-        "text"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -647,7 +640,14 @@
           "description": "The ID of the comment to reply to (from github_get_pr_conversations rootComment.id or replies[].id)",
           "example": "123456789"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "inReplyToId",
+        "text"
+      ]
     }
   },
   {
@@ -657,14 +657,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "path",
-        "line",
-        "text"
-      ],
       "properties": {
         "path": {
           "type": "string",
@@ -711,7 +703,15 @@
           "description": "The pull request number",
           "example": "74"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "path",
+        "line",
+        "text"
+      ]
     }
   },
   {
@@ -721,11 +721,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -742,7 +737,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -752,12 +752,12 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": ["threadId"],
       "properties": {"threadId": {
         "type": "string",
         "description": "The GraphQL node ID of the review thread to resolve (from github_get_pr_review_threads thread.id)",
         "example": "PRRT_kwDOBQfyNc5A..."
-      }}
+      }},
+      "required": ["threadId"]
     }
   },
   {
@@ -767,11 +767,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "commitSha"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -788,7 +783,12 @@
           "description": "The commit SHA to get check runs for",
           "example": "abc123..."
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "commitSha"
+      ]
     }
   },
   {
@@ -798,12 +798,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "sha",
-        "state"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -840,7 +834,13 @@
           "description": "Optional URL to link from the status (e.g. CI run URL)",
           "example": "https://github.com/owner/repo/actions/runs/123"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "sha",
+        "state"
+      ]
     }
   },
   {
@@ -850,12 +850,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "name",
-        "headSha"
-      ],
       "properties": {
         "summary": {
           "type": "string",
@@ -902,7 +896,13 @@
           "description": "The status: queued | in_progress | completed",
           "example": "in_progress"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "name",
+        "headSha"
+      ]
     }
   },
   {
@@ -912,12 +912,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "checkRunId",
-        "status"
-      ],
       "properties": {
         "conclusion": {
           "type": "string",
@@ -959,7 +953,13 @@
           "description": "The new status: in_progress | completed",
           "example": "completed"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "checkRunId",
+        "status"
+      ]
     }
   },
   {
@@ -969,11 +969,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "runId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -990,7 +985,12 @@
           "description": "The workflow run ID",
           "example": "1234567890"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "runId"
+      ]
     }
   },
   {
@@ -1000,11 +1000,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "runId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -1021,7 +1016,12 @@
           "description": "The workflow run ID",
           "example": "1234567890"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "runId"
+      ]
     }
   },
   {
@@ -1031,10 +1031,6 @@
     "category": "actions",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -1071,7 +1067,11 @@
           "description": "Filter by status: failure, success, in_progress, queued, cancelled, timed_out, action_required, neutral, skipped, stale, completed",
           "example": "failure"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository"
+      ]
     }
   },
   {
@@ -1081,11 +1081,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "jobId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -1102,7 +1097,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "jobId"
+      ]
     }
   },
   {
@@ -1112,11 +1112,6 @@
     "category": "actions",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "runId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -1133,7 +1128,12 @@
           "description": "The workflow run ID",
           "example": "22498697315"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "runId"
+      ]
     }
   },
   {
@@ -1143,12 +1143,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "label"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -1170,7 +1164,13 @@
           "description": "The pull request number",
           "example": "74"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "label"
+      ]
     }
   },
   {
@@ -1180,12 +1180,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "label"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -1207,7 +1201,13 @@
           "description": "The pull request number",
           "example": "74"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "label"
+      ]
     }
   },
   {
@@ -1217,11 +1217,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -1253,7 +1248,12 @@
           "description": "Title for the merge commit (optional, defaults to PR title)",
           "example": "Merge feature/my-branch into main"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -1263,11 +1263,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestID"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -1284,7 +1279,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestID"
+      ]
     }
   },
   {
@@ -1294,11 +1294,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestID"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -1315,7 +1310,12 @@
           "description": "The GitHub owner/organization name",
           "example": "IstiN"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestID"
+      ]
     }
   },
   {
@@ -1325,7 +1325,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["urlStrings"],
       "properties": {
         "format": {
           "type": "string",
@@ -1337,7 +1336,8 @@
           "description": "Array of Confluence URLs to retrieve content from",
           "example": "['https://confluence.example.com/wiki/spaces/SPACE/pages/123/Page+Title']"
         }
-      }
+      },
+      "required": ["urlStrings"]
     }
   },
   {
@@ -1347,7 +1347,6 @@
     "category": "search",
     "inputSchema": {
       "type": "object",
-      "required": ["query"],
       "properties": {
         "limit": {
           "type": "number",
@@ -1359,7 +1358,8 @@
           "description": "Search query text to find in Confluence content",
           "example": "project documentation"
         }
-      }
+      },
+      "required": ["query"]
     }
   },
   {
@@ -1369,7 +1369,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["contentId"],
       "properties": {
         "contentId": {
           "type": "string",
@@ -1381,7 +1380,8 @@
           "description": "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.",
           "example": "md"
         }
-      }
+      },
+      "required": ["contentId"]
     }
   },
   {
@@ -1391,10 +1391,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "title",
-        "space"
-      ],
       "properties": {
         "title": {
           "type": "string",
@@ -1411,7 +1407,11 @@
           "description": "The space key where the content is located",
           "example": "PROJ"
         }
-      }
+      },
+      "required": [
+        "title",
+        "space"
+      ]
     }
   },
   {
@@ -1421,8 +1421,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -1432,8 +1432,8 @@
     "category": "user_management",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -1443,12 +1443,12 @@
     "category": "user_management",
     "inputSchema": {
       "type": "object",
-      "required": ["userId"],
       "properties": {"userId": {
         "type": "string",
         "description": "The account ID of the user to get profile for",
         "example": "123456:abcdef-1234-5678-90ab-cdef12345678"
-      }}
+      }},
+      "required": ["userId"]
     }
   },
   {
@@ -1458,12 +1458,12 @@
     "category": "content_management",
     "inputSchema": {
       "type": "object",
-      "required": ["contentId"],
       "properties": {"contentId": {
         "type": "string",
         "description": "The content ID to get attachments for",
         "example": "123456"
-      }}
+      }},
+      "required": ["contentId"]
     }
   },
   {
@@ -1473,10 +1473,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "title",
-        "space"
-      ],
       "properties": {
         "title": {
           "type": "string",
@@ -1493,7 +1489,11 @@
           "description": "The space key where to search for the content",
           "example": "PROJ"
         }
-      }
+      },
+      "required": [
+        "title",
+        "space"
+      ]
     }
   },
   {
@@ -1503,12 +1503,6 @@
     "category": "content_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "title",
-        "parentId",
-        "body",
-        "space"
-      ],
       "properties": {
         "title": {
           "type": "string",
@@ -1530,7 +1524,13 @@
           "description": "The space key where to create the page",
           "example": "PROJ"
         }
-      }
+      },
+      "required": [
+        "title",
+        "parentId",
+        "body",
+        "space"
+      ]
     }
   },
   {
@@ -1540,13 +1540,6 @@
     "category": "content_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "contentId",
-        "title",
-        "parentId",
-        "body",
-        "space"
-      ],
       "properties": {
         "contentId": {
           "type": "string",
@@ -1573,7 +1566,14 @@
           "description": "The space key where the page is located",
           "example": "PROJ"
         }
-      }
+      },
+      "required": [
+        "contentId",
+        "title",
+        "parentId",
+        "body",
+        "space"
+      ]
     }
   },
   {
@@ -1583,14 +1583,6 @@
     "category": "content_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "contentId",
-        "title",
-        "parentId",
-        "body",
-        "space",
-        "historyComment"
-      ],
       "properties": {
         "contentId": {
           "type": "string",
@@ -1622,7 +1614,15 @@
           "description": "Comment to add to the page history",
           "example": "Updated content based on user feedback"
         }
-      }
+      },
+      "required": [
+        "contentId",
+        "title",
+        "parentId",
+        "body",
+        "space",
+        "historyComment"
+      ]
     }
   },
   {
@@ -1632,10 +1632,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "spaceKey",
-        "contentName"
-      ],
       "properties": {
         "spaceKey": {
           "type": "string",
@@ -1652,7 +1648,11 @@
           "description": "The name/title of the parent page",
           "example": "Project Documentation"
         }
-      }
+      },
+      "required": [
+        "spaceKey",
+        "contentName"
+      ]
     }
   },
   {
@@ -1662,7 +1662,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["contentId"],
       "properties": {
         "contentId": {
           "type": "string",
@@ -1674,7 +1673,8 @@
           "description": "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.",
           "example": "md"
         }
-      }
+      },
+      "required": ["contentId"]
     }
   },
   {
@@ -1684,10 +1684,6 @@
     "category": "content_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "attachment",
-        "targetDir"
-      ],
       "properties": {
         "attachment": {
           "type": "object",
@@ -1698,7 +1694,11 @@
           "description": "The target directory to save the file",
           "example": "/path/to/directory"
         }
-      }
+      },
+      "required": [
+        "attachment",
+        "targetDir"
+      ]
     }
   },
   {
@@ -1708,10 +1708,6 @@
     "category": "content_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "urlStrings",
-        "outputPath"
-      ],
       "properties": {
         "urlStrings": {
           "type": "array",
@@ -1733,7 +1729,11 @@
           "description": "Local folder path where pages and attachments will be saved",
           "example": "/tmp/confluence-pages"
         }
-      }
+      },
+      "required": [
+        "urlStrings",
+        "outputPath"
+      ]
     }
   },
   {
@@ -1743,7 +1743,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["title"],
       "properties": {
         "title": {
           "type": "string",
@@ -1755,7 +1754,8 @@
           "description": "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.",
           "example": "md"
         }
-      }
+      },
+      "required": ["title"]
     }
   },
   {
@@ -1765,11 +1765,6 @@
     "category": "content_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "title",
-        "parentId",
-        "body"
-      ],
       "properties": {
         "title": {
           "type": "string",
@@ -1786,7 +1781,12 @@
           "description": "ID of the parent page for creation",
           "example": "123456"
         }
-      }
+      },
+      "required": [
+        "title",
+        "parentId",
+        "body"
+      ]
     }
   },
   {
@@ -1796,7 +1796,6 @@
     "category": "content_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["title"],
       "properties": {
         "title": {
           "type": "string",
@@ -1808,7 +1807,8 @@
           "description": "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.",
           "example": "md"
         }
-      }
+      },
+      "required": ["title"]
     }
   },
   {
@@ -1818,8 +1818,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -1829,12 +1829,12 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {"limit": {
         "type": "number",
         "description": "Maximum number of chats (0 for all, default: 50)",
         "example": "50"
-      }}
+      }},
+      "required": []
     }
   },
   {
@@ -1844,12 +1844,12 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {"limit": {
         "type": "number",
         "description": "Maximum number of chats (0 for all, default: 50)",
         "example": "50"
-      }}
+      }},
+      "required": []
     }
   },
   {
@@ -1859,7 +1859,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {
         "limit": {
           "type": "number",
@@ -1871,7 +1870,8 @@
           "description": "Filter by chat type: 'oneOnOne', 'group', 'meeting', or 'all' (default: 'all')",
           "example": "oneOnOne"
         }
-      }
+      },
+      "required": []
     }
   },
   {
@@ -1881,7 +1881,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["chatId"],
       "properties": {
         "chatId": {
           "type": "string",
@@ -1897,7 +1896,8 @@
           "description": "Optional OData filter (e.g., 'lastModifiedDateTime gt 2025-01-01T00:00:00Z')",
           "example": "lastModifiedDateTime gt 2025-01-01T00:00:00Z"
         }
-      }
+      },
+      "required": ["chatId"]
     }
   },
   {
@@ -1907,11 +1907,11 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["chatName"],
       "properties": {"chatName": {
         "type": "string",
         "description": "The chat topic or participant name to search for"
-      }}
+      }},
+      "required": ["chatName"]
     }
   },
   {
@@ -1921,7 +1921,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["chatName"],
       "properties": {
         "limit": {
           "type": "number",
@@ -1932,7 +1931,8 @@
           "type": "string",
           "description": "The chat name to search for"
         }
-      }
+      },
+      "required": ["chatName"]
     }
   },
   {
@@ -1942,7 +1942,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["chatName"],
       "properties": {
         "limit": {
           "type": "number",
@@ -1958,7 +1957,8 @@
           "description": "Sort order: 'asc' for oldest first, 'desc' for newest first (default: 'desc')",
           "example": "desc"
         }
-      }
+      },
+      "required": ["chatName"]
     }
   },
   {
@@ -1968,10 +1968,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "chatId",
-        "sinceDate"
-      ],
       "properties": {
         "chatId": {
           "type": "string",
@@ -1987,7 +1983,11 @@
           "description": "Sort order: 'asc' for oldest first, 'desc' for newest first (default: 'desc')",
           "example": "desc"
         }
-      }
+      },
+      "required": [
+        "chatId",
+        "sinceDate"
+      ]
     }
   },
   {
@@ -1997,10 +1997,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "chatName",
-        "sinceDate"
-      ],
       "properties": {
         "chatName": {
           "type": "string",
@@ -2016,7 +2012,11 @@
           "description": "Sort order: 'asc' for oldest first, 'desc' for newest first (default: 'desc')",
           "example": "desc"
         }
-      }
+      },
+      "required": [
+        "chatName",
+        "sinceDate"
+      ]
     }
   },
   {
@@ -2026,10 +2026,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "chatId",
-        "content"
-      ],
       "properties": {
         "chatId": {
           "type": "string",
@@ -2039,7 +2035,11 @@
           "type": "string",
           "description": "Message content (plain text or HTML)"
         }
-      }
+      },
+      "required": [
+        "chatId",
+        "content"
+      ]
     }
   },
   {
@@ -2049,10 +2049,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "chatName",
-        "content"
-      ],
       "properties": {
         "chatName": {
           "type": "string",
@@ -2062,7 +2058,11 @@
           "type": "string",
           "description": "Message content (plain text or HTML)"
         }
-      }
+      },
+      "required": [
+        "chatName",
+        "content"
+      ]
     }
   },
   {
@@ -2072,12 +2072,12 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {"limit": {
         "type": "number",
         "description": "Maximum number of messages (0 for all, default: 100)",
         "example": "100"
-      }}
+      }},
+      "required": []
     }
   },
   {
@@ -2087,12 +2087,12 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {"limit": {
         "type": "number",
         "description": "Maximum number of messages (0 for all, default: 100)",
         "example": "100"
-      }}
+      }},
+      "required": []
     }
   },
   {
@@ -2102,11 +2102,11 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["content"],
       "properties": {"content": {
         "type": "string",
         "description": "Message content (plain text or HTML)"
-      }}
+      }},
+      "required": ["content"]
     }
   },
   {
@@ -2116,10 +2116,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "url",
-        "outputPath"
-      ],
       "properties": {
         "url": {
           "type": "string",
@@ -2131,7 +2127,11 @@
           "description": "Local file path to save to",
           "example": "/tmp/file.ext"
         }
-      }
+      },
+      "required": [
+        "url",
+        "outputPath"
+      ]
     }
   },
   {
@@ -2141,10 +2141,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "chatId",
-        "messageId"
-      ],
       "properties": {
         "chatId": {
           "type": "string",
@@ -2154,7 +2150,11 @@
           "type": "string",
           "description": "Message ID"
         }
-      }
+      },
+      "required": [
+        "chatId",
+        "messageId"
+      ]
     }
   },
   {
@@ -2164,11 +2164,11 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["callId"],
       "properties": {"callId": {
         "type": "string",
         "description": "Call ID from the meeting"
-      }}
+      }},
+      "required": ["callId"]
     }
   },
   {
@@ -2178,10 +2178,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "userId",
-        "searchQuery"
-      ],
       "properties": {
         "userId": {
           "type": "string",
@@ -2191,7 +2187,11 @@
           "type": "string",
           "description": "Search term (meeting name, 'transcript', '.vtt', etc.)"
         }
-      }
+      },
+      "required": [
+        "userId",
+        "searchQuery"
+      ]
     }
   },
   {
@@ -2201,10 +2201,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "driveId",
-        "itemId"
-      ],
       "properties": {
         "itemId": {
           "type": "string",
@@ -2214,7 +2210,11 @@
           "type": "string",
           "description": "Drive ID from the recording file"
         }
-      }
+      },
+      "required": [
+        "driveId",
+        "itemId"
+      ]
     }
   },
   {
@@ -2224,10 +2224,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "driveId",
-        "itemId"
-      ],
       "properties": {
         "itemId": {
           "type": "string",
@@ -2237,7 +2233,11 @@
           "type": "string",
           "description": "Drive ID"
         }
-      }
+      },
+      "required": [
+        "driveId",
+        "itemId"
+      ]
     }
   },
   {
@@ -2247,11 +2247,11 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["webUrl"],
       "properties": {"webUrl": {
         "type": "string",
         "description": "SharePoint webUrl of the recording"
-      }}
+      }},
+      "required": ["webUrl"]
     }
   },
   {
@@ -2261,12 +2261,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "driveId",
-        "itemId",
-        "transcriptId",
-        "outputPath"
-      ],
       "properties": {
         "itemId": {
           "type": "string",
@@ -2284,7 +2278,13 @@
           "type": "string",
           "description": "Transcript ID (UUID)"
         }
-      }
+      },
+      "required": [
+        "driveId",
+        "itemId",
+        "transcriptId",
+        "outputPath"
+      ]
     }
   },
   {
@@ -2294,8 +2294,8 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -2305,11 +2305,11 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["teamId"],
       "properties": {"teamId": {
         "type": "string",
         "description": "The team ID"
-      }}
+      }},
+      "required": ["teamId"]
     }
   },
   {
@@ -2319,11 +2319,11 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": ["teamName"],
       "properties": {"teamName": {
         "type": "string",
         "description": "The team name to search for"
-      }}
+      }},
+      "required": ["teamName"]
     }
   },
   {
@@ -2333,10 +2333,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "teamId",
-        "channelName"
-      ],
       "properties": {
         "channelName": {
           "type": "string",
@@ -2346,7 +2342,11 @@
           "type": "string",
           "description": "The team ID"
         }
-      }
+      },
+      "required": [
+        "teamId",
+        "channelName"
+      ]
     }
   },
   {
@@ -2356,10 +2356,6 @@
     "category": "communication",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "teamName",
-        "channelName"
-      ],
       "properties": {
         "teamName": {
           "type": "string",
@@ -2374,7 +2370,11 @@
           "type": "string",
           "description": "The channel name to search for"
         }
-      }
+      },
+      "required": [
+        "teamName",
+        "channelName"
+      ]
     }
   },
   {
@@ -2384,11 +2384,11 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["message"],
       "properties": {"message": {
         "type": "string",
         "description": "Text message to send to AI"
-      }}
+      }},
+      "required": ["message"]
     }
   },
   {
@@ -2398,10 +2398,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "message",
-        "filePaths"
-      ],
       "properties": {
         "message": {
           "type": "string",
@@ -2413,7 +2409,11 @@
           "description": "Array of file paths to attach to the message",
           "example": "['/path/to/image.png', '/path/to/document.pdf']"
         }
-      }
+      },
+      "required": [
+        "message",
+        "filePaths"
+      ]
     }
   },
   {
@@ -2423,11 +2423,11 @@
     "category": "Vertex AI",
     "inputSchema": {
       "type": "object",
-      "required": ["message"],
       "properties": {"message": {
         "type": "string",
         "description": "Text message"
-      }}
+      }},
+      "required": ["message"]
     }
   },
   {
@@ -2437,10 +2437,6 @@
     "category": "Vertex AI",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "message",
-        "filePaths"
-      ],
       "properties": {
         "message": {
           "type": "string",
@@ -2452,7 +2448,11 @@
           "description": "Array of file paths to attach to the message",
           "example": "['/path/to/image.png', '/path/to/document.pdf']"
         }
-      }
+      },
+      "required": [
+        "message",
+        "filePaths"
+      ]
     }
   },
   {
@@ -2462,11 +2462,11 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["message"],
       "properties": {"message": {
         "type": "string",
         "description": "Text message to send to AI"
-      }}
+      }},
+      "required": ["message"]
     }
   },
   {
@@ -2476,8 +2476,8 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -2487,11 +2487,11 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["message"],
       "properties": {"message": {
         "type": "string",
         "description": "Text message to send to AI"
-      }}
+      }},
+      "required": ["message"]
     }
   },
   {
@@ -2501,10 +2501,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "message",
-        "filePaths"
-      ],
       "properties": {
         "message": {
           "type": "string",
@@ -2516,7 +2512,11 @@
           "description": "Comma-separated list of file paths to attach (supports images and documents)",
           "example": "/path/to/image.png,/path/to/document.pdf"
         }
-      }
+      },
+      "required": [
+        "message",
+        "filePaths"
+      ]
     }
   },
   {
@@ -2526,11 +2526,11 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["message"],
       "properties": {"message": {
         "type": "string",
         "description": "Text message to send to AI"
-      }}
+      }},
+      "required": ["message"]
     }
   },
   {
@@ -2540,10 +2540,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "message",
-        "filePaths"
-      ],
       "properties": {
         "message": {
           "type": "string",
@@ -2555,7 +2551,11 @@
           "description": "Array of file paths to attach to the message",
           "example": "['/path/to/image.png', '/path/to/document.pdf']"
         }
-      }
+      },
+      "required": [
+        "message",
+        "filePaths"
+      ]
     }
   },
   {
@@ -2565,8 +2565,8 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -2576,11 +2576,11 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["message"],
       "properties": {"message": {
         "type": "string",
         "description": "Text message to send to AI"
-      }}
+      }},
+      "required": ["message"]
     }
   },
   {
@@ -2590,10 +2590,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "message",
-        "filePaths"
-      ],
       "properties": {
         "message": {
           "type": "string",
@@ -2605,7 +2601,11 @@
           "description": "Array of file paths to attach to the message",
           "example": "['/path/to/image.png', '/path/to/document.pdf']"
         }
-      }
+      },
+      "required": [
+        "message",
+        "filePaths"
+      ]
     }
   },
   {
@@ -2615,11 +2615,11 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["message"],
       "properties": {"message": {
         "type": "string",
         "description": "Text message to send to AI"
-      }}
+      }},
+      "required": ["message"]
     }
   },
   {
@@ -2629,10 +2629,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "message",
-        "filePaths"
-      ],
       "properties": {
         "message": {
           "type": "string",
@@ -2644,7 +2640,11 @@
           "description": "Array of file paths to attach to the message (images only for vision models)",
           "example": "['/path/to/image.png', '/path/to/photo.jpg']"
         }
-      }
+      },
+      "required": [
+        "message",
+        "filePaths"
+      ]
     }
   },
   {
@@ -2654,12 +2654,12 @@
     "category": "storage",
     "inputSchema": {
       "type": "object",
-      "required": ["sharingUrl"],
       "properties": {"sharingUrl": {
         "type": "string",
         "description": "SharePoint sharing URL",
         "example": "https://company-my.sharepoint.com/:v:/p/user/EabcdefGHIJ..."
-      }}
+      }},
+      "required": ["sharingUrl"]
     }
   },
   {
@@ -2669,10 +2669,6 @@
     "category": "storage",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "sharingUrl",
-        "outputPath"
-      ],
       "properties": {
         "sharingUrl": {
           "type": "string",
@@ -2684,7 +2680,11 @@
           "description": "Local file path to save to",
           "example": "/tmp/recording.mp4"
         }
-      }
+      },
+      "required": [
+        "sharingUrl",
+        "outputPath"
+      ]
     }
   },
   {
@@ -2694,7 +2694,6 @@
     "category": "work_item_management",
     "inputSchema": {
       "type": "object",
-      "required": ["id"],
       "properties": {
         "fields": {
           "type": "array",
@@ -2705,7 +2704,8 @@
           "description": "The work item ID (numeric)",
           "example": "12345"
         }
-      }
+      },
+      "required": ["id"]
     }
   },
   {
@@ -2715,7 +2715,6 @@
     "category": "search",
     "inputSchema": {
       "type": "object",
-      "required": ["wiql"],
       "properties": {
         "fields": {
           "type": "array",
@@ -2726,7 +2725,8 @@
           "description": "WIQL query string",
           "example": "SELECT [System.Id] FROM WorkItems WHERE [System.WorkItemType] = 'Bug'"
         }
-      }
+      },
+      "required": ["wiql"]
     }
   },
   {
@@ -2736,10 +2736,6 @@
     "category": "comment_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "id",
-        "ticket"
-      ],
       "properties": {
         "ticket": {
           "type": "object",
@@ -2749,7 +2745,11 @@
           "type": "string",
           "description": "The work item ID"
         }
-      }
+      },
+      "required": [
+        "id",
+        "ticket"
+      ]
     }
   },
   {
@@ -2759,10 +2759,6 @@
     "category": "comment_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "id",
-        "comment"
-      ],
       "properties": {
         "comment": {
           "type": "string",
@@ -2772,7 +2768,11 @@
           "type": "string",
           "description": "The work item ID"
         }
-      }
+      },
+      "required": [
+        "id",
+        "comment"
+      ]
     }
   },
   {
@@ -2782,10 +2782,6 @@
     "category": "work_item_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "id",
-        "userEmail"
-      ],
       "properties": {
         "userEmail": {
           "type": "string",
@@ -2795,7 +2791,11 @@
           "type": "string",
           "description": "The work item ID"
         }
-      }
+      },
+      "required": [
+        "id",
+        "userEmail"
+      ]
     }
   },
   {
@@ -2805,10 +2805,6 @@
     "category": "work_item_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "id",
-        "description"
-      ],
       "properties": {
         "description": {
           "type": "string",
@@ -2818,7 +2814,11 @@
           "type": "string",
           "description": "The work item ID"
         }
-      }
+      },
+      "required": [
+        "id",
+        "description"
+      ]
     }
   },
   {
@@ -2828,10 +2828,6 @@
     "category": "work_item_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "id",
-        "tags"
-      ],
       "properties": {
         "id": {
           "type": "string",
@@ -2841,7 +2837,11 @@
           "type": "string",
           "description": "Tags as semicolon-separated string (e.g., 'tag1;tag2;tag3')"
         }
-      }
+      },
+      "required": [
+        "id",
+        "tags"
+      ]
     }
   },
   {
@@ -2851,10 +2851,6 @@
     "category": "work_item_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "id",
-        "state"
-      ],
       "properties": {
         "id": {
           "type": "string",
@@ -2865,7 +2861,11 @@
           "description": "The target state name",
           "example": "Active"
         }
-      }
+      },
+      "required": [
+        "id",
+        "state"
+      ]
     }
   },
   {
@@ -2875,11 +2875,6 @@
     "category": "work_item_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "sourceId",
-        "targetId",
-        "relationship"
-      ],
       "properties": {
         "sourceId": {
           "type": "string",
@@ -2894,7 +2889,12 @@
           "description": "Relationship type (e.g., 'parent', 'child', 'related', 'tested by', 'tests')",
           "example": "parent"
         }
-      }
+      },
+      "required": [
+        "sourceId",
+        "targetId",
+        "relationship"
+      ]
     }
   },
   {
@@ -2904,11 +2904,6 @@
     "category": "work_item_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project",
-        "workItemType",
-        "title"
-      ],
       "properties": {
         "workItemType": {
           "type": "string",
@@ -2930,7 +2925,12 @@
           "type": "string",
           "description": "The work item title"
         }
-      }
+      },
+      "required": [
+        "project",
+        "workItemType",
+        "title"
+      ]
     }
   },
   {
@@ -2940,7 +2940,6 @@
     "category": "history",
     "inputSchema": {
       "type": "object",
-      "required": ["id"],
       "properties": {
         "ticket": {
           "type": "object",
@@ -2950,7 +2949,8 @@
           "type": "string",
           "description": "The work item ID"
         }
-      }
+      },
+      "required": ["id"]
     }
   },
   {
@@ -2960,11 +2960,11 @@
     "category": "file_management",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "The attachment URL to download"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -2974,11 +2974,11 @@
     "category": "user_management",
     "inputSchema": {
       "type": "object",
-      "required": ["email"],
       "properties": {"email": {
         "type": "string",
         "description": "User email address"
-      }}
+      }},
+      "required": ["email"]
     }
   },
   {
@@ -2988,8 +2988,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -2999,8 +2999,8 @@
     "category": "user_management",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -3010,10 +3010,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "status"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3025,7 +3021,11 @@
           "description": "The status of pull requests to list: 'active', 'completed', or 'abandoned'. 'open'/'opened' accepted as synonym for 'active'.",
           "example": "active"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "status"
+      ]
     }
   },
   {
@@ -3035,10 +3035,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3050,7 +3046,11 @@
           "description": "The pull request ID (numeric)",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -3060,10 +3060,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3075,7 +3071,11 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -3085,11 +3085,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "text"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3106,7 +3101,12 @@
           "description": "The comment text to add (Markdown supported)",
           "example": "Looks good!"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "text"
+      ]
     }
   },
   {
@@ -3116,12 +3116,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "threadId",
-        "text"
-      ],
       "properties": {
         "threadId": {
           "type": "string",
@@ -3143,7 +3137,13 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "threadId",
+        "text"
+      ]
     }
   },
   {
@@ -3153,13 +3153,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "filePath",
-        "line",
-        "text"
-      ],
       "properties": {
         "side": {
           "type": "string",
@@ -3196,7 +3189,14 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "filePath",
+        "line",
+        "text"
+      ]
     }
   },
   {
@@ -3206,11 +3206,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "threadId"
-      ],
       "properties": {
         "threadId": {
           "type": "string",
@@ -3232,7 +3227,12 @@
           "description": "The new status: 'fixed' (default/resolved), 'closed', 'byDesign', 'wontFix', 'pending', 'active'",
           "example": "fixed"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "threadId"
+      ]
     }
   },
   {
@@ -3242,13 +3242,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "threadId",
-        "commentId",
-        "text"
-      ],
       "properties": {
         "threadId": {
           "type": "string",
@@ -3275,7 +3268,14 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "threadId",
+        "commentId",
+        "text"
+      ]
     }
   },
   {
@@ -3285,12 +3285,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "threadId",
-        "commentId"
-      ],
       "properties": {
         "threadId": {
           "type": "string",
@@ -3312,7 +3306,13 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "threadId",
+        "commentId"
+      ]
     }
   },
   {
@@ -3322,10 +3322,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3337,7 +3333,11 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -3347,10 +3347,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3377,7 +3373,11 @@
           "description": "Whether to delete the source branch after merging (default: true)",
           "example": "true"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -3387,11 +3387,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "label"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3408,7 +3403,12 @@
           "description": "The label name to add",
           "example": "needs-review"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "label"
+      ]
     }
   },
   {
@@ -3418,11 +3418,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "labelId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3439,7 +3434,12 @@
           "description": "The label ID to remove (from the PR labels array, not the label name)",
           "example": "e10671ab-..."
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "labelId"
+      ]
     }
   },
   {
@@ -3449,10 +3449,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3464,7 +3460,11 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -3474,11 +3474,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "reviewerId"
-      ],
       "properties": {
         "reviewerId": {
           "type": "string",
@@ -3500,7 +3495,12 @@
           "description": "Optional initial vote: 10=approve, 5=approve with suggestions, 0=no vote, -5=wait for author, -10=reject",
           "example": "0"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "reviewerId"
+      ]
     }
   },
   {
@@ -3510,12 +3510,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId",
-        "reviewerId",
-        "vote"
-      ],
       "properties": {
         "reviewerId": {
           "type": "string",
@@ -3537,7 +3531,13 @@
           "description": "Vote value: 10=approve, 5=approve with suggestions, 0=reset, -5=wait for author, -10=reject",
           "example": "10"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId",
+        "reviewerId",
+        "vote"
+      ]
     }
   },
   {
@@ -3547,10 +3547,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "description": {
           "type": "string",
@@ -3577,7 +3573,11 @@
           "description": "New status: 'active' or 'abandoned'",
           "example": "active"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -3587,10 +3587,6 @@
     "category": "pull_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -3602,7 +3598,11 @@
           "description": "The pull request ID",
           "example": "1"
         }
-      }
+      },
+      "required": [
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -3612,8 +3612,8 @@
     "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -3623,7 +3623,6 @@
     "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
-      "required": ["pipelineId"],
       "properties": {
         "branch": {
           "type": "string",
@@ -3637,7 +3636,8 @@
           "type": "number",
           "description": "The pipeline ID to trigger"
         }
-      }
+      },
+      "required": ["pipelineId"]
     }
   },
   {
@@ -3647,7 +3647,6 @@
     "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
-      "required": ["pipelineId"],
       "properties": {
         "top": {
           "type": "number",
@@ -3657,7 +3656,8 @@
           "type": "number",
           "description": "The pipeline ID"
         }
-      }
+      },
+      "required": ["pipelineId"]
     }
   },
   {
@@ -3667,10 +3667,6 @@
     "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "pipelineId",
-        "runId"
-      ],
       "properties": {
         "pipelineId": {
           "type": "number",
@@ -3680,7 +3676,11 @@
           "type": "number",
           "description": "The run ID"
         }
-      }
+      },
+      "required": [
+        "pipelineId",
+        "runId"
+      ]
     }
   },
   {
@@ -3690,7 +3690,6 @@
     "category": "pipeline_management",
     "inputSchema": {
       "type": "object",
-      "required": ["buildId"],
       "properties": {
         "tailLines": {
           "type": "number",
@@ -3704,7 +3703,8 @@
           "type": "string",
           "description": "Optional: filter logs to a specific task name (case-insensitive substring match)"
         }
-      }
+      },
+      "required": ["buildId"]
     }
   },
   {
@@ -3714,11 +3714,6 @@
     "category": "diagram_generation",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "integration",
-        "storage_path",
-        "include_patterns"
-      ],
       "properties": {
         "integration": {
           "type": "string",
@@ -3750,7 +3745,12 @@
           "description": "Whether to include comments in content (only for Jira integrations, default: false)",
           "example": "false"
         }
-      }
+      },
+      "required": [
+        "integration",
+        "storage_path",
+        "include_patterns"
+      ]
     }
   },
   {
@@ -3760,10 +3760,6 @@
     "category": "diagram_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "integration",
-        "storage_path"
-      ],
       "properties": {
         "integration": {
           "type": "string",
@@ -3775,7 +3771,11 @@
           "description": "Base path where diagrams are stored",
           "example": "./mermaid-diagrams"
         }
-      }
+      },
+      "required": [
+        "integration",
+        "storage_path"
+      ]
     }
   },
   {
@@ -3785,10 +3785,6 @@
     "category": "diagram_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "integration",
-        "storage_path"
-      ],
       "properties": {
         "integration": {
           "type": "string",
@@ -3800,7 +3796,11 @@
           "description": "Base path where diagrams are stored",
           "example": "./mermaid-diagrams"
         }
-      }
+      },
+      "required": [
+        "integration",
+        "storage_path"
+      ]
     }
   },
   {
@@ -3810,8 +3810,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -3821,10 +3821,6 @@
     "category": "xray_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project",
-        "summary"
-      ],
       "properties": {
         "summary": {
           "type": "string",
@@ -3845,7 +3841,11 @@
           "type": "string",
           "description": "Optional JSON array of steps in format [{\"action\": \"...\", \"data\": \"...\", \"result\": \"...\"}]. Will be converted to definition format."
         }
-      }
+      },
+      "required": [
+        "project",
+        "summary"
+      ]
     }
   },
   {
@@ -3855,7 +3855,6 @@
     "category": "search",
     "inputSchema": {
       "type": "object",
-      "required": ["searchQueryJQL"],
       "properties": {
         "fields": {
           "type": "array",
@@ -3867,7 +3866,8 @@
           "description": "JQL search query (e.g., 'project = TP AND issueType = Test')",
           "example": "project = TP AND issueType = Test"
         }
-      }
+      },
+      "required": ["searchQueryJQL"]
     }
   },
   {
@@ -3877,12 +3877,12 @@
     "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["testKey"],
       "properties": {"testKey": {
         "type": "string",
         "description": "Jira ticket key (e.g., 'TP-909')",
         "example": "TP-909"
-      }}
+      }},
+      "required": ["testKey"]
     }
   },
   {
@@ -3892,12 +3892,12 @@
     "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["testKey"],
       "properties": {"testKey": {
         "type": "string",
         "description": "Jira ticket key (e.g., 'TP-909')",
         "example": "TP-909"
-      }}
+      }},
+      "required": ["testKey"]
     }
   },
   {
@@ -3907,12 +3907,12 @@
     "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["testKey"],
       "properties": {"testKey": {
         "type": "string",
         "description": "Jira ticket key (e.g., 'TP-909')",
         "example": "TP-909"
-      }}
+      }},
+      "required": ["testKey"]
     }
   },
   {
@@ -3922,12 +3922,12 @@
     "category": "test_retrieval",
     "inputSchema": {
       "type": "object",
-      "required": ["preconditionKey"],
       "properties": {"preconditionKey": {
         "type": "string",
         "description": "Jira ticket key (e.g., 'TP-910')",
         "example": "TP-910"
-      }}
+      }},
+      "required": ["preconditionKey"]
     }
   },
   {
@@ -3937,10 +3937,6 @@
     "category": "test_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "issueId",
-        "action"
-      ],
       "properties": {
         "result": {
           "type": "string",
@@ -3962,7 +3958,11 @@
           "description": "Step data (e.g., 'test_user')",
           "example": "test_user"
         }
-      }
+      },
+      "required": [
+        "issueId",
+        "action"
+      ]
     }
   },
   {
@@ -3972,10 +3972,6 @@
     "category": "test_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "issueId",
-        "steps"
-      ],
       "properties": {
         "steps": {
           "type": "object",
@@ -3987,7 +3983,11 @@
           "description": "Jira issue ID (e.g., '12345')",
           "example": "12345"
         }
-      }
+      },
+      "required": [
+        "issueId",
+        "steps"
+      ]
     }
   },
   {
@@ -3997,10 +3997,6 @@
     "category": "test_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "testIssueId",
-        "preconditionIssueId"
-      ],
       "properties": {
         "testIssueId": {
           "type": "string",
@@ -4012,7 +4008,11 @@
           "description": "Jira issue ID of the precondition (e.g., '12346')",
           "example": "12346"
         }
-      }
+      },
+      "required": [
+        "testIssueId",
+        "preconditionIssueId"
+      ]
     }
   },
   {
@@ -4022,10 +4022,6 @@
     "category": "test_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "testIssueId",
-        "preconditionIssueIds"
-      ],
       "properties": {
         "preconditionIssueIds": {
           "type": "object",
@@ -4037,7 +4033,11 @@
           "description": "Jira issue ID of the test (e.g., '12345')",
           "example": "12345"
         }
-      }
+      },
+      "required": [
+        "testIssueId",
+        "preconditionIssueIds"
+      ]
     }
   },
   {
@@ -4047,12 +4047,12 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["path"],
       "properties": {"path": {
         "type": "string",
         "description": "File path relative to working directory or absolute path within working directory",
         "example": "outputs/response.md"
-      }}
+      }},
+      "required": ["path"]
     }
   },
   {
@@ -4062,10 +4062,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "path",
-        "content"
-      ],
       "properties": {
         "path": {
           "type": "string",
@@ -4077,7 +4073,11 @@
           "description": "Content to write to the file as UTF-8 string",
           "example": "{\"messages\": []}"
         }
-      }
+      },
+      "required": [
+        "path",
+        "content"
+      ]
     }
   },
   {
@@ -4087,12 +4087,12 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["path"],
       "properties": {"path": {
         "type": "string",
         "description": "File path relative to working directory or absolute path within working directory",
         "example": "temp/unused_file.txt"
-      }}
+      }},
+      "required": ["path"]
     }
   },
   {
@@ -4102,12 +4102,12 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["json"],
       "properties": {"json": {
         "type": "string",
         "description": "JSON string to validate",
         "example": "{\"key\": \"value\"}"
-      }}
+      }},
+      "required": ["json"]
     }
   },
   {
@@ -4117,12 +4117,12 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["path"],
       "properties": {"path": {
         "type": "string",
         "description": "File path relative to working directory or absolute path within working directory",
         "example": "outputs/response.json"
-      }}
+      }},
+      "required": ["path"]
     }
   },
   {
@@ -4132,7 +4132,6 @@
     "category": "auth",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {
         "redirectUri": {
           "type": "string",
@@ -4149,7 +4148,8 @@
           "description": "Optional OAuth scope list (space-separated), e.g. file_content:read file_metadata:read. If omitted, uses FIGMA_SCOPE (or FIGMA_OAUTH_SCOPES) env or default minimal read scope.",
           "example": "file_content:read file_metadata:read"
         }
-      }
+      },
+      "required": []
     }
   },
   {
@@ -4159,7 +4159,6 @@
     "category": "auth",
     "inputSchema": {
       "type": "object",
-      "required": ["code"],
       "properties": {
         "redirectUri": {
           "type": "string",
@@ -4171,7 +4170,8 @@
           "description": "Authorization code received from Figma OAuth2 redirect",
           "example": "figma_auth_code_abc123"
         }
-      }
+      },
+      "required": ["code"]
     }
   },
   {
@@ -4181,8 +4181,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -4192,8 +4192,8 @@
     "category": "user",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -4203,12 +4203,12 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": ["url"],
       "properties": {"url": {
         "type": "string",
         "description": "Figma design URL with node-id parameter",
         "example": "https://www.figma.com/file/abc123/Design?node-id=1%3A2"
-      }}
+      }},
+      "required": ["url"]
     }
   },
   {
@@ -4218,10 +4218,6 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "href",
-        "nodeId"
-      ],
       "properties": {
         "format": {
           "type": "string",
@@ -4239,7 +4235,11 @@
           "type": "string",
           "description": "Node ID to download"
         }
-      }
+      },
+      "required": [
+        "href",
+        "nodeId"
+      ]
     }
   },
   {
@@ -4249,12 +4249,12 @@
     "category": "file_management",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "Figma design URL to download as image file",
         "example": "https://www.figma.com/file/abc123/Design?node-id=1%3A2"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -4264,11 +4264,11 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "Parameter href"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -4278,12 +4278,12 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "Figma design URL to extract visual elements from",
         "example": "https://www.figma.com/file/abc123/Design"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -4293,11 +4293,11 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "Figma design URL"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -4307,10 +4307,6 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "href",
-        "nodeIds"
-      ],
       "properties": {
         "format": {
           "type": "string",
@@ -4324,7 +4320,11 @@
           "type": "string",
           "description": "Figma design URL"
         }
-      }
+      },
+      "required": [
+        "href",
+        "nodeIds"
+      ]
     }
   },
   {
@@ -4334,11 +4334,6 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "href",
-        "nodeId",
-        "format"
-      ],
       "properties": {
         "format": {
           "type": "string",
@@ -4355,7 +4350,12 @@
           "description": "Figma design URL to extract file ID from",
           "example": "https://www.figma.com/file/abc123/Design"
         }
-      }
+      },
+      "required": [
+        "href",
+        "nodeId",
+        "format"
+      ]
     }
   },
   {
@@ -4365,10 +4365,6 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "href",
-        "nodeId"
-      ],
       "properties": {
         "nodeId": {
           "type": "string",
@@ -4380,7 +4376,11 @@
           "description": "Figma design URL to extract file ID from",
           "example": "https://www.figma.com/file/abc123/Design"
         }
-      }
+      },
+      "required": [
+        "href",
+        "nodeId"
+      ]
     }
   },
   {
@@ -4390,10 +4390,6 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "href",
-        "nodeIds"
-      ],
       "properties": {
         "nodeIds": {
           "type": "string",
@@ -4403,7 +4399,11 @@
           "type": "string",
           "description": "Figma design URL"
         }
-      }
+      },
+      "required": [
+        "href",
+        "nodeIds"
+      ]
     }
   },
   {
@@ -4413,10 +4413,6 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "href",
-        "nodeIds"
-      ],
       "properties": {
         "nodeIds": {
           "type": "string",
@@ -4426,7 +4422,11 @@
           "type": "string",
           "description": "Figma design URL"
         }
-      }
+      },
+      "required": [
+        "href",
+        "nodeIds"
+      ]
     }
   },
   {
@@ -4436,11 +4436,11 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "Figma design URL"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -4450,11 +4450,11 @@
     "category": "structure_analysis",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "Figma design URL with node-id"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -4464,10 +4464,6 @@
     "category": "structure_analysis",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "href",
-        "nodeIds"
-      ],
       "properties": {
         "nodeIds": {
           "type": "string",
@@ -4477,7 +4473,11 @@
           "type": "string",
           "description": "Figma design URL"
         }
-      }
+      },
+      "required": [
+        "href",
+        "nodeIds"
+      ]
     }
   },
   {
@@ -4487,11 +4487,56 @@
     "category": "content_access",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "Figma design URL with node-id"
-      }}
+      }},
+      "required": ["href"]
+    }
+  },
+  {
+    "name": "figma_list_team_projects",
+    "integration": "figma",
+    "description": "List all projects within a Figma team, so a team-level 'files' listing URL (which is not a single design file and cannot be passed to file-specific tools like figma_get_layers) can be broken down into browsable projects. Accepts either a raw numeric team ID or any Figma URL containing a '/team/<teamId>' path segment.",
+    "category": "content_access",
+    "inputSchema": {
+      "type": "object",
+      "properties": {"teamIdOrUrl": {
+        "type": "string",
+        "description": "Numeric Figma team ID, or a Figma URL containing '/team/<teamId>' (e.g. a team files-listing URL)",
+        "example": "https://www.figma.com/files/1008118788610687562/team/1633438210497791577"
+      }},
+      "required": ["teamIdOrUrl"]
+    }
+  },
+  {
+    "name": "figma_list_project_files",
+    "integration": "figma",
+    "description": "List all design files within a Figma project, returning each file's key, name, and thumbnail so a specific file URL can be built for use with file-specific tools like figma_get_layers or figma_get_file_structure. Use figma_list_team_projects first to discover project IDs from a team. Accepts either a raw numeric project ID or any Figma URL containing a '/project/<projectId>' path segment.",
+    "category": "content_access",
+    "inputSchema": {
+      "type": "object",
+      "properties": {"projectIdOrUrl": {
+        "type": "string",
+        "description": "Numeric Figma project ID, or a Figma URL containing '/project/<projectId>'",
+        "example": "https://www.figma.com/files/project/123456789"
+      }},
+      "required": ["projectIdOrUrl"]
+    }
+  },
+  {
+    "name": "figma_get_file_comments",
+    "integration": "figma",
+    "description": "Get all comments left on a Figma design file, including comment text, author, and creation date. Accepts either a raw Figma file key or a full Figma design file URL.",
+    "category": "content_access",
+    "inputSchema": {
+      "type": "object",
+      "properties": {"href": {
+        "type": "string",
+        "description": "Figma design file URL, or a raw Figma file key",
+        "example": "https://www.figma.com/file/abc123/Design"
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -4501,8 +4546,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -4512,8 +4557,8 @@
     "category": "projects",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -4523,12 +4568,12 @@
     "category": "suites",
     "inputSchema": {
       "type": "object",
-      "required": ["project_name"],
       "properties": {"project_name": {
         "type": "string",
         "description": "Project name to get suites from",
         "example": "My Project"
-      }}
+      }},
+      "required": ["project_name"]
     }
   },
   {
@@ -4538,7 +4583,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": ["case_id"],
       "properties": {
         "case_id": {
           "type": "string",
@@ -4550,7 +4594,8 @@
           "description": "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown \u2014 much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).",
           "example": "markdown"
         }
-      }
+      },
+      "required": ["case_id"]
     }
   },
   {
@@ -4560,7 +4605,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": ["project_name"],
       "properties": {
         "project_name": {
           "type": "string",
@@ -4572,7 +4616,8 @@
           "description": "Output format for HTML-bearing fields (preconditions, steps, expected results): 'html' (default, raw TestRail HTML) or 'md'/'markdown' (cleaned Markdown \u2014 much smaller and easier to read or feed to an LLM). If omitted, falls back to the TESTRAIL_DEFAULT_FORMAT env var (defaults to 'html' when unset).",
           "example": "markdown"
         }
-      }
+      },
+      "required": ["project_name"]
     }
   },
   {
@@ -4582,7 +4627,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": ["project_name"],
       "properties": {
         "format": {
           "type": "string",
@@ -4604,7 +4648,8 @@
           "description": "Suite ID to filter by (optional)",
           "example": "1"
         }
-      }
+      },
+      "required": ["project_name"]
     }
   },
   {
@@ -4614,10 +4659,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "refs",
-        "project_name"
-      ],
       "properties": {
         "project_name": {
           "type": "string",
@@ -4629,7 +4670,11 @@
           "description": "Reference ID (e.g., JIRA ticket key)",
           "example": "PROJ-123"
         }
-      }
+      },
+      "required": [
+        "refs",
+        "project_name"
+      ]
     }
   },
   {
@@ -4639,10 +4684,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project_name",
-        "title"
-      ],
       "properties": {
         "description": {
           "type": "string",
@@ -4669,7 +4710,11 @@
           "description": "Reference to requirement (e.g., JIRA key)",
           "example": "PROJ-123"
         }
-      }
+      },
+      "required": [
+        "project_name",
+        "title"
+      ]
     }
   },
   {
@@ -4679,10 +4724,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project_name",
-        "title"
-      ],
       "properties": {
         "priority_id": {
           "type": "string",
@@ -4729,7 +4770,11 @@
           "description": "Test steps separated by double newline (optional)",
           "example": "Navigate to login page.\\n\\nEnter username %Username%.\\n\\nClick Login button."
         }
-      }
+      },
+      "required": [
+        "project_name",
+        "title"
+      ]
     }
   },
   {
@@ -4739,11 +4784,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project_name",
-        "title",
-        "steps_json"
-      ],
       "properties": {
         "priority_id": {
           "type": "string",
@@ -4785,7 +4825,12 @@
           "description": "Test case title/summary",
           "example": "Verify login functionality"
         }
-      }
+      },
+      "required": [
+        "project_name",
+        "title",
+        "steps_json"
+      ]
     }
   },
   {
@@ -4795,7 +4840,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": ["case_id"],
       "properties": {
         "case_id": {
           "type": "string",
@@ -4817,7 +4861,8 @@
           "description": "New references (optional)",
           "example": "PROJ-123"
         }
-      }
+      },
+      "required": ["case_id"]
     }
   },
   {
@@ -4827,12 +4872,12 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": ["case_id"],
       "properties": {"case_id": {
         "type": "string",
         "description": "The numeric test case ID to delete (without the C prefix)",
         "example": "123"
-      }}
+      }},
+      "required": ["case_id"]
     }
   },
   {
@@ -4842,10 +4887,6 @@
     "category": "test_cases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "case_id",
-        "requirement_key"
-      ],
       "properties": {
         "case_id": {
           "type": "string",
@@ -4857,7 +4898,11 @@
           "description": "Requirement key (e.g., JIRA ticket)",
           "example": "PROJ-123"
         }
-      }
+      },
+      "required": [
+        "case_id",
+        "requirement_key"
+      ]
     }
   },
   {
@@ -4867,12 +4912,12 @@
     "category": "labels",
     "inputSchema": {
       "type": "object",
-      "required": ["project_name"],
       "properties": {"project_name": {
         "type": "string",
         "description": "Project name",
         "example": "My Project"
-      }}
+      }},
+      "required": ["project_name"]
     }
   },
   {
@@ -4882,12 +4927,12 @@
     "category": "labels",
     "inputSchema": {
       "type": "object",
-      "required": ["label_id"],
       "properties": {"label_id": {
         "type": "string",
         "description": "The label ID",
         "example": "7"
-      }}
+      }},
+      "required": ["label_id"]
     }
   },
   {
@@ -4897,11 +4942,6 @@
     "category": "labels",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "label_id",
-        "project_name",
-        "title"
-      ],
       "properties": {
         "project_name": {
           "type": "string",
@@ -4918,7 +4958,12 @@
           "description": "The label ID to update",
           "example": "7"
         }
-      }
+      },
+      "required": [
+        "label_id",
+        "project_name",
+        "title"
+      ]
     }
   },
   {
@@ -4928,8 +4973,8 @@
     "category": "case_types",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -4939,7 +4984,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": ["source_name"],
       "properties": {
         "output_path": {
           "type": "string",
@@ -4951,7 +4995,8 @@
           "description": "Name of the data source (e.g., 'teams_chat', 'slack_general')",
           "example": "teams_chat"
         }
-      }
+      },
+      "required": ["source_name"]
     }
   },
   {
@@ -4961,11 +5006,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "source_name",
-        "input_file",
-        "date_time"
-      ],
       "properties": {
         "input_file": {
           "type": "string",
@@ -4992,7 +5032,12 @@
           "description": "Optional. If true, removes all existing Q/A/N from this source before processing. Use for content refresh (e.g., Confluence pages).",
           "example": "true"
         }
-      }
+      },
+      "required": [
+        "source_name",
+        "input_file",
+        "date_time"
+      ]
     }
   },
   {
@@ -5002,11 +5047,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "source_name",
-        "input_file",
-        "date_time"
-      ],
       "properties": {
         "input_file": {
           "type": "string",
@@ -5033,7 +5073,12 @@
           "description": "Optional. If true, removes all existing Q/A/N from this source before processing. Use for content refresh (e.g., Confluence pages).",
           "example": "true"
         }
-      }
+      },
+      "required": [
+        "source_name",
+        "input_file",
+        "date_time"
+      ]
     }
   },
   {
@@ -5043,7 +5088,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {
         "smart_mode": {
           "type": "string",
@@ -5060,7 +5104,8 @@
           "description": "Optional: Filter to only regenerate for specific source. If null/empty, regenerates for ALL sources (recommended for description regeneration).",
           "example": "teams_chat"
         }
-      }
+      },
+      "required": []
     }
   },
   {
@@ -5070,7 +5115,6 @@
     "category": "",
     "inputSchema": {
       "type": "object",
-      "required": [],
       "properties": {
         "generate_descriptions": {
           "type": "string",
@@ -5087,7 +5131,8 @@
           "description": "Only regenerate descriptions if Q/A/N changed. Default: true",
           "example": "true"
         }
-      }
+      },
+      "required": []
     }
   },
   {
@@ -5097,8 +5142,8 @@
     "category": "authentication",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -5108,8 +5153,8 @@
     "category": "authentication",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -5119,8 +5164,8 @@
     "category": "authentication",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -5130,8 +5175,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -5141,11 +5186,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5162,7 +5202,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5172,12 +5217,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "label"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -5199,7 +5238,13 @@
           "description": "Merge request IID",
           "example": "42"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "label"
+      ]
     }
   },
   {
@@ -5209,12 +5254,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "label"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -5236,7 +5275,13 @@
           "description": "Merge request IID",
           "example": "42"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "label"
+      ]
     }
   },
   {
@@ -5246,11 +5291,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5267,7 +5307,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5277,12 +5322,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "text"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -5304,7 +5343,13 @@
           "description": "Merge request IID",
           "example": "42"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "text"
+      ]
     }
   },
   {
@@ -5314,11 +5359,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5335,7 +5375,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5345,11 +5390,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5366,7 +5406,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5376,11 +5421,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5397,7 +5437,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5407,11 +5452,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "state"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5428,7 +5468,12 @@
           "description": "MR state: opened, closed, merged, all. 'open' is also accepted as a synonym for 'opened'.",
           "example": "opened"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "state"
+      ]
     }
   },
   {
@@ -5438,13 +5483,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "sourceBranch",
-        "targetBranch",
-        "title"
-      ],
       "properties": {
         "removeSourceBranch": {
           "type": "string",
@@ -5481,7 +5519,14 @@
           "description": "Merge request title",
           "example": "PROJ-123 Implement feature"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "sourceBranch",
+        "targetBranch",
+        "title"
+      ]
     }
   },
   {
@@ -5491,11 +5536,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5512,7 +5552,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5522,13 +5567,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "discussionId",
-        "text"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -5555,7 +5593,14 @@
           "description": "Discussion thread ID",
           "example": "6a9c1750b37d57bba1079be3bbd13a..."
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "discussionId",
+        "text"
+      ]
     }
   },
   {
@@ -5565,17 +5610,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "filePath",
-        "line",
-        "text",
-        "baseSha",
-        "headSha",
-        "startSha"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -5622,7 +5656,18 @@
           "description": "Merge request IID",
           "example": "42"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "filePath",
+        "line",
+        "text",
+        "baseSha",
+        "headSha",
+        "startSha"
+      ]
     }
   },
   {
@@ -5632,12 +5677,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId",
-        "discussionId"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -5659,7 +5698,13 @@
           "description": "Discussion thread ID to resolve",
           "example": "6a9c1750b37d57bba1079be3bbd13a..."
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId",
+        "discussionId"
+      ]
     }
   },
   {
@@ -5669,11 +5714,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5690,7 +5730,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5700,11 +5745,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -5726,7 +5766,12 @@
           "description": "Merge request IID",
           "example": "42"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5736,11 +5781,6 @@
     "category": "merge_requests",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pullRequestId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5757,7 +5797,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pullRequestId"
+      ]
     }
   },
   {
@@ -5767,10 +5812,6 @@
     "category": "ci",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5782,7 +5823,11 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository"
+      ]
     }
   },
   {
@@ -5792,11 +5837,6 @@
     "category": "ci",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "jobId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5813,7 +5853,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "jobId"
+      ]
     }
   },
   {
@@ -5823,10 +5868,6 @@
     "category": "ci",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository"
-      ],
       "properties": {
         "limit": {
           "type": "string",
@@ -5853,7 +5894,11 @@
           "description": "Pipeline status filter",
           "example": "failed"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository"
+      ]
     }
   },
   {
@@ -5863,11 +5908,6 @@
     "category": "ci",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "ref"
-      ],
       "properties": {
         "variablesJson": {
           "type": "string",
@@ -5889,7 +5929,12 @@
           "description": "Repository name",
           "example": "myrepo"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "ref"
+      ]
     }
   },
   {
@@ -5899,11 +5944,6 @@
     "category": "ci",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "pipelineId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5920,7 +5960,12 @@
           "description": "GitLab pipeline ID",
           "example": "123456"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "pipelineId"
+      ]
     }
   },
   {
@@ -5930,11 +5975,6 @@
     "category": "ci",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "commitSha"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5951,7 +5991,12 @@
           "description": "The commit SHA to get statuses for",
           "example": "abc123..."
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "commitSha"
+      ]
     }
   },
   {
@@ -5961,11 +6006,6 @@
     "category": "ci",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "jobId"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -5982,7 +6022,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "jobId"
+      ]
     }
   },
   {
@@ -5992,11 +6037,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "tagName"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -6028,7 +6068,12 @@
           "description": "The human-readable release name. If empty, tagName is used.",
           "example": "PR Attachments Storage"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "tagName"
+      ]
     }
   },
   {
@@ -6038,12 +6083,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "tagName",
-        "filePath"
-      ],
       "properties": {
         "workspace": {
           "type": "string",
@@ -6085,7 +6124,13 @@
           "description": "If true, delete any existing asset (release link + underlying generic package file) with the same name before uploading. Defaults to false.",
           "example": "true"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "tagName",
+        "filePath"
+      ]
     }
   },
   {
@@ -6095,11 +6140,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "tagName"
-      ],
       "properties": {
         "repository": {
           "type": "string",
@@ -6116,7 +6156,12 @@
           "description": "GitLab group or namespace",
           "example": "mygroup"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "tagName"
+      ]
     }
   },
   {
@@ -6126,12 +6171,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "tagName",
-        "assetName"
-      ],
       "properties": {
         "assetName": {
           "type": "string",
@@ -6158,7 +6197,13 @@
           "description": "The tag name of the release.",
           "example": "pr-attachments-storage"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "tagName",
+        "assetName"
+      ]
     }
   },
   {
@@ -6168,13 +6213,6 @@
     "category": "releases",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workspace",
-        "repository",
-        "tagName",
-        "assetName",
-        "targetFilePath"
-      ],
       "properties": {
         "assetName": {
           "type": "string",
@@ -6206,7 +6244,14 @@
           "description": "The tag name of the release.",
           "example": "pr-attachments-storage"
         }
-      }
+      },
+      "required": [
+        "workspace",
+        "repository",
+        "tagName",
+        "assetName",
+        "targetFilePath"
+      ]
     }
   },
   {
@@ -6216,12 +6261,12 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": ["key"],
       "properties": {"key": {
         "type": "string",
         "description": "The Jira ticket key to delete",
         "example": "PRJ-123"
-      }}
+      }},
+      "required": ["key"]
     }
   },
   {
@@ -6231,12 +6276,12 @@
     "category": "information",
     "inputSchema": {
       "type": "object",
-      "required": ["email"],
       "properties": {"email": {
         "type": "string",
         "description": "The Jira Email",
         "example": "email@email.com"
-      }}
+      }},
+      "required": ["email"]
     }
   },
   {
@@ -6246,10 +6291,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "accountId"
-      ],
       "properties": {
         "accountId": {
           "type": "string",
@@ -6261,7 +6302,11 @@
           "description": "The Jira ticket key to assign",
           "example": "PRJ-123"
         }
-      }
+      },
+      "required": [
+        "key",
+        "accountId"
+      ]
     }
   },
   {
@@ -6271,10 +6316,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "label"
-      ],
       "properties": {
         "key": {
           "type": "string",
@@ -6286,7 +6327,11 @@
           "description": "The label to be added to ticket",
           "example": "custom_label"
         }
-      }
+      },
+      "required": [
+        "key",
+        "label"
+      ]
     }
   },
   {
@@ -6296,10 +6341,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "label"
-      ],
       "properties": {
         "key": {
           "type": "string",
@@ -6311,7 +6352,11 @@
           "description": "The label to be removed from the ticket",
           "example": "custom_label"
         }
-      }
+      },
+      "required": [
+        "key",
+        "label"
+      ]
     }
   },
   {
@@ -6321,7 +6366,6 @@
     "category": "search",
     "inputSchema": {
       "type": "object",
-      "required": ["jql"],
       "properties": {
         "jql": {
           "type": "string",
@@ -6333,7 +6377,8 @@
           "description": "Optional array of field names to include in response. When omitted, the project's extended default fields are used.",
           "example": "[\"summary\", \"status\", \"assignee\"]"
         }
-      }
+      },
+      "required": ["jql"]
     }
   },
   {
@@ -6343,11 +6388,6 @@
     "category": "search",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "jql",
-        "startAt",
-        "fields"
-      ],
       "properties": {
         "jql": {
           "type": "string",
@@ -6364,7 +6404,12 @@
           "description": "Starting index for pagination (0-based)",
           "example": "0"
         }
-      }
+      },
+      "required": [
+        "jql",
+        "startAt",
+        "fields"
+      ]
     }
   },
   {
@@ -6374,11 +6419,6 @@
     "category": "search",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "jql",
-        "nextPageToken",
-        "fields"
-      ],
       "properties": {
         "jql": {
           "type": "string",
@@ -6395,7 +6435,12 @@
           "description": "Next Page Token from previous response, empty by default for 1 page",
           "example": "AasvvasasaSASdada"
         }
-      }
+      },
+      "required": [
+        "jql",
+        "nextPageToken",
+        "fields"
+      ]
     }
   },
   {
@@ -6405,8 +6450,8 @@
     "category": "system",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -6416,8 +6461,8 @@
     "category": "user_management",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -6427,11 +6472,11 @@
     "category": "user_management",
     "inputSchema": {
       "type": "object",
-      "required": ["userId"],
       "properties": {"userId": {
         "type": "string",
         "description": "The user ID to get profile for"
-      }}
+      }},
+      "required": ["userId"]
     }
   },
   {
@@ -6441,7 +6486,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": ["key"],
       "properties": {
         "fields": {
           "type": "array",
@@ -6451,7 +6495,8 @@
           "type": "string",
           "description": "The Jira ticket key to retrieve"
         }
-      }
+      },
+      "required": ["key"]
     }
   },
   {
@@ -6461,11 +6506,11 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": ["key"],
       "properties": {"key": {
         "type": "string",
         "description": "The parent ticket key to get subtasks for"
-      }}
+      }},
+      "required": ["key"]
     }
   },
   {
@@ -6475,10 +6520,6 @@
     "category": "comment_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "comment"
-      ],
       "properties": {
         "key": {
           "type": "string",
@@ -6488,7 +6529,11 @@
           "type": "string",
           "description": "The comment text to post (supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)"
         }
-      }
+      },
+      "required": [
+        "key",
+        "comment"
+      ]
     }
   },
   {
@@ -6498,7 +6543,6 @@
     "category": "comment_management",
     "inputSchema": {
       "type": "object",
-      "required": ["key"],
       "properties": {
         "ticket": {
           "type": "object",
@@ -6508,7 +6552,8 @@
           "type": "string",
           "description": "The Jira ticket key to get comments for"
         }
-      }
+      },
+      "required": ["key"]
     }
   },
   {
@@ -6518,10 +6563,6 @@
     "category": "comment_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "comment"
-      ],
       "properties": {
         "key": {
           "type": "string",
@@ -6531,7 +6572,11 @@
           "type": "string",
           "description": "The comment text to post (supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)"
         }
-      }
+      },
+      "required": [
+        "key",
+        "comment"
+      ]
     }
   },
   {
@@ -6541,11 +6586,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["project"],
       "properties": {"project": {
         "type": "string",
         "description": "The Jira project key to get fix versions for"
-      }}
+      }},
+      "required": ["project"]
     }
   },
   {
@@ -6555,11 +6600,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["project"],
       "properties": {"project": {
         "type": "string",
         "description": "The Jira project key to get components for"
-      }}
+      }},
+      "required": ["project"]
     }
   },
   {
@@ -6569,11 +6614,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["project"],
       "properties": {"project": {
         "type": "string",
         "description": "The Jira project key to get statuses for"
-      }}
+      }},
+      "required": ["project"]
     }
   },
   {
@@ -6583,13 +6628,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project",
-        "issueType",
-        "summary",
-        "description",
-        "parentKey"
-      ],
       "properties": {
         "issueType": {
           "type": "string",
@@ -6611,7 +6649,14 @@
           "type": "string",
           "description": "The key of the parent ticket"
         }
-      }
+      },
+      "required": [
+        "project",
+        "issueType",
+        "summary",
+        "description",
+        "parentKey"
+      ]
     }
   },
   {
@@ -6621,12 +6666,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project",
-        "issueType",
-        "summary",
-        "description"
-      ],
       "properties": {
         "issueType": {
           "type": "string",
@@ -6644,7 +6683,13 @@
           "type": "string",
           "description": "The ticket description. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists"
         }
-      }
+      },
+      "required": [
+        "project",
+        "issueType",
+        "summary",
+        "description"
+      ]
     }
   },
   {
@@ -6654,10 +6699,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project",
-        "fieldsJson"
-      ],
       "properties": {
         "project": {
           "type": "string",
@@ -6667,7 +6708,11 @@
           "type": "object",
           "description": "JSON object containing ticket fields in Jira format (e.g., {\"summary\": \"Ticket Summary\", \"description\": \"Ticket Description\", \"issuetype\": {\"name\": \"Task\"}, \"priority\": {\"name\": \"High\"}}), Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists"
         }
-      }
+      },
+      "required": [
+        "project",
+        "fieldsJson"
+      ]
     }
   },
   {
@@ -6677,10 +6722,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "description"
-      ],
       "properties": {
         "description": {
           "type": "string",
@@ -6690,7 +6731,11 @@
           "type": "string",
           "description": "The Jira ticket key to update"
         }
-      }
+      },
+      "required": [
+        "key",
+        "description"
+      ]
     }
   },
   {
@@ -6700,10 +6745,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "parentKey"
-      ],
       "properties": {
         "key": {
           "type": "string",
@@ -6713,7 +6754,11 @@
           "type": "string",
           "description": "The key of the new parent ticket"
         }
-      }
+      },
+      "required": [
+        "key",
+        "parentKey"
+      ]
     }
   },
   {
@@ -6723,10 +6768,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "params"
-      ],
       "properties": {
         "params": {
           "type": "object",
@@ -6736,7 +6777,11 @@
           "type": "string",
           "description": "The Jira ticket key to update"
         }
-      }
+      },
+      "required": [
+        "key",
+        "params"
+      ]
     }
   },
   {
@@ -6746,11 +6791,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "field",
-        "value"
-      ],
       "properties": {
         "field": {
           "type": "string",
@@ -6764,7 +6804,12 @@
           "type": "string",
           "description": "The Jira ticket key to update"
         }
-      }
+      },
+      "required": [
+        "key",
+        "field",
+        "value"
+      ]
     }
   },
   {
@@ -6774,11 +6819,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "field",
-        "value"
-      ],
       "properties": {
         "field": {
           "type": "string",
@@ -6792,7 +6832,12 @@
           "type": "string",
           "description": "The Jira ticket key to update"
         }
-      }
+      },
+      "required": [
+        "key",
+        "field",
+        "value"
+      ]
     }
   },
   {
@@ -6802,11 +6847,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "fieldName",
-        "value"
-      ],
       "properties": {
         "value": {
           "type": "object",
@@ -6820,7 +6860,12 @@
           "type": "string",
           "description": "The user-friendly field name (e.g., 'Dependencies')"
         }
-      }
+      },
+      "required": [
+        "key",
+        "fieldName",
+        "value"
+      ]
     }
   },
   {
@@ -6830,10 +6875,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project",
-        "fieldName"
-      ],
       "properties": {
         "project": {
           "type": "string",
@@ -6843,7 +6884,11 @@
           "type": "string",
           "description": "The user-friendly field name"
         }
-      }
+      },
+      "required": [
+        "project",
+        "fieldName"
+      ]
     }
   },
   {
@@ -6853,11 +6898,11 @@
     "category": "api_operations",
     "inputSchema": {
       "type": "object",
-      "required": ["url"],
       "properties": {"url": {
         "type": "string",
         "description": "The Jira API URL to execute"
-      }}
+      }},
+      "required": ["url"]
     }
   },
   {
@@ -6867,11 +6912,6 @@
     "category": "file_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "ticketKey",
-        "name",
-        "filePath"
-      ],
       "properties": {
         "name": {
           "type": "string",
@@ -6893,7 +6933,12 @@
           "description": "Absolute path to the file on disk",
           "example": "/tmp/document.pdf"
         }
-      }
+      },
+      "required": [
+        "ticketKey",
+        "name",
+        "filePath"
+      ]
     }
   },
   {
@@ -6903,11 +6948,11 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": ["key"],
       "properties": {"key": {
         "type": "string",
         "description": "The Jira ticket key to get transitions for"
-      }}
+      }},
+      "required": ["key"]
     }
   },
   {
@@ -6917,10 +6962,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "statusName"
-      ],
       "properties": {
         "statusName": {
           "type": "string",
@@ -6930,7 +6971,11 @@
           "type": "string",
           "description": "The Jira ticket key to move"
         }
-      }
+      },
+      "required": [
+        "key",
+        "statusName"
+      ]
     }
   },
   {
@@ -6940,11 +6985,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "statusName",
-        "resolution"
-      ],
       "properties": {
         "statusName": {
           "type": "string",
@@ -6958,7 +6998,12 @@
           "type": "string",
           "description": "The Jira ticket key to move"
         }
-      }
+      },
+      "required": [
+        "key",
+        "statusName",
+        "resolution"
+      ]
     }
   },
   {
@@ -6968,10 +7013,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "field"
-      ],
       "properties": {
         "field": {
           "type": "string",
@@ -6981,7 +7022,11 @@
           "type": "string",
           "description": "The Jira ticket key to clear field from"
         }
-      }
+      },
+      "required": [
+        "key",
+        "field"
+      ]
     }
   },
   {
@@ -6991,10 +7036,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "fixVersion"
-      ],
       "properties": {
         "fixVersion": {
           "type": "string",
@@ -7004,7 +7045,11 @@
           "type": "string",
           "description": "The Jira ticket key to set fix version for"
         }
-      }
+      },
+      "required": [
+        "key",
+        "fixVersion"
+      ]
     }
   },
   {
@@ -7014,10 +7059,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "fixVersion"
-      ],
       "properties": {
         "fixVersion": {
           "type": "string",
@@ -7027,7 +7068,11 @@
           "type": "string",
           "description": "The Jira ticket key to add fix version to"
         }
-      }
+      },
+      "required": [
+        "key",
+        "fixVersion"
+      ]
     }
   },
   {
@@ -7037,10 +7082,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "priority"
-      ],
       "properties": {
         "priority": {
           "type": "string",
@@ -7050,7 +7091,11 @@
           "type": "string",
           "description": "The Jira ticket key to set priority for"
         }
-      }
+      },
+      "required": [
+        "key",
+        "priority"
+      ]
     }
   },
   {
@@ -7060,10 +7105,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "key",
-        "fixVersion"
-      ],
       "properties": {
         "fixVersion": {
           "type": "string",
@@ -7073,7 +7114,11 @@
           "type": "string",
           "description": "The Jira ticket key to remove fix version from"
         }
-      }
+      },
+      "required": [
+        "key",
+        "fixVersion"
+      ]
     }
   },
   {
@@ -7083,11 +7128,11 @@
     "category": "file_management",
     "inputSchema": {
       "type": "object",
-      "required": ["href"],
       "properties": {"href": {
         "type": "string",
         "description": "The attachment URL to download"
-      }}
+      }},
+      "required": ["href"]
     }
   },
   {
@@ -7097,11 +7142,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["project"],
       "properties": {"project": {
         "type": "string",
         "description": "The Jira project key to get fields for"
-      }}
+      }},
+      "required": ["project"]
     }
   },
   {
@@ -7111,11 +7156,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["project"],
       "properties": {"project": {
         "type": "string",
         "description": "The Jira project key to get issue types for"
-      }}
+      }},
+      "required": ["project"]
     }
   },
   {
@@ -7125,10 +7170,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "project",
-        "fieldName"
-      ],
       "properties": {
         "project": {
           "type": "string",
@@ -7138,7 +7179,11 @@
           "type": "string",
           "description": "The human-readable field name"
         }
-      }
+      },
+      "required": [
+        "project",
+        "fieldName"
+      ]
     }
   },
   {
@@ -7148,8 +7193,8 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [],
-      "properties": {}
+      "properties": {},
+      "required": []
     }
   },
   {
@@ -7159,11 +7204,6 @@
     "category": "ticket_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "sourceKey",
-        "anotherKey",
-        "relationship"
-      ],
       "properties": {
         "sourceKey": {
           "type": "string",
@@ -7177,7 +7217,12 @@
           "type": "string",
           "description": "The target issue key"
         }
-      }
+      },
+      "required": [
+        "sourceKey",
+        "anotherKey",
+        "relationship"
+      ]
     }
   },
   {
@@ -7187,11 +7232,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["projectKey"],
       "properties": {"projectKey": {
         "type": "string",
         "description": "The Jira project key, e.g. TP"
-      }}
+      }},
+      "required": ["projectKey"]
     }
   },
   {
@@ -7201,11 +7246,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["projectKey"],
       "properties": {"projectKey": {
         "type": "string",
         "description": "The Jira project key, e.g. TP"
-      }}
+      }},
+      "required": ["projectKey"]
     }
   },
   {
@@ -7215,11 +7260,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["projectKey"],
       "properties": {"projectKey": {
         "type": "string",
         "description": "The Jira project key, e.g. TP"
-      }}
+      }},
+      "required": ["projectKey"]
     }
   },
   {
@@ -7229,10 +7274,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "issueTypeSchemeId",
-        "projectId"
-      ],
       "properties": {
         "issueTypeSchemeId": {
           "type": "string",
@@ -7242,7 +7283,11 @@
           "type": "string",
           "description": "Numeric ID of the target Jira project"
         }
-      }
+      },
+      "required": [
+        "issueTypeSchemeId",
+        "projectId"
+      ]
     }
   },
   {
@@ -7252,10 +7297,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "workflowSchemeId",
-        "projectId"
-      ],
       "properties": {
         "projectId": {
           "type": "string",
@@ -7265,7 +7306,11 @@
           "type": "string",
           "description": "Numeric ID of the workflow scheme"
         }
-      }
+      },
+      "required": [
+        "workflowSchemeId",
+        "projectId"
+      ]
     }
   },
   {
@@ -7275,10 +7320,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "projectKey",
-        "name"
-      ],
       "properties": {
         "name": {
           "type": "string",
@@ -7296,7 +7337,11 @@
           "type": "string",
           "description": "Issue type kind: 'standard' or 'subtask'. Defaults to 'standard'."
         }
-      }
+      },
+      "required": [
+        "projectKey",
+        "name"
+      ]
     }
   },
   {
@@ -7306,10 +7351,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "sourceProjectKey",
-        "targetProjectKey"
-      ],
       "properties": {
         "sourceProjectKey": {
           "type": "string",
@@ -7319,7 +7360,11 @@
           "type": "string",
           "description": "Key of the target Jira project to apply structure to, e.g. TP"
         }
-      }
+      },
+      "required": [
+        "sourceProjectKey",
+        "targetProjectKey"
+      ]
     }
   },
   {
@@ -7329,10 +7374,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "projectKey",
-        "confirmDelete"
-      ],
       "properties": {
         "projectKey": {
           "type": "string",
@@ -7342,7 +7383,11 @@
           "type": "string",
           "description": "Must be 'true' to confirm deletion"
         }
-      }
+      },
+      "required": [
+        "projectKey",
+        "confirmDelete"
+      ]
     }
   },
   {
@@ -7352,11 +7397,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["projectKey"],
       "properties": {"projectKey": {
         "type": "string",
         "description": "Key of the trashed Jira project to restore, e.g. TP"
-      }}
+      }},
+      "required": ["projectKey"]
     }
   },
   {
@@ -7366,10 +7411,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "sourceProjectKey",
-        "newProjectKey"
-      ],
       "properties": {
         "sourceProjectKey": {
           "type": "string",
@@ -7383,7 +7424,11 @@
           "type": "string",
           "description": "Name for the new project. If empty, uses source project name"
         }
-      }
+      },
+      "required": [
+        "sourceProjectKey",
+        "newProjectKey"
+      ]
     }
   },
   {
@@ -7393,11 +7438,11 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": ["projectKey"],
       "properties": {"projectKey": {
         "type": "string",
         "description": "Key of the Jira project, e.g. MYTUBE"
-      }}
+      }},
+      "required": ["projectKey"]
     }
   },
   {
@@ -7407,10 +7452,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "projectKey",
-        "statusDefinitions"
-      ],
       "properties": {
         "projectKey": {
           "type": "string",
@@ -7420,7 +7461,11 @@
           "type": "string",
           "description": "JSON array of status definitions, e.g. [{\"name\":\"Backlog\",\"category\":\"TODO\"},...]. Valid categories: TODO, IN_PROGRESS, DONE."
         }
-      }
+      },
+      "required": [
+        "projectKey",
+        "statusDefinitions"
+      ]
     }
   },
   {
@@ -7430,10 +7475,6 @@
     "category": "project_management",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "sourceProjectKey",
-        "targetProjectKey"
-      ],
       "properties": {
         "sourceProjectKey": {
           "type": "string",
@@ -7443,7 +7484,11 @@
           "type": "string",
           "description": "Key of the target project to update workflow for, e.g. TP"
         }
-      }
+      },
+      "required": [
+        "sourceProjectKey",
+        "targetProjectKey"
+      ]
     }
   }
 ]}
