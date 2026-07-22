@@ -48,6 +48,12 @@ public class CliCommandExecutor {
     /** Config key for extra allowed commands (comma-separated). */
     public static final String CLI_ALLOWED_COMMANDS_KEY = "CLI_ALLOWED_COMMANDS";
 
+    // This tool is exposed to JS agents for arbitrary whitelisted commands (git diff, mvn,
+    // curl, etc.), whose output is often large/noisy raw command output rather than
+    // something an operator needs to see line-by-line by default. Cap default INFO logging
+    // to a preview; set DMTOOLS_JS_LOG_TOOL_CALLS=true to see the full output.
+    private static final int DEFAULT_MAX_LOGGED_OUTPUT_LINES = 50;
+
     // Security baseline – never removed regardless of configuration
     private static final String[] BASE_ALLOWED_COMMANDS = {
         "git", "gh", "dmtools", "npm", "yarn", "docker",
@@ -123,7 +129,8 @@ public class CliCommandExecutor {
         
         try {
             // Execute command using CommandLineUtils
-            String output = CommandLineUtils.runCommand(trimmedCommand, resolvedWorkingDir, envVars);
+            String output = CommandLineUtils.runCommand(trimmedCommand, resolvedWorkingDir, envVars, null,
+                    DEFAULT_MAX_LOGGED_OUTPUT_LINES);
             
             logger.debug("Command executed successfully, output length: {} characters", output.length());
             return output;
