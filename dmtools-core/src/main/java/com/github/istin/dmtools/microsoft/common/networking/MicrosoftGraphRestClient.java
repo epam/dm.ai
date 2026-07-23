@@ -36,7 +36,7 @@ public abstract class MicrosoftGraphRestClient extends AbstractRestClient {
      * @param clientId Azure App Registration client ID
      * @param tenantId Tenant ID (use "common" for multi-tenant)
      * @param scopes OAuth 2.0 scopes (space-separated)
-     * @param authMethod Authentication method: "browser", "device", or "refresh_token"
+     * @param authMethod Authentication method: "browser", "device", or "refresh_token" (used only when no refresh token is configured)
      * @param authPort Port for localhost redirect (browser flow)
      * @param tokenCachePath Path to token cache file
      * @param preConfiguredRefreshToken Optional pre-configured refresh token
@@ -101,8 +101,9 @@ public abstract class MicrosoftGraphRestClient extends AbstractRestClient {
     private void acquireNewToken() throws IOException {
         OAuth2AuthenticationFlow.TokenResponse tokenResponse;
         
-        if ("refresh_token".equals(authMethod) && preConfiguredRefreshToken != null) {
-            // Use pre-configured refresh token
+        if (preConfiguredRefreshToken != null && !preConfiguredRefreshToken.trim().isEmpty()) {
+            // A configured refresh token (e.g. TEAMS_REFRESH_TOKEN) always takes priority
+            // over interactive flows, regardless of the configured auth method.
             logger.info("Acquiring token using pre-configured refresh token");
             tokenResponse = authFlow.refreshAccessToken(preConfiguredRefreshToken, clientId, tenantId);
             
