@@ -197,6 +197,9 @@ dmtools run agents/xray_test_cases_generator.json
 - `ignoreClonedByRelationship` - Exclude tickets linked via "is cloned by" from AI context (default: **true**). Prevents cloned duplicates from overloading the context.
 - `relatedTestCaseExplanationPrompt` - When set, instructs the LLM to return an explanation alongside the `true` result (format: `"true, <explanation>"`). The value is the guidance text for what kind of explanation to provide (e.g., *"Explain why the TC is related to this story, or state if it needs to be deprecated once the story is delivered."*). Default: `null` (disabled, preserves `true`/`false` only behavior).
 - `postLinkedTestCasesComment` - When `true`, after finding all related test cases for a story, post a single Jira comment listing every linked TC with its explanation. Requires `relatedTestCaseExplanationPrompt` to be set for explanations to appear. Default: **false**.
+- `mermaidIndexStoragePath` - Path to pre-built Mermaid index snapshots. When set, `TestCasesGenerator` wraps existing test cases in Mermaid snapshot text during the relevant-test search instead of sending full ticket text, reducing token usage for large `existingTestCasesJql` result sets.
+- `mermaidIndexIntegration` - Integration subfolder inside `mermaidIndexStoragePath`: `"jira"` or `"jira_xray"` (default: `"jira"`).
+- `useMermaidSnapshotForGeneration` - When `true`, the final generation step also uses Mermaid snapshot text instead of full ticket text. Default: **false** (verification and generation keep full text).
 - `testCaseLinkRelationship` - Default relationship type (default: "is tested by")
 - `testCaseLinkRelationshipForNew` - Relationship for new test cases (overrides default)
 - `testCaseLinkRelationshipForExisting` - Relationship for existing test cases (overrides default)
@@ -232,6 +235,39 @@ dmtools run agents/xray_test_cases_generator.json
 **Output Formats**:
 1. **Xray Manual Test** - Step-by-step test cases with expected results
 2. **Cucumber/Gherkin** - Scenario Outline with data tables
+
+### Mermaid Index Snapshot Lookup for TestCasesGenerator
+
+For large `existingTestCasesJql` result sets, token usage during the relevant-test search can be high because each existing test case is serialized via `ticket.toText()`. You can pre-build compact Mermaid snapshots of those test cases (using `mermaid_index_generate`) and point `TestCasesGenerator` at them.
+
+When `mermaidIndexStoragePath` is set, `TestCasesGenerator` automatically wraps each existing test case in a `MermaidSnapshotTicketWrapper`. The wrapper keeps the original ticket key and metadata, but `toText()` returns the Mermaid diagram snapshot. This wrapped representation is fed into `RelatedTestCasesAgent`, so the AI searches against compact diagrams instead of full ticket descriptions.
+
+```json
+{
+  "name": "TestCasesGenerator",
+  "params": {
+    "inputJql": "key in (PROJ-123)",
+    "existingTestCasesJql": "project = PROJ AND issuetype = 'Test Case'",
+    "mermaidIndexStoragePath": "./mermaid-snapshots",
+    "mermaidIndexIntegration": "jira",
+    "useMermaidSnapshotForGeneration": false,
+    "isFindRelated": true,
+    "isGenerateNew": true
+  }
+}
+```
+
+The snapshot directory must match the layout produced by `MermaidIndex`:
+
+```
+{mermaidIndexStoragePath}/
+  {integration}/
+    {projectKey}/
+      {ticketKey}/
+        {title}.mmd
+```
+
+Example: `./mermaid-snapshots/jira/PROJ/PROJ-123/Login test.mmd`.
 
 **See also**: [Test Generation Guide](../test-generation/xray-manual.md)
 
