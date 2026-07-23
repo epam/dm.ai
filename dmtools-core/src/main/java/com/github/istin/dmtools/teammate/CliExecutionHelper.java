@@ -68,24 +68,24 @@ public class CliExecutionHelper {
     /**
      * Creates input context folder and files for CLI command execution.
      * All attachments (including videos) are downloaded so the CLI tool has full access.
+     * <p>
+     * When {@code ticket} is {@code null}, a standalone input folder ({@code input/standalone/})
+     * is created without ticket-specific enrichment or attachments.
      *
-     * @param ticket The ticket to create context for
+     * @param ticket The ticket to create context for; may be null for standalone CLI mode
      * @param inputParams The input parameters to save as request.md
      * @param trackerClient The tracker client for downloading attachments
      * @return Path to the created input folder
      * @throws IOException if folder/file creation fails
      */
     public Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient) throws IOException {
-        if (ticket == null) {
-            throw new IllegalArgumentException("Ticket cannot be null");
-        }
-        
-        String ticketKey = ticket.getTicketKey();
-        if (ticketKey == null || ticketKey.trim().isEmpty()) {
+        boolean isStandalone = ticket == null;
+        String ticketKey = isStandalone ? "standalone" : ticket.getTicketKey();
+        if (!isStandalone && (ticketKey == null || ticketKey.trim().isEmpty())) {
             throw new IllegalArgumentException("Ticket key cannot be null or empty");
         }
         
-        // Create input folder structure: input/[TICKET-KEY]/
+        // Create input folder structure: input/[TICKET-KEY]/ or input/standalone/
         Path inputFolderPath = Paths.get(INPUT_FOLDER_PREFIX, ticketKey);
         Files.createDirectories(inputFolderPath);
         logger.info("Created input folder: {}", inputFolderPath.toAbsolutePath());
@@ -95,6 +95,11 @@ public class CliExecutionHelper {
             Path requestFilePath = inputFolderPath.resolve(REQUEST_FILE_NAME);
             Files.write(requestFilePath, inputParams.getBytes(StandardCharsets.UTF_8));
             logger.info("Created request file: {} ({} bytes)", requestFilePath.toAbsolutePath(), inputParams.length());
+        }
+        
+        if (isStandalone) {
+            logger.info("Standalone CLI mode - skipping ticket enrichment and attachments");
+            return inputFolderPath;
         }
         
         // Enrich work item with relations if it's an ADO work item

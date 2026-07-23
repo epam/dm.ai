@@ -111,13 +111,16 @@ public class CliExecutionHelperTest {
     }
     
     @Test
-    void testCreateInputContext_NullTicket() {
-        // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> cliHelper.createInputContext(null, "test", mockTrackerClient)
-        );
-        assertEquals("Ticket cannot be null", exception.getMessage());
+    void testCreateInputContext_NullTicket() throws IOException {
+        // Act
+        Path result = cliHelper.createInputContext(null, "test", mockTrackerClient);
+
+        // Assert
+        assertTrue(result.toString().startsWith("input"));
+        assertTrue(result.toString().contains("standalone"));
+        Path requestFile = result.resolve("request.md");
+        assertTrue(Files.exists(requestFile));
+        assertEquals("test", Files.readString(requestFile));
     }
     
     @Test
