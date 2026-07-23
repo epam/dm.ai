@@ -3,9 +3,9 @@
 Complete reference for all MCP tools available in DMtools.
 
 **Total Integrations**: 20
-**Total Tools**: 289
+**Total Tools**: 292
 
-*Auto-generated from `dmtools list` on: 2026-07-21 17:23:05*
+*Auto-generated from `dmtools list` on: 2026-07-22 19:14:18*
 
 ## Quick Start
 
@@ -30,7 +30,7 @@ dmtools <tool_name> [arguments]
 | **CLI** | 1 | [cli-tools.md](cli-tools.md) |
 | **CONFLUENCE** | 19 | [confluence-tools.md](confluence-tools.md) |
 | **DIAL** | 2 | [dial-tools.md](dial-tools.md) |
-| **FIGMA** | 19 | [figma-tools.md](figma-tools.md) |
+| **FIGMA** | 22 | [figma-tools.md](figma-tools.md) |
 | **FILE** | 5 | [file-tools.md](file-tools.md) |
 | **GEMINI** | 2 | [gemini-tools.md](gemini-tools.md) |
 | **GITHUB** | 35 | [github-tools.md](github-tools.md) |
@@ -70,7 +70,7 @@ file_write('output.txt', 'content');
 
 ### Design
 
-- [FIGMA](figma-tools.md) - 19 tools
+- [FIGMA](figma-tools.md) - 22 tools
 
 ### Documentation
 
