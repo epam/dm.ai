@@ -52,9 +52,9 @@ const result = teams_chats(...);
 | `teams_myself_messages_raw` | Get messages from your personal self chat (notes to yourself) with full raw data | `limit` (number, optional) |
 | `teams_recent_chats` | Get recent chats sorted by last activity showing chat/contact names, last message with author, and date. Shows 'new: true' for unread messages. Filter by type: 'oneOnOne' for 1-on-1 chats, 'group' for group chats, 'meeting' for meeting chats, or 'all' (default). Only shows chats with activity in the last 90 days. | `limit` (number, optional)<br>`chatType` (string, optional) |
 | `teams_search_user_drive_files` | Search for files in a user's OneDrive (e.g., meeting transcripts/recordings). Returns list of files with download URLs. | `userId` (string, **required**)<br>`searchQuery` (string, **required**) |
-| `teams_send_message` | Send a message to a chat by name or participant name (finds chat, then sends message) | `chatName` (string, **required**)<br>`content` (string, **required**) |
-| `teams_send_message_by_id` | Send a message to a chat by ID (returns raw JSON) | `chatId` (string, **required**)<br>`content` (string, **required**) |
-| `teams_send_myself_message` | Send a message to your personal self chat (notes to yourself) | `content` (string, **required**) |
+| `teams_send_message` | Send a message to a chat by name or participant name (finds chat, then sends message) | `chatName` (string, **required**)<br>`content` (string, **required**)<br>`contentType` (string, optional) |
+| `teams_send_message_by_id` | Send a message to a chat by ID (returns raw JSON) | `chatId` (string, **required**)<br>`content` (string, **required**)<br>`contentType` (string, optional) |
+| `teams_send_myself_message` | Send a message to your personal self chat (notes to yourself) | `content` (string, **required**)<br>`contentType` (string, optional) |
 | `teams_test` | Test Microsoft Teams connectivity by fetching the current user's profile | None |
 
 ## Detailed Parameter Information
@@ -707,14 +707,20 @@ Send a message to a chat by name or participant name (finds chat, then sends mes
 - **`content`** (string) 🔴 Required
   - Message content (plain text or HTML)
 
+- **`contentType`** (string) ⚪ Optional
+  - Message content type: `"text"` or `"html"`. Defaults to `"text"` when omitted.
+  - Use `"html"` to render `content` as formatted HTML in Teams.
+
 **Example:**
 ```bash
-dmtools teams_send_message "value" "value"
+dmtools teams_send_message "Project" "Hello team"
+dmtools teams_send_message "Project" "<b>Bold update</b>" "html"
 ```
 
 ```javascript
 // In JavaScript agent
 const result = teams_send_message("chatName", "content");
+const htmlResult = teams_send_message("chatName", "<b>HTML content</b>", "html");
 ```
 
 ---
@@ -731,14 +737,20 @@ Send a message to a chat by ID (returns raw JSON)
 - **`content`** (string) 🔴 Required
   - Message content (plain text or HTML)
 
+- **`contentType`** (string) ⚪ Optional
+  - Message content type: `"text"` or `"html"`. Defaults to `"text"` when omitted.
+  - Use `"html"` to render `content` as formatted HTML in Teams.
+
 **Example:**
 ```bash
-dmtools teams_send_message_by_id "value" "value"
+dmtools teams_send_message_by_id "19:abc@thread.v2" "Hello team"
+dmtools teams_send_message_by_id "19:abc@thread.v2" "<b>Bold update</b>" "html"
 ```
 
 ```javascript
 // In JavaScript agent
 const result = teams_send_message_by_id("chatId", "content");
+const htmlResult = teams_send_message_by_id("chatId", "<b>HTML content</b>", "html");
 ```
 
 ---
@@ -752,14 +764,20 @@ Send a message to your personal self chat (notes to yourself)
 - **`content`** (string) 🔴 Required
   - Message content (plain text or HTML)
 
+- **`contentType`** (string) ⚪ Optional
+  - Message content type: `"text"` or `"html"`. Defaults to `"text"` when omitted.
+  - Use `"html"` to render `content` as formatted HTML in Teams.
+
 **Example:**
 ```bash
-dmtools teams_send_myself_message "value"
+dmtools teams_send_myself_message "Buy milk"
+dmtools teams_send_myself_message "<b>Reminder</b>: buy milk" "html"
 ```
 
 ```javascript
 // In JavaScript agent
 const result = teams_send_myself_message("content");
+const htmlResult = teams_send_myself_message("<b>HTML content</b>", "html");
 ```
 
 ---

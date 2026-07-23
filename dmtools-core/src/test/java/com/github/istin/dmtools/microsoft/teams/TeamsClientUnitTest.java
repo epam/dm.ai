@@ -668,6 +668,43 @@ class TeamsClientUnitTest {
     }
 
     @Test
+    void sendChatMessage_withHtmlContentType_postsHtmlBody() throws IOException {
+        onPost(messageJson("msg-sent", "2026-07-10T10:00:00Z", "<b>hello</b>"));
+
+        ChatMessage message = client.sendChatMessage("chat-1", "<b>hello</b>", "html");
+
+        assertEquals("msg-sent", message.getId());
+        assertEquals(1, postedRequests.size());
+        JSONObject body = new JSONObject(postedRequests.get(0).getBody());
+        assertEquals("html", body.getJSONObject("body").getString("contentType"));
+        assertEquals("<b>hello</b>", body.getJSONObject("body").getString("content"));
+    }
+
+    @Test
+    void sendChatMessage_withNullContentType_defaultsToText() throws IOException {
+        onPost(messageJson("msg-sent", "2026-07-10T10:00:00Z", "hello"));
+
+        ChatMessage message = client.sendChatMessage("chat-1", "hello", null);
+
+        assertEquals("msg-sent", message.getId());
+        assertEquals(1, postedRequests.size());
+        JSONObject body = new JSONObject(postedRequests.get(0).getBody());
+        assertEquals("text", body.getJSONObject("body").getString("contentType"));
+    }
+
+    @Test
+    void sendChatMessage_withEmptyContentType_defaultsToText() throws IOException {
+        onPost(messageJson("msg-sent", "2026-07-10T10:00:00Z", "hello"));
+
+        ChatMessage message = client.sendChatMessage("chat-1", "hello", "   ");
+
+        assertEquals("msg-sent", message.getId());
+        assertEquals(1, postedRequests.size());
+        JSONObject body = new JSONObject(postedRequests.get(0).getBody());
+        assertEquals("text", body.getJSONObject("body").getString("contentType"));
+    }
+
+    @Test
     void sendChatMessageByName_chatNotFound() throws IOException {
         on("/me/chats", page());
 
@@ -706,6 +743,20 @@ class TeamsClientUnitTest {
     }
 
     @Test
+    void sendChatMessageByName_withHtmlContentType_postsHtmlBody() throws IOException {
+        on("/me/chats", page(chatJson("chat-1", "Project", "group")));
+        onPost(messageJson("msg-sent", "2026-07-10T10:00:00Z", "<b>hello</b>"));
+
+        String result = client.sendChatMessageByName("project", "<b>hello</b>", "html");
+
+        JSONObject json = new JSONObject(result);
+        assertTrue(json.getBoolean("success"));
+        JSONObject body = new JSONObject(postedRequests.get(0).getBody());
+        assertEquals("html", body.getJSONObject("body").getString("contentType"));
+        assertEquals("<b>hello</b>", body.getJSONObject("body").getString("content"));
+    }
+
+    @Test
     void getSelfChatMessages_usesSelfChatId() throws IOException {
         on("/me/chats/48:notes/messages", page(messageJson("note-1", "2026-07-10T10:00:00Z", "note")));
 
@@ -737,6 +788,20 @@ class TeamsClientUnitTest {
         assertEquals("Self Chat (Personal Notes)", json.getString("chatName"));
         assertEquals("48:notes", json.getString("chatId"));
         assertEquals("note-sent", json.getString("messageId"));
+    }
+
+    @Test
+    void sendSelfChatMessage_withHtmlContentType_postsHtmlBody() throws IOException {
+        onPost(messageJson("note-sent", "2026-07-10T10:00:00Z", "<b>remember this</b>"));
+
+        String result = client.sendSelfChatMessage("<b>remember this</b>", "html");
+
+        JSONObject json = new JSONObject(result);
+        assertTrue(json.getBoolean("success"));
+        JSONObject body = new JSONObject(postedRequests.get(0).getBody());
+        assertEquals("html", body.getJSONObject("body").getString("contentType"));
+        assertEquals("<b>remember this</b>", body.getJSONObject("body").getString("content"));
+        assertTrue(postedRequests.get(0).url().contains("/me/chats/48:notes/messages"));
     }
 
     // ==================== File download ====================

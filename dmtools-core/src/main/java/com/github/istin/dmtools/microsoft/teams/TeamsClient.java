@@ -842,9 +842,26 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     
     /**
      * Sends a message to a chat by ID.
-     * 
+     * Defaults to plain text content type.
+     *
      * @param chatId The chat ID
      * @param content Message content (plain text or HTML)
+     * @return The created message
+     * @throws IOException if request fails
+     */
+    public ChatMessage sendChatMessage(
+            String chatId,
+            String content) throws IOException {
+
+        return sendChatMessage(chatId, content, "text");
+    }
+
+    /**
+     * Sends a message to a chat by ID.
+     *
+     * @param chatId The chat ID
+     * @param content Message content (plain text or HTML)
+     * @param contentType Message content type: "text" or "html". Defaults to "text" if null or empty.
      * @return The created message
      * @throws IOException if request fails
      */
@@ -856,16 +873,34 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     )
     public ChatMessage sendChatMessage(
             @MCPParam(name = "chatId", description = "The chat ID", required = true) String chatId,
-            @MCPParam(name = "content", description = "Message content (plain text or HTML)", required = true) String content) throws IOException {
-        
-        return sendChatMessageWithType(chatId, content, "text");
+            @MCPParam(name = "content", description = "Message content (plain text or HTML)", required = true) String content,
+            @MCPParam(name = "contentType", description = "Message content type: 'text' or 'html'", required = false, example = "text") String contentType) throws IOException {
+
+        return sendChatMessageWithType(chatId, content, normalizeContentType(contentType));
     }
-    
+
     /**
      * Sends a message to a chat by name.
-     * 
+     * Defaults to plain text content type.
+     *
      * @param chatName The chat name to search for
      * @param content Message content (plain text or HTML)
+     * @return The created message, or null if chat not found
+     * @throws IOException if request fails
+     */
+    public String sendChatMessageByName(
+            String chatName,
+            String content) throws IOException {
+
+        return sendChatMessageByName(chatName, content, "text");
+    }
+
+    /**
+     * Sends a message to a chat by name.
+     *
+     * @param chatName The chat name to search for
+     * @param content Message content (plain text or HTML)
+     * @param contentType Message content type: "text" or "html". Defaults to "text" if null or empty.
      * @return The created message, or null if chat not found
      * @throws IOException if request fails
      */
@@ -877,8 +912,9 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     )
     public String sendChatMessageByName(
             @MCPParam(name = "chatName", description = "The chat topic or participant name", required = true) String chatName,
-            @MCPParam(name = "content", description = "Message content (plain text or HTML)", required = true) String content) throws IOException {
-        
+            @MCPParam(name = "content", description = "Message content (plain text or HTML)", required = true) String content,
+            @MCPParam(name = "contentType", description = "Message content type: 'text' or 'html'", required = false, example = "text") String contentType) throws IOException {
+
         Chat chat = findChatByName(chatName);
         if (chat == null) {
             logger.error("Cannot send message: chat '{}' not found", chatName);
@@ -887,40 +923,54 @@ public class TeamsClient extends MicrosoftGraphRestClient {
             error.put("error", "Chat not found: " + chatName);
             return error.toString(2);
         }
-        
-        ChatMessage message = sendChatMessage(chat.getId(), content);
-        
+
+        ChatMessage message = sendChatMessage(chat.getId(), content, contentType);
+
         JSONObject result = new JSONObject();
         result.put("success", true);
         result.put("chatName", chat.getTopic() != null ? chat.getTopic() : "1-on-1 chat");
         result.put("chatId", chat.getId());
         result.put("messageId", message.getId());
         result.put("createdDateTime", message.getCreatedDateTime());
-        
+
         logger.info("Sent message to chat: {}", chatName);
         return result.toString(2);
     }
-    
+
     /**
      * Sends a message with specific content type.
      */
     private ChatMessage sendChatMessageWithType(String chatId, String content, String contentType) throws IOException {
         String url = path(String.format("/me/chats/%s/messages", chatId));
-        
+
         JSONObject messageBody = new JSONObject();
         JSONObject body = new JSONObject();
         body.put("content", content);
         body.put("contentType", contentType);
         messageBody.put("body", body);
-        
+
         GenericRequest request = new GenericRequest(this, url);
         request.setBody(messageBody.toString());
-        
+
         String response = post(request);
         ChatMessage message = new ChatMessage(response);
-        
+
         logger.info("Message sent to chat {}: {} chars", chatId, content.length());
         return message;
+    }
+
+    /**
+     * Normalizes the content type parameter.
+     * Defaults to "text" when null or empty.
+     *
+     * @param contentType The requested content type
+     * @return "text" if contentType is null or empty, otherwise the trimmed contentType
+     */
+    private String normalizeContentType(String contentType) {
+        if (contentType == null || contentType.trim().isEmpty()) {
+            return "text";
+        }
+        return contentType.trim();
     }
     
     // ========== Self Chat Operations (Personal Notes) ==========
@@ -982,8 +1032,24 @@ public class TeamsClient extends MicrosoftGraphRestClient {
     /**
      * Sends a message to your self chat (personal notes).
      * The self chat is a special chat with ID "48:notes" where you can send messages to yourself.
-     * 
+     * Defaults to plain text content type.
+     *
      * @param content Message content (plain text or HTML)
+     * @return JSON string with result (success/error) and message details
+     * @throws IOException if request fails
+     */
+    public String sendSelfChatMessage(
+            String content) throws IOException {
+
+        return sendSelfChatMessage(content, "text");
+    }
+
+    /**
+     * Sends a message to your self chat (personal notes).
+     * The self chat is a special chat with ID "48:notes" where you can send messages to yourself.
+     *
+     * @param content Message content (plain text or HTML)
+     * @param contentType Message content type: "text" or "html". Defaults to "text" if null or empty.
      * @return JSON string with result (success/error) and message details
      * @throws IOException if request fails
      */
@@ -994,17 +1060,18 @@ public class TeamsClient extends MicrosoftGraphRestClient {
         category = "communication"
     )
     public String sendSelfChatMessage(
-            @MCPParam(name = "content", description = "Message content (plain text or HTML)", required = true) String content) throws IOException {
-        
-        ChatMessage message = sendChatMessage(SELF_CHAT_ID, content);
-        
+            @MCPParam(name = "content", description = "Message content (plain text or HTML)", required = true) String content,
+            @MCPParam(name = "contentType", description = "Message content type: 'text' or 'html'", required = false, example = "text") String contentType) throws IOException {
+
+        ChatMessage message = sendChatMessage(SELF_CHAT_ID, content, contentType);
+
         JSONObject result = new JSONObject();
         result.put("success", true);
         result.put("chatName", "Self Chat (Personal Notes)");
         result.put("chatId", SELF_CHAT_ID);
         result.put("messageId", message.getId());
         result.put("createdDateTime", message.getCreatedDateTime());
-        
+
         logger.info("Sent message to self chat (personal notes)");
         return result.toString(2);
     }
