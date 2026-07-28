@@ -1,6 +1,6 @@
 # CONFLUENCE MCP Tools
 
-**Total Tools**: 19
+**Total Tools**: 24
 
 ## Quick Reference
 
@@ -30,6 +30,7 @@ const result = confluence_content_by_id(...);
 | `confluence_content_by_title_and_space` | Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional)<br>`space` (string, **required**) |
 | `confluence_contents_by_urls` | Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown. | `format` (string, optional)<br>`urlStrings` (array, **required**) |
 | `confluence_create_page` | Create a new Confluence page with specified title, parent, body content, and space. Returns the created content object. | `title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
+| `confluence_create_page_from_markdown_file_with_attachments` | Create a Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images (e.g. ./assets/doc.pdf) are resolved against the Markdown file's directory or an explicit attachmentsDir. Existing attachments are skipped. | `attachmentsDir` (string, optional)<br>`filePath` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`title` (string, **required**) |
 | `confluence_download_attachment` | Download an attachment file from Confluence to a specified directory. | `attachment` (object, **required**)<br>`targetDir` (object, **required**) |
 | `confluence_download_pages` | Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth. | `urlStrings` (array, **required**)<br>`depth` (number, optional)<br>`downloadAttachments` (boolean, optional)<br>`outputPath` (string, **required**) |
 | `confluence_find_content` | Find a Confluence page by title in the default space. Returns the page content if found. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional) |
@@ -41,9 +42,13 @@ const result = confluence_content_by_id(...);
 | `confluence_get_current_user_profile` | Get the current user's profile information from Confluence. Returns user details for the authenticated user. | None |
 | `confluence_get_user_profile_by_id` | Get a specific user's profile information from Confluence by user ID. Returns user details for the specified user. | `userId` (string, **required**) |
 | `confluence_search_content_by_text` | Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified. | `limit` (number, optional)<br>`query` (string, **required**) |
+| `confluence_sync_markdown_directory` | Synchronize a local directory tree of Markdown files to a Confluence page subtree. Subdirectories become parent pages, Markdown files become child pages, .md cross-links become Confluence page links, referenced attachments are uploaded idempotently, and non-Markdown files in each directory are attached and linked at the bottom of the matching page. Optionally deletes Confluence pages that no longer match the file structure. | `directoryPath` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`deleteOrphans` (boolean, optional)<br>`attachmentsDir` (string, optional) |
 | `confluence_test` | Test Confluence connectivity by fetching the current user's profile | None |
 | `confluence_update_page` | Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
 | `confluence_update_page_with_history` | Update an existing Confluence page with new content and add a history comment. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`historyComment` (string, **required**) |
+| `confluence_update_page_from_markdown_file_with_attachments` | Update an existing Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images are resolved against the Markdown file's directory or an explicit attachmentsDir. Existing attachments are skipped. | `attachmentsDir` (string, optional)<br>`contentId` (string, **required**)<br>`filePath` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`title` (string, **required**) |
+| `confluence_upload_attachment` | Upload a single file as an attachment to a Confluence page. Skips the upload if an attachment with the same filename already exists (idempotent). Returns the attachment metadata. | `contentId` (string, **required**)<br>`filePath` (string, **required**)<br>`updateIfExists` (boolean, optional) |
+| `confluence_upload_attachments` | Upload all files from a local directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a summary of uploaded and skipped files. | `contentId` (string, **required**)<br>`directoryPath` (string, **required**)<br>`updateIfExists` (boolean, optional) |
 
 ## Detailed Parameter Information
 
@@ -478,6 +483,54 @@ const result = confluence_search_content_by_text("limit", "query");
 
 ---
 
+### `confluence_sync_markdown_directory`
+
+Synchronize a local directory tree of Markdown files to a Confluence page subtree. Subdirectories become parent pages, Markdown files become child pages, `.md` cross-links become Confluence page links, referenced attachments are uploaded idempotently, and non-Markdown files in each directory are attached and linked at the bottom of the matching page. Optionally deletes Confluence pages under `parentId` whose titles do not match any directory or Markdown file.
+
+**Parameters:**
+
+- **`directoryPath`** (string) 🔴 Required
+  - Root directory containing Markdown files and subdirectories
+  - Example: `/tmp/docs`
+
+- **`parentId`** (string) 🔴 Required
+  - Existing Confluence page ID that represents the root directory
+  - Example: `123456`
+
+- **`space`** (string) 🔴 Required
+  - The space key where the pages are located
+  - Example: `PROJ`
+
+- **`deleteOrphans`** (boolean) ⚪ Optional
+  - If true, delete Confluence pages under `parentId` whose titles do not match any directory or Markdown file. Default is false.
+  - Example: `false`
+
+- **`attachmentsDir`** (string) ⚪ Optional
+  - Optional fallback directory for resolving attachment references. Defaults to each Markdown file's parent directory.
+  - Example: `/tmp/assets`
+
+**Example:**
+```bash
+dmtools confluence_sync_markdown_directory "/tmp/docs" "123456" "PROJ" "false" "/tmp/assets"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_sync_markdown_directory("/tmp/docs", "123456", "PROJ", false, "/tmp/assets");
+```
+
+**Directory mapping rules:**
+
+- The root directory maps to the existing `parentId` page.
+- Each subdirectory becomes a Confluence child page titled with the directory name. If the directory contains `index.md` or `README.md`, that file's content becomes the folder page body.
+- Each regular `.md` file becomes a Confluence child page of its parent directory page. The page title is read from the first `# Heading` or falls back to the filename without `.md`.
+- Local `.md` links such as `[text](./other.md)` are rewritten to Confluence `ri:page` references.
+- Local attachment references (e.g. `![diagram](assets/diagram.png)`) are uploaded idempotently; existing attachments are skipped.
+- Non-Markdown files inside a directory (e.g. `folder1/report.pdf`, `folder1/page.html`) are also uploaded as attachments to the matching Confluence folder/Markdown page. If a file is not already referenced in the page body, an **Attachments** section with explicit links is appended to the page so the files remain visible and downloadable.
+- With `deleteOrphans=true`, any child page under `parentId` whose title does not match a directory or Markdown file is deleted recursively.
+
+---
+
 ### `confluence_test`
 
 Test Confluence connectivity by fetching the current user's profile
@@ -575,4 +628,178 @@ const result = confluence_update_page_with_history("contentId", "title");
 ```
 
 ---
+
+### `confluence_create_page_from_markdown_file_with_attachments`
+
+Create a Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images (e.g. `./assets/doc.pdf`) are resolved against the Markdown file's directory or an explicit `attachmentsDir`. Existing attachments are skipped.
+
+**Parameters:**
+
+- **`title`** (string) 🔴 Required
+  - The title of the new page
+  - Example: `New Project Page`
+
+- **`parentId`** (string) 🔴 Required
+  - The ID of the parent page
+  - Example: `123456`
+
+- **`filePath`** (string) 🔴 Required
+  - Path to the Markdown file
+  - Example: `/tmp/page.md`
+
+- **`space`** (string) 🔴 Required
+  - The space key where to create the page
+  - Example: `PROJ`
+
+- **`attachmentsDir`** (string) ⚪ Optional
+  - Directory to resolve attachment references from. Defaults to the Markdown file's parent directory.
+  - Example: `/tmp/assets`
+
+**Example:**
+```bash
+dmtools confluence_create_page_from_markdown_file_with_attachments "New Project Page" "123456" "/tmp/page.md" "PROJ" "/tmp/assets"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_create_page_from_markdown_file_with_attachments(
+    "New Project Page", "123456", "/tmp/page.md", "PROJ", "/tmp/assets"
+);
+```
+
+---
+
+### `confluence_update_page_from_markdown_file_with_attachments`
+
+Update an existing Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images are resolved against the Markdown file's directory or an explicit `attachmentsDir`. Existing attachments are skipped.
+
+**Parameters:**
+
+- **`contentId`** (string) 🔴 Required
+  - The ID of the page to update
+  - Example: `123456`
+
+- **`title`** (string) 🔴 Required
+  - The new title for the page
+  - Example: `Updated Project Page`
+
+- **`parentId`** (string) 🔴 Required
+  - The ID of the parent page
+  - Example: `123456`
+
+- **`filePath`** (string) 🔴 Required
+  - Path to the Markdown file
+  - Example: `/tmp/page.md`
+
+- **`space`** (string) 🔴 Required
+  - The space key where the page is located
+  - Example: `PROJ`
+
+- **`attachmentsDir`** (string) ⚪ Optional
+  - Directory to resolve attachment references from. Defaults to the Markdown file's parent directory.
+  - Example: `/tmp/assets`
+
+**Example:**
+```bash
+dmtools confluence_update_page_from_markdown_file_with_attachments "123456" "Updated Project Page" "123456" "/tmp/page.md" "PROJ" "/tmp/assets"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_update_page_from_markdown_file_with_attachments(
+    "123456", "Updated Project Page", "123456", "/tmp/page.md", "PROJ", "/tmp/assets"
+);
+```
+
+---
+
+### `confluence_upload_attachment`
+
+Upload a single file as an attachment to a Confluence page. Skips the upload if an attachment with the same filename already exists (idempotent). Returns the attachment metadata.
+
+**Parameters:**
+
+- **`contentId`** (string) 🔴 Required
+  - The ID of the Confluence page to attach the file to
+  - Example: `123456`
+
+- **`filePath`** (string) 🔴 Required
+  - Absolute path to the file to upload
+  - Example: `/tmp/document.pdf`
+
+- **`updateIfExists`** (boolean) ⚪ Optional
+  - If true, overwrite an existing attachment with the same filename. Default is false.
+  - Example: `false`
+
+**Example:**
+```bash
+dmtools confluence_upload_attachment "123456" "/tmp/document.pdf"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_upload_attachment("123456", "/tmp/document.pdf");
+```
+
+---
+
+### `confluence_upload_attachments`
+
+Upload all files from a local directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a summary of uploaded and skipped files.
+
+**Parameters:**
+
+- **`contentId`** (string) 🔴 Required
+  - The ID of the Confluence page to attach the files to
+  - Example: `123456`
+
+- **`directoryPath`** (string) 🔴 Required
+  - Absolute path to the directory containing files to upload
+  - Example: `/tmp/attachments`
+
+- **`updateIfExists`** (boolean) ⚪ Optional
+  - If true, overwrite existing attachments with the same filename. Default is false.
+  - Example: `false`
+
+**Example:**
+```bash
+dmtools confluence_upload_attachments "123456" "/tmp/attachments"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_upload_attachments("123456", "/tmp/attachments");
+```
+
+---
+
+## Markdown Round-Trip with Attachments
+
+DMTools supports a full round-trip workflow between local Markdown files and Confluence pages:
+
+1. **Export** a page with `confluence_content_by_id <pageId> md` or `confluence_download_pages`. Attachment references are emitted as `[filename](filename)` or `![alt](filename)`.
+
+2. **Edit locally** and place attachment files next to the Markdown file (or in a separate directory referenced with relative paths like `./assets/doc.pdf`).
+
+3. **Push back** with `confluence_update_page_from_markdown_file_with_attachments` (or `confluence_create_page_from_markdown_file_with_attachments` for a new page). The tool:
+   - Converts Markdown to Confluence Storage Format.
+   - Finds all local attachment references.
+   - Uploads any files that are not already attached to the page.
+   - Leaves Confluence page links, external URLs, and anchors untouched.
+
+4. **Re-push safely** — existing attachments are skipped, so repeated edits do not re-upload files.
+
+### Example Markdown
+
+```markdown
+# Design Document
+
+See [requirements](Requirements and Specifications) for context.
+
+![architecture](assets/architecture.png)
+
+Download the [specification](./assets/spec.pdf).
+```
+
+When pushed with `confluence_create_page_from_markdown_file_with_attachments`, the page will contain `ri:page` and `ri:attachment` references, and `architecture.png` and `spec.pdf` will be uploaded from `./assets` if they exist and are not already attached.
 
