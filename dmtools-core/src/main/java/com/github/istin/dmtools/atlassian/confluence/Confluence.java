@@ -37,6 +37,7 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -525,6 +526,13 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         return new Content(putResponse);
     }
 
+    /**
+     * Deletes a Confluence page by ID. Visible for package use by sync helpers.
+     */
+    String deletePage(String contentId) throws IOException {
+        return new GenericRequest(this, path("content/" + contentId)).delete();
+    }
+
     @NotNull
     public static String prepareBodyForConfluence(String body) {
         body = body.replaceAll("<br>", "\n").replaceAll("<br/>", "\n");
@@ -551,41 +559,92 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     }
 
     public void attachFileToPage(String contentId, File file) throws IOException {
-        List<Attachment> contentAttachments = getContentAttachments(contentId);
-        for (Attachment attachment : contentAttachments) {
-            if (attachment.getTitle().equalsIgnoreCase(file.getName())) {
-                return;
-            }
+        getAttachmentHelper().uploadAttachment(contentId, file, false);
+    }
+
+    @MCPTool(
+        name = "confluence_upload_attachment",
+        description = "Upload a single file as an attachment to a Confluence page. Skips existing attachments by default. Returns the attachment object.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public Attachment uploadAttachment(
+        @MCPParam(name = "contentId", description = "The content ID of the page to attach the file to", required = true, example = "123456")
+        String contentId,
+        @MCPParam(name = "file", description = "The local file to upload", required = true, example = "/path/to/image.png")
+        File file,
+        @MCPParam(name = "updateIfExists", description = "Whether to overwrite an existing attachment with the same name", required = false, example = "false")
+        Boolean updateIfExists
+    ) throws IOException {
+        return getAttachmentHelper().uploadAttachment(contentId, file, updateIfExists != null && updateIfExists);
+    }
+
+    @MCPTool(
+        name = "confluence_upload_attachments",
+        description = "Upload all files in a directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a JSON summary.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public String uploadAttachments(
+        @MCPParam(name = "contentId", description = "The content ID of the page to attach files to", required = true, example = "123456")
+        String contentId,
+        @MCPParam(name = "directory", description = "The local directory containing files to upload", required = true, example = "/path/to/attachments")
+        String directory,
+        @MCPParam(name = "updateIfExists", description = "Whether to overwrite existing attachments with the same names", required = false, example = "false")
+        Boolean updateIfExists
+    ) throws IOException {
+        return getAttachmentHelper().uploadAttachments(contentId, new File(directory), updateIfExists);
+    }
+
+    @MCPTool(
+        name = "confluence_sync_markdown_directory",
+        description = "Synchronize a local Markdown directory tree to a Confluence page subtree. Markdown files become child pages, images and other files become attachments. Links between Markdown files are rewritten to Confluence page links. Returns a JSON summary.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public String syncMarkdownDirectory(
+        @MCPParam(name = "directory", description = "The local directory containing Markdown files and attachments", required = true, example = "/path/to/docs")
+        String directory,
+        @MCPParam(name = "parentId", description = "The content ID of the parent Confluence page", required = true, example = "123456")
+        String parentId,
+        @MCPParam(name = "space", description = "The space key where the pages should be created", required = true, example = "PROJ")
+        String space,
+        @MCPParam(name = "deleteOrphans", description = "Whether to delete child pages not present in the directory tree", required = false, example = "false")
+        Boolean deleteOrphans,
+        @MCPParam(name = "attachmentsDir", description = "Optional directory containing referenced attachments. Defaults to the Markdown file's directory.", required = false, example = "/path/to/attachments")
+        String attachmentsDir
+    ) throws IOException {
+        MarkdownConfluenceSync sync = new MarkdownConfluenceSync(getAttachmentHelper(), new ConfluencePageOperations(this));
+        return sync.syncDirectory(new File(directory), parentId, space, deleteOrphans != null && deleteOrphans, attachmentsDir);
+    }
+
+    private ConfluenceAttachmentHelper attachmentHelper;
+
+    /**
+     * Lazy accessor for the attachment helper. Kept as an instance factory so subclasses/tests
+     * can provide their own helper if desired.
+     */
+    ConfluenceAttachmentHelper getAttachmentHelper() {
+        if (attachmentHelper == null) {
+            attachmentHelper = new ConfluenceAttachmentHelper(
+                    contentId -> {
+                        try {
+                            return getContentAttachments(contentId);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    },
+                    ConfluenceAttachmentHelper.defaultUploader(getBasePath(), this::sign, client)
+            );
         }
-        String url = path("content/" + contentId + "/child/attachment");
-        // Prepare the file part
-        RequestBody requestBody = new MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("file", file.getName(),
-                        okhttp3.RequestBody.Companion.create(file, MediaType.parse("image/*"))
-                ).build();
+        return attachmentHelper;
+    }
 
-        if (true) {
-            try {
-                Thread.currentThread().sleep(500);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        // Create the request
-        Request request = sign(new Request.Builder()
-                .url(url)
-                .post(requestBody)
-        )
-                .build();
-
-        // Execute the request
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-
-            logger.info(response.body().string());
-        }
+    /**
+     * Visible for tests that need to inject a stubbed attachment helper.
+     */
+    void setAttachmentHelper(ConfluenceAttachmentHelper attachmentHelper) {
+        this.attachmentHelper = attachmentHelper;
     }
 
     public void insertImageInPageBody(String spaceKey, String contentId, String fileName) throws IOException {

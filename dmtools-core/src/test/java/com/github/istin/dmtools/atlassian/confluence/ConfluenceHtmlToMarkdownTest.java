@@ -276,6 +276,33 @@ public class ConfluenceHtmlToMarkdownTest {
 
         assertTrue("Should preserve code body", markdown.contains("System.out.println"));
         assertTrue("Should preserve hello string", markdown.contains("hello"));
+        assertTrue("Should convert code macro to fenced code block", markdown.contains("```java"));
+        assertTrue("Should close fenced code block", markdown.contains("```"));
+    }
+
+    @Test
+    public void testToMarkdown_convertsPreCodeToFencedBlock() {
+        String html = "<pre><code class=\"language-python\">def hello():\n    return 'hi'</code></pre>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should contain opening fence with language", markdown.contains("```python"));
+        assertTrue("Should preserve code body", markdown.contains("def hello():"));
+        assertTrue("Should contain closing fence", markdown.contains("\n```"));
+    }
+
+    @Test
+    public void testToMarkdown_preservesTaskListSyntax() {
+        String html = "<ac:task-list>" +
+            "<ac:task><ac:task-status>complete</ac:task-status><ac:task-body>Done</ac:task-body></ac:task>" +
+            "<ac:task><ac:task-status>incomplete</ac:task-status><ac:task-body>Todo</ac:task-body></ac:task>" +
+            "</ac:task-list>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Should have completed task", markdown.contains("- [x] Done"));
+        assertTrue("Should have incomplete task", markdown.contains("- [ ] Todo"));
+        assertFalse("Should not escape brackets", markdown.contains("\\[x]"));
     }
 
     @Test
