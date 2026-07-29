@@ -70,6 +70,38 @@ public class FigmaClientTest {
     }
 
     @Test
+    public void testExtractTeamId_rawId() {
+        assertEquals("1633438210497791577", FigmaClient.extractTeamId("1633438210497791577"));
+    }
+
+    @Test
+    public void testExtractTeamId_fromTeamUrl() {
+        String url = "https://www.figma.com/files/1008118788610687562/team/1633438210497791577?fuid=1626552638292432631";
+        assertEquals("1633438210497791577", FigmaClient.extractTeamId(url));
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void testExtractTeamId_invalidUrl() {
+        FigmaClient.extractTeamId("https://www.figma.com/file/1234567890abcdef");
+    }
+
+    @Test
+    public void testExtractProjectId_rawId() {
+        assertEquals("123456789", FigmaClient.extractProjectId("123456789"));
+    }
+
+    @Test
+    public void testExtractProjectId_fromProjectUrl() {
+        String url = "https://www.figma.com/files/project/123456789/My-Project";
+        assertEquals("123456789", FigmaClient.extractProjectId(url));
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void testExtractProjectId_invalidUrl() {
+        FigmaClient.extractProjectId("https://www.figma.com/file/1234567890abcdef");
+    }
+
+    @Test
     public void testConvertUrlToFile() throws Exception {
         String href = "https://www.figma.com/file/1234567890abcdef";
         File expectedFile = new File("image.png");
@@ -123,6 +155,24 @@ public class FigmaClientTest {
     }
 
     @Test
+    public void testListTeamProjects_rawId() throws Exception {
+        doReturn(new JSONArray("[{\"id\": \"1\", \"name\": \"Project 1\"}]")).when(figmaClient).getProjects("123456789");
+
+        String result = figmaClient.listTeamProjects("123456789");
+        verify(figmaClient, times(1)).getProjects("123456789");
+        assertEquals(new JSONArray("[{\"id\": \"1\", \"name\": \"Project 1\"}]").toString(), result);
+    }
+
+    @Test
+    public void testListTeamProjects_fromTeamUrl() throws Exception {
+        String url = "https://www.figma.com/files/1008118788610687562/team/1633438210497791577?fuid=1626552638292432631";
+        doReturn(new JSONArray("[{\"id\": \"1\"}]")).when(figmaClient).getProjects("1633438210497791577");
+
+        figmaClient.listTeamProjects(url);
+        verify(figmaClient, times(1)).getProjects("1633438210497791577");
+    }
+
+    @Test
     public void testGetFiles() throws Exception {
         String response = "{\"files\": [{\"key\": \"fileKey\", \"name\": \"File 1\"}]}";
         doReturn(response).when(figmaClient).execute(any(GenericRequest.class));
@@ -133,6 +183,24 @@ public class FigmaClientTest {
     }
 
     @Test
+    public void testListProjectFiles_rawId() throws Exception {
+        doReturn(new JSONArray("[{\"key\": \"fileKey\"}]")).when(figmaClient).getFiles("987654321");
+
+        String result = figmaClient.listProjectFiles("987654321");
+        verify(figmaClient, times(1)).getFiles("987654321");
+        assertEquals(new JSONArray("[{\"key\": \"fileKey\"}]").toString(), result);
+    }
+
+    @Test
+    public void testListProjectFiles_fromProjectUrl() throws Exception {
+        String url = "https://www.figma.com/files/project/123456789/My-Project";
+        doReturn(new JSONArray("[{\"key\": \"fileKey\"}]")).when(figmaClient).getFiles("123456789");
+
+        figmaClient.listProjectFiles(url);
+        verify(figmaClient, times(1)).getFiles("123456789");
+    }
+
+    @Test
     public void testGetComments() throws Exception {
         String response = "{\"comments\": [{\"id\": \"1\", \"text\": \"Comment 1\"}]}";
         doReturn(response).when(figmaClient).execute(any(GenericRequest.class));
@@ -140,6 +208,31 @@ public class FigmaClientTest {
         List<IComment> comments = figmaClient.getComments("fileKey");
         assertEquals(1, comments.size());
     }
+
+    @Test
+    public void testGetFileComments_byFileUrl() throws Exception {
+        String href = "https://www.figma.com/file/1234567890abcdef";
+        IComment comment = mock(IComment.class);
+        doReturn("{\"id\":\"1\",\"message\":\"Looks good\"}").when(comment).toString();
+        doReturn(List.of(comment)).when(figmaClient).getComments("1234567890abcdef");
+
+        String result = figmaClient.getFileComments(href);
+        verify(figmaClient, times(1)).getComments("1234567890abcdef");
+        assertEquals("Looks good", new JSONArray(result).getJSONObject(0).getString("message"));
+    }
+
+    @Test
+    public void testGetFileComments_byRawFileKey() throws Exception {
+        IComment comment = mock(IComment.class);
+        doReturn("{\"id\":\"1\",\"message\":\"Ship it\"}").when(comment).toString();
+        doReturn(List.of(comment)).when(figmaClient).getComments("rawFileKey123");
+
+        // A bare file key has no path segments for parseFileId to split on, so it must fall back to using it as-is.
+        String result = figmaClient.getFileComments("rawFileKey123");
+        verify(figmaClient, times(1)).getComments("rawFileKey123");
+        assertEquals("Ship it", new JSONArray(result).getJSONObject(0).getString("message"));
+    }
+
 
     @Test
     public void testSetUseOAuth2Bearer_defaultIsFalse() throws Exception {

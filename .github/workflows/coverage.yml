@@ -1,0 +1,100 @@
+name: Coverage
+
+# Dedicated coverage workflow. It runs the dmtools-core unit tests, generates the
+# JaCoCo report, and publishes a self-hosted coverage badge (no external service).
+# It is intentionally a standalone workflow (not part of build-and-test.yml) so it
+# runs in parallel with the release pipeline and can never block a release.
+#
+# The badge SVGs land on `main` via a small auto-merge PR: the "Protect main"
+# ruleset requires the "Java unit tests" status check, so a direct push from a
+# workflow is rejected. The PR gets the required check from unit-tests.yml,
+# then GitHub auto-merges it (squash). The publish step uses PAT_TOKEN because
+# events triggered by the default GITHUB_TOKEN do not start new workflow runs,
+# so this cannot loop.
+#
+# Use `workflow_dispatch` to refresh the badge manually, e.g. after an
+# auto-merged PR (bot squash merges do not fire the push trigger).
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+  # Manual trigger, e.g. to refresh the badge after an auto-merged PR (squash
+  # merges created by the GitHub Actions bot do not fire the push trigger).
+  workflow_dispatch:
+
+permissions:
+  contents: write       # push the badge-update branch
+  pull-requests: write  # open the badge-update PR and enable auto-merge
+
+jobs:
+  coverage:
+    name: JaCoCo coverage badge
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Configure Git for tests
+        run: |
+          git config --global user.name "dm.ai"
+          git config --global user.email "dm.ai@epam.com"
+
+      - name: Run unit tests and generate JaCoCo report
+        run: ./gradlew :dmtools-core:test :dmtools-core:jacocoTestReport --no-daemon -x integrationTest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate coverage badges
+        id: jacoco
+        uses: cicirello/jacoco-badge-generator@v2
+        with:
+          jacoco-csv-file: dmtools-core/build/reports/jacoco/test/jacocoTestReport.csv
+          generate-branches-badge: true
+
+      - name: Log coverage percentage
+        run: |
+          echo "coverage = ${{ steps.jacoco.outputs.coverage }}"
+          echo "branch coverage = ${{ steps.jacoco.outputs.branches }}"
+
+      - name: Publish coverage badge to main via auto-merge PR (if changed)
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        env:
+          # PAT_TOKEN (not GITHUB_TOKEN) on purpose: events triggered by the
+          # default GITHUB_TOKEN do not start new workflow runs, so a bot-pushed
+          # branch / bot-created PR would never get the required "Java unit
+          # tests" check and auto-merge would stall forever.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          if [[ -z $(git status --porcelain .github/badges) ]]; then
+            echo "Coverage badge unchanged; nothing to do."
+            exit 0
+          fi
+
+          # Direct pushes to main are rejected by the "Protect main" ruleset
+          # (required check "Java unit tests"), so publish through a PR and let
+          # GitHub auto-merge it once the required check passes.
+          BRANCH="bot/coverage-badges-${{ github.run_id }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git add .github/badges
+          git commit -m "chore(badges): update coverage badge"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(badges): update coverage badge" \
+            --body "Automated coverage badge refresh from run ${{ github.run_id }}.")
+          gh pr merge "$PR_URL" --auto --squash --delete-branch

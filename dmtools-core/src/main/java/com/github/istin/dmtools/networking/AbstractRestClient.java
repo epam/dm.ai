@@ -218,7 +218,11 @@ public abstract class AbstractRestClient implements RestClient {
         }
         String sanitizedUrl = sanitizeUrl(request.url().toString());
         String responseError = "printAndCreateException error: " + sanitizedUrl + "\n" + body + "\n" + response.message() + "\n" + code;
-        logger.error(responseError);
+        if (code == 404 && sanitizedUrl.contains("/issue/")) {
+            logger.debug(responseError);
+        } else {
+            logger.error(responseError);
+        }
         return new RestClient.RestClientException(responseError, body, code);
     }
 

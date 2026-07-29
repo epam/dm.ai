@@ -8,6 +8,8 @@ import com.github.istin.dmtools.atlassian.common.networking.AtlassianRestClient;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.*;
 import com.github.istin.dmtools.common.networking.GenericRequest;
+import com.github.istin.dmtools.mcp.MCPParam;
+import com.github.istin.dmtools.mcp.MCPTool;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -18,7 +20,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public abstract class Bitbucket extends AtlassianRestClient implements SourceCode {
     private static final Logger logger = LogManager.getLogger(Bitbucket.class);
@@ -43,6 +47,45 @@ public abstract class Bitbucket extends AtlassianRestClient implements SourceCod
 
     public void setDefaultLimit(int defaultLimit) {
         this.defaultLimit = defaultLimit;
+    }
+
+    @MCPTool(
+            name = "bitbucket_test",
+            description = "Test Bitbucket connectivity by fetching the current user's profile",
+            integration = "bitbucket",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            String userPath = apiVersion == ApiVersion.V1 ? "users/~me" : "user";
+            GenericRequest getRequest = new GenericRequest(this, path(userPath));
+            String response = execute(getRequest);
+            if (response != null && !response.isEmpty()) {
+                JSONObject jsonResponse = new JSONObject(response);
+                boolean hasUser = jsonResponse.has("displayName") || jsonResponse.has("nickname")
+                        || jsonResponse.has("username") || jsonResponse.has("account_id");
+                if (hasUser) {
+                    result.put("success", true);
+                    result.put("message", "Bitbucket API connection successful");
+                    result.put("user", jsonResponse.optString("displayName",
+                            jsonResponse.optString("nickname",
+                                    jsonResponse.optString("username", "unknown"))));
+                } else {
+                    result.put("success", false);
+                    result.put("message", "Unexpected response format from Bitbucket API");
+                }
+            } else {
+                result.put("success", false);
+                result.put("message", "Empty response from Bitbucket API");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Bitbucket API connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Bitbucket connection test failed", e);
+        }
+        return result;
     }
 
     @Override

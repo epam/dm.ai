@@ -160,9 +160,9 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo hello", "echo world"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), isNull(), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                       .thenReturn("hello\nExit Code: 0");
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), isNull(), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                       .thenReturn("world\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -186,7 +186,7 @@ public class CliExecutionHelperTest {
         String[] commands = {"invalid-command"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("invalid-command"), isNull(), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("invalid-command"), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                       .thenThrow(new IOException("Command not found"));
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -228,7 +228,7 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo test"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                       .thenReturn("test\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -240,7 +240,7 @@ public class CliExecutionHelperTest {
             // Assert
             assertTrue(result.toString().contains("test"));
             // Verify that CommandLineUtils was called with the correct working directory
-            mockedUtils.verify(() -> CommandLineUtils.runCommand(eq("echo test"), eq(workingDir.toFile()), any(Map.class), any()));
+            mockedUtils.verify(() -> CommandLineUtils.runCommand(eq("echo test"), eq(workingDir.toFile()), any(Map.class), any(), anyBoolean(), any(), anyInt()));
         }
     }
     
@@ -382,9 +382,9 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo hello", "echo world"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), any(File.class), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                       .thenReturn("hello\nExit Code: 0");
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), any(File.class), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo world"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                       .thenReturn("world\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -415,7 +415,7 @@ public class CliExecutionHelperTest {
         String[] commands = {"echo test"};
         
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
-            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo test"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                       .thenReturn("test\nExit Code: 0");
             // Mock the environment loading
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
@@ -812,7 +812,7 @@ public class CliExecutionHelperTest {
             try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
                 mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                         .thenReturn(Map.of("AI_AGENT_PROVIDER", "cursor")); // dmtools.env has old value
-                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("ok");
 
                 cliHelper.executeCliCommands(commands, null, "dmtools.env");
@@ -825,7 +825,10 @@ public class CliExecutionHelperTest {
                                 "claude-opus-4.6".equals(env.get("COPILOT_MODEL"))
                                 && "copilot".equals(env.get("AI_AGENT_PROVIDER")) // override beats dmtools.env
                         ),
-                        any()
+                        any(),
+                anyBoolean(),
+                any(),
+                anyInt()
                 ));
             }
         } finally {
@@ -841,7 +844,7 @@ public class CliExecutionHelperTest {
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                     .thenReturn(Map.of("COPILOT_MODEL", "gpt-5-mini"));
-            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello");
 
             cliHelper.executeCliCommands(commands, null, "dmtools.env");
@@ -850,7 +853,10 @@ public class CliExecutionHelperTest {
                     anyString(),
                     isNull(),
                     argThat((Map<String, String> env) -> "gpt-5-mini".equals(env.get("COPILOT_MODEL"))),
-                    any()
+                    any(),
+            anyBoolean(),
+            any(),
+            anyInt()
             ));
         }
     }
@@ -869,7 +875,7 @@ public class CliExecutionHelperTest {
             try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
                 mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                         .thenReturn(new java.util.HashMap<>());
-                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("test");
 
                 // Should NOT throw NullPointerException
@@ -885,7 +891,10 @@ public class CliExecutionHelperTest {
                                 && !env.containsKey("  ")
                                 && !env.containsKey("VALID_KEY")
                         ),
-                        any()
+                        any(),
+                anyBoolean(),
+                any(),
+                anyInt()
                 ));
             }
         } finally {
@@ -931,7 +940,7 @@ public class CliExecutionHelperTest {
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                     .thenReturn(Map.of("KEEP_ME", "keep", "DROP_ME", "drop"));
-            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("test");
 
             cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
@@ -943,7 +952,10 @@ public class CliExecutionHelperTest {
                     argThat((Map<String, String> env) ->
                             env.containsKey("KEEP_ME") && !env.containsKey("DROP_ME")
                     ),
-                    any()
+                    any(),
+            anyBoolean(),
+            any(),
+            anyInt()
             ));
         }
     }
@@ -954,7 +966,7 @@ public class CliExecutionHelperTest {
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                     .thenReturn(Map.of("SECRET_TOKEN", "x", "PUBLIC", "y"));
-            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("test");
 
             cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
@@ -966,7 +978,10 @@ public class CliExecutionHelperTest {
                     argThat((Map<String, String> env) ->
                             !env.containsKey("SECRET_TOKEN") && env.containsKey("PUBLIC")
                     ),
-                    any()
+                    any(),
+            anyBoolean(),
+            any(),
+            anyInt()
             ));
         }
     }
@@ -981,7 +996,7 @@ public class CliExecutionHelperTest {
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                     .thenReturn(Map.of());
-            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), any(File.class), any(Map.class), any()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello");
 
             Runnable timerAction = () -> {
@@ -1087,21 +1102,22 @@ public class CliExecutionHelperTest {
         Path confluenceDir = tempDir.resolve("confluence");
         assertTrue(Files.exists(confluenceDir), "confluence/ directory should be created");
 
-        // .md file should be written
-        long mdFiles = Files.list(confluenceDir)
-                .filter(p -> p.toString().endsWith(".md"))
-                .count();
-        assertEquals(1, mdFiles, "One .md file should be written");
-
-        String fileContent = Files.list(confluenceDir)
-                .filter(p -> p.toString().endsWith(".md"))
-                .findFirst()
-                .map(p -> { try { return Files.readString(p, StandardCharsets.UTF_8); } catch (Exception e) { return ""; } })
-                .orElse("");
+        // .md file should be written inside a per-page sub-folder
+        Path mdFile;
+        try (java.util.stream.Stream<Path> stream = Files.walk(confluenceDir)) {
+            mdFile = stream.filter(p -> p.toString().endsWith(".md"))
+                    .findFirst()
+                    .orElse(null);
+        }
+        assertNotNull(mdFile, "One .md file should be written");
+        String fileContent = Files.readString(mdFile, StandardCharsets.UTF_8);
         assertTrue(fileContent.contains("Page content here."), "File should contain page content");
 
-        // Verify shared downloadPageAttachments was called with the page content ID
-        verify(mockConfluence).downloadPageAttachments(eq("12345"), any(File.class));
+        // Page folder should be named after the sanitized title
+        assertEquals("My_Page", mdFile.getParent().getFileName().toString());
+
+        // Verify shared downloadPageAttachments was called with the page content ID and page folder
+        verify(mockConfluence).downloadPageAttachments(eq("12345"), eq(mdFile.getParent().toFile()));
     }
 
     @Test
@@ -1116,8 +1132,267 @@ public class CliExecutionHelperTest {
 
         Path confluenceDir = tempDir.resolve("confluence");
         if (Files.exists(confluenceDir)) {
-            assertEquals(0, Files.list(confluenceDir).filter(p -> p.toString().endsWith(".md")).count(),
-                    "No .md files should be written for null content");
+            long mdFiles;
+            try (java.util.stream.Stream<Path> stream = Files.walk(confluenceDir)) {
+                mdFiles = stream.filter(p -> p.toString().endsWith(".md")).count();
+            }
+            assertEquals(0, mdFiles, "No .md files should be written for null content");
         }
+    }
+
+    // ── Recursive Confluence input preparation tests ─────────────────────────
+
+    private static com.github.istin.dmtools.atlassian.confluence.model.Content createContent(
+            String id, String title, String storageValue) throws Exception {
+        org.json.JSONObject body = new org.json.JSONObject();
+        org.json.JSONObject storage = new org.json.JSONObject();
+        storage.put("value", storageValue);
+        storage.put("representation", "storage");
+        body.put("storage", storage);
+        return new com.github.istin.dmtools.atlassian.confluence.model.Content(
+                new org.json.JSONObject()
+                        .put("id", id)
+                        .put("title", title)
+                        .put("body", body));
+    }
+
+    private static long countMdFiles(Path confluenceDir) throws IOException {
+        try (java.util.stream.Stream<Path> stream = Files.walk(confluenceDir)) {
+            return stream.filter(p -> p.toString().endsWith(".md")).count();
+        }
+    }
+
+    @Test
+    void writeConfluencePagesFile_depthZero_doesNotFollowLinkedPages() throws Exception {
+        com.github.istin.dmtools.atlassian.confluence.Confluence confluence =
+                mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
+        String urlA = "https://wiki.example.com/wiki/spaces/SPACE/pages/1/Page+A";
+        String urlB = "https://wiki.example.com/wiki/spaces/SPACE/pages/2/Page+B";
+
+        com.github.istin.dmtools.atlassian.confluence.model.Content pageA =
+                createContent("1", "Page A", "<p>Page A body with link to " + urlB + "</p>");
+
+        when(confluence.parseUris("see " + urlA)).thenReturn(java.util.Set.of(urlA));
+        when(confluence.contentByUrl(urlA)).thenReturn(pageA);
+        when(confluence.parseUris(pageA.getStorage().getValue())).thenReturn(java.util.Set.of(urlB));
+        when(confluence.downloadPageAttachments(anyString(), any(File.class))).thenReturn(java.util.Collections.emptyList());
+
+        cliHelper.writeConfluencePagesFile("see " + urlA, tempDir, confluence, 0, true);
+
+        assertEquals(1, countMdFiles(tempDir.resolve("confluence")));
+        verify(confluence, never()).contentByUrl(urlB);
+    }
+
+    @Test
+    void writeConfluencePagesFile_depthOne_followsExternalConfluenceLinks() throws Exception {
+        com.github.istin.dmtools.atlassian.confluence.Confluence confluence =
+                mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
+        String urlA = "https://wiki.example.com/wiki/spaces/SPACE/pages/1/Page+A";
+        String urlB = "https://wiki.example.com/wiki/spaces/SPACE/pages/2/Page+B";
+
+        com.github.istin.dmtools.atlassian.confluence.model.Content pageA =
+                createContent("1", "Page A", "<p>Page A body with link to " + urlB + "</p>");
+        com.github.istin.dmtools.atlassian.confluence.model.Content pageB =
+                createContent("2", "Page B", "<p>Page B body.</p>");
+
+        when(confluence.parseUris("see " + urlA)).thenReturn(java.util.Set.of(urlA));
+        when(confluence.contentByUrl(urlA)).thenReturn(pageA);
+        when(confluence.contentByUrl(urlB)).thenReturn(pageB);
+        when(confluence.parseUris(pageA.getStorage().getValue())).thenReturn(java.util.Set.of(urlB));
+        when(confluence.parseUris(pageB.getStorage().getValue())).thenReturn(java.util.Collections.emptySet());
+        when(confluence.downloadPageAttachments(anyString(), any(File.class))).thenReturn(java.util.Collections.emptyList());
+
+        cliHelper.writeConfluencePagesFile("see " + urlA, tempDir, confluence, 1, true);
+
+        assertEquals(2, countMdFiles(tempDir.resolve("confluence")));
+        verify(confluence).contentByUrl(urlB);
+    }
+
+    @Test
+    void writeConfluencePagesFile_depthOne_followsChildrenMacro() throws Exception {
+        com.github.istin.dmtools.atlassian.confluence.Confluence confluence =
+                mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
+        String urlA = "https://wiki.example.com/wiki/spaces/SPACE/pages/1/Page+A";
+
+        com.github.istin.dmtools.atlassian.confluence.model.Content pageA =
+                createContent("1", "Page A", "<ac:structured-macro ac:name=\"children\"></ac:structured-macro>");
+        com.github.istin.dmtools.atlassian.confluence.model.Content childB =
+                createContent("2", "Child B", "<p>Child B body.</p>");
+
+        when(confluence.parseUris("see " + urlA)).thenReturn(java.util.Set.of(urlA));
+        when(confluence.contentByUrl(urlA)).thenReturn(pageA);
+        when(confluence.getChildrenOfContentById("1")).thenReturn(java.util.List.of(childB));
+        when(confluence.parseUris(childB.getStorage().getValue())).thenReturn(java.util.Collections.emptySet());
+        when(confluence.downloadPageAttachments(anyString(), any(File.class))).thenReturn(java.util.Collections.emptyList());
+
+        cliHelper.writeConfluencePagesFile("see " + urlA, tempDir, confluence, 1, true);
+
+        assertEquals(2, countMdFiles(tempDir.resolve("confluence")));
+        verify(confluence).getChildrenOfContentById("1");
+    }
+
+    @Test
+    void writeConfluencePagesFile_depthOne_followsInternalPageLinks() throws Exception {
+        com.github.istin.dmtools.atlassian.confluence.Confluence confluence =
+                mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
+        String urlA = "https://wiki.example.com/wiki/spaces/SPACE/pages/1/Page+A";
+
+        com.github.istin.dmtools.atlassian.confluence.model.Content pageA = createContent("1", "Page A",
+                "<p>See <ac:link><ri:page ri:content-title=\"Linked Page\" ri:space-key=\"SPACE\"/></ac:link></p>");
+        com.github.istin.dmtools.atlassian.confluence.model.Content linkedB = createContent("2", "Linked Page",
+                "<p>Linked page body.</p>");
+
+        when(confluence.parseUris("see " + urlA)).thenReturn(java.util.Set.of(urlA));
+        when(confluence.contentByUrl(urlA)).thenReturn(pageA);
+        when(confluence.parseUris(pageA.getStorage().getValue())).thenReturn(java.util.Collections.emptySet());
+        when(confluence.findContent("Linked Page", "SPACE")).thenReturn(linkedB);
+        when(confluence.downloadPageAttachments(anyString(), any(File.class))).thenReturn(java.util.Collections.emptyList());
+
+        cliHelper.writeConfluencePagesFile("see " + urlA, tempDir, confluence, 1, true);
+
+        assertEquals(2, countMdFiles(tempDir.resolve("confluence")));
+        verify(confluence).findContent("Linked Page", "SPACE");
+    }
+
+    @Test
+    void writeConfluencePagesFile_attachmentsDisabled_doesNotDownloadAttachments() throws Exception {
+        com.github.istin.dmtools.atlassian.confluence.Confluence confluence =
+                mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
+        String url = "https://wiki.example.com/wiki/spaces/SPACE/pages/1/Page";
+
+        com.github.istin.dmtools.atlassian.confluence.model.Content page =
+                createContent("1", "Page", "<p>Page body.</p>");
+
+        when(confluence.parseUris("see " + url)).thenReturn(java.util.Set.of(url));
+        when(confluence.contentByUrl(url)).thenReturn(page);
+
+        cliHelper.writeConfluencePagesFile("see " + url, tempDir, confluence, 0, false);
+
+        assertEquals(1, countMdFiles(tempDir.resolve("confluence")));
+        verify(confluence, never()).downloadPageAttachments(anyString(), any(File.class));
+    }
+
+    @Test
+    void writeConfluencePagesFile_cycleBetweenPages_isNotReprocessed() throws Exception {
+        com.github.istin.dmtools.atlassian.confluence.Confluence confluence =
+                mock(com.github.istin.dmtools.atlassian.confluence.Confluence.class);
+        String urlA = "https://wiki.example.com/wiki/spaces/SPACE/pages/1/Page+A";
+        String urlB = "https://wiki.example.com/wiki/spaces/SPACE/pages/2/Page+B";
+
+        com.github.istin.dmtools.atlassian.confluence.model.Content pageA =
+                createContent("1", "Page A", "<p>Link to " + urlB + "</p>");
+        com.github.istin.dmtools.atlassian.confluence.model.Content pageB =
+                createContent("2", "Page B", "<p>Link back to " + urlA + "</p>");
+
+        when(confluence.parseUris("see " + urlA)).thenReturn(java.util.Set.of(urlA));
+        when(confluence.contentByUrl(urlA)).thenReturn(pageA);
+        when(confluence.contentByUrl(urlB)).thenReturn(pageB);
+        when(confluence.parseUris(pageA.getStorage().getValue())).thenReturn(java.util.Set.of(urlB));
+        when(confluence.parseUris(pageB.getStorage().getValue())).thenReturn(java.util.Set.of(urlA));
+        when(confluence.downloadPageAttachments(anyString(), any(File.class))).thenReturn(java.util.Collections.emptyList());
+
+        cliHelper.writeConfluencePagesFile("see " + urlA, tempDir, confluence, 2, true);
+
+        assertEquals(2, countMdFiles(tempDir.resolve("confluence")));
+        verify(confluence, times(1)).contentByUrl(urlA);
+        verify(confluence, times(1)).contentByUrl(urlB);
+    }
+
+    // ── env variable exclusion tests ─────────────────────────────────────────
+
+    @Test
+    void testExecuteCliCommands_ExcludesExactEnvVariables() {
+        com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(
+                Map.of("KEEP_ME", "ok", "DROP_ME", "secret", "ALSO_DROP", "secret2")
+        );
+        try {
+            String[] commands = {"echo test"};
+            String[] excluded = {"DROP_ME", "ALSO_DROP"};
+            try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+                mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                        .thenReturn(Map.of());
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                        .thenReturn("test");
+
+                cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false, excluded, null);
+
+                mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                        anyString(),
+                        isNull(),
+                        argThat((Map<String, String> env) ->
+                                "ok".equals(env.get("KEEP_ME"))
+                                && !env.containsKey("DROP_ME")
+                                && !env.containsKey("ALSO_DROP")
+                        ),
+                        any(),
+                anyBoolean(),
+                any(),
+                anyInt()
+                ));
+            }
+        } finally {
+            com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testExecuteCliCommands_ExcludesEnvVariablesByRegex_WithOverrides() {
+        com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(
+                Map.of("API_KEY", "secret1", "MY_API_KEY", "secret2", "PUBLIC", "ok")
+        );
+        try {
+            String[] commands = {"echo test"};
+            String[] excludedRegexes = {".*API_KEY$"};
+            try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+                mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                        .thenReturn(Map.of());
+                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                        .thenReturn("test");
+
+                cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false, null, excludedRegexes);
+
+                mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                        anyString(),
+                        isNull(),
+                        argThat((Map<String, String> env) ->
+                                !env.containsKey("API_KEY")
+                                && !env.containsKey("MY_API_KEY")
+                                && "ok".equals(env.get("PUBLIC"))
+                        ),
+                        any(),
+                anyBoolean(),
+                any(),
+                anyInt()
+                ));
+            }
+        } finally {
+            com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testFilterEnvVariables_BothExactAndRegexExclusions() {
+        Map<String, String> env = Map.of(
+                "KEEP", "ok",
+                "DROP_EXACT", "secret1",
+                "DROP_REGEX", "secret2"
+        );
+
+        Map<String, String> result = CliExecutionHelper.filterEnvVariables(
+                env,
+                new String[]{"DROP_EXACT"},
+                new String[]{"DROP_.*"}
+        );
+
+        assertEquals(1, result.size());
+        assertEquals("ok", result.get("KEEP"));
+        assertFalse(result.containsKey("DROP_EXACT"));
+        assertFalse(result.containsKey("DROP_REGEX"));
+    }
+
+    @Test
+    void testFilterEnvVariables_NullInputs_ReturnsOriginal() {
+        Map<String, String> env = Map.of("KEY", "value");
+        assertSame(env, CliExecutionHelper.filterEnvVariables(env, null, null));
     }
 }

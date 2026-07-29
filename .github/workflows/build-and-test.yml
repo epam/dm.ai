@@ -21,7 +21,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
       
@@ -45,7 +45,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Test Report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         continue-on-error: true
         with:
@@ -170,7 +170,7 @@ jobs:
       
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: |
@@ -179,19 +179,7 @@ jobs:
             dmtools-core/build/reports/tests/test
             dmtools-core/build/test-results/test
           retention-days: 7
-      
-      - name: Upload coverage reports to Codecov
-        if: success() || steps.gradle.outcome == 'failure'
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Upload test results to Codecov
-        if: success() || steps.gradle.outcome == 'failure'
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-      
       - name: Prepare Build Artifacts for Upload
         id: prepare_artifacts
         if: steps.gradle.outcome == 'success'
@@ -248,7 +236,7 @@ jobs:
       
       - name: Upload Build Artifacts
         if: steps.prepare_artifacts.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
           path: build-artifacts/

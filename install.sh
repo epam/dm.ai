@@ -557,7 +557,14 @@ installer_managed_artifacts_present() {
 }
 
 installer_managed_jar_present() {
-    [ -s "$JAR_PATH" ]
+    [ -s "$JAR_PATH" ] || return 1
+    if command -v jar >/dev/null 2>&1 && jar tf "$JAR_PATH" >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v unzip >/dev/null 2>&1 && unzip -t "$JAR_PATH" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
 }
 
 installer_managed_script_present() {
@@ -967,6 +974,73 @@ validate_not_html() {
 }
 
 # Download file with progress and validation
+# Cross-platform file size in bytes.
+stat_file_size() {
+    local file="$1"
+    if stat -f%z "$file" >/dev/null 2>&1; then
+        stat -f%z "$file"
+    else
+        stat -c%s "$file"
+    fi
+}
+
+# Convert bytes to a human-readable string (e.g. 89MB).
+human_readable_size() {
+    local bytes="$1"
+    if ! [[ "$bytes" =~ ^[0-9]+$ ]]; then
+        echo "$bytes"
+        return
+    fi
+    if command -v numfmt >/dev/null 2>&1; then
+        numfmt --to=iec-i --suffix=B "$bytes" 2>/dev/null || echo "${bytes}B"
+        return
+    fi
+    if [ "$bytes" -ge 1073741824 ]; then
+        echo "$((bytes / 1073741824))GB"
+    elif [ "$bytes" -ge 1048576 ]; then
+        echo "$((bytes / 1048576))MB"
+    elif [ "$bytes" -ge 1024 ]; then
+        echo "$((bytes / 1024))KB"
+    else
+        echo "${bytes}B"
+    fi
+}
+
+# Validate a downloaded file (JAR integrity, shell script sanity, HTML error pages).
+# Returns 0 on success, 1 on failure. Caller is responsible for removing the file on failure.
+validate_downloaded_file() {
+    local output="$1"
+    local desc="$2"
+    local url="$3"
+
+    # JAR files must be valid zip archives
+    if [[ "$output" == *.jar ]] || [[ "$desc" == *"JAR"* ]]; then
+        local jar_valid=false
+        if command -v jar >/dev/null 2>&1 && jar tf "$output" >/dev/null 2>&1; then
+            jar_valid=true
+        elif command -v unzip >/dev/null 2>&1 && unzip -t "$output" >/dev/null 2>&1; then
+            jar_valid=true
+        fi
+        if [ "$jar_valid" != true ]; then
+            warn "Downloaded JAR file appears to be corrupted (invalid zip)."
+            return 1
+        fi
+    fi
+
+    local require_shell="false"
+    # Check if this is a shell script download
+    if [[ "$desc" == *"shell script"* ]] || [[ "$url" == *.sh ]]; then
+        require_shell="true"
+    fi
+
+    if ! validate_not_html "$output" "$desc" "$require_shell"; then
+        warn "Downloaded file appears to be invalid (HTML error page or not a valid shell script)."
+        return 1
+    fi
+
+    return 0
+}
+
 download_file() {
     local url="$1"
     local output="$2"
@@ -983,25 +1057,80 @@ download_file() {
         
         if command -v curl >/dev/null 2>&1; then
             # Use curl with better error handling
-            # For large files (like JAR), skip HTTP code check and download directly
-            # This avoids double download and handles redirects better
-            if curl -L --fail --connect-timeout 30 --max-time 300 "$url" -o "$output" 2>&1 | grep -v "^[[:space:]]*[0-9]"; then
+            local curl_log
+            curl_log=$(mktemp)
+            local curl_exit_code=0
+            local is_jar=false
+            if [[ "$desc" == *"JAR"* ]] || [[ "$output" == *.jar ]]; then
+                is_jar=true
+            fi
+
+            # Show the user what is being downloaded and from where.
+            info "Downloading $desc from $url (attempt $((retry_count + 1))/$max_retries)..."
+
+            # For large JAR files, show a progress bar when stderr is a terminal;
+            # otherwise stay silent and surface errors after the fact.
+            if [ "$is_jar" = true ] && [ -t 2 ]; then
+                local resume_msg=""
+                if [ -f "$output" ] && [ -s "$output" ]; then
+                    resume_msg=" (resuming from $(human_readable_size "$(stat_file_size "$output")"))"
+                fi
+                [ -n "$resume_msg" ] && info "Resuming partial download$resume_msg"
+
+                local max_time=${DMTOOLS_DOWNLOAD_MAX_TIME:-3600}
+                curl -L --fail --connect-timeout 30 --max-time "$max_time" \
+                     -C - --speed-time 30 --speed-limit 1024 \
+                     --progress-bar "$url" -o "$output" 2>&1 || curl_exit_code=$?
+            else
+                # Resume partial downloads, abort on stalls (<1KB/s for 30s), and keep
+                # real error messages visible despite -s progress suppression.
+                local max_time=${DMTOOLS_DOWNLOAD_MAX_TIME:-3600}
+                curl -L --fail --connect-timeout 30 --max-time "$max_time" \
+                     -C - --speed-time 30 --speed-limit 1024 \
+                     -s -S "$url" -o "$output" >"$curl_log" 2>&1 || curl_exit_code=$?
+
+                if [ -s "$curl_log" ]; then
+                    cat "$curl_log" >&2
+                fi
+            fi
+            rm -f "$curl_log"
+
+            if [ $curl_exit_code -eq 0 ]; then
+                info "Downloaded $desc ($(human_readable_size "$(stat_file_size "$output")"))"
                 download_success=true
             else
-                local curl_exit_code=$?
-                # Map curl exit codes to messages
+                # Map curl exit codes to messages.
+                # For transient network/timeout errors we keep the partial file so
+                # the next attempt can resume (-C -). For 404/write/range errors
+                # we wipe the partial file and start fresh.
                 case $curl_exit_code in
-                    6|7) warn "Network error or timeout when downloading $desc. Retrying..." ;;
-                    22) warn "HTTP error (404 or similar) when downloading $desc. Retrying..." ;;
-                    23) warn "Write error when saving $desc. Retrying..." ;;
-                    28) warn "Transfer timeout when downloading $desc. Retrying..." ;;
-                    *) warn "Download failed (curl exit code: $curl_exit_code). Retrying..." ;;
+                    6|7|28|35|56)
+                        warn "Network/timeout error (curl $curl_exit_code) when downloading $desc. Retrying with resume..."
+                        ;;
+                    33)
+                        warn "Server does not support resume for $desc. Restarting download..."
+                        rm -f "$output" 2>/dev/null
+                        ;;
+                    22)
+                        warn "HTTP error (404 or similar) when downloading $desc. Retrying..."
+                        rm -f "$output" 2>/dev/null
+                        ;;
+                    23)
+                        warn "Write error when saving $desc. Retrying..."
+                        rm -f "$output" 2>/dev/null
+                        ;;
+                    *)
+                        warn "Download failed (curl exit code: $curl_exit_code). Retrying..."
+                        ;;
                 esac
-                rm -f "$output" 2>/dev/null
             fi
         elif command -v wget >/dev/null 2>&1; then
-            # Use wget with better error handling
-            if wget --progress=bar --tries=1 --timeout=30 "$url" -O "$output" 2>&1; then
+            # Use wget with resume support and a reasonable overall timeout
+            info "Downloading $desc from $url (attempt $((retry_count + 1))/$max_retries) using wget..."
+            local wget_progress="--progress=bar"
+            [ -t 2 ] || wget_progress="--progress=dot:mega"
+            if wget -c $wget_progress --tries=1 --timeout=120 --read-timeout=30 "$url" -O "$output" 2>&1; then
+                info "Downloaded $desc ($(human_readable_size "$(stat_file_size "$output")"))"
                 download_success=true
             else
                 warn "Download failed. Retrying..."
@@ -1011,7 +1140,18 @@ download_file() {
         fi
         
         if [ "$download_success" = true ]; then
-            break
+            # Validate while we're still inside the retry loop so a corrupted or
+            # HTML-wrapped download counts as a retryable failure.
+            if [ "$validate" = "true" ]; then
+                if validate_downloaded_file "$output" "$desc" "$url"; then
+                    return 0
+                fi
+                warn "Validation failed for $desc. Retrying..."
+                rm -f "$output" 2>/dev/null
+                download_success=false
+            else
+                return 0
+            fi
         fi
         
         retry_count=$((retry_count + 1))
@@ -1022,34 +1162,14 @@ download_file() {
         fi
     done
     
-    # Check if download was successful
-    if [ ! -f "$output" ] || [ ! -s "$output" ]; then
-        error "Failed to download $desc from $url after $max_retries attempts.
-        
+    error "Failed to download $desc from $url after $max_retries attempts.
+    
 Possible causes:
   - Network connectivity issues
   - GitHub service temporarily unavailable (503 error)
   - File not found in release (404 error)
   
 Please try again later or check: https://github.com/${REPO}/releases/latest"
-    fi
-    
-    # Validate the downloaded file if requested
-    if [ "$validate" = "true" ]; then
-        local require_shell="false"
-        # Check if this is a shell script download
-        if [[ "$desc" == *"shell script"* ]] || [[ "$url" == *.sh ]]; then
-            require_shell="true"
-        fi
-        
-        if ! validate_not_html "$output" "$desc" "$require_shell"; then
-            warn "Downloaded file appears to be invalid (HTML error page or not a valid shell script). Removing invalid file."
-            rm -f "$output"
-            return 1
-        fi
-    fi
-    
-    return 0
 }
 
 # Create installation directory
@@ -1427,12 +1547,129 @@ download_script_from_repo() {
     return 1
 }
 
-# Download DMTools JAR
+# Download DMTools checksum file (best-effort; returns 0 even if not present).
+# Any stale local checksum file is removed first so that a failed download does
+# not leave a corrupted file behind to be used by verify_jar_checksum.
+download_checksum_file() {
+    local version="$1"
+    local checksum_url="https://github.com/${REPO}/releases/download/${version}/dmtools-checksums.sha256"
+    local checksum_path="$INSTALL_DIR/dmtools-checksums.sha256"
+
+    rm -f "$checksum_path" 2>/dev/null
+
+    # Try standard release URL
+    if download_file "$checksum_url" "$checksum_path" "DMTools checksums" "false" >/dev/null 2>&1; then
+        echo "$checksum_path"
+        return 0
+    fi
+
+    # Try GitHub API direct URL
+    local api_asset_url
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-checksums.sha256") || true
+    if [ -n "$api_asset_url" ]; then
+        if download_file "$api_asset_url" "$checksum_path" "DMTools checksums (from API)" "false" >/dev/null 2>&1; then
+            echo "$checksum_path"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Verify the downloaded JAR against the published SHA-256 checksum (if available).
+# Returns 0 when verified or when no checksum is available, 1 on mismatch.
+verify_jar_checksum() {
+    local version="$1"
+    local checksum_path
+    checksum_path=$(download_checksum_file "$version") || return 0
+
+    if [ ! -s "$checksum_path" ]; then
+        return 0
+    fi
+
+    local expected_checksum
+    expected_checksum=$(grep -o "^[a-f0-9A-F]\{64\}  dmtools-${version}-all.jar" "$checksum_path" 2>/dev/null | awk '{print $1}')
+    if [ -z "$expected_checksum" ]; then
+        warn "Could not find JAR checksum in $checksum_path — skipping checksum verification"
+        return 0
+    fi
+
+    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+        warn "Neither sha256sum nor shasum is available — skipping checksum verification"
+        return 0
+    fi
+
+    local actual_checksum
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual_checksum=$(sha256sum "$JAR_PATH" | awk '{print $1}')
+    else
+        actual_checksum=$(shasum -a 256 "$JAR_PATH" | awk '{print $1}')
+    fi
+
+    if [ "$expected_checksum" != "$actual_checksum" ]; then
+        warn "JAR checksum mismatch! Expected: $expected_checksum, got: $actual_checksum"
+        return 1
+    fi
+
+    info "JAR checksum verified successfully."
+    return 0
+}
+
+# Download DMTools JAR with fallback to the GitHub API direct asset URL.
+# Verifies SHA-256 checksum when the checksum file is published in the release.
 download_dmtools_jar() {
     local version="$1"
     local jar_url="https://github.com/${REPO}/releases/download/${version}/dmtools-${version}-all.jar"
 
-    download_file "$jar_url" "$JAR_PATH" "DMTools JAR"
+    # Method 1: Standard release URL
+    if download_file "$jar_url" "$JAR_PATH" "DMTools JAR"; then
+        if verify_jar_checksum "$version"; then
+            return 0
+        fi
+        warn "Downloaded JAR failed checksum verification, retrying from alternative source..."
+        rm -f "$JAR_PATH"
+    fi
+
+    # Method 2: GitHub API direct asset URL (different CDN/blob, may work when
+    # the redirect-based release URL is slow or blocked)
+    info "Standard release URL failed or checksum mismatch. Trying GitHub API direct asset URL..."
+    local api_asset_url
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools-${version}-all.jar") || true
+    if [ -n "$api_asset_url" ]; then
+        info "Got API asset URL: $api_asset_url"
+    else
+        warn "Could not get direct asset URL from GitHub API."
+    fi
+
+    if [ -n "$api_asset_url" ]; then
+        if download_file "$api_asset_url" "$JAR_PATH" "DMTools JAR (from API)"; then
+            if verify_jar_checksum "$version"; then
+                return 0
+            fi
+            warn "JAR from API failed checksum verification."
+            rm -f "$JAR_PATH"
+        fi
+    fi
+
+    # All methods failed
+    error "Failed to download DMTools JAR for ${version}.
+
+Tried:
+  1. GitHub release URL: $jar_url
+  2. GitHub API asset URL: ${api_asset_url:-'(not available)'}
+
+The JAR file is required to run DMTools.
+
+Possible causes:
+  - Network connectivity issues or a very slow/unstable connection
+  - GitHub service temporarily unavailable (503 error)
+  - Release asset not found (404 error) — the version may not exist yet
+
+You can check available releases at:
+  https://github.com/${REPO}/releases
+
+Or try installing the previous known-good version manually:
+  curl -fsSL https://github.com/${REPO}/releases/download/vPREVIOUS/install.sh | bash -s -- vPREVIOUS"
 }
 
 # Download DMTools shell script
@@ -1451,7 +1688,7 @@ download_dmtools_shell_script() {
     # Method 2: Try GitHub API to get direct asset URL (avoids expired blob URLs)
     warn "Redirect-based download failed, trying GitHub API for direct asset URL..."
     local api_asset_url
-    api_asset_url=$(get_asset_url_from_api "$version" "dmtools.sh")
+    api_asset_url=$(get_asset_url_from_api "$version" "dmtools.sh") || true
     
     if [ -n "$api_asset_url" ]; then
         if download_file "$api_asset_url" "$SCRIPT_PATH" "DMTools shell script (from API)" "true"; then
@@ -1542,6 +1779,29 @@ update_shell_config() {
             fi
         fi
     done
+}
+
+# Ensure dmtools is reachable in the current session without requiring a shell restart.
+# In CI environments shell rc files are usually not sourced between steps, so create a
+# symlink in a directory that is already on PATH (commonly ~/.local/bin).
+ensure_dmtools_in_path() {
+    # If BIN_DIR is already in PATH, the existing shell config updates are enough.
+    case ":${PATH}:" in
+        *:"$BIN_DIR":*) return 0 ;;
+    esac
+
+    local preferred_dir="$HOME/.local/bin"
+
+    # Create ~/.local/bin if it does not exist yet.
+    if ! mkdir -p "$preferred_dir" 2>/dev/null; then
+        return 0
+    fi
+
+    if [ -w "$preferred_dir" ]; then
+        if ln -sf "$SCRIPT_PATH" "$preferred_dir/dmtools" 2>/dev/null; then
+            info "Created symlink at $preferred_dir/dmtools so dmtools is available immediately."
+        fi
+    fi
 }
 
 # Verify installation
@@ -1678,6 +1938,9 @@ main() {
     
     # Update shell configuration
     update_shell_config
+    
+    # Make dmtools available in the current session (important for CI)
+    ensure_dmtools_in_path
     
     # Verify installation
     verify_installation

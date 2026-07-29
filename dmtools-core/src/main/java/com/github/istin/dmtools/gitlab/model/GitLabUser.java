@@ -44,4 +44,11 @@ public class GitLabUser extends JSONModel implements IUser {
         }
         return user;
     }
+
+    public static GitLabUser fromCommitFields(String authorName, String authorEmail) {
+        JSONObject userJson = new JSONObject();
+        if (authorName != null) userJson.put("name", authorName);
+        if (authorEmail != null) userJson.put("email", authorEmail);
+        return new GitLabUser(userJson);
+    }
 }

@@ -86,10 +86,14 @@ public class MetricFactory {
     }
 
     public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType) throws Exception {
-        return createMetric(metricName, metricParams, dataSourceType, null);
+        return createMetric(metricName, metricParams, dataSourceType, null, null);
     }
 
     public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType, Map<String, Object> dataSourceParams) throws Exception {
+        return createMetric(metricName, metricParams, dataSourceType, dataSourceParams, null);
+    }
+
+    public Metric createMetric(String metricName, Map<String, Object> metricParams, String dataSourceType, Map<String, Object> dataSourceParams, SourceCode resolvedSourceCode) throws Exception {
         // Merge: data source params as defaults, metric params override
         Map<String, Object> params = new HashMap<>();
         if (dataSourceParams != null) {
@@ -107,7 +111,7 @@ public class MetricFactory {
             TrackerRule rule = createTrackerRule(metricName, params);
             metric = new Metric(label, isWeight, rule);
         } else if ("pullRequests".equals(dataSourceType) || "commits".equals(dataSourceType)) {
-            SourceCollector collector = createSourceCollector(metricName, params);
+            SourceCollector collector = createSourceCollector(metricName, params, resolvedSourceCode);
             metric = new Metric(label, isWeight, isPersonalized, collector);
         } else if ("figma".equals(dataSourceType)) {
             SourceCollector collector = createFigmaCollector(metricName, params);
@@ -115,9 +119,15 @@ public class MetricFactory {
         } else if ("csv".equals(dataSourceType)) {
             SourceCollector collector = createCsvCollector(params);
             metric = new Metric(label, isWeight, isPersonalized, collector);
+            if (params.get("groupByField") != null && !params.get("groupByField").toString().isEmpty()) {
+                metric.setGroupBy(true);
+            }
         } else if ("jsonl".equals(dataSourceType)) {
             SourceCollector collector = createJsonlCollector(params);
             metric = new Metric(label, isWeight, isPersonalized, collector);
+            if (params.get("groupByField") != null && !params.get("groupByField").toString().isEmpty()) {
+                metric.setGroupBy(true);
+            }
         } else {
             throw new IllegalArgumentException("Unknown data source type: " + dataSourceType);
         }
@@ -235,13 +245,18 @@ public class MetricFactory {
     }
 
     private SourceCollector createSourceCollector(String metricName, Map<String, Object> params) {
-        if (sourceCode == null) {
+        return createSourceCollector(metricName, params, null);
+    }
+
+    private SourceCollector createSourceCollector(String metricName, Map<String, Object> params, SourceCode resolvedSourceCode) {
+        SourceCode sc = resolvedSourceCode != null ? resolvedSourceCode : sourceCode;
+        if (sc == null) {
             throw new IllegalArgumentException("SourceCode is not configured");
         }
 
-        String workspace = (String) params.getOrDefault("workspace", sourceCode.getDefaultWorkspace());
-        String repository = (String) params.getOrDefault("repository", sourceCode.getDefaultRepository());
-        String branch = (String) params.getOrDefault("branch", sourceCode.getDefaultBranch());
+        String workspace = (String) params.getOrDefault("workspace", sc.getDefaultWorkspace());
+        String repository = (String) params.getOrDefault("repository", sc.getDefaultRepository());
+        String branch = (String) params.getOrDefault("branch", sc.getDefaultBranch());
 
         // Resolve startDate: params["startDate"] -> params["since"] (backward compat) -> reportStartDate
         String startDateStr = (String) params.getOrDefault("startDate", null);
@@ -256,48 +271,48 @@ public class MetricFactory {
         switch (metricName) {
             case "PullRequestsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                return new PullRequestsMetricSource(workspace, repository, sc, employees, sd, titleRegex,
                         sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex));
             }
 
             case "CommitsMetricSource":
-                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
+                return new SourceCodeCommitsMetricSource(workspace, repository, branch, startDateStr, sc, employees, branchNameRegex, commitMessageRegex);
 
             case "LinesOfCodeMetricSource": {
                 // If branchNameRegex is set → commits-based LOC (branch context)
                 // Otherwise → PR diff-based LOC (pullRequests context)
                 if (branchNameRegex != null) {
-                    return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sourceCode, employees, branchNameRegex, commitMessageRegex);
+                    return new PullRequestsLOCMetricSource(workspace, repository, branch, startDateStr, sc, employees, branchNameRegex, commitMessageRegex);
                 }
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsChangesMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                return new PullRequestsChangesMetricSource(workspace, repository, sc, employees, sd, titleRegex,
                         sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex));
             }
 
             case "PullRequestsCommentsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
                 boolean isPositive = (boolean) params.getOrDefault("isPositive", true);
-                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sourceCode, employees, sd, titleRegex,
+                return new PullRequestsCommentsMetricSource(isPositive, workspace, repository, sc, employees, sd, titleRegex,
                         sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex),
                         sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsApprovalsMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsApprovalsMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                return new PullRequestsApprovalsMetricSource(workspace, repository, sc, employees, sd, titleRegex,
                         sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex),
                         sharedActivitiesMap(workspace, repository));
             }
 
             case "PullRequestsMergedByMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsMergedByMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                return new PullRequestsMergedByMetricSource(workspace, repository, sc, employees, sd, titleRegex,
                         sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_MERGED, startDateStr, titleRegex));
             }
 
             case "PullRequestsDeclinedMetricSource": {
                 Calendar sd = parseDateParam(startDateStr);
-                return new PullRequestsDeclinedMetricSource(workspace, repository, sourceCode, employees, sd, titleRegex,
+                return new PullRequestsDeclinedMetricSource(workspace, repository, sc, employees, sd, titleRegex,
                         sharedPrRef(workspace, repository, IPullRequest.PullRequestState.STATE_DECLINED, startDateStr, titleRegex));
             }
 

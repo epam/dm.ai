@@ -3,13 +3,18 @@
 
 package com.github.istin.dmtools.reporting;
 
+import com.github.istin.dmtools.atlassian.jira.BasicJiraClient;
+import com.github.istin.dmtools.broadcom.rally.BasicRallyClient;
 import com.github.istin.dmtools.common.code.SourceCode;
+import com.github.istin.dmtools.common.config.ApplicationConfiguration;
+import com.github.istin.dmtools.common.config.PropertyReaderConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.figma.FigmaClient;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.job.AbstractJob;
+import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import com.github.istin.dmtools.reporting.model.*;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
@@ -19,7 +24,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
 
-import javax.inject.Inject;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,8 +40,7 @@ public class ReportGeneratorJob extends AbstractJob<
 > {
     private static final Logger logger = LogManager.getLogger(ReportGeneratorJob.class);
 
-    @Inject
-    TrackerClient<? extends ITicket> trackerClient;
+    private TrackerClient<? extends ITicket> trackerClient;
 
     @Data
     @EqualsAndHashCode(callSuper=false)
@@ -124,9 +128,80 @@ public class ReportGeneratorJob extends AbstractJob<
         DaggerReportGeneratorComponent.create().inject(this);
     }
 
+    /**
+     * Lazily initializes the tracker client only when the report configuration references
+     * a "tracker" data source. Reports that rely solely on local files (jsonl, csv),
+     * source code, or Figma should not require JIRA/ADO/Rally credentials.
+     */
+    private TrackerClient<? extends ITicket> resolveTrackerClient(Params params) {
+        boolean needsTracker = params.getDataSources() != null &&
+            params.getDataSources().stream().anyMatch(ds -> "tracker".equals(ds.getName()));
+
+        if (!needsTracker) {
+            logger.info("No tracker data source configured; skipping tracker client initialization");
+            return null;
+        }
+
+        logger.info("Tracker data source detected; resolving tracker client...");
+
+        ApplicationConfiguration configuration = new PropertyReaderConfiguration();
+        String defaultTracker = configuration.getDefaultTracker();
+        if (defaultTracker != null && !defaultTracker.trim().isEmpty()) {
+            TrackerClient<? extends ITicket> client = tryInitDefaultTracker(defaultTracker.trim());
+            if (client != null) {
+                return client;
+            }
+        }
+
+        TrackerClient<? extends ITicket> client = tryInitTracker(BasicJiraClient::getInstance);
+        if (client != null) return client;
+
+        client = tryInitTracker(BasicAzureDevOpsClient::getInstance);
+        if (client != null) return client;
+
+        client = tryInitTracker(BasicRallyClient::getInstance);
+        if (client != null) return client;
+
+        throw new RuntimeException("Tracker data source is configured, but no tracker client could be initialized. " +
+            "Please configure one of: JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +
+            "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN), or " +
+            "Rally (RALLY_PATH + RALLY_TOKEN).");
+    }
+
+    private TrackerClient<? extends ITicket> tryInitDefaultTracker(String defaultTracker) {
+        switch (defaultTracker.toLowerCase()) {
+            case "jira":
+                return tryInitTracker(BasicJiraClient::getInstance);
+            case "ado":
+                return tryInitTracker(BasicAzureDevOpsClient::getInstance);
+            case "rally":
+                return tryInitTracker(BasicRallyClient::getInstance);
+            default:
+                logger.warn("Unknown DEFAULT_TRACKER value: '{}'. Valid values: 'jira', 'ado', 'rally'", defaultTracker);
+                return null;
+        }
+    }
+
+    @FunctionalInterface
+    private interface TrackerClientInitializer {
+        TrackerClient<? extends ITicket> init() throws IOException;
+    }
+
+    private TrackerClient<? extends ITicket> tryInitTracker(TrackerClientInitializer initializer) {
+        try {
+            return initializer.init();
+        } catch (Exception e) {
+            logger.debug("Tracker client not available: {}", e.getMessage());
+            return null;
+        }
+    }
+
     @Override
     public ReportOutput runJob(Params params) throws Exception {
         logger.info("ReportGeneratorJob starting...");
+
+        // 0. Resolve tracker client only when the report actually needs it
+        this.trackerClient = resolveTrackerClient(params);
 
         // 1. Build configuration from params
         ReportConfig config = new ReportConfig();

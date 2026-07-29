@@ -50,16 +50,12 @@ public class ContentUtilsTest {
 
         // Assert
         verify(basicConfluence, times(1)).attachFileToPage(anyString(), any(File.class));
-        assertEquals("<a href=\"https://example.com/image.png\">Image</a>\n" +
-                "<p><ac:image ac:height=\"250\">\n" +
-                "  <ri:attachment ri:filename=\"image.png\" />\n" +
-                " </ac:image></p>", result);
+        assertEquals("<a href=\"https://example.com/image.png\">Image</a>" +
+                "<p><ac:image ac:height=\"250\"><ri:attachment ri:filename=\"image.png\" /></ac:image></p>", result);
 
         when(storage.getValue()).thenReturn(result);
         result = ContentUtils.convertLinksToImages(basicConfluence, content, urlToImageFile);
-        assertEquals("<a href=\"https://example.com/image.png\">Image</a>\n" +
-                "<p><ac:image ac:height=\"250\">\n" +
-                "  <ri:attachment ri:filename=\"image.png\" />\n" +
-                " </ac:image></p>", result);
+        assertEquals("<a href=\"https://example.com/image.png\">Image</a>" +
+                "<p><ac:image ac:height=\"250\"><ri:attachment ri:filename=\"image.png\" /></ac:image></p>", result);
     }
 }

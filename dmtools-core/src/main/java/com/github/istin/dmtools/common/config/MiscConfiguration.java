@@ -10,7 +10,12 @@ package com.github.istin.dmtools.common.config;
 public interface MiscConfiguration extends 
         RallyConfiguration, 
         FigmaConfiguration,
-        MetricsConfiguration {
+        MetricsConfiguration,
+        TestRailConfiguration,
+        BitriseConfiguration,
+        JenkinsConfiguration,
+        XrayConfiguration,
+        AdoConfiguration {
     
     /**
      * Gets the sleep time between requests in milliseconds

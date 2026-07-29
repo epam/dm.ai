@@ -1,24 +1,37 @@
-name: Auto-update open PRs when main changes
+name: Auto-update open PRs when main or PRs change
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  schedule:
+    # Fallback: auto-merge commits made via PAT still may not trigger push events
+    # in some edge cases. Poll every 5 minutes (offset to avoid the :00/:30 herd).
+    - cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *'
   workflow_dispatch: {}
 
 concurrency:
-  group: auto-update-prs
-  cancel-in-progress: true
+  # Serialize updates but never cancel an in-progress run.
+  # Push/schedule/workflow_dispatch update all PRs; pull_request updates only the triggering PR.
+  group: auto-update-prs-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name }}
+  cancel-in-progress: false
 
 jobs:
   update-prs:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     steps:
-      - name: Update open PRs that are behind main
+      - name: Update all open PRs that are behind main
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -52,3 +65,13 @@ jobs:
             gh pr update-branch "$pr" --repo ${{ github.repository }} \
               || echo "PR #$pr skipped (already up to date or conflict)"
           done
+
+      - name: Update triggering PR if it is behind main
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Attempting to update PR #$PR_NUMBER..."
+          gh pr update-branch "$PR_NUMBER" --repo ${{ github.repository }} \
+            || echo "PR #$PR_NUMBER skipped (already up to date or conflict)"

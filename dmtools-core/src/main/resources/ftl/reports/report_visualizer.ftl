@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${reportFileName}</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <#noautoesc><script>${echartsJs}</script></#noautoesc>
     <style>
         :root {
             --bg: #F8F9FA;
@@ -357,6 +357,14 @@
                 <div id="shareGrid" style="display:grid;gap:8px;padding:12px 16px;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));"></div>
             </div>
 
+            <div class="chart-card" id="groupByCard" style="display:none;grid-column:1/-1;">
+                <div class="chart-title">
+                    Breakdown by Category
+                    <span class="hint">Distribution of group-by metrics (models, languages, features, etc.)</span>
+                </div>
+                <div id="groupByGrid" style="display:grid;gap:8px;padding:12px 16px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));"></div>
+            </div>
+
             <div class="chart-card" id="customChartsCard" style="display:none;grid-column:1/-1;">
                 <div class="chart-title">Custom Charts</div>
                 <div id="customChartsGrid" style="display:grid;gap:8px;padding:12px 16px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));"></div>
@@ -487,7 +495,7 @@
         }
         function renderRadarForPeriods(periodSlice) {
             const el = document.getElementById('radarChart');
-            const metrics = enabledMetrics();
+            const metrics = peopleMetrics();
             const contributors = enabledContributors();
             const allC = allContributors();
             const colors = getColors();
@@ -537,7 +545,7 @@
         document.addEventListener('DOMContentLoaded', init);
         window.addEventListener('resize', () => {
             Object.entries(charts).forEach(([k, c]) => {
-                if (k === '_pies' || k === '_custom') { (c || []).forEach(p => p?.resize()); }
+                if (k === '_pies' || k === '_custom' || k === '_groupBy') { (c || []).forEach(p => p?.resize()); }
                 else { c?.resize(); }
             });
         });
@@ -577,6 +585,7 @@
             renderScore();
             renderRadar();
             renderContributionShare();
+            renderGroupByBreakdown();
             renderCustomCharts();
             updateFilterSummary();
             if (currentPeriodIdx !== null) {
@@ -608,6 +617,10 @@
         }
         function enabledContributors() { return allContributors().filter(c => gContribEnabled[c]); }
         function enabledMetrics() { return allMetricNames().filter(m => gMetricEnabled[m]); }
+        function peopleMetrics() {
+            const groupBySet = new Set(R.groupByMetrics || []);
+            return enabledMetrics().filter(m => !groupBySet.has(m));
+        }
 
         function evaluateFormulaJs(formula, values) {
             if (!formula) return 0;
@@ -1006,7 +1019,7 @@
 
             const fp = filteredPeriods();
             const periodNames = fp.map(p => p.name);
-            const metrics = enabledMetrics();
+            const metrics = peopleMetrics();
             const contribs = enabledContributors();
             const colors = getColors();
             const allM = allMetricNames();
@@ -1087,7 +1100,7 @@
             const fp = filteredPeriods();
             const periodNames = fp.map(p => p.name);
             const contributors = enabledContributors();
-            const metrics = enabledMetrics();
+            const metrics = peopleMetrics();
             const allM = allMetricNames();
             const colors = getColors();
 
@@ -1198,7 +1211,7 @@
             const el = document.getElementById('radarChart');
             if (charts.radar) charts.radar.dispose();
 
-            const metrics = enabledMetrics();
+            const metrics = peopleMetrics();
             const contributors = enabledContributors();
             const allC = allContributors();
             const colors = getColors();
@@ -1334,7 +1347,7 @@
             (charts._pies || []).forEach(c => c.dispose());
             charts._pies = [];
 
-            const metrics = enabledMetrics();
+            const metrics = peopleMetrics();
             const contributors = enabledContributors();
             const allC = allContributors();
             const colors = getColors();
@@ -1442,6 +1455,78 @@
                 });
                 chart.on('click', function(params) {
                     openShareDetail(def.title, def.slices, params.name);
+                });
+            });
+        }
+
+        /* --- Group-by metrics breakdown (models, languages, features, etc.) --- */
+        function renderGroupByBreakdown() {
+            const card = document.getElementById('groupByCard');
+            const grid = document.getElementById('groupByGrid');
+            if (!card || !grid) return;
+
+            const groupByMetrics = (R.groupByMetrics || []).filter(m => gMetricEnabled[m]);
+            if (groupByMetrics.length === 0) { card.style.display = 'none'; return; }
+            card.style.display = '';
+
+            (charts._groupBy || []).forEach(c => c.dispose());
+            charts._groupBy = [];
+            grid.innerHTML = '';
+
+            const colors = getColors();
+
+            groupByMetrics.forEach((metricName, metricIdx) => {
+                const values = {};
+                (R.timePeriods || []).forEach(p => {
+                    (p.dataset || []).forEach(item => {
+                        const mkt = item.metrics?.[metricName];
+                        if (!mkt) return;
+                        (mkt.keyTimes || []).forEach(kt => {
+                            const who = kt.who || 'unknown';
+                            values[who] = (values[who] || 0) + (kt.weight || 0);
+                        });
+                    });
+                });
+
+                const entries = Object.entries(values)
+                    .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
+                    .filter(d => d.value > 0)
+                    .sort((a, b) => b.value - a.value);
+
+                if (entries.length === 0) return;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'chart-card';
+                wrapper.style.marginBottom = '0';
+                const chartId = 'gb_' + metricIdx + '_' + metricName.replace(/[^a-zA-Z0-9]/g, '_');
+                wrapper.innerHTML = '<div class="chart-title">' + esc(metricName) + '</div>' +
+                    '<div id="' + chartId + '" style="height:300px;padding:8px;"></div>';
+                grid.appendChild(wrapper);
+
+                const chart = echarts.init(document.getElementById(chartId));
+                charts._groupBy.push(chart);
+
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    tooltip: { ...tooltipTheme(),
+                        formatter: function(params) {
+                            return '<b>' + esc(params.name) + '</b><br/>' +
+                                formatStatValue(params.value, metricName) + ' (' + params.percent.toFixed(1) + '%)';
+                        }
+                    },
+                    legend: { type: 'scroll', orient: 'vertical', right: 4, top: 8, bottom: 8, textStyle: { color: axisLabelColor(), fontSize: 11 } },
+                    series: [{
+                        type: 'pie',
+                        radius: ['35%', '70%'],
+                        center: ['32%', '50%'],
+                        data: entries.map((d, i) => ({ ...d, itemStyle: { color: colors[i % colors.length] } })),
+                        label: { show: false },
+                        emphasis: {
+                            itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.3)' },
+                            label: { show: true, fontSize: 12, fontWeight: 'bold', formatter: '{b}\n{d}%' }
+                        },
+                        animationDuration: 400
+                    }]
                 });
             });
         }

@@ -6,6 +6,7 @@ package com.github.istin.dmtools.atlassian.jira;
 import com.github.istin.dmtools.atlassian.common.model.Assignee;
 import com.github.istin.dmtools.atlassian.common.networking.AtlassianRestClient;
 import com.github.istin.dmtools.atlassian.jira.model.*;
+import com.github.istin.dmtools.atlassian.jira.utils.AtlassianDocumentFormat;
 import com.github.istin.dmtools.atlassian.jira.utils.IssuesIDsParser;
 import com.github.istin.dmtools.atlassian.jira.utils.JiraResponseUtils;
 import com.github.istin.dmtools.common.model.*;
@@ -461,14 +462,20 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     public List<T> searchAndPerform(
             @MCPParam(name = "jql", description = "JQL query string to search tickets", required = true, example = "project = DEMO AND status = Open", aliases = {"searchQueryJQL", "query"})
             String jql,
-            @MCPParam(name = "fields", description = "Optional array of field names to include in response", required = false, example = "[\"summary\", \"status\", \"assignee\"]")
+            @MCPParam(name = "fields", description = "Optional array of field names to include in response. When omitted, the project's extended default fields are used.", required = false, example = "[\"summary\", \"status\", \"assignee\"]")
             String[] fields
     ) throws Exception {
+        String[] effectiveFields = fields;
+        if (effectiveFields == null || effectiveFields.length == 0 ||
+                (effectiveFields.length == 1 && effectiveFields[0] != null && effectiveFields[0].isBlank())) {
+            effectiveFields = getExtendedQueryFields();
+            logger.info("jira_search_by_jql: no fields specified, using extended default fields");
+        }
         List<T> tickets = new ArrayList<>();
         searchAndPerform(ticket -> {
             tickets.add(ticket);
             return false;
-        }, jql, fields);
+        }, jql, effectiveFields);
         return tickets;
     }
 
@@ -741,6 +748,29 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     }
 
     @MCPTool(
+            name = "jira_test",
+            description = "Test Jira connectivity by fetching the current user's profile",
+            integration = "jira",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() throws IOException {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            IUser profile = performMyProfile();
+            result.put("success", true);
+            result.put("message", "Jira connection successful");
+            result.put("user", profile.getFullName());
+            result.put("email", profile.getEmailAddress());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Jira connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Jira connection test failed", e);
+        }
+        return result;
+    }
+
+    @MCPTool(
             name = "jira_get_my_profile",
             description = "Get the current user's profile information from Jira",
             integration = "jira",
@@ -771,9 +801,15 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             category = "ticket_management",
             aliases = {"tracker_get_ticket"}
     )
-    public T performTicket(@MCPParam(name = "key", description = "The Jira ticket key to retrieve", required = true) String ticketKey, 
-                          @MCPParam(name = "fields", description = "Optional array of fields to include in the response", required = false) String[] fields) throws IOException {
-        GenericRequest jiraRequest = createPerformTicketRequest(ticketKey, fields);
+    public T performTicket(@MCPParam(name = "key", description = "The Jira ticket key to retrieve", required = true) String ticketKey,
+                          @MCPParam(name = "fields", description = "Optional array of fields to include in the response. When omitted, the project's extended default fields are used.", required = false) String[] fields) throws IOException {
+        String[] effectiveFields = fields;
+        if (effectiveFields == null || effectiveFields.length == 0 ||
+                (effectiveFields.length == 1 && effectiveFields[0] != null && effectiveFields[0].isBlank())) {
+            effectiveFields = getExtendedQueryFields();
+            logger.info("jira_get_ticket: no fields specified, using extended default fields");
+        }
+        GenericRequest jiraRequest = createPerformTicketRequest(ticketKey, effectiveFields);
         String response = jiraRequest.execute();
         if (isErrorResponse(response)) {
             return null;
@@ -1957,17 +1993,29 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         return cached != null ? cached : new ArrayList<>();
     }
 
+    private static final Set<String> JQL_KEYWORDS = new HashSet<>(Arrays.asList(
+            "AND", "OR", "NOT", "IN", "IS", "WAS", "CHANGED", "EMPTY", "NULL",
+            "ORDER", "BY", "ASC", "DESC", "LIKE", "CONTAINS", "~", "!=", "<=", ">="
+    ));
+
+    private boolean isJqlKeyword(String value) {
+        return value != null && JQL_KEYWORDS.contains(value.toUpperCase(Locale.ROOT));
+    }
+
     private String extractProjectKeyFromJQL(String jql) {
         if (jql == null || jql.trim().isEmpty()) {
             return "";
         }
 
-        String upperJql = jql.toUpperCase();
+        String upperJql = jql.toUpperCase(Locale.ROOT);
         // Sort by length descending so longer keys (e.g. "MYPROJ") are checked before shorter ones (e.g. "MY")
         Optional<String> match = getKnownProjectKeys().stream()
                 .sorted(Comparator.comparingInt(String::length).reversed())
                 .filter(key -> {
-                    String upperKey = key.toUpperCase();
+                    String upperKey = key.toUpperCase(Locale.ROOT);
+                    if (isJqlKeyword(upperKey)) {
+                        return false;
+                    }
                     return upperJql.contains(upperKey + "-")
                             || Pattern.compile("\\b" + Pattern.quote(upperKey) + "\\b").matcher(upperJql).find();
                 })
@@ -1984,16 +2032,20 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 "\\bproject\\s*(?:=|in)\\s*[\"'(]?([A-Z][A-Z0-9_]+)[\"')]?", Pattern.CASE_INSENSITIVE
         ).matcher(jql);
         if (projectMatcher.find()) {
-            String extracted = projectMatcher.group(1).toUpperCase();
-            logger.debug("Extracted project key '{}' from JQL via pattern (not in member list): {}", extracted, jql);
-            return extracted;
+            String extracted = projectMatcher.group(1).toUpperCase(Locale.ROOT);
+            if (!isJqlKeyword(extracted)) {
+                logger.debug("Extracted project key '{}' from JQL via pattern (not in member list): {}", extracted, jql);
+                return extracted;
+            }
         }
         // Also try to extract from a ticket key pattern like "MYTUBE-123"
         java.util.regex.Matcher keyMatcher = Pattern.compile("\\b([A-Z][A-Z0-9_]+)-\\d+\\b").matcher(upperJql);
-        if (keyMatcher.find()) {
+        while (keyMatcher.find()) {
             String extracted = keyMatcher.group(1);
-            logger.debug("Extracted project key '{}' from ticket key pattern in JQL: {}", extracted, jql);
-            return extracted;
+            if (!isJqlKeyword(extracted)) {
+                logger.debug("Extracted project key '{}' from ticket key pattern in JQL: {}", extracted, jql);
+                return extracted;
+            }
         }
 
         return "";
@@ -2130,6 +2182,35 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         String updateResult = jiraRequest.put();
         validateFieldUpdateResponse(updateResult, errorMessage);
         return updateResult;
+    }
+
+    /**
+     * Updates a rich-text field using Jira REST API v3 and Atlassian Document Format (ADF).
+     * This bypasses {@link #path(String)} because v3 requires an explicit API version path
+     * and ADF payloads for fields such as description, comment and environment.
+     */
+    private String performFieldUpdateAsAdf(String key, String fieldIdentifier, Object value, String errorMessage) throws IOException {
+        JSONObject adfValue = AtlassianDocumentFormat.normalize(value);
+
+        GenericRequest jiraRequest = createV3IssueRequest(key);
+        JSONObject body = new JSONObject();
+        body.put("update", new JSONObject()
+                .put(fieldIdentifier, new JSONArray()
+                        .put(new JSONObject()
+                                .put("set", adfValue)
+                        )));
+        jiraRequest.setBody(body.toString());
+
+        String updateResult = jiraRequest.put();
+        validateFieldUpdateResponse(updateResult, errorMessage);
+        return updateResult;
+    }
+
+    /**
+     * Factory for v3 issue update requests. Package-private so tests can spy/mock it.
+     */
+    GenericRequest createV3IssueRequest(String issueKey) {
+        return new GenericRequest(this, getBasePath() + "/rest/api/3/issue/" + issueKey);
     }
 
     private void validateFieldUpdateResponse(String updateResult, String defaultMessage) throws IOException {
@@ -2397,6 +2478,36 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
                 return results.toString();
             }
         }
+    }
+
+    @MCPTool(
+            name = "jira_update_field_as_adf",
+            description = "Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud.",
+            integration = "jira",
+            category = "ticket_management"
+    )
+    public String updateFieldAsAdf(
+            @MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key,
+            @MCPParam(name = "field", description = "The rich-text field to update, e.g. 'description' or 'comment'", required = true) String field,
+            @MCPParam(name = "value", description = "Plain text or ADF JSON. Plain text is wrapped into an ADF paragraph; JSON object is sent as-is; JSON array is used as the ADF content.", required = true) Object value) throws IOException {
+        if ("".equals(value)) {
+            return clearField(key, field);
+        }
+        value = coerceFieldValue(value);
+
+        String updateResult = performFieldUpdateAsAdf(
+                key,
+                field,
+                value,
+                "Failed to update field '" + field + "' as ADF on ticket " + key
+        );
+
+        if (updateResult == null || updateResult.trim().isEmpty()) {
+            log("Updated field '" + field + "' as ADF on ticket " + key);
+            return "Field '" + field + "' updated as ADF successfully on ticket " + key;
+        }
+        log("Updated field '" + field + "' as ADF on ticket " + key + " with result: " + updateResult);
+        return updateResult;
     }
 
     @MCPTool(

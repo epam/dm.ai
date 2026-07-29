@@ -52,7 +52,9 @@ class TrackerParamsTest {
             customParams,
             "https://ci.example.com/runs/42",
             true,
-            null
+            null,
+            "PSR,RFC",
+            "PROJ,TEAM"
         );
 
         assertEquals("project = TEST", params.getInputJql());
@@ -70,6 +72,8 @@ class TrackerParamsTest {
         assertEquals(customParams, params.getCustomParams());
         assertEquals("https://ci.example.com/runs/42", params.getCiRunUrl());
         assertTrue(params.getAlwaysPostComments());
+        assertEquals("PSR,RFC", params.getIssueIgnorePrefixes());
+        assertEquals("PROJ,TEAM", params.getIssueAllowedPrefixes());
     }
 
     @Test
@@ -118,6 +122,12 @@ class TrackerParamsTest {
 
         trackerParams.setChunkProcessingTimeoutInMinutes(60);
         assertEquals(60, trackerParams.getChunkProcessingTimeoutInMinutes());
+
+        trackerParams.setIssueIgnorePrefixes("PSR,RFC");
+        assertEquals("PSR,RFC", trackerParams.getIssueIgnorePrefixes());
+
+        trackerParams.setIssueAllowedPrefixes("PROJ,TEAM");
+        assertEquals("PROJ,TEAM", trackerParams.getIssueAllowedPrefixes());
     }
 
     @Test
@@ -147,6 +157,8 @@ class TrackerParamsTest {
         assertEquals("chunksProcessingTimeout", TrackerParams.CHUNKS_PROCESSING_TIMEOUT_IN_MINUTES);
         assertEquals("preJSAction", TrackerParams.PRE_ACTION);
         assertEquals("ciRunUrl", TrackerParams.CI_RUN_URL);
+        assertEquals("issueIgnorePrefixes", TrackerParams.ISSUE_IGNORE_PREFIXES);
+        assertEquals("issueAllowedPrefixes", TrackerParams.ISSUE_ALLOWED_PREFIXES);
     }
 
     @Test

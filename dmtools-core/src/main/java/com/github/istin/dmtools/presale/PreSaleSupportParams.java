@@ -7,6 +7,10 @@ import com.github.istin.dmtools.common.model.JSONModel;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+/**
+ * Deprecated: superseded by JSON agents (agents/*.json); scheduled for removal.
+ */
+@Deprecated
 public class PreSaleSupportParams extends JSONModel {
 
     public static final String CONFLUENCE_ROOT_PAGE = "confluenceRootPage";

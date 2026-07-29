@@ -102,6 +102,16 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return result;
     }
 
+    @MCPTool(
+            name = "github_test",
+            description = "Test GitHub connectivity by fetching the current user's profile",
+            integration = "github",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        return testConnectionDetailed();
+    }
+
     @Override
     public String path(String path) {
         return getBasePath() + "/" + path;
@@ -1636,6 +1646,30 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         } catch (AtlassianRestClient.RestClientException e) {
             logger.warn("Skipping PR diff for {}/{} PR#{}: {}", workspace, repository, pullRequestID, e.getMessage());
             return new IDiffStats.Empty();
+        }
+    }
+
+    @MCPTool(
+            name = "github_get_pr_diff_text",
+            description = "Get the raw unified diff text for a GitHub pull request. Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String getPullRequestDiffText(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestID", description = "The pull request number", required = true, example = "74")
+            String pullRequestID) throws IOException {
+        if (!IS_READ_PULL_REQUEST_DIFF) {
+            return "";
+        }
+        try {
+            return getPullRequestResponse(workspace, repository, pullRequestID, true);
+        } catch (AtlassianRestClient.RestClientException e) {
+            logger.warn("Skipping PR diff text for {}/{} PR#{}: {}", workspace, repository, pullRequestID, e.getMessage());
+            return "";
         }
     }
 

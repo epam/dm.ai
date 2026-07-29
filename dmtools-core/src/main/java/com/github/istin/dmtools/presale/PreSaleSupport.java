@@ -24,6 +24,10 @@ import java.util.Set;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Deprecated: superseded by JSON agents (agents/*.json); scheduled for removal.
+ */
+@Deprecated
 public class PreSaleSupport extends AbstractJob<PreSaleSupportParams, String> {
 
     private static final Logger logger = LogManager.getLogger(PreSaleSupport.class);

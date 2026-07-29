@@ -8,6 +8,7 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.file.FileTools;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
@@ -188,6 +189,19 @@ public class JobJavaScriptBridge {
             logger.debug("BasicBitrise not initialized: {}. Bitrise tools will not be available.", e.getMessage());
         }
 
+        // Initialize Jenkins client if configured
+        try {
+            com.github.istin.dmtools.jenkins.BasicJenkins jenkinsInstance = com.github.istin.dmtools.jenkins.BasicJenkins.getInstance();
+            if (jenkinsInstance != null) {
+                this.clientInstances.put("jenkins", jenkinsInstance);
+                logger.debug("BasicJenkins initialized for JavaScript bridge");
+            } else {
+                logger.debug("BasicJenkins not configured (JENKINS_BASE_PATH/JENKINS_USER/JENKINS_API_TOKEN not set). Jenkins tools will not be available.");
+            }
+        } catch (Exception e) {
+            logger.debug("BasicJenkins not initialized: {}. Jenkins tools will not be available.", e.getMessage());
+        }
+
         // Don't initialize JavaScript context in constructor - use lazy initialization instead
         // This significantly improves startup time for commands that don't need JS execution
         // initializeJavaScriptContext();
@@ -270,11 +284,14 @@ public class JobJavaScriptBridge {
      * Execute MCP tool from JavaScript
      */
     public Object executeToolFromJS(String toolName, Object jsArgs) {
+        boolean verboseToolLogging = isToolCallArgsLoggingEnabled();
         try {
             // Convert JavaScript object to Map
             Map<String, Object> argsMap = new HashMap<>();
             if (jsArgs != null) {
-                logger.debug("Converting JS args for tool {}: {} (type: {})", toolName, jsArgs, jsArgs.getClass().getName());
+                if (verboseToolLogging) {
+                    logger.debug("Converting JS args for tool {}: {} (type: {})", toolName, jsArgs, jsArgs.getClass().getName());
+                }
                 
                 Value argsValue = Value.asValue(jsArgs);
                 logger.debug("JS args as Value: hasMembers={}, isHostObject={}", argsValue.hasMembers(), argsValue.isHostObject());
@@ -321,7 +338,9 @@ public class JobJavaScriptBridge {
                             // Otherwise, it's just a regular string - keep it as-is
                         }
                         argsMap.put(key, memberValue);
-                        logger.debug("Converted JS arg: {} = {} (type: {})", key, memberValue, memberValue != null ? memberValue.getClass().getName() : "null");
+                        if (verboseToolLogging) {
+                            logger.debug("Converted JS arg: {} = {} (type: {})", key, memberValue, memberValue != null ? memberValue.getClass().getName() : "null");
+                        }
                     }
                 } else if (argsValue.isHostObject()) {
                     // Handle case where JS object is passed as host object
@@ -362,12 +381,16 @@ public class JobJavaScriptBridge {
                             }
                         }
                         argsMap.putAll(hostMap);
-                        logger.debug("Used host object as Map: {}", argsMap);
+                        if (verboseToolLogging) {
+                            logger.debug("Used host object as Map: {}", argsMap);
+                        }
                     }
                 }
             }
             
-            logger.debug("Final args map for tool {}: {}", toolName, argsMap);
+            if (verboseToolLogging) {
+                logger.debug("Final args map for tool {}: {}", toolName, argsMap);
+            }
             
             // Get tool schema to check parameter types
             Map<String, Object> toolSchema = getToolSchema(toolName);
@@ -443,7 +466,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "gitlab", "bitrise"));
+        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "gitlab", "bitrise", "jenkins"));
         // Add jira_xray if XrayClient is available
         if (trackerClient instanceof com.github.istin.dmtools.atlassian.jira.xray.XrayClient) {
             integrations.add("jira_xray");
@@ -607,6 +630,16 @@ public class JobJavaScriptBridge {
     }
 
     /**
+     * Whether generated JS tool wrappers should console.log their full args (including
+     * file contents / large logs) on every call, and whether the per-tool "Exposed MCP
+     * tool X to JavaScript" debug line is emitted at startup. Off by default to keep CI
+     * logs readable; opt in with DMTOOLS_JS_LOG_TOOL_CALLS=true (or "1") for local debugging.
+     */
+    private static boolean isToolCallArgsLoggingEnabled() {
+        return new PropertyReader().isJsToolCallLoggingEnabled();
+    }
+
+    /**
      * Expose a single MCP tool to JavaScript context using generated executor
      */
     private void exposeToolToJS(String toolName, Map<String, Object> toolSchema) {
@@ -629,6 +662,14 @@ public class JobJavaScriptBridge {
             }
         }
         
+        // Verbose logging of tool-call args and per-tool registration can flood CI
+        // output (e.g. args can include large file contents). Off by default; opt in
+        // via DMTOOLS_JS_LOG_TOOL_CALLS=true.
+        boolean verboseToolLogging = isToolCallArgsLoggingEnabled();
+        String toolCallLogStatement = verboseToolLogging
+            ? String.format("console.log('Calling tool %s with args:', JSON.stringify(args));", toolName)
+            : "";
+
         // Create a JavaScript function that calls the generated MCP executor
         String jsFunction = String.format("""
             function %s() {
@@ -646,14 +687,16 @@ public class JobJavaScriptBridge {
                         args.message = arguments[0];
                     }
                 }
-                console.log('Calling tool %s with args:', JSON.stringify(args));
+                %s
                 return executeToolViaJava('%s', args);
             }
-            """, toolName, parameterMappingLogic.toString(), toolName, toolName, toolName);
+            """, toolName, parameterMappingLogic.toString(), toolName, toolCallLogStatement, toolName);
             
         try {
             jsContext.eval("js", jsFunction);
-            logger.debug("Exposed MCP tool {} to JavaScript", toolName);
+            if (verboseToolLogging) {
+                logger.debug("Exposed MCP tool {} to JavaScript", toolName);
+            }
         } catch (Exception e) {
             logger.error("Failed to expose tool {} to JavaScript", toolName, e);
         }

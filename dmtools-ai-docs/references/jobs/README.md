@@ -53,7 +53,6 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 ### Development (Dev)
 - [UnitTestsGenerator](#unittestsgenerator) - Generate unit tests for code
 - [DevProductivityReport](#devproductivityreport) - Dev team productivity metrics
-- [CommitsTriage](#commitstriage) - Analyze and categorize commits
 
 ### Architecture & Design
 - [SolutionArchitectureCreator](#solutionarchitecturecreator) - Create solution architecture docs
@@ -68,8 +67,6 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 - [ReportVisualizer](#reportvisualizer) - Render report JSON as interactive HTML
 
 ### Project Management
-- [JEstimator](#jestimator) - Estimate story points and effort
-- [ScrumMasterDaily](#scrummasterdaily) - Daily scrum reports
 - [BusinessAnalyticDORGeneration](#businessanalyticdorgeneration) - Definition of Ready
 
 ### Documentation
@@ -84,6 +81,35 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 - [KBProcessingJob](#kbprocessingjob) - Process knowledge base
 - [SourceCodeTrackerSyncJob](#sourcecodetrackersy ncjob) - Sync source code with tracker
 - [SourceCodeCommitTrackerSyncJob](#sourcecodecommittrackersy ncjob) - Sync commits with tracker
+
+---
+
+## Common Job Parameters
+
+All jobs that inherit from `TrackerParams` support the following common parameters.
+
+### Jira Issue Key Filtering
+
+You can control which Jira issue keys are recognized when DMtools parses ticket references in text, comments, descriptions, and JQL results.
+
+| Parameter | Env Variable | Description |
+|-----------|--------------|-------------|
+| `issueIgnorePrefixes` | `JIRA_ISSUE_IGNORE_PREFIXES` | Comma-separated prefixes to ignore (e.g. `PSR,RFC,CVE`). All other keys are allowed. |
+| `issueAllowedPrefixes` | `JIRA_ISSUE_ALLOWED_PREFIXES` | Comma-separated prefixes to allow. When set, only keys with these prefixes are kept. |
+| `envVariables` | — | Per-job environment variable overrides. Job-level `issueIgnorePrefixes` / `issueAllowedPrefixes` take precedence over env variables with the same name. |
+
+```json
+{
+  "name": "Teammate",
+  "params": {
+    "inputJql": "key = PROJ-123",
+    "issueIgnorePrefixes": "PSR,RFC,CVE",
+    "issueAllowedPrefixes": "PROJ,TEAM"
+  }
+}
+```
+
+If neither list is configured, parsing behavior is unchanged (full backward compatibility).
 
 ---
 
@@ -424,6 +450,10 @@ dmtools Teammate --inputJql "key = PROJ-123"
   - Each index has `integration` (index name) and `storagePath` (path to index)
 - `systemRequestCommentAlias` - Alias for system request in comments
 - `ignoreClonedByRelationship` - Exclude tickets linked via "is cloned by" from AI context (default: **true**). Prevents cloned duplicates from overloading the context.
+- `excludedEnvVariables` - Array of exact env variable names to exclude from the CLI subprocess (optional)
+- `excludedEnvRegexes` - Array of regex patterns; matching env variable names are excluded from the CLI subprocess (optional)
+  - Use these to prevent sensitive values from being passed to CLI agents.
+  - Default: `null` (no filtering, backward compatible).
 
 **Index Configuration** (IndexConfig):
 ```json

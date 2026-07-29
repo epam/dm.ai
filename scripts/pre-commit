@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  QUALITY GATE — DO NOT LOWER THESE THRESHOLDS WITHOUT TEAM APPROVAL       ║
+# ║  We ship quality code. Every commit must pass these gates.                ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+#
+# Pre-commit hook: runs file-size check + duplication for Java sources.
+# To skip (emergency only): git commit --no-verify
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Unset git env vars so test processes that spawn git subprocesses use the
+# correct working directory rather than the hook's GIT_DIR / GIT_INDEX_FILE.
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE 2>/dev/null || true
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 1. FILE SIZE GUARD
+# ═══════════════════════════════════════════════════════════════════════════
+MAX_LINES=2800
+VIOLATIONS=()
+
+while IFS= read -r file; do
+  case "$file" in
+    *.java)
+      lines=$(wc -l < "$file")
+      if (( lines > MAX_LINES )); then
+        VIOLATIONS+=("  $file: $lines lines (max $MAX_LINES)")
+      fi
+      ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+if ((${#VIOLATIONS[@]} > 0)); then
+  echo ""
+  echo "╔═══════════════════════════════════════════════════════════════════════════╗"
+  echo "║  ❌ QUALITY GATE FAILED — FILE SIZE                                       ║"
+  echo "╚═══════════════════════════════════════════════════════════════════════════╝"
+  echo "   Staged Java files exceed $MAX_LINES lines:"
+  printf '%s\n' "${VIOLATIONS[@]}"
+  echo ""
+  echo "   Extract classes / logic into smaller files, then retry."
+  echo "   Use --no-verify to skip (NOT recommended — consult the team first)."
+  exit 1
+fi
+
+# 2. CODE DUPLICATION GUARD (baseline-aware)
+# ═══════════════════════════════════════════════════════════════════════════
+DUP_THRESHOLD=1.0
+BASELINE_FILE="scripts/jscpd-baseline.json"
+if command -v jscpd >/dev/null 2>&1; then
+  echo "🔍 Checking code duplication (threshold: < ${DUP_THRESHOLD}%)..."
+  jscpd --min-tokens 50 --min-lines 5 --reporters json --output /tmp/jscpd-precommit dmtools-core/src/main/java/ >/dev/null 2>&1 || true
+  DUP_PCT=$(python3 -c "
+import json,sys
+try:
+    with open('/tmp/jscpd-precommit/jscpd-report.json') as f:
+        d=json.load(f)
+    print(d['statistics']['total']['percentage'])
+except: print('0.0')
+" 2>/dev/null || echo "0.0")
+
+  # Enforce hard ceiling first
+  if ! python3 -c "exit(0 if float('$DUP_PCT') < float('$DUP_THRESHOLD') else 1)" 2>/dev/null; then
+    # Above absolute ceiling — allow only if a baseline exists and current is not worse
+    if [ -f "$BASELINE_FILE" ]; then
+      BASELINE=$(python3 -c "
+import json,sys
+try:
+    with open('$BASELINE_FILE') as f:
+        d=json.load(f)
+    print(d.get('percentage', 999.0))
+except: print('999.0')
+" 2>/dev/null || echo "999.0")
+      if python3 -c "exit(0 if float('$DUP_PCT') <= float('$BASELINE') else 1)" 2>/dev/null; then
+        echo "⚠️  Duplication is $DUP_PCT% (above ${DUP_THRESHOLD}% ceiling) but matches baseline $BASELINE%."
+        echo "    New code must not increase duplication; update the baseline only with team approval."
+      else
+        echo ""
+        echo "╔═══════════════════════════════════════════════════════════════════════════╗"
+        echo "║  ❌ QUALITY GATE FAILED — CODE DUPLICATION RATCHET                        ║"
+        echo "╚═══════════════════════════════════════════════════════════════════════════╝"
+        echo "   Duplication: $DUP_PCT%"
+        echo "   Baseline:    $BASELINE%"
+        echo "   Current duplication exceeds the established baseline."
+        echo ""
+        echo "   Run: jscpd --min-tokens 50 --min-lines 5 dmtools-core/src/main/java/"
+        echo "   Refactor duplicated code, then retry."
+        echo "   Use --no-verify to skip (NOT recommended — consult the team first)."
+        exit 1
+      fi
+    else
+      echo ""
+      echo "╔═══════════════════════════════════════════════════════════════════════════╗"
+      echo "║  ❌ QUALITY GATE FAILED — CODE DUPLICATION                                ║"
+      echo "╚═══════════════════════════════════════════════════════════════════════════╝"
+      echo "   Duplication: $DUP_PCT% (max ${DUP_THRESHOLD}%)"
+      echo ""
+      echo "   Run: jscpd --min-tokens 50 --min-lines 5 dmtools-core/src/main/java/"
+      echo "   Extract shared helpers, then retry."
+      echo "   Use --no-verify to skip (NOT recommended — consult the team first)."
+      exit 1
+    fi
+  else
+    echo "✅ Duplication check OK ($DUP_PCT% < ${DUP_THRESHOLD}%)"
+  fi
+fi
+
+echo ""
+echo "╔═══════════════════════════════════════════════════════════════════════════╗"
+echo "║  ✅ ALL QUALITY GATES PASSED — COMMIT APPROVED                            ║"
+echo "╚═══════════════════════════════════════════════════════════════════════════╝"

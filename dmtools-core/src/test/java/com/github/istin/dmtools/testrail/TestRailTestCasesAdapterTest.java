@@ -68,14 +68,14 @@ public class TestRailTestCasesAdapterTest {
         TestCase tc2 = new TestCase(BASE_PATH, new JSONObject("{\"id\":2,\"title\":\"TC2\"}"));
         TestCase tc3 = new TestCase(BASE_PATH, new JSONObject("{\"id\":3,\"title\":\"TC3\"}"));
 
-        when(mockClient.getAllCases("Project A")).thenReturn(Arrays.asList(tc1, tc2));
-        when(mockClient.getAllCases("Project B")).thenReturn(Arrays.asList(tc3));
+        when(mockClient.getAllCases("Project A", null)).thenReturn(Arrays.asList(tc1, tc2));
+        when(mockClient.getAllCases("Project B", null)).thenReturn(Arrays.asList(tc3));
 
         List<ITicket> result = multiProjectAdapter.getExistingCases();
 
         assertEquals(3, result.size());
-        verify(mockClient).getAllCases("Project A");
-        verify(mockClient).getAllCases("Project B");
+        verify(mockClient).getAllCases("Project A", null);
+        verify(mockClient).getAllCases("Project B", null);
     }
 
     @Test

@@ -25,7 +25,8 @@ public interface ApplicationConfiguration extends
     AnthropicConfiguration,
     BedrockConfiguration,
     OpenAIConfiguration,
-    TrackerConfiguration {
+    TrackerConfiguration,
+    TeamsConfiguration {
     
     /**
      * Sets the configuration file path to use

@@ -18,7 +18,7 @@ SETUP={
 MISS{
   !dmtools=>offer/install;
   !env=>ask{integrations,ai_provider}->mk(dmtools.env);
-  !gitignore=>+{"dmtools.env","dmtools-local.env",".dmtools/"}
+  !gitignore=>+{"dmtools.env","dmtools-local.env"}
 }
 
 SKILLS{focused:DMTOOLS_SKILLS=jira,github}

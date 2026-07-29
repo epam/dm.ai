@@ -16,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -52,6 +54,53 @@ class JSRunnerTest {
         jsRunner.ai = mockAI;
         jsRunner.confluence = mockConfluence;
         jsRunner.sourceCodes = List.of(mockSourceCode);
+    }
+
+    @Test
+    void testTruffleLanguageProviderServiceFileContainsRegexLanguage() throws Exception {
+        // Regression guard for issue #298: the merged service file must list
+        // both the JS and the Regex Truffle language providers. Without the
+        // regex provider, JavaScript regex literals fail in the shadow JAR.
+        try (InputStream serviceFile = getClass().getClassLoader()
+                .getResourceAsStream("META-INF/services/com.oracle.truffle.api.provider.TruffleLanguageProvider")) {
+            assertNotNull(serviceFile, "TruffleLanguageProvider service file must be present in resources");
+
+            String content = new String(serviceFile.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(content.contains("com.oracle.truffle.js.lang.JavaScriptLanguageProvider"),
+                    "Service file must register JavaScript language provider");
+            assertTrue(content.contains("com.oracle.truffle.regex.RegexLanguageProvider"),
+                    "Service file must register Regex language provider");
+        }
+    }
+
+    @Test
+    void testJavaScriptRegexLiteralExecution() throws Exception {
+        // Regression test for issue #298: GraalJS regex literals must work.
+        String jsWithRegex = """
+            function action(params) {
+                const match = "Visit https://github.com/epam/dm.ai".match(/https:\\/\\/github\\.com\\/[^\\s]+/);
+                const globalMatches = "A https://a.com B https://b.com".match(/https:\\/\\/[^\\s]+/g);
+                return {
+                    success: true,
+                    match: match ? match[0] : null,
+                    allMatches: globalMatches
+                };
+            }
+            """;
+
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath(jsWithRegex);
+        params.setTicket(Map.of("key", "TEST-123"));
+        params.setResponse("");
+        params.setInitiator("test@example.com");
+
+        Object result = jsRunner.runJobImpl(params);
+
+        assertNotNull(result);
+        String resultStr = result.toString();
+        assertTrue(resultStr.contains("https://github.com/epam/dm.ai"), "Regex literal should match GitHub URL");
+        assertTrue(resultStr.contains("https://a.com"), "Global regex literal should match first URL");
+        assertTrue(resultStr.contains("https://b.com"), "Global regex literal should match second URL");
     }
 
     @Test

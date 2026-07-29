@@ -10,6 +10,9 @@ package com.github.istin.dmtools.mcp.cli;
  *   <li>{@link #JSON} – pretty-printed JSON (default)</li>
  *   <li>{@link #TOON} – LLM-optimized text format via {@link com.github.istin.dmtools.common.utils.LLMOptimizedJson}</li>
  *   <li>{@link #MINI} – minified/compact JSON without whitespace</li>
+ *   <li>{@link #SHORT} – compact human-readable lines</li>
+ *   <li>{@link #TABLE} – Markdown table</li>
+ *   <li>{@link #MERMAID} – Mermaid diagram</li>
  * </ul>
  */
 public enum OutputFormat {
@@ -21,7 +24,16 @@ public enum OutputFormat {
     TOON("toon"),
 
     /** Minified JSON – valid JSON with no extra whitespace. */
-    MINI("mini");
+    MINI("mini"),
+
+    /** Compact human-readable text (integration + name + short description). */
+    SHORT("short"),
+
+    /** Markdown table view. */
+    TABLE("table"),
+
+    /** Mermaid mindmap / graph view. */
+    MERMAID("mermaid");
 
     private final String id;
 

@@ -6,6 +6,7 @@ package com.github.istin.dmtools.metrics.source;
 import com.github.istin.dmtools.atlassian.common.networking.AtlassianRestClient;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.ICommit;
+import com.github.istin.dmtools.common.model.IDiffStats;
 import com.github.istin.dmtools.report.model.KeyTime;
 import com.github.istin.dmtools.team.IEmployees;
 
@@ -51,23 +52,11 @@ public class PullRequestsLinesOfCodeMetricSource extends CommonSourceCollector {
                     displayName = IEmployees.UNKNOWN;
                 }
                 KeyTime keyTime = new KeyTime(model.getId(), model.getCommitterDate(), isPersonalized ? displayName : metricName);
-//                BitbucketResult commitDiff = bitbucket.getCommitDiff(workspace, repo, model.getId());
-//                List<Diff> diffs = commitDiff.getDiffs();
-//                int amountOfLines = 0;
-//                for (Diff diff : diffs) {
-//                    if (!isValidFileCounted(diff.getSource())) {
-//                        continue;
-//                    }
-//
-//                    List<Hunk> hunks = diff.getHunks();
-//                    for (Hunk hunk : hunks) {
-//                        List<Segment> segments = hunk.getSegments();
-//                        for (Segment segment : segments) {
-//                            amountOfLines = amountOfLines + segment.getLines().size();
-//                        }
-//                    }
-//                }
-//                keyTime.setWeight(amountOfLines/1000d);
+                IDiffStats diffStats = (model instanceof IDiffStats) ? (IDiffStats) model : null;
+                if (diffStats != null && diffStats.getStats() != null) {
+                    int additions = diffStats.getStats().getAdditions();
+                    keyTime.setWeight(additions / 1000.0);
+                }
                 data.add(keyTime);
                 return false;
             }

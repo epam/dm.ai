@@ -88,7 +88,6 @@ The `"name"` field in JSON configuration **MUST** exactly match the Java Job cla
 | `DiagramsCreator` | Create Mermaid diagrams |
 | `SolutionArchitectureCreator` | Create architecture docs |
 | `InstructionsGenerator` | Generate implementation instructions |
-| `JEstimator` | Estimate story points |
 | `RequirementsCollector` | Collect requirements |
 | `UserStoryGenerator` | Generate user stories |
 | `JSRunner` | Run JavaScript agents |
@@ -134,10 +133,22 @@ All jobs that extend `TrackerParams` support these common parameters:
     "postJSAction": "agents/js/postprocess.js",
     "attachResponseAsFile": false,
     "ticketContextDepth": 1,
-    "chunkProcessingTimeoutInMinutes": 60
+    "chunkProcessingTimeoutInMinutes": 60,
+    "issueIgnorePrefixes": "PSR,RFC,CVE",
+    "issueAllowedPrefixes": "PROJ,TEAM,PLATFORM",
+    "envVariables": {
+      "JIRA_ISSUE_IGNORE_PREFIXES": "PSR,RFC,CVE",
+      "JIRA_ISSUE_ALLOWED_PREFIXES": "PROJ,TEAM,PLATFORM"
+    }
   }
 }
 ```
+
+- `issueIgnorePrefixes` — comma-separated list of Jira issue key prefixes to exclude when parsing ticket references (e.g. `PSR-18`, `RFC-6749`). Empty by default.
+- `issueAllowedPrefixes` — comma-separated list of allowed Jira issue key prefixes; when set, only keys matching these prefixes are kept. Empty by default.
+- `envVariables` — per-job environment variable overrides. Job-level `issueIgnorePrefixes` / `issueAllowedPrefixes` take precedence over env variables with the same name.
+
+When neither list is configured, parsing behavior remains unchanged (full backward compatibility).
 
 ## Configuration Validation
 

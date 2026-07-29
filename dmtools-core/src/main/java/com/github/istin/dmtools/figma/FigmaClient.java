@@ -133,7 +133,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         category = "auth"
     )
     public String oauth2GetAuthUrl(
-        @MCPParam(name = "redirectUri", description = "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback)", required = true, example = "http://localhost:8080/callback") String redirectUri,
+        @MCPParam(name = "redirectUri", description = "Redirect URI registered in your Figma OAuth app (e.g. http://localhost:8080/callback). If omitted, uses FIGMA_REDIRECT_URI env variable.", required = false, example = "http://localhost:8080/callback") String redirectUri,
         @MCPParam(name = "state", description = "Random state string for CSRF protection", required = false, example = "random_state_123") String state,
         @MCPParam(name = "scope", description = "Optional OAuth scope list (space-separated), e.g. file_content:read file_metadata:read. If omitted, uses FIGMA_SCOPE (or FIGMA_OAUTH_SCOPES) env or default minimal read scope.", required = false, example = "file_content:read file_metadata:read") String scope
     ) {
@@ -148,6 +148,14 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         if (clientSecret == null || clientSecret.isEmpty()) {
             return new JSONObject()
                     .put("error", "FIGMA_CLIENT_SECRET is not configured")
+                    .toString();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            redirectUri = propertyReader.getFigmaRedirectUri();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            return new JSONObject()
+                    .put("error", "redirectUri is required (or set FIGMA_REDIRECT_URI in dmtools.env)")
                     .toString();
         }
         if (state == null || state.isEmpty()) {
@@ -175,7 +183,7 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
     )
     public String oauth2ExchangeCode(
         @MCPParam(name = "code", description = "Authorization code received from Figma OAuth2 redirect", required = true, example = "figma_auth_code_abc123") String code,
-        @MCPParam(name = "redirectUri", description = "Same redirect URI used in figma_oauth2_get_auth_url", required = true, example = "http://localhost:8080/callback") String redirectUri
+        @MCPParam(name = "redirectUri", description = "Same redirect URI used in figma_oauth2_get_auth_url. If omitted, uses FIGMA_REDIRECT_URI env variable.", required = false, example = "http://localhost:8080/callback") String redirectUri
     ) {
         com.github.istin.dmtools.common.utils.PropertyReader propertyReader = new com.github.istin.dmtools.common.utils.PropertyReader();
         String clientId = propertyReader.getFigmaClientId();
@@ -183,6 +191,14 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         if (clientId == null || clientId.isEmpty() || clientSecret == null || clientSecret.isEmpty()) {
             return new JSONObject()
                     .put("error", "FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET must be configured")
+                    .toString();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            redirectUri = propertyReader.getFigmaRedirectUri();
+        }
+        if (redirectUri == null || redirectUri.isEmpty()) {
+            return new JSONObject()
+                    .put("error", "redirectUri is required (or set FIGMA_REDIRECT_URI in dmtools.env)")
                     .toString();
         }
         try {
@@ -203,6 +219,16 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
                     .put("error", "Token exchange failed: " + e.getMessage())
                     .toString();
         }
+    }
+
+    @MCPTool(
+        name = "figma_test",
+        description = "Test Figma connectivity by fetching the current user's profile",
+        integration = "figma",
+        category = "system"
+    )
+    public Map<String, Object> testConnection() {
+        return me();
     }
 
     @MCPTool(
@@ -434,6 +460,47 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Extracts a numeric Figma team ID from either a raw ID or a Figma URL containing
+     * a "/team/&lt;teamId&gt;" path segment (e.g. a team files-listing URL such as
+     * "https://www.figma.com/files/&lt;orgId&gt;/team/&lt;teamId&gt;?fuid=...").
+     */
+    protected static String extractTeamId(String teamIdOrUrl) {
+        if (teamIdOrUrl == null) {
+            throw new UnsupportedOperationException("Invalid url");
+        }
+        String trimmed = teamIdOrUrl.trim();
+        if (trimmed.matches("\\d+")) {
+            return trimmed;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("team/(\\d+)").matcher(trimmed);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        throw new UnsupportedOperationException("Invalid url: could not extract a Figma team ID. "
+                + "Provide either a numeric team ID or a URL containing '/team/<teamId>'.");
+    }
+
+    /**
+     * Extracts a numeric Figma project ID from either a raw ID or a Figma URL containing
+     * a "/project/&lt;projectId&gt;" path segment.
+     */
+    protected static String extractProjectId(String projectIdOrUrl) {
+        if (projectIdOrUrl == null) {
+            throw new UnsupportedOperationException("Invalid url");
+        }
+        String trimmed = projectIdOrUrl.trim();
+        if (trimmed.matches("\\d+")) {
+            return trimmed;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("project/(\\d+)").matcher(trimmed);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        throw new UnsupportedOperationException("Invalid url: could not extract a Figma project ID. "
+                + "Provide either a numeric project ID or a URL containing '/project/<projectId>'.");
     }
 
     protected static String extractValueByParameter(String url, String paramName) {
@@ -1378,6 +1445,21 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         return jsonResponse.getJSONArray("projects");
     }
 
+    @MCPTool(
+        name = "figma_list_team_projects",
+        description = "List all projects within a Figma team, so a team-level 'files' listing URL (which is not a single design file "
+            + "and cannot be passed to file-specific tools like figma_get_layers) can be broken down into browsable projects. "
+            + "Accepts either a raw numeric team ID or any Figma URL containing a '/team/<teamId>' path segment.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public String listTeamProjects(
+        @MCPParam(name = "teamIdOrUrl", description = "Numeric Figma team ID, or a Figma URL containing '/team/<teamId>' (e.g. a team files-listing URL)", required = true, example = "https://www.figma.com/files/1008118788610687562/team/1633438210497791577") String teamIdOrUrl
+    ) throws Exception {
+        String teamId = extractTeamId(teamIdOrUrl);
+        return getProjects(teamId).toString();
+    }
+
     // Get all files within a project
     public JSONArray getFiles(String projectId) throws Exception {
         String url = path("projects/" + projectId + "/files");
@@ -1386,12 +1468,52 @@ public class FigmaClient extends AbstractRestClient implements ContentUtils.UrlT
         return jsonResponse.getJSONArray("files");
     }
 
+    @MCPTool(
+        name = "figma_list_project_files",
+        description = "List all design files within a Figma project, returning each file's key, name, and thumbnail so a specific "
+            + "file URL can be built for use with file-specific tools like figma_get_layers or figma_get_file_structure. "
+            + "Use figma_list_team_projects first to discover project IDs from a team. "
+            + "Accepts either a raw numeric project ID or any Figma URL containing a '/project/<projectId>' path segment.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public String listProjectFiles(
+        @MCPParam(name = "projectIdOrUrl", description = "Numeric Figma project ID, or a Figma URL containing '/project/<projectId>'", required = true, example = "https://www.figma.com/files/project/123456789") String projectIdOrUrl
+    ) throws Exception {
+        String projectId = extractProjectId(projectIdOrUrl);
+        return getFiles(projectId).toString();
+    }
+
     // Get all comments in a file
     public List<IComment> getComments(String fileKey) throws Exception {
         String url = path("files/" + fileKey + "/comments");
         String response = execute(new GenericRequest(this, url));
         JSONObject jsonResponse = new JSONObject(response);
         return JSONModel.convertToModels(FigmaComment.class, jsonResponse.getJSONArray("comments"));
+    }
+
+    @MCPTool(
+        name = "figma_get_file_comments",
+        description = "Get all comments left on a Figma design file, including comment text, author, and creation date. "
+            + "Accepts either a raw Figma file key or a full Figma design file URL.",
+        integration = "figma",
+        category = "content_access"
+    )
+    public String getFileComments(
+        @MCPParam(name = "href", description = "Figma design file URL, or a raw Figma file key", required = true, example = "https://www.figma.com/file/abc123/Design") String href
+    ) throws Exception {
+        String fileKey;
+        try {
+            fileKey = parseFileId(href);
+        } catch (Exception e) {
+            fileKey = href;
+        }
+        List<IComment> comments = getComments(fileKey);
+        JSONArray result = new JSONArray();
+        for (IComment comment : comments) {
+            result.put(new JSONObject(comment.toString()));
+        }
+        return result.toString();
     }
 
     @Override

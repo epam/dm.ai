@@ -38,12 +38,12 @@ Generate Mermaid diagrams from content sources (Confluence or Jira) based on inc
 **Parameters:**
 
 - **`integration`** (string) 🔴 Required
-  - Integration type: 'confluence', 'jira', or 'jira_xray'
+  - Integration type: 'confluence', 'jira', 'jira_xray', or 'testrail'
   - Example: `confluence`
 
 - **`include_patterns`** (array) 🔴 Required
-  - Array of include patterns. For Confluence: ["SPACE/pages/PAGE_ID/PAGE_NAME/**"]. For Jira: ["JQL query"]
-  - Example: `["YOUR_SPACE/pages/PAGE_ID/Templates/**"]`
+  - Array of include patterns. For Confluence: ["SPACE/pages/PAGE_ID/PAGE_NAME/**"]. For Jira: ["JQL query"]. For TestRail: ["project_id=5&suite_id=3"]
+  - Example: `["AINA/pages/11665522/Templates/**"]`
 
 - **`exclude_patterns`** (array) ⚪ Optional
   - Optional array of exclude patterns to filter out specific content (not used for Jira)
@@ -80,7 +80,7 @@ Read all Mermaid diagram files (.mmd) from storage path recursively. Returns lis
 **Parameters:**
 
 - **`integration`** (string) 🔴 Required
-  - Integration type (currently only 'confluence' is supported)
+  - Integration type (used as subfolder name under storage path)
   - Example: `confluence`
 
 - **`storage_path`** (string) 🔴 Required
@@ -106,7 +106,7 @@ Read all Mermaid diagram files (.mmd) from storage path recursively. Returns lis
 **Parameters:**
 
 - **`integration`** (string) 🔴 Required
-  - Integration type (currently only 'confluence' is supported)
+  - Integration type (used as subfolder name under storage path)
   - Example: `confluence`
 
 - **`storage_path`** (string) 🔴 Required

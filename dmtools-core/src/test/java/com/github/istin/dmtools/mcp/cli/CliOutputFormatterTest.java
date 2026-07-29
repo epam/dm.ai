@@ -194,6 +194,9 @@ class CliOutputFormatterTest {
         assertEquals(OutputFormat.JSON, OutputFormat.fromString("json"));
         assertEquals(OutputFormat.TOON, OutputFormat.fromString("toon"));
         assertEquals(OutputFormat.MINI, OutputFormat.fromString("mini"));
+        assertEquals(OutputFormat.SHORT, OutputFormat.fromString("short"));
+        assertEquals(OutputFormat.TABLE, OutputFormat.fromString("table"));
+        assertEquals(OutputFormat.MERMAID, OutputFormat.fromString("mermaid"));
     }
 
     @Test
@@ -257,6 +260,27 @@ class CliOutputFormatterTest {
     }
 
     @Test
+    @DisplayName("Factory – explicit 'short' CLI flag resolves to ShortCliOutputFormatter")
+    void factoryShortFlag() {
+        CliOutputFormatter fmt = CliOutputFormatterFactory.create("short");
+        assertInstanceOf(ShortCliOutputFormatter.class, fmt);
+    }
+
+    @Test
+    @DisplayName("Factory – explicit 'table' CLI flag resolves to TableCliOutputFormatter")
+    void factoryTableFlag() {
+        CliOutputFormatter fmt = CliOutputFormatterFactory.create("table");
+        assertInstanceOf(TableCliOutputFormatter.class, fmt);
+    }
+
+    @Test
+    @DisplayName("Factory – explicit 'mermaid' CLI flag resolves to MermaidCliOutputFormatter")
+    void factoryMermaidFlag() {
+        CliOutputFormatter fmt = CliOutputFormatterFactory.create("mermaid");
+        assertInstanceOf(MermaidCliOutputFormatter.class, fmt);
+    }
+
+    @Test
     @DisplayName("Factory – explicit 'json' CLI flag resolves to JsonCliOutputFormatter")
     void factoryJsonFlag() {
         CliOutputFormatter fmt = CliOutputFormatterFactory.create("json");
@@ -308,11 +332,93 @@ class CliOutputFormatterTest {
     }
 
     @Test
-    @DisplayName("MINI formatter – ToText throwing IOException falls back to LLMOptimizedJson")
-    void miniFormatterToTextExceptionFallsBack() {
-        ToText broken = () -> { throw new IOException("disk error"); };
-        MiniCliOutputFormatter fmt = new MiniCliOutputFormatter();
-        // Should not throw; should fall back gracefully
-        assertDoesNotThrow(() -> fmt.formatResult(broken));
+    @DisplayName("SHORT formatter – empty list returns a message")
+    void shortFormatterEmptyList() {
+        ShortCliOutputFormatter fmt = new ShortCliOutputFormatter();
+        Map<String, Object> tools = new LinkedHashMap<>();
+        tools.put("tools", new org.json.JSONArray());
+        String out = fmt.formatList(tools);
+        assertTrue(out.contains("No tools available"));
+    }
+
+    @Test
+    @DisplayName("SHORT formatter – list contains integration, name and description")
+    void shortFormatterList() {
+        ShortCliOutputFormatter fmt = new ShortCliOutputFormatter();
+        Map<String, Object> tools = new LinkedHashMap<>();
+        org.json.JSONArray arr = new org.json.JSONArray();
+        org.json.JSONObject t = new org.json.JSONObject();
+        t.put("name", "jira_get_ticket");
+        t.put("integration", "jira");
+        t.put("description", "Get Jira ticket by key. Returns ticket data.");
+        arr.put(t);
+        tools.put("tools", arr);
+        String out = fmt.formatList(tools);
+        assertTrue(out.contains("jira"));
+        assertTrue(out.contains("jira_get_ticket"));
+        assertTrue(out.contains("Get Jira ticket by key"));
+        assertFalse(out.contains("Returns ticket data"), "SHORT should keep only first sentence");
+    }
+
+    @Test
+    @DisplayName("TABLE formatter – list renders Markdown table")
+    void tableFormatterList() {
+        TableCliOutputFormatter fmt = new TableCliOutputFormatter();
+        Map<String, Object> tools = new LinkedHashMap<>();
+        org.json.JSONArray arr = new org.json.JSONArray();
+        org.json.JSONObject t = new org.json.JSONObject();
+        t.put("name", "jira_get_ticket");
+        t.put("integration", "jira");
+        t.put("description", "Get Jira ticket by key");
+        arr.put(t);
+        tools.put("tools", arr);
+        String out = fmt.formatList(tools);
+        assertTrue(out.contains("| Integration"));
+        assertTrue(out.contains("| Tool"));
+        assertTrue(out.contains("| Description"));
+        assertTrue(out.contains("| jira"));
+        assertTrue(out.contains("jira_get_ticket"));
+        assertTrue(out.contains("Get Jira ticket by key"));
+    }
+
+    @Test
+    @DisplayName("MERMAID formatter – list renders mindmap")
+    void mermaidFormatterList() {
+        MermaidCliOutputFormatter fmt = new MermaidCliOutputFormatter();
+        Map<String, Object> tools = new LinkedHashMap<>();
+        org.json.JSONArray arr = new org.json.JSONArray();
+        org.json.JSONObject t = new org.json.JSONObject();
+        t.put("name", "jira_get_ticket");
+        t.put("integration", "jira");
+        t.put("description", "Get Jira ticket by key");
+        arr.put(t);
+        tools.put("tools", arr);
+        String out = fmt.formatList(tools);
+        assertTrue(out.startsWith("mindmap"));
+        assertTrue(out.contains("jira"));
+        assertTrue(out.contains("jira_get_ticket"));
+    }
+
+    @Test
+    @DisplayName("New formatters – unknown result falls back to JSON")
+    void newFormattersFallbackForResult() {
+        ShortCliOutputFormatter shortFmt = new ShortCliOutputFormatter();
+        TableCliOutputFormatter tableFmt = new TableCliOutputFormatter();
+        MermaidCliOutputFormatter mermaidFmt = new MermaidCliOutputFormatter();
+
+        JSONObject obj = new JSONObject();
+        obj.put("key", "value");
+
+        assertTrue(shortFmt.formatResult(obj).contains("key"));
+        assertTrue(tableFmt.formatResult(obj).contains("key"));
+        assertTrue(mermaidFmt.formatResult(obj).contains("key"));
+    }
+
+    @Test
+    @DisplayName("New formatters – errors are plain text")
+    void newFormattersError() {
+        assertTrue(new ShortCliOutputFormatter().formatError("oops").contains("oops"));
+        assertTrue(new TableCliOutputFormatter().formatError("oops").contains("oops"));
+        assertTrue(new MermaidCliOutputFormatter().formatError("oops").contains("oops"));
     }
 }

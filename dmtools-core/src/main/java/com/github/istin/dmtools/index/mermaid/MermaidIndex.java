@@ -88,15 +88,15 @@ public class MermaidIndex {
     }
     
     /**
-     * Creates a new MermaidIndex instance for Jira or Jira Xray integration.
+     * Creates a new MermaidIndex instance for Jira, Jira Xray, or TestRail integration.
      * 
-     * @param integrationName Name of the integration ("jira" or "jira_xray")
+     * @param integrationName Name of the integration ("jira", "jira_xray", or "testrail")
      * @param storagePath Base path for storing generated diagrams
-     * @param includePatterns List of patterns to include (first element should be JQL query)
-     * @param excludePatterns List of patterns to exclude (not used for Jira)
-     * @param trackerClient TrackerClient instance (BasicJiraClient or XrayClient)
-     * @param customFields Array of custom field names to include in content
-     * @param includeComments Whether to include comments in the content
+     * @param includePatterns List of patterns to include (first element should be JQL query or TestRail API query)
+     * @param excludePatterns List of patterns to exclude (not used for Jira or TestRail)
+     * @param trackerClient TrackerClient instance (BasicJiraClient, XrayClient, or TestRailClient)
+     * @param customFields Array of custom field names to include in content (only used for Jira integrations)
+     * @param includeComments Whether to include comments in the content (only used for Jira integrations)
      * @param diagramGenerator Diagram generator agent
      * @throws IllegalArgumentException if required parameters are null
      */
@@ -112,7 +112,7 @@ public class MermaidIndex {
             throw new IllegalArgumentException("Diagram generator is required");
         }
         if (trackerClient == null) {
-            throw new IllegalArgumentException("TrackerClient is required for Jira integration");
+            throw new IllegalArgumentException("TrackerClient is required for " + integrationName + " integration");
         }
         
         this.integrationName = integrationName;
@@ -125,12 +125,14 @@ public class MermaidIndex {
         // Create integration instance based on name
         // Both "jira" and "jira_xray" use JiraMermaidIndexIntegration, but with different TrackerClient instances
         // The TrackerClient (BasicJiraClient or XrayClient) is already selected in MermaidIndexTools
-        logger.info("Creating JiraMermaidIndexIntegration for integration: {} with TrackerClient: {}", 
+        logger.info("Creating integration for: {} with TrackerClient: {}", 
                 integrationName, trackerClient.getClass().getName());
         if ("jira".equalsIgnoreCase(integrationName) || "jira_xray".equalsIgnoreCase(integrationName)) {
             this.integration = new JiraMermaidIndexIntegration(trackerClient, customFields, includeComments);
+        } else if ("testrail".equalsIgnoreCase(integrationName)) {
+            this.integration = new com.github.istin.dmtools.testrail.index.TestRailMermaidIndexIntegration(trackerClient);
         } else {
-            throw new IllegalArgumentException("Unsupported integration: " + integrationName + ". Use 'jira' or 'jira_xray' for this constructor.");
+            throw new IllegalArgumentException("Unsupported integration: " + integrationName + ". Use 'jira', 'jira_xray', or 'testrail' for this constructor.");
         }
     }
     

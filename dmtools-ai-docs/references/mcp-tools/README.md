@@ -2,10 +2,10 @@
 
 Complete reference for all MCP tools available in DMtools.
 
-**Total Integrations**: 17
-**Total Tools**: 168
+**Total Integrations**: 20
+**Total Tools**: 292
 
-*Updated: 2026-02-25*
+*Auto-generated from `dmtools list` on: 2026-07-22 19:14:18*
 
 ## Quick Start
 
@@ -24,23 +24,26 @@ dmtools <tool_name> [arguments]
 
 | Integration | Tools | Documentation |
 |-------------|-------|---------------|
-| **ADO** | 31 | [ado-tools.md](ado-tools.md) |
-| **ANTHROPIC** | 2 | [anthropic-tools.md](anthropic-tools.md) |
+| **ADO** | 38 | [ado-tools.md](ado-tools.md) |
+| **ANTHROPIC** | 3 | [anthropic-tools.md](anthropic-tools.md) |
 | **BEDROCK** | 2 | [bedrock-tools.md](bedrock-tools.md) |
 | **CLI** | 1 | [cli-tools.md](cli-tools.md) |
-| **CONFLUENCE** | 17 | [confluence-tools.md](confluence-tools.md) |
+| **CONFLUENCE** | 19 | [confluence-tools.md](confluence-tools.md) |
 | **DIAL** | 2 | [dial-tools.md](dial-tools.md) |
-| **FIGMA** | 12 | [figma-tools.md](figma-tools.md) |
-| **FILE** | 4 | [file-tools.md](file-tools.md) |
+| **FIGMA** | 22 | [figma-tools.md](figma-tools.md) |
+| **FILE** | 5 | [file-tools.md](file-tools.md) |
 | **GEMINI** | 2 | [gemini-tools.md](gemini-tools.md) |
-| **GITHUB** | 16 | [github-tools.md](github-tools.md) |
-| **JIRA** | 52 | [jira-tools.md](jira-tools.md) |
+| **GITHUB** | 35 | [github-tools.md](github-tools.md) |
+| **GITLAB** | 30 | [gitlab-tools.md](gitlab-tools.md) |
+| **JIRA** | 69 | [jira-tools.md](jira-tools.md) |
 | **KB** | 5 | [kb-tools.md](kb-tools.md) |
 | **MERMAID** | 3 | [mermaid-tools.md](mermaid-tools.md) |
 | **OLLAMA** | 2 | [ollama-tools.md](ollama-tools.md) |
 | **OPENAI** | 2 | [openai-tools.md](openai-tools.md) |
 | **SHAREPOINT** | 2 | [sharepoint-tools.md](sharepoint-tools.md) |
-| **TEAMS** | 30 | [teams-tools.md](teams-tools.md) |
+| **TEAMS** | 31 | [teams-tools.md](teams-tools.md) |
+| **TESTRAIL** | 17 | [testrail-tools.md](testrail-tools.md) |
+| **VERTEX** | 2 | [vertex-tools.md](vertex-tools.md) |
 
 ## Usage in JavaScript Agents
 
@@ -56,41 +59,40 @@ file_write('output.txt', 'content');
 
 ## Integration Categories
 
-### Issue Tracking & Source Control
+### Issue Tracking
 
-- [JIRA](jira-tools.md) - 52 tools
-- [ADO](ado-tools.md) - 31 tools
-- [GITHUB](github-tools.md) - 16 tools (pull requests, CI/CD monitoring)
+- [JIRA](jira-tools.md) - 69 tools
+- [ADO](ado-tools.md) - 38 tools
 
 ### Communication
 
-- [TEAMS](teams-tools.md) - 30 tools
+- [TEAMS](teams-tools.md) - 31 tools
 
 ### Design
 
-- [FIGMA](figma-tools.md) - 12 tools
+- [FIGMA](figma-tools.md) - 22 tools
 
 ### Documentation
 
-- [CONFLUENCE](confluence-tools.md) - 17 tools
+- [CONFLUENCE](confluence-tools.md) - 19 tools
 - [SHAREPOINT](sharepoint-tools.md) - 2 tools
 
 ### AI Providers
 
 - [GEMINI](gemini-tools.md) - 2 tools
 - [OPENAI](openai-tools.md) - 2 tools
-- [ANTHROPIC](anthropic-tools.md) - 2 tools
+- [ANTHROPIC](anthropic-tools.md) - 3 tools
 - [OLLAMA](ollama-tools.md) - 2 tools
 - [BEDROCK](bedrock-tools.md) - 2 tools
 - [DIAL](dial-tools.md) - 2 tools
 
 ### Authentication
 
-- [TEAMS](teams-tools.md) - 30 tools
+- [TEAMS](teams-tools.md) - 31 tools
 
 ### File Operations
 
-- [FILE](file-tools.md) - 4 tools
+- [FILE](file-tools.md) - 5 tools
 
 ### CLI Operations
 

@@ -3,11 +3,19 @@
 
 package com.github.istin.dmtools;
 
+import org.junit.After;
 import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ConfigTest {
+
+    @After
+    public void tearDown() {
+        // restore global flags so other tests in the same JVM fork are not affected
+        Config.DEMO_PAGE = false;
+        Config.DEMO_SITE = false;
+    }
 
     @Test
     public void testDemoPageSetValue() {

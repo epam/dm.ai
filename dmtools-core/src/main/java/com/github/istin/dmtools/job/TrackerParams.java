@@ -109,4 +109,14 @@ public class TrackerParams implements CliPostComment {
     @SerializedName(ENV_VARIABLES)
     private java.util.Map<String, String> envVariables;
 
+    public static final String ISSUE_IGNORE_PREFIXES = "issueIgnorePrefixes";
+
+    @SerializedName(ISSUE_IGNORE_PREFIXES)
+    private String issueIgnorePrefixes;
+
+    public static final String ISSUE_ALLOWED_PREFIXES = "issueAllowedPrefixes";
+
+    @SerializedName(ISSUE_ALLOWED_PREFIXES)
+    private String issueAllowedPrefixes;
+
 }

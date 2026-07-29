@@ -1138,6 +1138,29 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     }
 
     @MCPTool(
+            name = "ado_test",
+            description = "Test Azure DevOps connectivity by fetching the current user's profile",
+            integration = "ado",
+            category = "system"
+    )
+    public Map<String, Object> testConnection() throws IOException {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            IUser profile = getMyProfile();
+            result.put("success", true);
+            result.put("message", "Azure DevOps connection successful");
+            result.put("user", profile.getFullName());
+            result.put("email", profile.getEmailAddress());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "Azure DevOps connection failed: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            logger.warn("Azure DevOps connection test failed", e);
+        }
+        return result;
+    }
+
+    @MCPTool(
             name = "ado_get_my_profile",
             description = "Get the current user's profile information from Azure DevOps",
             integration = "ado",

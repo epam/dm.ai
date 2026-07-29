@@ -526,6 +526,8 @@ public class MCPToolProcessor extends AbstractProcessor {
         // Generate schema without outputSchema - let tools return data as text
         out.println("        return Map.of(");
         out.println("            \"name\", \"" + tool.getName() + "\",");
+        out.println("            \"integration\", \"" + tool.getIntegration() + "\",");
+        out.println("            \"category\", \"" + tool.getCategory() + "\",");
         out.println("            \"description\", \"" + escapeJavaString(tool.getDescription()) + "\",");
         out.println("            \"inputSchema\", Map.of(");
         out.println("                \"type\", \"object\",");

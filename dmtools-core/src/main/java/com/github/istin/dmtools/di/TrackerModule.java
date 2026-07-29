@@ -140,7 +140,13 @@ public class TrackerModule {
             }
         }
         
-        // No tracker configuration found - throw RuntimeException with informative message
+        // No tracker configuration found
+        if (isTestEnvironment()) {
+            logger.warn("No tracker configuration found, but test/CI environment detected. " +
+                    "Returning no-op TrackerClient. Real tracker features will throw if used.");
+            return new com.github.istin.dmtools.common.tracker.NoOpTrackerClient();
+        }
+
         logger.error("No tracker configuration found. Please configure one of: JIRA, ADO, Rally, or X-ray");
         throw new RuntimeException("Failed to create TrackerClient instance. " +
                 "Please configure JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +

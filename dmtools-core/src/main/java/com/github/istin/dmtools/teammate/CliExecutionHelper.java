@@ -13,9 +13,7 @@ import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
-import com.github.istin.dmtools.atlassian.confluence.ConfluenceStorageMarkdown;
-import com.github.istin.dmtools.atlassian.confluence.model.Content;
-import io.github.furstenheim.CopyDown;
+import com.github.istin.dmtools.atlassian.confluence.ConfluencePageDownloader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -38,6 +36,7 @@ import java.util.regex.Pattern;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * Helper class for CLI command execution within Teammate jobs.
@@ -214,101 +213,53 @@ public class CliExecutionHelper {
      * and all page attachments to {@code inputFolderPath/confluence/} so CLI agents can read them
      * without web access.
      * <p>
-     * Uses {@link Confluence#parseUris} (domain-aware, same mechanism as ContextOrchestrator)
-     * to detect URLs, then {@link Confluence#contentByUrl} to get the full {@link Content} object,
-     * {@link Confluence#getContentAttachments} + {@link Confluence#downloadAttachment} to fetch
-     * attachments — reusing the same pattern as {@code ConfluenceMermaidIndexIntegration}.
-     * If {@code confluence} is null the method is a no-op.
+     * This overload preserves the original behavior: depth 0 (only pages explicitly linked in the
+     * ticket text) and attachments enabled.
      *
      * @param textContent     Any text that may contain Confluence URLs (e.g. full ticket text)
      * @param inputFolderPath The base input folder (e.g. {@code input/PROJ-123})
      * @param confluence      Confluence client; if {@code null} the method does nothing
      */
     public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence) {
+        writeConfluencePagesFile(textContent, inputFolderPath, confluence, 0, true);
+    }
+
+    /**
+     * Fetches Confluence pages referenced in {@code textContent} and writes both the page text
+     * and all page attachments to {@code inputFolderPath/confluence/} so CLI agents can read them
+     * without web access.
+     * <p>
+     * Recursively follows internal Confluence links and {@code children} macros up to
+     * {@code confluenceDepth} levels. Attachments are downloaded for every fetched page unless
+     * {@code confluenceAttachments} is {@code false}.
+     * <p>
+     * Delegates to {@link ConfluencePageDownloader} so that Teammate and the
+     * {@code confluence_download_pages} MCP tool use the exact same download logic.
+     *
+     * @param textContent           Any text that may contain Confluence URLs (e.g. full ticket text)
+     * @param inputFolderPath       The base input folder (e.g. {@code input/PROJ-123})
+     * @param confluence            Confluence client; if {@code null} the method does nothing
+     * @param confluenceDepth       How many levels of linked/child pages to follow (0 = only ticket links)
+     * @param confluenceAttachments Whether to download attachments for each fetched page
+     */
+    public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence,
+                                         int confluenceDepth, boolean confluenceAttachments) {
         if (confluence == null || textContent == null || textContent.isBlank()) return;
         try {
-            Set<String> urls = confluence.parseUris(textContent);
-            if (urls == null || urls.isEmpty()) {
+            Set<String> seedUrls = confluence.parseUris(textContent);
+            if (seedUrls == null || seedUrls.isEmpty()) {
                 logger.info("No Confluence URLs detected in ticket text");
                 return;
             }
-            logger.info("Found {} Confluence URL(s), writing to input/confluence/...", urls.size());
+            logger.info("Found {} Confluence URL(s), writing to input/confluence/ with depth={} attachments={}",
+                    seedUrls.size(), confluenceDepth, confluenceAttachments);
 
             Path confluenceFolder = inputFolderPath.resolve("confluence");
-            Files.createDirectories(confluenceFolder);
-
-            int written = 0;
-            for (String url : urls) {
-                try {
-                    Content page = confluence.contentByUrl(url);
-                    if (page == null) {
-                        logger.warn("Confluence returned null Content for {}", url);
-                        continue;
-                    }
-
-                    // Write page text
-                    String title = page.getTitle();
-                    String safeName = deriveSafeName(title, url, written);
-                    String bodyText = page.getStorage() != null && page.getStorage().getValue() != null
-                            ? page.getStorage().getValue().trim() : "";
-                    if (!bodyText.isBlank()) {
-                        String markdownText = convertHtmlToMarkdown(bodyText);
-                        Path mdFile = confluenceFolder.resolve(safeName + ".md");
-                        Files.write(mdFile, markdownText.getBytes(StandardCharsets.UTF_8));
-                        logger.info("Wrote Confluence page → {} ({} chars, markdown)", mdFile, markdownText.length());
-                        written++;
-                    } else {
-                        logger.warn("Confluence page '{}' has empty body, skipping text write", title);
-                    }
-
-                    // Download attachments (same pattern as ConfluenceMermaidIndexIntegration)
-                    String contentId = page.getId();
-                    if (contentId != null && !contentId.isBlank()) {
-                        downloadConfluenceAttachments(confluence, contentId, confluenceFolder.toFile());
-                    }
-                } catch (Exception e) {
-                    logger.warn("Could not fetch Confluence page {} (skipping): {}", url, e.getMessage());
-                }
-            }
-            logger.info("Wrote {}/{} Confluence pages to input/confluence/", written, urls.size());
+            new ConfluencePageDownloader(confluence).downloadPages(
+                    new ArrayList<>(seedUrls), confluenceFolder.toFile(), confluenceDepth, confluenceAttachments);
         } catch (Exception e) {
             logger.warn("writeConfluencePagesFile failed (non-fatal): {}", e.getMessage());
         }
-    }
-
-    /**
-     * Downloads all attachments for a Confluence content item into {@code targetDir}
-     * via {@link Confluence#downloadPageAttachments} — the shared method used by both
-     * MermaidIndex and CLI input folder preparation.
-     */
-    private void downloadConfluenceAttachments(Confluence confluence, String contentId, File targetDir) {
-        try {
-            List<java.io.File> files = confluence.downloadPageAttachments(contentId, targetDir);
-            logger.info("Downloaded {} attachment(s) for Confluence page {} to input/confluence/",
-                    files.size(), contentId);
-        } catch (Exception e) {
-            logger.warn("Could not download attachments for content {} (skipping): {}", contentId, e.getMessage());
-        }
-    }
-
-    /** Derives a safe filesystem name from a Confluence page title or URL. */
-    private static String deriveSafeName(String title, String url, int index) {
-        if (title != null && !title.isBlank()) {
-            return title.replaceAll("[^\\w.\\-]", "_");
-        }
-        String urlPath = url.replaceAll("\\?.*", "").replaceAll("#.*", "");
-        String[] segments = urlPath.split("/");
-        String raw = segments[segments.length - 1];
-        return raw.isBlank() ? "page-" + index : raw.replaceAll("[^\\w.\\-]", "_");
-    }
-
-    /**
-     * Converts Confluence Storage Format HTML to readable Markdown.
-     * Delegates to {@link ConfluenceStorageMarkdown} which pre-processes
-     * Confluence-specific tags before passing to CopyDown.
-     */
-    private static String convertHtmlToMarkdown(String html) {
-        return ConfluenceStorageMarkdown.toMarkdown(html);
     }
 
     /**
@@ -543,12 +494,12 @@ public class CliExecutionHelper {
                 String response;
                 if (lineStopPredicate == null) {
                     response = allowAnyCommand
-                            ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false)
-                            : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer);
+                            ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false, null, -1)
+                            : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, true, null, -1);
                 } else {
                     response = allowAnyCommand
-                            ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false, lineStopPredicate)
-                            : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, true, lineStopPredicate);
+                            ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false, lineStopPredicate, -1)
+                            : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, true, lineStopPredicate, -1);
                 }
 
                 if (response != null && !response.trim().isEmpty()) {
@@ -746,6 +697,38 @@ public class CliExecutionHelper {
         AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
                 : (timerAction != null ? new AtomicReference<>("") : null);
 
+        AtomicReference<CliExecutionResult> resultRef = new AtomicReference<>();
+        runWithTimer(timerAction, timerIntervalSeconds, () -> {
+            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
+                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate);
+            String outputResponse = processOutputResponse(workingDirectory);
+            resultRef.set(new CliExecutionResult(cliResponses, outputResponse));
+        });
+        return resultRef.get();
+    }
+
+    /**
+     * Runs {@code work} with an optional periodic background timer, using the same
+     * scheduling/shutdown/final-tick semantics as {@link #executeCliCommandsWithResult}.
+     *
+     * <p>Useful for wrapping any long-running phase with the same auto-commit/session-save
+     * safety net used for the main CLI command phase — in particular a {@code postJSAction}
+     * that itself loops over CLI commands (e.g. a feedback-loop quality-gate retry calling
+     * {@code cli_execute_command} repeatedly from JavaScript). Without this, such a phase
+     * would run with zero periodic auto-save/auto-commit protection, since the timer
+     * previously only wrapped the main {@code cliCommands} array execution.
+     *
+     * <p>Each timer firing invokes {@code timerAction} on a dedicated daemon scheduler thread.
+     * Since {@code timerAction} is expected to spin up its own independent JS execution
+     * context (see {@code Teammate}'s {@code js(...)} helper), this is safe to run
+     * concurrently with {@code work} even when {@code work} itself is executing JavaScript,
+     * as GraalJS contexts created independently do not share thread-affinity locks.
+     *
+     * @param timerAction          Optional runnable executed on the timer thread; timer is disabled if null or timerIntervalSeconds &lt;= 0
+     * @param timerIntervalSeconds Interval between timer firings in seconds
+     * @param work                 The work to run on the calling thread while the timer fires in the background
+     */
+    public static void runWithTimer(Runnable timerAction, int timerIntervalSeconds, Runnable work) {
         ScheduledExecutorService scheduler = null;
         if (timerAction != null && timerIntervalSeconds > 0) {
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -757,17 +740,14 @@ public class CliExecutionHelper {
                 try {
                     timerAction.run();
                 } catch (Exception e) {
-                    logger.warn("timerJSAction threw exception (ignored, CLI execution continues): {}", e.getMessage());
+                    logger.warn("timerJSAction threw exception (ignored, execution continues): {}", e.getMessage());
                 }
             }, timerIntervalSeconds, timerIntervalSeconds, TimeUnit.SECONDS);
             logger.info("timerJSAction scheduler started (interval: {}s)", timerIntervalSeconds);
         }
 
         try {
-            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
-                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate);
-            String outputResponse = processOutputResponse(workingDirectory);
-            return new CliExecutionResult(cliResponses, outputResponse);
+            work.run();
         } finally {
             if (scheduler != null) {
                 scheduler.shutdown();
@@ -780,7 +760,7 @@ public class CliExecutionHelper {
                     Thread.currentThread().interrupt();
                 }
                 logger.info("timerJSAction scheduler stopped");
-                // Fire one final tick so the complete CLI output is saved to releases
+                // Fire one final tick so the complete output (commit/push, session save) is captured
                 try {
                     logger.info("timerJSAction final tick: saving complete session output");
                     timerAction.run();
@@ -791,56 +771,6 @@ public class CliExecutionHelper {
         }
     }
 
-    /**
-     * Filters environment variables by exact name and/or regex patterns.
-     * Returns a new map with matching keys removed.
-     */
-    public static Map<String, String> filterEnvVariables(Map<String, String> envVars,
-                                                         String[] excludedEnvVariables,
-                                                         String[] excludedEnvRegexes) {
-        if (envVars == null || envVars.isEmpty()) {
-            return envVars;
-        }
-        Set<String> exactExclusions = new HashSet<>();
-        if (excludedEnvVariables != null) {
-            for (String key : excludedEnvVariables) {
-                if (key != null && !key.isBlank()) {
-                    exactExclusions.add(key);
-                }
-            }
-        }
-        java.util.List<java.util.regex.Pattern> patterns = new java.util.ArrayList<>();
-        if (excludedEnvRegexes != null) {
-            for (String regex : excludedEnvRegexes) {
-                if (regex != null && !regex.isBlank()) {
-                    patterns.add(java.util.regex.Pattern.compile(regex));
-                }
-            }
-        }
-        if (exactExclusions.isEmpty() && patterns.isEmpty()) {
-            return envVars;
-        }
-        Map<String, String> filtered = new java.util.HashMap<>(envVars);
-        int removed = 0;
-        for (String key : envVars.keySet()) {
-            if (exactExclusions.contains(key)) {
-                filtered.remove(key);
-                removed++;
-                continue;
-            }
-            for (java.util.regex.Pattern pattern : patterns) {
-                if (pattern.matcher(key).matches()) {
-                    filtered.remove(key);
-                    removed++;
-                    break;
-                }
-            }
-        }
-        logger.info("Excluded {} environment variable(s) from subprocess env (exact={}, regex={})",
-                removed, exactExclusions.size(), patterns.size());
-        return filtered;
-    }
-    
     /**
      * Processes output response from CLI commands by checking for outputs/response.md file.
      * For backward compatibility, also checks output/response.md if outputs/response.md is not found.
@@ -924,6 +854,63 @@ public class CliExecutionHelper {
         }
     }
     
+    /**
+     * Filters environment variables by exact name and/or regex patterns.
+     * Returns a new map with matching keys removed. If both filters are null/empty,
+     * returns the original map reference unchanged.
+     */
+    public static Map<String, String> filterEnvVariables(Map<String, String> envVars,
+                                                         String[] excludedEnvVariables,
+                                                         String[] excludedEnvRegexes) {
+        if (envVars == null || envVars.isEmpty()) {
+            return envVars;
+        }
+
+        Set<String> exactExclusions = new HashSet<>();
+        if (excludedEnvVariables != null) {
+            for (String name : excludedEnvVariables) {
+                if (name != null && !name.isBlank()) {
+                    exactExclusions.add(name);
+                }
+            }
+        }
+
+        List<Pattern> regexPatterns = new ArrayList<>();
+        if (excludedEnvRegexes != null) {
+            for (String regex : excludedEnvRegexes) {
+                if (regex != null && !regex.isBlank()) {
+                    regexPatterns.add(Pattern.compile(regex));
+                }
+            }
+        }
+
+        if (exactExclusions.isEmpty() && regexPatterns.isEmpty()) {
+            return envVars;
+        }
+
+        Map<String, String> filtered = new HashMap<>();
+        for (Map.Entry<String, String> entry : envVars.entrySet()) {
+            String key = entry.getKey();
+            if (exactExclusions.contains(key)) {
+                logger.debug("Excluding env variable {} (exact match)", key);
+                continue;
+            }
+            boolean matchesRegex = false;
+            for (Pattern pattern : regexPatterns) {
+                if (pattern.matcher(key).matches()) {
+                    logger.debug("Excluding env variable {} (regex match: {})", key, pattern.pattern());
+                    matchesRegex = true;
+                    break;
+                }
+            }
+            if (!matchesRegex) {
+                filtered.put(key, entry.getValue());
+            }
+        }
+        logger.info("Filtered environment variables: {} excluded, {} retained", envVars.size() - filtered.size(), filtered.size());
+        return filtered;
+    }
+
     /**
      * Appends processed prompt to each CLI command via temporary file.
      * Creates a temporary file with prompt content and passes file path as parameter.

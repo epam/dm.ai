@@ -449,8 +449,16 @@ public class MarkdownToJiraConverter {
         }
         String placeholderPattern = Pattern.quote(HTMLCodeBlockPreserver.CODE_BLOCK_PLACEHOLDER) + "\\d+";
 
+        // jsoup 1.22+ pretty-prints innerHTML with extra whitespace around inline tags.
+        // Render this paragraph in a temporary document with pretty-print disabled
+        // so that <br>-to-newline conversion keeps the same compact output as before.
+        Document temp = Document.createShell("");
+        temp.outputSettings().prettyPrint(false);
+        Element pClone = p.clone();
+        temp.body().appendChild(pClone);
+
         // convert known tags => JIRA
-        String text = p.html()
+        String text = pClone.html()
                 .replaceAll("(?i)<a\\s+href=\"([^\"]+)\">(.*?)</a>", "[$2|$1]")
                 .replaceAll("(?i)<strong>(.*?)</strong>", "*$1*")
                 .replaceAll("(?i)<em>(.*?)</em>", "_$1_")
@@ -521,7 +529,7 @@ public class MarkdownToJiraConverter {
                     .replaceAll("(?i)<em>(.*?)</em>", "_$1_")
                     .replaceAll("(?i)<b>(.*?)</b>", "*$1*")
                     .replaceAll("(?i)<i>(.*?)</i>", "_$1_")
-                    .replaceAll("(?i)<br\\s*/?>", "\n")
+                    .replaceAll("(?i)<br\\s*/?>\\s*", "\n")
                     .replaceAll("(?i)<code>(?!" + placeholderPattern + ")(.*?)</code>", "{{$1}}")
                     .replaceAll("(?i)<[^>]+>", "");
 
@@ -570,7 +578,7 @@ public class MarkdownToJiraConverter {
                     .replaceAll("(?i)<em>(.*?)</em>", "_$1_")
                     .replaceAll("(?i)<b>(.*?)</b>", "*$1*")
                     .replaceAll("(?i)<i>(.*?)</i>", "_$1_")
-                    .replaceAll("(?i)<br\\s*/?>", "\n")
+                    .replaceAll("(?i)<br\\s*/?>\\s*", "\n")
                     .replaceAll("(?i)<code>(?!" + placeholderPattern + ")(.*?)</code>", "{{$1}}")
                     .replaceAll("(?i)<[^>]+>", "");
 
@@ -618,7 +626,15 @@ public class MarkdownToJiraConverter {
                         sb.append(stripped).append("|");
                     } else {
                         String placeholderPattern = Pattern.quote(HTMLCodeBlockPreserver.CODE_BLOCK_PLACEHOLDER) + "\\d+";
-                        String cellText = cell.html()
+                        // jsoup 1.22+ pretty-prints cell innerHTML; render the cell in a
+                        // temporary document without pretty-print to keep <br>-to-line-break
+                        // conversion compact.
+                        Document cellTemp = Document.createShell("");
+                        cellTemp.outputSettings().prettyPrint(false);
+                        Element cellClone = cell.clone();
+                        cellTemp.body().appendChild(cellClone);
+
+                        String cellText = cellClone.html()
                                 .replaceAll("(?i)<a\\s+href=\"([^\"]+)\">(.*?)</a>", "[$2|$1]")
                                 .replaceAll("(?i)<strong>(.*?)</strong>", "*$1*")
                                 .replaceAll("(?i)<em>(.*?)</em>", "_$1_")
@@ -677,7 +693,7 @@ public class MarkdownToJiraConverter {
                 .replaceAll("(?i)<strong>(.*?)</strong>", "*$1*")
                 .replaceAll("(?i)<em>(.*?)</em>", "_$1_")
                 .replaceAll("(?i)<b>(.*?)</b>", "*$1*")
-                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)<br\\s*/?>\\s*", "\n")
                 .replaceAll("(?i)<i>(.*?)</i>", "_$1_")
                 .replaceAll("(?i)<code>(?!" + placeholderPattern + ")(.*?)</code>", "{{$1}}")
                 .replaceAll("(?i)<[^>]+>", "");

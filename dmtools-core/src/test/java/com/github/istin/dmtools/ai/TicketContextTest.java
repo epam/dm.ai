@@ -9,6 +9,7 @@ import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -442,6 +443,26 @@ public class TicketContextTest {
             // Format: "TIMING: Starting TicketContext.prepareContext() for {ticket} at {timestamp}"
             // Format: "TIMING: IssuesIDsParser.extractAllJiraIDs() took {duration}ms for {ticket}"
             // Format: "TIMING: All extra tickets fetch took {duration}ms for {ticket}"
+        }
+    }
+
+    @Test
+    void testPrepareContextFiltersIgnoredPrefixes() throws IOException {
+        PropertyReader.setOverrides(java.util.Map.of(PropertyReader.JIRA_ISSUE_IGNORE_PREFIXES, "PSR"));
+        try {
+            when(mockTicket.toText()).thenReturn("This ticket references PSR-18 and DMC-403");
+            when(mockTrackerClient.getExtendedQueryFields()).thenReturn(new String[]{"description", "summary"});
+            when(mockTrackerClient.performTicket("DMC-403", new String[]{"description", "summary"}))
+                .thenReturn(mockExtraTicket1);
+
+            ticketContext.prepareContext(false);
+
+            List<ITicket> extraTickets = ticketContext.getExtraTickets();
+            assertEquals(1, extraTickets.size());
+            assertEquals("DMC-403", extraTickets.get(0).getKey());
+            verify(mockTrackerClient, never()).performTicket(eq("PSR-18"), any());
+        } finally {
+            PropertyReader.clearOverrides();
         }
     }
 

@@ -78,7 +78,6 @@ grep -q "dmtools.env\|dmtools-local.env" .gitignore 2>/dev/null || echo "Not in 
 # DMtools configuration (contains secrets)
 dmtools.env
 dmtools-local.env
-.dmtools/
 ```
 
 ### Configuration Template
@@ -169,7 +168,7 @@ Create `dmtools.env` in project root (see template in FIRST-TIME SETUP section)
 
 #### 3. Add to .gitignore
 ```bash
-echo -e "\n# DMtools configuration\ndmtools.env\ndmtools-local.env\n.dmtools/" >> .gitignore
+echo -e "\n# DMtools configuration\ndmtools.env\ndmtools-local.env" >> .gitignore
 ```
 
 #### 4. Get API Tokens

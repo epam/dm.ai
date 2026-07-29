@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+
+    <!-- GraalVM bundles ICU4J for JS unicode support; OWASP matches browser/C++ ICU CVEs -->
+    <suppress>
+        <notes><![CDATA[
+            False positive: Chromium/ICU tooling CVEs (genrb, V8, etc.) are not applicable to
+            org.graalvm.shadowed:icu4j used as a Java unicode library inside GraalVM JS.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.graalvm\.shadowed/icu4j@.*$</packageUrl>
+        <cvssBelow>10</cvssBelow>
+    </suppress>
+
+    <suppress>
+        <notes><![CDATA[
+            False positive: CVE-2015-5922 (CVSS 10) is a Chromium/V8 ICU issue, not GraalVM icu4j.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.graalvm\.shadowed/icu4j@.*$</packageUrl>
+        <cve>CVE-2015-5922</cve>
+    </suppress>
+
+    <!-- CVE description explicitly references gRPC-Go server authorization bypass -->
+    <suppress>
+        <notes><![CDATA[
+            False positive: CVE-2026-33186 documents a gRPC-Go server :path validation bug,
+            not the Java io.grpc:grpc-context artifact.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/io\.grpc/grpc-context@.*$</packageUrl>
+        <cve>CVE-2026-33186</cve>
+    </suppress>
+
+    <!-- CVE description explicitly references Python protobuf json_format.ParseDict -->
+    <suppress>
+        <notes><![CDATA[
+            False positive: CVE-2026-0994 affects Python google.protobuf.json_format.ParseDict(),
+            not Java com.google.protobuf:protobuf-java.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.google\.protobuf/protobuf-java@.*$</packageUrl>
+        <cve>CVE-2026-0994</cve>
+    </suppress>
+
+    <suppress>
+        <notes><![CDATA[
+            False positive: CVE-2026-0994 affects Python google.protobuf.json_format.ParseDict(),
+            not Java com.google.protobuf:protobuf-java-util.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.google\.protobuf/protobuf-java-util@.*$</packageUrl>
+        <cve>CVE-2026-0994</cve>
+    </suppress>
+
+    <!-- Kotlin stdlib CVE is annotation-processor transitive; temp-dir perms, not runtime attack surface -->
+    <suppress>
+        <notes><![CDATA[
+            False positive / accepted risk: CVE-2020-29582 is insecure temp-file creation in old Kotlin
+            versions pulled only via Dagger/KSP annotation processors at build time.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.jetbrains\.kotlin/.*@.*$</packageUrl>
+        <cve>CVE-2020-29582</cve>
+    </suppress>
+
+    <!-- Path traversal in ExtractEmbeddedFiles example code; dmtools does not use that example -->
+    <suppress>
+        <notes><![CDATA[
+            False positive for dmtools: CVE-2026-23907/CVE-2026-33929 affect the PDFBox
+            ExtractEmbeddedFiles sample, not core Loader.loadPDF usage in ReadPDFFile.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.pdfbox/.*@.*$</packageUrl>
+        <cve>CVE-2026-23907</cve>
+    </suppress>
+
+    <suppress>
+        <notes><![CDATA[
+            False positive for dmtools: CVE-2026-33929 affects the PDFBox ExtractEmbeddedFiles sample.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.pdfbox/.*@.*$</packageUrl>
+        <cve>CVE-2026-33929</cve>
+    </suppress>
+
+    <!-- KSP API matched to unrelated "processing" CPE; annotation processor only -->
+    <suppress>
+        <notes><![CDATA[
+            False positive: CVE-2018-1000840 is for npm "morgan" package, not KSP symbol-processing-api.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.google\.devtools\.ksp/symbol-processing-api@.*$</packageUrl>
+        <cve>CVE-2018-1000840</cve>
+    </suppress>
+
+</suppressions>

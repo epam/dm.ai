@@ -24,5 +24,16 @@ public interface AnthropicConfiguration {
      * @return The max tokens for responses
      */
     int getAnthropicMaxTokens();
+    /**
+     * Gets the Anthropic custom header names
+     * @return Comma-separated custom header names
+     */
+    String getAnthropicCustomHeaderNames();
+
+    /**
+     * Gets the Anthropic custom header values
+     * @return Comma-separated custom header values
+     */
+    String getAnthropicCustomHeaderValues();
 }
 

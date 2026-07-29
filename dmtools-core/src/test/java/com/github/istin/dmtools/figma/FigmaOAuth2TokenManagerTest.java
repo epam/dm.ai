@@ -48,7 +48,7 @@ public class FigmaOAuth2TokenManagerTest {
 
     @Test
     public void testTokenEndpointUrl_isCorrect() {
-        assertEquals("https://www.figma.com/api/oauth/token", FigmaOAuth2TokenManager.FIGMA_OAUTH_TOKEN_URL);
+        assertEquals("https://api.figma.com/v1/oauth/token", FigmaOAuth2TokenManager.FIGMA_OAUTH_TOKEN_URL);
     }
 
     @Test

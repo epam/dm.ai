@@ -613,6 +613,28 @@ function action(params) {
 }
 ```
 
+### Verbose MCP Tool-Call Logging (opt-in)
+
+By default, DMtools does **not** log the raw arguments of every MCP tool call your
+agent makes, or the "Exposed MCP tool X to JavaScript" registration listing at
+startup. This is intentional: tool args can include large payloads (e.g. a
+`file_write` call containing an entire file's contents, or a Jenkins console log),
+and logging them unconditionally can turn a CI job's log into a multi-megabyte
+wall of text.
+
+If you need to see exactly what args are passed to each MCP tool call while
+debugging an agent locally, opt in with an environment variable:
+
+```bash
+DMTOOLS_JS_LOG_TOOL_CALLS=true dmtools run agents/js/myScript.js '{}'
+```
+
+This enables, for the duration of that run:
+- `Calling tool <name> with args: <json>` before every MCP tool invocation
+- `Exposed MCP tool <name> to JavaScript` for each tool registered at JS context startup
+
+Leave this unset (or `false`) in CI/production pipelines to keep logs readable.
+
 ### Debug Mode (opt-in verbose output)
 
 Use a `debug` param flag to enable verbose output without cluttering production logs:

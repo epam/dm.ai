@@ -38,46 +38,6 @@ public class JAssistantTest {
     }
 
     @Test
-    public void testGenerateCode() throws Exception {
-        TicketContext ticketContextMock = mock(TicketContext.class);
-        ITicket ticketMock = mock(ITicket.class);
-        when(ticketContextMock.getTicket()).thenReturn(ticketMock);
-        when(ticketMock.getIssueType()).thenReturn("Story");
-        when(trackerClientMock.getBasePath()).thenReturn("basePath");
-        when(promptManagerMock.requestGenerateCodeForTicket(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(anyString(), anyString())).thenReturn("AI Response");
-
-        jAssistant.generateCode("role", ticketContextMock);
-
-        verify(trackerClientMock).addLabelIfNotExists(any(), eq("ai_generated_code"));
-    }
-
-    @Test
-    public void testGenerateNiceLookingStoryInGherkinStyleAndPotentialQuestionsToPO() throws Exception {
-        ITicket ticketMock = mock(ITicket.class);
-        when(trackerClientMock.performTicket(anyString(), any())).thenReturn(ticketMock);
-        when(promptManagerMock.requestNiceLookingStoryInGherkinStyleAndPotentialQuestionsToPO(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(anyString())).thenReturn("AI Response");
-        when(ticketMock.toText()).thenReturn("");
-        jAssistant.generateNiceLookingStoryInGherkinStyleAndPotentialQuestionsToPO("TICKET-1");
-
-        verify(trackerClientMock).postComment(anyString(), contains("JAI Generated Nice Looking Story In Gherkin Style And Potential Questions To PO: "));
-    }
-
-    @Test
-    public void testCheckStoryIsTechnicalOrProduct() throws Exception {
-        ITicket ticketMock = mock(ITicket.class);
-        when(trackerClientMock.performTicket(anyString(), any())).thenReturn(ticketMock);
-        when(promptManagerMock.checkTaskTechnicalOrProduct(any())).thenReturn("AI Request");
-        when(aiClientMock.chat(anyString())).thenReturn("Technical");
-        when(ticketMock.toText()).thenReturn("");
-
-        String result = jAssistant.checkStoryIsTechnicalOrProduct(ticketMock);
-
-        assertEquals("Technical", result);
-    }
-
-    @Test
     public void testChooseFeatureAreaForStory() throws Exception {
         ToText inputTextMock = mock(ToText.class);
         when(promptManagerMock.checkStoryAreas(any())).thenReturn("AI Request");

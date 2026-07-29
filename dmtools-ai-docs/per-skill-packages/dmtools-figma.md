@@ -2,7 +2,7 @@
 
 ## Overview
 
-`dmtools-figma` is the focused DMtools package for Figma design-analysis workflows, including file structure inspection, node exports, image extraction, icon discovery, and design-token access.
+`dmtools-figma` is the focused DMtools package for Figma design-analysis workflows, including file structure inspection, node exports, image extraction, icon discovery, design-token access, team/project discovery, and file comment retrieval.
 
 ## Package / Artifact
 
@@ -34,6 +34,22 @@ bash skill-install.sh --skills figma
 
 ```bash
 dmtools figma_get_layers "https://www.figma.com/file/abc123/Product?node-id=1%3A2"
+```
+
+Team-level "files" listing URLs (e.g. `https://www.figma.com/files/<orgId>/team/<teamId>`) are not single design files and cannot be passed directly to file-specific tools. Browse them down to an actual file first:
+
+```bash
+# 1. List projects within a team (accepts a raw team ID or a URL containing /team/<teamId>)
+dmtools figma_list_team_projects "https://www.figma.com/files/<orgId>/team/<teamId>"
+
+# 2. List files within a chosen project (accepts a raw project ID or a URL containing /project/<projectId>)
+dmtools figma_list_project_files "<projectId>"
+
+# 3. Once you have a single file's URL/key, inspect it as usual
+dmtools figma_get_layers "https://www.figma.com/file/<fileKey>/Design"
+
+# Optional: read reviewer feedback left on a file
+dmtools figma_get_file_comments "https://www.figma.com/file/<fileKey>/Design"
 ```
 
 ## Compatibility / Supported versions

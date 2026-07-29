@@ -5,7 +5,6 @@ package com.github.istin.dmtools.di;
 
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
-import com.github.istin.dmtools.dev.CommitsTriageParams;
 import dagger.Module;
 import dagger.Provides;
 
@@ -30,9 +29,5 @@ public class SourceCodeModule {
             throw new RuntimeException(e);
         }
 
-    }
-    @Provides
-    SourceCode provideSourceCode(SourceCodeFactory factory, CommitsTriageParams params) {
-        return factory.createSourceCodes(params.getSourceType());
     }
 }

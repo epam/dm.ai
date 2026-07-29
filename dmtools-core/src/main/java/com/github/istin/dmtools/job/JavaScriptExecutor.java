@@ -9,6 +9,7 @@ import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.ai.AI;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.google.gson.Gson;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -106,7 +107,12 @@ public class JavaScriptExecutor {
             }
             Object result = jsBridge.executeJavaScript(jsCode, jsParamsJson);
             
-            logger.info("JavaScript executed successfully: {}", result);
+            if (new PropertyReader().isJsToolCallLoggingEnabled()) {
+                logger.info("JavaScript executed successfully: {}", result);
+            } else {
+                logger.info("JavaScript executed successfully (result type: {}, set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full result)",
+                        result != null ? result.getClass().getSimpleName() : "null");
+            }
             return result;
             
         } catch (Exception e) {

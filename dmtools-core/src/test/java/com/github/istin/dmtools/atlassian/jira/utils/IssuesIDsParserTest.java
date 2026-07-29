@@ -3,11 +3,16 @@
 
 package com.github.istin.dmtools.atlassian.jira.utils;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.junit.Test;
 import org.mockito.Mockito;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -68,5 +73,80 @@ public class IssuesIDsParserTest {
         Set<String> result = IssuesIDsParser.extractAllJiraIDs(null);
 
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testExtractAllJiraIDsWithIgnoreList() {
+        String text = "PROJ-860 uses PSR-18 and PSR-17 factories, see RFC-6749";
+        Set<String> ignorePrefixes = new HashSet<>(Collections.singletonList("PSR"));
+        Set<String> result = IssuesIDsParser.extractAllJiraIDs(text, ignorePrefixes, Collections.emptySet());
+
+        assertEquals(2, result.size());
+        assertTrue(result.contains("PROJ-860"));
+        assertTrue(result.contains("RFC-6749"));
+    }
+
+    @Test
+    public void testExtractAllJiraIDsWithAllowedList() {
+        String text = "PROJ-860 uses PSR-18 and TEAM-123 factories, see RFC-6749";
+        Set<String> allowedPrefixes = new HashSet<>(Collections.singletonList("PROJ"));
+        Set<String> result = IssuesIDsParser.extractAllJiraIDs(text, Collections.emptySet(), allowedPrefixes);
+
+        assertEquals(1, result.size());
+        assertTrue(result.contains("PROJ-860"));
+    }
+
+    @Test
+    public void testExtractAllJiraIDsWithBothLists() {
+        String text = "PROJ-860 uses PSR-18 and TEAM-123 factories";
+        Set<String> ignorePrefixes = new HashSet<>(Collections.singletonList("TEAM"));
+        Set<String> allowedPrefixes = new HashSet<>(Collections.singletonList("PROJ"));
+        Set<String> result = IssuesIDsParser.extractAllJiraIDs(text, ignorePrefixes, allowedPrefixes);
+
+        assertEquals(1, result.size());
+        assertTrue(result.contains("PROJ-860"));
+    }
+
+    @Test
+    public void testExtractAllJiraIDsWithCaseInsensitivePrefixes() {
+        String text = "PROJ-860 uses PSR-18 factories";
+        Set<String> ignorePrefixes = new HashSet<>(Collections.singletonList("psr"));
+        Set<String> allowedPrefixes = new HashSet<>(Collections.singletonList("proj"));
+        Set<String> result = IssuesIDsParser.extractAllJiraIDs(text, ignorePrefixes, allowedPrefixes);
+
+        assertEquals(1, result.size());
+        assertTrue(result.contains("PROJ-860"));
+    }
+
+    @Test
+    public void testExtractAllJiraIDsReadsPropertyReaderConfig() {
+        Map<String, String> overrides = new HashMap<>();
+        overrides.put(PropertyReader.JIRA_ISSUE_IGNORE_PREFIXES, "PSR,RFC");
+        PropertyReader.setOverrides(overrides);
+        try {
+            String text = "PROJ-860 uses PSR-18 and RFC-6749";
+            Set<String> result = IssuesIDsParser.extractAllJiraIDs(text);
+
+            assertEquals(1, result.size());
+            assertTrue(result.contains("PROJ-860"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    public void testExtractAllJiraIDsAllowedListFromPropertyReaderConfig() {
+        Map<String, String> overrides = new HashMap<>();
+        overrides.put(PropertyReader.JIRA_ISSUE_ALLOWED_PREFIXES, "TEAM");
+        PropertyReader.setOverrides(overrides);
+        try {
+            String text = "PROJ-860 and TEAM-123";
+            Set<String> result = IssuesIDsParser.extractAllJiraIDs(text);
+
+            assertEquals(1, result.size());
+            assertTrue(result.contains("TEAM-123"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
     }
 }

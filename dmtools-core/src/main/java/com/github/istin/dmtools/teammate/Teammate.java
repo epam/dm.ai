@@ -12,6 +12,7 @@ import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.ai.agent.SourceImpactAssessmentAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
+import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.IAttachment;
@@ -118,6 +119,21 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
         @SerializedName("timerIntervalSeconds")
         private int timerIntervalSeconds = 60;
+
+        @SerializedName("confluenceDepth")
+        private int confluenceDepth = 1;
+
+        @SerializedName("confluenceAttachments")
+        private boolean confluenceAttachments = true;
+
+        @SerializedName("includeParentConfluence")
+        private boolean includeParentConfluence = true;
+
+        @SerializedName("excludedEnvVariables")
+        private String[] excludedEnvVariables;
+
+        @SerializedName("excludedEnvRegexes")
+        private String[] excludedEnvRegexes;
 
         // ----- InputContextConfig implementation (preserves existing Teammate behavior) -----
 
@@ -503,6 +519,32 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             CliExecutionHelper.CliExecutionResult cliResult = null;
             Path inputContextPath = null;
 
+            // Build timer JS action runnable if configured. Declared here (outer scope) so the
+            // SAME timer also wraps postJSAction below — a postJSAction can itself run a long
+            // CLI-driven loop (e.g. a feedback-loop quality-gate retry calling cli_execute_command
+            // repeatedly from JavaScript), which previously had zero periodic auto-save/auto-commit
+            // protection since the timer only covered the main cliCommands execution.
+            String timerJSAction = expertParams.getTimerJSAction();
+            int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
+            AtomicReference<String> liveCliOutput = new AtomicReference<>("");
+            Runnable timerRunnable = null;
+            if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
+                timerRunnable = () -> {
+                    try {
+                        js(timerJSAction)
+                            .mcp(trackerClient, ai, confluence, null)
+                            .withJobContext(expertParams, ticket, null)
+                            .with(TrackerParams.INITIATOR, initiator)
+                            .with("systemRequest", systemRequestCommentAlias)
+                            .with("currentCliOutput", liveCliOutput.get())
+                            .execute();
+                    } catch (Exception e) {
+                        logger.warn("timerJSAction execution failed (continues): {}", e.getMessage());
+                    }
+                };
+                logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
+            }
+
             if (cliCommands != null && cliCommands.length > 0) {
                 try {
                     // Build final CLI commands with aggregated prompt (shared logic with CliAgent)
@@ -540,30 +582,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
                     Path projectRoot = Paths.get(System.getProperty("user.dir"));
 
-                    // Build timer JS action runnable if configured
-                    String timerJSAction = expertParams.getTimerJSAction();
-                    int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
-                    AtomicReference<String> liveCliOutput = new AtomicReference<>("");
-                    Runnable timerRunnable = null;
-                    if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
-                        timerRunnable = () -> {
-                            try {
-                                js(timerJSAction)
-                                    .mcp(trackerClient, ai, confluence, null)
-                                    .withJobContext(expertParams, ticket, null)
-                                    .with(TrackerParams.INITIATOR, initiator)
-                                    .with("systemRequest", systemRequestCommentAlias)
-                                    .with("currentCliOutput", liveCliOutput.get())
-                                    .execute();
-                            } catch (Exception e) {
-                                logger.warn("timerJSAction execution failed (CLI continues): {}", e.getMessage());
-                            }
-                        };
-                        logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
-                    }
-
-                    cliResult = cliHelper.executeCliCommandsWithResult(finalCliCommands, projectRoot, null,
-                            timerRunnable, timerIntervalSeconds, liveCliOutput);
+                    cliResult = cliHelper.executeCliCommandsWithResult(
+                            finalCliCommands,
+                            projectRoot,
+                            null,
+                            timerRunnable,
+                            timerIntervalSeconds,
+                            liveCliOutput,
+                            false,
+                            expertParams.getExcludedEnvVariables(),
+                            expertParams.getExcludedEnvRegexes());
                     
                     // Append CLI responses to knownInfo if not empty
                     StringBuilder cliResponses = cliResult.getCommandResponses();
@@ -673,12 +701,22 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, chunksContext, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
                 response = genericRequestAgent.run(genericRequesAgentParams);
             }
-            js(expertParams.getPostJSAction())
-                .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
-                .withJobContext(expertParams, ticket, response)
-                .with(TrackerParams.INITIATOR, initiator)
-                .with("systemRequest", systemRequestCommentAlias)
-                .execute();
+            AtomicReference<Exception> postJsError = new AtomicReference<>();
+            CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
+                try {
+                    js(expertParams.getPostJSAction())
+                        .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                        .withJobContext(expertParams, ticket, response)
+                        .with(TrackerParams.INITIATOR, initiator)
+                        .with("systemRequest", systemRequestCommentAlias)
+                        .execute();
+                } catch (Exception e) {
+                    postJsError.set(e);
+                }
+            });
+            if (postJsError.get() != null) {
+                throw postJsError.get();
+            }
             if (expertParams.isAttachResponseAsFile()) {
                 attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
             }
@@ -741,12 +779,56 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             } else {
                 logger.info("Output type is 'none', skipping publishing results for ticket {}", ticket.getKey());
             }
+
+            // Post completion comment so the initiator is notified when the Teammate run finishes
+            postCompletionComment(trackerClient, ticket.getTicketKey(), ciRunUrl, initiator, expertParams);
+
             results.add(new ResultItem(ticket.getTicketKey(), response));
             return false;
         }, inputJQL, trackerClient.getExtendedQueryFields());
         return results;
     }
 
+
+    /**
+     * Builds the completion comment text that tags the initiator and references the CI run URL.
+     * If tagging the initiator fails, the comment is built without the tag so the notification
+     * still goes out.
+     */
+    static String buildCompletionComment(String initiator, String ciRunUrl, TrackerClient trackerClient) {
+        if (initiator != null && !initiator.isEmpty()) {
+            try {
+                return trackerClient.tag(initiator) + ", \n\n✅ Teammate run completed. CI Run: " + ciRunUrl;
+            } catch (Exception e) {
+                logger.warn("Failed to tag initiator {} in completion comment — posting without tag. Error: {}",
+                        initiator, e.getMessage());
+            }
+        }
+        return "✅ Teammate run completed. CI Run: " + ciRunUrl;
+    }
+
+    /**
+     * Posts a completion comment to the ticket when a CI run URL is configured.
+     * Tags the initiator if available. Errors are logged and swallowed so the job continues.
+     */
+    void postCompletionComment(TrackerClient trackerClient, String ticketKey, String ciRunUrl, String initiator, TeammateParams params) {
+        if (ciRunUrl == null || ciRunUrl.isEmpty()) {
+            return;
+        }
+        if (!shouldPostComments(params)) {
+            logger.debug("CI run URL provided ({}) but comments disabled - not posting completion comment to ticket {}",
+                    ciRunUrl, ticketKey);
+            return;
+        }
+        try {
+            String completionComment = buildCompletionComment(initiator, ciRunUrl, trackerClient);
+            trackerClient.postComment(ticketKey, agentNamePrefix(params) + completionComment);
+            logger.info("Posted completion comment for ticket {} with CI run trace", ticketKey);
+        } catch (Exception e) {
+            logger.warn("Failed to post completion comment for ticket {} — continuing. Error: {}",
+                    ticketKey, e.getMessage());
+        }
+    }
 
     /**
      * Resolves the effective CLI prompts by merging base {@code cliPrompts} with tracker-specific
@@ -796,6 +878,45 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             return Collections.emptyList();
         }
         return mermaidIndexTools.read(config.getIntegration(), config.getStoragePath());
+    }
+
+    /**
+     * Builds the text used to discover Confluence URLs for the CLI input folder.
+     * In addition to the current ticket's text fields, it also includes the parent
+     * ticket's text fields (for Jira sub-tasks) so that Confluence pages linked from
+     * the parent story are downloaded too.
+     *
+     * @param ticket                   the ticket being processed
+     * @param textFieldsOnly           the current ticket's text fields
+     * @param trackerClient            tracker client for fetching the parent ticket
+     * @param includeParentConfluence  whether to include the parent ticket's text fields
+     * @return combined text to scan for Confluence URLs
+     */
+    private String buildConfluenceScanText(ITicket ticket, String textFieldsOnly,
+                                            TrackerClient<?> trackerClient, boolean includeParentConfluence) {
+        StringBuilder scanText = new StringBuilder(textFieldsOnly != null ? textFieldsOnly : "");
+        if (includeParentConfluence && ticket instanceof Ticket) {
+            Ticket jiraTicket = (Ticket) ticket;
+            if (jiraTicket.getFields() != null) {
+                Ticket parent = jiraTicket.getFields().getParent();
+                if (parent != null && parent.getKey() != null && !parent.getKey().isBlank()) {
+                    String parentKey = parent.getKey();
+                    try {
+                        ITicket parentTicket = trackerClient.performTicket(parentKey, trackerClient.getExtendedQueryFields());
+                        if (parentTicket != null) {
+                            String parentTextFields = trackerClient.getTextFieldsOnly(parentTicket);
+                            if (parentTextFields != null && !parentTextFields.isBlank()) {
+                                scanText.append("\n\n").append(parentTextFields);
+                                logger.info("Including parent ticket {} text in Confluence URL scan", parentKey);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Could not fetch parent ticket {} for Confluence URL scan (skipping): {}", parentKey, e.getMessage());
+                    }
+                }
+            }
+        }
+        return scanText.toString();
     }
 
 }
