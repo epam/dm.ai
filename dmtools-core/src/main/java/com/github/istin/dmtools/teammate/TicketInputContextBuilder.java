@@ -6,6 +6,8 @@ package com.github.istin.dmtools.teammate;
 import com.github.istin.dmtools.ai.TicketContext;
 import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.jira.model.Fields;
+import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.model.IAttachment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -110,13 +112,14 @@ public class TicketInputContextBuilder {
             agentParamsFileWriter.writeToInputFolder(inputFolderPath, agentParams);
         }
 
-        // Smart source resolution
-        if (config.isSmart() && !textFieldsOnly.isBlank()) {
+        // Smart source resolution (include parent ticket text when configured)
+        String smartText = buildSmartText(textFieldsOnly, ticket, trackerClient, config);
+        if (config.isSmart() && !smartText.isBlank()) {
             if (isSourceEnabled(config, SOURCE_CONFLUENCE)) {
-                cliHelper.writeConfluencePagesFile(textFieldsOnly, inputFolderPath, confluence);
+                cliHelper.writeConfluencePagesFile(smartText, inputFolderPath, confluence);
             }
             if (isSourceEnabled(config, SOURCE_FIGMA)) {
-                writeFigmaFiles(textFieldsOnly, inputFolderPath, figmaClient);
+                writeFigmaFiles(smartText, inputFolderPath, figmaClient);
             }
         }
 
@@ -164,6 +167,44 @@ public class TicketInputContextBuilder {
         }
         // CliAgent path: full ticket context as request.md
         return ticketContext.toText();
+    }
+
+    private String buildSmartText(String textFieldsOnly, ITicket ticket,
+                                   TrackerClient<?> trackerClient, InputContextConfig config) {
+        StringBuilder smartText = new StringBuilder(textFieldsOnly != null ? textFieldsOnly : "");
+        if (config.isIncludeParentConfluence() && trackerClient != null) {
+            String parentKey = extractParentTicketKey(ticket);
+            if (parentKey != null) {
+                try {
+                    ITicket parentTicket = trackerClient.performTicket(parentKey, trackerClient.getExtendedQueryFields());
+                    String parentText = trackerClient.getTextFieldsOnly(parentTicket);
+                    if (parentText != null && !parentText.isBlank()) {
+                        if (!smartText.isEmpty()) {
+                            smartText.append("\n");
+                        }
+                        smartText.append(parentText);
+                        logger.info("Included parent {} text for smart source resolution", parentKey);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Could not fetch parent ticket {} for smart source resolution: {}",
+                            parentKey, e.getMessage());
+                }
+            }
+        }
+        return smartText.toString();
+    }
+
+    private String extractParentTicketKey(ITicket ticket) {
+        if (ticket instanceof Ticket) {
+            Fields fields = ((Ticket) ticket).getFields();
+            if (fields != null) {
+                Ticket parent = fields.getParent();
+                if (parent != null) {
+                    return parent.getKey();
+                }
+            }
+        }
+        return null;
     }
 
     private List<? extends IAttachment> filterAttachments(List<? extends IAttachment> attachments, InputContextConfig config) {

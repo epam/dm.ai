@@ -97,7 +97,7 @@ class TicketInputContextBuilderTest {
 
         Path confluenceFolder = result.getPath().resolve("confluence");
         assertTrue(Files.exists(confluenceFolder), "Confluence folder should be created");
-        assertTrue(Files.list(confluenceFolder).anyMatch(p -> p.toString().endsWith(".md")),
+        assertTrue(Files.walk(confluenceFolder).anyMatch(p -> p.toString().endsWith(".md")),
                 "Confluence page markdown should be written");
     }
 

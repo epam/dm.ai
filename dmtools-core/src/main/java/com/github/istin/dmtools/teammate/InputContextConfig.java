@@ -66,4 +66,11 @@ public interface InputContextConfig {
     default boolean isWriteAgentParamsToFiles() {
         return false;
     }
+
+    /**
+     * Whether to also scan the ticket's parent (if any) for Confluence URLs.
+     */
+    default boolean isIncludeParentConfluence() {
+        return false;
+    }
 }

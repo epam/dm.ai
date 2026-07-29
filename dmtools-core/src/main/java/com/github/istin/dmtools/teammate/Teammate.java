@@ -187,6 +187,11 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             return writeAgentParamsToFiles;
         }
 
+        @Override
+        public boolean isIncludeParentConfluence() {
+            return includeParentConfluence;
+        }
+
     }
 
     /**

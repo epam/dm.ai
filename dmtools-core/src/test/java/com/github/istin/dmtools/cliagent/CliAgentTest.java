@@ -63,7 +63,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -73,7 +73,7 @@ class CliAgentTest {
             assertEquals(1, results.size());
             assertNotNull(results.get(0).getResult());
             assertTrue(results.get(0).getResult().contains("hello"));
-            mocked.verify(() -> CommandLineUtils.runCommand(eq("echo hello"), any(), any(), any(), eq(false)));
+            mocked.verify(() -> CommandLineUtils.runCommand(eq("echo hello"), any(), any(), any(), eq(false), any(), anyInt()));
         }
     }
 
@@ -90,7 +90,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("done\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -99,7 +99,7 @@ class CliAgentTest {
 
             mocked.verify(() -> CommandLineUtils.runCommand(
                     argThat(cmd -> cmd.startsWith("cursor-agent") && cmd.contains("dmtools_cli_prompt_")),
-                    any(), any(), any(), eq(false)));
+                    any(), any(), any(), eq(false), any(), anyInt()));
         }
     }
 
@@ -115,7 +115,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nworld\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -123,7 +123,7 @@ class CliAgentTest {
             assertDoesNotThrow(() -> agent.runJobImpl(params));
 
             mocked.verify(() -> CommandLineUtils.runCommand(
-                    eq("echo hello && echo world"), any(), any(), any(), eq(false)));
+                    eq("echo hello && echo world"), any(), any(), any(), eq(false), any(), anyInt()));
         }
     }
 
@@ -141,6 +141,8 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("ok\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
                     .thenReturn("ok\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
@@ -174,7 +176,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -202,7 +204,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -230,7 +232,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -253,7 +255,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -277,7 +279,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("done\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -305,7 +307,7 @@ class CliAgentTest {
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of("SECRET_TOKEN", "secret", "PUBLIC_VAR", "visible"));
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
 
             agent.runJobImpl(params);
@@ -316,7 +318,9 @@ class CliAgentTest {
                     argThat((Map<String, String> env) ->
                             !env.containsKey("SECRET_TOKEN") && env.containsKey("PUBLIC_VAR")),
                     any(),
-                    anyBoolean()));
+                    anyBoolean(),
+                    any(),
+                    anyInt()));
         }
     }
 
@@ -349,7 +353,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -373,7 +377,7 @@ class CliAgentTest {
         CliAgent agent = buildAgent();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -400,7 +404,7 @@ class CliAgentTest {
         agent.trackerClient = trackerClient;
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -428,7 +432,7 @@ class CliAgentTest {
         agent.trackerClient = mockTrackerClient();
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -463,7 +467,7 @@ class CliAgentTest {
         agent.trackerClient = trackerClient;
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -505,7 +509,7 @@ class CliAgentTest {
         agent.confluence = confluence;
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -514,7 +518,7 @@ class CliAgentTest {
 
             Path confluenceFolder = tempDir.resolve("input/PROJ-123/confluence");
             assertTrue(Files.exists(confluenceFolder), "Confluence folder should be created");
-            assertTrue(Files.list(confluenceFolder).anyMatch(p -> p.toString().endsWith(".md")),
+            assertTrue(Files.walk(confluenceFolder).anyMatch(p -> p.toString().endsWith(".md")),
                     "Confluence page should be written");
         }
     }
@@ -544,7 +548,7 @@ class CliAgentTest {
         agent.figmaClient = figmaClient;
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -580,7 +584,7 @@ class CliAgentTest {
         agent.figmaClient = figmaClient;
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("hello\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
