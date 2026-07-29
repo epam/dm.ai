@@ -378,6 +378,67 @@ public class TeammatePreCliJSActionTest {
         }
     }
 
+    @Test
+    void testPreCliJSActionNoReturnValueDoesNotStopCliExecution() throws Exception {
+        // Backward compatibility: most existing preCliJSAction scripts don't return anything at
+        // all (JS `undefined`/no explicit `return`), which the bridge converts to a Java `null`.
+        // That must continue to be treated as success, exactly like before this fix, so CLI
+        // execution proceeds as normal.
+        JavaScriptExecutor noReturnExecutor = buildMockExecutor(); // execute() -> null
+
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", noReturnExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setCleanupInputFolder(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                    .thenReturn("ok\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+                assertDoesNotThrow(() -> spy.runJobImpl(params));
+
+                // CLI command must still run: no return value = success, same as pre-fix behavior.
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any()));
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
+    void testIsPreCliJSActionFailureBackwardCompatibility() {
+        // Direct unit coverage of the classification helper, spelling out every backward-compatible
+        // "treat as success" case alongside the two documented failure shapes.
+        assertFalse(Teammate.isPreCliJSActionFailure(null), "no return value (undefined/null) must be success");
+        assertFalse(Teammate.isPreCliJSActionFailure(Boolean.TRUE), "explicit true must be success");
+        assertFalse(Teammate.isPreCliJSActionFailure("some string"), "non-boolean/non-object results must be success");
+
+        org.json.JSONObject noSuccessKey = new org.json.JSONObject();
+        noSuccessKey.put("prNumber", 42);
+        assertFalse(Teammate.isPreCliJSActionFailure(noSuccessKey),
+            "object without a 'success' key must be success (older/simpler JS actions)");
+
+        org.json.JSONObject successTrue = new org.json.JSONObject();
+        successTrue.put("success", true);
+        assertFalse(Teammate.isPreCliJSActionFailure(successTrue));
+
+        assertTrue(Teammate.isPreCliJSActionFailure(Boolean.FALSE), "explicit false must be failure");
+
+        org.json.JSONObject successFalse = new org.json.JSONObject();
+        successFalse.put("success", false);
+        assertTrue(Teammate.isPreCliJSActionFailure(successFalse), "{success: false} must be failure");
+
+        assertTrue(Teammate.isPreCliJSActionFailure(Map.of("success", false)),
+            "plain Map with success:false must also be recognized as failure");
+    }
+
     // ---- helpers ----
 
     private JavaScriptExecutor buildMockExecutor() throws Exception {
