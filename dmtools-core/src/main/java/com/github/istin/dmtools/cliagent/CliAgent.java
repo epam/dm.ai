@@ -182,7 +182,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
             String[] finalCommands = commandBuilder.buildCommands(
                     params.getCliCommands(),
                     params.getCliPrompt(),
-                    params.getCliPrompts(),
+                    params.getCliPromptsConfig(),
                     params.getCliPromptsByTracker());
 
             // Ensure outputs folder exists so CLI agents can write outputs/response.md by default

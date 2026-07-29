@@ -74,13 +74,29 @@ public class CliCommandBuilder {
      */
     public String[] buildCommands(String[] cliCommands, String cliPrompt, String[] cliPrompts,
                                    Map<String, String[]> cliPromptsByTracker) throws IOException {
+        return buildCommands(cliCommands, cliPrompt,
+                CliPromptsConfig.fromStrings(cliPrompts), cliPromptsByTracker);
+    }
+
+    /**
+     * Builds the final CLI commands for execution using the structured prompt config.
+     *
+     * @param cliCommands       base CLI commands from the job config
+     * @param cliPrompt         single base CLI prompt (may be null)
+     * @param cliPrompts        structured CLI prompts config (may be null)
+     * @param cliPromptsByTracker tracker-specific prompts (may be null)
+     * @return commands with aggregated prompt appended, or original commands if no prompt provided
+     */
+    public String[] buildCommands(String[] cliCommands, String cliPrompt, CliPromptsConfig cliPrompts,
+                                   Map<String, String[]> cliPromptsByTracker) throws IOException {
         if (cliCommands == null || cliCommands.length == 0) {
             return cliCommands;
         }
 
         String trackerType = configuration != null ? configuration.getDefaultTracker() : null;
-        String[] mergedCliPrompts = resolveCliPrompts(cliPrompts, cliPromptsByTracker, trackerType);
-        if (mergedCliPrompts != cliPrompts) {
+        String[] flatPrompts = cliPrompts != null ? cliPrompts.toStringArray() : null;
+        String[] mergedCliPrompts = resolveCliPrompts(flatPrompts, cliPromptsByTracker, trackerType);
+        if (mergedCliPrompts != flatPrompts) {
             logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
         }
 

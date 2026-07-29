@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.job;
 
+import com.github.istin.dmtools.teammate.CliPromptsConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -50,6 +51,13 @@ public class ParentConfigResolver {
     public static final String PARENT_PATH     = "path";
     public static final String PARENT_OVERRIDE = "override";
     public static final String PARENT_MERGE    = "merge";
+
+    /**
+     * Path to the structured {@code cliPrompts} array inside the job config.
+     * When present in both parent and child, it is merged by section id
+     * instead of the default array-replacement behavior.
+     */
+    private static final String CLI_PROMPTS_PATH = "params.cliPrompts";
 
     private final ConfigurationMerger configurationMerger;
 
@@ -114,6 +122,10 @@ public class ParentConfigResolver {
 
         // Base merge: parent ← child (child wins for scalars and arrays by default)
         JSONObject merged = configurationMerger.deepMerge(parentConfig, originalChild);
+
+        // Apply structured cliPrompts merge: sections with the same id are merged
+        // according to mergeStrategy, unnamed prompts keep their positions.
+        applyStructuredCliPromptsMerge(merged, parentConfig, originalChild);
 
         // Apply override: at each listed path, replace merged value with original child value (no deep merge)
         if (overridePaths != null) {
@@ -204,5 +216,29 @@ public class ParentConfigResolver {
             for (int i = 0; i < childArr.length(); i++) combined.put(childArr.get(i));
         }
         setValueAtPath(result, dotPath, combined);
+    }
+
+    /**
+     * Merges structured {@code cliPrompts} from parent and child configs using section ids.
+     * If either side has no {@code cliPrompts}, the other's value (or none) is kept.
+     */
+    private void applyStructuredCliPromptsMerge(JSONObject merged, JSONObject parentConfig, JSONObject originalChild) {
+        Object parentValue = getValueAtPath(parentConfig, CLI_PROMPTS_PATH);
+        Object childValue  = getValueAtPath(originalChild, CLI_PROMPTS_PATH);
+
+        if (!(parentValue instanceof JSONArray) && !(childValue instanceof JSONArray)) {
+            return;
+        }
+
+        CliPromptsConfig parentPrompts = parentValue instanceof JSONArray
+                ? CliPromptsConfig.fromJsonArray((JSONArray) parentValue)
+                : new CliPromptsConfig();
+        CliPromptsConfig childPrompts = childValue instanceof JSONArray
+                ? CliPromptsConfig.fromJsonArray((JSONArray) childValue)
+                : new CliPromptsConfig();
+
+        CliPromptsConfig mergedPrompts = parentPrompts.merge(childPrompts);
+        setValueAtPath(merged, CLI_PROMPTS_PATH, CliPromptsConfig.toJsonArray(mergedPrompts));
+        logger.debug("Structured cliPrompts merge applied at '{}'", CLI_PROMPTS_PATH);
     }
 }
