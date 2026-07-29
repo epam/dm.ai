@@ -73,7 +73,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         private String cliPrompt;
 
         @SerializedName("cliPrompts")
-        private String[] cliPrompts;
+        private CliPromptsConfig cliPromptsConfig = new CliPromptsConfig();
 
         @SerializedName("cliPromptsByTracker")
         private Map<String, String[]> cliPromptsByTracker;
@@ -190,6 +190,23 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @Override
         public boolean isIncludeParentConfluence() {
             return includeParentConfluence;
+        }
+
+        /**
+         * Backward-compatible accessor that returns {@code cliPrompts} as a plain string array.
+         */
+        public String[] getCliPrompts() {
+            if (cliPromptsConfig == null || cliPromptsConfig.getItems().isEmpty()) {
+                return null;
+            }
+            return cliPromptsConfig.toStringArray();
+        }
+
+        /**
+         * Backward-compatible mutator that accepts a plain string array.
+         */
+        public void setCliPrompts(String[] cliPrompts) {
+            this.cliPromptsConfig = CliPromptsConfig.fromStrings(cliPrompts);
         }
 
     }
