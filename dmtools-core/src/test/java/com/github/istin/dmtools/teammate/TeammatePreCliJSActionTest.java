@@ -232,7 +232,10 @@ public class TeammatePreCliJSActionTest {
     }
 
     @Test
-    void testPreCliJSActionExceptionDoesNotStopCliExecution() throws Exception {
+    void testPreCliJSActionExceptionStopsCliExecution() throws Exception {
+        // Regression test for the "engine ignores preCliJSAction failure" bug: when the JS action
+        // throws (e.g. because it couldn't find a PR to review/rework), the engine must NOT proceed
+        // to run CLI commands — the JS action has already posted its own failure comment.
         JavaScriptExecutor throwingExecutor = mock(JavaScriptExecutor.class);
         when(throwingExecutor.mcp(any(), any(), any(), any())).thenReturn(throwingExecutor);
         when(throwingExecutor.withJobContext(any(), any(), any())).thenReturn(throwingExecutor);
@@ -257,12 +260,183 @@ public class TeammatePreCliJSActionTest {
 
                 assertDoesNotThrow(() -> spy.runJobImpl(params));
 
-                // CLI command must still have been executed despite JS failure
+                // CLI command must NOT have been executed — the JS setup failure is a hard stop.
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
+    void testPreCliJSActionFalseReturnStopsCliExecution() throws Exception {
+        // preparePRForReview.js / preCliReworkSetup.js return `false` (not throw) when no PR is found.
+        JavaScriptExecutor falseExecutor = mock(JavaScriptExecutor.class);
+        when(falseExecutor.mcp(any(), any(), any(), any())).thenReturn(falseExecutor);
+        when(falseExecutor.withJobContext(any(), any(), any())).thenReturn(falseExecutor);
+        when(falseExecutor.with(anyString(), any())).thenReturn(falseExecutor);
+        when(falseExecutor.execute()).thenReturn(Boolean.FALSE);
+
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", falseExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setCleanupInputFolder(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("ok\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+                assertDoesNotThrow(() -> spy.runJobImpl(params));
+
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
+    void testPreCliJSActionSuccessFalseObjectStopsCliExecution() throws Exception {
+        // preCliReworkSetup.js returns {success: false, error: ...} when setup fails but doesn't throw.
+        org.json.JSONObject failureResult = new org.json.JSONObject();
+        failureResult.put("success", false);
+        failureResult.put("error", "No Pull Request found for ticket TEST-1");
+
+        JavaScriptExecutor failureExecutor = mock(JavaScriptExecutor.class);
+        when(failureExecutor.mcp(any(), any(), any(), any())).thenReturn(failureExecutor);
+        when(failureExecutor.withJobContext(any(), any(), any())).thenReturn(failureExecutor);
+        when(failureExecutor.with(anyString(), any())).thenReturn(failureExecutor);
+        when(failureExecutor.execute()).thenReturn(failureResult);
+
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", failureExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setCleanupInputFolder(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("ok\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+                assertDoesNotThrow(() -> spy.runJobImpl(params));
+
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
+    void testPreCliJSActionSuccessTrueObjectDoesNotStopCliExecution() throws Exception {
+        // Normal success path: {success: true, ...} must not be treated as a failure.
+        org.json.JSONObject successResult = new org.json.JSONObject();
+        successResult.put("success", true);
+        successResult.put("prNumber", 42);
+
+        JavaScriptExecutor successExecutor = mock(JavaScriptExecutor.class);
+        when(successExecutor.mcp(any(), any(), any(), any())).thenReturn(successExecutor);
+        when(successExecutor.withJobContext(any(), any(), any())).thenReturn(successExecutor);
+        when(successExecutor.with(anyString(), any())).thenReturn(successExecutor);
+        when(successExecutor.execute()).thenReturn(successResult);
+
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", successExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setCleanupInputFolder(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("ok\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+                assertDoesNotThrow(() -> spy.runJobImpl(params));
+
                 mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()));
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);
         }
+    }
+
+    @Test
+    void testPreCliJSActionNoReturnValueDoesNotStopCliExecution() throws Exception {
+        // Backward compatibility: most existing preCliJSAction scripts don't return anything at
+        // all (JS `undefined`/no explicit `return`), which the bridge converts to a Java `null`.
+        // That must continue to be treated as success, exactly like before this fix, so CLI
+        // execution proceeds as normal.
+        JavaScriptExecutor noReturnExecutor = buildMockExecutor(); // execute() -> null
+
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", noReturnExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setCleanupInputFolder(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("ok\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+                assertDoesNotThrow(() -> spy.runJobImpl(params));
+
+                // CLI command must still run: no return value = success, same as pre-fix behavior.
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()));
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
+    void testIsPreCliJSActionFailureBackwardCompatibility() {
+        // Direct unit coverage of the classification helper, spelling out every backward-compatible
+        // "treat as success" case alongside the two documented failure shapes.
+        assertFalse(Teammate.isPreCliJSActionFailure(null), "no return value (undefined/null) must be success");
+        assertFalse(Teammate.isPreCliJSActionFailure(Boolean.TRUE), "explicit true must be success");
+        assertFalse(Teammate.isPreCliJSActionFailure("some string"), "non-boolean/non-object results must be success");
+
+        org.json.JSONObject noSuccessKey = new org.json.JSONObject();
+        noSuccessKey.put("prNumber", 42);
+        assertFalse(Teammate.isPreCliJSActionFailure(noSuccessKey),
+            "object without a 'success' key must be success (older/simpler JS actions)");
+
+        org.json.JSONObject successTrue = new org.json.JSONObject();
+        successTrue.put("success", true);
+        assertFalse(Teammate.isPreCliJSActionFailure(successTrue));
+
+        assertTrue(Teammate.isPreCliJSActionFailure(Boolean.FALSE), "explicit false must be failure");
+
+        org.json.JSONObject successFalse = new org.json.JSONObject();
+        successFalse.put("success", false);
+        assertTrue(Teammate.isPreCliJSActionFailure(successFalse), "{success: false} must be failure");
+
+        assertTrue(Teammate.isPreCliJSActionFailure(Map.of("success", false)),
+            "plain Map with success:false must also be recognized as failure");
     }
 
     // ---- helpers ----

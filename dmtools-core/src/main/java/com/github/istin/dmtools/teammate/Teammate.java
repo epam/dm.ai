@@ -584,11 +584,15 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             trackerClient, confluence, null, originalParams);
                     inputContextPath = contextResult.getPath();
 
-                    // Run preCliJSAction to allow extending input folder with extra content before CLI execution
+                    // Run preCliJSAction to allow extending input folder with extra content before CLI execution.
+                    // If it throws, or reports failure (returns false / {success:false, ...}), treat this as a
+                    // hard stop: the JS action has already posted its own failure comment, so nothing downstream
+                    // (CLI execution, postJSAction) should run for this ticket.
                     String preCliJSAction = expertParams.getPreCliJSAction();
                     if (preCliJSAction != null && !preCliJSAction.trim().isEmpty()) {
+                        Object preCliActionResult;
                         try {
-                            js(preCliJSAction)
+                            preCliActionResult = js(preCliJSAction)
                                 .mcp(trackerClient, ai, confluence, null)
                                 .withJobContext(expertParams, ticket, null)
                                 .with(TrackerParams.INITIATOR, initiator)
@@ -596,8 +600,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                                 .execute();
                             logger.info("preCliJSAction executed for ticket: {}", ticket.getKey());
                         } catch (Exception e) {
-                            logger.warn("preCliJSAction failed for ticket {}, continuing with CLI execution: {}",
+                            logger.warn("preCliJSAction threw for ticket {}, treating as setup failure (skipping CLI execution and postJSAction): {}",
                                 ticket.getKey(), e.getMessage());
+                            preCliActionResult = Boolean.FALSE;
+                        }
+
+                        if (isPreCliJSActionFailure(preCliActionResult)) {
+                            logger.warn("preCliJSAction reported failure for ticket {} — skipping CLI execution and postJSAction; " +
+                                "the JS action is responsible for its own failure notification.", ticket.getKey());
+                            results.add(new ResultItem(ticket.getTicketKey(), "Skipped: preCliJSAction reported failure"));
+                            return false;
                         }
                     }
 
@@ -827,6 +839,28 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             }
         }
         return "✅ Teammate run completed. CI Run: " + ciRunUrl;
+    }
+
+    /**
+     * Determines whether a {@code preCliJSAction} result should be treated as a hard-stop failure:
+     * an explicit {@code false}, or an object/map containing {@code success: false}. Any other
+     * value (including {@code null}/undefined, {@code true}, or an object without a {@code success}
+     * key) is treated as success, preserving backwards compatibility for actions that don't return
+     * a structured result.
+     */
+    static boolean isPreCliJSActionFailure(Object preCliActionResult) {
+        if (Boolean.FALSE.equals(preCliActionResult)) {
+            return true;
+        }
+        if (preCliActionResult instanceof JSONObject) {
+            JSONObject json = (JSONObject) preCliActionResult;
+            return json.has("success") && !json.optBoolean("success", true);
+        }
+        if (preCliActionResult instanceof Map) {
+            Object success = ((Map<?, ?>) preCliActionResult).get("success");
+            return Boolean.FALSE.equals(success);
+        }
+        return false;
     }
 
     /**

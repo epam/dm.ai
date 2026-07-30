@@ -5,6 +5,10 @@ package com.github.istin.dmtools.jenkins;
 
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.jenkins.model.JenkinsBuild;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +49,21 @@ class JenkinsClientTest {
     }
 
     private StubJenkins jenkins;
+
+    /** Builds a real (non-mocked) okhttp3.Response so triggerJob()'s header reading works as-is. */
+    private static Response fakeResponse(int code, String locationHeader) {
+        Request request = new Request.Builder().url("http://localhost:8080/job/folder/job/job-name/build").build();
+        Response.Builder builder = new Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(code)
+                .message(code < 300 ? "OK" : "Found")
+                .body(ResponseBody.create(new byte[0], null));
+        if (locationHeader != null) {
+            builder.header("Location", locationHeader);
+        }
+        return builder.build();
+    }
 
     @BeforeEach
     void setUp() throws IOException {
@@ -141,27 +160,120 @@ class JenkinsClientTest {
 
     @Test
     void jenkins_trigger_job_withParameters_usesBuildWithParametersAndQueryParams() throws IOException {
-        doReturn("").when(jenkins).post(any(GenericRequest.class));
+        doReturn(fakeResponse(201, "http://localhost:8080/queue/item/42/")).when(jenkins).executeRawRequest(any(Request.class));
 
         Map<String, Object> result = jenkins.triggerJob(JOB_PATH, "{\"BRANCH\":\"main\",\"ENV\":\"prod\"}");
 
         assertTrue((Boolean) result.get("success"));
-        verify(jenkins).post(argThat((GenericRequest req) ->
-                req.url().contains("/job/folder/job/job-name/buildWithParameters") &&
-                req.url().contains("BRANCH=main") &&
-                req.url().contains("ENV=prod")));
+        assertEquals("http://localhost:8080/queue/item/42/", result.get("queueUrl"));
+        verify(jenkins).executeRawRequest(argThat((Request req) ->
+                req.url().toString().contains("/job/folder/job/job-name/buildWithParameters") &&
+                req.url().toString().contains("BRANCH=main") &&
+                req.url().toString().contains("ENV=prod")));
     }
 
     @Test
     void jenkins_trigger_job_withoutParameters_usesBuild() throws IOException {
-        doReturn("").when(jenkins).post(any(GenericRequest.class));
+        doReturn(fakeResponse(201, "http://localhost:8080/queue/item/7/")).when(jenkins).executeRawRequest(any(Request.class));
 
         Map<String, Object> result = jenkins.triggerJob(JOB_PATH, null);
 
         assertTrue((Boolean) result.get("success"));
-        verify(jenkins).post(argThat((GenericRequest req) ->
-                req.url().contains("/job/folder/job/job-name/build") &&
-                !req.url().contains("buildWithParameters")));
+        assertEquals("http://localhost:8080/queue/item/7/", result.get("queueUrl"));
+        verify(jenkins).executeRawRequest(argThat((Request req) ->
+                req.url().toString().contains("/job/folder/job/job-name/build") &&
+                !req.url().toString().contains("buildWithParameters")));
+    }
+
+    @Test
+    void jenkins_trigger_job_returnsFailure_onNon2xxResponse() throws IOException {
+        doReturn(fakeResponse(404, null)).when(jenkins).executeRawRequest(any(Request.class));
+
+        Map<String, Object> result = jenkins.triggerJob(JOB_PATH, null);
+
+        assertFalse((Boolean) result.get("success"));
+        assertTrue(((String) result.get("message")).contains("404"));
+    }
+
+    @Test
+    void jenkins_get_queue_item_returnsBuildNumber_onceExecuting() throws IOException {
+        JSONObject queueJson = new JSONObject()
+                .put("cancelled", false)
+                .put("blocked", false)
+                .put("executable", new JSONObject().put("number", 99).put("url", "http://localhost:8080/job/folder/job/job-name/99/"));
+        doReturn(queueJson.toString()).when(jenkins).execute(any(GenericRequest.class));
+
+        Map<String, Object> result = jenkins.getQueueItem("http://localhost:8080/queue/item/42/");
+
+        assertTrue((Boolean) result.get("success"));
+        assertEquals(99, result.get("buildNumber"));
+        assertEquals("http://localhost:8080/job/folder/job/job-name/99/", result.get("buildUrl"));
+        assertEquals(false, result.get("cancelled"));
+        verify(jenkins).execute(argThat((GenericRequest req) ->
+                req.url().equals("http://localhost:8080/queue/item/42/api/json")));
+    }
+
+    @Test
+    void jenkins_get_queue_item_reportsCancelled() throws IOException {
+        JSONObject queueJson = new JSONObject().put("cancelled", true);
+        doReturn(queueJson.toString()).when(jenkins).execute(any(GenericRequest.class));
+
+        Map<String, Object> result = jenkins.getQueueItem("http://localhost:8080/queue/item/42");
+
+        assertTrue((Boolean) result.get("success"));
+        assertEquals(true, result.get("cancelled"));
+        assertNull(result.get("buildNumber"));
+    }
+
+    @Test
+    void jenkins_get_queue_item_requiresQueueUrl() throws IOException {
+        Map<String, Object> result = jenkins.getQueueItem("");
+
+        assertFalse((Boolean) result.get("success"));
+        verify(jenkins, never()).execute(any(GenericRequest.class));
+    }
+
+    @Test
+    void jenkins_trigger_job_and_wait_resolvesQueueThenPollsUntilFinished() throws IOException {
+        doReturn(fakeResponse(201, "http://localhost:8080/queue/item/1/")).when(jenkins).executeRawRequest(any(Request.class));
+
+        JSONObject queuedNotYetBuilding = new JSONObject().put("cancelled", false);
+        JSONObject queuedNowBuilding = new JSONObject()
+                .put("cancelled", false)
+                .put("executable", new JSONObject().put("number", 5).put("url", "http://localhost:8080/job/folder/job/job-name/5/"));
+        JSONObject buildStillRunning = new JSONObject().put("building", true);
+        JSONObject buildFinished = new JSONObject().put("building", false).put("result", "SUCCESS").put("url", "http://localhost:8080/job/folder/job/job-name/5/");
+
+        doReturn(queuedNotYetBuilding.toString(), queuedNowBuilding.toString(), buildStillRunning.toString(), buildFinished.toString())
+                .when(jenkins).execute(any(GenericRequest.class));
+
+        Map<String, Object> result = jenkins.triggerJobAndWait(JOB_PATH, null, 0, 5);
+
+        assertTrue((Boolean) result.get("success"));
+        assertEquals(5, result.get("buildNumber"));
+        assertEquals("SUCCESS", result.get("result"));
+        assertEquals(false, result.get("timedOut"));
+    }
+
+    @Test
+    void jenkins_trigger_job_and_wait_failsWhenQueueItemCancelled() throws IOException {
+        doReturn(fakeResponse(201, "http://localhost:8080/queue/item/1/")).when(jenkins).executeRawRequest(any(Request.class));
+        doReturn(new JSONObject().put("cancelled", true).toString()).when(jenkins).execute(any(GenericRequest.class));
+
+        Map<String, Object> result = jenkins.triggerJobAndWait(JOB_PATH, null, 0, 5);
+
+        assertFalse((Boolean) result.get("success"));
+        assertTrue(((String) result.get("message")).toLowerCase().contains("cancelled"));
+    }
+
+    @Test
+    void jenkins_trigger_job_and_wait_failsWhenTriggerItselfFails() throws IOException {
+        doReturn(fakeResponse(500, null)).when(jenkins).executeRawRequest(any(Request.class));
+
+        Map<String, Object> result = jenkins.triggerJobAndWait(JOB_PATH, null, 0, 5);
+
+        assertFalse((Boolean) result.get("success"));
+        verify(jenkins, never()).execute(any(GenericRequest.class));
     }
 
     @Test
