@@ -18,35 +18,42 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 
 /**
- * Regression coverage for {@link MarkdownConfluenceSync#syncDirectory}, in particular the
- * root-node "own parent" bug: updating an existing target root page must preserve its real
- * current ancestor instead of falling back to the page's own ID.
+ * Regression coverage for {@link MarkdownConfluenceSync#syncDirectory}, in particular two
+ * root-node bugs found while updating an already-existing target page across repeated syncs:
+ * (1) the update sent the page's own ID as its ancestor ("Can not set page as its own
+ * parent"), and (2) the update silently renamed the page to the local root directory's
+ * basename instead of preserving its real title (which can even fail outright with
+ * "A page with this title already exists" if some unrelated page in the space happens to
+ * share that literal folder name).
  */
 public class MarkdownConfluenceSyncTest {
 
     /**
      * Minimal in-memory fake of {@link MarkdownConfluenceSync.PageOperations} that records
-     * every updatePage/createPage call and lets a test pre-seed an existing page's ancestor.
+     * every updatePage/createPage call and lets a test pre-seed an existing page's title
+     * and ancestor.
      */
     private static class FakePageOperations implements MarkdownConfluenceSync.PageOperations {
         final Map<String, String> parentsById = new HashMap<>();
-        final List<String[]> updateCalls = new ArrayList<>(); // {contentId, parentId, body}
+        final Map<String, String> titlesById = new HashMap<>();
+        final List<String[]> updateCalls = new ArrayList<>(); // {contentId, title, parentId, body}
         int nextId = 1000;
 
         @Override
         public Content createPage(String title, String parentId, String body, String space) {
             String id = String.valueOf(nextId++);
             parentsById.put(id, parentId);
+            titlesById.put(id, title);
             return contentFor(id, title, parentId);
         }
 
         @Override
         public Content updatePage(String contentId, String title, String parentId, String body, String space, String historyComment) {
-            updateCalls.add(new String[]{contentId, parentId, body});
+            updateCalls.add(new String[]{contentId, title, parentId, body});
             parentsById.put(contentId, parentId);
+            titlesById.put(contentId, title);
             return contentFor(contentId, title, parentId);
         }
 
@@ -63,7 +70,8 @@ public class MarkdownConfluenceSyncTest {
         @Override
         public Content getContent(String contentId) throws IOException {
             String parentId = parentsById.get(contentId);
-            return contentFor(contentId, "existing", parentId);
+            String title = titlesById.containsKey(contentId) ? titlesById.get(contentId) : "existing";
+            return contentFor(contentId, title, parentId);
         }
 
         private Content contentFor(String id, String title, String parentId) {
@@ -84,11 +92,16 @@ public class MarkdownConfluenceSyncTest {
         }
     }
 
-    @Test
-    public void syncDirectory_updatesRootPage_preservingItsRealExistingParent() throws IOException {
+    private File newTempDir() throws IOException {
         File tempDir = File.createTempFile("md-sync-test", "");
         tempDir.delete();
         tempDir.mkdirs();
+        return tempDir;
+    }
+
+    @Test
+    public void syncDirectory_updatesRootPage_preservingItsRealExistingParent() throws IOException {
+        File tempDir = newTempDir();
         try {
             FileUtils.write(new File(tempDir, "index.md"), "# Landing page", "UTF-8");
 
@@ -98,6 +111,7 @@ public class MarkdownConfluenceSyncTest {
             // "Discovery" parent page. Before the fix, syncDirectory never looked this up,
             // so the update call below would have sent parentId="555" (itself).
             pageOps.parentsById.put("555", "999");
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
 
             MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
             sync.syncDirectory(tempDir, "555", "SPACE", false, null);
@@ -106,17 +120,39 @@ public class MarkdownConfluenceSyncTest {
             String[] call = pageOps.updateCalls.get(0);
             assertEquals("555", call[0]);
             assertEquals("update must preserve the real existing parent (999), not self-reference (555)",
-                    "999", call[1]);
+                    "999", call[2]);
         } finally {
             FileUtils.deleteDirectory(tempDir);
         }
     }
 
     @Test
-    public void syncDirectory_rootPageWithNoExistingParent_fallsBackGracefully() throws IOException {
-        File tempDir = File.createTempFile("md-sync-test", "");
-        tempDir.delete();
-        tempDir.mkdirs();
+    public void syncDirectory_updatesRootPage_preservingItsRealExistingTitle() throws IOException {
+        File tempDir = newTempDir();
+        try {
+            // tempDir's basename (e.g. "md-sync-test1234567890") is NOT the desired page
+            // title — the root page's REAL existing title ("TICKET-123 Some feature") must
+            // be preserved, not overwritten with the local directory's basename.
+            FileUtils.write(new File(tempDir, "index.md"), "# Landing page", "UTF-8");
+
+            FakePageOperations pageOps = new FakePageOperations();
+            pageOps.parentsById.put("555", "999");
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
+
+            MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null);
+
+            String[] call = pageOps.updateCalls.get(0);
+            assertEquals("update must preserve the real existing title, not the local directory's basename",
+                    "TICKET-123 Some feature", call[1]);
+        } finally {
+            FileUtils.deleteDirectory(tempDir);
+        }
+    }
+
+    @Test
+    public void syncDirectory_rootPageWithNoExistingParentOrTitle_fallsBackGracefully() throws IOException {
+        File tempDir = newTempDir();
         try {
             FileUtils.write(new File(tempDir, "index.md"), "# Landing page", "UTF-8");
 
@@ -125,12 +161,16 @@ public class MarkdownConfluenceSyncTest {
             // getParentId() legitimately returns null here; the sync must still complete
             // without throwing, falling back to the pre-fix self-reference behavior.
             pageOps.parentsById.put("555", null);
+            pageOps.titlesById.put("555", "");
 
             MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
             sync.syncDirectory(tempDir, "555", "SPACE", false, null);
 
             assertEquals(1, pageOps.updateCalls.size());
             assertEquals("555", pageOps.updateCalls.get(0)[0]);
+            // Empty existing title falls back to the directory-basename default (pre-fix
+            // behavior) rather than sending an empty title.
+            assertEquals(tempDir.getName(), pageOps.updateCalls.get(0)[1]);
         } finally {
             FileUtils.deleteDirectory(tempDir);
         }
@@ -138,9 +178,7 @@ public class MarkdownConfluenceSyncTest {
 
     @Test
     public void syncDirectory_parentLookupFailure_isNonFatal() throws IOException {
-        File tempDir = File.createTempFile("md-sync-test", "");
-        tempDir.delete();
-        tempDir.mkdirs();
+        File tempDir = newTempDir();
         try {
             FileUtils.write(new File(tempDir, "index.md"), "# Landing page", "UTF-8");
 
@@ -152,7 +190,7 @@ public class MarkdownConfluenceSyncTest {
             };
 
             MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
-            // Must not throw — a failed parent lookup should not abort the whole sync.
+            // Must not throw — a failed parent/title lookup should not abort the whole sync.
             String summary = sync.syncDirectory(tempDir, "555", "SPACE", false, null);
 
             assertNotNull(summary);
@@ -164,15 +202,14 @@ public class MarkdownConfluenceSyncTest {
 
     @Test
     public void syncDirectory_childFile_becomesChildPageOfRoot() throws IOException {
-        File tempDir = File.createTempFile("md-sync-test", "");
-        tempDir.delete();
-        tempDir.mkdirs();
+        File tempDir = newTempDir();
         try {
             FileUtils.write(new File(tempDir, "index.md"), "# Landing page", "UTF-8");
             FileUtils.write(new File(tempDir, "prd.md"), "# PRD\ncontent", "UTF-8");
 
             FakePageOperations pageOps = new FakePageOperations();
             pageOps.parentsById.put("555", "999");
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
 
             MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
             sync.syncDirectory(tempDir, "555", "SPACE", false, null);
@@ -182,11 +219,12 @@ public class MarkdownConfluenceSyncTest {
             assertEquals(2, pageOps.updateCalls.size());
             String[] rootUpdate = pageOps.updateCalls.get(0);
             assertEquals("555", rootUpdate[0]);
-            assertEquals("999", rootUpdate[1]);
+            assertEquals("TICKET-123 Some feature", rootUpdate[1]);
+            assertEquals("999", rootUpdate[2]);
 
             String[] childUpdate = pageOps.updateCalls.get(1);
             assertEquals("child page's parent must be the root page (555), not the grandparent",
-                    "555", childUpdate[1]);
+                    "555", childUpdate[2]);
         } finally {
             FileUtils.deleteDirectory(tempDir);
         }

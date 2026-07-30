@@ -81,15 +81,33 @@ public class MarkdownConfluenceSync {
         root.contentId = parentId;
         // The root node's own page (parentId) is an EXISTING page being updated in place
         // (its body becomes rootDir's index.md) — unlike every other node in the tree,
-        // it was never "created" during this sync walk, so nothing ever set its
-        // parentId. Without this lookup, syncDirNode's fallback (node.parentId != null
-        // ? node.parentId : node.contentId) would pass the page's OWN id as its ancestor
-        // on update, which Confluence rejects with "Can not set page as its own parent."
-        // Fetch its actual current parent so the update preserves it unchanged.
+        // it was never "created" during this sync walk, so nothing ever set its title
+        // or parentId; buildDirTree defaults every node's title to its directory's
+        // basename, which is correct for a brand-new page representing a subdirectory,
+        // but WRONG for the root: it would silently rename the caller's existing target
+        // page (e.g. "TICKET-123 Summary") to the local root folder's basename (e.g.
+        // "discovery") on every single sync — and since Confluence enforces per-space
+        // title uniqueness, that rename can even fail outright with "A page with this
+        // title already exists" if some unrelated page in the space happens to already
+        // have that literal folder name as its title.
+        //
+        // Similarly, its parentId fallback (node.parentId != null ? node.parentId :
+        // node.contentId) would pass the page's OWN id as its ancestor on update, which
+        // Confluence rejects with "Can not set page as its own parent."
+        //
+        // Fetch the root page's actual current title + parent ONCE so the update
+        // preserves both unchanged, instead of falling back to a directory-name pseudo
+        // creation. Non-fatal if this lookup fails — falls back to the old behavior
+        // (self-parent, directory-name title) rather than aborting the whole sync.
         try {
-            root.parentId = pageOps.getContent(parentId).getParentId();
+            Content existingRoot = pageOps.getContent(parentId);
+            root.parentId = existingRoot.getParentId();
+            String existingTitle = existingRoot.getTitle();
+            if (existingTitle != null && !existingTitle.isEmpty()) {
+                root.title = existingTitle;
+            }
         } catch (IOException e) {
-            logger.warn("syncDirectory: failed to look up existing parent of root page {} — proceeding without it: {}", parentId, e.getMessage());
+            logger.warn("syncDirectory: failed to look up existing title/parent of root page {} — proceeding without them: {}", parentId, e.getMessage());
         }
         syncDirNode(root, rootDir, pathToTitle, space, attachmentsDir);
 
@@ -406,7 +424,7 @@ public class MarkdownConfluenceSync {
 
     private static final class DirNode {
         final File dir;
-        final String title;
+        String title;
         File indexFile;
         final List<FileNode> files = new ArrayList<>();
         final List<DirNode> subdirs = new ArrayList<>();
