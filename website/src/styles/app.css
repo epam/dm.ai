@@ -174,9 +174,9 @@
   padding: 16px 64px 16px 18px;
   font-size: 13px;
   color: var(--mint);
-  overflow-x: auto;
   width: 100%;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .code-block--tall {
   padding: 22px 22px 26px;
