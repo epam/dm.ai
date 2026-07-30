@@ -1,11 +1,11 @@
 import { useState } from 'react';
 
 const LINKS = [
-  { href: '#problem', label: 'Why DMTools' },
+  { href: '#benefits', label: 'Why DMTools' },
   { href: '#architecture', label: 'Architecture' },
-  { href: '#integrations', label: 'Integrations' },
-  { href: '#trust', label: 'Trust & security' },
-  { href: '#quick-start', label: 'Quick start' },
+  { href: '#trust', label: 'Trust' },
+  { href: '#faq', label: 'FAQ' },
+  { href: '#quick-start', label: 'Get started' },
 ];
 
 export function Nav() {

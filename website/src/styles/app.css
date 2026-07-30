@@ -287,18 +287,26 @@
 
 /* ---------- Solution: hub diagram ---------- */
 .hub {
-  margin-top: 56px;
+  margin-top: 48px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 28px;
+  align-items: flex-start;
+  max-width: 720px;
+}
+.hub__row-label {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
 }
 .hub__ring {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
-  max-width: 720px;
 }
 .hub__chip {
   padding: 9px 18px;
@@ -315,15 +323,26 @@
   border-color: rgba(184, 150, 255, 0.35);
   background: rgba(184, 150, 255, 0.08);
 }
+.hub__connector {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding-left: 22px;
+}
+.hub__connector span {
+  width: 1px;
+  height: 100%;
+  background: repeating-linear-gradient(180deg, var(--hairline) 0 5px, transparent 5px 10px);
+}
 .hub__core {
-  padding: 22px 44px;
+  padding: 14px 28px;
   border-radius: 999px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 20px;
+  font-size: 17px;
   color: var(--canvas);
   background: linear-gradient(90deg, var(--mint), var(--sea), var(--lilac));
-  box-shadow: 0 0 60px rgba(0, 246, 255, 0.25);
+  box-shadow: 0 0 40px rgba(0, 246, 255, 0.2);
 }
 
 /* ---------- Numbers ---------- */
@@ -460,6 +479,81 @@
   color: var(--text-faint);
 }
 
+/* ---------- Benefits ---------- */
+.benefit-card {
+  padding: 24px 22px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.benefit-card h3 {
+  font-size: 15.5px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.benefit-card p {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+/* ---------- Plain-language callout ---------- */
+.plain-terms {
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border-left: 2px solid var(--sea);
+  background: rgba(0, 246, 255, 0.05);
+  border-radius: 0 8px 8px 0;
+  font-size: 13.5px;
+  color: var(--text-dim);
+  max-width: 620px;
+}
+.plain-terms strong {
+  color: var(--text);
+}
+
+/* ---------- FAQ ---------- */
+.faq-list {
+  margin-top: 40px;
+  max-width: 760px;
+  border-top: 1px solid var(--hairline);
+}
+.faq-item {
+  border-bottom: 1px solid var(--hairline);
+  padding: 18px 0;
+}
+.faq-item summary {
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item summary::after {
+  content: '+';
+  flex-shrink: 0;
+  color: var(--sea);
+  font-size: 20px;
+  font-weight: 400;
+  transition: transform 0.15s ease;
+}
+.faq-item[open] summary::after {
+  transform: rotate(45deg);
+}
+.faq-item p {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--text-dim);
+  max-width: 640px;
+}
+
 /* ---------- Grid & path cards ---------- */
 .grid {
   display: grid;
@@ -488,6 +582,20 @@
   font-size: 12px;
   color: var(--text-faint);
   margin-bottom: 14px;
+}
+.path-card__persona {
+  display: inline-block;
+  margin: 0 0 10px;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(184, 150, 255, 0.1);
+  color: var(--lilac);
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .path-card h3 {
   font-size: 16px;
@@ -725,6 +833,10 @@
   }
   .duct-tape__group {
     flex-direction: column;
+    align-items: stretch;
+  }
+  .duct-tape__card {
+    text-align: left;
   }
   .duct-tape__break {
     width: 1px;

@@ -1,6 +1,7 @@
 const PATHS = [
   {
     index: '01',
+    persona: 'For developers',
     title: 'CLI + MCP tools',
     detail: 'Execute direct tool calls and integration operations from the terminal.',
     href: 'https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/mcp-tools',
@@ -8,6 +9,7 @@ const PATHS = [
   },
   {
     index: '02',
+    persona: 'For platform & QA teams',
     title: 'Jobs + agents',
     detail: 'Run orchestrated workflows such as Teammate, reporting, and test generation.',
     href: 'https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/jobs',
@@ -15,6 +17,7 @@ const PATHS = [
   },
   {
     index: '03',
+    persona: 'For CI/CD owners',
     title: 'CI/CD pipelines',
     detail: 'Run DMTools in GitHub Actions, Jenkins, Bitrise, GitLab CI, or Bitbucket for ticket processing and teammate flows.',
     href: 'https://github.com/epam/dm.ai/blob/main/dmtools-ai-docs/references/workflows/github-actions-teammate.md',
@@ -22,6 +25,7 @@ const PATHS = [
   },
   {
     index: '04',
+    persona: 'For AI assistant users',
     title: 'AI assistant skills',
     detail: 'Install project-level DMTools skills for agent-driven usage in Cursor, Claude, Codex, and Copilot.',
     href: 'https://github.com/epam/dm.ai/blob/main/dmtools-ai-docs/SKILL.md',
@@ -40,6 +44,7 @@ export function UsagePaths() {
           {PATHS.map((p) => (
             <a className="path-card" href={p.href} target="_blank" rel="noopener" key={p.index}>
               <span className="path-card__index">{p.index}</span>
+              <span className="path-card__persona">{p.persona}</span>
               <h3>{p.title}</h3>
               <p>{p.detail}</p>
               <span className="path-card__link">{p.link} →</span>

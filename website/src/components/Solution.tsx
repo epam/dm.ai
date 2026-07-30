@@ -11,19 +11,33 @@ export function Solution() {
         </h2>
         <p className="section__lede">
           DMTools sits between your AI harnesses and every delivery system your organization already
-          runs — one CLI, one job engine, one set of agent skills.
+          runs — one CLI, one job engine, one set of agent skills. In practice: whichever AI assistant
+          your team already uses can now read and update Jira, GitHub, Confluence, and the rest, safely
+          and consistently.
         </p>
 
-        <div className="hub" aria-hidden="true">
-          <div className="hub__ring hub__ring--inner">
+        <div className="hub">
+          <p className="hub__row-label">Your AI tools</p>
+          <div className="hub__ring">
             {HARNESSES.map((h) => (
               <span className="hub__chip hub__chip--harness" key={h}>
                 {h}
               </span>
             ))}
           </div>
+
+          <div className="hub__connector" aria-hidden="true">
+            <span />
+          </div>
+
           <div className="hub__core">DMTools</div>
-          <div className="hub__ring hub__ring--outer">
+
+          <div className="hub__connector" aria-hidden="true">
+            <span />
+          </div>
+
+          <p className="hub__row-label">Your delivery systems</p>
+          <div className="hub__ring">
             {SPOKES.map((s) => (
               <span className="hub__chip" key={s}>
                 {s}

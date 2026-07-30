@@ -21,6 +21,11 @@ export function CodeSample() {
             CLI tools are callable as plain JS functions inside a job — no SDK, no boilerplate, no
             proprietary DSL to learn.
           </p>
+          <p className="plain-terms">
+            <strong>In plain terms:</strong> this reads a ticket, pulls the team's own definition of
+            done, checks open pull requests, and hands an AI assistant everything it needs to suggest
+            a fix — the kind of prep work a person would otherwise do by hand before writing any code.
+          </p>
         </div>
 
         <div className="code-window">
