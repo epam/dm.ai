@@ -13,11 +13,14 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 public class CommandLineUtils {
 
@@ -178,6 +181,15 @@ public class CommandLineUtils {
                                     Consumer<String> lineConsumer, boolean validateCommand,
                                     Predicate<String> lineStopPredicate, int maxLinesToLog)
             throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand,
+                lineStopPredicate, maxLinesToLog, null, null);
+    }
+
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate, int maxLinesToLog,
+                                    String[] excludedEnvVariables, String[] excludedEnvRegexes)
+            throws IOException, InterruptedException {
 
         logger.debug("Running command: {}", SecurityUtils.maskCommand(command));
         if (validateCommand) {
@@ -214,6 +226,8 @@ public class CommandLineUtils {
         if (additionalEnv != null && !additionalEnv.isEmpty()) {
             processBuilder.environment().putAll(additionalEnv);
         }
+        removeExcludedEnvironmentVariables(
+                processBuilder.environment(), excludedEnvVariables, excludedEnvRegexes);
 
         // Merge stdout and stderr so all output is captured
         processBuilder.redirectErrorStream(true);
@@ -243,6 +257,7 @@ public class CommandLineUtils {
                     logger.info("... output truncated after {} line(s); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output ...", maxLinesToLog);
                     truncationNoticeLogged = true;
                 }
+
                 output.append(line).append(System.lineSeparator());
                 if (lineConsumer != null) {
                     try {
@@ -273,6 +288,33 @@ public class CommandLineUtils {
         }
 
         return output.toString().trim();
+    }
+
+    static void removeExcludedEnvironmentVariables(Map<String, String> environment,
+                                                   String[] excludedEnvVariables,
+                                                   String[] excludedEnvRegexes) {
+        if (environment == null || environment.isEmpty()) {
+            return;
+        }
+        if (excludedEnvVariables != null) {
+            for (String name : excludedEnvVariables) {
+                if (name != null && !name.isBlank()) {
+                    environment.remove(name);
+                }
+            }
+        }
+        List<Pattern> patterns = new ArrayList<>();
+        if (excludedEnvRegexes != null) {
+            for (String regex : excludedEnvRegexes) {
+                if (regex != null && !regex.isBlank()) {
+                    patterns.add(Pattern.compile(regex));
+                }
+            }
+        }
+        if (!patterns.isEmpty()) {
+            environment.keySet().removeIf(name ->
+                    patterns.stream().anyMatch(pattern -> pattern.matcher(name).matches()));
+        }
     }
 
     /**

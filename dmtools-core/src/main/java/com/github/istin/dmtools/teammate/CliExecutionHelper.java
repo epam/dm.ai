@@ -14,6 +14,8 @@ import com.github.istin.dmtools.common.utils.IOUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.confluence.ConfluencePageDownloader;
+import com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient;
+import com.github.istin.dmtools.microsoft.ado.model.WorkItem;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -30,12 +32,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -52,6 +53,11 @@ public class CliExecutionHelper {
     private static final String OUTPUT_FOLDER_LEGACY = "output";  // Backward compatibility
     private static final String COMMENTS_FILE_NAME = "comments.md";
     private static final String RESPONSE_FILE_NAME = "response.md";
+
+    public enum OutputFolderPreference {
+        LEGACY_OUTPUT_FIRST,
+        OUTPUTS_FIRST
+    }
 
     private static final String[] VIDEO_EXTENSIONS = {
         ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".3gp", ".ogv", ".mpg", ".mpeg"
@@ -112,6 +118,12 @@ public class CliExecutionHelper {
      */
     public Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient,
                                     Path baseDirectory, List<? extends IAttachment> attachmentsOverride) throws IOException {
+        return createInputContext(ticket, inputParams, trackerClient, baseDirectory, attachmentsOverride, false);
+    }
+
+    Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient,
+                            Path baseDirectory, List<? extends IAttachment> attachmentsOverride,
+                            boolean relationsAlreadyEnriched) throws IOException {
         if (ticket == null) {
             throw new IllegalArgumentException("Ticket cannot be null");
         }
@@ -135,22 +147,8 @@ public class CliExecutionHelper {
             logger.info("Created request file: {} ({} bytes)", requestFilePath.toAbsolutePath(), inputParams.length());
         }
 
-        // Enrich work item with relations if it's an ADO work item
-        // This is needed because ADO API doesn't include relations when using fields parameter
-        if (trackerClient != null) {
-            try {
-                // Check if this is an AzureDevOpsClient using instanceof
-                if (trackerClient instanceof com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) {
-                    com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient adoClient =
-                        (com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient) trackerClient;
-                    com.github.istin.dmtools.microsoft.ado.model.WorkItem workItem =
-                        (com.github.istin.dmtools.microsoft.ado.model.WorkItem) ticket;
-                    adoClient.enrichWorkItemWithRelations(workItem);
-                    logger.info("🔄 Enriched ADO work item {} with relations for attachment detection", ticketKey);
-                }
-            } catch (Exception e) {
-                logger.warn("⚠️ Could not enrich work item with relations: {}", e.getMessage());
-            }
+        if (!relationsAlreadyEnriched) {
+            enrichTicketWithRelations(ticket, trackerClient);
         }
 
         // Download ticket attachments to the input folder
@@ -175,6 +173,21 @@ public class CliExecutionHelper {
         }
 
         return inputFolderPath;
+    }
+
+    void enrichTicketWithRelations(ITicket ticket, TrackerClient<?> trackerClient) {
+        if (!(trackerClient instanceof AzureDevOpsClient) || !(ticket instanceof WorkItem)) {
+            return;
+        }
+        try {
+            AzureDevOpsClient adoClient = (AzureDevOpsClient) trackerClient;
+            WorkItem workItem = (WorkItem) ticket;
+            adoClient.enrichWorkItemWithRelations(workItem);
+            logger.info("🔄 Enriched ADO work item {} with relations for attachment detection",
+                    ticket.getTicketKey());
+        } catch (Exception e) {
+            logger.warn("⚠️ Could not enrich work item with relations: {}", e.getMessage());
+        }
     }
 
     /**
@@ -492,7 +505,13 @@ public class CliExecutionHelper {
                     liveOutput.set(cliResponses + commandOutput.toString());
                 };
                 String response;
-                if (lineStopPredicate == null) {
+                boolean hasEnvironmentExclusions = hasEnvironmentExclusions(
+                        excludedEnvVariables, excludedEnvRegexes);
+                if (hasEnvironmentExclusions) {
+                    response = CommandLineUtils.runCommand(
+                            command.trim(), workingDir, envVars, lineConsumer, !allowAnyCommand,
+                            lineStopPredicate, -1, excludedEnvVariables, excludedEnvRegexes);
+                } else if (lineStopPredicate == null) {
                     response = allowAnyCommand
                             ? CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, false, null, -1)
                             : CommandLineUtils.runCommand(command.trim(), workingDir, envVars, lineConsumer, true, null, -1);
@@ -547,6 +566,22 @@ public class CliExecutionHelper {
         }
         
         return cliResponses;
+    }
+
+    private boolean hasEnvironmentExclusions(String[] excludedEnvVariables, String[] excludedEnvRegexes) {
+        return hasNonBlankValue(excludedEnvVariables) || hasNonBlankValue(excludedEnvRegexes);
+    }
+
+    private boolean hasNonBlankValue(String[] values) {
+        if (values == null) {
+            return false;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
     
     /**
@@ -694,6 +729,22 @@ public class CliExecutionHelper {
                                                            String[] excludedEnvRegexes,
                                                            Consumer<Exception> errorHandler,
                                                            Predicate<String> lineStopPredicate) {
+        return executeCliCommandsWithResult(
+                cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds,
+                liveCliOutput, allowAnyCommand, excludedEnvVariables, excludedEnvRegexes,
+                errorHandler, lineStopPredicate, OutputFolderPreference.LEGACY_OUTPUT_FIRST);
+    }
+
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds,
+                                                           AtomicReference<String> liveCliOutput,
+                                                           boolean allowAnyCommand,
+                                                           String[] excludedEnvVariables,
+                                                           String[] excludedEnvRegexes,
+                                                           Consumer<Exception> errorHandler,
+                                                           Predicate<String> lineStopPredicate,
+                                                           OutputFolderPreference outputFolderPreference) {
         AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
                 : (timerAction != null ? new AtomicReference<>("") : null);
 
@@ -701,7 +752,7 @@ public class CliExecutionHelper {
         runWithTimer(timerAction, timerIntervalSeconds, () -> {
             StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
                     allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate);
-            String outputResponse = processOutputResponse(workingDirectory);
+            String outputResponse = processOutputResponse(workingDirectory, outputFolderPreference);
             resultRef.set(new CliExecutionResult(cliResponses, outputResponse));
         });
         return resultRef.get();
@@ -772,50 +823,41 @@ public class CliExecutionHelper {
     }
 
     /**
-     * Processes output response from CLI commands by checking for outputs/response.md file.
-     * For backward compatibility, also checks output/response.md if outputs/response.md is not found.
+     * Processes a Teammate output response, preferring the legacy output/response.md location
+     * and falling back to outputs/response.md.
      *
-     * @return Content of outputs/response.md file if it exists, null otherwise
+     * @return response file content if it exists, null otherwise
      */
     public String processOutputResponse() {
-        return processOutputResponse(null);
+        return processOutputResponse(null, OutputFolderPreference.LEGACY_OUTPUT_FIRST);
     }
 
     /**
-     * Processes output response from CLI commands by checking for outputs/response.md file
-     * relative to the specified working directory.
-     * For backward compatibility, also checks output/response.md if outputs/response.md is not found.
+     * Processes a Teammate output response relative to the specified working directory,
+     * preferring output/response.md and falling back to outputs/response.md.
      *
-     * @param workingDirectory Working directory to look for outputs/response.md file (null for current directory)
-     * @return Content of outputs/response.md file if it exists, null otherwise
+     * @param workingDirectory working directory containing output folders (null for current directory)
+     * @return response file content if it exists, null otherwise
      */
     public String processOutputResponse(Path workingDirectory) {
-        // Try primary location: outputs/response.md
-        Path outputFilePath;
-        if (workingDirectory != null) {
-            outputFilePath = workingDirectory.resolve(OUTPUT_FOLDER).resolve(RESPONSE_FILE_NAME);
-        } else {
-            outputFilePath = Paths.get(OUTPUT_FOLDER, RESPONSE_FILE_NAME);
-        }
+        return processOutputResponse(workingDirectory, OutputFolderPreference.LEGACY_OUTPUT_FIRST);
+    }
 
-        if (!Files.exists(outputFilePath)) {
-            logger.info("No output response file found at: {}", outputFilePath.toAbsolutePath());
+    public String processOutputResponse(Path workingDirectory, OutputFolderPreference preference) {
+        Path outputsResponse = resolveOutputFile(workingDirectory, OUTPUT_FOLDER);
+        Path legacyResponse = resolveOutputFile(workingDirectory, OUTPUT_FOLDER_LEGACY);
+        Path primary = preference == OutputFolderPreference.OUTPUTS_FIRST ? outputsResponse : legacyResponse;
+        Path fallback = preference == OutputFolderPreference.OUTPUTS_FIRST ? legacyResponse : outputsResponse;
 
-            // Backward compatibility: Try legacy location: output/response.md
-            Path legacyOutputFilePath;
-            if (workingDirectory != null) {
-                legacyOutputFilePath = workingDirectory.resolve(OUTPUT_FOLDER_LEGACY).resolve(RESPONSE_FILE_NAME);
-            } else {
-                legacyOutputFilePath = Paths.get(OUTPUT_FOLDER_LEGACY, RESPONSE_FILE_NAME);
-            }
-
-            if (Files.exists(legacyOutputFilePath)) {
-                logger.info("Found output response file at legacy location: {}", legacyOutputFilePath.toAbsolutePath());
-                outputFilePath = legacyOutputFilePath;
-            } else {
-                logger.info("No output response file found at legacy location: {}", legacyOutputFilePath.toAbsolutePath());
+        Path outputFilePath = primary;
+        if (!Files.exists(primary)) {
+            logger.info("No output response file found at: {}", primary.toAbsolutePath());
+            if (!Files.exists(fallback)) {
+                logger.info("No fallback output response file found at: {}", fallback.toAbsolutePath());
                 return null;
             }
+            logger.info("Found output response file at fallback location: {}", fallback.toAbsolutePath());
+            outputFilePath = fallback;
         }
 
         try {
@@ -833,6 +875,12 @@ public class CliExecutionHelper {
                         outputFilePath.toAbsolutePath(), e.getMessage());
             return null;
         }
+    }
+
+    private Path resolveOutputFile(Path workingDirectory, String folder) {
+        return workingDirectory != null
+                ? workingDirectory.resolve(folder).resolve(RESPONSE_FILE_NAME)
+                : Paths.get(folder, RESPONSE_FILE_NAME);
     }
     
     /**

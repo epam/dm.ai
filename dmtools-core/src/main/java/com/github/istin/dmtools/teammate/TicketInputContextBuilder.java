@@ -96,13 +96,19 @@ public class TicketInputContextBuilder {
                 : "";
         String requestContent = buildRequestContent(config, ticketContext, textFieldsOnly, agentParams);
 
+        // ADO attachments are represented by relations, which are not present in field-only responses.
+        // Enrich before reading and filtering the attachment list.
+        CliExecutionHelper cliHelper = new CliExecutionHelper();
+        if (config.isIncludeAttachments() && !config.isSkipAllAttachments()) {
+            cliHelper.enrichTicketWithRelations(ticket, trackerClient);
+        }
+
         // Determine which attachments to download
         List<? extends IAttachment> attachments = filterAttachments(ticket.getAttachments(), config);
 
         // Create folder, write request.md, download attachments
-        CliExecutionHelper cliHelper = new CliExecutionHelper();
         Path inputFolderPath = cliHelper.createInputContext(
-                ticket, requestContent, trackerClient, workingDirectory, attachments);
+                ticket, requestContent, trackerClient, workingDirectory, attachments, true);
 
         // Write comments.md
         cliHelper.writeCommentsFile(inputFolderPath, ticketContext.getComments());
@@ -216,8 +222,9 @@ public class TicketInputContextBuilder {
         if (attachments == null || attachments.isEmpty()) {
             return attachments;
         }
-        if (config.isSkipAllAttachments()) {
-            logger.info("⏭️ Skipping all attachments (skipAllAttachments=true)");
+        if (!config.isIncludeAttachments() || config.isSkipAllAttachments()) {
+            logger.info("⏭️ Skipping all attachments (includeAttachments={}, skipAllAttachments={})",
+                    config.isIncludeAttachments(), config.isSkipAllAttachments());
             return Collections.emptyList();
         }
         if (!config.isSkipVideoAttachments()) {

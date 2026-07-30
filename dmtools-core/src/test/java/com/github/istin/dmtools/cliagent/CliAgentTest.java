@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.cliagent;
 
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
+import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.confluence.model.Storage;
 import com.github.istin.dmtools.common.model.ITicket;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Mockito.*;
 
 class CliAgentTest {
@@ -188,6 +190,40 @@ class CliAgentTest {
     }
 
     @Test
+    void testRecreatesOutputFolderAfterSetupHookRemovesIt() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setSetup("remove outputs");
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(
+                            eq("remove outputs"), any(), any(), any(), eq(false)))
+                    .thenAnswer(invocation -> {
+                        Path outputs = tempDir.resolve("outputs");
+                        if (Files.exists(outputs)) {
+                            org.apache.commons.io.FileUtils.deleteDirectory(outputs.toFile());
+                        }
+                        return "removed";
+                    });
+            mocked.when(() -> CommandLineUtils.runCommand(
+                            eq("echo hello"), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.runJobImpl(params);
+
+            assertTrue(Files.isDirectory(tempDir.resolve("outputs")));
+        }
+    }
+
+    @Test
     void testCleanupOutputsFolderRemovesOutputFolder() throws Exception {
         CliAgentParams params = new CliAgentParams();
         params.setCliCommands(new String[]{"echo hello"});
@@ -307,7 +343,8 @@ class CliAgentTest {
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of("SECRET_TOKEN", "secret", "PUBLIC_VAR", "visible"));
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+            mocked.when(() -> CommandLineUtils.runCommand(
+                            anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt(), any(), any()))
                     .thenReturn("hello\nExit Code: 0");
 
             agent.runJobImpl(params);
@@ -320,7 +357,9 @@ class CliAgentTest {
                     any(),
                     anyBoolean(),
                     any(),
-                    anyInt()));
+                    anyInt(),
+                    aryEq(new String[]{"SECRET_TOKEN"}),
+                    isNull()));
         }
     }
 
@@ -337,7 +376,7 @@ class CliAgentTest {
     }
 
     @Test
-    void testReturnsOutputResponseFileContent() throws Exception {
+    void testReturnsOutputResponseCreatedByCurrentRun() throws Exception {
         CliAgentParams params = new CliAgentParams();
         params.setCliCommands(new String[]{"echo hello"});
         params.setOutputType(TrackerParams.OutputType.none);
@@ -346,9 +385,38 @@ class CliAgentTest {
         params.setCleanupOutputsFolder(false);
         params.setWorkingDirectory(tempDir.toString());
 
+        CliAgent agent = buildAgent();
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenAnswer(invocation -> {
+                        Path outputsDir = tempDir.resolve("outputs");
+                        Files.createDirectories(outputsDir);
+                        Files.writeString(outputsDir.resolve("response.md"), "file based response");
+                        return "hello\nExit Code: 0";
+                    });
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            List<ResultItem> results = agent.runJobImpl(params);
+
+            assertEquals(1, results.size());
+            assertEquals("file based response", results.get(0).getResult());
+        }
+    }
+
+    @Test
+    void testStaleOutputResponseIsRemovedBeforeExecution() throws Exception {
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(true);
+        params.setCleanupInputFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
         Path outputsDir = tempDir.resolve("outputs");
         Files.createDirectories(outputsDir);
-        Files.writeString(outputsDir.resolve("response.md"), "file based response");
+        Files.writeString(outputsDir.resolve("response.md"), "stale response");
 
         CliAgent agent = buildAgent();
 
@@ -360,8 +428,45 @@ class CliAgentTest {
 
             List<ResultItem> results = agent.runJobImpl(params);
 
-            assertEquals(1, results.size());
-            assertEquals("file based response", results.get(0).getResult());
+            assertFalse(Files.exists(outputsDir.resolve("response.md")));
+            assertTrue(results.get(0).getResult().contains("did not produce output file"));
+            assertFalse(results.get(0).getResult().contains("stale response"));
+        }
+    }
+
+    @Test
+    void testStandaloneConfluenceClientExpandsCliPrompt() throws Exception {
+        BasicConfluence standaloneConfluence = mock(BasicConfluence.class);
+        Content page = mock(Content.class);
+        Storage storage = mock(Storage.class);
+        when(page.getStorage()).thenReturn(storage);
+        when(storage.getValue()).thenReturn("<p>Standalone prompt content</p>");
+        when(standaloneConfluence.contentByUrl("https://wiki.example/page")).thenReturn(page);
+
+        CliAgent agent = new CliAgent();
+        agent.trackerClient = mock(TrackerClient.class);
+        agent.figmaClient = mock(FigmaClient.class);
+
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"cursor-agent"});
+        params.setCliPrompt("https://wiki.example/page");
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
+        try (MockedStatic<BasicConfluence> basicConfluence = mockStatic(BasicConfluence.class);
+             MockedStatic<CommandLineUtils> commands = mockStatic(CommandLineUtils.class)) {
+            basicConfluence.when(BasicConfluence::getInstance).thenReturn(standaloneConfluence);
+            commands.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("done\nExit Code: 0");
+            commands.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.initializeStandalone();
+            agent.runJobImpl(params);
+
+            verify(standaloneConfluence).contentByUrl("https://wiki.example/page");
         }
     }
 

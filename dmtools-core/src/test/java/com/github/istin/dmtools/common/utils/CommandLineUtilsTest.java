@@ -190,6 +190,20 @@ class CommandLineUtilsTest {
     }
 
     @Test
+    void testRunCommand_ExcludesInheritedEnvironmentVariables() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            String result = CommandLineUtils.runCommand(
+                    "if /usr/bin/env | /usr/bin/grep -Eq '^(PATH|[^=]*HOME[^=]*)='; "
+                            + "then echo present; else echo excluded; fi",
+                    null, Map.of(), null, false, null, -1,
+                    new String[]{"PATH"}, new String[]{".*HOME.*"});
+
+            assertEquals("excluded", result);
+        }
+    }
+
+    @Test
     void testLoadEnvironmentFromFile_NonExistentFile() {
         Map<String, String> result = CommandLineUtils.loadEnvironmentFromFile("non_existent_file.env");
         assertNotNull(result);

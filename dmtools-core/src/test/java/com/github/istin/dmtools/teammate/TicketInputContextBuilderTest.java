@@ -13,6 +13,8 @@ import com.github.istin.dmtools.common.model.IAttachment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.figma.FigmaClient;
+import com.github.istin.dmtools.microsoft.ado.AzureDevOpsClient;
+import com.github.istin.dmtools.microsoft.ado.model.WorkItem;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,6 +24,7 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -217,6 +220,61 @@ class TicketInputContextBuilderTest {
 
         verify(trackerClient, never()).convertUrlToFile(anyString());
         assertFalse(Files.exists(result.getPath().resolve("doc.pdf")));
+    }
+
+    @Test
+    void testIncludeAttachmentsFalseDoesNotDownload() throws Exception {
+        IAttachment attachment = mock(IAttachment.class);
+        when(attachment.getName()).thenReturn("doc.pdf");
+        when(attachment.getUrl()).thenReturn("https://example.com/doc.pdf");
+        ITicket ticket = mockTicket("PROJ-123", "Summary", "Desc");
+        doReturn(List.of(attachment)).when(ticket).getAttachments();
+        when(trackerClient.performTicket(anyString(), any())).thenReturn(ticket);
+        when(trackerClient.getTextFieldsOnly(ticket)).thenReturn("Summary\nDesc");
+
+        InputParams input = new InputParams("PROJ-123");
+        input.setIncludeAttachments(false);
+        input.setSmart(false);
+
+        TicketInputContextBuilder.Result result =
+                builder.build(input, tempDir, trackerClient, confluence, figmaClient);
+
+        verify(trackerClient, never()).convertUrlToFile(anyString());
+        assertFalse(Files.exists(result.getPath().resolve("doc.pdf")));
+    }
+
+    @Test
+    void testAdoRelationsAreEnrichedBeforeAttachmentsAreFiltered() throws Exception {
+        AzureDevOpsClient adoClient = mock(AzureDevOpsClient.class);
+        WorkItem workItem = mock(WorkItem.class);
+        IAttachment attachment = mock(IAttachment.class);
+        AtomicBoolean enriched = new AtomicBoolean(false);
+
+        when(workItem.getTicketKey()).thenReturn("42");
+        when(workItem.toText()).thenReturn("ADO work item");
+        when(workItem.getAttachments()).thenAnswer(invocation ->
+                enriched.get() ? List.of(attachment) : Collections.emptyList());
+        when(attachment.getName()).thenReturn("relation.txt");
+        when(attachment.getUrl()).thenReturn("https://ado/attachment");
+        when(adoClient.getTextFieldsOnly(workItem)).thenReturn("ADO work item");
+        doAnswer(invocation -> {
+            enriched.set(true);
+            return null;
+        }).when(adoClient).enrichWorkItemWithRelations(workItem);
+
+        File downloaded = tempDir.resolve("downloaded.txt").toFile();
+        Files.writeString(downloaded.toPath(), "attachment");
+        when(adoClient.convertUrlToFile("https://ado/attachment")).thenReturn(downloaded);
+
+        Teammate.TeammateParams config = new Teammate.TeammateParams();
+        config.setWriteAgentParamsToFiles(true);
+
+        TicketInputContextBuilder.Result result = builder.build(
+                config, workItem, tempDir, adoClient, confluence, figmaClient, null);
+
+        verify(adoClient).enrichWorkItemWithRelations(workItem);
+        verify(adoClient).convertUrlToFile("https://ado/attachment");
+        assertTrue(Files.exists(result.getPath().resolve("relation.txt")));
     }
 
     @Test

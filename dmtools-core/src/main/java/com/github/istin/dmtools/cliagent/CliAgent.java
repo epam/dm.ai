@@ -90,7 +90,6 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     @Override
     protected void initializeStandalone() {
         logger.info("Initializing CliAgent in STANDALONE mode");
-        this.instructionProcessor = new InstructionProcessor(confluence);
         if (this.confluence == null) {
             try {
                 this.confluence = BasicConfluence.getInstance();
@@ -115,6 +114,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 logger.debug("BasicFigmaClient not configured, continuing without FigmaClient: {}", e.getMessage());
             }
         }
+        this.instructionProcessor = new InstructionProcessor(confluence);
         logger.info("CliAgent standalone initialization completed");
     }
 
@@ -144,6 +144,8 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
         CliExecutionHelper.CliExecutionResult cliResult = null;
 
         try {
+            clearStaleOutputResponses(workingDirectory);
+
             // 1. Setup hook
             executeScriptHook(params.getSetup(), "setup", params, workingDirectory, null);
 
@@ -185,14 +187,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     params.getCliPromptsConfig(),
                     params.getCliPromptsByTracker());
 
-            // Ensure outputs folder exists so CLI agents can write outputs/response.md by default
-            Path outputFolder = workingDirectory.resolve("outputs");
-            try {
-                Files.createDirectories(outputFolder);
-                logger.info("Created outputs folder: {}", outputFolder.toAbsolutePath());
-            } catch (Exception e) {
-                logger.warn("Failed to create outputs folder: {}", e.getMessage());
-            }
+            ensureOutputFolder(workingDirectory);
 
             AtomicReference<String> liveOutput = new AtomicReference<>("");
             Runnable timerRunnable = buildTimerRunnable(params, liveOutput);
@@ -210,7 +205,8 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     params.getExcludedEnvVariables(),
                     params.getExcludeEnvVariablesByRegex(),
                     errorHandler,
-                    lineStopPredicate);
+                    lineStopPredicate,
+                    CliExecutionHelper.OutputFolderPreference.OUTPUTS_FIRST);
 
             // 6. Post-JS action
             String response = extractResponse(cliResult, params);
@@ -401,10 +397,22 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
             FileUtils.deleteDirectory(outputFolder.toFile());
             logger.info("Cleaned up outputs folder: {}", outputFolder.toAbsolutePath());
         }
+
         if (Files.exists(legacyOutputFolder)) {
             FileUtils.deleteDirectory(legacyOutputFolder.toFile());
             logger.info("Cleaned up legacy output folder: {}", legacyOutputFolder.toAbsolutePath());
         }
+    }
+
+    private void clearStaleOutputResponses(Path workingDirectory) throws IOException {
+        Files.deleteIfExists(workingDirectory.resolve("outputs").resolve("response.md"));
+        Files.deleteIfExists(workingDirectory.resolve("output").resolve("response.md"));
+    }
+
+    private void ensureOutputFolder(Path workingDirectory) throws IOException {
+        Path outputFolder = workingDirectory.resolve("outputs");
+        Files.createDirectories(outputFolder);
+        logger.info("Prepared outputs folder: {}", outputFolder.toAbsolutePath());
     }
 
     private String extractResponse(CliExecutionHelper.CliExecutionResult cliResult, CliAgentParams params) {

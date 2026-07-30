@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Mockito.*;
 
 public class CliExecutionHelperTest {
@@ -277,8 +278,8 @@ public class CliExecutionHelperTest {
     }
 
     @Test
-    void testProcessOutputResponse_PreferNewOverLegacy() throws IOException {
-        // Arrange - both folders exist, primary outputs/ should take precedence
+    void testProcessOutputResponse_PreservesLegacyTeammatePrecedence() throws IOException {
+        // Arrange - both folders exist, legacy output/ must remain primary for Teammate
         Path newOutputDir = tempDir.resolve("outputs");
         Files.createDirectories(newOutputDir);
         Path newResponseFile = newOutputDir.resolve("response.md");
@@ -295,7 +296,23 @@ public class CliExecutionHelperTest {
         String result = cliHelper.processOutputResponse(tempDir);
 
         // Assert
-        assertEquals(newContent, result, "Should prefer primary 'outputs/' folder over legacy 'output/' folder");
+        assertEquals(legacyContent, result, "Teammate must preserve legacy 'output/' precedence");
+    }
+
+    @Test
+    void testProcessOutputResponse_CliAgentPrefersOutputsFolder() throws IOException {
+        Path newOutputDir = tempDir.resolve("outputs");
+        Files.createDirectories(newOutputDir);
+        Files.writeString(newOutputDir.resolve("response.md"), "CliAgent response");
+
+        Path legacyOutputDir = tempDir.resolve("output");
+        Files.createDirectories(legacyOutputDir);
+        Files.writeString(legacyOutputDir.resolve("response.md"), "Teammate response");
+
+        String result = cliHelper.processOutputResponse(
+                tempDir, CliExecutionHelper.OutputFolderPreference.OUTPUTS_FIRST);
+
+        assertEquals("CliAgent response", result);
     }
 
     @Test
@@ -875,7 +892,8 @@ public class CliExecutionHelperTest {
             try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
                 mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                         .thenReturn(new java.util.HashMap<>());
-                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                mockedUtils.when(() -> CommandLineUtils.runCommand(
+                                anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("test");
 
                 // Should NOT throw NullPointerException
@@ -940,7 +958,8 @@ public class CliExecutionHelperTest {
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                     .thenReturn(Map.of("KEEP_ME", "keep", "DROP_ME", "drop"));
-            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(
+                            anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt(), any(), any()))
                     .thenReturn("test");
 
             cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
@@ -955,7 +974,9 @@ public class CliExecutionHelperTest {
                     any(),
             anyBoolean(),
             any(),
-            anyInt()
+            anyInt(),
+            aryEq(new String[]{"DROP_ME"}),
+            isNull()
             ));
         }
     }
@@ -966,7 +987,8 @@ public class CliExecutionHelperTest {
         try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
             mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                     .thenReturn(Map.of("SECRET_TOKEN", "x", "PUBLIC", "y"));
-            mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+            mockedUtils.when(() -> CommandLineUtils.runCommand(
+                            anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt(), any(), any()))
                     .thenReturn("test");
 
             cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false,
@@ -981,7 +1003,9 @@ public class CliExecutionHelperTest {
                     any(),
             anyBoolean(),
             any(),
-            anyInt()
+            anyInt(),
+            isNull(),
+            aryEq(new String[]{".*TOKEN"})
             ));
         }
     }
@@ -1311,7 +1335,8 @@ public class CliExecutionHelperTest {
             try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
                 mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                         .thenReturn(Map.of());
-                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                mockedUtils.when(() -> CommandLineUtils.runCommand(
+                                anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt(), any(), any()))
                         .thenReturn("test");
 
                 cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false, excluded, null);
@@ -1327,7 +1352,9 @@ public class CliExecutionHelperTest {
                         any(),
                 anyBoolean(),
                 any(),
-                anyInt()
+                anyInt(),
+                aryEq(excluded),
+                isNull()
                 ));
             }
         } finally {
@@ -1346,7 +1373,8 @@ public class CliExecutionHelperTest {
             try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
                 mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
                         .thenReturn(Map.of());
-                mockedUtils.when(() -> CommandLineUtils.runCommand(anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                mockedUtils.when(() -> CommandLineUtils.runCommand(
+                                anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt(), any(), any()))
                         .thenReturn("test");
 
                 cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false, null, excludedRegexes);
@@ -1362,7 +1390,9 @@ public class CliExecutionHelperTest {
                         any(),
                 anyBoolean(),
                 any(),
-                anyInt()
+                anyInt(),
+                isNull(),
+                aryEq(excludedRegexes)
                 ));
             }
         } finally {
