@@ -1,0 +1,10 @@
+node_modules
+dist
+.env.local
+*.local
+
+# The repo-root .gitignore ignores package.json / package-lock.json
+# (unanchored pattern, aimed at other tooling); this SPA genuinely needs
+# both tracked, so un-ignore them for this subtree.
+!package.json
+!package-lock.json

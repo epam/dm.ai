@@ -1,0 +1,162 @@
+/*
+ * EPAM Brandbook 2023 — Night (dark) variant.
+ * Source of truth: branded/epam/dmtools/GOAL.md in IstiN/yoclip-examples
+ * (used only for brand/content reference, not copied verbatim as code).
+ *
+ * Font note: the original brand kit uses Museo Sans (exljbris, commercial
+ * license). This project uses "Sora" (Google Fonts, SIL OFL) as an open,
+ * visually-similar geometric sans substitute so the font can be redistributed
+ * under this repository's Apache-2.0 license.
+ */
+:root {
+  --canvas: #060606;
+  --surface: #161616;
+  --surface-raised: #1c1c1c;
+  --hairline: #2a2a2a;
+
+  --sea: #00f6ff;
+  --mint: #00fff0;
+  --lilac: #b896ff;
+  --sky: #7ba8ff;
+
+  --text: #f5f5f4;
+  --text-dim: #a3a3a0;
+  --text-faint: #6b6b68;
+
+  --gradient-headline: linear-gradient(90deg, var(--mint), var(--sea), var(--lilac));
+
+  --font-display: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
+
+  --radius: 14px;
+  --container: 1180px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 300;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+svg {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+.container {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-faint);
+  margin: 0 0 14px;
+}
+
+.gradient-word {
+  background: var(--gradient-headline);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 100;
+  text-align: left;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+h2 {
+  font-weight: 300;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn--primary {
+  background: linear-gradient(90deg, var(--mint), var(--sea));
+  color: #04211f;
+}
+.btn--primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--hairline);
+  color: var(--text);
+}
+.btn--ghost:hover {
+  border-color: var(--sky);
+  color: var(--sky);
+}
+
+.section {
+  padding: 96px 0;
+}
+
+.section--bordered {
+  border-top: 1px solid var(--hairline);
+}
+
+.section__lede {
+  color: var(--text-dim);
+  max-width: 620px;
+  font-size: 16px;
+  margin: 16px 0 0;
+}
+
+@media (max-width: 720px) {
+  .section {
+    padding: 64px 0;
+  }
+}
