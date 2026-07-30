@@ -7,6 +7,7 @@ import { Architecture } from './components/Architecture';
 import { CodeSample } from './components/CodeSample';
 import { UsagePaths } from './components/UsagePaths';
 import { Integrations } from './components/Integrations';
+import { Trust } from './components/Trust';
 import { Cta } from './components/Cta';
 import { Footer } from './components/Footer';
 
@@ -23,6 +24,7 @@ function App() {
         <CodeSample />
         <UsagePaths />
         <Integrations />
+        <Trust />
         <Cta />
       </main>
       <Footer />

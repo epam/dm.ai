@@ -122,6 +122,17 @@
   height: 20px;
 }
 
+.hero__audience {
+  margin: 22px 0 0;
+  font-size: 13.5px;
+  color: var(--text-faint);
+  max-width: 560px;
+}
+.hero__audience strong {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
 /* ---------- Install box ---------- */
 .install-box {
   border: 1px solid var(--hairline);
@@ -203,6 +214,19 @@
   font-size: clamp(26px, 3.6vw, 38px);
   max-width: 700px;
   margin-bottom: 8px;
+}
+
+.numbers__note {
+  margin: 0 0 20px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.section__footnote {
+  margin: 18px 0 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  max-width: 560px;
 }
 
 .section__sublabel {
@@ -505,6 +529,69 @@
   background: rgba(184, 150, 255, 0.08);
 }
 
+/* ---------- Trust ---------- */
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin: 44px 0 32px;
+}
+.trust-card {
+  padding: 22px 20px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.trust-card h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.trust-card p {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.proof-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  border: 1px solid rgba(0, 246, 255, 0.25);
+  border-radius: var(--radius);
+  background: rgba(0, 246, 255, 0.06);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.proof-strip:hover {
+  border-color: var(--sea);
+  background: rgba(0, 246, 255, 0.1);
+}
+.proof-strip__tag {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--sea);
+  color: #04211f;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.proof-strip__text {
+  flex: 1;
+  min-width: 240px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+.proof-strip__arrow {
+  color: var(--sea);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
 /* ---------- CTA ---------- */
 .cta__inner {
   max-width: 640px;
@@ -572,6 +659,9 @@
   .code-section {
     grid-template-columns: 1fr;
   }
+  .trust-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 780px) {
@@ -614,6 +704,9 @@
   }
   .stats {
     grid-template-columns: 1fr 1fr;
+  }
+  .trust-grid {
+    grid-template-columns: 1fr;
   }
   .flow__step {
     grid-template-columns: 32px 1fr;

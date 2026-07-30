@@ -4,6 +4,7 @@ const LINKS = [
   { href: '#problem', label: 'Why DMTools' },
   { href: '#architecture', label: 'Architecture' },
   { href: '#integrations', label: 'Integrations' },
+  { href: '#trust', label: 'Trust & security' },
   { href: '#quick-start', label: 'Quick start' },
 ];
 

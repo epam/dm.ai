@@ -42,6 +42,8 @@ export function Numbers() {
           ))}
         </div>
 
+        <p className="numbers__note">Top 10 integrations by tool count — plus AI-provider tools, shared CLI utilities, and more shipping every release.</p>
+
         <div className="bars">
           {BARS.map((b) => (
             <div className="bars__row" key={b.name}>

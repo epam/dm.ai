@@ -29,7 +29,7 @@ export function Integrations() {
           ))}
         </div>
 
-        <p className="section__sublabel">AI providers</p>
+        <p className="section__sublabel">AI providers — bring your own, including a fully local option</p>
         <div className="chip-grid chip-grid--accent">
           {AI_PROVIDERS.map((p) => (
             <span className="chip chip--accent" key={p}>
@@ -37,6 +37,10 @@ export function Integrations() {
             </span>
           ))}
         </div>
+        <p className="section__footnote">
+          "Enterprise gateway (DIAL)" is an internal LLM routing layer — one config value, no code
+          changes to switch providers.
+        </p>
       </div>
     </section>
   );

@@ -43,7 +43,20 @@ export function Hero() {
             src="https://img.shields.io/github/stars/epam/dm.ai?labelColor=060606&color=7BA8FF"
             alt="GitHub stars"
           />
+          <img
+            src="https://img.shields.io/github/last-commit/epam/dm.ai?label=last%20commit&color=00FFF0&labelColor=060606"
+            alt="Last commit"
+          />
+          <img
+            src="https://img.shields.io/github/contributors/epam/dm.ai?label=contributors&color=B896FF&labelColor=060606"
+            alt="Contributors"
+          />
         </div>
+
+        <p className="hero__audience">
+          Built for <strong>platform</strong>, <strong>delivery</strong>, <strong>QA</strong>, and{' '}
+          <strong>engineering leadership</strong> teams running enterprise-scale software delivery.
+        </p>
       </div>
     </section>
   );
