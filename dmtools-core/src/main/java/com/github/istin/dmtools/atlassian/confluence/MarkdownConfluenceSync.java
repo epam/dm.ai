@@ -55,6 +55,13 @@ public class MarkdownConfluenceSync {
         Content updatePage(String contentId, String title, String parentId, String body, String space, String historyComment) throws IOException;
         List<Content> getChildren(String contentId) throws IOException;
         String deletePage(String contentId) throws IOException;
+        /**
+         * Fetches a page's current metadata, including its ancestors — used only to look up
+         * the ROOT target page's existing real parent before updating it (see
+         * {@link #syncDirectory}). Not needed for any other node in the tree, since every
+         * other node's parentId is set explicitly as it is created during the sync walk.
+         */
+        Content getContent(String contentId) throws IOException;
     }
 
     public MarkdownConfluenceSync(ConfluenceAttachmentHelper attachmentHelper, PageOperations pageOps) {
@@ -72,6 +79,18 @@ public class MarkdownConfluenceSync {
         Set<String> expectedTitles = new HashSet<>(pathToTitle.values());
 
         root.contentId = parentId;
+        // The root node's own page (parentId) is an EXISTING page being updated in place
+        // (its body becomes rootDir's index.md) — unlike every other node in the tree,
+        // it was never "created" during this sync walk, so nothing ever set its
+        // parentId. Without this lookup, syncDirNode's fallback (node.parentId != null
+        // ? node.parentId : node.contentId) would pass the page's OWN id as its ancestor
+        // on update, which Confluence rejects with "Can not set page as its own parent."
+        // Fetch its actual current parent so the update preserves it unchanged.
+        try {
+            root.parentId = pageOps.getContent(parentId).getParentId();
+        } catch (IOException e) {
+            logger.warn("syncDirectory: failed to look up existing parent of root page {} — proceeding without it: {}", parentId, e.getMessage());
+        }
         syncDirNode(root, rootDir, pathToTitle, space, attachmentsDir);
 
         List<String> deleted = new ArrayList<>();
