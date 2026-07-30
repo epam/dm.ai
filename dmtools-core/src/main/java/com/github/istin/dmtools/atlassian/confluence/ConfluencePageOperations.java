@@ -40,4 +40,9 @@ public class ConfluencePageOperations implements MarkdownConfluenceSync.PageOper
     public String deletePage(String contentId) throws IOException {
         return confluence.deletePage(contentId);
     }
+
+    @Override
+    public Content getContent(String contentId) throws IOException {
+        return confluence.contentById(contentId, null);
+    }
 }
