@@ -73,4 +73,18 @@ public interface InputContextConfig {
     default boolean isIncludeParentConfluence() {
         return false;
     }
+
+    /**
+     * How many levels of pages linked from ticket Confluence URLs to download.
+     */
+    default int getConfluenceDepth() {
+        return 0;
+    }
+
+    /**
+     * Whether to download attachments for fetched Confluence pages.
+     */
+    default boolean isConfluenceAttachments() {
+        return true;
+    }
 }

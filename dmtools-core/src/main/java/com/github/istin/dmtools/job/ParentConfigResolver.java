@@ -226,7 +226,7 @@ public class ParentConfigResolver {
         Object parentValue = getValueAtPath(parentConfig, CLI_PROMPTS_PATH);
         Object childValue  = getValueAtPath(originalChild, CLI_PROMPTS_PATH);
 
-        if (!(parentValue instanceof JSONArray) && !(childValue instanceof JSONArray)) {
+        if (!containsStructuredCliPrompts(parentValue) && !containsStructuredCliPrompts(childValue)) {
             return;
         }
 
@@ -240,5 +240,18 @@ public class ParentConfigResolver {
         CliPromptsConfig mergedPrompts = parentPrompts.merge(childPrompts);
         setValueAtPath(merged, CLI_PROMPTS_PATH, CliPromptsConfig.toJsonArray(mergedPrompts));
         logger.debug("Structured cliPrompts merge applied at '{}'", CLI_PROMPTS_PATH);
+    }
+
+    private boolean containsStructuredCliPrompts(Object value) {
+        if (!(value instanceof JSONArray)) {
+            return false;
+        }
+        JSONArray prompts = (JSONArray) value;
+        for (int i = 0; i < prompts.length(); i++) {
+            if (prompts.get(i) instanceof JSONObject) {
+                return true;
+            }
+        }
+        return false;
     }
 }

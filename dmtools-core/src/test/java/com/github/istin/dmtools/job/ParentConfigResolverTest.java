@@ -358,7 +358,7 @@ class ParentConfigResolverTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void testResolve_CliPromptsLegacyArrays_MergedAsPlainAppend() throws Exception {
+    void testResolve_CliPromptsLegacyArrays_ChildReplacesParent() throws Exception {
         Path parentFile = tempDir.resolve("base.json");
         Files.writeString(parentFile, """
                 {"params":{"cliPrompts":["base1","base2"]}}
@@ -374,10 +374,8 @@ class ParentConfigResolverTest {
         JSONObject result = resolver.resolve(child, tempDir.resolve("child.json"));
         JSONArray cliPrompts = result.getJSONObject("params").getJSONArray("cliPrompts");
 
-        assertEquals(3, cliPrompts.length());
-        assertEquals("base1", cliPrompts.getString(0));
-        assertEquals("base2", cliPrompts.getString(1));
-        assertEquals("child1", cliPrompts.getString(2));
+        assertEquals(1, cliPrompts.length());
+        assertEquals("child1", cliPrompts.getString(0));
     }
 
     @Test

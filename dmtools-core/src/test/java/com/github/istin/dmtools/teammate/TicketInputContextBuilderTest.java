@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.teammate;
 
 import com.github.istin.dmtools.ai.TicketContext;
+import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.confluence.model.Storage;
@@ -216,6 +217,60 @@ class TicketInputContextBuilderTest {
 
         verify(trackerClient, never()).convertUrlToFile(anyString());
         assertFalse(Files.exists(result.getPath().resolve("doc.pdf")));
+    }
+
+    @Test
+    void testTeammateAgentParamsRemainRequestContentWhenNotWrittenToFiles() throws Exception {
+        ITicket ticket = mockTicket("PROJ-123", "Summary", "Description");
+        when(trackerClient.getTextFieldsOnly(ticket)).thenReturn("Ticket text");
+
+        Teammate.TeammateParams config = new Teammate.TeammateParams();
+        config.setWriteAgentParamsToFiles(false);
+        RequestDecompositionAgent.Result agentParams = new RequestDecompositionAgent.Result(
+                "QA role", "Generated request", new String[0], new String[0],
+                new String[]{"Verify edge cases"}, "Known information", "Markdown only", "");
+
+        TicketInputContextBuilder.Result result = builder.build(
+                config, ticket, tempDir, trackerClient, confluence, figmaClient, agentParams);
+
+        String request = Files.readString(result.getPath().resolve("request.md"));
+        assertTrue(request.contains("QA role"));
+        assertTrue(request.contains("Verify edge cases"));
+        assertTrue(request.contains("Known information"));
+    }
+
+    @Test
+    void testTeammateConfluenceConfigurationControlsDepthAndAttachments() throws Exception {
+        ITicket ticket = mockTicket("PROJ-123", "Summary", "See https://wiki/seed");
+        when(trackerClient.getTextFieldsOnly(ticket)).thenReturn("See https://wiki/seed");
+
+        Content seedPage = mock(Content.class);
+        when(seedPage.getId()).thenReturn("seed");
+        when(seedPage.getTitle()).thenReturn("Seed");
+        Storage seedStorage = mock(Storage.class);
+        when(seedStorage.getValue()).thenReturn("<p>https://wiki/child</p>");
+        when(seedPage.getStorage()).thenReturn(seedStorage);
+
+        Content childPage = mock(Content.class);
+        when(childPage.getId()).thenReturn("child");
+        when(childPage.getTitle()).thenReturn("Child");
+        Storage childStorage = mock(Storage.class);
+        when(childStorage.getValue()).thenReturn("<p>Child page</p>");
+        when(childPage.getStorage()).thenReturn(childStorage);
+
+        when(confluence.parseUris("See https://wiki/seed")).thenReturn(Set.of("https://wiki/seed"));
+        when(confluence.parseUris("<p>https://wiki/child</p>")).thenReturn(Set.of("https://wiki/child"));
+        when(confluence.contentByUrl("https://wiki/seed")).thenReturn(seedPage);
+        when(confluence.contentByUrl("https://wiki/child")).thenReturn(childPage);
+
+        Teammate.TeammateParams config = new Teammate.TeammateParams();
+        config.setConfluenceDepth(1);
+        config.setConfluenceAttachments(false);
+
+        builder.build(config, ticket, tempDir, trackerClient, confluence, figmaClient, null);
+
+        verify(confluence).contentByUrl("https://wiki/child");
+        verify(confluence, never()).downloadPageAttachments(anyString(), any(File.class));
     }
 
     private ITicket mockTicket(String key, String title, String description) throws Exception {

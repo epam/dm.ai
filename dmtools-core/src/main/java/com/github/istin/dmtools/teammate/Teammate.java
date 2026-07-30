@@ -192,6 +192,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             return includeParentConfluence;
         }
 
+        @Override
+        public int getConfluenceDepth() {
+            return confluenceDepth;
+        }
+
+        @Override
+        public boolean isConfluenceAttachments() {
+            return confluenceAttachments;
+        }
+
         /**
          * Backward-compatible accessor that returns {@code cliPrompts} as a plain string array.
          */
@@ -581,7 +591,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     TicketInputContextBuilder contextBuilder = new TicketInputContextBuilder(instructionProcessor);
                     TicketInputContextBuilder.Result contextResult = contextBuilder.build(
                             expertParams, ticket, Paths.get(System.getProperty("user.dir")),
-                            trackerClient, confluence, null, originalParams);
+                            trackerClient, confluence, null,
+                            expertParams.isWriteAgentParamsToFiles() ? originalParams : inputParams);
                     inputContextPath = contextResult.getPath();
 
                     // Run preCliJSAction to allow extending input folder with extra content before CLI execution.

@@ -116,7 +116,12 @@ public class TicketInputContextBuilder {
         String smartText = buildSmartText(textFieldsOnly, ticket, trackerClient, config);
         if (config.isSmart() && !smartText.isBlank()) {
             if (isSourceEnabled(config, SOURCE_CONFLUENCE)) {
-                cliHelper.writeConfluencePagesFile(smartText, inputFolderPath, confluence);
+                cliHelper.writeConfluencePagesFile(
+                        smartText,
+                        inputFolderPath,
+                        confluence,
+                        config.getConfluenceDepth(),
+                        config.isConfluenceAttachments());
             }
             if (isSourceEnabled(config, SOURCE_FIGMA)) {
                 writeFigmaFiles(smartText, inputFolderPath, figmaClient);
