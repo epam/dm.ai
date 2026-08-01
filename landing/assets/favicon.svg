@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DMTools">
   <defs>
-    <linearGradient id="dm" x1="0" y1="0" x2="1" y2="0">
+    <linearGradient id="dm" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#00FFF0"/>
       <stop offset="0.5" stop-color="#00F6FF"/>
       <stop offset="1" stop-color="#B896FF"/>
@@ -9,9 +9,10 @@
 
   <rect width="64" height="64" rx="12" fill="#060606"/>
 
-  <!-- Systems above, agents below, one orchestration layer spanning both.
-       Kept to three bars so the mark still reads at 16px. -->
-  <rect x="17" y="13" width="30" height="7" rx="3.5" fill="#FFFFFF" opacity="0.7"/>
-  <rect x="7" y="28" width="50" height="9" rx="4.5" fill="url(#dm)"/>
-  <rect x="17" y="44" width="30" height="7" rx="3.5" fill="#FFFFFF" opacity="0.7"/>
+  <!-- Isometric container: one box holding every connected system.
+       Stroke kept at 4 so the wireframe still resolves at 16px. -->
+  <g fill="none" stroke="url(#dm)" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M32 11 13 21v22l19 10 19-10V21L32 11Z"/>
+    <path d="M13 21l19 10 19-10M32 31v22"/>
+  </g>
 </svg>

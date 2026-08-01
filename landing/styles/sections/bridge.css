@@ -1,0 +1,176 @@
+/* Platform — bipartite diagram
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   10. Layer / agents
+   -------------------------------------------------------------------------- */
+
+.layer__lead {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(2rem, 4vw, 4rem);
+  align-items: center;
+}
+
+.layer__claim {
+  margin-top: 1.75rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Bridge ------------------------------------------------------------
+   Agents on the left, systems on the right, everything through one point.
+   Drawn as a single SVG so the curves and the nodes share one coordinate
+   space — no measuring HTML boxes to work out where a line should land. */
+
+.bridge {
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
+}
+
+.bridge__svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-family: var(--font);
+}
+
+.bridge__wire path {
+  fill: none;
+  stroke: var(--sea);
+  stroke-width: 1.6;
+  opacity: 0.55;
+}
+
+/* The hub is treated as a mark, not as a themed surface: the same brand
+   gradient in both themes, with a near-black label because the gradient is
+   bright at every stop. */
+.bridge__hub {
+  fill: url(#bridgeHubFill);
+  stroke: none;
+}
+
+.bridge__hubLabel {
+  fill: #060606;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-anchor: middle;
+}
+
+.bridge__col {
+  fill: var(--faint);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-anchor: middle;
+}
+
+.bridge__node rect { stroke-width: 1.5; }
+
+.bridge__node text {
+  font-size: 21px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.bridge__node--ai rect { fill: var(--node-ai-fill); stroke: var(--node-ai-line); }
+.bridge__node--ai text { fill: var(--node-ai-text); }
+
+.bridge__node--sys rect { fill: var(--node-sys-fill); stroke: var(--node-sys-line); }
+.bridge__node--sys text { fill: var(--node-sys-text); }
+
+.bridge__more {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+/* Carries the diagram's names to assistive technology, and becomes the
+   diagram itself below 900px where two facing columns cannot fit. */
+.bridge__fallback {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.bridge__group {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 1rem;
+}
+
+.bridge__names {
+  font-size: 0.9375rem;
+  line-height: 1.9;
+  color: var(--muted);
+  margin-bottom: 2.25rem;
+}
+.bridge__names:last-child { margin-bottom: 0; }
+
+.chipset { margin-top: 3rem; }
+
+.chipset__title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 1.25rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+}
+.chip:hover { border-color: var(--hairline-strong); transform: translateY(-2px); }
+
+.chip__count {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+/* Two facing columns with a hub between them need real width. Below that the
+   diagram is dropped rather than squeezed, and the name list takes over. */
+@media (max-width: 900px) {
+  .layer__lead { grid-template-columns: 1fr; }
+  .bridge__svg, .bridge__more { display: none; }
+
+  /* Unhide the list: it is the whole section at this width. */
+  .bridge__fallback {
+    position: static;
+    width: auto; height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+}

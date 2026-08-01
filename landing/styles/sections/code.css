@@ -1,0 +1,55 @@
+/* Code panel
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   13. Code
+   -------------------------------------------------------------------------- */
+
+.code {
+  margin-top: 3.5rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.code__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-alt);
+}
+
+.code__dots { display: flex; gap: 0.4rem; }
+.code__dots i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--hairline-strong);
+}
+
+.code__file {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.code__body {
+  padding: 1.5rem clamp(1rem, 2.5vw, 1.75rem);
+  overflow-x: auto;
+}
+
+.code__body pre {
+  font-size: 0.8125rem;
+  line-height: 1.85;
+  white-space: pre;
+}
+
+.tk-comment { color: var(--faint); font-style: italic; }
+.tk-key     { color: var(--lilac); }
+.tk-fn      { color: var(--sea); }
+.tk-str     { color: var(--mint); }
+.tk-var     { color: var(--sky); }

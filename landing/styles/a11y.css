@@ -1,0 +1,23 @@
+/* Motion and print preferences — must load last
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md.
+
+   These override .reveal, .bar__fill and .flow__step::after at equal
+   specificity, so they only win by coming after every section file. */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  .bar__fill { transform: scaleX(var(--w, 1)); }
+  .flow__step::after { transform: scaleX(1); }
+}
+
+@media print {
+  .nav, .toast, .hero__glow, .close__glow { display: none; }
+  body { background: #fff; color: #000; }
+}

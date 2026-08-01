@@ -1,0 +1,34 @@
+/* Closing CTA
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   16. Closing CTA
+   -------------------------------------------------------------------------- */
+
+.close { position: relative; overflow: hidden; }
+
+.close__glow {
+  position: absolute;
+  width: 40rem; height: 40rem;
+  border-radius: 50%;
+  filter: blur(130px);
+  background: var(--glow-a);
+  bottom: -24rem;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.close__inner { position: relative; z-index: 1; }
+
+.close__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  margin-top: 2.75rem;
+}
+
+@media (max-width: 480px) {
+  .close__actions { flex-direction: column; align-items: stretch; }
+}

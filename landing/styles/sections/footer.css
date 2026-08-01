@@ -1,0 +1,75 @@
+/* Footer
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   17. Footer
+   -------------------------------------------------------------------------- */
+
+.footer {
+  border-top: 1px solid var(--hairline);
+  padding: clamp(3rem, 6vw, 4.5rem) 0 2.5rem;
+  background: var(--canvas);
+}
+
+.footer__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: clamp(2rem, 4vw, 3rem);
+}
+
+.footer__about {
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 34ch;
+}
+
+.footer__title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 1.15rem;
+}
+
+.footer__links { display: flex; flex-direction: column; gap: 0.7rem; }
+
+.footer__link {
+  font-size: 0.9375rem;
+  color: var(--muted);
+  width: fit-content;
+  transition: color 0.2s var(--ease);
+}
+.footer__link:hover { color: var(--text); }
+
+.footer__bottom {
+  margin-top: clamp(2.5rem, 5vw, 4rem);
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+.badge {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 960px) {
+  .footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .footer__grid { grid-template-columns: 1fr; }
+}

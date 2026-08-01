@@ -1,0 +1,92 @@
+/* Architecture — flow
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   12. Architecture
+   -------------------------------------------------------------------------- */
+
+/* Editorial rule-topped columns rather than a boxed grid: seven steps never
+   divide evenly into a responsive column count, and empty cells in a boxed
+   grid read as a rendering fault. Trailing whitespace under rules does not. */
+.flow {
+  margin-top: 3.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  gap: 2.75rem 2rem;
+}
+
+.flow__step {
+  position: relative;
+  padding-top: 1.5rem;
+}
+
+.flow__step::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.flow__num {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--sea);
+  letter-spacing: 0.08em;
+}
+
+.flow__title {
+  margin-top: 0.85rem;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.flow__desc {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.flow__desc code {
+  font-size: 0.78rem;
+  padding: 0.1rem 0.3rem;
+  background: var(--surface-alt);
+  border-radius: 2px;
+}
+
+/* Progress rail that draws across the steps when the section reveals. */
+.flow__step::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--grad);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.55s var(--ease);
+}
+.flow.is-in .flow__step::after { transform: scaleX(1); }
+.flow.is-in .flow__step:nth-child(1)::after { transition-delay: 0.05s; }
+.flow.is-in .flow__step:nth-child(2)::after { transition-delay: 0.15s; }
+.flow.is-in .flow__step:nth-child(3)::after { transition-delay: 0.25s; }
+.flow.is-in .flow__step:nth-child(4)::after { transition-delay: 0.35s; }
+.flow.is-in .flow__step:nth-child(5)::after { transition-delay: 0.45s; }
+.flow.is-in .flow__step:nth-child(6)::after { transition-delay: 0.55s; }
+.flow.is-in .flow__step:nth-child(7)::after { transition-delay: 0.65s; }
+
+.callout {
+  margin-top: 3rem;
+  padding: 1.75rem clamp(1.5rem, 3vw, 2.5rem);
+  border: 1px solid var(--hairline);
+  border-left: 2px solid var(--sea);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 1rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.callout strong { color: var(--text); font-weight: 600; }

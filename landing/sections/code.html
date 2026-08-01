@@ -1,0 +1,48 @@
+<!-- ========================== CODE ========================== -->
+<section class="band" id="code">
+  <div class="shell">
+    <div class="split">
+      <div>
+        <p class="eyebrow reveal">Developer experience</p>
+        <h2 class="headline reveal" data-delay="1">
+          And it's just <span class="accent">JavaScript</span>.
+        </h2>
+      </div>
+      <div>
+        <p class="subhead reveal" data-delay="2">
+          Read the ticket. Pull the page. Ask the model. Ship the result.
+          Every one of the 320+ tools is a function your engineers can already call —
+          no SDK to learn, no schema to hand-write.
+        </p>
+      </div>
+    </div>
+
+    <div class="code panel--dark reveal">
+      <div class="code__bar">
+        <span class="code__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="code__file">agents/story_development.js</span>
+      </div>
+      <div class="code__body">
+<pre><span class="tk-comment">// 1 — read context from every connected system</span>
+<span class="tk-key">const</span> ticket   = <span class="tk-key">await</span> <span class="tk-fn">jira_get_ticket</span>(<span class="tk-str">'PROJ-123'</span>);
+<span class="tk-key">const</span> guidelines = <span class="tk-key">await</span> <span class="tk-fn">confluence_content_by_title</span>(<span class="tk-str">'API Design Guidelines'</span>);
+<span class="tk-key">const</span> openPRs  = <span class="tk-key">await</span> <span class="tk-fn">github_list_prs</span>({ state: <span class="tk-str">'open'</span> });
+
+<span class="tk-comment">// 2 — build the context and ask the model</span>
+<span class="tk-key">await</span> <span class="tk-fn">file_write</span>(<span class="tk-str">'context.md'</span>, buildContext(ticket, guidelines, openPRs));
+<span class="tk-key">const</span> result = <span class="tk-key">await</span> <span class="tk-fn">gemini_ai_chat</span>({
+  prompt:  <span class="tk-str">`Implement the story: <span class="tk-var">${ticket.summary}</span>`</span>,
+  context: <span class="tk-fn">file_read</span>(<span class="tk-str">'context.md'</span>)
+});
+
+<span class="tk-comment">// 3 — ship it: branch and pull request, waiting for review</span>
+<span class="tk-key">await</span> <span class="tk-fn">github_create_branch</span>(<span class="tk-str">'feature/PROJ-123'</span>);
+<span class="tk-key">await</span> <span class="tk-fn">github_create_pull_request</span>({
+  title:  ticket.summary,
+  body:   result.explanation,
+  branch: <span class="tk-str">'feature/PROJ-123'</span>
+});</pre>
+      </div>
+    </div>
+  </div>
+</section>

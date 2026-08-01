@@ -1,0 +1,71 @@
+/* Numbers
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   11. Numbers
+   -------------------------------------------------------------------------- */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: clamp(2rem, 4vw, 3.5rem);
+  margin-top: 3.5rem;
+}
+
+.figure__value {
+  font-size: clamp(3rem, 7vw, 5.5rem);
+  font-weight: 200;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+}
+
+.figure__label {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hairline);
+  font-size: 0.9375rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.bars { margin-top: 3.5rem; }
+
+.bar {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr 3rem;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.bar__name { font-size: 0.875rem; }
+
+.bar__track {
+  display: block;
+  height: 3px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+.bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--grad);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.1s var(--ease);
+}
+
+.bar__value {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .bar { grid-template-columns: 6.5rem 1fr 2.5rem; gap: 0.75rem; }
+  .bar__name { font-size: 0.8125rem; }
+}

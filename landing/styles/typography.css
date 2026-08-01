@@ -1,0 +1,75 @@
+/* Type scale and text helpers
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   4. Typography
+   -------------------------------------------------------------------------- */
+
+.eyebrow {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 1.75rem;
+}
+
+.eyebrow--rule {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.eyebrow--rule::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
+}
+
+h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
+
+.display {
+  font-size: clamp(2.85rem, 7.4vw, 6.25rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+}
+
+.headline {
+  font-size: clamp(2.1rem, 4.6vw, 3.9rem);
+  line-height: 1.03;
+}
+
+.subhead {
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  font-weight: 300;
+  color: var(--muted);
+  line-height: 1.75;
+  max-width: 60ch;
+}
+
+.lede {
+  font-size: clamp(1.1rem, 1.7vw, 1.45rem);
+  font-weight: 300;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 54ch;
+}
+
+/* The single permitted gradient keyword per headline. */
+.accent {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.kicker {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

@@ -1,0 +1,115 @@
+/* Tokens — palette, themes, scoped overrides
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* ==========================================================================
+   DMTools landing page
+   EPAM Brandbook 2023 — Snow (light) and Night (dark) variants.
+
+   Palette source: branded/epam/dmtools film brief (IstiN/yoclip-examples).
+     Canvas   Night #060606 / Snow #FBFAFA
+     Accents  Sea #00F6FF · Mint #00FFF0 · Lilac #B896FF · Sky #7BA8FF
+
+   Snow uses darkened accent variants so text and rules keep WCAG AA contrast
+   on a light canvas.
+
+   Brand rule applied throughout: exactly one gradient keyword per headline.
+   Everything else stays monochrome. That restraint is what makes the page
+   read as EPAM rather than as a generic developer-tool template.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* Snow — default */
+  --canvas:      #FBFAFA;
+  --surface:     #FFFFFF;
+  --surface-alt: #F2F1F0;
+  --text:        #060606;
+  --muted:       rgba(6, 6, 6, 0.58);
+  --faint:       rgba(6, 6, 6, 0.38);
+  --hairline:    rgba(6, 6, 6, 0.12);
+  --hairline-strong: rgba(6, 6, 6, 0.22);
+
+  --sea:   #0088A0;
+  --mint:  #00998F;
+  --lilac: #7B4FE0;
+  --sky:   #3A6BD6;
+
+  --grad: linear-gradient(96deg, var(--mint) 0%, var(--sea) 46%, var(--lilac) 100%);
+  --glow-a: rgba(0, 136, 160, 0.16);
+  --glow-b: rgba(123, 79, 224, 0.14);
+
+  /* Diagram nodes. Agents carry the lilac accent, systems the sea one, each
+     over a tinted fill so the pill still reads as an object rather than an
+     outline. Label colours are pulled darker than the border they sit next
+     to — the border only has to be seen, the text has to be read. */
+  --node-ai-fill:   #E9DEFF;
+  --node-ai-line:   #7B4FE0;
+  --node-ai-text:   #5B2FBF;
+
+  --node-sys-fill:  #CFE9F1;
+  --node-sys-line:  #0088A0;
+  --node-sys-text:  #035666;
+
+  --font: 'Nunito Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+
+  --shell: 1240px;
+  --gutter: clamp(1.25rem, 5vw, 4rem);
+  --band: clamp(5rem, 11vw, 9.5rem);
+  --radius: 4px;
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  color-scheme: light;
+}
+
+[data-theme='night'] {
+  --canvas:      #060606;
+  --surface:     #121212;
+  --surface-alt: #1A1A1A;
+  --text:        #FFFFFF;
+  --muted:       rgba(255, 255, 255, 0.56);
+  --faint:       rgba(255, 255, 255, 0.34);
+  --hairline:    rgba(255, 255, 255, 0.13);
+  --hairline-strong: rgba(255, 255, 255, 0.26);
+
+  --sea:   #00F6FF;
+  --mint:  #00FFF0;
+  --lilac: #B896FF;
+  --sky:   #7BA8FF;
+
+  --glow-a: rgba(0, 246, 255, 0.13);
+  --glow-b: rgba(184, 150, 255, 0.13);
+
+  --node-ai-fill:   #17121F;
+  --node-ai-line:   #B896FF;
+  --node-ai-text:   #CDB4FF;
+
+  --node-sys-fill:  #0B191D;
+  --node-sys-line:  #00F6FF;
+  --node-sys-text:  #86EEF8;
+
+  color-scheme: dark;
+}
+
+/* The code panel is the one place that stays dark in both themes: the token
+   colours below are tuned for a dark ground, and a terminal surface reads as
+   deliberate on a light page. */
+.panel--dark {
+  --surface:     #131313;
+  --surface-alt: #1A1A1A;
+  --text:        #FFFFFF;
+  --muted:       rgba(255, 255, 255, 0.56);
+  --faint:       rgba(255, 255, 255, 0.34);
+  --hairline:    rgba(255, 255, 255, 0.13);
+  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --sea:   #00F6FF;
+  --mint:  #00FFF0;
+  --lilac: #B896FF;
+  --sky:   #7BA8FF;
+  color: var(--text);
+}

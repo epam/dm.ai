@@ -31,6 +31,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # landing/index.html is assembled from template.html and sections/, and
+      # committed so the site still needs no build to serve. That leaves one
+      # failure mode worth guarding: a section edited without rebuilding.
+      - name: Verify index.html matches its sources
+        run: python3 landing/build.py --check
+
       # GA_MEASUREMENT_ID is a repository variable (Settings -> Variables -> Actions),
       # not a secret: a GA4 measurement ID is public as soon as the page is served.
       # When it is absent the whole snippet is removed instead of being left

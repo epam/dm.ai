@@ -1,0 +1,39 @@
+/* Layout primitives
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   3. Layout primitives
+   -------------------------------------------------------------------------- */
+
+.shell {
+  width: 100%;
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+.band {
+  position: relative;
+  padding: var(--band) 0;
+  border-top: 1px solid var(--hairline);
+  background: var(--canvas);
+  color: var(--text);
+  transition: background-color 0.35s var(--ease), color 0.35s var(--ease);
+}
+
+.band--flush { border-top: none; }
+
+/* Editorial split: headline column + content column. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: start;
+}
+
+.split--narrow { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+
+@media (max-width: 960px) {
+  .split, .split--narrow { grid-template-columns: 1fr; gap: 2rem; }
+}

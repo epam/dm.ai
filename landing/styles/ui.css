@@ -1,0 +1,101 @@
+/* Buttons, toast, reveal
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   6. Buttons
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  height: 3.125rem;
+  padding: 0 1.75rem;
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  transition: transform 0.2s var(--ease), background-color 0.2s var(--ease),
+              color 0.2s var(--ease), border-color 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn--solid {
+  background: var(--text);
+  color: var(--canvas);
+}
+.btn--solid:hover { opacity: 0.86; }
+
+.btn--ghost {
+  border: 1px solid var(--hairline-strong);
+  color: var(--text);
+}
+.btn--ghost:hover { border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+
+.btn--sm { height: 2.5rem; padding: 0 1.15rem; font-size: 0.875rem; }
+
+.textlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--hairline-strong);
+  padding-bottom: 0.15rem;
+  transition: border-color 0.2s var(--ease), gap 0.2s var(--ease);
+}
+.textlink:hover { border-color: var(--text); gap: 0.75rem; }
+
+/* --------------------------------------------------------------------------
+   18. Toast
+   -------------------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 2rem;
+  transform: translate(-50%, 1.5rem);
+  z-index: 200;
+  padding: 0.8rem 1.4rem;
+  border-radius: var(--radius);
+  background: var(--text);
+  color: var(--canvas);
+  font-size: 0.875rem;
+  font-weight: 600;
+  /* Hidden outright when idle — an empty toast is still a painted box. */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.35s var(--ease), opacity 0.3s var(--ease), visibility 0.3s;
+}
+
+.toast.is-visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --------------------------------------------------------------------------
+   19. Reveal
+   -------------------------------------------------------------------------- */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+.reveal.is-in { opacity: 1; transform: none; }
+
+.reveal[data-delay='1'] { transition-delay: 0.08s; }
+.reveal[data-delay='2'] { transition-delay: 0.16s; }
+.reveal[data-delay='3'] { transition-delay: 0.24s; }
+.reveal[data-delay='4'] { transition-delay: 0.32s; }
+
+@media (max-width: 480px) {
+  .btn { width: 100%; }
+}

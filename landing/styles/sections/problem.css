@@ -1,0 +1,84 @@
+/* Problem — broken chain
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   9. Problem
+   -------------------------------------------------------------------------- */
+
+/* Broken chain: the tools exist, the links between them do not. Dashed nodes,
+   dashed connectors, and a break glyph sitting on each connector. */
+.chain {
+  display: flex;
+  align-items: center;
+  margin-top: 3.5rem;
+}
+
+.chain__node {
+  padding: 1.05rem 1.35rem;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chain__break {
+  position: relative;
+  flex: 0 0 2.75rem;
+  height: 1px;
+  margin: 0 0.25rem;
+  background: repeating-linear-gradient(90deg,
+              var(--hairline-strong) 0 6px, transparent 6px 12px);
+}
+
+.chain__break::after {
+  content: '\00d7';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0 0.3rem;
+  background: var(--canvas);
+  color: var(--faint);
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.chain__caption {
+  margin-top: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--faint);
+}
+
+.pullquote {
+  margin-top: 4rem;
+  padding-left: clamp(1.25rem, 3vw, 2.5rem);
+  border-left: 2px solid var(--text);
+  font-size: clamp(1.25rem, 2.4vw, 1.85rem);
+  font-weight: 200;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  max-width: 42ch;
+}
+
+/* Stack the chain rather than let it wrap: a wrapped row can strand a
+   connector at the end of a line with nothing to connect. */
+@media (max-width: 760px) {
+  .chain { flex-direction: column; align-items: flex-start; }
+  .chain__node { width: 100%; text-align: center; }
+  .chain__break {
+    flex: 0 0 1.75rem;
+    width: 1px;
+    height: 1.75rem;
+    margin: 0.25rem 0 0.25rem 50%;
+    background: repeating-linear-gradient(180deg,
+                var(--hairline-strong) 0 6px, transparent 6px 12px);
+  }
+}
+
+@media (max-width: 720px) {
+  .pullquote { margin-top: 3rem; }
+}

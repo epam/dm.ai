@@ -1,0 +1,78 @@
+/* Film
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   8. Video
+   -------------------------------------------------------------------------- */
+
+.video__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background:
+    radial-gradient(60% 80% at 22% 18%, var(--glow-a), transparent 70%),
+    radial-gradient(50% 70% at 82% 88%, var(--glow-b), transparent 70%),
+    var(--surface);
+}
+
+/* The film's cover frame, held locally so nothing is requested from the video
+   host until the visitor actually presses play. */
+.video__poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video__body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+/* Fixed light-on-dark: the poster behind it is dark in either theme. */
+.video__play {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #FFFFFF;
+  color: #060606;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  transition: transform 0.25s var(--ease);
+}
+.video__play:hover { transform: scale(1.08); }
+.video__play:focus-visible { outline-offset: 5px; }
+.video__play svg { margin-left: 4px; }
+
+.video__note {
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.video__frame iframe,
+.video__frame video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@media (max-width: 480px) {
+  .video__play { width: 4rem; height: 4rem; }
+  .video__play svg { width: 20px; height: 20px; }
+}

@@ -1,0 +1,111 @@
+/* Hero
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   7. Hero
+   -------------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  padding: clamp(4rem, 9vw, 7.5rem) 0 clamp(3rem, 6vw, 5rem);
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+/* Each bloom sits wholly inside the section and fades to zero at its own
+   edges, so the hero's overflow clip has nothing left to cut. The previous
+   version was a blurred circle pushed out past the corner: the clip sliced it
+   while it was still opaque, which showed as a straight edge along the section
+   boundary. closest-side keeps the falloff tangent to the element's box, so it
+   holds at any hero height. */
+.hero__glow {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(closest-side, var(--glow), transparent);
+}
+
+.hero__glow--a {
+  --glow: var(--glow-a);
+  top: 0;
+  left: 0;
+  width: 58%;
+  height: 74%;
+}
+
+.hero__glow--b {
+  --glow: var(--glow-b);
+  right: 0;
+  bottom: 0;
+  width: 56%;
+  height: 84%;
+}
+
+.hero__inner { position: relative; z-index: 1; }
+
+.hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 2.5rem;
+}
+.hero__meta span { display: inline-flex; align-items: center; gap: 1.25rem; }
+.hero__meta span:not(:last-child)::after {
+  content: '';
+  width: 1.5rem;
+  height: 1px;
+  background: var(--hairline-strong);
+}
+
+.hero__title { margin-bottom: 2rem; max-width: 15ch; }
+
+.hero__lede { margin-bottom: 2.75rem; }
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  margin-bottom: 3.5rem;
+}
+
+.hero__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.5rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.stat__value {
+  font-size: clamp(1.9rem, 3.6vw, 3rem);
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.stat__label {
+  margin-top: 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+@media (max-width: 960px) {
+  .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem 1.5rem; }
+}
+
+@media (max-width: 720px) {
+  .hero__title { max-width: none; }
+}
+
+@media (max-width: 480px) {
+  .hero__stats { grid-template-columns: 1fr 1fr; }
+  .hero__actions { flex-direction: column; align-items: stretch; }
+}
