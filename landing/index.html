@@ -32,30 +32,12 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@200;300;400;600;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@200;300;400;600;800&family=Fira+Code:wght@400&display=swap" rel="stylesheet">
 
   <!-- Split by concern, loaded in cascade order. a11y.css must stay last:
        it overrides .reveal, .bar__fill and .flow__step::after at equal
        specificity and only wins by coming after the section files. -->
-  <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/base.css">
-  <link rel="stylesheet" href="styles/typography.css">
-  <link rel="stylesheet" href="styles/layout.css">
-  <link rel="stylesheet" href="styles/ui.css">
-  <link rel="stylesheet" href="styles/sections/nav.css">
-  <link rel="stylesheet" href="styles/sections/hero.css">
-  <link rel="stylesheet" href="styles/sections/film.css">
-  <link rel="stylesheet" href="styles/sections/problem.css">
-  <link rel="stylesheet" href="styles/sections/bridge.css">
-  <link rel="stylesheet" href="styles/sections/numbers.css">
-  <link rel="stylesheet" href="styles/sections/architecture.css">
-  <link rel="stylesheet" href="styles/sections/code.css">
-  <link rel="stylesheet" href="styles/sections/paths.css">
-  <link rel="stylesheet" href="styles/sections/install.css">
-  <link rel="stylesheet" href="styles/sections/faq.css">
-  <link rel="stylesheet" href="styles/sections/close.css">
-  <link rel="stylesheet" href="styles/sections/footer.css">
-  <link rel="stylesheet" href="styles/a11y.css">
+  <link rel="stylesheet" href="styles/bundle.css">
 
   <!-- Applied before first paint so the chosen theme never flashes. -->
   <script>
@@ -542,7 +524,7 @@
 
     <p class="bars__caption reveal">Tools per integration</p>
 
-    <div class="bars reveal" id="bars">
+    <div class="bars reveal">
       <div class="bar"><span class="bar__name">Jira</span><span class="bar__track"><span class="bar__fill" style="--w:1"></span></span><span class="bar__value">69</span></div>
       <div class="bar"><span class="bar__name">Azure DevOps</span><span class="bar__track"><span class="bar__fill" style="--w:0.55"></span></span><span class="bar__value">38</span></div>
       <div class="bar"><span class="bar__name">GitHub</span><span class="bar__track"><span class="bar__fill" style="--w:0.51"></span></span><span class="bar__value">35</span></div>
@@ -575,7 +557,7 @@
       </div>
     </div>
 
-    <div class="flow reveal" id="flow">
+    <div class="flow reveal">
       <div class="flow__step">
         <span class="flow__num">01</span>
         <p class="flow__title">Ticket state change</p>

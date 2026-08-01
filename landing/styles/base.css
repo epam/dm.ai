@@ -52,15 +52,6 @@ code, pre { font-family: var(--mono); }
   padding: 0.85rem 1.4rem;
   background: var(--text);
   color: var(--canvas);
-  font-weight: 700;
+  font-weight: 800;
 }
 .skip-link:focus { left: 0; }
-
-.visually-hidden {
-  position: absolute;
-  width: 1px; height: 1px;
-  padding: 0; margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}

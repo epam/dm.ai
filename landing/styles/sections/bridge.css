@@ -75,7 +75,7 @@
 .bridge__hubLabel {
   fill: #060606;
   font-size: 26px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.02em;
   text-anchor: middle;
 }
@@ -83,7 +83,7 @@
 .bridge__col {
   fill: var(--muted);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   text-anchor: middle;
@@ -123,7 +123,7 @@
 
 .bridge__group {
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
@@ -139,43 +139,6 @@
   margin-bottom: 2.25rem;
 }
 .bridge__names:last-child { margin-bottom: 0; }
-
-.chipset { margin-top: 3rem; }
-
-.chipset__title {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--faint);
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--hairline);
-  margin-bottom: 1.25rem;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.5rem 0.9rem;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  font-size: 0.875rem;
-  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
-}
-.chip:hover { border-color: var(--hairline-strong); transform: translateY(-2px); }
-
-.chip__count {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--faint);
-}
 
 /* Two facing columns with a hub between them need real width. Below that the
    diagram is dropped rather than squeezed, and the name list takes over. */

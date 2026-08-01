@@ -12,7 +12,7 @@
 .eyebrow {
   display: block;
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
@@ -67,12 +67,4 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-}
-
-.kicker {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
