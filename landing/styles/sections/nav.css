@@ -156,10 +156,13 @@
     align-items: stretch;
     gap: 0;
     padding: 0 var(--gutter) 0.5rem;
-    background: color-mix(in srgb, var(--canvas) 96%, transparent);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    /* Opaque, and no backdrop-filter of its own. .nav already declares one,
+       which makes it a backdrop root: a filter on a descendant then samples
+       nothing and blurs nothing, so a translucent panel just showed the page
+       text straight through the menu. */
+    background: var(--canvas);
     border-bottom: 1px solid var(--hairline);
+    box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.45);
     /* visibility, not display: a display swap cannot transition, and the panel
        has to stay out of the tab order while it is closed. */
     visibility: hidden;

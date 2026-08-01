@@ -29,6 +29,20 @@
   object-fit: cover;
 }
 
+/* The poster is a frame lifted from the middle of the film, so its composition
+   was never planned around a play button in the centre — here the button lands
+   squarely on a caption and eats a word of it. A scrim pushed toward the middle
+   sinks whatever sits under the button while leaving the edges of the frame
+   legible, so the overlap reads as depth rather than as a collision. */
+.video__body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(38% 52% at 50% 50%,
+              rgba(6, 6, 6, 0.72), rgba(6, 6, 6, 0.28) 60%, transparent 100%);
+  pointer-events: none;
+}
+
 .video__body {
   position: absolute;
   inset: 0;
@@ -41,8 +55,11 @@
   padding: 2rem;
 }
 
-/* Fixed light-on-dark: the poster behind it is dark in either theme. */
+/* Fixed light-on-dark: the poster behind it is dark in either theme.
+   Positioned so it paints above the scrim — an absolutely positioned ::before
+   would otherwise cover a static sibling. */
 .video__play {
+  position: relative;
   width: 5.5rem;
   height: 5.5rem;
   border-radius: 50%;
