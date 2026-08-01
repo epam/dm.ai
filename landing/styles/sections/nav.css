@@ -37,11 +37,14 @@
   flex-shrink: 0;
 }
 
-/* Wordmark set in type rather than a logo file — no trademark asset shipped. */
+/* Wordmark set in type rather than a logo file — no trademark asset shipped.
+   Lowercase inside angle brackets, as epam.com sets it; the brackets are part
+   of the mark, so the tracking stays tight rather than the wide caps this
+   used to carry. */
 .brand__epam {
-  font-size: 0.9375rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   line-height: 1;
 }
 
@@ -63,13 +66,16 @@
   gap: clamp(1rem, 2.4vw, 2.25rem);
 }
 
+/* epam.com sets its header links bold and at full contrast rather than as
+   quiet grey — the header is a wayfinding bar there, not a footnote. */
 .nav__link {
   font-size: 0.9375rem;
-  font-weight: 400;
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--text);
   position: relative;
   padding: 0.35rem 0;
-  transition: color 0.2s var(--ease);
+  transition: opacity 0.2s var(--ease);
+  opacity: 0.72;
 }
 
 .nav__link::after {
@@ -83,13 +89,37 @@
   transition: transform 0.3s var(--ease);
 }
 
-.nav__link:hover { color: var(--text); }
+.nav__link:hover { opacity: 1; }
 .nav__link:hover::after { transform: scaleX(1); }
 
 /* Scroll spy. The reader always knows which section they are standing in, so
    the underline is the same mark hover uses — one vocabulary, two triggers. */
-.nav__link.is-current { color: var(--text); }
+.nav__link.is-current { opacity: 1; }
 .nav__link.is-current::after { transform: scaleX(1); }
+
+/* --------------------------------------------------------------------------
+   5a. Header CTA — gradient-outlined pill
+   -------------------------------------------------------------------------- */
+
+/* epam.com's CONTACT US: a pill with a gradient edge and no fill. Two
+   backgrounds in one box — a flat one clipped to the padding box, the brand
+   gradient clipped to the border box — leave the border showing as gradient,
+   which border-color cannot do on its own. */
+.nav__cta {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background-image: linear-gradient(var(--canvas), var(--canvas)), var(--grad);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  transition: color 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+/* Filling the pill on hover would need a second gradient and a repaint; fading
+   the flat layer lets the one already painted underneath show through. */
+.nav__cta:hover { opacity: 0.82; }
 
 .nav__actions {
   display: flex;
@@ -142,8 +172,10 @@
 @media (max-width: 860px) {
   .nav__burger { display: grid; }
 
-  /* No room for a button beside the burger; the panel carries the CTA. */
-  .nav__cta { display: none; }
+  /* No room for a button beside the burger; the panel carries the CTA. The
+     panel copy shares .nav__cta for its styling, so exclude it by name rather
+     than relying on which rule happens to come last. */
+  .nav__cta:not(.nav__panelCta) { display: none; }
 
   /* Absolute against .nav — sticky is a positioned ancestor — so the panel
      overlays the hero instead of pushing the header taller as it opens. */

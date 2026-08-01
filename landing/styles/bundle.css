@@ -432,11 +432,14 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   flex-shrink: 0;
 }
 
-/* Wordmark set in type rather than a logo file — no trademark asset shipped. */
+/* Wordmark set in type rather than a logo file — no trademark asset shipped.
+   Lowercase inside angle brackets, as epam.com sets it; the brackets are part
+   of the mark, so the tracking stays tight rather than the wide caps this
+   used to carry. */
 .brand__epam {
-  font-size: 0.9375rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   line-height: 1;
 }
 
@@ -458,13 +461,16 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   gap: clamp(1rem, 2.4vw, 2.25rem);
 }
 
+/* epam.com sets its header links bold and at full contrast rather than as
+   quiet grey — the header is a wayfinding bar there, not a footnote. */
 .nav__link {
   font-size: 0.9375rem;
-  font-weight: 400;
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--text);
   position: relative;
   padding: 0.35rem 0;
-  transition: color 0.2s var(--ease);
+  transition: opacity 0.2s var(--ease);
+  opacity: 0.72;
 }
 
 .nav__link::after {
@@ -478,13 +484,37 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   transition: transform 0.3s var(--ease);
 }
 
-.nav__link:hover { color: var(--text); }
+.nav__link:hover { opacity: 1; }
 .nav__link:hover::after { transform: scaleX(1); }
 
 /* Scroll spy. The reader always knows which section they are standing in, so
    the underline is the same mark hover uses — one vocabulary, two triggers. */
-.nav__link.is-current { color: var(--text); }
+.nav__link.is-current { opacity: 1; }
 .nav__link.is-current::after { transform: scaleX(1); }
+
+/* --------------------------------------------------------------------------
+   5a. Header CTA — gradient-outlined pill
+   -------------------------------------------------------------------------- */
+
+/* epam.com's CONTACT US: a pill with a gradient edge and no fill. Two
+   backgrounds in one box — a flat one clipped to the padding box, the brand
+   gradient clipped to the border box — leave the border showing as gradient,
+   which border-color cannot do on its own. */
+.nav__cta {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background-image: linear-gradient(var(--canvas), var(--canvas)), var(--grad);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  transition: color 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+/* Filling the pill on hover would need a second gradient and a repaint; fading
+   the flat layer lets the one already painted underneath show through. */
+.nav__cta:hover { opacity: 0.82; }
 
 .nav__actions {
   display: flex;
@@ -537,8 +567,10 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
 @media (max-width: 860px) {
   .nav__burger { display: grid; }
 
-  /* No room for a button beside the burger; the panel carries the CTA. */
-  .nav__cta { display: none; }
+  /* No room for a button beside the burger; the panel carries the CTA. The
+     panel copy shares .nav__cta for its styling, so exclude it by name rather
+     than relying on which rule happens to come last. */
+  .nav__cta:not(.nav__panelCta) { display: none; }
 
   /* Absolute against .nav — sticky is a positioned ancestor — so the panel
      overlays the hero instead of pushing the header taller as it opens. */
@@ -1634,16 +1666,52 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
    17. Footer
    -------------------------------------------------------------------------- */
 
+/* Dark in both themes, the way epam.com sets it. The reason is not only
+   fidelity: the accent that carries the column titles there is cyan, and cyan
+   on the Snow canvas measures 4.01:1 — under AA for 11px type. On this ground
+   it clears 15:1. The page already had one always-dark surface in the code
+   panel, so a second one reads as a system rather than an exception. */
 .footer {
-  border-top: 1px solid var(--hairline);
-  padding: clamp(3rem, 6vw, 4.5rem) 0 2.5rem;
+  padding: clamp(3.5rem, 7vw, 5.5rem) 0 2.5rem;
+
+  --canvas:      #060606;
+  --surface:     #121212;
+  --surface-alt: #1A1A1A;
+  --text:        #FFFFFF;
+  --muted:       rgba(255, 255, 255, 0.56);
+  --faint:       rgba(255, 255, 255, 0.34);
+  --hairline:    rgba(255, 255, 255, 0.13);
+  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --sea:   #00F6FF;
+  --mint:  #00FFF0;
+  --lilac: #B896FF;
+
+  position: relative;
   background: var(--canvas);
+  color: var(--text);
+}
+
+/* The brand gradient laid along the top edge — the mark that opens the footer
+   on epam.com, and the one place on this page a gradient is not a headline. */
+.footer::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--grad);
 }
 
 .footer__grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
   gap: clamp(2rem, 4vw, 3rem);
+}
+
+/* Hairline rules between the columns, as on epam.com. Drawn with a border on
+   the column rather than a divider element, so the markup stays as it is. */
+.footer__grid > * + * {
+  padding-left: clamp(1.25rem, 3vw, 2.5rem);
+  border-left: 1px solid var(--hairline);
 }
 
 .footer__about {
@@ -1654,24 +1722,33 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   max-width: 34ch;
 }
 
+/* Accent, uppercase, and tracked much wider than the page's other eyebrows —
+   the widest setting on epam.com and the thing that makes a footer read as
+   theirs. */
 .footer__title {
   font-size: 0.6875rem;
   font-weight: 800;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 1.15rem;
+  color: var(--sea);
+  margin-bottom: 1.5rem;
 }
 
-.footer__links { display: flex; flex-direction: column; gap: 0.7rem; }
+.footer__links { display: flex; flex-direction: column; gap: 0.9rem; }
 
+/* Uppercase and bold rather than sentence case and grey: on epam.com the
+   footer links are a directory, not small print. */
 .footer__link {
-  font-size: 0.9375rem;
-  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  color: var(--text);
   width: fit-content;
   transition: color 0.2s var(--ease);
 }
-.footer__link:hover { color: var(--text); }
+.footer__link:hover { color: var(--sea); }
 
 .footer__bottom {
   margin-top: clamp(2.5rem, 5vw, 4rem);
@@ -1694,8 +1771,11 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   letter-spacing: 0.06em;
 }
 
+/* Once the columns wrap, a left border no longer separates neighbours — it
+   just hangs off the start of a row. */
 @media (max-width: 960px) {
   .footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .footer__grid > * + * { padding-left: 0; border-left: none; }
 }
 
 @media (max-width: 480px) {
