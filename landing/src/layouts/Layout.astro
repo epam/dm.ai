@@ -1,0 +1,157 @@
+---
+import '../styles/index.css';
+import {
+  meta,
+  film,
+  filmEmbedUrl,
+  filmWatchUrl,
+  software,
+  asset,
+  basePath,
+  REPO,
+} from '../data/site';
+import { faq } from '../data/faq';
+
+const canonical = new URL(basePath, Astro.site).href;
+const absolute = (path: string) => new URL(asset(path), Astro.site).href;
+const ogImage = absolute(meta.ogImage);
+
+/**
+ * A GA4 measurement ID is public the moment the page is served, so it arrives
+ * as a build-time variable rather than a secret. Leave it unset and the block
+ * is simply never rendered — the page ships with no tracking at all.
+ *
+ * Read through process.env rather than import.meta.env: the page is only ever
+ * rendered on the server, and an import.meta.env key Vite does not know about
+ * breaks its dev-mode SSR transform ("Cannot split a chunk that has already
+ * been edited"). It also keeps the name identical to the repository variable
+ * and to how astro.config.mjs reads SITE_URL.
+ */
+const gaId = process.env.GA_MEASUREMENT_ID;
+
+const softwareSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'DMTools',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: software.operatingSystem,
+  description: software.description,
+  url: canonical,
+  codeRepository: REPO,
+  license: 'https://www.apache.org/licenses/LICENSE-2.0',
+  softwareVersion: software.version,
+  softwareRequirements: software.requirements,
+  downloadUrl: `${REPO}/releases/latest`,
+  screenshot: ogImage,
+  isAccessibleForFree: true,
+  featureList: software.features,
+  author: { '@type': 'Organization', name: 'EPAM Systems', url: 'https://www.epam.com' },
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+};
+
+const videoSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoObject',
+  name: film.name,
+  uploadDate: film.uploadDate,
+  description: film.description,
+  thumbnailUrl: absolute(film.poster),
+  embedUrl: filmEmbedUrl,
+  contentUrl: filmWatchUrl,
+  publisher: { '@type': 'Organization', name: film.publisher.name, url: film.publisher.url },
+};
+
+/** Built from the same list the visible accordion renders, so the two cannot drift. */
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map((entry) => ({
+    '@type': 'Question',
+    name: entry.question,
+    acceptedAnswer: { '@type': 'Answer', text: entry.answer },
+  })),
+};
+---
+
+<!DOCTYPE html>
+<html lang={meta.lang} data-theme="night">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>{meta.title}</title>
+  <meta name="description" content={meta.description} />
+  <meta name="keywords" content={meta.keywords} />
+  <link rel="canonical" href={canonical} />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={meta.siteName} />
+  <meta property="og:title" content={meta.socialTitle} />
+  <meta property="og:description" content={meta.ogDescription} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={meta.socialTitle} />
+  <meta name="twitter:description" content={meta.twitterDescription} />
+  <meta name="twitter:image" content={ogImage} />
+
+  <!-- Night is the default in both cases: the browser chrome should match the
+       canvas the page actually opens on, not the OS preference. -->
+  <meta name="theme-color" content={meta.themeColor} />
+
+  <link rel="icon" href={asset(meta.favicon)} type="image/svg+xml" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@100;200;300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Applied before first paint so the chosen theme never flashes. is:inline
+       is load-bearing: a processed script is deferred by definition, which
+       would let the wrong theme paint first. Night is the default rather than
+       the OS preference — this page is designed as a dark surface, and Snow is
+       the alternate a reader opts into. A stored choice still wins over both. -->
+  <script is:inline>
+    (function () {
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem('dmtools-theme') || 'night';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'night';
+      }
+    })();
+  </script>
+
+  {gaId && (
+    <>
+      <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>
+      {/* Written out rather than passed through define:vars, which would wrap
+          the body in a function and leave gtag local — the snippet declares it
+          globally, and a later gtag('event', …) anywhere on the page needs it. */}
+      <script is:inline set:html={`window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', ${JSON.stringify(gaId)});`} />
+    </>
+  )}
+
+  <script type="application/ld+json" set:html={JSON.stringify(softwareSchema)} is:inline />
+  <script type="application/ld+json" set:html={JSON.stringify(videoSchema)} is:inline />
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} is:inline />
+</head>
+
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<slot />
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  import '../scripts/reveal';
+</script>
+</body>
+</html>

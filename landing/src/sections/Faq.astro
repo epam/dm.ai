@@ -1,0 +1,38 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+import { faq } from '../data/faq';
+
+/**
+ * Native <details>, not a scripted accordion: keyboard and screen-reader
+ * behaviour come for free, it works with JavaScript off, and the answers stay
+ * in the markup where crawlers and assistants read them even while collapsed.
+ * <summary> may contain one heading element, so the +/x marker is drawn by CSS
+ * rather than added as a second child.
+ *
+ * The same `faq` list builds the FAQPage block in Layout.astro. It used to be
+ * typed out twice, with a comment asking the next maintainer to edit both.
+ */
+---
+
+<section class="band" id="faq">
+  <div class="shell">
+    <SectionHead eyebrow="Common questions">
+      <Fragment slot="headline">
+        Plain answers, before you <span class="accent">install</span> anything.
+      </Fragment>
+      <Fragment slot="subhead">
+        What teams ask on the first call — where the data goes, who has to run it,
+        and what happens when the model gets something wrong.
+      </Fragment>
+    </SectionHead>
+
+    <div class="faq">
+      {faq.map((entry) => (
+        <details class="faq__item reveal" open={entry.open}>
+          <summary class="faq__sum"><h3 class="faq__q">{entry.question}</h3></summary>
+          <p class="faq__a">{entry.answer}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

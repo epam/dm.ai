@@ -1,0 +1,55 @@
+---
+import PlayIcon from '../components/PlayIcon.astro';
+
+const badges = ['EPAM Open Source', 'Apache 2.0', 'Java 17+'];
+
+/** `countTo` animates from zero when the row is revealed; a plain value does not. */
+const stats = [
+  { countTo: 320, suffix: '+', label: 'CLI tools, callable as plain JavaScript functions' },
+  { countTo: 20, suffix: '+', label: 'Production-ready system integrations' },
+  { value: '4', label: 'Adoption paths, each valuable on its own' },
+  { value: '0', label: 'Servers to run or agents to babysit' },
+];
+---
+
+<section class="hero" id="top">
+  <div class="hero__glow hero__glow--a" aria-hidden="true"></div>
+  <div class="hero__glow hero__glow--b" aria-hidden="true"></div>
+
+  <div class="shell hero__inner">
+    <p class="hero__meta reveal">
+      {badges.map((badge) => <span>{badge}</span>)}
+    </p>
+
+    <h1 class="display hero__title reveal" data-delay="1">
+      Every enterprise wants an <span class="accent">AI factory</span>.
+    </h1>
+
+    <p class="lede hero__lede reveal" data-delay="2">
+      Few know where to start. DMTools is the orchestration layer between the systems
+      you already run and the agents your teams already use — one CLI, every integration,
+      nothing to deploy.
+    </p>
+
+    <div class="hero__actions reveal" data-delay="3">
+      <a class="btn btn--solid" href="#install">Install DMTools</a>
+      <a class="btn btn--ghost" href="#video">
+        <PlayIcon />
+        Watch the film
+      </a>
+    </div>
+
+    <div class="hero__stats reveal" data-delay="4">
+      {stats.map((stat) => (
+        <div class="stat">
+          <div class="stat__value">
+            {stat.countTo
+              ? <><span class="counter" data-to={stat.countTo}>0</span>{stat.suffix}</>
+              : stat.value}
+          </div>
+          <p class="stat__label">{stat.label}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

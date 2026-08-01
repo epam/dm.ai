@@ -1,0 +1,28 @@
+/* Split by concern, imported in cascade order — the order is load-bearing.
+   a11y.css must stay last: it overrides .reveal, .bar__fill and
+   .flow__step::after at equal specificity and only wins by coming after the
+   section files. Section files are otherwise independent, each owning its own
+   media queries.
+
+   This file exists so the order lives in CSS, where @import guarantees it,
+   rather than depending on how a bundler happens to sequence JS imports. */
+
+@import './tokens.css';
+@import './base.css';
+@import './typography.css';
+@import './layout.css';
+@import './ui.css';
+@import './sections/nav.css';
+@import './sections/hero.css';
+@import './sections/film.css';
+@import './sections/problem.css';
+@import './sections/bridge.css';
+@import './sections/numbers.css';
+@import './sections/architecture.css';
+@import './sections/code.css';
+@import './sections/paths.css';
+@import './sections/install.css';
+@import './sections/faq.css';
+@import './sections/close.css';
+@import './sections/footer.css';
+@import './a11y.css';

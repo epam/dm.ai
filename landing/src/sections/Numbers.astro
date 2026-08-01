@@ -1,0 +1,60 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+import { bars } from '../data/integrations';
+
+const figures = [
+  {
+    countTo: 320,
+    suffix: '+',
+    label: 'CLI tools spanning trackers, repositories, wikis, design systems and AI providers',
+  },
+  {
+    countTo: 20,
+    suffix: '+',
+    label: 'System integrations, each with setup guides and a tool reference',
+  },
+  {
+    value: '17+',
+    label: 'Java baseline — runs anywhere your CI already runs',
+  },
+];
+---
+
+<section class="band" id="numbers">
+  <div class="shell">
+    <SectionHead eyebrow="By the numbers">
+      <Fragment slot="headline">
+        Wired. Documented. <span class="accent">Ready</span>.
+      </Fragment>
+      <Fragment slot="subhead">
+        Not a roadmap — what ships today. Every tool is generated from annotated Java
+        at compile time, documented in the repository, and callable the moment you install.
+      </Fragment>
+    </SectionHead>
+
+    <div class="figures">
+      {figures.map((figure, i) => (
+        <div class="figure reveal" data-delay={i > 0 ? i : undefined}>
+          <p class="figure__value">
+            {figure.countTo
+              ? <><span class="counter" data-to={figure.countTo}>0</span>{figure.suffix}</>
+              : figure.value}
+          </p>
+          <p class="figure__label">{figure.label}</p>
+        </div>
+      ))}
+    </div>
+
+    <p class="bars__caption reveal">Tools per integration</p>
+
+    <div class="bars reveal">
+      {bars.map((bar) => (
+        <div class="bar">
+          <span class="bar__name">{bar.name}</span>
+          <span class="bar__track"><span class="bar__fill" style={`--w:${bar.width}`}></span></span>
+          <span class="bar__value">{bar.tools}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

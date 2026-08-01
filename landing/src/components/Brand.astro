@@ -1,0 +1,22 @@
+---
+/**
+ * The wordmark, set in type rather than shipped as a logo file, so no trademark
+ * asset lives in this repository. The angle brackets are part of it.
+ *
+ * The header needs a link back to the top; the footer needs the same mark with
+ * nothing to click. Passing an href is what tells the two apart.
+ */
+interface Props {
+  href?: string;
+  label?: string;
+}
+
+const { href, label } = Astro.props;
+const Tag = href ? 'a' : 'div';
+---
+
+<Tag class="brand" href={href} aria-label={label}>
+  <span class="brand__epam">&lt;epam&gt;</span>
+  <span class="brand__rule" aria-hidden="true"></span>
+  <span class="brand__name">DMTools</span>
+</Tag>
