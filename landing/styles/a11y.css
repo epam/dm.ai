@@ -25,4 +25,13 @@
 @media print {
   .nav, .toast, .hero__glow, .close__glow { display: none; }
   body { background: #fff; color: #000; }
+
+  /* Gradient text is a transparent fill over a clipped background, and print
+     drops the background — which leaves the headline keyword and every counted
+     figure as blank space on the page. Put the ink back. */
+  .accent, .figure__value {
+    background: none;
+    -webkit-text-fill-color: #000;
+    color: #000;
+  }
 }

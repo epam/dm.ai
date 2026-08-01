@@ -86,8 +86,26 @@ the two cannot disagree — add a section stylesheet by adding its tag, as befor
 `data-theme` before first paint, because a module is deferred by definition and
 would let the wrong theme flash. `js/theme.js` only handles changes after load.
 
-**One gradient keyword per headline.** A brandbook rule, and the thing that
-keeps the page reading as EPAM. Everything else stays monochrome.
+**Night is the default, not the OS preference.** The page is designed as a dark
+surface; Snow is the alternate a reader opts into with the toggle, and a stored
+choice wins over both. `theme.js` deliberately carries no
+`prefers-color-scheme` listener — following a mid-session OS change to light
+would drop a reader onto Snow without them asking.
+
+**Snow is not a recolour of Night.** Its accents are darkened so they hold WCAG
+AA as *text* on a light canvas, which makes them too light to use as a *fill*:
+white on Snow's mint measures 3.42:1, under AA for a 15px label. That is why the
+filled button reads `--grad-btn` rather than `--grad` — Snow gives it its own
+darker stops, Night aliases it straight back to `--grad`. `--btn-ink` flips with
+the theme for the same reason. Any scope that restates the Night accents
+(`.panel--dark`, `.footer`) has to restate both of those tokens with them.
+
+**One gradient keyword per headline — plus the counted figures.** A brandbook
+rule and the thing that keeps the page reading as EPAM. The gradient carries the
+one keyword per headline, the `.figure__value` counters, and the bars that
+measure them; everything else stays monochrome. Gradient text is a transparent
+fill over a clipped background, so `a11y.css` restores solid ink for print,
+where backgrounds are dropped and the text would otherwise vanish.
 
 **JavaScript is native ES modules.** `main.js` is loaded with
 `type="module"`, so relative import paths must include the `.js` extension.

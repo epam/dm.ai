@@ -17,14 +17,6 @@ function apply(theme) {
   }
 }
 
-function stored() {
-  try {
-    return localStorage.getItem(KEY);
-  } catch {
-    return null;
-  }
-}
-
 export function initTheme() {
   const toggle = document.getElementById('theme-toggle');
   if (toggle) {
@@ -45,9 +37,7 @@ export function initTheme() {
     });
   }
 
-  // Follow the OS only while the visitor has not made an explicit choice.
-  const dark = window.matchMedia('(prefers-color-scheme: dark)');
-  dark.addEventListener?.('change', (event) => {
-    if (!stored()) root.dataset.theme = event.matches ? 'night' : 'snow';
-  });
+  // No prefers-color-scheme listener. Night is the page's default rather than
+  // the OS's, so following a mid-session OS change to light would drop a reader
+  // onto Snow without them asking for it. The toggle is the only way across.
 }

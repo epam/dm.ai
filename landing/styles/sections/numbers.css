@@ -8,16 +8,34 @@
 
 .figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: clamp(2rem, 4vw, 3.5rem);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1.25rem;
   margin-top: 3.5rem;
 }
 
+/* Boxed, like every other panel on the page. Bare figures on the canvas worked
+   when the page was a light editorial surface; on #060606 a counted number
+   needs a card under it or it floats. */
+.figure {
+  padding: 1.75rem 1.5rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* The counted figures carry the gradient. They are the page's only claim that
+   is a number rather than a sentence, and the gradient is what marks them as
+   the measured ones — see the brand note in tokens.css. */
 .figure__value {
-  font-size: clamp(3rem, 7vw, 5.5rem);
+  font-size: clamp(2.5rem, 5.5vw, 4rem);
   font-weight: 200;
   line-height: 0.9;
   letter-spacing: -0.045em;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .figure__label {
@@ -55,14 +73,16 @@
 
 .bar__track {
   display: block;
-  height: 3px;
-  background: var(--hairline);
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-alt);
   overflow: hidden;
 }
 
 .bar__fill {
   display: block;
   height: 100%;
+  border-radius: var(--radius-pill);
   background: var(--grad);
   transform: scaleX(0);
   transform-origin: left;

@@ -4,18 +4,21 @@
 
 /* ==========================================================================
    DMTools landing page
-   EPAM Brandbook 2023 — Snow (light) and Night (dark) variants.
+   EPAM Brandbook 2023 — Night (dark, default) and Snow (light) variants.
 
    Palette source: branded/epam/dmtools film brief (IstiN/yoclip-examples).
      Canvas   Night #060606 / Snow #FBFAFA
      Accents  Sea #00F6FF · Mint #00FFF0 · Lilac #B896FF · Sky #7BA8FF
 
-   Snow uses darkened accent variants so text and rules keep WCAG AA contrast
-   on a light canvas.
+   Night is the default and the tuned target: the page is a dark surface with
+   cyan-to-lilac accents, and the light variant is the alternate rather than the
+   other way round. Snow uses darkened accent variants so text and rules keep
+   WCAG AA contrast on a light canvas.
 
-   Brand rule applied throughout: exactly one gradient keyword per headline.
-   Everything else stays monochrome. That restraint is what makes the page
-   read as EPAM rather than as a generic developer-tool template.
+   Brand rule applied throughout: the gradient carries one keyword per headline
+   plus the counted figures and the rules that measure them. Everything else
+   stays monochrome — that restraint is what keeps the page reading as EPAM
+   rather than as a generic developer-tool template.
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
@@ -39,6 +42,13 @@
   --sky:   #3A6BD6;
 
   --grad: linear-gradient(96deg, var(--mint) 0%, var(--sea) 46%, var(--lilac) 100%);
+
+  /* The filled button needs its own stops on Snow. The accents above are tuned
+     as *text* on a light canvas; used as a *fill* under white, the mint end
+     measures 3.42:1 — under AA for a 15px label. These are the same three hues
+     pulled dark enough that --btn-ink clears 4.5:1 across the whole sweep.
+     Night has no such problem and reuses --grad as it stands. */
+  --grad-btn: linear-gradient(96deg, #00726B 0%, #00677A 46%, #5B33B8 100%);
   --glow-a: rgba(0, 136, 160, 0.16);
   --glow-b: rgba(123, 79, 224, 0.14);
 
@@ -54,36 +64,65 @@
   --node-sys-line:  #0088A0;
   --node-sys-text:  #035666;
 
-  --font: 'Nunito Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
-  --mono: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  /* Sora carries the geometric, wide-aperture look the dark canvas needs, and
+     it holds up at the 100–200 weights the headlines are set in — Nunito Sans
+     thins out to a hairline well before that. JetBrains Mono replaces Fira Code
+     for the same reason at small sizes: a taller x-height stays legible at 13px
+     inside the terminal panels. */
+  --font: 'Sora', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
 
-  --shell: 1240px;
+  --shell: 1180px;
   --gutter: clamp(1.25rem, 5vw, 4rem);
   --band: clamp(5rem, 11vw, 9.5rem);
-  --radius: 4px;
+
+  /* Soft cards, fully round controls. The 4px this used to carry read as a
+     sharp editorial page; the panels are objects sitting on the canvas here,
+     and they need a radius you can see. */
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  /* Ink for the gradient-filled button, and it has to flip with the theme: Snow
+     darkens the accents to hold AA on a light canvas, so the fill here is a deep
+     teal-to-violet and the label has to be light. Night keeps the bright mint
+     end and takes dark ink. Getting this backwards puts dark text on a dark
+     fill, which is exactly what the light theme would have shipped. */
+  --btn-ink: #FBFAFA;
 
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
   color-scheme: light;
 }
 
+/* Night — the default. Surfaces are opaque greys rather than translucent white:
+   a card stacked on a panel stacked on the canvas compounded three alpha layers
+   and drifted lighter each time, which is what made the panels look washed out
+   against #060606. Fixed values keep every card at the same step. */
 [data-theme='night'] {
   --canvas:      #060606;
-  --surface:     #121212;
-  --surface-alt: #1A1A1A;
-  --text:        #FFFFFF;
-  --muted:       rgba(255, 255, 255, 0.56);
-  --faint:       rgba(255, 255, 255, 0.34);
-  --hairline:    rgba(255, 255, 255, 0.13);
-  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --surface:     #161616;
+  --surface-alt: #1C1C1C;
+  --text:        #F5F5F4;
+  --muted:       #A3A3A0;
+  --faint:       #6B6B68;
+  --hairline:    #2A2A2A;
+  --hairline-strong: #3A3A3A;
 
   --sea:   #00F6FF;
   --mint:  #00FFF0;
   --lilac: #B896FF;
   --sky:   #7BA8FF;
 
-  --glow-a: rgba(0, 246, 255, 0.13);
-  --glow-b: rgba(184, 150, 255, 0.13);
+  /* The hero blooms are the only large colour on the page, so they carry more
+     weight here than the 13% they had — at that strength they read as a smudge
+     on the canvas rather than as light. */
+  /* Dark ink, against the bright mint end of the fill. */
+  --btn-ink: #04211F;
+  --grad-btn: var(--grad);
+
+  --glow-a: rgba(0, 246, 255, 0.20);
+  --glow-b: rgba(184, 150, 255, 0.18);
 
   --node-ai-fill:   #17121F;
   --node-ai-line:   #B896FF;
@@ -100,16 +139,20 @@
    colours below are tuned for a dark ground, and a terminal surface reads as
    deliberate on a light page. */
 .panel--dark {
-  --surface:     #131313;
-  --surface-alt: #1A1A1A;
-  --text:        #FFFFFF;
-  --muted:       rgba(255, 255, 255, 0.56);
-  --faint:       rgba(255, 255, 255, 0.34);
-  --hairline:    rgba(255, 255, 255, 0.13);
-  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --surface:     #161616;
+  --surface-alt: #1C1C1C;
+  --text:        #F5F5F4;
+  --muted:       #A3A3A0;
+  --faint:       #6B6B68;
+  --hairline:    #2A2A2A;
+  --hairline-strong: #3A3A3A;
   --sea:   #00F6FF;
   --mint:  #00FFF0;
   --lilac: #B896FF;
   --sky:   #7BA8FF;
+  /* Carried with the accents it belongs to: this scope restates the Night
+     gradient, so it has to restate the ink that goes on top of it. */
+  --btn-ink: #04211F;
+  --grad-btn: var(--grad);
   color: var(--text);
 }
