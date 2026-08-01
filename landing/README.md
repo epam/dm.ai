@@ -78,6 +78,22 @@ keeps the page reading as EPAM. Everything else stays monochrome.
 **JavaScript is native ES modules.** `main.js` is loaded with
 `type="module"`, so relative import paths must include the `.js` extension.
 
+## The published site URL
+
+`canonical`, `og:url`, `og:image`, three Schema.org fields, `sitemap.xml` and
+`robots.txt` all need an **absolute** URL, and the correct one differs per
+repository: a fork publishes to its own `github.io` path. Hardcoding one domain
+means every fork ships broken social previews and a canonical pointing at
+someone else's site.
+
+So the sources carry a `__SITE_URL__` placeholder, and the deploy workflow
+substitutes the address that `actions/configure-pages` reports for whichever
+repository is publishing. Nothing to configure after forking, and the step fails
+loudly if a placeholder survives.
+
+The placeholder is what sits in the committed `index.html` — like the GA block
+below, the file is deploy-ready rather than browser-ready in that one respect.
+
 ## Google Analytics
 
 `index.html` ships a `__GA_MEASUREMENT_ID__` placeholder wrapped in

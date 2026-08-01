@@ -3,7 +3,7 @@
      dmtools-ai-docs/ are rendered to HTML — that is the point of having it now. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://epam.github.io/dm.ai/</loc>
+    <loc>__SITE_URL__/</loc>
     <lastmod>2026-08-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>

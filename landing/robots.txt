@@ -1,10 +1,13 @@
-# Served at https://epam.github.io/dm.ai/robots.txt
+# Served at __SITE_URL__/robots.txt
+#
+# __SITE_URL__ is substituted at deploy time with the real Pages address, so a
+# fork and the upstream repository each publish their own.
 #
 # Crawlers read robots.txt from the ORIGIN root only, so while the site lives on
 # a github.io project path this file is documentation rather than an enforced
-# directive — the file that actually governs epam.github.io is GitHub's own.
-# It becomes live the day the site moves to a custom domain. Until then the
-# sitemap has to be submitted through Search Console to be found.
+# directive — the file that actually governs *.github.io is GitHub's own. It
+# becomes live the day the site moves to a custom domain. Until then the sitemap
+# has to be submitted through Search Console to be found.
 
 User-agent: *
 Allow: /
@@ -26,4 +29,4 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
-Sitemap: https://epam.github.io/dm.ai/sitemap.xml
+Sitemap: __SITE_URL__/sitemap.xml
