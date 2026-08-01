@@ -6,16 +6,52 @@
    17. Footer
    -------------------------------------------------------------------------- */
 
+/* Dark in both themes, the way epam.com sets it. The reason is not only
+   fidelity: the accent that carries the column titles there is cyan, and cyan
+   on the Snow canvas measures 4.01:1 — under AA for 11px type. On this ground
+   it clears 15:1. The page already had one always-dark surface in the code
+   panel, so a second one reads as a system rather than an exception. */
 .footer {
-  border-top: 1px solid var(--hairline);
-  padding: clamp(3rem, 6vw, 4.5rem) 0 2.5rem;
+  padding: clamp(3.5rem, 7vw, 5.5rem) 0 2.5rem;
+
+  --canvas:      #060606;
+  --surface:     #121212;
+  --surface-alt: #1A1A1A;
+  --text:        #FFFFFF;
+  --muted:       rgba(255, 255, 255, 0.56);
+  --faint:       rgba(255, 255, 255, 0.34);
+  --hairline:    rgba(255, 255, 255, 0.13);
+  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --sea:   #00F6FF;
+  --mint:  #00FFF0;
+  --lilac: #B896FF;
+
+  position: relative;
   background: var(--canvas);
+  color: var(--text);
+}
+
+/* The brand gradient laid along the top edge — the mark that opens the footer
+   on epam.com, and the one place on this page a gradient is not a headline. */
+.footer::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--grad);
 }
 
 .footer__grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
   gap: clamp(2rem, 4vw, 3rem);
+}
+
+/* Hairline rules between the columns, as on epam.com. Drawn with a border on
+   the column rather than a divider element, so the markup stays as it is. */
+.footer__grid > * + * {
+  padding-left: clamp(1.25rem, 3vw, 2.5rem);
+  border-left: 1px solid var(--hairline);
 }
 
 .footer__about {
@@ -26,24 +62,33 @@
   max-width: 34ch;
 }
 
+/* Accent, uppercase, and tracked much wider than the page's other eyebrows —
+   the widest setting on epam.com and the thing that makes a footer read as
+   theirs. */
 .footer__title {
   font-size: 0.6875rem;
   font-weight: 800;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 1.15rem;
+  color: var(--sea);
+  margin-bottom: 1.5rem;
 }
 
-.footer__links { display: flex; flex-direction: column; gap: 0.7rem; }
+.footer__links { display: flex; flex-direction: column; gap: 0.9rem; }
 
+/* Uppercase and bold rather than sentence case and grey: on epam.com the
+   footer links are a directory, not small print. */
 .footer__link {
-  font-size: 0.9375rem;
-  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  color: var(--text);
   width: fit-content;
   transition: color 0.2s var(--ease);
 }
-.footer__link:hover { color: var(--text); }
+.footer__link:hover { color: var(--sea); }
 
 .footer__bottom {
   margin-top: clamp(2.5rem, 5vw, 4rem);
@@ -66,8 +111,11 @@
   letter-spacing: 0.06em;
 }
 
+/* Once the columns wrap, a left border no longer separates neighbours — it
+   just hangs off the start of a row. */
 @media (max-width: 960px) {
   .footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .footer__grid > * + * { padding-left: 0; border-left: none; }
 }
 
 @media (max-width: 480px) {
