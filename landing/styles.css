@@ -109,7 +109,9 @@
 html {
   font-size: 16px;
   scroll-behavior: smooth;
-  scroll-padding-top: 5rem;
+  /* Clears the 4.5rem sticky nav with room to spare, so anchor targets never
+     land underneath it. */
+  scroll-padding-top: 6.5rem;
   -webkit-text-size-adjust: 100%;
 }
 
