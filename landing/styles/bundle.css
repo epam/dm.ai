@@ -9,18 +9,21 @@
 
 /* ==========================================================================
    DMTools landing page
-   EPAM Brandbook 2023 — Snow (light) and Night (dark) variants.
+   EPAM Brandbook 2023 — Night (dark, default) and Snow (light) variants.
 
    Palette source: branded/epam/dmtools film brief (IstiN/yoclip-examples).
      Canvas   Night #060606 / Snow #FBFAFA
      Accents  Sea #00F6FF · Mint #00FFF0 · Lilac #B896FF · Sky #7BA8FF
 
-   Snow uses darkened accent variants so text and rules keep WCAG AA contrast
-   on a light canvas.
+   Night is the default and the tuned target: the page is a dark surface with
+   cyan-to-lilac accents, and the light variant is the alternate rather than the
+   other way round. Snow uses darkened accent variants so text and rules keep
+   WCAG AA contrast on a light canvas.
 
-   Brand rule applied throughout: exactly one gradient keyword per headline.
-   Everything else stays monochrome. That restraint is what makes the page
-   read as EPAM rather than as a generic developer-tool template.
+   Brand rule applied throughout: the gradient carries one keyword per headline
+   plus the counted figures and the rules that measure them. Everything else
+   stays monochrome — that restraint is what keeps the page reading as EPAM
+   rather than as a generic developer-tool template.
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
@@ -44,6 +47,13 @@
   --sky:   #3A6BD6;
 
   --grad: linear-gradient(96deg, var(--mint) 0%, var(--sea) 46%, var(--lilac) 100%);
+
+  /* The filled button needs its own stops on Snow. The accents above are tuned
+     as *text* on a light canvas; used as a *fill* under white, the mint end
+     measures 3.42:1 — under AA for a 15px label. These are the same three hues
+     pulled dark enough that --btn-ink clears 4.5:1 across the whole sweep.
+     Night has no such problem and reuses --grad as it stands. */
+  --grad-btn: linear-gradient(96deg, #00726B 0%, #00677A 46%, #5B33B8 100%);
   --glow-a: rgba(0, 136, 160, 0.16);
   --glow-b: rgba(123, 79, 224, 0.14);
 
@@ -59,36 +69,65 @@
   --node-sys-line:  #0088A0;
   --node-sys-text:  #035666;
 
-  --font: 'Nunito Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
-  --mono: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  /* Sora carries the geometric, wide-aperture look the dark canvas needs, and
+     it holds up at the 100–200 weights the headlines are set in — Nunito Sans
+     thins out to a hairline well before that. JetBrains Mono replaces Fira Code
+     for the same reason at small sizes: a taller x-height stays legible at 13px
+     inside the terminal panels. */
+  --font: 'Sora', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
 
-  --shell: 1240px;
+  --shell: 1180px;
   --gutter: clamp(1.25rem, 5vw, 4rem);
   --band: clamp(5rem, 11vw, 9.5rem);
-  --radius: 4px;
+
+  /* Soft cards, fully round controls. The 4px this used to carry read as a
+     sharp editorial page; the panels are objects sitting on the canvas here,
+     and they need a radius you can see. */
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  /* Ink for the gradient-filled button, and it has to flip with the theme: Snow
+     darkens the accents to hold AA on a light canvas, so the fill here is a deep
+     teal-to-violet and the label has to be light. Night keeps the bright mint
+     end and takes dark ink. Getting this backwards puts dark text on a dark
+     fill, which is exactly what the light theme would have shipped. */
+  --btn-ink: #FBFAFA;
 
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
   color-scheme: light;
 }
 
+/* Night — the default. Surfaces are opaque greys rather than translucent white:
+   a card stacked on a panel stacked on the canvas compounded three alpha layers
+   and drifted lighter each time, which is what made the panels look washed out
+   against #060606. Fixed values keep every card at the same step. */
 [data-theme='night'] {
   --canvas:      #060606;
-  --surface:     #121212;
-  --surface-alt: #1A1A1A;
-  --text:        #FFFFFF;
-  --muted:       rgba(255, 255, 255, 0.56);
-  --faint:       rgba(255, 255, 255, 0.34);
-  --hairline:    rgba(255, 255, 255, 0.13);
-  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --surface:     #161616;
+  --surface-alt: #1C1C1C;
+  --text:        #F5F5F4;
+  --muted:       #A3A3A0;
+  --faint:       #6B6B68;
+  --hairline:    #2A2A2A;
+  --hairline-strong: #3A3A3A;
 
   --sea:   #00F6FF;
   --mint:  #00FFF0;
   --lilac: #B896FF;
   --sky:   #7BA8FF;
 
-  --glow-a: rgba(0, 246, 255, 0.13);
-  --glow-b: rgba(184, 150, 255, 0.13);
+  /* The hero blooms are the only large colour on the page, so they carry more
+     weight here than the 13% they had — at that strength they read as a smudge
+     on the canvas rather than as light. */
+  /* Dark ink, against the bright mint end of the fill. */
+  --btn-ink: #04211F;
+  --grad-btn: var(--grad);
+
+  --glow-a: rgba(0, 246, 255, 0.20);
+  --glow-b: rgba(184, 150, 255, 0.18);
 
   --node-ai-fill:   #17121F;
   --node-ai-line:   #B896FF;
@@ -105,17 +144,21 @@
    colours below are tuned for a dark ground, and a terminal surface reads as
    deliberate on a light page. */
 .panel--dark {
-  --surface:     #131313;
-  --surface-alt: #1A1A1A;
-  --text:        #FFFFFF;
-  --muted:       rgba(255, 255, 255, 0.56);
-  --faint:       rgba(255, 255, 255, 0.34);
-  --hairline:    rgba(255, 255, 255, 0.13);
-  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --surface:     #161616;
+  --surface-alt: #1C1C1C;
+  --text:        #F5F5F4;
+  --muted:       #A3A3A0;
+  --faint:       #6B6B68;
+  --hairline:    #2A2A2A;
+  --hairline-strong: #3A3A3A;
   --sea:   #00F6FF;
   --mint:  #00FFF0;
   --lilac: #B896FF;
   --sky:   #7BA8FF;
+  /* Carried with the accents it belongs to: this scope restates the Night
+     gradient, so it has to restate the ink that goes on top of it. */
+  --btn-ink: #04211F;
+  --grad-btn: var(--grad);
   color: var(--text);
 }
 
@@ -212,7 +255,13 @@ code, pre { font-family: var(--mono); }
   background: var(--hairline);
 }
 
-h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
+/* Sora at 100 is the page's signature setting, and it only works large: the
+   display and the section headlines carry it, h3 stays at 300 because card
+   titles run at 16–20px where a hairline weight stops being readable. */
+h1, h2, h3 { letter-spacing: -0.028em; line-height: 1.02; }
+h1 { font-weight: 100; }
+h2 { font-weight: 200; }
+h3 { font-weight: 300; }
 
 .display {
   font-size: clamp(2.85rem, 7.4vw, 6.25rem);
@@ -305,28 +354,38 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   gap: 0.6rem;
   height: 3.125rem;
   padding: 0 1.75rem;
-  border-radius: var(--radius);
+  /* Fully round. The buttons are the one element repeated in every section, so
+     the shape they carry sets the page's register more than any single panel. */
+  border-radius: var(--radius-pill);
   font-size: 0.9375rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
   transition: transform 0.2s var(--ease), background-color 0.2s var(--ease),
-              color 0.2s var(--ease), border-color 0.2s var(--ease), opacity 0.2s var(--ease);
+              color 0.2s var(--ease), border-color 0.2s var(--ease),
+              filter 0.2s var(--ease), opacity 0.2s var(--ease);
 }
 
+/* Lifts on hover, presses on click — the same 1px vocabulary the cards use. */
+.btn:hover { transform: translateY(-1px); }
 .btn:active { transform: translateY(1px); }
 
+/* The primary action is the only filled gradient on the page. --btn-ink rather
+   than --canvas: the fill is mint at its left edge, and #060606 on mint is a
+   harsher step than the green-cast near-black. */
 .btn--solid {
-  background: var(--text);
-  color: var(--canvas);
+  background: var(--grad-btn);
+  color: var(--btn-ink);
 }
-.btn--solid:hover { opacity: 0.86; }
+.btn--solid:hover { filter: brightness(1.08); }
 
 .btn--ghost {
   border: 1px solid var(--hairline-strong);
   color: var(--text);
 }
-.btn--ghost:hover { border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+/* Picks up the accent rather than going brighter monochrome, so the pair reads
+   as primary/secondary of one system. */
+.btn--ghost:hover { border-color: var(--sea); color: var(--sea); }
 
 .btn--sm { height: 2.5rem; padding: 0 1.15rem; font-size: 0.875rem; }
 
@@ -1117,16 +1176,34 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
 
 .figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: clamp(2rem, 4vw, 3.5rem);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1.25rem;
   margin-top: 3.5rem;
 }
 
+/* Boxed, like every other panel on the page. Bare figures on the canvas worked
+   when the page was a light editorial surface; on #060606 a counted number
+   needs a card under it or it floats. */
+.figure {
+  padding: 1.75rem 1.5rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* The counted figures carry the gradient. They are the page's only claim that
+   is a number rather than a sentence, and the gradient is what marks them as
+   the measured ones — see the brand note in tokens.css. */
 .figure__value {
-  font-size: clamp(3rem, 7vw, 5.5rem);
+  font-size: clamp(2.5rem, 5.5vw, 4rem);
   font-weight: 200;
   line-height: 0.9;
   letter-spacing: -0.045em;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .figure__label {
@@ -1164,14 +1241,16 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
 
 .bar__track {
   display: block;
-  height: 3px;
-  background: var(--hairline);
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-alt);
   overflow: hidden;
 }
 
 .bar__fill {
   display: block;
   height: 100%;
+  border-radius: var(--radius-pill);
   background: var(--grad);
   transform: scaleX(0);
   transform-origin: left;
@@ -1355,29 +1434,35 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
    -------------------------------------------------------------------------- */
 
 /* Explicit column counts, not auto-fit: four cards must land as 4 or 2 per row,
-   never 3, or the boxed grid shows an empty cell. */
+   never 3, or the last row is left with a stranded card. */
 .paths {
   margin-top: 3.5rem;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--hairline);
-  border: 1px solid var(--hairline);
+  gap: 1.25rem;
 }
 
+/* Separate cards on the canvas rather than cells in a hairline-boxed grid. The
+   boxed version had no room to move: a shared 1px gap means one card cannot
+   lift without tearing the rule it shares with its neighbour. */
 .path {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   padding: 2rem 1.75rem;
-  background: var(--canvas);
-  transition: background-color 0.25s var(--ease);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.25s var(--ease), transform 0.25s var(--ease),
+              background-color 0.25s var(--ease);
 }
 
-/* --surface is #FFFFFF against a #FBFAFA canvas: a 1.6% step nobody sees.
-   --surface-alt reads in both themes. */
-.path:hover { background: var(--surface-alt); }
+.path:hover {
+  border-color: var(--sea);
+  background: var(--surface-alt);
+  transform: translateY(-3px);
+}
 .path:hover .path__index { color: var(--sea); }
 
 /* The card's only link sat at the bottom in 15px type — a small target for a
@@ -1478,15 +1563,20 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   background: var(--surface);
 }
 
+/* Mint, the way a terminal prints back. The command is the one line on the page
+   a reader is meant to copy rather than read, and the accent is what separates
+   it from the prose around it. */
 .cmd code {
   flex: 1;
   font-size: 0.8125rem;
-  color: var(--text);
+  color: var(--mint);
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: thin;
 }
 
+/* --radius-sm, not --radius: 14px on a 36px box is most of the way to a circle,
+   and the control has to read as the square sibling of the panel it sits in. */
 .cmd__copy {
   flex-shrink: 0;
   width: 2.25rem;
@@ -1494,11 +1584,12 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   display: grid;
   place-items: center;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
   color: var(--muted);
   transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
 }
-.cmd__copy:hover { color: var(--text); border-color: var(--hairline-strong); }
+.cmd__copy:hover { color: var(--text); border-color: var(--sea); }
 
 /* Carries the Java requirement and the install location — read, not decoration,
    so --muted rather than the 2.7:1 --faint. */
@@ -1675,16 +1766,18 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   padding: clamp(3.5rem, 7vw, 5.5rem) 0 2.5rem;
 
   --canvas:      #060606;
-  --surface:     #121212;
-  --surface-alt: #1A1A1A;
-  --text:        #FFFFFF;
-  --muted:       rgba(255, 255, 255, 0.56);
-  --faint:       rgba(255, 255, 255, 0.34);
-  --hairline:    rgba(255, 255, 255, 0.13);
-  --hairline-strong: rgba(255, 255, 255, 0.26);
+  --surface:     #161616;
+  --surface-alt: #1C1C1C;
+  --text:        #F5F5F4;
+  --muted:       #A3A3A0;
+  --faint:       #6B6B68;
+  --hairline:    #2A2A2A;
+  --hairline-strong: #3A3A3A;
   --sea:   #00F6FF;
   --mint:  #00FFF0;
   --lilac: #B896FF;
+  --btn-ink: #04211F;
+  --grad-btn: var(--grad);
 
   position: relative;
   background: var(--canvas);
@@ -1810,4 +1903,13 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
 @media print {
   .nav, .toast, .hero__glow, .close__glow { display: none; }
   body { background: #fff; color: #000; }
+
+  /* Gradient text is a transparent fill over a clipped background, and print
+     drops the background — which leaves the headline keyword and every counted
+     figure as blank space on the page. Put the ink back. */
+  .accent, .figure__value {
+    background: none;
+    -webkit-text-fill-color: #000;
+    color: #000;
+  }
 }

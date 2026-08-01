@@ -51,15 +51,20 @@
   background: var(--surface);
 }
 
+/* Mint, the way a terminal prints back. The command is the one line on the page
+   a reader is meant to copy rather than read, and the accent is what separates
+   it from the prose around it. */
 .cmd code {
   flex: 1;
   font-size: 0.8125rem;
-  color: var(--text);
+  color: var(--mint);
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: thin;
 }
 
+/* --radius-sm, not --radius: 14px on a 36px box is most of the way to a circle,
+   and the control has to read as the square sibling of the panel it sits in. */
 .cmd__copy {
   flex-shrink: 0;
   width: 2.25rem;
@@ -67,11 +72,12 @@
   display: grid;
   place-items: center;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
   color: var(--muted);
   transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
 }
-.cmd__copy:hover { color: var(--text); border-color: var(--hairline-strong); }
+.cmd__copy:hover { color: var(--text); border-color: var(--sea); }
 
 /* Carries the Java requirement and the install location — read, not decoration,
    so --muted rather than the 2.7:1 --faint. */

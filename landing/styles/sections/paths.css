@@ -7,29 +7,35 @@
    -------------------------------------------------------------------------- */
 
 /* Explicit column counts, not auto-fit: four cards must land as 4 or 2 per row,
-   never 3, or the boxed grid shows an empty cell. */
+   never 3, or the last row is left with a stranded card. */
 .paths {
   margin-top: 3.5rem;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--hairline);
-  border: 1px solid var(--hairline);
+  gap: 1.25rem;
 }
 
+/* Separate cards on the canvas rather than cells in a hairline-boxed grid. The
+   boxed version had no room to move: a shared 1px gap means one card cannot
+   lift without tearing the rule it shares with its neighbour. */
 .path {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   padding: 2rem 1.75rem;
-  background: var(--canvas);
-  transition: background-color 0.25s var(--ease);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.25s var(--ease), transform 0.25s var(--ease),
+              background-color 0.25s var(--ease);
 }
 
-/* --surface is #FFFFFF against a #FBFAFA canvas: a 1.6% step nobody sees.
-   --surface-alt reads in both themes. */
-.path:hover { background: var(--surface-alt); }
+.path:hover {
+  border-color: var(--sea);
+  background: var(--surface-alt);
+  transform: translateY(-3px);
+}
 .path:hover .path__index { color: var(--sea); }
 
 /* The card's only link sat at the bottom in 15px type — a small target for a

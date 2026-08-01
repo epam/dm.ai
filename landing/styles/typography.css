@@ -31,7 +31,13 @@
   background: var(--hairline);
 }
 
-h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
+/* Sora at 100 is the page's signature setting, and it only works large: the
+   display and the section headlines carry it, h3 stays at 300 because card
+   titles run at 16–20px where a hairline weight stops being readable. */
+h1, h2, h3 { letter-spacing: -0.028em; line-height: 1.02; }
+h1 { font-weight: 100; }
+h2 { font-weight: 200; }
+h3 { font-weight: 300; }
 
 .display {
   font-size: clamp(2.85rem, 7.4vw, 6.25rem);

@@ -13,28 +13,38 @@
   gap: 0.6rem;
   height: 3.125rem;
   padding: 0 1.75rem;
-  border-radius: var(--radius);
+  /* Fully round. The buttons are the one element repeated in every section, so
+     the shape they carry sets the page's register more than any single panel. */
+  border-radius: var(--radius-pill);
   font-size: 0.9375rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
   transition: transform 0.2s var(--ease), background-color 0.2s var(--ease),
-              color 0.2s var(--ease), border-color 0.2s var(--ease), opacity 0.2s var(--ease);
+              color 0.2s var(--ease), border-color 0.2s var(--ease),
+              filter 0.2s var(--ease), opacity 0.2s var(--ease);
 }
 
+/* Lifts on hover, presses on click — the same 1px vocabulary the cards use. */
+.btn:hover { transform: translateY(-1px); }
 .btn:active { transform: translateY(1px); }
 
+/* The primary action is the only filled gradient on the page. --btn-ink rather
+   than --canvas: the fill is mint at its left edge, and #060606 on mint is a
+   harsher step than the green-cast near-black. */
 .btn--solid {
-  background: var(--text);
-  color: var(--canvas);
+  background: var(--grad-btn);
+  color: var(--btn-ink);
 }
-.btn--solid:hover { opacity: 0.86; }
+.btn--solid:hover { filter: brightness(1.08); }
 
 .btn--ghost {
   border: 1px solid var(--hairline-strong);
   color: var(--text);
 }
-.btn--ghost:hover { border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+/* Picks up the accent rather than going brighter monochrome, so the pair reads
+   as primary/secondary of one system. */
+.btn--ghost:hover { border-color: var(--sea); color: var(--sea); }
 
 .btn--sm { height: 2.5rem; padding: 0 1.15rem; font-size: 0.875rem; }
 
