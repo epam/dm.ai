@@ -15,6 +15,11 @@
   .reveal { opacity: 1; transform: none; }
   .bar__fill { transform: scaleX(var(--w, 1)); }
   .flow__step::after { transform: scaleX(1); }
+  .chain__break::after { transform: translate(-50%, -50%) scale(1); }
+
+  /* The blooms and the wire flow are ambient — they have no end state worth
+     snapping to, so they stop rather than jump. */
+  .hero__glow, .bridge__wire path { animation: none !important; }
 }
 
 @media print {

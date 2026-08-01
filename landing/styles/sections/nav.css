@@ -86,6 +86,11 @@
 .nav__link:hover { color: var(--text); }
 .nav__link:hover::after { transform: scaleX(1); }
 
+/* Scroll spy. The reader always knows which section they are standing in, so
+   the underline is the same mark hover uses — one vocabulary, two triggers. */
+.nav__link.is-current { color: var(--text); }
+.nav__link.is-current::after { transform: scaleX(1); }
+
 .nav__actions {
   display: flex;
   align-items: center;
@@ -113,6 +118,75 @@
 [data-theme='night'] .theme-toggle__sun { display: block; }
 [data-theme='night'] .theme-toggle__moon { display: none; }
 
-@media (max-width: 720px) {
-  .nav__links { display: none; }
+/* --------------------------------------------------------------------------
+   5b. Burger — narrow screens only
+   -------------------------------------------------------------------------- */
+
+.nav__burger {
+  display: none;
+  width: 2.375rem;
+  height: 2.375rem;
+  place-items: center;
+  color: var(--text);
+}
+
+.nav__burgerClose { display: none; }
+.nav.is-open .nav__burgerOpen { display: none; }
+.nav.is-open .nav__burgerClose { display: block; }
+
+.nav__panelCta { display: none; }
+
+/* 860, not 720: six links plus the wordmark and the CTA stop fitting on one
+   row at roughly 820px, and squeezing the gaps to buy the difference makes the
+   header look cramped long before it makes it fit. */
+@media (max-width: 860px) {
+  .nav__burger { display: grid; }
+
+  /* No room for a button beside the burger; the panel carries the CTA. */
+  .nav__cta { display: none; }
+
+  /* Absolute against .nav — sticky is a positioned ancestor — so the panel
+     overlays the hero instead of pushing the header taller as it opens. */
+  .nav__links {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0 var(--gutter) 0.5rem;
+    background: color-mix(in srgb, var(--canvas) 96%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--hairline);
+    /* visibility, not display: a display swap cannot transition, and the panel
+       has to stay out of the tab order while it is closed. */
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-0.5rem);
+    pointer-events: none;
+    transition: opacity 0.25s var(--ease), transform 0.25s var(--ease), visibility 0.25s;
+  }
+
+  .nav.is-open .nav__links {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  /* Colour stays inherited from the base rule — muted by default, --text once
+     .is-current lands — so the spy still reads with the underline suppressed. */
+  .nav__link {
+    padding: 1.05rem 0;
+    font-size: 1.0625rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  /* The sliding underline is a pointer affordance; in a stacked list it just
+     redraws the border that is already there. */
+  .nav__link::after { display: none; }
+
+  .nav__panelCta { display: inline-flex; margin-top: 1.5rem; }
 }

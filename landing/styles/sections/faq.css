@@ -1,0 +1,92 @@
+/* FAQ
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   16. FAQ
+   -------------------------------------------------------------------------- */
+
+/* One column, not two. Rows change height as they open, and in a two-column
+   grid every open row drags its neighbour down with it. */
+.faq {
+  margin-top: 3.5rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.faq__item { border-bottom: 1px solid var(--hairline); }
+
+.faq__sum {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.35rem 0;
+  cursor: pointer;
+  /* Both are needed: the standard property for current browsers, the WebKit
+     pseudo-element for older Safari, which ignores list-style on summary. */
+  list-style: none;
+}
+.faq__sum::-webkit-details-marker { display: none; }
+
+.faq__q {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  transition: color 0.2s var(--ease);
+}
+
+.faq__sum:hover .faq__q { color: var(--sea); }
+
+/* A plus turned 45 degrees is a cross — one glyph for both states, so open and
+   closed cannot drift out of sync the way two swapped icons can. */
+.faq__sum::after {
+  content: '+';
+  flex-shrink: 0;
+  width: 1.5rem;
+  margin-top: -0.15rem;
+  color: var(--sea);
+  font-size: 1.5rem;
+  font-weight: 300;
+  line-height: 1;
+  text-align: center;
+  transition: transform 0.25s var(--ease);
+}
+
+.faq__item[open] .faq__sum::after { transform: rotate(45deg); }
+
+.faq__a {
+  padding-bottom: 1.5rem;
+  font-size: 0.9375rem;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 64ch;
+}
+
+/* <details> cannot transition its own height across browsers, so the answer
+   fades in on its own rather than the row animating open. */
+.faq__item[open] .faq__a { animation: faqReveal 0.28s var(--ease) both; }
+
+@keyframes faqReveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.faq__a code {
+  font-size: 0.82rem;
+  padding: 0.1rem 0.3rem;
+  background: var(--surface-alt);
+  border-radius: 2px;
+}
+
+/* The row is the control, so the ring belongs to the row and not to the text
+   inside it. */
+.faq__sum:focus-visible {
+  outline: 2px solid var(--sea);
+  outline-offset: -2px;
+}
+
+@media (max-width: 720px) {
+  .faq__q { font-size: 1rem; }
+  .faq__sum { gap: 1rem; }
+}

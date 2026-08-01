@@ -52,5 +52,22 @@
         <p class="panel__hint">Adds the DMTools skill to your project for Cursor, Claude Code and Codex.</p>
       </div>
     </div>
+
+    <!-- The section used to end on a copied command, which leaves the reader
+         with no way to tell whether it worked or what to do next. -->
+    <div class="install__next reveal">
+      <p class="install__nextTitle">Then check it landed</p>
+      <div class="cmd">
+        <code id="cmd-verify">dmtools list</code>
+        <button class="cmd__copy" type="button" data-copy="cmd-verify" aria-label="Copy verification command">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <p class="panel__hint">
+        Prints every tool the CLI can reach. Nothing listed means the integrations
+        still need credentials —
+        <a class="textlink" href="https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/configuration" target="_blank" rel="noopener">configuration guide →</a>
+      </p>
+    </div>
   </div>
 </section>

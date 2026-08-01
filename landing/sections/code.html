@@ -21,9 +21,12 @@
       <div class="code__bar">
         <span class="code__dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="code__file">agents/story_development.js</span>
+        <button class="cmd__copy code__copy" type="button" data-copy="code-sample" aria-label="Copy the example agent">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
       </div>
       <div class="code__body">
-<pre><span class="tk-comment">// 1 — read context from every connected system</span>
+<pre id="code-sample"><span class="tk-comment">// 1 — read context from every connected system</span>
 <span class="tk-key">const</span> ticket   = <span class="tk-key">await</span> <span class="tk-fn">jira_get_ticket</span>(<span class="tk-str">'PROJ-123'</span>);
 <span class="tk-key">const</span> guidelines = <span class="tk-key">await</span> <span class="tk-fn">confluence_content_by_title</span>(<span class="tk-str">'API Design Guidelines'</span>);
 <span class="tk-key">const</span> openPRs  = <span class="tk-key">await</span> <span class="tk-fn">github_list_prs</span>({ state: <span class="tk-str">'open'</span> });

@@ -34,7 +34,7 @@ landing/
 │   └── a11y.css                motion and print preferences
 └── assets/
     ├── favicon.svg
-    ├── film-poster.png         cover frame, served locally
+    ├── film-poster.jpg         the frame YouTube uses, served locally
     └── og-cover.png            social card, 1200×630
 ```
 

@@ -17,7 +17,7 @@
 .chain__node {
   padding: 1.05rem 1.35rem;
   border: 1px dashed var(--hairline-strong);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--muted);
   font-size: 0.875rem;
@@ -34,23 +34,35 @@
               var(--hairline-strong) 0 6px, transparent 6px 12px);
 }
 
+/* The breaks land one after another once the row reveals, left to right, so the
+   chain reads as coming apart rather than as having always been broken. */
 .chain__break::after {
   content: '\00d7';
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(0);
   padding: 0 0.3rem;
   background: var(--canvas);
-  color: var(--faint);
+  color: var(--muted);
   font-size: 0.875rem;
   line-height: 1;
+  transition: transform 0.4s var(--ease);
 }
 
+.chain.is-in .chain__break::after { transform: translate(-50%, -50%) scale(1); }
+.chain.is-in .chain__break:nth-child(2)::after { transition-delay: 0.35s; }
+.chain.is-in .chain__break:nth-child(4)::after { transition-delay: 0.5s; }
+.chain.is-in .chain__break:nth-child(6)::after { transition-delay: 0.65s; }
+.chain.is-in .chain__break:nth-child(8)::after { transition-delay: 0.8s; }
+
+/* The diagram above is aria-hidden, so this caption is the only form the point
+   takes for a screen reader — it has to meet reading contrast, not decoration
+   contrast. */
 .chain__caption {
   margin-top: 1.25rem;
   font-size: 0.85rem;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .pullquote {

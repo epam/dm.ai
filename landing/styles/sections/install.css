@@ -73,8 +73,29 @@
 }
 .cmd__copy:hover { color: var(--text); border-color: var(--hairline-strong); }
 
+/* Carries the Java requirement and the install location — read, not decoration,
+   so --muted rather than the 2.7:1 --faint. */
 .panel__hint {
   margin-top: 0.85rem;
   font-size: 0.8125rem;
-  color: var(--faint);
+  color: var(--muted);
 }
+
+.install__next {
+  margin-top: 2.75rem;
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.install__nextTitle {
+  margin-bottom: 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.install__next .panel__hint { line-height: 1.6; }
+
+.install__next .textlink { font-size: 0.8125rem; }
