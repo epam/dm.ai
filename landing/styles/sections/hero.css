@@ -26,12 +26,16 @@
   background: radial-gradient(closest-side, var(--glow), transparent);
 }
 
+/* Two slow drifts on deliberately coprime durations, so the pair never settles
+   into a visible rhythm. transform only — the blooms are composited, and a
+   background-position animation here would repaint the whole hero. */
 .hero__glow--a {
   --glow: var(--glow-a);
   top: 0;
   left: 0;
   width: 58%;
   height: 74%;
+  animation: glowDriftA 19s ease-in-out infinite alternate;
 }
 
 .hero__glow--b {
@@ -40,6 +44,17 @@
   bottom: 0;
   width: 56%;
   height: 84%;
+  animation: glowDriftB 23s ease-in-out infinite alternate;
+}
+
+@keyframes glowDriftA {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(5%, 4%, 0) scale(1.1); }
+}
+
+@keyframes glowDriftB {
+  from { transform: translate3d(0, 0, 0) scale(1.06); }
+  to   { transform: translate3d(-4%, -5%, 0) scale(1); }
 }
 
 .hero__inner { position: relative; z-index: 1; }
@@ -53,7 +68,9 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--faint);
+  /* --faint is 2.7:1 on the Snow canvas and 3.0:1 on Night — decoration
+     contrast, and this line carries the licence and the runtime requirement. */
+  color: var(--muted);
   margin-bottom: 2.5rem;
 }
 .hero__meta span { display: inline-flex; align-items: center; gap: 1.25rem; }

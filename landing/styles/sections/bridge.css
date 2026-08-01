@@ -43,6 +43,25 @@
   stroke: var(--sea);
   stroke-width: 1.6;
   opacity: 0.55;
+  /* A long dash with a short gap, not a dotted line: the gap travelling along
+     the wire reads as traffic, while the wire itself stays visually continuous
+     and still says "connected". Every path is authored left-to-right, so one
+     negative offset moves all fourteen the same way — into the hub on the left,
+     out of it on the right. */
+  stroke-dasharray: 26 6;
+}
+
+/* Gated on the reveal so nothing animates off-screen, and staggered so the
+   wires do not pulse in lockstep. */
+.bridge.is-in .bridge__wire path {
+  animation: bridgeFlow 1.6s linear infinite;
+}
+
+.bridge.is-in .bridge__wire path:nth-child(3n + 2) { animation-delay: -0.5s; }
+.bridge.is-in .bridge__wire path:nth-child(3n + 3) { animation-delay: -1s; }
+
+@keyframes bridgeFlow {
+  to { stroke-dashoffset: -32; }
 }
 
 /* The hub is treated as a mark, not as a themed surface: the same brand
@@ -62,7 +81,7 @@
 }
 
 .bridge__col {
-  fill: var(--faint);
+  fill: var(--muted);
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -88,7 +107,7 @@
   margin-top: 1.5rem;
   text-align: center;
   font-size: 0.8125rem;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 /* Carries the diagram's names to assistive technology, and becomes the
@@ -107,7 +126,7 @@
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--hairline);
   margin-bottom: 1rem;

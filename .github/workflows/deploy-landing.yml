@@ -61,8 +61,38 @@ jobs:
             exit 1
           fi
 
+      # Must run before the substitution below: it is what reports the address
+      # this repository actually publishes to.
       - name: Setup Pages
+        id: pages
         uses: actions/configure-pages@v5
+
+      # canonical, og:image, the sitemap and three schema fields all need an
+      # absolute URL, and the right one differs per repository — a fork serves
+      # from its own github.io path. Taking it from configure-pages means nobody
+      # has to remember to edit a hardcoded domain after forking.
+      - name: Substitute the published site URL
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          FILES="landing/index.html landing/sitemap.xml landing/robots.txt"
+
+          if [ -z "${SITE_URL}" ]; then
+            echo "::error::configure-pages reported no base_url"
+            exit 1
+          fi
+
+          # base_url carries no trailing slash; the placeholder is always
+          # followed by an explicit one in the sources.
+          SITE_URL="${SITE_URL%/}"
+          sed -i "s|__SITE_URL__|${SITE_URL}|g" $FILES
+          echo "Site URL: ${SITE_URL}"
+
+          if grep -l '__SITE_URL__' $FILES; then
+            echo "::error::a __SITE_URL__ placeholder survived substitution"
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

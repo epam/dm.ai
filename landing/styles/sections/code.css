@@ -37,6 +37,10 @@
   color: var(--muted);
 }
 
+/* Borrows .cmd__copy from the install section — same control, same affordance,
+   so it should not be a second one that merely looks similar. */
+.code__copy { margin-left: auto; }
+
 .code__body {
   padding: 1.5rem clamp(1rem, 2.5vw, 1.75rem);
   overflow-x: auto;
@@ -48,7 +52,7 @@
   white-space: pre;
 }
 
-.tk-comment { color: var(--faint); font-style: italic; }
+.tk-comment { color: var(--muted); font-style: italic; }
 .tk-key     { color: var(--lilac); }
 .tk-fn      { color: var(--sea); }
 .tk-str     { color: var(--mint); }

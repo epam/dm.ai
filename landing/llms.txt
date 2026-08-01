@@ -1,0 +1,42 @@
+# DMTools
+
+> DMTools is an open-source command-line orchestrator that connects AI agents to
+> enterprise delivery systems. It exposes 320+ tools across 20+ integrations —
+> Jira, Azure DevOps, GitHub, GitLab, Confluence, Figma, Microsoft Teams and
+> every major AI provider — behind a single CLI. Built and maintained by EPAM
+> Systems, released under Apache 2.0.
+
+DMTools requires Java 17 or newer and installs with one command on Linux, macOS
+and Windows. It runs no server and keeps no agent process alive: the CLI is
+installed fresh on each run, which is what makes it safe to drop into CI. Every
+tool is generated from annotated Java at compile time, so the CLI surface, the
+MCP schema and the JavaScript functions available to agents never drift apart.
+
+The same tool set is reachable four ways: direct CLI calls, MCP for assistants
+such as Claude and Cursor, plain JavaScript functions inside jobs, and CI
+pipelines on GitHub Actions, GitLab CI, Jenkins or Bitrise.
+
+## Documentation
+
+- [Skill entry point](https://github.com/epam/dm.ai/blob/main/dmtools-ai-docs/SKILL.md): how an AI agent installs and uses DMTools in a project
+- [Installation](https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/installation): install script, requirements, troubleshooting
+- [Configuration](https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/configuration): environment variables per integration and per AI provider
+- [MCP tools reference](https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/mcp-tools): every tool with its parameters, grouped by integration
+- [Jobs and agents](https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs/references/jobs): the job system, JavaScript agents, orchestration
+- [GitHub Actions teammate](https://github.com/epam/dm.ai/blob/main/dmtools-ai-docs/references/workflows/github-actions-teammate.md): running DMTools on ticket state changes
+
+## Integrations
+
+- Trackers: Jira, Azure DevOps, Rally
+- Source control: GitHub, GitLab, Bitbucket
+- Documentation: Confluence, SharePoint
+- Design: Figma
+- Collaboration: Microsoft Teams
+- Testing: TestRail, Jira Xray
+- CI/CD: GitHub Actions, GitLab CI, Jenkins, Bitrise
+- AI providers: Anthropic Claude, OpenAI, Google Gemini, Google Vertex AI, AWS Bedrock, Ollama, EPAM DIAL
+
+## Source
+
+- [Repository](https://github.com/epam/dm.ai): source, issues, releases
+- [Licence](https://github.com/epam/dm.ai/blob/main/LICENSE): Apache 2.0

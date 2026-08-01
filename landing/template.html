@@ -7,21 +7,21 @@
   <title>DMTools — Enterprise AI-Factory Orchestrator | EPAM Open Source</title>
   <meta name="description" content="DMTools is EPAM's open-source AI-factory orchestrator. 320+ CLI tools across 20+ integrations — Jira, Azure DevOps, GitHub, Figma, Teams and every major AI provider — behind one CLI. Apache 2.0.">
   <meta name="keywords" content="DMTools, EPAM, AI orchestrator, AI factory, CLI tools, MCP, Jira, GitHub, Azure DevOps, Figma, Confluence, delivery automation, open source">
-  <link rel="canonical" href="https://epam.github.io/dm.ai/">
+  <link rel="canonical" href="__SITE_URL__/">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="DMTools by EPAM">
   <meta property="og:title" content="DMTools — Enterprise AI-Factory Orchestrator">
   <meta property="og:description" content="320+ CLI tools. 20+ integrations. One orchestration layer for your AI factory. Open source from EPAM.">
-  <meta property="og:url" content="https://epam.github.io/dm.ai/">
-  <meta property="og:image" content="https://epam.github.io/dm.ai/assets/og-cover.png">
+  <meta property="og:url" content="__SITE_URL__/">
+  <meta property="og:image" content="__SITE_URL__/assets/og-cover.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DMTools — Enterprise AI-Factory Orchestrator">
   <meta name="twitter:description" content="320+ CLI tools. 20+ integrations. One orchestration layer for your AI factory.">
-  <meta name="twitter:image" content="https://epam.github.io/dm.ai/assets/og-cover.png">
+  <meta name="twitter:image" content="__SITE_URL__/assets/og-cover.png">
 
   <meta name="theme-color" content="#FBFAFA" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#060606" media="(prefers-color-scheme: dark)">
@@ -50,6 +50,7 @@
   <link rel="stylesheet" href="styles/sections/code.css">
   <link rel="stylesheet" href="styles/sections/paths.css">
   <link rel="stylesheet" href="styles/sections/install.css">
+  <link rel="stylesheet" href="styles/sections/faq.css">
   <link rel="stylesheet" href="styles/sections/close.css">
   <link rel="stylesheet" href="styles/sections/footer.css">
   <link rel="stylesheet" href="styles/a11y.css">
@@ -77,6 +78,8 @@
   </script>
   <!-- ga:end -->
 
+  <!-- softwareVersion tracks gradle.properties. It is the one field here that
+       goes stale silently, so bump it with the release. -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -85,11 +88,112 @@
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Linux, macOS, Windows",
     "description": "Enterprise AI-factory orchestrator for automating delivery workflows across trackers, source control, documentation, design systems, AI providers, and CI/CD.",
-    "url": "https://epam.github.io/dm.ai/",
+    "url": "__SITE_URL__/",
     "codeRepository": "https://github.com/epam/dm.ai",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "softwareVersion": "1.7.238",
+    "softwareRequirements": "Java 17 or newer",
+    "downloadUrl": "https://github.com/epam/dm.ai/releases/latest",
+    "screenshot": "__SITE_URL__/assets/og-cover.png",
+    "isAccessibleForFree": true,
+    "featureList": [
+      "320+ CLI tools across 20+ enterprise integrations",
+      "Model Context Protocol server for Claude, Cursor and Copilot",
+      "JavaScript agents with direct access to every tool",
+      "Runs in GitHub Actions, GitLab CI, Jenkins and Bitrise",
+      "Runtime AI provider selection across Claude, OpenAI, Gemini, Vertex AI, Bedrock, DIAL and Ollama"
+    ],
     "author": { "@type": "Organization", "name": "EPAM Systems", "url": "https://www.epam.com" },
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "DMTools - Introduction",
+    "uploadDate": "2026-07-31",
+    "description": "A nine-scene introduction to DMTools, EPAM's open-source AI-factory orchestrator, in the EPAM 2023 brand system.",
+    "thumbnailUrl": "__SITE_URL__/assets/film-poster.jpg",
+    "embedUrl": "https://www.youtube-nocookie.com/embed/EQp_leZgVtk",
+    "contentUrl": "https://www.youtube.com/watch?v=EQp_leZgVtk",
+    "publisher": { "@type": "Organization", "name": "AI Native", "url": "https://www.youtube.com/@AI-Native-Pro" }
+  }
+  </script>
+
+  <!-- Mirrors sections/faq.html. The two must say the same thing: markup that
+       contradicts the visible page is a manual-action risk, not a shortcut. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is DMTools?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DMTools is an open-source command-line orchestrator that connects AI agents to enterprise delivery systems. It exposes 320+ tools across 20+ integrations — Jira, Azure DevOps, GitHub, GitLab, Confluence, Figma, Microsoft Teams and every major AI provider — behind a single CLI. DMTools is built and maintained by EPAM Systems and released under the Apache 2.0 licence."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is our data sent to EPAM or to a DMTools service?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. DMTools is a CLI you run inside your own CI pipeline or on your own machine, with your own credentials and your own choice of AI provider. There is no DMTools-operated backend in between, and no telemetry path back to EPAM."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need to be a developer to benefit from DMTools?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. One technical teammate installs and configures DMTools once per project — Java 17 or newer plus a set of environment variables. After that the output reaches delivery managers, QA and platform teams as processed tickets, drafted pull requests and generated reports, not as a tool anyone has to operate."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What happens if the AI gets something wrong?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Nothing merges on its own. Every branch and pull request DMTools produces stops for human review before it ships — the model drafts the work, your engineers approve and merge it. Because each run installs fresh and leaves its trail in CI, a wrong answer is auditable rather than mysterious."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does DMTools only work with GitHub?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. DMTools integrates with Jira, Azure DevOps, GitHub, GitLab, Bitbucket, Confluence, SharePoint, Figma, Microsoft Teams, TestRail, Jenkins and Bitrise — more than twenty systems in total. GitHub is one of them, not a requirement."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which AI providers can we use?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DMTools supports Anthropic Claude, OpenAI, Google Gemini, Google Vertex AI, AWS Bedrock, the EPAM DIAL enterprise gateway, and fully local models through Ollama when code and tickets must never leave your network. The provider is chosen at runtime through environment variables, so switching takes no code change."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does DMTools cost?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DMTools itself is free and open source under Apache 2.0 — no account, no licence key, no paid tier. You pay only the AI provider and the delivery tools your organisation already uses."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is DMTools different from a single MCP server?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A typical MCP server wraps one system; DMTools covers more than twenty behind one install, and exposes them four ways — direct CLI calls, MCP for assistants such as Claude and Cursor, plain JavaScript functions inside jobs, and CI pipelines. Every tool is generated from annotated Java at compile time, so the CLI surface, the MCP schema and the JavaScript functions cannot drift apart."
+        }
+      }
+    ]
   }
   </script>
 </head>
@@ -119,6 +223,8 @@
 <!-- include: sections/paths.html -->
 
 <!-- include: sections/install.html -->
+
+<!-- include: sections/faq.html -->
 
 <!-- include: sections/close.html -->
 

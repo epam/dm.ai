@@ -18,6 +18,7 @@
 }
 
 .path {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -25,12 +26,33 @@
   background: var(--canvas);
   transition: background-color 0.25s var(--ease);
 }
-.path:hover { background: var(--surface); }
+
+/* --surface is #FFFFFF against a #FBFAFA canvas: a 1.6% step nobody sees.
+   --surface-alt reads in both themes. */
+.path:hover { background: var(--surface-alt); }
+.path:hover .path__index { color: var(--sea); }
+
+/* The card's only link sat at the bottom in 15px type — a small target for a
+   thumb, and the tint promised a hit area the card did not have. This spreads
+   that one link over the card without adding a second link to the a11y tree. */
+.path .textlink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* Focus follows the link, so the ring has to be drawn by the card instead. */
+.path:focus-within {
+  outline: 2px solid var(--sea);
+  outline-offset: -2px;
+}
+.path:focus-within .textlink { border-color: var(--text); }
 
 .path__index {
   font-family: var(--mono);
   font-size: 0.75rem;
   color: var(--faint);
+  transition: color 0.25s var(--ease);
 }
 
 .path__title {

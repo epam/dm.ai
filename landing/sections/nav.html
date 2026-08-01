@@ -7,12 +7,20 @@
       <span class="brand__name">DMTools</span>
     </a>
 
-    <nav class="nav__links" aria-label="Sections">
+    <!-- Doubles as the narrow-screen menu: below 720px this becomes a panel
+         under the header, opened by the burger. One list, not two, so the
+         links can never drift apart. -->
+    <nav class="nav__links" id="nav-links" aria-label="Sections">
       <a class="nav__link" href="#problem">Why</a>
       <a class="nav__link" href="#layer">Platform</a>
       <a class="nav__link" href="#architecture">Architecture</a>
       <a class="nav__link" href="#paths">Adoption</a>
+      <a class="nav__link" href="#faq">FAQ</a>
       <a class="nav__link" href="https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs" target="_blank" rel="noopener">Docs</a>
+
+      <!-- Panel only. The header CTA has no room beside a burger, so the menu
+           carries it instead of dropping it. -->
+      <a class="btn btn--solid nav__panelCta" href="#install">Install DMTools</a>
     </nav>
 
     <div class="nav__actions">
@@ -25,7 +33,17 @@
           <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
         </svg>
       </button>
-      <a class="btn btn--solid btn--sm" href="https://github.com/epam/dm.ai" target="_blank" rel="noopener">Star on GitHub</a>
+      <a class="btn btn--solid btn--sm nav__cta" href="#install">Install DMTools</a>
+
+      <button class="nav__burger" id="nav-burger" type="button"
+              aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg class="nav__burgerOpen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 6h18M3 12h18M3 18h18"/>
+        </svg>
+        <svg class="nav__burgerClose" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+          <path d="M5 5l14 14M19 5L5 19"/>
+        </svg>
+      </button>
     </div>
   </div>
 </header>

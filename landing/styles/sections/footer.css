@@ -31,7 +31,7 @@
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   margin-bottom: 1.15rem;
 }
 
@@ -55,7 +55,7 @@
   align-items: center;
   justify-content: space-between;
   font-size: 0.8125rem;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .badge {

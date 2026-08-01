@@ -6,13 +6,16 @@
    4. Typography
    -------------------------------------------------------------------------- */
 
+/* 11px, wide-tracked and uppercase — the least legible setting on the page, and
+   it labels every section. --faint measures 2.7:1 on Snow and 3.0:1 on Night,
+   so this one rule was failing AA nine times over. */
 .eyebrow {
   display: block;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   margin-bottom: 1.75rem;
 }
 
