@@ -12,7 +12,11 @@ landing/
 ├── index.html                  GENERATED — run build.py, do not edit
 ├── template.html               head, meta, structured data, GA, include markers
 ├── sections/*.html             one file per section; edit these
-├── build.py                    assembles index.html; --check guards CI
+├── build.py                    assembles index.html and the CSS bundle;
+│                               --check guards both in CI
+├── robots.txt                  crawler policy; __SITE_URL__ filled at deploy
+├── sitemap.xml                 one URL today, grows with the docs
+├── llms.txt                    extractable summary for AI assistants
 ├── main.js                     entry point; imports the modules below
 ├── js/
 │   ├── motion.js               reduced-motion preference, read once
@@ -25,6 +29,7 @@ landing/
 │   ├── clipboard.js            copy buttons
 │   └── video.js                on-demand film player
 ├── styles/
+│   ├── bundle.css              GENERATED — every sheet below, in cascade order
 │   ├── tokens.css              palette, both themes, scoped overrides
 │   ├── base.css                reset and base elements
 │   ├── typography.css          type scale and text helpers
@@ -62,11 +67,20 @@ Nothing is installed to run any of this — `build.py` is standard library only.
 
 ## Rules worth knowing before editing
 
-**Stylesheet order is load-bearing.** The `<link>` tags in `index.html` set the
-cascade. `a11y.css` must stay last: it overrides `.reveal`, `.bar__fill` and
+**Stylesheet order is load-bearing.** The `<link>` tags in `template.html` set
+the cascade. `a11y.css` must stay last: it overrides `.reveal`, `.bar__fill` and
 `.flow__step::after` at equal specificity and only wins by coming after the
 section files. Section files are otherwise independent — each owns its own
 media queries.
+
+**The stylesheets ship as one file.** Eighteen `<link>` tags are eighteen
+render-blocking requests for ~47 KB that never changes between them, so
+`build.py` concatenates them into `styles/bundle.css` and emits a single link.
+Authoring stays split by concern; only delivery is joined. The order comes from
+the `<link>` tags in `template.html` rather than a list inside `build.py`, so
+the two cannot disagree — add a section stylesheet by adding its tag, as before.
+`bundle.css` is generated and committed, and `--check` guards it alongside
+`index.html`.
 
 **The theme is applied twice, on purpose.** An inline script in `<head>` sets
 `data-theme` before first paint, because a module is deferred by definition and
