@@ -194,8 +194,8 @@
         return;
       }
 
-      var body = frame.querySelector('.video__body');
-      if (body) body.remove();
+      // Clear the poster and the play control before the player takes the frame.
+      frame.replaceChildren();
 
       if (/\.(mp4|webm)$/i.test(url)) {
         var video = document.createElement('video');

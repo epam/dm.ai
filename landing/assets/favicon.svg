@@ -1,16 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DMTools">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="dm" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#00FFF0"/>
       <stop offset="0.5" stop-color="#00F6FF"/>
       <stop offset="1" stop-color="#B896FF"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="10" fill="#060606"/>
-  <!-- Orchestration mark: one hub, four systems wired to it. -->
-  <g stroke="url(#g)" stroke-width="3" stroke-linecap="round" fill="none">
-    <path d="M32 20V14M32 50v-6M20 32h-6M50 32h-6"/>
-  </g>
-  <circle cx="32" cy="32" r="9" fill="none" stroke="url(#g)" stroke-width="3.5"/>
-  <circle cx="32" cy="32" r="3" fill="url(#g)"/>
+
+  <rect width="64" height="64" rx="12" fill="#060606"/>
+
+  <!-- Systems above, agents below, one orchestration layer spanning both.
+       Kept to three bars so the mark still reads at 16px. -->
+  <rect x="17" y="13" width="30" height="7" rx="3.5" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="7" y="28" width="50" height="9" rx="4.5" fill="url(#dm)"/>
+  <rect x="17" y="44" width="30" height="7" rx="3.5" fill="#FFFFFF" opacity="0.7"/>
 </svg>

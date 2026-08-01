@@ -1,10 +1,13 @@
 name: Deploy Landing Page to GitHub Pages
 
+# Only the default branch deploys. The github-pages environment restricts
+# deployments to it, so triggering on any other branch produces a run that is
+# rejected by the environment protection rule rather than a useful preview.
+# Use workflow_dispatch to publish on demand from the default branch.
 on:
   push:
     branches:
       - main
-      - landing
     paths:
       - 'landing/**'
       - '.github/workflows/deploy-landing.yml'

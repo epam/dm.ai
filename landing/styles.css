@@ -519,17 +519,14 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
     var(--surface);
 }
 
-/* Faint engineering grid — the film's signature backdrop. */
-.video__frame::before {
-  content: '';
+/* The film's cover frame, held locally so nothing is requested from the video
+   host until the visitor actually presses play. */
+.video__poster {
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(var(--hairline) 1px, transparent 1px),
-    linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
-  background-size: 72px 72px;
-  opacity: 0.6;
-  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .video__body {
@@ -544,24 +541,21 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   padding: 2rem;
 }
 
+/* Fixed light-on-dark: the poster behind it is dark in either theme. */
 .video__play {
   width: 5.5rem;
   height: 5.5rem;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--text);
-  color: var(--canvas);
+  background: #FFFFFF;
+  color: #060606;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
   transition: transform 0.25s var(--ease);
 }
 .video__play:hover { transform: scale(1.08); }
+.video__play:focus-visible { outline-offset: 5px; }
 .video__play svg { margin-left: 4px; }
-
-.video__title {
-  font-size: clamp(1.15rem, 2.2vw, 1.6rem);
-  font-weight: 300;
-  letter-spacing: -0.02em;
-}
 
 .video__note {
   margin-top: 1.25rem;
@@ -582,33 +576,50 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
    9. Problem
    -------------------------------------------------------------------------- */
 
-.silos {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
-  border-top: 1px solid var(--hairline);
-  border-left: 1px solid var(--hairline);
+/* Broken chain: the tools exist, the links between them do not. Dashed nodes,
+   dashed connectors, and a break glyph sitting on each connector. */
+.chain {
+  display: flex;
+  align-items: center;
   margin-top: 3.5rem;
 }
 
-.silo {
-  padding: 1.75rem 1.5rem;
-  border-right: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--hairline);
-  transition: background-color 0.25s var(--ease);
-}
-.silo:hover { background: var(--surface); }
-
-.silo__name {
-  font-size: 0.9375rem;
+.chain__node {
+  padding: 1.05rem 1.35rem;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.875rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
-.silo__state {
-  margin-top: 0.4rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.chain__break {
+  position: relative;
+  flex: 0 0 2.75rem;
+  height: 1px;
+  margin: 0 0.25rem;
+  background: repeating-linear-gradient(90deg,
+              var(--hairline-strong) 0 6px, transparent 6px 12px);
+}
+
+.chain__break::after {
+  content: '\00d7';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0 0.3rem;
+  background: var(--canvas);
+  color: var(--faint);
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.chain__caption {
+  margin-top: 1.25rem;
+  font-size: 0.85rem;
   color: var(--faint);
 }
 
@@ -1160,6 +1171,21 @@ h1, h2, h3 { font-weight: 200; letter-spacing: -0.028em; line-height: 1.02; }
   .split, .split--narrow { grid-template-columns: 1fr; gap: 2rem; }
   .footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem 1.5rem; }
+}
+
+/* Stack the chain rather than let it wrap: a wrapped row can strand a
+   connector at the end of a line with nothing to connect. */
+@media (max-width: 760px) {
+  .chain { flex-direction: column; align-items: flex-start; }
+  .chain__node { width: 100%; text-align: center; }
+  .chain__break {
+    flex: 0 0 1.75rem;
+    width: 1px;
+    height: 1.75rem;
+    margin: 0.25rem 0 0.25rem 50%;
+    background: repeating-linear-gradient(180deg,
+                var(--hairline-strong) 0 6px, transparent 6px 12px);
+  }
 }
 
 @media (max-width: 720px) {

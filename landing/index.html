@@ -170,11 +170,13 @@
 
     <div class="video__frame reveal" id="video"
          data-video-url="https://www.youtube-nocookie.com/embed/EQp_leZgVtk?autoplay=1&amp;rel=0">
+      <img class="video__poster" src="assets/film-poster.png"
+           alt="DMTools — Enterprise AI-factory orchestrator. EPAM open source, Apache 2.0, Java 17+."
+           width="1920" height="1080" loading="lazy" decoding="async">
       <div class="video__body">
         <button class="video__play" id="video-play" type="button" aria-label="Play the DMTools introduction film">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
         </button>
-        <p class="video__title">DMTools — from a ticket to a pull request</p>
       </div>
     </div>
 
@@ -193,7 +195,7 @@
       <div>
         <p class="eyebrow reveal">The problem</p>
         <h2 class="headline reveal" data-delay="1">
-          You already have AI.<br>Delivery still runs on <span class="accent">handoffs</span>.
+          You already have AI. Delivery still runs on <span class="accent">handoffs</span>.
         </h2>
       </div>
       <div>
@@ -206,14 +208,18 @@
       </div>
     </div>
 
-    <div class="silos reveal">
-      <div class="silo"><p class="silo__name">Issue trackers</p><p class="silo__state">Isolated</p></div>
-      <div class="silo"><p class="silo__name">Source control</p><p class="silo__state">Isolated</p></div>
-      <div class="silo"><p class="silo__name">Documentation</p><p class="silo__state">Isolated</p></div>
-      <div class="silo"><p class="silo__name">Design systems</p><p class="silo__state">Isolated</p></div>
-      <div class="silo"><p class="silo__name">AI providers</p><p class="silo__state">Isolated</p></div>
-      <div class="silo"><p class="silo__name">CI / CD</p><p class="silo__state">Isolated</p></div>
+    <div class="chain reveal" aria-hidden="true">
+      <span class="chain__node">Tracker</span>
+      <span class="chain__break"></span>
+      <span class="chain__node">Repo</span>
+      <span class="chain__break"></span>
+      <span class="chain__node">Docs</span>
+      <span class="chain__break"></span>
+      <span class="chain__node">CI/CD</span>
+      <span class="chain__break"></span>
+      <span class="chain__node">AI</span>
     </div>
+    <p class="chain__caption reveal">Disconnected tools. Broken handoffs.</p>
 
     <p class="pullquote reveal">
       One-off scripts don't scale. What scales is an orchestration layer that
