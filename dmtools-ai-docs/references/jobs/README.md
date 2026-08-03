@@ -74,6 +74,7 @@ The `"name"` field is a **technical identifier** that maps to a Java class in DM
 
 ### AI Assistants
 - **[Teammate](#teammate)** - Flexible AI teammate with custom instructions
+- **[CliAgent](#cliagent)** - Lightweight CLI-agent orchestration without a tracker ticket
 - **[Expert](#expert)** - Domain expert for answering questions
 
 ### Utilities

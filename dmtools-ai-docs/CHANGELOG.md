@@ -2,11 +2,12 @@
 
 ### Added
 
+- **New job: `CliAgent`** — lightweight CLI-agent orchestration that runs cursor-agent / claude / copilot-style tools without requiring an `inputJql` or tracker ticket. Supports setup/cache/reset hooks, `preCliJSAction`, `cliOutputLineJSAction`, `cliExecutionErrorJSAction`, `timerJSAction`, and smart input-context building from a ticket or JQL when integrations are available.
 - **Structured `cliPrompts` with named sections** — `cliPrompts` now supports a mixed array of plain strings and named section objects (`{"id": "...", "prompts": ["..."], "mergeStrategy": "append|prepend|replace"}`). This allows:
   - grouping related prompts (e.g., `input`, `output`, `template`) while preserving order
   - partial overrides when inheriting configs: sections with the same `id` are merged according to `mergeStrategy`, unnamed strings keep their position, and new items are appended to the end
   - full backward compatibility: plain string arrays are still accepted and treated as unnamed prompts
-- Updated `references/agents/teammate-configs.md` and `references/jobs/README.md` with structured `cliPrompts` documentation and inheritance examples
+- Updated `references/agents/teammate-configs.md`, `references/jobs/README.md`, and `SKILL.md` with `CliAgent` and structured `cliPrompts` documentation and inheritance examples
 
 ## [skill-v1.0.30] - 2026-07-04
 

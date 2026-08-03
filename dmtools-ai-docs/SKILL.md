@@ -1,12 +1,12 @@
 ---
 name: dmtools
-description: Comprehensive documentation and assistance for DMTools - an enterprise dark-factory orchestrator with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMTools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows, or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator jobs.
+description: Comprehensive documentation and assistance for DMTools - an enterprise dark-factory orchestrator with 328+ MCP tools for Jira, Azure DevOps, GitHub, GitLab, Figma, Confluence, Teams, and test automation. Use when working with DMTools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows (Teammate/CliAgent), or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator/CliAgent jobs.
 license: Apache-2.0
 compatibility:
   - Java 17+
   - macOS, Linux, Windows (WSL)
 metadata:
-  version: skill-v1.0.23
+  version: skill-v1.0.31
   author: DMtools Team
   repository: https://github.com/epam/dm.ai
   documentation: https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs
@@ -14,7 +14,7 @@ metadata:
 
 # DMtools Development Assistant
 
-DMTools is an enterprise dark-factory orchestrator that integrates with multiple platforms and provides 96+ MCP tools for reusable delivery automation.
+DMTools is an enterprise dark-factory orchestrator that integrates with multiple platforms and provides 328+ MCP tools for reusable delivery automation.
 
 ## 🔧 FIRST-TIME SETUP (DO THIS PROACTIVELY)
 
@@ -147,7 +147,7 @@ Use this skill when:
 - Generating analytics reports (ReportGenerator, ReportVisualizer)
 - Troubleshooting DMtools issues
 - Working with dmtools.env configuration
-- Creating AI teammate configurations
+- Creating AI teammate configurations (Teammate/CliAgent)
 - Setting up CI/CD run tracing (`ciRunUrl`) for ticket traceability
 
 ## Quick Reference
@@ -180,7 +180,7 @@ See [Installation Guide](references/installation/README.md#️-configuration-set
 
 ### Common Commands
 ```bash
-dmtools list                          # List all 96+ MCP tools
+dmtools list                          # List all 328+ MCP tools
 dmtools jira_get_ticket PROJ-123      # Get Jira ticket
 dmtools run agents/config.json        # Run configuration
 dmtools run agents/config.json --ciRunUrl "https://ci.example.com/runs/42"  # With CI tracing
@@ -189,27 +189,30 @@ dmtools run agents/config.json "${ENCODED_CONFIG}" --inputJql "key=PROJ-1"  # Wi
 
 ## Core Capabilities
 
-### 152+ MCP Tools Available
+### 328+ MCP Tools Available
 
 **Complete Reference**: [references/mcp-tools/README.md](references/mcp-tools/README.md) - Auto-generated from actual DMtools build
 
-Current breakdown (16 integrations):
-- **Jira** (52 tools): Ticket management, search, comments, Xray test management
-- **Teams** (30 tools): Messages, chats, files, transcripts, meetings
-- **Confluence** (17 tools): Page management, search, content access, attachments
-- **ADO** (31 tools): Azure DevOps work items, queries, comments, attachments, pull requests, code review threads
-- **Figma** (12 tools): Design extraction, icons, layers, styles, components
-- **AI Providers** (12 tools):
-  - Gemini (2): Chat, multimodal
-  - OpenAI (2): Chat, vision models with files
-  - Anthropic (2): Claude chat
-  - Bedrock (2): AWS Claude
-  - DIAL (2): Enterprise AI
-  - Ollama (2): Local models
+Current breakdown (20 integrations):
+- **Jira** (58 tools): Ticket management, search, comments, fields
+- **Jira Xray** (11 tools): Xray test management
+- **Teams** (28 tools): Messages, chats, files, transcripts, meetings
+- **Teams Auth** (3 tools): Teams authentication flows
+- **Confluence** (22 tools): Page management, search, content access, attachments
+- **ADO** (38 tools): Azure DevOps work items, queries, comments, attachments, pull requests, code review threads
+- **GitHub** (35 tools): Pull requests, issues, comments, workflows
+- **GitLab** (30 tools): Merge requests, issues, CI/CD pipelines
+- **Bitbucket** (1 tool): Pull request operations
+- **Figma** (22 tools): Design extraction, icons, layers, styles, components
+- **AI Providers** (15 tools): Chat, vision, and file inputs across Gemini, OpenAI, Anthropic, Bedrock, DIAL, Ollama, and Vertex
 - **Knowledge Base** (5 tools): Document search, indexing, RAG
 - **File** (4 tools): File operations, read/write
 - **Mermaid** (3 tools): Diagram generation
 - **SharePoint** (2 tools): Document management
+- **Bitrise** (24 tools): Mobile CI/CD builds and artifacts
+- **Jenkins** (7 tools): CI/CD job and build information
+- **TestRail** (16 tools): Test case and test run management
+- **Rally** (1 tool): Work item lookups
 - **CLI** (1 tool): Command execution
 
 **Example tools**:
@@ -248,12 +251,13 @@ function action(params) {
 | **Configuration** | [Configuration Overview](references/configuration/README.md) | Environment variables and hierarchy |
 | | [CLI Output Formats](references/configuration/cli-output-formats.md) | `json` / `toon` / `mini` — token savings up to 70% |
 | | [JSON Configuration Rules](references/configuration/json-config-rules.md) | **⚠️ CRITICAL**: Rules for job configurations |
-| | [Jira Setup](references/configuration/integrations/jira.md) | API tokens and 52 tools |
-| | [Azure DevOps](references/configuration/integrations/ado.md) | PAT setup and 23+ tools |
+| | [Jira Setup](references/configuration/integrations/jira.md) | API tokens and 58 tools |
+| | [Azure DevOps](references/configuration/integrations/ado.md) | PAT setup and 38+ tools |
 | | [Gemini AI](references/configuration/ai-providers/gemini.md) | Free tier configuration (15 req/min) |
 | | [Other AI Providers](references/configuration/ai-providers/) | OpenAI, Claude, DIAL, Ollama |
 | **Jobs** | [Jobs Reference](references/jobs/README.md) | Complete guide to all 23 jobs |
 | | [Teammate](references/jobs/README.md#teammate) | Flexible AI assistant with custom instructions |
+| | [CliAgent](references/jobs/README.md#cliagent) | Lightweight CLI-agent orchestration without a tracker ticket |
 | | [Expert](references/jobs/README.md#expert) | Domain expert Q&A based on project context |
 | | [TestCasesGenerator](references/jobs/README.md#testcasesgenerator) | Automated test case generation |
 | | [InstructionsGenerator](references/jobs/README.md#instructionsgenerator) | Build reusable implementation instructions from tracker tickets |
@@ -265,11 +269,11 @@ function action(params) {
 | | [ReportVisualizer](references/jobs/README.md#reportvisualizer) | Render an existing report JSON as interactive HTML |
 | | [KBProcessingJob](references/jobs/README.md#kbprocessingjob) | Process source material into knowledge-base artifacts |
 | **Agents** | [Agent Best Practices](references/agents/best-practices.md) | **⚠️ CRITICAL**: Patterns and lessons learned |
-| | [JavaScript Agents](references/agents/javascript-agents.md) | GraalJS development with 152+ MCP tools |
+| | [JavaScript Agents](references/agents/javascript-agents.md) | GraalJS development with 328+ MCP tools |
 | | [Teammate Configs](references/agents/teammate-configs.md) | JSON-based AI workflows (CLI safety v1.7.133+) |
 | | [CLI Integration](references/agents/cli-integration.md) | Cursor, Claude, Copilot, Gemini CLI agents |
 | **Testing** | [Test Generation](references/test-generation/xray-manual.md) | Xray test case creation |
-| **MCP Tools** | [MCP Tools Reference](references/mcp-tools/README.md) | Auto-generated list of 152+ tools (16 integrations) |
+| **MCP Tools** | [MCP Tools Reference](references/mcp-tools/README.md) | Auto-generated list of 328+ tools (20 integrations) |
 | **CI/CD** | [GitHub Actions](references/workflows/github-actions-teammate.md) | Automated ticket processing + CI run tracing |
 
 ## ⚠️ CRITICAL: JSON Configuration "name" Field

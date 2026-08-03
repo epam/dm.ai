@@ -134,6 +134,7 @@ public class JobRunner {
                             new com.github.istin.dmtools.reporting.ReportVisualizerJob(),
                             new Expert(),
                             new Teammate(),
+                            new CliAgent(),
                             new SourceCodeTrackerSyncJob(),
                             new SourceCodeCommitTrackerSyncJob(),
                             new UserStoryGenerator(),
