@@ -14,6 +14,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -138,7 +139,9 @@ public final class MarkdownToConfluenceStorage {
     }
 
     private static String convertHtmlToConfluenceStorage(String html) {
-        org.jsoup.nodes.Document doc = Jsoup.parseBodyFragment(html);
+        // Parse as XML so that raw CDATA sections we inject for code macros are
+        // preserved instead of being converted to HTML comments.
+        org.jsoup.nodes.Document doc = Jsoup.parse(html, "", org.jsoup.parser.Parser.xmlParser());
         doc.outputSettings()
                 .prettyPrint(false)
                 .syntax(org.jsoup.nodes.Document.OutputSettings.Syntax.xml);
@@ -148,11 +151,26 @@ public final class MarkdownToConfluenceStorage {
         convertImages(doc);
         convertLinks(doc);
 
-        Element body = doc.body();
-        String result = body != null ? body.html() : doc.html();
+        String result = fragmentHtml(doc);
         // XML syntax can leave empty element tags like <br /> with a space before />;
         // Confluence is fine with that, but normalize to a consistent form.
         return result.replaceAll("(?i)<br\\s*/?>", "<br/>");
+    }
+
+    private static String fragmentHtml(org.jsoup.nodes.Document doc) {
+        if (doc.body() != null && !doc.body().html().isBlank()) {
+            return doc.body().html();
+        }
+        // XML parser places fragment children at the document root and adds an empty
+        // synthetic <html><body> wrapper; serialize the real fragment nodes instead.
+        StringBuilder sb = new StringBuilder();
+        for (Node node : doc.childNodes()) {
+            if (node instanceof Element && "html".equals(((Element) node).tagName())) {
+                continue;
+            }
+            sb.append(node.outerHtml());
+        }
+        return sb.toString();
     }
 
     /**

@@ -10,6 +10,8 @@ import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.parser.Parser;
 import org.jsoup.select.Elements;
 
 import java.util.ArrayList;
@@ -278,10 +280,7 @@ public final class ConfluenceStorageMarkdown {
         Section preamble = new Section(null, null);
         sections.add(preamble);
         Section current = preamble;
-        if (doc.body() == null) {
-            return sections;
-        }
-        for (Element el : doc.body().children()) {
+        for (Element el : fragmentRootElements(doc)) {
             if (isHeading(el)) {
                 current = new Section(normalizeHeadingText(el.text()), el);
                 sections.add(current);
@@ -290,6 +289,20 @@ public final class ConfluenceStorageMarkdown {
             }
         }
         return sections;
+    }
+
+    private static List<Element> fragmentRootElements(Document doc) {
+        if (doc.body() != null && !doc.body().children().isEmpty()) {
+            return doc.body().children();
+        }
+        List<Element> result = new ArrayList<>();
+        for (Element el : doc.children()) {
+            if ("html".equals(el.tagName())) {
+                continue;
+            }
+            result.add(el);
+        }
+        return result;
     }
 
     private static boolean isHeading(Element el) {
@@ -581,13 +594,29 @@ public final class ConfluenceStorageMarkdown {
     }
 
     private static Document parseFragment(String html) {
-        Document doc = Jsoup.parseBodyFragment(html);
+        // Confluence Storage Format is XML (with custom ac:/ri: namespaces) and
+        // may contain CDATA sections. Parsing it as XML preserves both the custom
+        // tags and CDATA content; the HTML parser treats CDATA as a bogus comment
+        // starting with jsoup 1.23.
+        Document doc = Jsoup.parse(html, "", Parser.xmlParser());
         doc.outputSettings().prettyPrint(false);
         return doc;
     }
 
     private static String bodyHtml(Document doc) {
-        return doc.body() != null ? doc.body().html() : doc.html();
+        if (doc.body() != null && !doc.body().html().isBlank()) {
+            return doc.body().html();
+        }
+        // XML parser places fragment children at the document root and adds an empty
+        // synthetic <html><body> wrapper; serialize the real fragment nodes instead.
+        StringBuilder sb = new StringBuilder();
+        for (Node node : doc.childNodes()) {
+            if (node instanceof Element && "html".equals(((Element) node).tagName())) {
+                continue;
+            }
+            sb.append(node.outerHtml());
+        }
+        return sb.toString();
     }
 
 }
