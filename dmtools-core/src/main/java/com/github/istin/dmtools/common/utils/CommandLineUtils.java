@@ -13,10 +13,14 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 public class CommandLineUtils {
 
@@ -62,7 +66,7 @@ public class CommandLineUtils {
      */
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv)
             throws IOException, InterruptedException {
-        return runCommand(command, workingDirectory, additionalEnv, null);
+        return runCommand(command, workingDirectory, additionalEnv, null, true, null, -1);
     }
 
     /**
@@ -84,7 +88,7 @@ public class CommandLineUtils {
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
                                     Consumer<String> lineConsumer)
             throws IOException, InterruptedException {
-        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, -1);
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, true, null, -1);
     }
 
     /**
@@ -110,9 +114,89 @@ public class CommandLineUtils {
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
                                     Consumer<String> lineConsumer, int maxLinesToLog)
             throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, true, null, maxLinesToLog);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * and optional shell-injection validation bypass.
+     *
+     * @param command The command to run
+     * @param workingDirectory The working directory for the command (null to use current directory)
+     * @param additionalEnv Additional environment variables to set
+     * @param lineConsumer Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     *                        Use only for trusted job configs where arbitrary shell syntax is required.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand, null, -1);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * optional shell-injection validation bypass, and an optional per-line stop predicate.
+     *
+     * @param command           The command to run
+     * @param workingDirectory  The working directory for the command (null to use current directory)
+     * @param additionalEnv     Additional environment variables to set
+     * @param lineConsumer      Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand   When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     * @param lineStopPredicate Optional predicate called for each output line; returning {@code true} stops
+     *                          the command and throws {@link CliExecutionStoppedException}.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand, lineStopPredicate, -1);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * optional shell-injection validation bypass, optional per-line stop predicate, and
+     * a cap on how many output lines get logged at INFO level by default.
+     *
+     * @param command           The command to run
+     * @param workingDirectory  The working directory for the command (null to use current directory)
+     * @param additionalEnv     Additional environment variables to set
+     * @param lineConsumer      Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand   When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     * @param lineStopPredicate Optional predicate called for each output line; returning {@code true} stops
+     *                          the command and throws {@link CliExecutionStoppedException}.
+     * @param maxLinesToLog     Caps how many output lines are logged at INFO level when
+     *                          DMTOOLS_JS_LOG_TOOL_CALLS is not enabled. Use -1 for no cap.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate, int maxLinesToLog)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand,
+                lineStopPredicate, maxLinesToLog, null, null);
+    }
+
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate, int maxLinesToLog,
+                                    String[] excludedEnvVariables, String[] excludedEnvRegexes)
+            throws IOException, InterruptedException {
 
         logger.debug("Running command: {}", SecurityUtils.maskCommand(command));
-        validateNoShellInjection(command);
+        if (validateCommand) {
+            validateNoShellInjection(command);
+        } else {
+            logger.info("Skipping shell-injection validation for command: {}", SecurityUtils.maskCommand(command));
+        }
 
         // Write command to a temp shell script to avoid shell-escaping issues with
         // special characters (em-dash, embedded quotes, etc.) in the command string.
@@ -142,6 +226,8 @@ public class CommandLineUtils {
         if (additionalEnv != null && !additionalEnv.isEmpty()) {
             processBuilder.environment().putAll(additionalEnv);
         }
+        removeExcludedEnvironmentVariables(
+                processBuilder.environment(), excludedEnvVariables, excludedEnvRegexes);
 
         // Merge stdout and stderr so all output is captured
         processBuilder.redirectErrorStream(true);
@@ -171,6 +257,7 @@ public class CommandLineUtils {
                     logger.info("... output truncated after {} line(s); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output ...", maxLinesToLog);
                     truncationNoticeLogged = true;
                 }
+
                 output.append(line).append(System.lineSeparator());
                 if (lineConsumer != null) {
                     try {
@@ -178,6 +265,12 @@ public class CommandLineUtils {
                     } catch (Exception e) {
                         logger.warn("lineConsumer threw exception on line, ignoring: {}", e.getMessage());
                     }
+                }
+                if (lineStopPredicate != null && lineStopPredicate.test(line)) {
+                    logger.warn("Line stop predicate returned true on line, terminating process: {}", line);
+                    process.destroyForcibly();
+                    throw new CliExecutionStoppedException(
+                            "CLI execution stopped by line callback at line: " + line, line);
                 }
             }
         }
@@ -195,6 +288,33 @@ public class CommandLineUtils {
         }
 
         return output.toString().trim();
+    }
+
+    static void removeExcludedEnvironmentVariables(Map<String, String> environment,
+                                                   String[] excludedEnvVariables,
+                                                   String[] excludedEnvRegexes) {
+        if (environment == null || environment.isEmpty()) {
+            return;
+        }
+        if (excludedEnvVariables != null) {
+            for (String name : excludedEnvVariables) {
+                if (name != null && !name.isBlank()) {
+                    environment.remove(name);
+                }
+            }
+        }
+        List<Pattern> patterns = new ArrayList<>();
+        if (excludedEnvRegexes != null) {
+            for (String regex : excludedEnvRegexes) {
+                if (regex != null && !regex.isBlank()) {
+                    patterns.add(Pattern.compile(regex));
+                }
+            }
+        }
+        if (!patterns.isEmpty()) {
+            environment.keySet().removeIf(name ->
+                    patterns.stream().anyMatch(pattern -> pattern.matcher(name).matches()));
+        }
     }
 
     /**
