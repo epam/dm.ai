@@ -1,12 +1,12 @@
 ---
 name: dmtools
-description: Comprehensive documentation and assistance for DMTools - an enterprise dark-factory orchestrator with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMTools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows, or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator jobs.
+description: Comprehensive documentation and assistance for DMTools - an enterprise dark-factory orchestrator with 96+ MCP tools for Jira, Azure DevOps, Figma, Confluence, Teams, and test automation. Use when working with DMTools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows (Teammate/CliAgent), or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator/CliAgent jobs.
 license: Apache-2.0
 compatibility:
   - Java 17+
   - macOS, Linux, Windows (WSL)
 metadata:
-  version: skill-v1.0.23
+  version: skill-v1.0.31
   author: DMtools Team
   repository: https://github.com/epam/dm.ai
   documentation: https://github.com/epam/dm.ai/tree/main/dmtools-ai-docs
@@ -147,7 +147,7 @@ Use this skill when:
 - Generating analytics reports (ReportGenerator, ReportVisualizer)
 - Troubleshooting DMtools issues
 - Working with dmtools.env configuration
-- Creating AI teammate configurations
+- Creating AI teammate configurations (Teammate/CliAgent)
 - Setting up CI/CD run tracing (`ciRunUrl`) for ticket traceability
 
 ## Quick Reference
@@ -252,8 +252,9 @@ function action(params) {
 | | [Azure DevOps](references/configuration/integrations/ado.md) | PAT setup and 23+ tools |
 | | [Gemini AI](references/configuration/ai-providers/gemini.md) | Free tier configuration (15 req/min) |
 | | [Other AI Providers](references/configuration/ai-providers/) | OpenAI, Claude, DIAL, Ollama |
-| **Jobs** | [Jobs Reference](references/jobs/README.md) | Complete guide to all 23 jobs |
+| **Jobs** | [Jobs Reference](references/jobs/README.md) | Complete guide to all 24 jobs |
 | | [Teammate](references/jobs/README.md#teammate) | Flexible AI assistant with custom instructions |
+| | [CliAgent](references/jobs/README.md#cliagent) | Lightweight CLI-agent orchestration without a tracker ticket |
 | | [Expert](references/jobs/README.md#expert) | Domain expert Q&A based on project context |
 | | [TestCasesGenerator](references/jobs/README.md#testcasesgenerator) | Automated test case generation |
 | | [InstructionsGenerator](references/jobs/README.md#instructionsgenerator) | Build reusable implementation instructions from tracker tickets |
