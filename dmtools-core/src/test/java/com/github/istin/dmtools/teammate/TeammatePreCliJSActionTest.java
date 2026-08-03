@@ -136,7 +136,7 @@ public class TeammatePreCliJSActionTest {
         params.setCliCommands(new String[]{"echo ok"});
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                 .thenReturn("ok\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                 .thenReturn(Map.of());
@@ -151,7 +151,7 @@ public class TeammatePreCliJSActionTest {
         params.setCliCommands(new String[]{"echo ok"});
 
         try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                 .thenReturn("ok\nExit Code: 0");
             mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                 .thenReturn(Map.of());
@@ -188,7 +188,7 @@ public class TeammatePreCliJSActionTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -253,7 +253,7 @@ public class TeammatePreCliJSActionTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -261,7 +261,7 @@ public class TeammatePreCliJSActionTest {
                 assertDoesNotThrow(() -> spy.runJobImpl(params));
 
                 // CLI command must NOT have been executed — the JS setup failure is a hard stop.
-                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any()), never());
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);
@@ -288,14 +288,14 @@ public class TeammatePreCliJSActionTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
 
                 assertDoesNotThrow(() -> spy.runJobImpl(params));
 
-                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any()), never());
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);
@@ -326,14 +326,14 @@ public class TeammatePreCliJSActionTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
 
                 assertDoesNotThrow(() -> spy.runJobImpl(params));
 
-                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any()), never());
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);
@@ -364,14 +364,14 @@ public class TeammatePreCliJSActionTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
 
                 assertDoesNotThrow(() -> spy.runJobImpl(params));
 
-                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any()));
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()));
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);
@@ -397,7 +397,7 @@ public class TeammatePreCliJSActionTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -405,7 +405,7 @@ public class TeammatePreCliJSActionTest {
                 assertDoesNotThrow(() -> spy.runJobImpl(params));
 
                 // CLI command must still run: no return value = success, same as pre-fix behavior.
-                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any()));
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()));
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);

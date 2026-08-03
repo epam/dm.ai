@@ -217,9 +217,36 @@ public class RunCommandProcessor {
             root.put(JobParams.PARAMS, params);
         }
         for (Map.Entry<String, String> entry : cliOverrides.entrySet()) {
-            params.put(entry.getKey(), entry.getValue());
+            params.put(entry.getKey(), parseCliOverrideValue(entry.getValue()));
         }
         logger.info("Applied {} CLI override(s) to params block: {}", cliOverrides.size(), cliOverrides.keySet());
         return root.toString();
+    }
+
+    /**
+     * Parses a CLI override value. If it looks like a JSON array or object, it is parsed
+     * and returned as a {@link JSONArray} / {@link JSONObject}; otherwise it is kept as a string.
+     * This allows overrides like --cliCommands '["cursor-agent"]' to be deserialized into
+     * array fields.
+     */
+    private Object parseCliOverrideValue(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return value;
+        }
+        String trimmed = value.trim();
+        if (trimmed.startsWith("[")) {
+            try {
+                return new org.json.JSONArray(trimmed);
+            } catch (Exception e) {
+                // Not a valid JSON array — keep as string
+            }
+        } else if (trimmed.startsWith("{")) {
+            try {
+                return new org.json.JSONObject(trimmed);
+            } catch (Exception e) {
+                // Not a valid JSON object — keep as string
+            }
+        }
+        return value;
     }
 }
