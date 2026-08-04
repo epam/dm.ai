@@ -7,6 +7,7 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.confluence.model.Storage;
+import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
@@ -154,6 +155,38 @@ class CliAgentTest {
 
             mocked.verify(() -> CommandLineUtils.runCommand(eq("echo setup"), any(), any(), any(), eq(false)));
             mocked.verify(() -> CommandLineUtils.runCommand(eq("echo reset"), any(), any(), any(), eq(false)));
+        }
+    }
+
+    @Test
+    void testPreJSActionReceivesTrackerClient() throws Exception {
+        Path script = tempDir.resolve("preAction.js");
+        Files.writeString(script, "function action(params) { jira_search_by_jql({jql: 'key = PROJ-1', fields: ['summary']}); return {success: true}; }");
+
+        CliAgentParams params = new CliAgentParams();
+        params.setCliCommands(new String[]{"echo hello"});
+        params.setPreJSAction(script.toString());
+        params.setOutputType(TrackerParams.OutputType.none);
+        params.setRequireCliOutputFile(false);
+        params.setCleanupInputFolder(true);
+        params.setWorkingDirectory(tempDir.toString());
+
+        CliAgent agent = buildAgent();
+        JiraClient trackerClient = mock(JiraClient.class);
+        ITicket ticket = mockTicket("PROJ-1", "Summary");
+        when(trackerClient.searchAndPerform(eq("key = PROJ-1"), aryEq(new String[]{"summary"})))
+                .thenReturn(List.of(ticket));
+        agent.trackerClient = trackerClient;
+
+        try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+            mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("hello\nExit Code: 0");
+            mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+            agent.runJobImpl(params);
+
+            verify(trackerClient).searchAndPerform(eq("key = PROJ-1"), aryEq(new String[]{"summary"}));
         }
     }
 
