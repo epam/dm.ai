@@ -278,7 +278,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
     private JavaScriptExecutor prepareJsExecutor(String script, CliAgentParams params, String response,
                                                   Map<String, Object> extraBindings, ITicket ticket) {
         JavaScriptExecutor executor = js(script)
-                .mcp(null, ai, confluence, null)
+                .mcp(trackerClient, ai, confluence, null)
                 .withJobContext(params, ticket, response);
         if (params.getCustomParams() != null && !params.getCustomParams().isEmpty()) {
             executor.with("customParams", params.getCustomParams());
