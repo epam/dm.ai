@@ -1,0 +1,232 @@
+---
+import '../styles/tokens.css';
+import '../styles/base.css';
+import '../styles/sections.css';
+import '../styles/docs.css';
+import '../styles/a11y.css';
+
+import Analytics from '../components/Analytics.astro';
+import Brand from '../components/Brand.astro';
+import { meta, basePath, REPO, DOCS, organization, lastModified } from '../data/content';
+import { buildNav, hrefOf, ROOT_ID } from '../lib/docs';
+import type { MarkdownHeading } from 'astro';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Collection id; ROOT_ID is the docs index. */
+  id: string;
+  headings?: MarkdownHeading[];
+  /** The file this page was rendered from, so a reader can go and fix it. */
+  sourcePath?: string;
+}
+
+const { title, description, id, headings = [], sourcePath } = Astro.props;
+
+const isRoot = id === ROOT_ID;
+// hrefOf, not the id: the root's id is the literal "index".
+const canonical = new URL(hrefOf(id, basePath), Astro.site).href;
+const siteHome = new URL(basePath, Astro.site).href;
+const nav = await buildNav(basePath);
+
+// h2 and h3 only — these pages run to four levels, which is too deep to scan.
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+
+const crumbs = [
+  { label: 'DMTools', href: basePath },
+  { label: 'Docs', href: `${basePath}docs/` },
+  ...(isRoot ? [] : [{ label: title, href: canonical }]),
+];
+
+const schema = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'TechArticle',
+      '@id': `${canonical}#article`,
+      headline: title,
+      description,
+      inLanguage: meta.lang,
+      dateModified: lastModified,
+      url: canonical,
+      isPartOf: { '@id': `${siteHome}#website` },
+      about: { '@id': `${siteHome}#dmtools` },
+      // The same @id the home page mints for the publisher. Without it this is
+      // an anonymous second Organization, so the sameAs links that identify
+      // EPAM never reach the docs pages; with it, the two merge into one entity.
+      publisher: {
+        '@type': 'Organization',
+        '@id': `${siteHome}#organization`,
+        name: organization.name,
+        url: organization.url,
+      },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumbs`,
+      itemListElement: crumbs.map((crumb, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: crumb.label,
+        item: new URL(crumb.href, Astro.site).href,
+      })),
+    },
+  ],
+};
+---
+
+<!DOCTYPE html>
+<html lang={meta.lang} data-theme="night">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>{title} — DMTools docs</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonical} />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content={meta.siteName} />
+  <meta property="og:title" content={`${title} — DMTools docs`} />
+  <meta property="og:description" content={description} />
+  <meta property="og:url" content={canonical} />
+
+  <meta name="theme-color" content={meta.themeColor} />
+  <link rel="icon" href={`${basePath}assets/favicon.svg`} type="image/svg+xml" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@100..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <script is:inline>
+    (function () {
+      try {
+        var stored = localStorage.getItem('dmtools-theme');
+        if (stored) document.documentElement.dataset.theme = stored;
+      } catch (e) { /* private mode keeps the default */ }
+    })();
+  </script>
+
+  <Analytics />
+
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} is:inline />
+</head>
+
+<body class="docs">
+  <a class="skip-link" href="#doc">Skip to content</a>
+
+  <header class="nav docs__bar">
+    <div class="docs__barInner">
+      <Brand href={basePath} label="DMTools — back to the landing page" />
+      <span class="docs__barTag">Docs</span>
+
+      <div class="docs__barActions">
+        <a class="docs__barLink" href={REPO} target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn--sm nav__cta" href={`${basePath}#install`}>Install DMTools</a>
+        <button class="docs__menuBtn" id="docs-menu" type="button"
+                aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-side">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+            <path d="M3 6h18M3 12h18M3 18h18"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs__shell">
+    <aside class="docs__side" id="docs-side">
+      <nav aria-label="Documentation">
+        {nav.map((section) => (
+          <div class="docs__group">
+            <p class="docs__groupTitle">{section.label}</p>
+            <ul class="docs__list">
+              {section.items.map((item) => (
+                <li>
+                  <a
+                    class="docs__link"
+                    href={item.href}
+                    aria-current={item.id === id ? 'page' : undefined}
+                  >{item.title}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </aside>
+
+    <main class="docs__main" id="doc">
+      <nav class="docs__crumbs" aria-label="Breadcrumb">
+        {crumbs.map((crumb, i) => (
+          <>
+            {i > 0 && <span aria-hidden="true">/</span>}
+            {i === crumbs.length - 1
+              ? <span aria-current="page">{crumb.label}</span>
+              : <a href={crumb.href}>{crumb.label}</a>}
+          </>
+        ))}
+      </nav>
+
+      <article class="prose">
+        <slot />
+      </article>
+
+      {sourcePath && (
+        <footer class="docs__foot">
+          <a class="textlink" href={`${REPO}/blob/main/dmtools-ai-docs/${sourcePath}`} target="_blank" rel="noopener">
+            Edit this page on GitHub →
+          </a>
+          <p class="docs__footNote">
+            Rendered from <code>dmtools-ai-docs/{sourcePath}</code>, the same Markdown the
+            DMTools agent skill reads. Last updated <time datetime={lastModified}>{lastModified}</time>.
+          </p>
+        </footer>
+      )}
+    </main>
+
+    {toc.length > 1 && (
+      <aside class="docs__toc" aria-label="On this page">
+        <p class="docs__groupTitle">On this page</p>
+        <ul class="docs__tocList">
+          {toc.map((h) => (
+            <li class={`docs__tocItem docs__tocItem--${h.depth}`}>
+              <a href={`#${h.slug}`}>{h.text}</a>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    )}
+  </div>
+
+  <footer class="docs__pageFoot">
+    <div class="docs__barInner">
+      <p>© 2026 EPAM Systems, Inc. DMTools is open source software, Apache 2.0.</p>
+      <a class="docs__barLink" href={DOCS} target="_blank" rel="noopener">Docs source</a>
+    </div>
+  </footer>
+
+  <script>
+    const btn = document.getElementById('docs-menu');
+    const side = document.getElementById('docs-side');
+
+    if (btn && side) {
+      btn.addEventListener('click', () => {
+        const open = document.body.classList.toggle('is-nav-open');
+        btn.setAttribute('aria-expanded', String(open));
+        btn.setAttribute('aria-label', open ? 'Close documentation menu' : 'Open documentation menu');
+      });
+
+      // Every item in the panel navigates, so a click always ends its job.
+      side.addEventListener('click', (event) => {
+        if (!(event.target as Element).closest('a')) return;
+        document.body.classList.remove('is-nav-open');
+        btn.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    // Bring the current entry into view in a 60-item list.
+    document.querySelector('.docs__link[aria-current="page"]')
+      ?.scrollIntoView({ block: 'center' });
+  </script>
+</body>
+</html>

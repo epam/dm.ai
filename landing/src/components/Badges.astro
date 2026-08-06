@@ -1,0 +1,20 @@
+---
+const REPO = 'https://github.com/epam/dm.ai';
+
+const badges = [
+  { label: 'release', value: 'latest', href: `${REPO}/releases/latest` },
+  { label: 'license', value: 'Apache 2.0', href: `${REPO}/blob/main/LICENSE` },
+  { label: 'Java', value: '17+', href: 'https://adoptium.net/' },
+  { label: 'stars', value: 'GitHub', href: `${REPO}/stargazers` },
+  { label: 'forks', value: 'GitHub', href: `${REPO}/network/members` },
+];
+---
+
+<div class="badges" aria-label="Project badges">
+  {badges.map((badge) => (
+    <a class="badge" href={badge.href} target="_blank" rel="noopener">
+      <span class="badge__label">{badge.label}</span>
+      <span class="badge__value">{badge.value}</span>
+    </a>
+  ))}
+</div>

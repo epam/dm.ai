@@ -1,0 +1,29 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+import { paths } from '../data/content';
+---
+
+<section class="band band--tint" id="paths">
+  <div class="shell">
+    <SectionHead eyebrow="Adoption">
+      <Fragment slot="headline">
+        Adopt it <span class="accent">your way</span>.
+      </Fragment>
+      <Fragment slot="subhead">
+        Start from the terminal today and stop there if that's enough. Each path stands
+        on its own, and each one is a step you can take without a platform migration.
+      </Fragment>
+    </SectionHead>
+
+    <div class="paths">
+      {paths.map((path, i) => (
+        <article class="path reveal" data-delay={i > 0 ? i : undefined}>
+          <span class="path__index">{String(i + 1).padStart(2, '0')}</span>
+          <h3 class="path__title">{path.title}</h3>
+          <p class="path__desc">{path.desc}</p>
+          <a class="textlink" href={path.link.href} target="_blank" rel="noopener">{path.link.label}</a>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>

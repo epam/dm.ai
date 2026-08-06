@@ -1,0 +1,27 @@
+---
+/**
+ * The gtag block, in one place because both layouts need it. It used to sit in
+ * Layout.astro alone, which left every page rendered through Doc.astro — the
+ * whole reference section — uncounted.
+ *
+ * Read through process.env, not import.meta.env: an unknown import.meta.env key
+ * breaks Vite's dev-mode SSR transform ("Cannot split a chunk that has already
+ * been edited"). Unset, nothing below is rendered and the page ships no
+ * tracking at all. A GA4 id is public once served, so it is a repository
+ * variable rather than a secret.
+ */
+const gaId = process.env.GA_MEASUREMENT_ID;
+---
+
+{gaId && (
+  <>
+    <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>
+    {/* Written out rather than passed through define:vars, which would wrap
+        the body in a function and leave gtag local — the snippet declares it
+        globally, and a later gtag('event', …) needs it. */}
+    <script is:inline set:html={`window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', ${JSON.stringify(gaId)});`} />
+  </>
+)}

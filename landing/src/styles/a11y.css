@@ -1,0 +1,37 @@
+/* Motion and print preferences — must load last
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md.
+
+   These override .reveal, .bar__fill and .flow__arrow::after at equal
+   specificity, so they only win by coming after every section file. */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  .bar__fill { transform: scaleX(var(--w, 1)); }
+  .flow__arrow::after { transform: scale(1); }
+  .chain__break::after { transform: translate(-50%, -50%) scale(1); }
+
+  /* The blooms and the wire flow are ambient — they have no end state worth
+     snapping to, so they stop rather than jump. */
+  .hero__glow, .bridge__wire path { animation: none !important; }
+}
+
+@media print {
+  .nav, .toast, .hero__glow, .close__glow { display: none; }
+  body { background: #fff; color: #000; }
+
+  /* Gradient text is a transparent fill over a clipped background, and print
+     drops the background — which leaves the headline keyword and every counted
+     figure as blank space on the page. Put the ink back. */
+  .accent, .figure__value {
+    background: none;
+    -webkit-text-fill-color: #000;
+    color: #000;
+  }
+}

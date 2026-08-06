@@ -1,0 +1,17 @@
+---
+import { asset } from '../data/content';
+
+interface Props {
+  href?: string;
+  label?: string;
+}
+
+const { href, label } = Astro.props;
+const Tag = href ? 'a' : 'div';
+---
+
+<Tag class="brand" href={href} aria-label={label}>
+  <img class="brand__epam" src={asset('assets/epam_logo_white.svg')} alt="EPAM" width="59" height="22" />
+  <span class="brand__rule" aria-hidden="true"></span>
+  <span class="brand__name">DMTools</span>
+</Tag>

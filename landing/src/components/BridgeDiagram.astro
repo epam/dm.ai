@@ -1,0 +1,93 @@
+---
+import { aiProviders, deliverySystems } from '../data/content';
+
+/**
+ * Many agents converge on one layer, one layer fans out to many systems.
+ * Coordinates are derived, so adding an integration to content.ts moves the
+ * diagram with it.
+ *
+ * The SVG is decorative: the fallback lists below carry the same names to
+ * assistive technology in a linear order.
+ */
+const HUB = { x: 500, y: 285 };
+const NODE = { w: 240, h: 46, rx: 23 };
+const AI_X = 40;
+const SYS_X = 720;
+
+/** The AI column is evenly spaced; the systems column fills the same height with two more rows. */
+const aiY = (i: number) => 62 + i * 80;
+const sysY = (i: number) => Math.round(47 + (i * 430) / (deliverySystems.shown.length - 1));
+
+const centre = (y: number) => y + NODE.h / 2;
+const label = (y: number) => y + 30;
+
+const aiNodes = aiProviders.shown.map((name, i) => ({ name, y: aiY(i) }));
+const sysNodes = deliverySystems.shown.map((name, i) => ({ name, y: sysY(i) }));
+
+const alsoSupported = [...aiProviders.also, ...deliverySystems.also];
+const alsoSentence = `${alsoSupported.slice(0, -1).join(', ')} and ${alsoSupported.at(-1)}`;
+
+const allAi = [...aiProviders.shown, ...aiProviders.also].join(' · ');
+const allSystems = [...deliverySystems.shown, ...deliverySystems.also].join(' · ');
+---
+
+<div class="bridge reveal" data-delay="2">
+  <svg class="bridge__svg" viewBox="0 0 1000 580" role="presentation" focusable="false" aria-hidden="true">
+    <defs>
+      <radialGradient id="bridgeCore">
+        <stop offset="0" stop-color="var(--sea)" stop-opacity="0.30"></stop>
+        <stop offset="1" stop-color="var(--sea)" stop-opacity="0"></stop>
+      </radialGradient>
+      {/* Hard-coded rather than var(--grad): SVG cannot read a CSS gradient,
+           only a colour. The three stops mirror Night's --grad in tokens.css
+           and have to be changed with it — the hub is the largest painted
+           instance of the brand sweep on the page, so a stale copy here reads
+           as two different gradients rather than one. */}
+      <linearGradient id="bridgeHubFill" x1="0" y1="0" x2="1" y2="0.35">
+        <stop offset="0" stop-color="#00FFF0"></stop>
+        <stop offset="0.45" stop-color="#00F6FF"></stop>
+        <stop offset="1" stop-color="#B896FF"></stop>
+      </linearGradient>
+    </defs>
+
+    {/* Drawn first so the hub and the pills paint over their tails. */}
+    <g class="bridge__wire">
+      {aiNodes.map(({ y }) => (
+        <path d={`M288 ${centre(y)} C380 ${centre(y)} 408 ${HUB.y} ${HUB.x} ${HUB.y}`} />
+      ))}
+      {sysNodes.map(({ y }) => (
+        <path d={`M${HUB.x} ${HUB.y} C592 ${HUB.y} 620 ${centre(y)} 712 ${centre(y)}`} />
+      ))}
+    </g>
+
+    <circle cx={HUB.x} cy={HUB.y} r="202" fill="url(#bridgeCore)" class="bridge__bloom"></circle>
+    <circle cx={HUB.x} cy={HUB.y} r="78" class="bridge__hub"></circle>
+    <text x={HUB.x} y={HUB.y + 7} class="bridge__hubLabel">DMTools</text>
+
+    <text x={AI_X + NODE.w / 2} y="28" class="bridge__col">{aiProviders.label}</text>
+    <text x={SYS_X + NODE.w / 2} y="28" class="bridge__col">{deliverySystems.label}</text>
+
+    {aiNodes.map(({ name, y }) => (
+      <g class="bridge__node bridge__node--ai">
+        <rect x={AI_X} y={y} width={NODE.w} height={NODE.h} rx={NODE.rx} />
+        <text x={AI_X + NODE.w / 2} y={label(y)}>{name}</text>
+      </g>
+    ))}
+
+    {sysNodes.map(({ name, y }) => (
+      <g class="bridge__node bridge__node--sys">
+        <rect x={SYS_X} y={y} width={NODE.w} height={NODE.h} rx={NODE.rx} />
+        <text x={SYS_X + NODE.w / 2} y={label(y)}>{name}</text>
+      </g>
+    ))}
+  </svg>
+
+  <div class="bridge__fallback">
+    <p class="bridge__group">{aiProviders.label}</p>
+    <p class="bridge__names">{allAi}</p>
+    <p class="bridge__group">Delivery and collaboration</p>
+    <p class="bridge__names">{allSystems}</p>
+  </div>
+
+  <p class="bridge__more">Plus {alsoSentence} — 20+ integrations in all.</p>
+</div>

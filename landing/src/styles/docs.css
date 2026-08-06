@@ -1,0 +1,408 @@
+/* Documentation — shell, navigation and prose
+   Loaded only by Doc.astro, after sections.css and before a11y.css, so it can
+   lean on the tokens and the .btn/.nav rules the landing page already defines.
+   See landing/README.md for the cascade. */
+
+/* --------------------------------------------------------------------------
+   D1. Shell
+   -------------------------------------------------------------------------- */
+
+/* Wider than --shell: three columns do not fit the landing page's 1180px. */
+.docs {
+  --docs-shell: 1560px;
+  --docs-side: 17rem;
+  --docs-toc: 13rem;
+  --docs-bar: 4rem;
+}
+
+.docs__bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.docs__barInner {
+  max-width: var(--docs-shell);
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  height: var(--docs-bar);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.docs__barTag {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sea-ink);
+}
+
+.docs__barActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.docs__barLink {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color 0.2s var(--ease);
+}
+.docs__barLink:hover { color: var(--sea-ink); }
+
+.docs__menuBtn {
+  display: none;
+  width: 2.375rem;
+  height: 2.375rem;
+  place-items: center;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+.docs__shell {
+  max-width: var(--docs-shell);
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  display: grid;
+  grid-template-columns: var(--docs-side) minmax(0, 1fr) var(--docs-toc);
+  gap: clamp(1.5rem, 3vw, 3rem);
+  align-items: start;
+}
+
+/* --------------------------------------------------------------------------
+   D2. Side navigation
+   -------------------------------------------------------------------------- */
+
+/* Its own scroll region: sixty entries outrun most documents. */
+.docs__side {
+  position: sticky;
+  top: var(--docs-bar);
+  max-height: calc(100vh - var(--docs-bar));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2rem 0.5rem 3rem 0;
+  border-right: 1px solid var(--hairline);
+}
+
+.docs__group + .docs__group { margin-top: 1.75rem; }
+
+.docs__groupTitle {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sea-ink);
+  margin-bottom: 0.65rem;
+}
+
+.docs__list { list-style: none; display: grid; gap: 0.1rem; }
+
+.docs__link {
+  display: block;
+  padding: 0.32rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--muted);
+  transition: color 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+
+.docs__link:hover { color: var(--text); background: var(--surface); }
+
+/* Hangs off aria-current, so there is no second class to keep in step. */
+.docs__link[aria-current='page'] {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: inset 2px 0 0 var(--sea-ink);
+}
+
+/* --------------------------------------------------------------------------
+   D3. Main column
+   -------------------------------------------------------------------------- */
+
+.docs__main { padding: 2rem 0 5rem; min-width: 0; }
+
+.docs__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+.docs__crumbs a { color: var(--muted); }
+.docs__crumbs a:hover { color: var(--sea-ink); }
+
+.docs__foot {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.docs__footNote {
+  margin-top: 0.85rem;
+  font-size: 0.8125rem;
+  color: var(--faint);
+  line-height: 1.6;
+}
+.docs__footNote code { font-size: 0.78rem; color: var(--muted); }
+
+.docs__pageFoot {
+  border-top: 1px solid var(--hairline);
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+.docs__pageFoot .docs__barInner { justify-content: space-between; }
+
+/* --------------------------------------------------------------------------
+   D4. Contents
+   -------------------------------------------------------------------------- */
+
+.docs__toc {
+  position: sticky;
+  top: var(--docs-bar);
+  max-height: calc(100vh - var(--docs-bar));
+  overflow-y: auto;
+  padding: 2rem 0 3rem;
+  font-size: 0.8125rem;
+}
+
+.docs__tocList { list-style: none; display: grid; gap: 0.4rem; }
+
+.docs__tocItem a {
+  color: var(--muted);
+  line-height: 1.45;
+  transition: color 0.2s var(--ease);
+}
+.docs__tocItem a:hover { color: var(--sea-ink); }
+.docs__tocItem--3 { padding-left: 0.85rem; font-size: 0.78rem; }
+
+/* --------------------------------------------------------------------------
+   D5. Prose
+   -------------------------------------------------------------------------- */
+
+.prose { max-width: 78ch; }
+
+.prose > * + * { margin-top: 1.15rem; }
+
+.prose h1 {
+  font-size: clamp(2rem, 3.6vw, 2.9rem);
+  font-weight: 200;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.5rem;
+}
+
+.prose h2 {
+  font-size: clamp(1.4rem, 2.2vw, 1.85rem);
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.prose h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 2.25rem;
+}
+
+.prose h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-top: 1.75rem;
+  color: var(--muted);
+}
+
+/* Clears the sticky bar, so a jump from the contents list does not land the
+   heading underneath it. */
+.prose :is(h1, h2, h3, h4) { scroll-margin-top: calc(var(--docs-bar) + 1rem); }
+
+.prose p, .prose li { line-height: 1.75; }
+
+/* grid for the gap, but an auto track sizes to max-content: one item holding an
+   unbroken identifier widened the column and put a scrollbar on the page at
+   390px. minmax(0, 1fr) is what stops the track growing past its container. */
+.prose :is(ul, ol) {
+  padding-left: 1.35rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+}
+.prose li::marker { color: var(--faint); }
+
+/* These pages are full of unbroken identifiers — jira_add_fix_version, env var
+   names, URLs — which otherwise push the column open. */
+.prose { overflow-wrap: break-word; }
+
+.prose a {
+  color: var(--sea-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--sea-ink) 40%, transparent);
+  transition: text-decoration-color 0.2s var(--ease);
+}
+.prose a:hover { text-decoration-color: currentColor; }
+
+.prose strong { font-weight: 700; color: var(--text); }
+
+/* Inline code, distinct from a block: a tinted chip rather than a panel. */
+.prose :not(pre) > code {
+  padding: 0.12em 0.36em;
+  border-radius: 4px;
+  background: var(--surface-alt);
+  font-size: 0.86em;
+  color: var(--text);
+  word-break: break-word;
+}
+
+/* Shiki writes the background; the border makes it a panel like the landing
+   page's, and the scroll keeps a long command from widening the column. */
+.prose pre {
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+.prose pre code { background: none; padding: 0; font-size: inherit; }
+
+.prose blockquote {
+  padding: 0.9rem 1.25rem;
+  border-left: 2px solid var(--sea-ink);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface);
+  color: var(--muted);
+}
+.prose blockquote > * + * { margin-top: 0.6rem; }
+
+/* Most of the tool reference is tables, several wider than the column. */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.prose :is(th, td) {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom-color: var(--hairline-strong);
+}
+
+.prose td code { white-space: nowrap; }
+
+.prose hr { border: 0; border-top: 1px solid var(--hairline); margin: 2.5rem 0; }
+
+.prose img { border-radius: var(--radius-sm); }
+
+/* --------------------------------------------------------------------------
+   D6. Index page
+   -------------------------------------------------------------------------- */
+
+.docs__index { margin-top: 2rem; display: grid; gap: 2.5rem; }
+
+.docs__indexTitle {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sea-ink);
+  margin-bottom: 1rem;
+}
+
+.docs__indexList {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+
+.docs__indexList li {
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+}
+.docs__indexList li:hover { border-color: var(--sea-ink); transform: translateY(-2px); }
+
+.docs__indexLink {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.docs__indexDesc {
+  margin-top: 0.4rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   D7. Narrow screens
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1280px) {
+  .docs__shell { grid-template-columns: var(--docs-side) minmax(0, 1fr); }
+  .docs__toc { display: none; }
+}
+
+@media (max-width: 900px) {
+  .docs__shell { grid-template-columns: minmax(0, 1fr); }
+  .docs__menuBtn { display: grid; }
+
+  /* Off-canvas, so the page behind it does not move under the reader. */
+  .docs__side {
+    position: fixed;
+    inset: var(--docs-bar) auto 0 0;
+    z-index: 90;
+    width: min(20rem, 84vw);
+    max-height: none;
+    padding: 1.5rem 1rem 3rem;
+    background: var(--canvas);
+    border-right: 1px solid var(--hairline);
+    transform: translateX(-101%);
+    visibility: hidden;
+    transition: transform 0.28s var(--ease), visibility 0.28s;
+  }
+
+  .is-nav-open .docs__side { transform: none; visibility: visible; }
+  .is-nav-open { overflow: hidden; }
+
+  .docs__main { padding-top: 1.5rem; }
+  .prose table { white-space: normal; }
+}
