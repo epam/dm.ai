@@ -23,5 +23,8 @@
     "@types/react-dom": "^19.0.0",
     "astro": "^7.2.0",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "sharp": "^0.35.3"
   }
 }
