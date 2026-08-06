@@ -1,0 +1,11 @@
+name: "DMTools CodeQL configuration"
+
+# CodeQL's default setup scans the whole checkout, including git worktrees
+# that contain copies of the same source files. That produces duplicate-class
+# warnings and makes analysis slower. Exclude the local worktree directory and
+# build artifacts while keeping all tracked source code.
+paths-ignore:
+  - '.worktrees/**'
+  - '**/build/**'
+  - 'landing/dist/**'
+  - '**/.gradle/**'
