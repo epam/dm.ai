@@ -12,16 +12,18 @@ const playerUrl = `${filmEmbedUrl}?autoplay=1&rel=0`;
   <div class="hero__glow hero__glow--b" aria-hidden="true"></div>
 
   <div class="shell hero__inner">
+    <div class="hero__signals">
+      <p class="hero__meta reveal">
+        {metaBadges.map((badge) => <span>{badge}</span>)}
+      </p>
+
+      <div class="hero__badges reveal" data-delay="1">
+        <Badges />
+      </div>
+    </div>
+
     <div class="hero__lead">
       <div class="hero__content">
-        <p class="hero__meta reveal">
-          {metaBadges.map((badge) => <span>{badge}</span>)}
-        </p>
-
-        <div class="hero__badges reveal" data-delay="1">
-          <Badges />
-        </div>
-
         <h1 class="display hero__title reveal" data-delay="1">
           Every enterprise wants an <span class="accent">AI factory</span>.
         </h1>

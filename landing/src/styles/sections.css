@@ -235,10 +235,10 @@
    -------------------------------------------------------------------------- */
 
 .badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.7rem;
+  width: 100%;
 }
 
 /* Custom pill badges styled to match the page rather than third-party shields.
@@ -247,7 +247,9 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  height: 1.75rem;
+  justify-content: space-between;
+  width: 100%;
+  height: 2rem;
   border-radius: 999px;
   overflow: hidden;
   border: 1px solid var(--hairline-strong);
@@ -266,14 +268,28 @@
 }
 
 .badge__label {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 1;
   padding: 0 0.55rem;
   color: var(--muted);
   background: var(--surface-alt);
 }
 
 .badge__value {
+  flex: 0 0 auto;
   padding: 0 0.65rem;
   color: var(--text);
+}
+
+@media (max-width: 960px) {
+  .badges { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .badges { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+  .badge { font-size: 0.6875rem; }
 }
 
 /* ===== hero ===== */
@@ -342,6 +358,10 @@
 
 .hero__inner { position: relative; z-index: 1; }
 
+.hero__signals {
+  margin-bottom: clamp(3.5rem, 7vw, 6rem);
+}
+
 .hero__lead {
   display: grid;
   grid-template-columns: minmax(0, 6.4fr) minmax(22rem, 5.6fr);
@@ -374,7 +394,7 @@
 }
 
 .hero__badges {
-  margin-bottom: 2rem;
+  width: 100%;
 }
 
 /* No ch cap. `ch` measures the active font, and with font-display: swap 15ch
