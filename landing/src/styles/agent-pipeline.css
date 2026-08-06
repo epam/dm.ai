@@ -11,6 +11,9 @@
   --ap-accent: var(--sea-ink);
   --ap-glow-a: var(--glow-a);
   --ap-glow-b: var(--glow-b);
+  --ap-status-bg: #DDF5EE;
+  --ap-status-border: #008F78;
+  --ap-status-text: #063D33;
 
   padding: var(--band-top) 0 var(--band-bottom);
   border-top: 1px solid var(--ap-line);
@@ -29,6 +32,9 @@
   --ap-line: var(--hairline-strong);
   --ap-line-soft: color-mix(in srgb, var(--hairline) 55%, transparent);
   --ap-accent: var(--sea);
+  --ap-status-bg: rgba(6, 44, 35, 0.92);
+  --ap-status-border: rgba(0, 255, 190, 0.72);
+  --ap-status-text: #FFFFFF;
 }
 
 .agent-pipeline-section .section-copy {
@@ -323,8 +329,9 @@
 
 .agent-node.status-node {
   min-height: 82px;
-  border-color: rgba(0, 255, 190, 0.72);
-  background: rgba(6, 44, 35, 0.92);
+  border-color: var(--ap-status-border);
+  color: var(--ap-status-text);
+  background: var(--ap-status-bg);
   box-shadow: 0 0 24px rgba(0, 255, 190, 0.12);
 }
 

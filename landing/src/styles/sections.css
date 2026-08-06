@@ -167,11 +167,11 @@
 .theme-switch__track {
   display: block;
   width: 3.25rem;
-  height: 1.75rem;
-  padding: 0.1875rem;
-  border: 1px solid var(--hairline-strong);
+  height: 1.875rem;
+  padding: 0.125rem;
+  border: 2px solid #B8B8B8;
   border-radius: 999px;
-  background: var(--surface-alt);
+  background: var(--canvas);
   transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease);
 }
 
@@ -182,34 +182,23 @@
   width: 1.375rem;
   height: 1.375rem;
   border-radius: 50%;
-  background: var(--text);
-  color: var(--canvas);
+  background: #060606;
+  color: #FFFFFF;
   transform: translateX(0);
   transition: transform 0.25s var(--ease), background-color 0.2s var(--ease), color 0.2s var(--ease);
 }
 
-.theme-switch__icon { display: block; }
+.theme-switch__icon { display: block; width: 14px; height: 14px; }
 .theme-switch__icon--moon { display: none; }
 
 [data-theme='night'] .theme-switch__thumb {
-  transform: translateX(1.5rem);
+  color: #060606;
+  background: #FFFFFF;
+  transform: translateX(1.375rem);
 }
 
 [data-theme='night'] .theme-switch__icon--sun { display: none; }
 [data-theme='night'] .theme-switch__icon--moon { display: block; }
-
-/* Decorative language selector and search icon, mapped from epam.com header. */
-.nav__lang {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--text);
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: 0.035em;
-  white-space: nowrap;
-  cursor: default;
-}
 
 .nav__search {
   display: grid;
@@ -229,7 +218,6 @@
 
 @media (max-width: 760px) {
   .nav__inner { height: 4.75rem; padding-inline: 1rem; }
-  .nav__lang,
   .nav__search,
   .nav__cta { display: none; }
   .brand__epam { width: 62px; }
@@ -431,18 +419,17 @@
   line-height: 1.5;
 }
 
-/* Under the headline rather than beside it, so the display size is untouched. */
-.hero__proof {
+.cli-proof {
   display: grid;
   grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
   gap: clamp(1.5rem, 3.5vw, 3rem);
   align-items: start;
   padding-top: 2.5rem;
   border-top: 1px solid var(--hairline);
-  margin-top: clamp(4rem, 8vw, 7rem);
+  margin-top: clamp(4rem, 7vw, 6rem);
 }
 
-.hero__stats {
+.cli-proof__stats {
   display: grid;
   gap: 2.25rem;
 }
@@ -550,9 +537,8 @@
   .hero__lead { grid-template-columns: 1fr; }
   .hero__title { max-width: 14ch; }
   .hero__film { width: 100%; justify-self: start; }
-  /* Figures side by side rather than stacked under a full-width panel. */
-  .hero__proof { grid-template-columns: 1fr; gap: 2rem; }
-  .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+  .cli-proof { grid-template-columns: 1fr; gap: 2rem; }
+  .cli-proof__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
 }
 
 @media (max-width: 720px) {
