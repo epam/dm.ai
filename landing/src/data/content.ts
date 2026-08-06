@@ -140,10 +140,10 @@ export const footerColumns: FooterColumn[] = [
   {
     title: 'Docs',
     links: [
-      { label: 'Installation', href: `${DOCS}/references/installation` },
-      { label: 'Configuration', href: `${DOCS}/references/configuration` },
-      { label: 'MCP tools', href: `${DOCS}/references/mcp-tools` },
-      { label: 'Jobs and agents', href: `${DOCS}/references/jobs` },
+      { label: 'Installation', href: `${basePath}docs/references/installation/` },
+      { label: 'Configuration', href: `${basePath}docs/references/configuration/` },
+      { label: 'MCP tools', href: `${basePath}docs/references/mcp-tools/` },
+      { label: 'Jobs and agents', href: `${basePath}docs/references/jobs/` },
     ],
   },
   {
@@ -277,26 +277,25 @@ export const paths: AdoptionPath[] = [
   {
     title: 'CLI and MCP tools',
     desc: 'Run direct tool calls against every connected system from your terminal. 320+ tools, available the moment you install.',
-    link: { label: 'MCP tools reference →', href: `${DOCS}/references/mcp-tools` },
+    link: { label: 'MCP tools reference →', href: `${basePath}docs/references/mcp-tools/` },
   },
   {
     title: 'Jobs and agents',
     desc: 'Orchestrate real workflows — AI teammate, reporting, test generation, story development — in plain JavaScript.',
-    link: { label: 'Jobs reference →', href: `${DOCS}/references/jobs` },
+    link: { label: 'Jobs reference →', href: `${basePath}docs/references/jobs/` },
   },
   {
     title: 'CI/CD pipelines',
     desc: 'Run DMTools in GitHub Actions, GitLab CI, Jenkins or Bitrise for ticket processing and teammate flows at scale.',
-    // A file, so /blob/ — DOCS points at /tree/, which is for directories.
     link: {
       label: 'GitHub Actions guide →',
-      href: `${REPO}/blob/main/dmtools-ai-docs/references/workflows/github-actions-teammate.md`,
+      href: `${basePath}docs/references/workflows/github-actions-teammate/`,
     },
   },
   {
     title: 'Agent skills',
     desc: 'Install project-level DMTools skills for Cursor, Claude, Codex and Copilot. The agents your teams already use gain full delivery reach.',
-    link: { label: 'Skill guide →', href: `${REPO}/blob/main/dmtools-ai-docs/SKILL.md` },
+    link: { label: 'Skill guide →', href: `${basePath}docs/skill/` },
   },
 ];
 

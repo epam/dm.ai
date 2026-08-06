@@ -8,11 +8,13 @@ import { navLinks } from '../data/content';
     <div class="nav__left">
       <button class="nav__menu" id="nav-burger" type="button"
               aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
-        <svg class="nav__menuOpen" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 6h18M3 12h18M3 18h18"></path>
+        <svg class="nav__menuOpen" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <rect x="2" y="5" width="18" height="1.5" rx="0" fill="currentColor"/>
+          <rect x="2" y="10.25" width="18" height="1.5" rx="0" fill="currentColor"/>
+          <rect x="2" y="15.5" width="18" height="1.5" rx="0" fill="currentColor"/>
         </svg>
-        <svg class="nav__menuClose" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M5 5l14 14M19 5L5 19"></path>
+        <svg class="nav__menuClose" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <path d="M5 5L17 17M17 5L5 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/>
         </svg>
       </button>
 
@@ -42,7 +44,15 @@ import { navLinks } from '../data/content';
     <div class="nav__actions">
       <button class="theme-switch" id="theme-toggle" type="button" aria-label="Switch colour theme">
         <span class="theme-switch__track" aria-hidden="true">
-          <span class="theme-switch__dot"></span>
+          <span class="theme-switch__thumb">
+            <svg class="theme-switch__icon theme-switch__icon--sun" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="5"></circle>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+            </svg>
+            <svg class="theme-switch__icon theme-switch__icon--moon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </span>
         </span>
       </button>
 
@@ -50,13 +60,13 @@ import { navLinks } from '../data/content';
 
       <div class="nav__lang" aria-label="Language">
         <span>Global (EN)</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 9l6 6 6-6"></path>
         </svg>
       </div>
 
       <a class="nav__search" href="https://github.com/epam/dm.ai" target="_blank" rel="noopener" aria-label="DMTools on GitHub">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="8"></circle>
           <path d="M21 21l-4.35-4.35"></path>
         </svg>

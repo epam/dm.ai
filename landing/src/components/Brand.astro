@@ -1,7 +1,6 @@
 ---
-// Set in type, not shipped as a logo file, so no trademark asset lives in this
-// repository. An href makes it the header's link home; without one it is the
-// footer's static mark.
+import { asset } from '../data/content';
+
 interface Props {
   href?: string;
   label?: string;
@@ -12,7 +11,7 @@ const Tag = href ? 'a' : 'div';
 ---
 
 <Tag class="brand" href={href} aria-label={label}>
-  <span class="brand__epam">&lt;epam&gt;</span>
+  <img class="brand__epam" src={asset('assets/epam_logo_white.svg')} alt="EPAM" width="59" height="22" />
   <span class="brand__rule" aria-hidden="true"></span>
   <span class="brand__name">DMTools</span>
 </Tag>

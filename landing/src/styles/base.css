@@ -133,10 +133,10 @@ h3 { font-weight: 400; }
 }
 
 .subhead {
-  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  font-size: clamp(1.05rem, 1.45vw, 1.3rem);
   font-weight: 300;
   color: var(--muted);
-  line-height: 1.55;
+  line-height: 1.6;
   max-width: 60ch;
 }
 

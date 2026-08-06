@@ -11,14 +11,12 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background: color-mix(in srgb, var(--canvas) 86%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid transparent;
+  /* epam.com's header is opaque: it sits on the canvas as a solid bar, not a
+     frosted overlay, so the contents read at full contrast against it. */
+  background: var(--canvas);
+  border-bottom: 1px solid var(--hairline);
   transition: border-color 0.3s var(--ease), background-color 0.35s var(--ease);
 }
-
-.nav.is-stuck { border-bottom-color: var(--hairline); }
 
 .nav__inner {
   max-width: var(--shell);
@@ -34,7 +32,7 @@
 .nav__left {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: 1rem;
   flex-shrink: 0;
 }
 
@@ -43,12 +41,15 @@
    stays as a visual anchor on desktop. */
 .nav__menu {
   display: grid;
-  width: 2.375rem;
-  height: 2.375rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
   color: var(--text);
   flex-shrink: 0;
+  transition: color 0.2s var(--ease);
 }
+
+.nav__menu:hover { color: var(--sea-ink); }
 
 .nav__menuClose { display: none; }
 .nav.is-open .nav__menuOpen { display: none; }
@@ -67,15 +68,11 @@
   flex-shrink: 0;
 }
 
-/* Wordmark set in type rather than a logo file — no trademark asset shipped.
-   Lowercase inside angle brackets, as epam.com sets it; the brackets are part
-   of the mark, so the tracking stays tight rather than the wide caps this
-   used to carry. */
 .brand__epam {
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1;
+  display: block;
+  width: 59px;
+  height: 22px;
+  line-height: 0;
 }
 
 .brand__rule {
@@ -88,19 +85,20 @@
   font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.015em;
+  color: var(--text);
 }
 
 .nav__links {
   display: flex;
   align-items: center;
-  gap: clamp(1rem, 2.4vw, 2.25rem);
+  gap: clamp(1.25rem, 2.6vw, 2.5rem);
 }
 
 /* epam.com sets its header links bold and at full contrast rather than as
    quiet grey — the header is a wayfinding bar there, not a footnote. */
 .nav__link {
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text);
   position: relative;
   padding: 0.35rem 0;
@@ -112,56 +110,47 @@
   content: '';
   position: absolute;
   left: 0; bottom: 0;
-  width: 100%; height: 1px;
-  background: var(--text);
+  width: 100%; height: 2px;
+  background: var(--sea-ink);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.3s var(--ease), background-color 0.2s var(--ease);
 }
 
-/* --sea-ink, not --sea: at 15px these need 4.5:1 and Snow's --sea gives 4.01:1.
-   The underline takes the accent with the label. */
 .nav__link:hover { opacity: 1; color: var(--sea-ink); }
-.nav__link:hover::after { transform: scaleX(1); background: var(--sea-ink); }
+.nav__link:hover::after { transform: scaleX(1); }
 
 /* Scroll spy. The reader always knows which section they are standing in, so
    the underline is the same mark hover uses — one vocabulary, two triggers. */
-.nav__link.is-current { opacity: 1; }
-.nav__link.is-current::after { transform: scaleX(1); }
+.nav__link.is-current { opacity: 1; color: var(--text); }
+.nav__link.is-current::after { transform: scaleX(1); background: var(--text); }
 
 /* --------------------------------------------------------------------------
-   5a. Header CTA — gradient-outlined pill
+   5a. Header CTA — solid pill
    -------------------------------------------------------------------------- */
 
-/* epam.com's CONTACT US: a pill with a gradient edge and no fill. Two
-   backgrounds in one box — a flat one clipped to the padding box, the brand
-   gradient clipped to the border box — leave the border showing as gradient,
-   which border-color cannot do on its own. 2px because at one pixel the three
-   stops have too little width to separate. */
+/* epam.com's CONTACT US: a solid white pill on a dark header. We keep the
+   gradient accent so it stays on-brand for DMTools, but the shape is the same
+   rounded pill with bold tracking. */
 .nav__cta {
   border-radius: 999px;
-  border: 2px solid transparent;
-  color: var(--text);
+  color: var(--btn-ink);
   font-weight: 700;
   letter-spacing: 0.02em;
-  background-image: linear-gradient(var(--canvas), var(--canvas)), var(--grad);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  transition: color 0.2s var(--ease), opacity 0.2s var(--ease);
+  background: var(--grad-btn);
+  transition: transform 0.2s var(--ease), filter 0.2s var(--ease);
 }
 
-/* Filling the pill on hover would need a second gradient and a repaint; fading
-   the flat layer lets the one already painted underneath show through. */
-.nav__cta:hover { opacity: 0.82; }
+.nav__cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
 
 .nav__actions {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: 1rem;
 }
 
-/* epam.com uses a horizontal pill switch with a dot instead of a moon icon.
-   The dot slides to the right in Night mode and stays left in Snow mode. */
+/* epam.com uses a horizontal pill switch with a sliding thumb. The thumb shows
+   a sun icon for light/snow and a moon icon for dark/night. */
 .theme-switch {
   display: grid;
   place-items: center;
@@ -171,8 +160,8 @@
 
 .theme-switch__track {
   display: block;
-  width: 3rem;
-  height: 1.625rem;
+  width: 3.5rem;
+  height: 1.875rem;
   padding: 0.1875rem;
   border: 1px solid var(--hairline-strong);
   border-radius: 999px;
@@ -180,29 +169,38 @@
   transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease);
 }
 
-.theme-switch__dot {
-  display: block;
-  width: 1.125rem;
-  height: 1.125rem;
+.theme-switch__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
-  background: var(--sea-ink);
+  background: var(--text);
+  color: var(--canvas);
   transform: translateX(0);
-  transition: transform 0.25s var(--ease), background-color 0.2s var(--ease);
+  transition: transform 0.25s var(--ease), background-color 0.2s var(--ease), color 0.2s var(--ease);
 }
 
-[data-theme='night'] .theme-switch__dot {
-  background: var(--sea);
-  transform: translateX(1.375rem);
+.theme-switch__icon { display: block; }
+.theme-switch__icon--moon { display: none; }
+
+[data-theme='night'] .theme-switch__thumb {
+  transform: translateX(1.625rem);
 }
+
+[data-theme='night'] .theme-switch__icon--sun { display: none; }
+[data-theme='night'] .theme-switch__icon--moon { display: block; }
 
 /* Decorative language selector and search icon, mapped from epam.com header. */
 .nav__lang {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   color: var(--text);
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: default;
 }
 
@@ -241,10 +239,6 @@
     align-items: stretch;
     gap: 0;
     padding: 0 var(--gutter) 0.5rem;
-    /* Opaque, and no backdrop-filter of its own. .nav already declares one,
-       which makes it a backdrop root: a filter on a descendant then samples
-       nothing and blurs nothing, so a translucent panel just showed the page
-       text straight through the menu. */
     background: var(--canvas);
     border-bottom: 1px solid var(--hairline);
     box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.45);
@@ -290,23 +284,39 @@
   align-items: center;
 }
 
+/* Custom pill badges styled to match the page rather than third-party shields.
+   The dark value section carries the brand gradient on hover so the row feels
+   alive without looking like a strip of foreign images. */
 .badge {
   display: inline-flex;
-  line-height: 0;
-  border-radius: 4px;
+  align-items: center;
+  height: 1.75rem;
+  border-radius: 999px;
   overflow: hidden;
-  transition: transform 0.2s var(--ease), opacity 0.2s var(--ease);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 
 .badge:hover {
   transform: translateY(-1px);
-  opacity: 0.9;
+  border-color: var(--hairline-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
-.badge img {
-  height: 22px;
-  width: auto;
-  display: block;
+.badge__label {
+  padding: 0 0.55rem;
+  color: var(--muted);
+  background: var(--surface-alt);
+}
+
+.badge__value {
+  padding: 0 0.65rem;
+  color: var(--text);
 }
 
 /* ===== hero ===== */
@@ -674,11 +684,11 @@
 
 .chain__node {
   padding: 1.05rem 1.35rem;
-  border: 1px dashed var(--hairline-strong);
+  border: 1px solid var(--hairline-strong);
   border-radius: var(--radius);
   background: var(--surface);
-  color: var(--muted);
-  font-size: 0.875rem;
+  color: var(--text);
+  font-size: 0.9375rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -719,8 +729,9 @@
    contrast. */
 .chain__caption {
   margin-top: 1.25rem;
-  font-size: 0.85rem;
-  color: var(--muted);
+  font-size: 0.875rem;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .pullquote {
@@ -728,10 +739,11 @@
   padding-left: clamp(1.25rem, 3vw, 2.5rem);
   border-left: 2px solid var(--text);
   font-size: clamp(1.25rem, 2.4vw, 1.85rem);
-  font-weight: 200;
+  font-weight: 300;
   line-height: 1.45;
   letter-spacing: -0.02em;
   max-width: 42ch;
+  color: var(--text);
 }
 
 /* Stack the chain rather than let it wrap: a wrapped row can strand a
