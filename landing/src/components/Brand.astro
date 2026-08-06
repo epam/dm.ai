@@ -4,14 +4,24 @@ import { asset } from '../data/content';
 interface Props {
   href?: string;
   label?: string;
+  /** Force a logo variant. Default follows the active colour theme. */
+  logo?: 'auto' | 'light' | 'dark';
 }
 
-const { href, label } = Astro.props;
+const { href, label, logo = 'auto' } = Astro.props;
 const Tag = href ? 'a' : 'div';
 ---
 
 <Tag class="brand" href={href} aria-label={label}>
-  <img class="brand__epam" src={asset('assets/epam_logo_white.svg')} alt="EPAM" width="59" height="22" />
+  {logo === 'auto' ? (
+    <>
+      <img class="brand__epam brand__epam--auto-light" src={asset('assets/epam_logo_white.svg')} alt="EPAM" width="59" height="22" />
+      <img class="brand__epam brand__epam--auto-dark" src={asset('assets/epam_logo_dark.svg')} alt="EPAM" width="59" height="22" />
+    </>
+  ) : (
+    <img class={`brand__epam brand__epam--${logo}`} src={asset(logo === 'light' ? 'assets/epam_logo_white.svg' : 'assets/epam_logo_dark.svg')} alt="EPAM" width="59" height="22" />
+  )}
   <span class="brand__rule" aria-hidden="true"></span>
+  <img class="brand__mark" src={asset('assets/favicon.svg')} alt="" width="34" height="34" />
   <span class="brand__name">DMTools</span>
 </Tag>

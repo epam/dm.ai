@@ -195,6 +195,33 @@
 
 .prose > * + * { margin-top: 1.15rem; }
 
+.prose .doc-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 0.92em;
+  height: 0.92em;
+  margin-right: 0.32em;
+  padding: 0.16em;
+  border: 1px solid color-mix(in srgb, var(--sea-ink) 42%, var(--hairline));
+  border-radius: 0.24em;
+  color: var(--sea-ink);
+  background: color-mix(in srgb, var(--sea-ink) 8%, var(--surface));
+  box-sizing: content-box;
+  vertical-align: -0.16em;
+}
+
+.prose .doc-icon svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.prose h1 .doc-icon,
+.prose h2 .doc-icon {
+  color: var(--sea-ink);
+  background: color-mix(in srgb, var(--sea-ink) 10%, var(--canvas));
+}
+
 .prose h1 {
   font-size: clamp(2rem, 3.6vw, 2.9rem);
   font-weight: 200;
