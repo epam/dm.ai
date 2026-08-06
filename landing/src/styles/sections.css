@@ -75,6 +75,20 @@
   line-height: 0;
 }
 
+/* Auto-variant follows the active theme. */
+.brand__epam--auto-dark { display: none; }
+
+[data-theme='night'] .brand__epam--auto-light { display: block; }
+[data-theme='night'] .brand__epam--auto-dark { display: none; }
+
+/* Snow theme: swap to the dark logo so it stays visible on the light canvas. */
+[data-theme='snow'] .brand__epam--auto-light { display: none; }
+[data-theme='snow'] .brand__epam--auto-dark { display: block; }
+
+/* Forced variants always show their single logo. */
+.brand__epam--light,
+.brand__epam--dark { display: block; }
+
 .brand__rule {
   width: 1px;
   height: 1.15rem;

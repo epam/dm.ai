@@ -295,19 +295,21 @@ export function AgentPipelineGraph() {
 
   return (
     <section className="agent-pipeline-section" id="agent-pipeline">
-      <div className="section-heading narrow">
-        <p className="eyebrow">Agent pipeline</p>
-        <h2>Example agent pipeline</h2>
-        <p className="section-copy">
-          A story does not move through one generic prompt. It passes through focused agent
-          configurations that clarify requirements, prepare solution context, implement code,
-          review the pull request, handle rework, generate tests, and close the tracking loop
-          only after the delivery signals line up.
-        </p>
+      <div className="shell agent-pipeline__copy">
+        <div className="section-heading narrow">
+          <p className="eyebrow">Agent pipeline</p>
+          <h2 className="headline">Example agent pipeline</h2>
+          <p className="section-copy">
+            A story does not move through one generic prompt. It passes through focused agent
+            configurations that clarify requirements, prepare solution context, implement code,
+            review the pull request, handle rework, generate tests, and close the tracking loop
+            only after the delivery signals line up.
+          </p>
+        </div>
       </div>
 
       <div
-        className="agent-graph-shell"
+        className="agent-graph-shell shell"
         ref={graphShellRef}
         style={{ '--phase-count': pipelinePhases.length } as CSSProperties}
       >

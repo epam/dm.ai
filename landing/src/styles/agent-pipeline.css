@@ -12,12 +12,17 @@
   --ap-glow-a: var(--glow-a);
   --ap-glow-b: var(--glow-b);
 
+  padding: var(--band-top) 0 var(--band-bottom);
   border-top: 1px solid var(--ap-line);
   background:
     linear-gradient(90deg, var(--ap-line-soft) 1px, transparent 1px),
     linear-gradient(180deg, var(--ap-line-soft) 1px, transparent 1px),
     var(--canvas);
   background-size: 44px 44px;
+}
+
+.agent-pipeline__copy {
+  margin-bottom: 2.5rem;
 }
 
 [data-theme='night'] .agent-pipeline-section {
