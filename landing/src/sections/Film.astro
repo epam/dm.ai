@@ -1,0 +1,72 @@
+---
+import PlayIcon from '../components/PlayIcon.astro';
+import { film, filmEmbedUrl, asset } from '../data/content';
+
+/** autoplay is what makes the click that loads the player also start it. */
+const playerUrl = `${filmEmbedUrl}?autoplay=1&rel=0`;
+---
+
+<section class="band band--flush" id="film">
+  <div class="shell">
+    <p class="eyebrow eyebrow--rule reveal">See it in motion</p>
+
+    <div class="video__frame reveal" id="video" data-video-url={playerUrl}>
+      <!-- The frame YouTube uses, fetched once and served from here rather than
+           hotlinked: the poster matches the video, and no request reaches Google
+           until the visitor actually presses play. -->
+      <img class="video__poster" src={asset(film.poster)}
+           alt={film.posterAlt}
+           width="1280" height="720" loading="lazy" decoding="async" />
+      <div class="video__body">
+        <button class="video__play" id="video-play" type="button" aria-label="Play the DMTools introduction film">
+          <PlayIcon size={26} />
+        </button>
+      </div>
+    </div>
+
+    <p class="video__note reveal">
+      Scene source and brief live in
+      <a class="textlink" href={film.sourceUrl} target="_blank" rel="noopener">yoclip-examples</a>
+      — EPAM 2023 brand system, nine scenes, dual Night and Snow variants.
+    </p>
+  </div>
+</section>
+
+<script>
+  import { showToast } from '../scripts/shared';
+
+  const frame = document.getElementById('video');
+  const play = document.getElementById('video-play');
+
+  if (frame && play) {
+    play.addEventListener('click', () => {
+      const url = (frame.dataset.videoUrl ?? '').trim();
+
+      if (!url) {
+        showToast('Film link not published yet');
+        return;
+      }
+
+      // Clears the poster and the play control before the player takes the frame.
+      frame.replaceChildren();
+
+      if (/\.(mp4|webm)$/i.test(url)) {
+        const video = document.createElement('video');
+        video.src = url;
+        video.controls = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        frame.append(video);
+        return;
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.src = url;
+      iframe.title = 'DMTools film';
+      iframe.allow =
+        'accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture';
+      iframe.allowFullscreen = true;
+      frame.append(iframe);
+    });
+  }
+</script>

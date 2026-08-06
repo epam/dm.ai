@@ -1,0 +1,60 @@
+# DMTools
+
+> DMTools is an open-source command-line orchestrator that connects AI agents to
+> enterprise delivery systems. It exposes 320+ tools across 20+ integrations —
+> Jira, Azure DevOps, GitHub, GitLab, Confluence, Figma, Microsoft Teams and
+> every major AI provider — behind a single CLI. Built and maintained by EPAM
+> Systems, released under Apache 2.0.
+
+DMTools requires Java 17 or newer and installs with one command on Linux, macOS
+and Windows. It runs no server and keeps no agent process alive: the CLI is
+installed fresh on each run, which is what makes it safe to drop into CI. Every
+tool is generated from annotated Java at compile time, so the CLI surface, the
+MCP schema and the JavaScript functions available to agents never drift apart.
+
+The same tool set is reachable four ways: direct CLI calls, MCP for assistants
+such as Claude and Cursor, plain JavaScript functions inside jobs, and CI
+pipelines on GitHub Actions, GitLab CI, Jenkins or Bitrise.
+
+## Documentation
+
+Served as HTML on this site, rendered from the same Markdown the DMTools agent
+skill reads. Relative links, because this file is static and a fork publishes
+under /<repo>/.
+
+- [Documentation index](docs/): every reference page, grouped by section
+- [Skill entry point](docs/skill/): how an AI agent installs and uses DMTools in a project
+- [Installation](docs/references/installation/): install script, requirements, troubleshooting
+- [Configuration](docs/references/configuration/): environment variables per integration and per AI provider
+- [MCP tools reference](docs/references/mcp-tools/): every tool with its parameters, grouped by integration
+- [Jobs](docs/references/jobs/): the job system and its configuration
+- [Agents](docs/references/agents/javascript-agents/): JavaScript agents and orchestration
+- [GitHub Actions teammate](docs/references/workflows/github-actions-teammate/): running DMTools on ticket state changes
+
+## Integrations
+
+- Trackers: Jira, Azure DevOps, Rally
+- Source control: GitHub, GitLab, Bitbucket
+- Documentation: Confluence, SharePoint
+- Design: Figma
+- Collaboration: Microsoft Teams
+- Testing: TestRail, Jira Xray
+- CI/CD: GitHub Actions, GitLab CI, Jenkins, Bitrise
+- AI providers: Anthropic Claude, OpenAI, Google Gemini, Google Vertex AI, AWS Bedrock, Ollama, EPAM DIAL
+
+## Cost
+
+DMTools is free and open source under Apache 2.0. There is no paid tier, no
+licence key and no account. You pay only your own AI provider and the delivery
+tools you already licence; there is no DMTools-operated service in between.
+
+- [Pricing](pricing.md): the same answer as data, for an agent comparing tools
+
+  Relative on purpose. This file is static, so it cannot know the base path,
+  and a fork publishes under /<repo>/ — a leading slash would point at the
+  origin root and miss.
+
+## Source
+
+- [Repository](https://github.com/epam/dm.ai): source, issues, releases
+- [Licence](https://github.com/epam/dm.ai/blob/main/LICENSE): Apache 2.0

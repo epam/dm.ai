@@ -1,0 +1,97 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+import CopyButton from '../components/CopyButton.astro';
+import { installTabs, verifyCommand, DOCS } from '../data/content';
+---
+
+<section class="band" id="install">
+  <div class="shell">
+    <SectionHead eyebrow="Install">
+      <Fragment slot="headline">
+        <span class="accent">One command</span>.
+      </Fragment>
+      <Fragment slot="subhead">
+        No account, no licence key, no server. Pick your platform and paste.
+      </Fragment>
+    </SectionHead>
+
+    <div class="reveal">
+      <div class="tabs" role="tablist" aria-label="Installation method">
+        {installTabs.map((tab, i) => (
+          <button
+            class:list={['tab', i === 0 && 'is-active']}
+            role="tab"
+            type="button"
+            id={`tab-${tab.id}`}
+            aria-controls={`panel-${tab.id}`}
+            aria-selected={i === 0 ? 'true' : 'false'}
+            data-panel={tab.id}
+          >{tab.label}</button>
+        ))}
+      </div>
+
+      {installTabs.map((tab, i) => (
+        <div
+          class:list={['panel', i === 0 && 'is-active']}
+          role="tabpanel"
+          id={`panel-${tab.id}`}
+          aria-labelledby={`tab-${tab.id}`}
+          hidden={i !== 0}
+        >
+          <div class="cmd">
+            <code id={`cmd-${tab.id}`}>{tab.command}</code>
+            <CopyButton target={`cmd-${tab.id}`} label="Copy install command" />
+          </div>
+          <p class="panel__hint" set:html={tab.hint}></p>
+        </div>
+      ))}
+    </div>
+
+    <!-- Ends on a check, not on a copied command the reader cannot verify. -->
+    <div class="install__next reveal">
+      <p class="install__nextTitle">Then check it landed</p>
+      <div class="cmd">
+        <code id="cmd-verify">{verifyCommand}</code>
+        <CopyButton target="cmd-verify" label="Copy verification command" />
+      </div>
+      <p class="panel__hint">
+        Prints every tool the CLI can reach. Nothing listed means the integrations
+        still need credentials —
+        <a class="textlink" href={`${DOCS}/references/configuration`} target="_blank" rel="noopener">configuration guide →</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<script>
+  /** Install-command tablist, including the arrow-key behaviour a tablist owes. */
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('.tab')];
+
+  if (tabs.length) {
+    const select = (tab: HTMLButtonElement) => {
+      tabs.forEach((other) => {
+        const isTarget = other === tab;
+        other.classList.toggle('is-active', isTarget);
+        other.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+
+        const panel = document.getElementById(`panel-${other.dataset.panel}`);
+        if (!panel) return;
+        panel.classList.toggle('is-active', isTarget);
+        (panel as HTMLElement).hidden = !isTarget;
+      });
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => select(tab));
+
+      tab.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        event.preventDefault();
+        const step = event.key === 'ArrowRight' ? 1 : -1;
+        const next = tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length]!;
+        select(next);
+        next.focus();
+      });
+    });
+  }
+</script>

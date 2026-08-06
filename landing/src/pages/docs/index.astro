@@ -1,0 +1,57 @@
+---
+import { getCollection, render } from 'astro:content';
+import Doc from '../../layouts/Doc.astro';
+import { summaryOf, buildNav, ROOT_ID } from '../../lib/docs';
+import { basePath } from '../../data/content';
+
+const docs = await getCollection('docs');
+const root = docs.find((doc) => doc.id === ROOT_ID);
+const rendered = root ? await render(root) : null;
+
+const nav = await buildNav(basePath);
+const sections = nav.filter((section) => section.label !== 'Overview');
+
+// Counted from what actually rendered, so the figure cannot drift from the set
+// of pages the build produced.
+const total = docs.length;
+
+const summaries = new Map(docs.map((doc) => [doc.id, summaryOf(doc)]));
+---
+
+<Doc
+  title="Documentation"
+  description={`Reference documentation for DMTools — installation, configuration, the MCP tool reference across every integration, jobs, agents and CI workflows. ${total} pages, rendered from the repository.`}
+  id={ROOT_ID}
+  headings={rendered?.headings ?? []}
+  sourcePath={root ? 'README.md' : undefined}
+>
+  {rendered
+    ? <rendered.Content />
+    : (
+      <>
+        <h1>DMTools documentation</h1>
+        <p>
+          Reference material for DMTools — installation, configuration, the tool reference
+          across every integration, and the job and agent system.
+        </p>
+      </>
+    )}
+
+  <h2 id="all-pages">All {total} pages</h2>
+
+  <div class="docs__index" not-prose>
+    {sections.map((section) => (
+      <section class="docs__indexGroup">
+        <h3 class="docs__indexTitle">{section.label}</h3>
+        <ul class="docs__indexList">
+          {section.items.map((item) => (
+            <li>
+              <a class="docs__indexLink" href={item.href}>{item.title}</a>
+              {summaries.get(item.id) && <p class="docs__indexDesc">{summaries.get(item.id)}</p>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </div>
+</Doc>

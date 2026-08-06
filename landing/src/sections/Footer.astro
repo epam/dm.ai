@@ -1,0 +1,47 @@
+---
+import Brand from '../components/Brand.astro';
+import { footerColumns, lastModified } from '../data/content';
+
+// Spelled out: "2026-08-02" reads as a different date depending on the reader.
+// The machine-readable form stays in the <time datetime> below.
+const updated = new Date(`${lastModified}T00:00:00Z`).toLocaleDateString('en-GB', {
+  day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+});
+
+// Deliberately not software.description from site.ts: that string is the
+// structured-data wording and carries an Oxford comma this one does not.
+// Sharing them would silently edit the visible page.
+---
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__grid">
+      <div>
+        <Brand />
+        <p class="footer__about">
+          Enterprise AI-factory orchestrator for automating delivery workflows across
+          trackers, source control, documentation, design systems, AI providers and CI/CD.
+        </p>
+      </div>
+
+      {footerColumns.map((column) => (
+        <div>
+          <p class="footer__title">{column.title}</p>
+          <div class="footer__links">
+            {column.links.map((link) => (
+              <a class="footer__link" href={link.href} target="_blank" rel="noopener">{link.label}</a>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div class="footer__bottom">
+      <p>
+        © 2026 EPAM Systems, Inc. DMTools is open source software.
+        <span class="footer__updated">Last updated <time datetime={lastModified}>{updated}</time>.</span>
+      </p>
+      <span class="badge">Apache 2.0</span>
+    </div>
+  </div>
+</footer>

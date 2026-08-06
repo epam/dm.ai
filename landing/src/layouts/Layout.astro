@@ -1,0 +1,277 @@
+---
+// Cascade order is load-bearing and these imports set it. a11y.css must stay
+// last: it overrides .reveal, .bar__fill and .flow__arrow::after at equal
+// specificity and only wins by coming after the section rules.
+import '../styles/tokens.css';
+import '../styles/base.css';
+import '../styles/sections.css';
+import '../styles/agent-pipeline.css';
+import '../styles/a11y.css';
+
+import Analytics from '../components/Analytics.astro';
+import {
+  meta, film, filmEmbedUrl, filmWatchUrl, software, faq, asset, basePath, REPO,
+  organization, installTabs, verifyCommand, lastModified,
+} from '../data/content';
+
+const canonical = new URL(basePath, Astro.site).href;
+const absolute = (path: string) => new URL(asset(path), Astro.site).href;
+const ogImage = absolute(meta.ogImage);
+
+/**
+ * One @graph, not separate blocks: the nodes carry an @id and reference each
+ * other, so what an assistant extracts is a product with a publisher, a film
+ * and an FAQ attached rather than three findings that share a URL.
+ */
+const ids = {
+  org: `${canonical}#organization`,
+  site: `${canonical}#website`,
+  app: `${canonical}#dmtools`,
+  page: `${canonical}#webpage`,
+  video: `${canonical}#film`,
+  faq: `${canonical}#faq`,
+  install: `${canonical}#install`,
+};
+
+const graph = [
+  {
+    '@type': 'Organization',
+    '@id': ids.org,
+    name: organization.name,
+    legalName: organization.legalName,
+    alternateName: organization.alternateName,
+    description: organization.description,
+    url: organization.url,
+    sameAs: organization.sameAs,
+  },
+  {
+    '@type': 'WebSite',
+    '@id': ids.site,
+    url: canonical,
+    name: meta.siteName,
+    inLanguage: meta.lang,
+    publisher: { '@id': ids.org },
+  },
+  {
+    '@type': 'WebPage',
+    '@id': ids.page,
+    url: canonical,
+    name: meta.title,
+    description: meta.description,
+    inLanguage: meta.lang,
+    dateModified: lastModified,
+    isPartOf: { '@id': ids.site },
+    about: { '@id': ids.app },
+    publisher: { '@id': ids.org },
+    primaryImageOfPage: ogImage,
+  },
+  {
+    '@type': 'SoftwareApplication',
+    '@id': ids.app,
+    name: 'DMTools',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: software.operatingSystem,
+    description: software.description,
+    url: canonical,
+    codeRepository: REPO,
+    // The product's own mark. It stays off the Organization node on purpose:
+    // that node is EPAM, and `logo` there would claim DMT is the company's
+    // logo rather than this application's.
+    image: absolute(meta.mark),
+    license: 'https://www.apache.org/licenses/LICENSE-2.0',
+    softwareVersion: software.version,
+    softwareRequirements: software.requirements,
+    downloadUrl: `${REPO}/releases/latest`,
+    screenshot: ogImage,
+    isAccessibleForFree: true,
+    dateModified: lastModified,
+    featureList: software.features,
+    author: { '@id': ids.org },
+    publisher: { '@id': ids.org },
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  },
+  {
+    '@type': 'VideoObject',
+    '@id': ids.video,
+    name: film.name,
+    uploadDate: film.uploadDate,
+    description: film.description,
+    thumbnailUrl: absolute(film.poster),
+    embedUrl: filmEmbedUrl,
+    contentUrl: filmWatchUrl,
+    about: { '@id': ids.app },
+    publisher: { '@type': 'Organization', name: film.publisher.name, url: film.publisher.url },
+  },
+  /**
+   * Google retired HowTo rich results in 2023, so this earns nothing in the blue
+   * links — it is here because "how do I install DMTools" is a question an
+   * assistant gets asked. Built from installTabs so it cannot contradict them.
+   */
+  {
+    '@type': 'HowTo',
+    '@id': ids.install,
+    name: 'Install DMTools',
+    description:
+      'Install the DMTools CLI on Linux, macOS or Windows. No account and no licence key; Java 17 or newer is the only requirement.',
+    totalTime: 'PT2M',
+    about: { '@id': ids.app },
+    supply: { '@type': 'HowToSupply', name: software.requirements },
+    step: [
+      // The label verbatim: two of the three tabs are platforms and one is a
+      // delivery mode, so "Install on {label}" produced "Install on Agent skill".
+      ...installTabs.map((tab, i) => ({
+        '@type': 'HowToStep',
+        position: i + 1,
+        name: tab.label,
+        text: `${tab.command} — ${tab.hint.replace(/<[^>]+>/g, '')}`,
+      })),
+      {
+        '@type': 'HowToStep',
+        position: installTabs.length + 1,
+        name: 'Verify the install',
+        text: `Run ${verifyCommand} to print every tool the CLI can reach.`,
+      },
+    ],
+  },
+  {
+    '@type': 'FAQPage',
+    '@id': ids.faq,
+    about: { '@id': ids.app },
+    mainEntity: faq.map((entry) => ({
+      '@type': 'Question',
+      name: entry.question,
+      acceptedAnswer: { '@type': 'Answer', text: entry.answer },
+    })),
+  },
+];
+
+const schemas = [{ '@context': 'https://schema.org', '@graph': graph }];
+---
+
+<!DOCTYPE html>
+<html lang={meta.lang} data-theme="night">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>{meta.title}</title>
+  <meta name="description" content={meta.description} />
+  <meta name="keywords" content={meta.keywords} />
+  <link rel="canonical" href={canonical} />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={meta.siteName} />
+  <meta property="og:title" content={meta.socialTitle} />
+  <meta property="og:description" content={meta.ogDescription} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={meta.socialTitle} />
+  <meta name="twitter:description" content={meta.twitterDescription} />
+  <meta name="twitter:image" content={ogImage} />
+
+  <meta name="theme-color" content={meta.themeColor} />
+  <link rel="icon" href={asset(meta.favicon)} type="image/svg+xml" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- The axis, not seven instances: Hanken Grotesk is variable and Google Fonts
+       serves the same woff2 files either way, so this costs nothing and makes
+       every weight available rather than the ones that happened to be listed.
+       The full 100..900 range is load-bearing: 100 sets the counted figures and
+       900 the tracked eyebrows, which is how epam.com uses museo-sans. --><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- is:inline is load-bearing: a script Astro processes is deferred, which
+       would let the wrong theme paint first. Night is the default rather than
+       the OS preference; a stored choice wins over both. -->
+  <script is:inline>
+    (function () {
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem('dmtools-theme') || 'night';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'night';
+      }
+    })();
+  </script>
+
+  <Analytics />
+
+  {schemas.map((schema) => (
+    <script type="application/ld+json" set:html={JSON.stringify(schema)} is:inline />
+  ))}
+</head>
+
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<slot />
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  import { prefersReducedMotion } from '../scripts/shared';
+
+  /** Count up to data-to once, the first time the element is revealed. */
+  function runCounter(el: HTMLElement): void {
+    if (el.dataset.done) return;
+    el.dataset.done = '1';
+
+    const target = parseInt(el.dataset.to ?? '', 10) || 0;
+
+    if (prefersReducedMotion) {
+      el.textContent = String(target);
+      return;
+    }
+
+    const duration = 1500;
+    const start = performance.now();
+
+    function frame(now: number): void {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = String(Math.floor(eased * target));
+      if (progress < 1) requestAnimationFrame(frame);
+      else el.textContent = String(target);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  /** Fire whatever a revealed block owns: counters, bar widths, the flow rail. */
+  function activate(el: Element): void {
+    el.classList.add('is-in');
+
+    if (el.classList.contains('counter')) runCounter(el as HTMLElement);
+    el.querySelectorAll<HTMLElement>('.counter').forEach(runCounter);
+
+    el.querySelectorAll<HTMLElement>('.bar__fill').forEach((fill) => {
+      fill.style.transform = `scaleX(${fill.style.getPropertyValue('--w') || 1})`;
+    });
+  }
+
+  const targets = document.querySelectorAll('.reveal');
+
+  if (!('IntersectionObserver' in window) || prefersReducedMotion) {
+    targets.forEach(activate);
+  } else {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          activate(entry.target);
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -40px 0px' },
+    );
+
+    targets.forEach((el) => observer.observe(el));
+  }
+</script>
+</body>
+</html>

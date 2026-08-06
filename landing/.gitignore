@@ -1,0 +1,11 @@
+dist/
+node_modules/
+.astro/
+
+# The repository root ignores package.json and package-lock.json — a rule aimed
+# at the Gradle build, which has no npm package to track. This directory does:
+# without both files checked in, `npm ci` has nothing to install from and the
+# deploy workflow cannot build the page. A negation in the nested file wins
+# over the parent rule, so the root list stays as it is.
+!package.json
+!package-lock.json

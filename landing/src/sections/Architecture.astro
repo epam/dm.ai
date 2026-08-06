@@ -1,0 +1,80 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+import { flow, humanInTheLoop } from '../data/content';
+
+// Numbered across the whole run, not within a stage, so the container's four
+// steps carry 3–6 and the nodes on either side keep their place.
+let n = 0;
+const stages = flow.map((stage) => ({
+  ...stage,
+  steps: stage.steps.map((step) => ({ ...step, n: ++n })),
+}));
+---
+
+<section class="band" id="architecture">
+  <div class="shell">
+    <SectionHead eyebrow="AI teammate · per run">
+      <Fragment slot="headline">
+        A ticket changes state — and a <span class="accent">factory</span> wakes up.
+      </Fragment>
+      <Fragment slot="subhead">
+        Clean runner. Fresh tools. Full context. The model reasons, and a pull request
+        waits for a human. Nothing to deploy, nothing to babysit.
+      </Fragment>
+    </SectionHead>
+
+    <div class="flow reveal">
+      <div class="flow__run">
+        {stages.map((stage, i) => (
+          <>
+            {i > 0 && <span class="flow__arrow" aria-hidden="true"></span>}
+
+            {stage.label ? (
+              <div class="flow__runner">
+                <p class="flow__runnerLabel">{stage.label}</p>
+                <div class="flow__runnerSteps">
+                  {stage.steps.map((step) => (
+                    <div class="flow__step">
+                      <span class="flow__num">{step.n}</span>
+                      <div class="flow__body">
+                        <p class="flow__title">{step.title}</p>
+                        <p class="flow__desc">{step.desc}{step.code && <code>{step.code}</code>}{step.descAfter}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              stage.steps.map((step) => (
+                <div class="flow__step flow__step--node">
+                  <span class="flow__num">{step.n}</span>
+                  <div class="flow__body">
+                    <p class="flow__title">{step.title}</p>
+                    <p class="flow__desc">{step.desc}{step.code && <code>{step.code}</code>}{step.descAfter}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </>
+        ))}
+      </div>
+
+      {/* Beside the whole run, not after it: review gates every step from the
+          ticket to the pull request rather than following the last one. The
+          wrapper carries the panel so the text stays ordinary block flow. */}
+      <aside class="flow__aside">
+        <p class="flow__human">
+          <span class="flow__humanDot" aria-hidden="true"></span>
+          <strong>{humanInTheLoop.title}</strong> — {humanInTheLoop.desc}
+        </p>
+      </aside>
+    </div>
+
+    <p class="callout reveal">
+      <strong>Zero persistent infrastructure.</strong>
+      DMTools installs fresh on every run. There is no server to maintain and no agent
+      process to keep alive — just repeatable, auditable automation that leaves a trail
+      your auditors can read.
+    </p>
+  </div>
+</section>

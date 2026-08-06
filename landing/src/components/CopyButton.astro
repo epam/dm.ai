@@ -1,0 +1,50 @@
+---
+// `target` is the id of the element copied. The button holds no copy of the
+// text, so the two cannot disagree.
+interface Props {
+  target: string;
+  label: string;
+  class?: string;
+}
+
+const { target, label, class: extraClass } = Astro.props;
+---
+
+<button
+  class:list={['cmd__copy', extraClass]}
+  type="button"
+  data-copy={target}
+  aria-label={label}
+>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+    <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </svg>
+</button>
+
+<script>
+  import { showToast } from '../scripts/shared';
+
+  /**
+   * The Clipboard API needs a secure context, so it is absent over plain http
+   * and on file://. Failing loudly beats a button that looks like it worked.
+   */
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const source = document.getElementById(button.dataset.copy ?? '');
+      if (!source) return;
+
+      const text = source.textContent?.trim() ?? '';
+
+      if (!navigator.clipboard?.writeText) {
+        showToast('Copy failed — select the command manually');
+        return;
+      }
+
+      navigator.clipboard.writeText(text).then(
+        () => showToast('Copied to clipboard'),
+        () => showToast('Copy failed — select the command manually'),
+      );
+    });
+  });
+</script>

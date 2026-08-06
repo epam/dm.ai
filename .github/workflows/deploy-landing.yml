@@ -1,0 +1,92 @@
+name: Deploy Landing Page to GitHub Pages
+
+# Only the default branch deploys. The github-pages environment restricts
+# deployments to it, so triggering on any other branch produces a run that is
+# rejected by the environment protection rule rather than a useful preview.
+# Use workflow_dispatch to publish on demand from the default branch.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'landing/**'
+      - '.github/workflows/deploy-landing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build landing page
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: landing
+
+      # Must run before the build: it is what reports the address this
+      # repository actually publishes to, and the build needs it.
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      # canonical, og:image, the sitemap, robots.txt and three schema fields all
+      # need an absolute URL, and the right one differs per repository — a fork
+      # serves from its own github.io path. Taking it from configure-pages means
+      # nobody has to remember to edit a hardcoded domain after forking.
+      #
+      # GA_MEASUREMENT_ID is a repository variable (Settings -> Variables ->
+      # Actions), not a secret: a GA4 measurement ID is public as soon as the
+      # page is served. Leave it unset and no analytics block is rendered at all.
+      - name: Build
+        working-directory: landing
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+          GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+        run: |
+          set -euo pipefail
+
+          # Unset, astro.config.mjs falls back to localhost — fine for a local
+          # build, silently wrong for a published one. Fail loudly instead.
+          if [ -z "${SITE_URL}" ]; then
+            echo "::error::configure-pages reported no base_url"
+            exit 1
+          fi
+
+          echo "Site URL: ${SITE_URL}"
+          npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: landing/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
