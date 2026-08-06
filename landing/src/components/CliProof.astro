@@ -1,0 +1,134 @@
+---
+const stats = [
+  { value: '4', label: 'Adoption paths, each valuable on its own' },
+  { value: '0', label: 'Servers to run or agents to babysit' },
+];
+
+const session = [
+  {
+    cmd: 'dmtools list',
+    out: ['320 tools across 20 integrations'],
+  },
+  {
+    cmd: 'dmtools jira_get_ticket DMT-482',
+    out: [
+      '{ "key":     "DMT-482",',
+      '  "summary": "Add TestRail sync",',
+      '  "status":  "In Progress" }',
+    ],
+  },
+  {
+    cmd: 'dmtools run agents/story_development.json',
+    out: [
+      'context   ticket · wiki · repository',
+      'model     anthropic_ai_chat',
+      'publish   branch → pull request',
+    ],
+  },
+];
+---
+
+<div class="cli-proof reveal">
+  <div class="term panel--dark" aria-hidden="true">
+    <div class="term__bar">
+      <span class="term__dot"></span>
+      <span class="term__dot"></span>
+      <span class="term__dot"></span>
+      <span class="term__path">~ / your-project</span>
+    </div>
+    <pre class="term__body" id="cli-proof-term">{session.map((line) => (
+      <>
+        <span class="term__cmd"><span class="term__prompt">$</span> <span class="term__text">{line.cmd}</span></span>
+        {line.out.map((out) => <span class="term__out">{out}</span>)}
+      </>
+    ))}<span class="term__caret" aria-hidden="true"></span></pre>
+  </div>
+
+  <div class="cli-proof__stats">
+    {stats.map((stat) => (
+      <div class="stat">
+        <div class="stat__value">{stat.value}</div>
+        <p class="stat__label">{stat.label}</p>
+      </div>
+    ))}
+  </div>
+</div>
+
+<script>
+  import { prefersReducedMotion } from '../scripts/shared';
+
+  interface Group {
+    cmd: HTMLElement;
+    text: HTMLElement;
+    out: HTMLElement[];
+  }
+
+  const term = document.getElementById('cli-proof-term');
+
+  if (term && !prefersReducedMotion) {
+    const caret = term.querySelector<HTMLElement>('.term__caret');
+    const groups: Group[] = [];
+
+    term.querySelectorAll<HTMLElement>('.term__cmd, .term__out').forEach((el) => {
+      if (el.classList.contains('term__cmd')) {
+        const text = el.querySelector<HTMLElement>('.term__text');
+        if (text) groups.push({ cmd: el, text, out: [] });
+      } else if (groups.length) {
+        groups[groups.length - 1].out.push(el);
+      }
+    });
+
+    if (groups.length) {
+      const commands = groups.map((group) => group.text.textContent ?? '');
+
+      groups.forEach((group) => {
+        group.cmd.style.opacity = '0';
+        group.text.textContent = '';
+        group.out.forEach((output) => { output.style.opacity = '0'; });
+      });
+      if (caret) caret.style.opacity = '0';
+
+      const wait = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); });
+      const play = async (): Promise<void> => {
+        for (let index = 0; index < groups.length; index += 1) {
+          const group = groups[index];
+          const command = commands[index];
+          group.cmd.style.opacity = '1';
+          group.text.classList.add('is-typing');
+
+          for (let character = 1; character <= command.length; character += 1) {
+            group.text.textContent = command.slice(0, character);
+            await wait(22);
+          }
+
+          group.text.classList.remove('is-typing');
+          await wait(220);
+          for (const output of group.out) {
+            output.style.opacity = '1';
+            await wait(55);
+          }
+          await wait(360);
+        }
+
+        if (caret) {
+          caret.style.opacity = '1';
+          caret.classList.add('is-on');
+        }
+      };
+
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            void play();
+          },
+          { threshold: 0.35 },
+        );
+        observer.observe(term);
+      } else {
+        void play();
+      }
+    }
+  }
+</script>

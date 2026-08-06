@@ -1,39 +1,10 @@
 ---
 import PlayIcon from '../components/PlayIcon.astro';
 import Badges from '../components/Badges.astro';
+import { film, filmEmbedUrl, asset } from '../data/content';
 
 const metaBadges = ['EPAM Open Source', 'Apache 2.0', 'Java 17+'];
-
-// Only the two figures the Numbers section does not count again. The tool and
-// integration counts moved into the panel, where the CLI prints them.
-const stats = [
-  { value: '4', label: 'Adoption paths, each valuable on its own' },
-  { value: '0', label: 'Servers to run or agents to babysit' },
-];
-
-/** Every command is a CLI entry point that ships — a demonstration, not a mock-up. */
-const session = [
-  {
-    cmd: 'dmtools list',
-    out: ['320 tools across 20 integrations'],
-  },
-  {
-    cmd: 'dmtools jira_get_ticket DMT-482',
-    out: [
-      '{ "key":     "DMT-482",',
-      '  "summary": "Add TestRail sync",',
-      '  "status":  "In Progress" }',
-    ],
-  },
-  {
-    cmd: 'dmtools run agents/story_development.json',
-    out: [
-      'context   ticket · wiki · repository',
-      'model     anthropic_ai_chat',
-      'publish   branch → pull request',
-    ],
-  },
-];
+const playerUrl = `${filmEmbedUrl}?autoplay=1&rel=0`;
 ---
 
 <section class="hero" id="top">
@@ -41,152 +12,82 @@ const session = [
   <div class="hero__glow hero__glow--b" aria-hidden="true"></div>
 
   <div class="shell hero__inner">
-    <p class="hero__meta reveal">
-      {metaBadges.map((badge) => <span>{badge}</span>)}
-    </p>
+    <div class="hero__signals">
+      <p class="hero__meta reveal">
+        {metaBadges.map((badge) => <span>{badge}</span>)}
+      </p>
 
-    <div class="hero__badges reveal" data-delay="1">
-      <Badges />
+      <div class="hero__badges reveal" data-delay="1">
+        <Badges />
+      </div>
     </div>
 
-    <h1 class="display hero__title reveal" data-delay="1">
-      Every enterprise wants an <span class="accent">AI factory</span>.
-    </h1>
+    <div class="hero__lead">
+      <div class="hero__content">
+        <h1 class="display hero__title reveal" data-delay="1">
+          Every enterprise wants an <span class="accent">AI factory</span>.
+        </h1>
 
-    <p class="lede hero__lede reveal" data-delay="2">
-      Few know where to start. DMTools is the orchestration layer between the systems
-      you already run and the agents your teams already use — one CLI, every integration,
-      nothing to deploy.
-    </p>
+        <p class="lede hero__lede reveal" data-delay="2">
+          Few know where to start. DMTools is the orchestration layer between the systems
+          you already run and the agents your teams already use — one CLI, every integration,
+          nothing to deploy.
+        </p>
 
-    <div class="hero__actions reveal" data-delay="3">
-      <a class="btn btn--solid" href="#install">Install DMTools</a>
-      <a class="btn btn--ghost" href="#video">
-        <PlayIcon />
-        Watch the film
-      </a>
-    </div>
-
-    <div class="hero__proof reveal" data-delay="4">
-      {/* aria-hidden: read aloud the prompts and JSON are noise, and the lede
-          already states what the session shows. */}
-      <div class="term panel--dark" aria-hidden="true">
-        <div class="term__bar">
-          <span class="term__dot"></span>
-          <span class="term__dot"></span>
-          <span class="term__dot"></span>
-          <span class="term__path">~ / your-project</span>
+        <div class="hero__actions reveal" data-delay="3">
+          <a class="btn btn--solid" href="#install">Install DMTools</a>
+          <button class="btn btn--ghost" id="watch-film" type="button">
+            <PlayIcon />
+            Watch the film
+          </button>
         </div>
-        <pre class="term__body" id="hero-term">{session.map((line) => (
-          <>
-            <span class="term__cmd"><span class="term__prompt">$</span> <span class="term__text">{line.cmd}</span></span>
-            {line.out.map((out) => <span class="term__out">{out}</span>)}
-          </>
-        ))}<span class="term__caret" aria-hidden="true"></span></pre>
       </div>
 
-      <div class="hero__stats">
-        {stats.map((stat) => (
-          <div class="stat">
-            <div class="stat__value">{stat.value}</div>
-            <p class="stat__label">{stat.label}</p>
+      <div class="hero__film reveal" data-delay="2">
+        <div class="video__frame" id="video" data-video-url={playerUrl}>
+          <img class="video__poster" src={asset(film.poster)}
+               alt={film.posterAlt}
+               width="1280" height="720" decoding="async" />
+          <div class="video__body">
+            <button class="video__play" id="video-play" type="button" aria-label="Play the DMTools introduction film">
+              <PlayIcon size={26} />
+            </button>
           </div>
-        ))}
+        </div>
+        <p class="hero__filmCaption">See how DMTools turns delivery signals into an autonomous agent workflow.</p>
       </div>
     </div>
+
   </div>
 </section>
 
 <script>
-  import { prefersReducedMotion } from '../scripts/shared';
+  import { showToast } from '../scripts/shared';
 
-  /**
-   * The session types itself out once, when the panel reaches the reader.
-   *
-   * Runs off the rendered markup, so the no-JavaScript and reduced-motion pages
-   * are the finished session rather than an empty box. Only .term__text is
-   * cleared — the prompt beside it holds the line open and output fades instead
-   * of unhiding, so the panel is the same height throughout and never reflows.
-   */
-  interface Group {
-    cmd: HTMLElement;
-    text: HTMLElement;
-    out: HTMLElement[];
+  const frame = document.getElementById('video');
+  const playButton = document.getElementById('video-play');
+  const watchButton = document.getElementById('watch-film');
+
+  if (frame && playButton) {
+    const playFilm = () => {
+      const url = (frame.dataset.videoUrl ?? '').trim();
+      if (!url) {
+        showToast('Film link not published yet');
+        return;
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.src = url;
+      iframe.title = 'DMTools film';
+      iframe.allow =
+        'accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture';
+      iframe.allowFullscreen = true;
+      frame.replaceChildren(iframe);
+      iframe.focus();
+    };
+
+    playButton.addEventListener('click', playFilm);
+    watchButton?.addEventListener('click', playFilm);
   }
 
-  const term = document.getElementById('hero-term');
-
-  if (term && !prefersReducedMotion) {
-    const caret = term.querySelector<HTMLElement>('.term__caret');
-    const groups: Group[] = [];
-
-    term.querySelectorAll<HTMLElement>('.term__cmd, .term__out').forEach((el) => {
-      if (el.classList.contains('term__cmd')) {
-        const text = el.querySelector<HTMLElement>('.term__text');
-        if (text) groups.push({ cmd: el, text, out: [] });
-      } else if (groups.length) {
-        groups[groups.length - 1].out.push(el);
-      }
-    });
-
-    if (groups.length) {
-      const script = groups.map((g) => g.text.textContent ?? '');
-
-      groups.forEach((g) => {
-        g.cmd.style.opacity = '0';
-        g.text.textContent = '';
-        g.out.forEach((o) => { o.style.opacity = '0'; });
-      });
-      if (caret) caret.style.opacity = '0';
-
-      const wait = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms); });
-
-      const play = async (): Promise<void> => {
-        for (let i = 0; i < groups.length; i += 1) {
-          const g = groups[i];
-          const full = script[i];
-
-          g.cmd.style.opacity = '1';
-          g.text.classList.add('is-typing');
-
-          for (let c = 1; c <= full.length; c += 1) {
-            g.text.textContent = full.slice(0, c);
-            await wait(22);
-          }
-
-          g.text.classList.remove('is-typing');
-          await wait(220);
-
-          for (const line of g.out) {
-            line.style.opacity = '1';
-            await wait(55);
-          }
-
-          await wait(360);
-        }
-
-        if (caret) {
-          caret.style.opacity = '1';
-          caret.classList.add('is-on');
-        }
-      };
-
-      // Below the fold, so starting on load would run it on an empty screen.
-      if ('IntersectionObserver' in window) {
-        const observer = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              if (!entry.isIntersecting) return;
-              observer.disconnect();
-              void play();
-            });
-          },
-          { threshold: 0.35 },
-        );
-        observer.observe(term);
-      } else {
-        void play();
-      }
-    }
-  }
 </script>

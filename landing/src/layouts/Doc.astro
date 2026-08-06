@@ -9,6 +9,7 @@ import Analytics from '../components/Analytics.astro';
 import Brand from '../components/Brand.astro';
 import { meta, basePath, REPO, DOCS, organization, lastModified } from '../data/content';
 import { buildNav, hrefOf, ROOT_ID } from '../lib/docs';
+import { stripDocEmoji } from '../lib/rehype-doc-icons.mjs';
 import type { MarkdownHeading } from 'astro';
 
 interface Props {
@@ -190,7 +191,7 @@ const schema = {
         <ul class="docs__tocList">
           {toc.map((h) => (
             <li class={`docs__tocItem docs__tocItem--${h.depth}`}>
-              <a href={`#${h.slug}`}>{h.text}</a>
+              <a href={`#${h.slug}`}>{stripDocEmoji(h.text)}</a>
             </li>
           ))}
         </ul>

@@ -31,7 +31,7 @@ body {
   font-size: 1.125rem;
   font-weight: 300;
   line-height: 1.5;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.025em;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -112,15 +112,15 @@ code, pre { font-family: var(--mono); letter-spacing: normal; }
    Tracking follows them too: their headlines run at roughly their natural width,
    and the -0.028em here was pulling words together tightly enough to read as a
    different typographic register. */
-h1, h2, h3 { letter-spacing: -0.01em; line-height: 1.05; }
-h1 { font-weight: 200; }
+h1, h2, h3 { letter-spacing: 0.01em; line-height: 1.05; }
+h1 { font-weight: 300; }
 h2 { font-weight: 300; }
 h3 { font-weight: 400; }
 
 .display {
-  font-size: clamp(2.85rem, 7.4vw, 6.25rem);
-  line-height: 1.02;
-  letter-spacing: -0.012em;
+  font-size: clamp(3rem, 5.2vw, 5.75rem);
+  line-height: 1;
+  letter-spacing: 0.01em;
 }
 
 /* Smaller than it was, in a wider column (see .split): at 3.9rem in a 5fr track
@@ -135,7 +135,7 @@ h3 { font-weight: 400; }
 .subhead {
   font-size: clamp(1.05rem, 1.45vw, 1.3rem);
   font-weight: 300;
-  color: var(--muted);
+  color: var(--text);
   line-height: 1.6;
   max-width: 60ch;
 }
@@ -143,7 +143,7 @@ h3 { font-weight: 400; }
 .lede {
   font-size: clamp(1.1rem, 1.7vw, 1.45rem);
   font-weight: 300;
-  color: var(--muted);
+  color: var(--text);
   line-height: 1.5;
   max-width: 54ch;
 }

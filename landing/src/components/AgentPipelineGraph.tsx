@@ -38,6 +38,11 @@ const VERTICAL_SIDE_COLUMN_WIDTH = 260;
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+const supportsScrollDrivenGraph = () =>
+  typeof window !== 'undefined' &&
+  !prefersReducedMotion() &&
+  window.matchMedia('(min-height: 721px)').matches;
+
 function pointsToPath(points: Point[]) {
   return points.reduce((path, point, index) => {
     if (index === 0) {
@@ -209,6 +214,8 @@ export function AgentPipelineGraph() {
   const [orientation, setOrientation] = useState<GraphOrientation>('horizontal');
   const [availableGraphWidth, setAvailableGraphWidth] = useState(MIN_VERTICAL_GRAPH_WIDTH + 36);
   const graphShellRef = useRef<HTMLDivElement>(null);
+  const scrollStoryRef = useRef<HTMLDivElement>(null);
+  const graphViewportRef = useRef<HTMLDivElement>(null);
   const verticalRailRef = useRef<HTMLDivElement>(null);
   const agentsById = useMemo(() => new Map(pipelineAgents.map((agent) => [agent.id, agent])), []);
   const graphOuterWidth =
@@ -259,6 +266,43 @@ export function AgentPipelineGraph() {
     return () => cancelAnimationFrame(animationFrame);
   }, []);
 
+  useEffect(() => {
+    if (orientation !== 'horizontal' || !supportsScrollDrivenGraph()) {
+      return undefined;
+    }
+
+    let frame = 0;
+    const updateScrollPosition = () => {
+      frame = 0;
+      const story = scrollStoryRef.current;
+      const viewport = graphViewportRef.current;
+      const shell = graphShellRef.current;
+      if (!story || !viewport || !shell) {
+        return;
+      }
+
+      const rect = story.getBoundingClientRect();
+      const stickyTop = Number.parseFloat(getComputedStyle(shell).top) || 0;
+      const distance = Math.max(1, story.offsetHeight - window.innerHeight + stickyTop);
+      const progress = Math.min(1, Math.max(0, (stickyTop - rect.top) / distance));
+      viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) * progress;
+    };
+    const requestUpdate = () => {
+      if (!frame) {
+        frame = requestAnimationFrame(updateScrollPosition);
+      }
+    };
+
+    updateScrollPosition();
+    window.addEventListener('scroll', requestUpdate, { passive: true });
+    window.addEventListener('resize', requestUpdate);
+    return () => {
+      window.removeEventListener('scroll', requestUpdate);
+      window.removeEventListener('resize', requestUpdate);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [orientation]);
+
   const tickets = pipelineTickets.map((ticket) =>
     reducedMotion
       ? {
@@ -295,48 +339,55 @@ export function AgentPipelineGraph() {
 
   return (
     <section className="agent-pipeline-section" id="agent-pipeline">
-      <div className="section-heading narrow">
-        <p className="eyebrow">Agent pipeline</p>
-        <h2>Example agent pipeline</h2>
-        <p className="section-copy">
-          A story does not move through one generic prompt. It passes through focused agent
-          configurations that clarify requirements, prepare solution context, implement code,
-          review the pull request, handle rework, generate tests, and close the tracking loop
-          only after the delivery signals line up.
-        </p>
+      <div className="shell agent-pipeline__copy">
+        <div className="section-heading narrow">
+          <p className="eyebrow">Agent pipeline</p>
+          <h2 className="headline">Example agent pipeline</h2>
+          <p className="section-copy">
+            A story does not move through one generic prompt. It passes through focused agent
+            configurations that clarify requirements, prepare solution context, implement code,
+            review the pull request, handle rework, generate tests, and close the tracking loop
+            only after the delivery signals line up.
+          </p>
+        </div>
       </div>
 
-      <div
-        className="agent-graph-shell"
-        ref={graphShellRef}
-        style={{ '--phase-count': pipelinePhases.length } as CSSProperties}
-      >
-        <div className="agent-graph-toolbar">
-          <div className="graph-view-switch" aria-label="Graph orientation">
-            <button
-              className={orientation === 'horizontal' ? 'active' : ''}
-              type="button"
-              onClick={() => setOrientation('horizontal')}
-              aria-label="Horizontal graph"
-              aria-pressed={orientation === 'horizontal'}
-              title="Horizontal graph"
-            >
-              <Columns3 aria-hidden="true" />
-            </button>
-            <button
-              className={orientation === 'vertical' ? 'active' : ''}
-              type="button"
-              onClick={() => setOrientation('vertical')}
-              aria-label="Vertical graph"
-              aria-pressed={orientation === 'vertical'}
-              title="Vertical graph"
-            >
-              <Rows3 aria-hidden="true" />
-            </button>
+      <div className={`agent-scroll-story orientation-${orientation}`} ref={scrollStoryRef}>
+        <div
+          className="agent-graph-shell"
+          ref={graphShellRef}
+          style={{ '--phase-count': pipelinePhases.length } as CSSProperties}
+        >
+          <div className="agent-graph-toolbar">
+            <div className="graph-view-switch" aria-label="Graph orientation">
+              <button
+                className={orientation === 'horizontal' ? 'active' : ''}
+                type="button"
+                onClick={() => setOrientation('horizontal')}
+                aria-label="Horizontal graph"
+                aria-pressed={orientation === 'horizontal'}
+                title="Horizontal graph"
+              >
+                <Columns3 aria-hidden="true" />
+              </button>
+              <button
+                className={orientation === 'vertical' ? 'active' : ''}
+                type="button"
+                onClick={() => setOrientation('vertical')}
+                aria-label="Vertical graph"
+                aria-pressed={orientation === 'vertical'}
+                title="Vertical graph"
+              >
+                <Rows3 aria-hidden="true" />
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="agent-graph-scroll" aria-label="Scrollable story agent pipeline">
+        <div
+          className="agent-graph-scroll"
+          ref={graphViewportRef}
+          aria-label="Story agent pipeline that moves horizontally while the page scrolls"
+        >
           {orientation === 'vertical' ? (
             <div className="vertical-phase-layout" aria-hidden="true">
               <div className="vertical-title-column">
@@ -459,6 +510,7 @@ export function AgentPipelineGraph() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </section>
   );
