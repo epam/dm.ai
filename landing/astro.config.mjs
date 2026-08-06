@@ -5,6 +5,7 @@ import { unified } from '@astrojs/markdown-remark';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { remarkDocLinks } from './src/lib/remark-doc-links.mjs';
+import { rehypeDocIcons } from './src/lib/rehype-doc-icons.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(here, '..');
@@ -46,6 +47,7 @@ export default defineConfig({
           base: pathname,
         }),
       ],
+      rehypePlugins: [rehypeDocIcons],
     }),
   },
 });
