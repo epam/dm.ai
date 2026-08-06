@@ -1,14 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DMTools">
-  <rect width="64" height="64" rx="12" fill="#060606"/>
-
-  <!-- DMT as strokes, not <text>: a favicon is often rasterised without access
-       to any font, so letterforms have to be geometry. Stroke kept at 4, the
-       weight the previous mark used to stay readable when this is drawn at 16px.
-       Colour is the Sea accent token, #00F6FF, rather than a literal cyan
-       picked by eye, so the tab icon and the page agree. -->
-  <g fill="none" stroke="#00F6FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 20h5a7 12 0 0 1 0 24H8V20Z"/>
-    <path d="M26 44V20l7 12 7-12v24"/>
-    <path d="M46 20h10M51 20v24"/>
-  </g>
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00FFF0" />
+      <stop offset="50%" stop-color="#00F6FF" />
+      <stop offset="100%" stop-color="#B896FF" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="#060606" />
+  <path d="M16 5 6 10v12l10 5 10-5V10L16 5Z" stroke="url(#g)" stroke-width="1.7" stroke-linejoin="round" fill="none" />
+  <path d="M16 5v10m0 0-10-5m10 5 10-5m-10 5v12" stroke="url(#g)" stroke-width="1.7" stroke-linejoin="round" />
 </svg>

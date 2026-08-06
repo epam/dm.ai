@@ -1,0 +1,468 @@
+/* Agent pipeline animation styles
+   Adapted for the DMTools Astro landing page. Scoped to .agent-pipeline-section
+   so the original variables do not leak across the rest of the page. */
+
+.agent-pipeline-section {
+  --ap-line: var(--hairline);
+  --ap-line-soft: color-mix(in srgb, var(--hairline) 55%, transparent);
+  --ap-node-bg: var(--surface);
+  --ap-tooltip-bg: var(--surface);
+  --ap-code-bg: var(--surface-alt);
+  --ap-accent: var(--sea-ink);
+  --ap-glow-a: var(--glow-a);
+  --ap-glow-b: var(--glow-b);
+
+  border-top: 1px solid var(--ap-line);
+  background:
+    linear-gradient(90deg, var(--ap-line-soft) 1px, transparent 1px),
+    linear-gradient(180deg, var(--ap-line-soft) 1px, transparent 1px),
+    var(--canvas);
+  background-size: 44px 44px;
+}
+
+[data-theme='night'] .agent-pipeline-section {
+  --ap-line: var(--hairline-strong);
+  --ap-line-soft: color-mix(in srgb, var(--hairline) 55%, transparent);
+  --ap-accent: var(--sea);
+}
+
+.agent-pipeline-section .section-copy {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+
+.agent-graph-shell {
+  position: relative;
+}
+
+.agent-graph-toolbar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0 10px;
+}
+
+.agent-graph-scroll {
+  position: relative;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+.graph-view-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--ap-line);
+  background: color-mix(in srgb, var(--canvas) 92%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.graph-view-switch button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.graph-view-switch button.active {
+  border-color: color-mix(in srgb, var(--ap-accent) 48%, transparent);
+  color: var(--text);
+  background: var(--ap-code-bg);
+}
+
+.graph-view-switch svg {
+  width: 18px;
+  height: 18px;
+}
+
+.agent-graph {
+  position: relative;
+  min-height: 600px;
+  border: 1px solid var(--ap-line);
+  background: color-mix(in srgb, var(--canvas) 86%, var(--surface) 14%);
+}
+
+.agent-graph.orientation-vertical {
+  margin-left: var(--vertical-side-column-width, 260px);
+  border-right: 0;
+  border-left: 0;
+  background: transparent;
+}
+
+.vertical-phase-layout {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns:
+    var(--vertical-side-column-width, 260px)
+    minmax(260px, 1fr)
+    var(--vertical-side-column-width, 260px);
+  border: 1px solid var(--ap-line);
+  background: color-mix(in srgb, var(--canvas) 86%, var(--surface) 14%);
+  pointer-events: none;
+}
+
+.vertical-title-column,
+.vertical-description-column {
+  display: grid;
+  grid-template-rows: repeat(var(--phase-count), minmax(0, 1fr));
+}
+
+.vertical-diagram-column {
+  min-width: 0;
+  border-right: 1px solid var(--ap-line-soft);
+  border-left: 1px solid var(--ap-line-soft);
+}
+
+.vertical-phase-title,
+.vertical-phase-description {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 16px;
+  border-bottom: 1px solid var(--ap-line-soft);
+}
+
+.vertical-phase-title:last-child,
+.vertical-phase-description:last-child {
+  border-bottom: 0;
+}
+
+.vertical-phase-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.vertical-phase-description {
+  justify-content: flex-end;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.phase-grid {
+  position: absolute;
+  inset: 0 18px;
+  display: grid;
+  grid-template-columns: repeat(var(--phase-count), minmax(0, 1fr));
+}
+
+.phase-grid.orientation-vertical {
+  inset: 76px 18px 64px;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(var(--phase-count), minmax(0, 1fr));
+  opacity: 0;
+}
+
+.phase-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 18px 14px;
+  border-right: 1px solid var(--ap-line-soft);
+  background: linear-gradient(180deg, var(--ap-code-bg), transparent 42%);
+}
+
+.phase-column:last-child {
+  border-right: 0;
+}
+
+.phase-grid.orientation-vertical .phase-column {
+  flex-direction: row;
+  align-items: center;
+  border-right: 0;
+  border-bottom: 1px solid var(--ap-line-soft);
+  background: linear-gradient(90deg, var(--ap-code-bg), transparent 58%);
+}
+
+.phase-grid.orientation-vertical .phase-column:last-child {
+  border-bottom: 0;
+}
+
+.phase-grid.orientation-vertical .phase-column small {
+  max-width: 210px;
+  text-align: right;
+}
+
+.phase-column span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.phase-column small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.agent-node-layer {
+  position: absolute;
+  inset: 76px 18px 64px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.agent-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 104px;
+  min-height: 96px;
+  padding: 12px 9px 30px;
+  border: 1px solid rgba(0, 246, 255, 0.62);
+  border-radius: 2px;
+  color: var(--text);
+  background: var(--ap-node-bg);
+  box-shadow: 0 0 24px rgba(0, 246, 255, 0.12);
+  font: inherit;
+  text-align: left;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: help;
+}
+
+.agent-node span:first-child {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.agent-node small {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.agent-graph.orientation-vertical .agent-node {
+  width: 148px;
+  min-height: 78px;
+  padding: 9px 9px 24px;
+}
+
+.agent-graph.orientation-vertical .agent-node.status-node {
+  min-height: 70px;
+}
+
+.agent-graph.orientation-vertical .agent-node span:first-child {
+  font-size: 11px;
+  line-height: 1.12;
+}
+
+.agent-graph.orientation-vertical .agent-node small {
+  margin-top: 5px;
+}
+
+.agent-node.mode-local {
+  border-color: rgba(123, 168, 255, 0.7);
+}
+
+.agent-node.mode-review {
+  border-color: rgba(184, 150, 255, 0.75);
+}
+
+.agent-node.status-node {
+  min-height: 82px;
+  border-color: rgba(0, 255, 190, 0.72);
+  background: rgba(6, 44, 35, 0.92);
+  box-shadow: 0 0 24px rgba(0, 255, 190, 0.12);
+}
+
+.agent-node:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 3px;
+}
+
+.agent-tooltip {
+  position: absolute;
+  right: 50%;
+  bottom: calc(100% + 12px);
+  z-index: 8;
+  width: 220px;
+  padding: 12px;
+  border: 1px solid rgba(0, 246, 255, 0.45);
+  color: var(--text);
+  background: var(--ap-tooltip-bg);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translate(50%, 8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+}
+
+.agent-node:hover .agent-tooltip,
+.agent-node:focus-visible .agent-tooltip {
+  opacity: 1;
+  transform: translate(50%, 0);
+}
+
+.agent-loading {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  left: 7px;
+  display: grid;
+  gap: 3px;
+  color: var(--mint);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.agent-loading span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-loading i {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.agent-loading.route-rework {
+  color: var(--lilac);
+}
+
+.agent-loading.route-test-rework {
+  color: var(--ap-accent);
+}
+
+.agent-loading.route-bug-loop {
+  color: #ff7ea8;
+}
+
+.agent-paths,
+.ticket-motion-layer {
+  position: absolute;
+  inset: 76px 18px 64px;
+  width: calc(100% - 36px);
+  height: calc(100% - 140px);
+  overflow: visible;
+}
+
+.agent-paths {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pipeline-path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.pipeline-path.main {
+  stroke: rgba(0, 246, 255, 0.62);
+  stroke-width: 2;
+}
+
+.pipeline-path.branch,
+.pipeline-path.loop {
+  stroke: rgba(184, 150, 255, 0.58);
+  stroke-dasharray: 8 8;
+  stroke-width: 2;
+}
+
+.ticket-motion-layer {
+  z-index: 5;
+  pointer-events: none;
+}
+
+.moving-ticket {
+  position: absolute;
+  display: block;
+  width: 13px;
+  height: 13px;
+  color: var(--mint);
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 8px rgba(0, 255, 240, 0.75));
+}
+
+.moving-ticket.route-test-rework {
+  color: var(--ap-accent);
+}
+
+.moving-ticket.route-bug-loop {
+  color: #ff7ea8;
+}
+
+.moving-ticket i {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.moving-ticket span {
+  position: absolute;
+  top: 50%;
+  left: 19px;
+  padding: 2px 5px;
+  color: currentColor;
+  background: var(--ap-code-bg);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.moving-ticket.route-rework {
+  color: var(--lilac);
+  filter: drop-shadow(0 0 8px rgba(184, 150, 255, 0.75));
+}
+
+@media (max-width: 1060px) {
+  .agent-pipeline-section .section-heading.narrow {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .agent-node {
+    width: 96px;
+    min-height: 86px;
+    padding: 10px 8px 26px;
+  }
+
+  .agent-node span:first-child {
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-tooltip {
+    transition: none;
+  }
+}

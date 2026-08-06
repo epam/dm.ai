@@ -31,6 +31,35 @@
   gap: 1.5rem;
 }
 
+.nav__left {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-shrink: 0;
+}
+
+/* epam.com places a plain hamburger to the left of the wordmark, separated by
+   a vertical rule. The button toggles the mobile panel on narrow screens and
+   stays as a visual anchor on desktop. */
+.nav__menu {
+  display: grid;
+  width: 2.375rem;
+  height: 2.375rem;
+  place-items: center;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.nav__menuClose { display: none; }
+.nav.is-open .nav__menuOpen { display: none; }
+.nav.is-open .nav__menuClose { display: block; }
+
+.nav__divider {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--hairline-strong);
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -128,45 +157,65 @@
 .nav__actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.9rem;
 }
 
-.theme-toggle {
-  width: 2.375rem;
-  height: 2.375rem;
+/* epam.com uses a horizontal pill switch with a dot instead of a moon icon.
+   The dot slides to the right in Night mode and stays left in Snow mode. */
+.theme-switch {
   display: grid;
   place-items: center;
-  border: 1px solid var(--hairline);
-  border-radius: 50%;
-  color: var(--muted);
-  transition: color 0.2s var(--ease), border-color 0.2s var(--ease), transform 0.2s var(--ease);
-}
-
-.theme-toggle:hover {
+  padding: 0;
   color: var(--text);
-  border-color: var(--hairline-strong);
-  transform: rotate(-15deg);
 }
 
-.theme-toggle__sun { display: none; }
-[data-theme='night'] .theme-toggle__sun { display: block; }
-[data-theme='night'] .theme-toggle__moon { display: none; }
+.theme-switch__track {
+  display: block;
+  width: 3rem;
+  height: 1.625rem;
+  padding: 0.1875rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  background: var(--surface-alt);
+  transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
 
-/* --------------------------------------------------------------------------
-   5b. Burger — narrow screens only
-   -------------------------------------------------------------------------- */
+.theme-switch__dot {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background: var(--sea-ink);
+  transform: translateX(0);
+  transition: transform 0.25s var(--ease), background-color 0.2s var(--ease);
+}
 
-.nav__burger {
-  display: none;
-  width: 2.375rem;
-  height: 2.375rem;
+[data-theme='night'] .theme-switch__dot {
+  background: var(--sea);
+  transform: translateX(1.375rem);
+}
+
+/* Decorative language selector and search icon, mapped from epam.com header. */
+.nav__lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: default;
+}
+
+.nav__search {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
   place-items: center;
   color: var(--text);
+  transition: color 0.2s var(--ease);
 }
 
-.nav__burgerClose { display: none; }
-.nav.is-open .nav__burgerOpen { display: none; }
-.nav.is-open .nav__burgerClose { display: block; }
+.nav__search:hover { color: var(--sea-ink); }
 
 .nav__panelCta { display: none; }
 
@@ -174,12 +223,12 @@
    row at roughly 820px, and squeezing the gaps to buy the difference makes the
    header look cramped long before it makes it fit. */
 @media (max-width: 860px) {
-  .nav__burger { display: grid; }
-
   /* No room for a button beside the burger; the panel carries the CTA. The
      panel copy shares .nav__cta for its styling, so exclude it by name rather
      than relying on which rule happens to come last. */
   .nav__cta:not(.nav__panelCta) { display: none; }
+
+  .nav__lang { display: none; }
 
   /* Absolute against .nav — sticky is a positioned ancestor — so the panel
      overlays the hero instead of pushing the header taller as it opens. */
@@ -228,6 +277,36 @@
   .nav__link::after { display: none; }
 
   .nav__panelCta { display: inline-flex; margin-top: 1.5rem; }
+}
+
+/* --------------------------------------------------------------------------
+   6. Badges
+   -------------------------------------------------------------------------- */
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  line-height: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: transform 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+.badge:hover {
+  transform: translateY(-1px);
+  opacity: 0.9;
+}
+
+.badge img {
+  height: 22px;
+  width: auto;
+  display: block;
 }
 
 /* ===== hero ===== */
@@ -316,6 +395,10 @@
   width: 1.5rem;
   height: 1px;
   background: var(--hairline-strong);
+}
+
+.hero__badges {
+  margin-bottom: 2rem;
 }
 
 /* No ch cap. `ch` measures the active font, and with font-display: swap 15ch

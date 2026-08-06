@@ -9,9 +9,17 @@
     "preview": "astro preview",
     "check": "astro check"
   },
+  "dependencies": {
+    "@astrojs/react": "^4.0.0",
+    "lucide-react": "^0.460.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
     "@types/node": "^26.1.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "astro": "^5.6.1",
     "typescript": "^5.8.3"
   }

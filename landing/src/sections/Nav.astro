@@ -5,9 +5,23 @@ import { navLinks } from '../data/content';
 
 <header class="nav" id="nav">
   <div class="nav__inner">
-    <Brand href="#top" label="DMTools by EPAM — back to top" />
+    <div class="nav__left">
+      <button class="nav__menu" id="nav-burger" type="button"
+              aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg class="nav__menuOpen" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18M3 12h18M3 18h18"></path>
+        </svg>
+        <svg class="nav__menuClose" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 5l14 14M19 5L5 19"></path>
+        </svg>
+      </button>
 
-    <!-- Doubles as the narrow-screen menu: below 720px this becomes a panel
+      <span class="nav__divider" aria-hidden="true"></span>
+
+      <Brand href="#top" label="DMTools by EPAM — back to top" />
+    </div>
+
+    <!-- Doubles as the narrow-screen menu: below 860px this becomes a panel
          under the header, opened by the burger. One list, not two, so the
          links can never drift apart. -->
     <nav class="nav__links" id="nav-links" aria-label="Sections">
@@ -26,26 +40,27 @@ import { navLinks } from '../data/content';
     </nav>
 
     <div class="nav__actions">
-      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch colour theme">
-        <svg class="theme-toggle__moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-        <svg class="theme-toggle__sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="4.2"></circle>
-          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-        </svg>
+      <button class="theme-switch" id="theme-toggle" type="button" aria-label="Switch colour theme">
+        <span class="theme-switch__track" aria-hidden="true">
+          <span class="theme-switch__dot"></span>
+        </span>
       </button>
+
       <a class="btn btn--sm nav__cta" href="#install">Install DMTools</a>
 
-      <button class="nav__burger" id="nav-burger" type="button"
-              aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
-        <svg class="nav__burgerOpen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
-          <path d="M3 6h18M3 12h18M3 18h18"></path>
+      <div class="nav__lang" aria-label="Language">
+        <span>Global (EN)</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"></path>
         </svg>
-        <svg class="nav__burgerClose" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
-          <path d="M5 5l14 14M19 5L5 19"></path>
+      </div>
+
+      <a class="nav__search" href="https://github.com/epam/dm.ai" target="_blank" rel="noopener" aria-label="DMTools on GitHub">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="M21 21l-4.35-4.35"></path>
         </svg>
-      </button>
+      </a>
     </div>
   </div>
 </header>
@@ -70,9 +85,6 @@ import { navLinks } from '../data/content';
       }
     };
 
-    // The button swaps a moon for a sun, which says nothing to a screen reader.
-    // Naming the action beats naming the state: the icon already shows where
-    // you are, the label has to say where the press takes you.
     const labelToggle = () => {
       toggle.setAttribute(
         'aria-label',
@@ -98,7 +110,7 @@ import { navLinks } from '../data/content';
     window.addEventListener('scroll', setStuck, { passive: true });
 
     // ---- Burger menu ------------------------------------------------------
-    // Below 720px the links collapse into a panel under the header.
+    // Below 860px the links collapse into a panel under the header.
     const burger = document.getElementById('nav-burger');
     const panel = document.getElementById('nav-links');
 

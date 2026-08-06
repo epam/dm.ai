@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import react from '@astrojs/react';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { remarkDocLinks } from './src/lib/remark-doc-links.mjs';
@@ -25,6 +26,7 @@ export default defineConfig({
   site: origin,
   base: pathname,
   trailingSlash: 'always',
+  integrations: [react()],
   build: {
     // The landing markup is the product — keep it readable in view-source.
     inlineStylesheets: 'never',

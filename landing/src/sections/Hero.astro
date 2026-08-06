@@ -1,7 +1,8 @@
 ---
 import PlayIcon from '../components/PlayIcon.astro';
+import Badges from '../components/Badges.astro';
 
-const badges = ['EPAM Open Source', 'Apache 2.0', 'Java 17+'];
+const metaBadges = ['EPAM Open Source', 'Apache 2.0', 'Java 17+'];
 
 // Only the two figures the Numbers section does not count again. The tool and
 // integration counts moved into the panel, where the CLI prints them.
@@ -41,8 +42,12 @@ const session = [
 
   <div class="shell hero__inner">
     <p class="hero__meta reveal">
-      {badges.map((badge) => <span>{badge}</span>)}
+      {metaBadges.map((badge) => <span>{badge}</span>)}
     </p>
+
+    <div class="hero__badges reveal" data-delay="1">
+      <Badges />
+    </div>
 
     <h1 class="display hero__title reveal" data-delay="1">
       Every enterprise wants an <span class="accent">AI factory</span>.

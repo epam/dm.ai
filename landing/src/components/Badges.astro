@@ -1,0 +1,24 @@
+---
+const REPO = 'https://github.com/epam/dm.ai';
+
+const badges = [
+  { src: 'https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version', alt: 'Latest release', href: `${REPO}/releases/latest` },
+  { src: `${REPO}/raw/main/.github/badges/jacoco.svg`, alt: 'Coverage', href: `${REPO}/actions/workflows/coverage.yml` },
+  { src: `${REPO}/raw/main/.github/badges/branches.svg`, alt: 'Branches coverage', href: `${REPO}/actions/workflows/coverage.yml` },
+  { src: 'https://img.shields.io/badge/license-Apache%202.0-blue', alt: 'License Apache 2.0', href: `${REPO}/blob/main/LICENSE` },
+  { src: 'https://img.shields.io/github/stars/epam/dm.ai', alt: 'GitHub stars', href: `${REPO}/stargazers` },
+  { src: 'https://img.shields.io/github/forks/epam/dm.ai', alt: 'GitHub forks', href: `${REPO}/network/members` },
+  { src: 'https://img.shields.io/github/contributors/epam/dm.ai', alt: 'Contributors', href: `${REPO}/graphs/contributors` },
+  { src: 'https://img.shields.io/github/downloads/epam/dm.ai/total', alt: 'Downloads', href: `${REPO}/releases` },
+  { src: 'https://img.shields.io/github/last-commit/epam/dm.ai', alt: 'Last commit', href: `${REPO}/commits/main` },
+  { src: 'https://img.shields.io/badge/Java-17%2B-blue', alt: 'Java 17+', href: 'https://adoptium.net/' },
+];
+---
+
+<div class="badges" aria-label="Project badges">
+  {badges.map((badge) => (
+    <a class="badge" href={badge.href} target="_blank" rel="noopener">
+      <img src={badge.src} alt={badge.alt} loading="lazy" />
+    </a>
+  ))}
+</div>
