@@ -1,31 +1,16 @@
 ---
 import Brand from '../components/Brand.astro';
 import { navLinks } from '../data/content';
+
+const docsLink = navLinks.find((link) => link.label === 'Docs');
 ---
 
 <header class="nav" id="nav">
   <div class="nav__inner">
     <div class="nav__left">
-      <button class="nav__menu" id="nav-burger" type="button"
-              aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
-        <svg class="nav__menuOpen" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-          <rect x="2" y="5" width="18" height="1.5" rx="0" fill="currentColor"/>
-          <rect x="2" y="10.25" width="18" height="1.5" rx="0" fill="currentColor"/>
-          <rect x="2" y="15.5" width="18" height="1.5" rx="0" fill="currentColor"/>
-        </svg>
-        <svg class="nav__menuClose" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-          <path d="M5 5L17 17M17 5L5 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/>
-        </svg>
-      </button>
-
-      <span class="nav__divider" aria-hidden="true"></span>
-
       <Brand href="#top" label="DMTools by EPAM — back to top" />
     </div>
 
-    <!-- Doubles as the narrow-screen menu: below 860px this becomes a panel
-         under the header, opened by the burger. One list, not two, so the
-         links can never drift apart. -->
     <nav class="nav__links" id="nav-links" aria-label="Sections">
       {navLinks.map((link) => (
         <a
@@ -35,13 +20,11 @@ import { navLinks } from '../data/content';
           rel={link.external ? 'noopener' : undefined}
         >{link.label}</a>
       ))}
-
-      <!-- Panel only. The header CTA has no room beside a burger, so the menu
-           carries it instead of dropping it. -->
-      <a class="btn nav__cta nav__panelCta" href="#install">Install DMTools</a>
     </nav>
 
     <div class="nav__actions">
+      {docsLink && <a class="nav__mobileDocs" href={docsLink.href}>Docs</a>}
+
       <button class="theme-switch" id="theme-toggle" type="button" aria-label="Switch colour theme">
         <span class="theme-switch__track" aria-hidden="true">
           <span class="theme-switch__thumb">
@@ -119,39 +102,6 @@ import { navLinks } from '../data/content';
     setStuck();
     window.addEventListener('scroll', setStuck, { passive: true });
 
-    // ---- Burger menu ------------------------------------------------------
-    // Below 860px the links collapse into a panel under the header.
-    const burger = document.getElementById('nav-burger');
-    const panel = document.getElementById('nav-links');
-
-    if (burger && panel) {
-      const setOpen = (open: boolean) => {
-        nav.classList.toggle('is-open', open);
-        burger.setAttribute('aria-expanded', String(open));
-        burger.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-      };
-
-      burger.addEventListener('click', () => setOpen(!nav.classList.contains('is-open')));
-
-      // Every item in the panel navigates, so a click always ends the menu's job.
-      panel.addEventListener('click', (event) => {
-        if ((event.target as Element).closest('a')) setOpen(false);
-      });
-
-      document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape' || !nav.classList.contains('is-open')) return;
-        setOpen(false);
-        burger.focus();
-      });
-
-      // Crossing back to the desktop layout would otherwise strand `is-open` on
-      // a header whose links are laid out inline again. Keep in step with the
-      // burger breakpoint in nav.css.
-      const wide = window.matchMedia('(min-width: 861px)');
-      wide.addEventListener('change', (event) => {
-        if (event.matches) setOpen(false);
-      });
-    }
   }
 
   // ---- Scroll spy ---------------------------------------------------------

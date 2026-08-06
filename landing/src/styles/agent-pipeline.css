@@ -33,27 +33,61 @@
 
 .agent-pipeline-section .section-copy {
   max-width: 760px;
-  color: var(--muted);
+  color: var(--text);
   font-size: 1.125rem;
   line-height: 1.55;
 }
 
 .agent-graph-shell {
+  position: sticky;
+  top: 5.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  height: calc(100vh - 5.5rem);
+  overflow: hidden;
+}
+
+.agent-scroll-story {
   position: relative;
+  height: calc(100vh + 1200px);
+}
+
+.agent-scroll-story.orientation-vertical {
+  height: auto;
+}
+
+.agent-scroll-story.orientation-vertical .agent-graph-shell {
+  position: relative;
+  top: auto;
+  height: auto;
+  min-height: 780px;
+}
+
+.agent-scroll-story.orientation-vertical .agent-graph-scroll {
+  overflow-x: auto;
 }
 
 .agent-graph-toolbar {
-  position: relative;
+  position: absolute;
+  top: 1.25rem;
+  right: clamp(1.25rem, 3vw, 3rem);
   z-index: 3;
   display: flex;
   justify-content: flex-end;
-  padding: 0 0 10px;
+  padding: 0;
 }
 
 .agent-graph-scroll {
   position: relative;
-  overflow-x: auto;
-  padding-bottom: 12px;
+  width: 100vw;
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+.agent-graph-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .graph-view-switch {
@@ -90,7 +124,9 @@
 .agent-graph {
   position: relative;
   min-height: 600px;
-  border: 1px solid var(--ap-line);
+  border-top: 1px solid var(--ap-line);
+  border-bottom: 1px solid var(--ap-line);
+  border-right: 1px solid var(--ap-line);
   background: color-mix(in srgb, var(--canvas) 86%, var(--surface) 14%);
 }
 
@@ -466,7 +502,46 @@
   }
 }
 
+@media (max-width: 760px) {
+  .agent-graph-shell {
+    top: 4.75rem;
+    height: calc(100vh - 4.75rem);
+  }
+}
+
+@media (max-height: 720px) {
+  .agent-scroll-story {
+    height: auto;
+  }
+
+  .agent-graph-shell {
+    position: relative;
+    top: auto;
+    height: auto;
+    min-height: 680px;
+  }
+
+  .agent-graph-scroll {
+    overflow-x: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .agent-scroll-story {
+    height: auto;
+  }
+
+  .agent-graph-shell {
+    position: relative;
+    top: auto;
+    height: auto;
+    min-height: 680px;
+  }
+
+  .agent-graph-scroll {
+    overflow-x: auto;
+  }
+
   .agent-tooltip {
     transition: none;
   }

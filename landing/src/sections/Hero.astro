@@ -1,8 +1,10 @@
 ---
 import PlayIcon from '../components/PlayIcon.astro';
 import Badges from '../components/Badges.astro';
+import { film, filmEmbedUrl, asset } from '../data/content';
 
 const metaBadges = ['EPAM Open Source', 'Apache 2.0', 'Java 17+'];
+const playerUrl = `${filmEmbedUrl}?autoplay=1&rel=0`;
 
 // Only the two figures the Numbers section does not count again. The tool and
 // integration counts moved into the panel, where the CLI prints them.
@@ -41,30 +43,48 @@ const session = [
   <div class="hero__glow hero__glow--b" aria-hidden="true"></div>
 
   <div class="shell hero__inner">
-    <p class="hero__meta reveal">
-      {metaBadges.map((badge) => <span>{badge}</span>)}
-    </p>
+    <div class="hero__lead">
+      <div class="hero__content">
+        <p class="hero__meta reveal">
+          {metaBadges.map((badge) => <span>{badge}</span>)}
+        </p>
 
-    <div class="hero__badges reveal" data-delay="1">
-      <Badges />
-    </div>
+        <div class="hero__badges reveal" data-delay="1">
+          <Badges />
+        </div>
 
-    <h1 class="display hero__title reveal" data-delay="1">
-      Every enterprise wants an <span class="accent">AI factory</span>.
-    </h1>
+        <h1 class="display hero__title reveal" data-delay="1">
+          Every enterprise wants an <span class="accent">AI factory</span>.
+        </h1>
 
-    <p class="lede hero__lede reveal" data-delay="2">
-      Few know where to start. DMTools is the orchestration layer between the systems
-      you already run and the agents your teams already use — one CLI, every integration,
-      nothing to deploy.
-    </p>
+        <p class="lede hero__lede reveal" data-delay="2">
+          Few know where to start. DMTools is the orchestration layer between the systems
+          you already run and the agents your teams already use — one CLI, every integration,
+          nothing to deploy.
+        </p>
 
-    <div class="hero__actions reveal" data-delay="3">
-      <a class="btn btn--solid" href="#install">Install DMTools</a>
-      <a class="btn btn--ghost" href="#video">
-        <PlayIcon />
-        Watch the film
-      </a>
+        <div class="hero__actions reveal" data-delay="3">
+          <a class="btn btn--solid" href="#install">Install DMTools</a>
+          <button class="btn btn--ghost" id="watch-film" type="button">
+            <PlayIcon />
+            Watch the film
+          </button>
+        </div>
+      </div>
+
+      <div class="hero__film reveal" data-delay="2">
+        <div class="video__frame" id="video" data-video-url={playerUrl}>
+          <img class="video__poster" src={asset(film.poster)}
+               alt={film.posterAlt}
+               width="1280" height="720" decoding="async" />
+          <div class="video__body">
+            <button class="video__play" id="video-play" type="button" aria-label="Play the DMTools introduction film">
+              <PlayIcon size={26} />
+            </button>
+          </div>
+        </div>
+        <p class="hero__filmCaption">See how DMTools turns delivery signals into an autonomous agent workflow.</p>
+      </div>
     </div>
 
     <div class="hero__proof reveal" data-delay="4">
@@ -98,7 +118,33 @@ const session = [
 </section>
 
 <script>
-  import { prefersReducedMotion } from '../scripts/shared';
+  import { prefersReducedMotion, showToast } from '../scripts/shared';
+
+  const frame = document.getElementById('video');
+  const playButton = document.getElementById('video-play');
+  const watchButton = document.getElementById('watch-film');
+
+  if (frame && playButton) {
+    const playFilm = () => {
+      const url = (frame.dataset.videoUrl ?? '').trim();
+      if (!url) {
+        showToast('Film link not published yet');
+        return;
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.src = url;
+      iframe.title = 'DMTools film';
+      iframe.allow =
+        'accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture';
+      iframe.allowFullscreen = true;
+      frame.replaceChildren(iframe);
+      iframe.focus();
+    };
+
+    playButton.addEventListener('click', playFilm);
+    watchButton?.addEventListener('click', playFilm);
+  }
 
   /**
    * The session types itself out once, when the panel reaches the reader.

@@ -178,11 +178,7 @@ const schemas = [{ '@context': 'https://schema.org', '@graph': graph }];
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- The axis, not seven instances: Hanken Grotesk is variable and Google Fonts
-       serves the same woff2 files either way, so this costs nothing and makes
-       every weight available rather than the ones that happened to be listed.
-       The full 100..900 range is load-bearing: 100 sets the counted figures and
-       900 the tracked eyebrows, which is how epam.com uses museo-sans. --><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
 
   <!-- is:inline is load-bearing: a script Astro processes is deferred, which
        would let the wrong theme paint first. Night is the default rather than

@@ -36,8 +36,8 @@ export default defineConfig({
     // The reference pages carry a lot of shell and JSON; a highlighter that
     // matches the two panels the landing page already draws keeps them looking
     // like the same site rather than a bolted-on docs host.
+    shikiConfig: { theme: 'github-dark-default', wrap: false },
     processor: unified({
-      shikiConfig: { theme: 'github-dark-default', wrap: false },
       remarkPlugins: [
         remarkDocLinks({
           docsRoot: DOCS_ROOT,

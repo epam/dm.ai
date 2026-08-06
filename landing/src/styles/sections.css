@@ -19,59 +19,34 @@
 }
 
 .nav__inner {
-  max-width: var(--shell);
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 0 var(--gutter);
-  height: 4.5rem;
+  padding: 0 clamp(1.5rem, 3vw, 3.5rem);
+  height: 5.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: clamp(1.25rem, 2vw, 2.5rem);
 }
 
 .nav__left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
   flex-shrink: 0;
-}
-
-/* epam.com places a plain hamburger to the left of the wordmark, separated by
-   a vertical rule. The button toggles the mobile panel on narrow screens and
-   stays as a visual anchor on desktop. */
-.nav__menu {
-  display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
-  place-items: center;
-  color: var(--text);
-  flex-shrink: 0;
-  transition: color 0.2s var(--ease);
-}
-
-.nav__menu:hover { color: var(--sea-ink); }
-
-.nav__menuClose { display: none; }
-.nav.is-open .nav__menuOpen { display: none; }
-.nav.is-open .nav__menuClose { display: block; }
-
-.nav__divider {
-  width: 1px;
-  height: 1.5rem;
-  background: var(--hairline-strong);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.75rem;
   flex-shrink: 0;
 }
 
 .brand__epam {
   display: block;
-  width: 59px;
-  height: 22px;
+  width: 72px;
+  height: auto;
   line-height: 0;
 }
 
@@ -91,33 +66,41 @@
 
 .brand__rule {
   width: 1px;
-  height: 1.15rem;
+  height: 2rem;
   background: var(--hairline-strong);
 }
 
+.brand__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
 .brand__name {
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   color: var(--text);
 }
 
 .nav__links {
   display: flex;
   align-items: center;
-  gap: clamp(1.25rem, 2.6vw, 2.5rem);
+  gap: clamp(1.1rem, 1.8vw, 2rem);
 }
 
 /* epam.com sets its header links bold and at full contrast rather than as
    quiet grey — the header is a wayfinding bar there, not a footnote. */
 .nav__link {
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
   color: var(--text);
   position: relative;
   padding: 0.35rem 0;
   transition: color 0.2s var(--ease), opacity 0.2s var(--ease);
-  opacity: 0.72;
+  opacity: 1;
 }
 
 .nav__link::after {
@@ -149,8 +132,10 @@
 .nav__cta {
   border-radius: 999px;
   color: var(--btn-ink);
+  min-height: 3rem;
+  padding-inline: 1.5rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.025em;
   background: var(--grad-btn);
   transition: transform 0.2s var(--ease), filter 0.2s var(--ease);
 }
@@ -160,7 +145,14 @@
 .nav__actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
+}
+
+.nav__mobileDocs {
+  display: none;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
 }
 
 /* epam.com uses a horizontal pill switch with a sliding thumb. The thumb shows
@@ -174,8 +166,8 @@
 
 .theme-switch__track {
   display: block;
-  width: 3.5rem;
-  height: 1.875rem;
+  width: 3.25rem;
+  height: 1.75rem;
   padding: 0.1875rem;
   border: 1px solid var(--hairline-strong);
   border-radius: 999px;
@@ -187,8 +179,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.375rem;
+  height: 1.375rem;
   border-radius: 50%;
   background: var(--text);
   color: var(--canvas);
@@ -200,7 +192,7 @@
 .theme-switch__icon--moon { display: none; }
 
 [data-theme='night'] .theme-switch__thumb {
-  transform: translateX(1.625rem);
+  transform: translateX(1.5rem);
 }
 
 [data-theme='night'] .theme-switch__icon--sun { display: none; }
@@ -212,8 +204,9 @@
   align-items: center;
   gap: 0.3rem;
   color: var(--text);
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
   white-space: nowrap;
   cursor: default;
 }
@@ -229,62 +222,24 @@
 
 .nav__search:hover { color: var(--sea-ink); }
 
-.nav__panelCta { display: none; }
+@media (max-width: 1180px) {
+  .nav__links { display: none; }
+  .nav__mobileDocs { display: inline-flex; }
+}
 
-/* 860, not 720: six links plus the wordmark and the CTA stop fitting on one
-   row at roughly 820px, and squeezing the gaps to buy the difference makes the
-   header look cramped long before it makes it fit. */
-@media (max-width: 860px) {
-  /* No room for a button beside the burger; the panel carries the CTA. The
-     panel copy shares .nav__cta for its styling, so exclude it by name rather
-     than relying on which rule happens to come last. */
-  .nav__cta:not(.nav__panelCta) { display: none; }
+@media (max-width: 760px) {
+  .nav__inner { height: 4.75rem; padding-inline: 1rem; }
+  .nav__lang,
+  .nav__search,
+  .nav__cta { display: none; }
+  .brand__epam { width: 62px; }
+  .brand__mark { width: 30px; height: 30px; }
+  .brand__name { font-size: 1rem; }
+}
 
-  .nav__lang { display: none; }
-
-  /* Absolute against .nav — sticky is a positioned ancestor — so the panel
-     overlays the hero instead of pushing the header taller as it opens. */
-  .nav__links {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    padding: 0 var(--gutter) 0.5rem;
-    background: var(--canvas);
-    border-bottom: 1px solid var(--hairline);
-    box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.45);
-    /* visibility, not display: a display swap cannot transition, and the panel
-       has to stay out of the tab order while it is closed. */
-    visibility: hidden;
-    opacity: 0;
-    transform: translateY(-0.5rem);
-    pointer-events: none;
-    transition: opacity 0.25s var(--ease), transform 0.25s var(--ease), visibility 0.25s;
-  }
-
-  .nav.is-open .nav__links {
-    visibility: visible;
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-  }
-
-  /* Colour stays inherited from the base rule — muted by default, --text once
-     .is-current lands — so the spy still reads with the underline suppressed. */
-  .nav__link {
-    padding: 1.05rem 0;
-    font-size: 1.0625rem;
-    border-bottom: 1px solid var(--hairline);
-  }
-
-  /* The sliding underline is a pointer affordance; in a stacked list it just
-     redraws the border that is already there. */
-  .nav__link::after { display: none; }
-
-  .nav__panelCta { display: inline-flex; margin-top: 1.5rem; }
+@media (max-width: 390px) {
+  .brand__rule,
+  .brand__name { display: none; }
 }
 
 /* --------------------------------------------------------------------------
@@ -399,6 +354,15 @@
 
 .hero__inner { position: relative; z-index: 1; }
 
+.hero__lead {
+  display: grid;
+  grid-template-columns: minmax(0, 6.4fr) minmax(22rem, 5.6fr);
+  gap: clamp(2.5rem, 5vw, 6rem);
+  align-items: center;
+}
+
+.hero__content { min-width: 0; }
+
 .hero__meta {
   display: flex;
   flex-wrap: wrap;
@@ -429,7 +393,10 @@
    resolved to 1077px against the fallback and 773px once Sora arrived — so the
    headline set in two lines or three depending on cache and timing. Nothing is
    lost: the first line is 1033px and .shell already caps the column at 1052px. */
-.hero__title { margin-bottom: 2rem; }
+.hero__title {
+  max-width: 10.5ch;
+  margin-bottom: 2rem;
+}
 
 /* 20px, their --slider-cta-after-text. The heading above keeps their 32px, so the
    lede reads as belonging to the button under it rather than floating between
@@ -440,7 +407,28 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.875rem;
-  margin-bottom: 3.5rem;
+  margin-bottom: 0;
+}
+
+.hero__film {
+  position: relative;
+  width: min(100%, 42rem);
+  justify-self: end;
+}
+
+.hero__film .video__frame {
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.28);
+}
+
+.hero__filmCaption {
+  max-width: 38rem;
+  margin-top: 1.25rem;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 /* Under the headline rather than beside it, so the display size is untouched. */
@@ -451,6 +439,7 @@
   align-items: start;
   padding-top: 2.5rem;
   border-top: 1px solid var(--hairline);
+  margin-top: clamp(4rem, 8vw, 7rem);
 }
 
 .hero__stats {
@@ -558,6 +547,9 @@
 }
 
 @media (max-width: 1080px) {
+  .hero__lead { grid-template-columns: 1fr; }
+  .hero__title { max-width: 14ch; }
+  .hero__film { width: 100%; justify-self: start; }
   /* Figures side by side rather than stacked under a full-width panel. */
   .hero__proof { grid-template-columns: 1fr; gap: 2rem; }
   .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
