@@ -74,7 +74,7 @@ export const meta = {
    * for the image fields, not SVG, so the vector alone would be skipped.
    * Regenerate both together or the tab icon and the schema will disagree.
    */
-  mark: 'assets/dmt-mark.png',
+  mark: 'assets/favicon.svg',
 } as const;
 
 /** softwareVersion tracks gradle.properties — the one field that goes stale silently. */

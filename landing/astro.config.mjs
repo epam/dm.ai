@@ -1,9 +1,11 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
+import { unified } from '@astrojs/markdown-remark';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { remarkDocLinks } from './src/lib/remark-doc-links.mjs';
+import { rehypeDocIcons } from './src/lib/rehype-doc-icons.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(here, '..');
@@ -36,13 +38,16 @@ export default defineConfig({
     // matches the two panels the landing page already draws keeps them looking
     // like the same site rather than a bolted-on docs host.
     shikiConfig: { theme: 'github-dark-default', wrap: false },
-    remarkPlugins: [
-      remarkDocLinks({
-        docsRoot: DOCS_ROOT,
-        repoRoot: REPO_ROOT,
-        repoUrl: REPO_URL,
-        base: pathname,
-      }),
-    ],
+    processor: unified({
+      remarkPlugins: [
+        remarkDocLinks({
+          docsRoot: DOCS_ROOT,
+          repoRoot: REPO_ROOT,
+          repoUrl: REPO_URL,
+          base: pathname,
+        }),
+      ],
+      rehypePlugins: [rehypeDocIcons],
+    }),
   },
 });
