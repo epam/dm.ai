@@ -438,6 +438,29 @@ public class PropertyReader {
     return Boolean.parseBoolean(value) || "1".equals(value);
   }
 
+  /**
+   * Directory where {@link CommandLineUtils#runCommand} persists the complete,
+   * untruncated output of any command whose console logging was capped (see
+   * DEFAULT_MAX_LOGGED_OUTPUT_LINES / maxLinesToLog). This is intentionally
+   * DECOUPLED from DMTOOLS_JS_LOG_TOOL_CALLS: that flag also enables verbose
+   * per-call JS/MCP tool argument dumping (JobJavaScriptBridge), which can
+   * include large payloads (e.g. full file_write contents) and is unwanted
+   * noise when the only goal is recovering a capped CLI subprocess transcript
+   * (e.g. a nested `dmtools run ...` invoked via cli_execute_command).
+   * <p>
+   * Full-output persistence only fires when a command's output actually
+   * exceeds the logging cap — short/trivial commands (e.g. `git status`,
+   * `git checkout`) never produce a file, so normal agent runs with many
+   * small shell calls (pre/post JS actions, git plumbing, etc.) don't get
+   * cluttered with log files.
+   * <p>
+   * Set to an empty string to disable persisting these files entirely.
+   * Defaults to ".dmtools-logs/cli" (relative to the process working directory).
+   */
+  public String getCliFullOutputLogDir() {
+    return getValue("DMTOOLS_CLI_LOG_DIR", ".dmtools-logs/cli");
+  }
+
   public boolean isXrayCacheGetRequestsEnabled() {
     String value = getValue("XRAY_CACHE_GET_REQUESTS_ENABLED");
     if (value == null) {
