@@ -11,6 +11,7 @@
  * variable rather than a secret.
  */
 const gaId = process.env.GA_MEASUREMENT_ID;
+const consentMode = (process.env.GA_CONSENT_MODE || 'denied').toLowerCase();
 ---
 
 {gaId && (
@@ -22,6 +23,18 @@ const gaId = process.env.GA_MEASUREMENT_ID;
     <script is:inline set:html={`window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
-    gtag('config', ${JSON.stringify(gaId)});`} />
+    gtag('consent', 'default', {
+      ad_storage: '${consentMode}',
+      analytics_storage: 'granted',
+      ad_user_data: '${consentMode}',
+      ad_personalization: '${consentMode}'
+    });
+    gtag('config', ${JSON.stringify(gaId)}, {
+      send_page_view: true,
+      allow_google_signals: false,
+      cookie_flags: 'SameSite=None;Secure',
+      cookie_expires: 63072000,
+      custom_map: { dimension1: 'theme', metric1: 'scroll_depth' }
+    });`} />
   </>
 )}
