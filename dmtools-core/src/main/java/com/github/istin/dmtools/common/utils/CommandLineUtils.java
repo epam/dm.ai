@@ -236,6 +236,11 @@ public class CommandLineUtils {
 
         // Drain stdout/stderr in real-time so the process doesn't block on a full pipe
         boolean verboseCommandOutputLogging = new PropertyReader().isJsToolCallLoggingEnabled();
+        // Path a full, untruncated transcript would be written to IF this command's
+        // output ends up exceeding the logging cap (computed upfront, from the same
+        // timestamp/uniqueId used for the temp script, so the truncation notice can
+        // point at it immediately instead of only after the fact).
+        Path fullOutputLogFile = resolveFullOutputLogFile(timestamp, uniqueId);
         StringBuilder output = new StringBuilder();
         int lineCount = 0;
         int loggedLineCount = 0;
@@ -254,7 +259,12 @@ public class CommandLineUtils {
                     logger.info(line);
                     loggedLineCount++;
                 } else if (!truncationNoticeLogged) {
-                    logger.info("... output truncated after {} line(s); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output ...", maxLinesToLog);
+                    if (fullOutputLogFile != null) {
+                        logger.info("... output truncated after {} line(s); full output will be saved to {} ...",
+                                maxLinesToLog, fullOutputLogFile);
+                    } else {
+                        logger.info("... output truncated after {} line(s); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output ...", maxLinesToLog);
+                    }
                     truncationNoticeLogged = true;
                 }
 
@@ -282,12 +292,59 @@ public class CommandLineUtils {
         }
         logger.debug("Process exited with code: {}", exitCode);
 
+        // Persist the complete transcript whenever the console logging was actually
+        // capped, regardless of exit code, so a failing/CI run is never left blind
+        // even before the exception below is thrown/handled by the caller.
+        if (truncationNoticeLogged && fullOutputLogFile != null) {
+            persistFullOutput(fullOutputLogFile, command, workingDirectory, output.toString(), lineCount, exitCode);
+        }
+
         // Propagate non-zero exit codes so callers are not silently misled.
         if (exitCode != 0) {
             throw new IOException("Command failed (exit code " + exitCode + "): " + command + "\nOutput:\n" + output.toString().trim());
         }
 
         return output.toString().trim();
+    }
+
+    /**
+     * Resolves (without creating) the path a full command-output transcript would be
+     * written to, or null if full-output persistence is disabled
+     * (DMTOOLS_CLI_LOG_DIR set to an empty string).
+     */
+    private static Path resolveFullOutputLogFile(String timestamp, String uniqueId) {
+        String logDirProperty = new PropertyReader().getCliFullOutputLogDir();
+        if (logDirProperty == null || logDirProperty.isBlank()) {
+            return null;
+        }
+        return Paths.get(logDirProperty).resolve(timestamp + "-" + uniqueId + ".log");
+    }
+
+    /**
+     * Writes the complete, untruncated output of a command to disk. Only called
+     * when the console logging was actually capped (see maxLinesToLog), so trivial
+     * commands whose full output already fit on the console never produce a file.
+     * Best-effort: failures to write are logged and swallowed, never propagated,
+     * so a read-only filesystem or full disk can't turn a successful command into
+     * a failure.
+     */
+    private static void persistFullOutput(Path logFile, String command, File workingDirectory,
+                                           String fullOutput, int lineCount, int exitCode) {
+        try {
+            Path parent = logFile.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            String header = "Command: " + SecurityUtils.maskCommand(command) + System.lineSeparator()
+                    + "Working directory: " + (workingDirectory != null ? workingDirectory.getAbsolutePath() : System.getProperty("user.dir")) + System.lineSeparator()
+                    + "Exit code: " + exitCode + System.lineSeparator()
+                    + "Total output lines: " + lineCount + System.lineSeparator()
+                    + "----" + System.lineSeparator();
+            Files.writeString(logFile, header + fullOutput);
+            logger.info("Full output ({} line(s)) written to: {}", lineCount, logFile.toAbsolutePath());
+        } catch (IOException e) {
+            logger.warn("Failed to persist full command output to {}: {}", logFile, e.getMessage());
+        }
     }
 
     static void removeExcludedEnvironmentVariables(Map<String, String> environment,

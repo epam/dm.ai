@@ -312,4 +312,84 @@ class CommandLineUtilsTest {
             assertTrue(result.contains("B"));
         }
     }
+
+    @Test
+    void testRunCommand_TruncatedOutput_PersistsFullOutputToConfiguredDir() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        Path logDir = tempDir.resolve("full-output-logs");
+        try {
+            PropertyReader.setOverrides(Map.of("DMTOOLS_CLI_LOG_DIR", logDir.toString()));
+
+            Path testFile = tempDir.resolve("five-lines.txt");
+            Files.writeString(testFile, "L1\nL2\nL3\nL4\nL5\n");
+
+            // maxLinesToLog=2 guarantees truncation (5 lines produced) without needing
+            // DMTOOLS_JS_LOG_TOOL_CALLS, which is the whole point of this decoupling.
+            String result = CommandLineUtils.runCommand(
+                    "cat " + testFile.toAbsolutePath(), null, Map.of(), null, false, null, 2);
+
+            // Full output is still returned to the caller regardless of the cap.
+            assertTrue(result.contains("L1") && result.contains("L5"));
+
+            assertTrue(Files.isDirectory(logDir), "Log dir should have been created");
+            try (var files = Files.list(logDir)) {
+                java.util.List<Path> written = files.toList();
+                assertEquals(1, written.size(), "Exactly one full-output log file should be written");
+                String content = Files.readString(written.get(0));
+                assertTrue(content.contains("L1") && content.contains("L5"),
+                        "Persisted file should contain the full untruncated output");
+                assertTrue(content.contains("Exit code: 0"));
+            }
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testRunCommand_UntruncatedOutput_DoesNotWriteLogFile() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        Path logDir = tempDir.resolve("full-output-logs-2");
+        try {
+            PropertyReader.setOverrides(Map.of("DMTOOLS_CLI_LOG_DIR", logDir.toString()));
+
+            // Trivial command (single line) well within the default/any reasonable cap —
+            // this mirrors pre/post JS action shell calls (git status, git checkout, etc.)
+            // that must NOT clutter the log directory.
+            CommandLineUtils.runCommand("echo only-one-line");
+
+            assertFalse(Files.exists(logDir), "No log file/dir should be created when nothing was truncated");
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testRunCommand_TruncatedOutput_LogDirDisabled_DoesNotWriteFile() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        Path logDir = tempDir.resolve("full-output-logs-3");
+        try {
+            // Empty string explicitly disables full-output persistence.
+            PropertyReader.setOverrides(Map.of("DMTOOLS_CLI_LOG_DIR", ""));
+
+            Path testFile = tempDir.resolve("three-lines.txt");
+            Files.writeString(testFile, "A\nB\nC\n");
+
+            String result = CommandLineUtils.runCommand(
+                    "cat " + testFile.toAbsolutePath(), null, Map.of(), null, false, null, 1);
+
+            assertTrue(result.contains("A") && result.contains("C"));
+            assertFalse(Files.exists(logDir), "No log file should be written when DMTOOLS_CLI_LOG_DIR is empty");
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
 }
