@@ -20,9 +20,15 @@ const REPO_URL = 'https://github.com/epam/dm.ai';
  * Splitting it into origin and path matters for a project page: the site lives
  * under /<repo>/, and every generated asset link has to carry that prefix or
  * it resolves against the user page root and 404s.
+ *
+ * When a custom domain is configured (e.g. dmtools.epam.com), the site serves
+ * from the domain root, so the base path must be '/'.
  */
 const SITE_URL = process.env.SITE_URL || 'http://localhost:4321';
-const { origin, pathname } = new URL(SITE_URL.endsWith('/') ? SITE_URL : `${SITE_URL}/`);
+const siteUrl = new URL(SITE_URL.endsWith('/') ? SITE_URL : `${SITE_URL}/`);
+const origin = siteUrl.origin;
+// Project pages live under /<repo>/; custom domains serve from the root.
+const pathname = origin.endsWith('github.io') ? siteUrl.pathname : '/';
 
 export default defineConfig({
   site: origin,
