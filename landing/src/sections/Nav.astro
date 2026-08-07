@@ -80,8 +80,12 @@ const docsLink = navLinks.find((link) => link.label === 'Docs');
 
     labelToggle();
     toggle.addEventListener('click', () => {
-      applyTheme(root.dataset.theme === 'night' ? 'snow' : 'night');
+      const next = root.dataset.theme === 'night' ? 'snow' : 'night';
+      applyTheme(next);
       labelToggle();
+      if (typeof gtag === 'function') {
+        gtag('event', 'theme_switch', { event_category: 'engagement', event_label: next });
+      }
     });
   }
 
