@@ -86,8 +86,43 @@ const playerUrl = `${filmEmbedUrl}?autoplay=1&rel=0`;
       iframe.focus();
     };
 
-    playButton.addEventListener('click', playFilm);
-    watchButton?.addEventListener('click', playFilm);
+    playButton.addEventListener('click', () => {
+      playFilm();
+      if (typeof gtag === 'function') {
+        gtag('event', 'play_film', { event_category: 'engagement', event_label: 'hero' });
+      }
+    });
+    watchButton?.addEventListener('click', () => {
+      playFilm();
+      if (typeof gtag === 'function') {
+        gtag('event', 'play_film', { event_category: 'engagement', event_label: 'hero_button' });
+      }
+    });
   }
 
+  // Scroll-depth tracking for the landing page.
+  if (typeof window !== 'undefined') {
+    const markers = [25, 50, 75, 90];
+    const sent = new Set<number>();
+    const sendDepth = () => {
+      const scroll = window.scrollY + window.innerHeight;
+      const height = document.documentElement.scrollHeight;
+      if (!height) return;
+      const depth = Math.round((scroll / height) * 100);
+      markers.forEach((m) => {
+        if (depth >= m && !sent.has(m)) {
+          sent.add(m);
+          if (typeof gtag === 'function') {
+            gtag('event', 'scroll_depth', {
+              event_category: 'engagement',
+              event_label: String(m),
+              value: m,
+            });
+          }
+        }
+      });
+    };
+    window.addEventListener('scroll', sendDepth, { passive: true });
+    sendDepth();
+  }
 </script>

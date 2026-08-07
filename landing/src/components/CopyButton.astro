@@ -14,6 +14,7 @@ const { target, label, class: extraClass } = Astro.props;
   class:list={['cmd__copy', extraClass]}
   type="button"
   data-copy={target}
+  data-copy-target={target}
   aria-label={label}
 >
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
