@@ -1046,6 +1046,7 @@ download_file() {
     local output="$2"
     local desc="$3"
     local validate="${4:-true}"
+    local expected_checksum="${5:-}"
     local max_retries=3
     local retry_count=0
     
@@ -1143,13 +1144,26 @@ download_file() {
             # Validate while we're still inside the retry loop so a corrupted or
             # HTML-wrapped download counts as a retryable failure.
             if [ "$validate" = "true" ]; then
-                if validate_downloaded_file "$output" "$desc" "$url"; then
-                    return 0
+                if ! validate_downloaded_file "$output" "$desc" "$url"; then
+                    warn "Validation failed for $desc. Retrying..."
+                    rm -f "$output" 2>/dev/null
+                    download_success=false
                 fi
-                warn "Validation failed for $desc. Retrying..."
-                rm -f "$output" 2>/dev/null
-                download_success=false
-            else
+            fi
+
+            # When a checksum is known, verify it inside the retry loop so a
+            # corrupted partial resume is caught and re-downloaded from scratch.
+            if [ "$download_success" = true ] && [ -n "$expected_checksum" ]; then
+                local actual_checksum
+                actual_checksum=$(compute_sha256 "$output")
+                if [ -n "$actual_checksum" ] && [ "$expected_checksum" != "$actual_checksum" ]; then
+                    warn "Checksum mismatch for $desc. Expected: $expected_checksum, got: $actual_checksum. Retrying..."
+                    rm -f "$output" 2>/dev/null
+                    download_success=false
+                fi
+            fi
+
+            if [ "$download_success" = true ]; then
                 return 0
             fi
         fi
@@ -1576,9 +1590,20 @@ download_checksum_file() {
     return 1
 }
 
-# Verify the downloaded JAR against the published SHA-256 checksum (if available).
-# Returns 0 when verified or when no checksum is available, 1 on mismatch.
-verify_jar_checksum() {
+# Compute SHA-256 checksum of a file. Returns empty string if neither sha256sum
+# nor shasum is available.
+compute_sha256() {
+    local file="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$file" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$file" | awk '{print $1}'
+    fi
+}
+
+# Fetch the expected SHA-256 checksum for the DMTools JAR of a given version.
+# Returns the checksum or an empty string if unavailable.
+get_jar_expected_checksum() {
     local version="$1"
     local checksum_path
     checksum_path=$(download_checksum_file "$version") || return 0
@@ -1587,23 +1612,24 @@ verify_jar_checksum() {
         return 0
     fi
 
-    local expected_checksum
-    expected_checksum=$(grep -o "^[a-f0-9A-F]\{64\}  dmtools-${version}-all.jar" "$checksum_path" 2>/dev/null | awk '{print $1}')
-    if [ -z "$expected_checksum" ]; then
-        warn "Could not find JAR checksum in $checksum_path — skipping checksum verification"
-        return 0
-    fi
+    grep -o "^[a-f0-9A-F]\{64\}  dmtools-${version}-all.jar" "$checksum_path" 2>/dev/null | awk '{print $1}'
+}
 
-    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
-        warn "Neither sha256sum nor shasum is available — skipping checksum verification"
+# Verify the downloaded JAR against the published SHA-256 checksum (if available).
+# Returns 0 when verified or when no checksum is available, 1 on mismatch.
+verify_jar_checksum() {
+    local version="$1"
+    local expected_checksum
+    expected_checksum=$(get_jar_expected_checksum "$version")
+    if [ -z "$expected_checksum" ]; then
         return 0
     fi
 
     local actual_checksum
-    if command -v sha256sum >/dev/null 2>&1; then
-        actual_checksum=$(sha256sum "$JAR_PATH" | awk '{print $1}')
-    else
-        actual_checksum=$(shasum -a 256 "$JAR_PATH" | awk '{print $1}')
+    actual_checksum=$(compute_sha256 "$JAR_PATH")
+    if [ -z "$actual_checksum" ]; then
+        warn "Neither sha256sum nor shasum is available — skipping checksum verification"
+        return 0
     fi
 
     if [ "$expected_checksum" != "$actual_checksum" ]; then
@@ -1620,13 +1646,15 @@ verify_jar_checksum() {
 download_dmtools_jar() {
     local version="$1"
     local jar_url="https://github.com/${REPO}/releases/download/${version}/dmtools-${version}-all.jar"
+    local expected_checksum
+    expected_checksum=$(get_jar_expected_checksum "$version")
 
     # Method 1: Standard release URL
-    if download_file "$jar_url" "$JAR_PATH" "DMTools JAR"; then
+    if download_file "$jar_url" "$JAR_PATH" "DMTools JAR" "true" "$expected_checksum"; then
         if verify_jar_checksum "$version"; then
             return 0
         fi
-        warn "Downloaded JAR failed checksum verification, retrying from alternative source..."
+        warn "Downloaded JAR failed final checksum verification."
         rm -f "$JAR_PATH"
     fi
 
@@ -1642,11 +1670,11 @@ download_dmtools_jar() {
     fi
 
     if [ -n "$api_asset_url" ]; then
-        if download_file "$api_asset_url" "$JAR_PATH" "DMTools JAR (from API)"; then
+        if download_file "$api_asset_url" "$JAR_PATH" "DMTools JAR (from API)" "true" "$expected_checksum"; then
             if verify_jar_checksum "$version"; then
                 return 0
             fi
-            warn "JAR from API failed checksum verification."
+            warn "JAR from API failed final checksum verification."
             rm -f "$JAR_PATH"
         fi
     fi
