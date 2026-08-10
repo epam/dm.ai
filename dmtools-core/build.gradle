@@ -134,7 +134,7 @@ dependencies {
     api 'com.google.cloud:google-cloud-core:2.73.0'
 
     // TOON format serialization for LLM-optimized CLI output (2.0.0 uses Jackson 3.1.3+)
-    api 'dev.toonformat:jtoon:2.0.1'
+    api 'dev.toonformat:jtoon:2.0.2'
 
     // Test dependencies
     testImplementation platform("org.junit:junit-bom:${versions.junit}")
