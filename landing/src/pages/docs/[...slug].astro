@@ -1,0 +1,32 @@
+---
+import { getCollection, render } from 'astro:content';
+import Doc from '../../layouts/Doc.astro';
+import { titleOf, summaryOf, ROOT_ID } from '../../lib/docs';
+
+export async function getStaticPaths() {
+  const docs = await getCollection('docs');
+
+  // The root README is rendered by the index route, not here — leaving it in
+  // would publish it a second time at /docs/index/.
+  return docs
+    .filter((doc) => doc.id !== ROOT_ID)
+    .map((doc) => ({ params: { slug: doc.id }, props: { doc } }));
+}
+
+const { doc } = Astro.props;
+const { Content, headings } = await render(doc);
+
+const title = titleOf(doc);
+const summary = summaryOf(doc);
+
+// Falls back to naming the document rather than shipping an empty description:
+// a page with none reads as thin, and several of these open on a table.
+const description = summary
+  || `${title} — reference documentation for DMTools, EPAM's open-source AI-factory orchestrator.`;
+
+const sourcePath = doc.filePath?.split('dmtools-ai-docs/')[1];
+---
+
+<Doc title={title} description={description} id={doc.id} headings={headings} sourcePath={sourcePath}>
+  <Content />
+</Doc>

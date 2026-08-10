@@ -1,0 +1,37 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+import { faq } from '../data/content';
+
+/**
+ * Native <details>, not a scripted accordion: keyboard and screen-reader
+ * behaviour come free, it works with JavaScript off, and the answers stay in
+ * the markup where assistants read them even while collapsed. <summary> may
+ * hold one heading, so the +/x marker is drawn by CSS, not added as a child.
+ *
+ * Every row ships closed. No `open` attribute anywhere, so the section loads as
+ * a list of questions and each answer costs a click.
+ */
+---
+
+<section class="band" id="faq">
+  <div class="shell">
+    <SectionHead eyebrow="Common questions">
+      <Fragment slot="headline">
+        The awkward questions, answered <span class="accent">up front</span>.
+      </Fragment>
+      <Fragment slot="subhead">
+        What teams ask on the first call — where the data goes, who has to run it,
+        and what happens when the model gets something wrong.
+      </Fragment>
+    </SectionHead>
+
+    <div class="faq">
+      {faq.map((entry) => (
+        <details class="faq__item reveal">
+          <summary class="faq__sum"><h3 class="faq__q">{entry.question}</h3></summary>
+          <p class="faq__a">{entry.answer}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

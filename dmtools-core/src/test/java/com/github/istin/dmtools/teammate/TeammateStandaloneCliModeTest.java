@@ -160,7 +160,7 @@ class TeammateStandaloneCliModeTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("executed\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -169,7 +169,7 @@ class TeammateStandaloneCliModeTest {
 
                 mocked.verify(() -> CommandLineUtils.runCommand(
                         argThat(cmd -> cmd.startsWith("cursor-agent") && cmd.contains("dmtools_cli_prompt_")),
-                        any(), any(), any()));
+                        any(), any(), any(), anyBoolean(), any(), anyInt()));
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);

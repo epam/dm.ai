@@ -118,7 +118,7 @@ public class JobRunnerCoverageTest {
     public void testGetJobsReturnsAllJobsAndCachesList() {
         List<Job> jobs = JobRunner.getJobs();
         assertNotNull(jobs);
-        assertEquals(22, jobs.size());
+        assertEquals(23, jobs.size());
         for (Job job : jobs) {
             assertNotNull(job);
             assertNotNull(job.getName());
@@ -383,8 +383,9 @@ public class JobRunnerCoverageTest {
         String output = captureOut(() -> JobRunner.main(new String[]{"--list-jobs"}));
         assertTrue(output.contains("Available Jobs:"));
         assertTrue(output.contains("- CodeGenerator"));
+        assertTrue(output.contains("- CliAgent"));
         assertTrue(output.contains("- KBProcessingJob"));
-        assertTrue(output.contains("Total: 22 jobs available"));
+        assertTrue(output.contains("Total: 23 jobs available"));
     }
 
     @Test

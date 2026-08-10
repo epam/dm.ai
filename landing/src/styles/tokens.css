@@ -1,0 +1,201 @@
+/* Tokens — palette, themes, scoped overrides
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* ==========================================================================
+   DMTools landing page
+   EPAM Brandbook 2023 — Night (dark, default) and Snow (light) variants.
+
+   Palette source: branded/epam/dmtools film brief (IstiN/yoclip-examples).
+     Canvas   Night #060606 / Snow #FBFAFA
+     Accents  Sea #00F6FF · Mint #00FFF0 · Lilac #B896FF · Sky #7BA8FF
+
+   Night is the default and the tuned target: the page is a dark surface with
+   cyan-to-lilac accents, and the light variant is the alternate rather than the
+   other way round. Snow uses darkened accent variants so text and rules keep
+   WCAG AA contrast on a light canvas.
+
+   Brand rule applied throughout: the gradient carries one keyword per headline
+   plus the counted figures and the rules that measure them. Everything else
+   stays monochrome — that restraint is what keeps the page reading as EPAM
+   rather than as a generic developer-tool template.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* Snow — default. #FBFAFA and #060606 are what EPAM serves on its own
+     properties, so the pair is fixed; the cards get their edge from --hairline
+     at 16% rather than from moving the ground. */
+  --canvas:      #FBFAFA;
+  --surface:     #FFFFFF;
+  --surface-alt: #EFEEEC;
+  --text:        #060606;
+  --muted:       #262626;
+  --faint:       #717171;
+  --hairline:    rgba(6, 6, 6, 0.16);
+  --hairline-strong: rgba(6, 6, 6, 0.26);
+
+  /* The alternating band, one step off the canvas in either theme. A tinted
+     band restates --surface with it: the cards inside have to keep the same
+     step away from their ground, or they disappear into it. */
+  --tint-canvas:  #F0EFED;
+  --tint-surface: #FFFFFF;
+
+  --sea:   #0088A0;
+  --mint:  #00998F;
+  --lilac: #7B4FE0;
+  --sky:   #3A6BD6;
+
+  /* The accent at a weight that carries small text, in either direction. The
+     eyebrows are 11px and the step numbers 11px on a fill, both of which need
+     4.5:1; --sea measures 4.01:1 against the canvas, just under. Same hue and
+     saturation, darker. Night's --sea is already 15:1 there and aliases back. */
+  /* Clears 4.5:1 on both grounds the 11px eyebrow sits on: 5.6:1 on the canvas,
+     5.0:1 in a tinted band. The previous #00798F measured 4.42:1 in a band. */
+  --sea-ink: #00707F;
+
+  /* Built from the accent tokens so .panel--dark and .footer, which stay dark on
+     a light page, get the Night sweep by restating those tokens.
+
+     The stops are epam.com's homepage headline — mint into cyan into lilac, no
+     blue between them. Their product sites do route through blue; the headline
+     treatment this page copies does not. The missing blue stop is deliberate. */
+  --grad: linear-gradient(96deg, var(--mint) 0%, var(--sea) 46%, var(--lilac) 100%);
+
+  /* The filled button needs its own stops on Snow. The accents above are tuned
+     as *text* on a light canvas; used as a *fill* under white, the mint end
+     measures 3.42:1 — under AA for a 15px label. These are the same three hues
+     pulled dark enough that --btn-ink clears 4.5:1 across the whole sweep.
+     Night has no such problem and reuses --grad as it stands. */
+  --grad-btn: linear-gradient(96deg, #00726B 0%, #00677A 46%, #5B33B8 100%);
+  --glow-a: rgba(0, 136, 160, 0.16);
+  --glow-b: rgba(123, 79, 224, 0.14);
+
+  /* Diagram nodes. Agents carry the lilac accent, systems the sea one, each
+     over a tinted fill so the pill still reads as an object rather than an
+     outline. Label colours are pulled darker than the border they sit next
+     to — the border only has to be seen, the text has to be read. */
+  --node-ai-fill:   #E9DEFF;
+  --node-ai-line:   #7B4FE0;
+  --node-ai-text:   #5B2FBF;
+
+  --node-sys-fill:  #CFE9F1;
+  --node-sys-line:  #0088A0;
+  --node-sys-text:  #035666;
+
+  /* Stands in for museo-sans, which is what epam.com serves and which licenses
+     only through Adobe Fonts — it cannot be self-hosted here. Hanken Grotesk is
+     the closest free face by proportion: the same width and x-height, so a
+     headline sets in the same number of lines, and it carries the full 100–900
+     axis the epam settings need. Sora was wider and ran headlines a line long;
+     Nunito Sans matches the shapes but thins to a hairline at 100–200, which is
+     exactly where the display sizes sit. JetBrains Mono stays for the terminal
+     panels: a taller x-height keeps 13px legible. */
+  --font: 'Source Sans 3', 'Source Sans Pro', Arial, Helvetica, sans-serif;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
+
+  --shell: 1180px;
+  --gutter: clamp(1.25rem, 5vw, 4rem);
+  /* 152px top and bottom put 304px of empty canvas on every section boundary,
+     and the page ran to thirteen screens on a 900px viewport with roughly half
+     of them blank. The band is the page's only vertical rhythm, so it sets the
+     density on its own — nothing else needed changing to halve the scroll.
+
+     Asymmetric, in epam.com's proportion: they run 72px above a section and
+     137px below it (--slider-padding-top 7.2rem, --padding-container-bottom
+     13.7rem on a 10px root), so a heading sits nearer the rule above it than
+     the next section does. The two values still sum to the 208px boundary the
+     symmetric 6.5rem produced, which is the point — the rhythm is theirs and
+     the page is not one pixel longer. */
+  --band-top: clamp(2.5rem, 5vw, 4.5rem);
+  --band-bottom: clamp(4.5rem, 9vw, 8.5rem);
+
+  /* Soft cards, fully round controls. The 4px this used to carry read as a
+     sharp editorial page; the panels are objects sitting on the canvas here,
+     and they need a radius you can see. */
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  /* Ink for the gradient-filled button, and it has to flip with the theme: Snow
+     darkens the accents to hold AA on a light canvas, so the fill here is a deep
+     teal-to-violet and the label has to be light. Night keeps the bright mint
+     end and takes dark ink. Getting this backwards puts dark text on a dark
+     fill, which is exactly what the light theme would have shipped. */
+  --btn-ink: #FBFAFA;
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  color-scheme: light;
+}
+
+/* Night — the default. Surfaces are opaque greys rather than translucent white:
+   a card stacked on a panel stacked on the canvas compounded three alpha layers
+   and drifted lighter each time, which is what made the panels look washed out
+   against #060606. Fixed values keep every card at the same step. */
+[data-theme='night'] {
+  --canvas:      #060606;
+  --surface:     #161616;
+  --surface-alt: #1C1C1C;
+  --text:        #FFFFFF;
+  --muted:       #E4E4E4;
+  --faint:       #8A8A8A;
+  --hairline:    #2A2A2A;
+  --hairline-strong: #3A3A3A;
+
+  --tint-canvas:  #101010;
+  --tint-surface: #1E1E1E;
+
+  --sea:   #00F6FF;
+  --mint:  #00FFF0;
+  --lilac: #B896FF;
+  --sky:   #7BA8FF;
+  --sea-ink: var(--sea);
+
+  /* The hero blooms are the only large colour on the page, so they carry more
+     weight here than the 13% they had — at that strength they read as a smudge
+     on the canvas rather than as light. */
+  /* Dark ink, against the bright mint end of the fill. */
+  --btn-ink: #04211F;
+  --grad-btn: var(--grad);
+
+  --glow-a: rgba(0, 246, 255, 0.20);
+  --glow-b: rgba(184, 150, 255, 0.18);
+
+  --node-ai-fill:   #17121F;
+  --node-ai-line:   #B896FF;
+  --node-ai-text:   #CDB4FF;
+
+  --node-sys-fill:  #0B191D;
+  --node-sys-line:  #00F6FF;
+  --node-sys-text:  #86EEF8;
+
+  color-scheme: dark;
+}
+
+/* The code and terminal panels are the one place that stays dark in both
+   themes: the token colours below are tuned for a dark ground, and a terminal
+   surface reads as deliberate on a light page. */
+.panel--dark {
+  --surface:     #161616;
+  --surface-alt: #1C1C1C;
+  --text:        #F5F5F4;
+  --muted:       #A3A3A0;
+  --faint:       #6B6B68;
+  --hairline:    #2A2A2A;
+  --hairline-strong: #3A3A3A;
+  --sea:   #00F6FF;
+  --mint:  #00FFF0;
+  --lilac: #B896FF;
+  --sky:   #7BA8FF;
+  --sea-ink: var(--sea);
+  /* Carried with the accents it belongs to: this scope restates the Night
+     accents, so --grad rebuilds from them here and the ink on top has to be
+     restated with it. */
+  --btn-ink: #04211F;
+  --grad-btn: var(--grad);
+  color: var(--text);
+}

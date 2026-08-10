@@ -1,0 +1,336 @@
+/* ===== base ===== */
+/* Reset and base elements
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   2. Reset and base
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  /* Clears the 4.5rem sticky nav with room to spare, so anchor targets never
+     land underneath it. */
+  scroll-padding-top: 6.5rem;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* epam.com's body setting: 18px at weight 300, line-height 1.5, tracked 0.04em
+   (they compute to 18px/27px/0.72px). The tracking is the part that reads as
+   theirs — a light weight set loose is what keeps a dark page from looking
+   dense. 1.7 was airier than anything they serve. */
+body {
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1.125rem;
+  font-weight: 300;
+  line-height: 1.5;
+  letter-spacing: 0.025em;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.35s var(--ease), color 0.35s var(--ease);
+}
+
+img, svg { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+/* letter-spacing: normal undoes body's 0.04em. Tracking a monospace face widens
+   an already-wide grid, and the terminal panels set it at 13px. */
+code, pre { font-family: var(--mono); letter-spacing: normal; }
+
+::selection { background: var(--text); color: var(--canvas); }
+
+:focus-visible {
+  outline: 2px solid var(--sea);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 200;
+  padding: 0.85rem 1.4rem;
+  background: var(--text);
+  color: var(--canvas);
+  font-weight: 800;
+}
+.skip-link:focus { left: 0; }
+
+/* ===== typography ===== */
+/* Type scale and text helpers
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   4. Typography
+   -------------------------------------------------------------------------- */
+
+/* epam.com's preheader, verbatim: 16px, weight 900, uppercase, tracked 0.5em —
+   8px of letter-spacing, the widest setting they serve and the one thing that
+   labels a section as theirs. 16px is also the fix to what this rule used to be:
+   at 11px on --faint it measured 2.7:1 on Snow and failed AA nine times over.
+   --sea-ink holds 5.6:1 on the canvas and 5.0:1 in a tinted band; 16px/900 still
+   counts as normal text for AA (bold clears at 18.66px), so the token is doing
+   the work, not the size. margin-bottom is their 32px heading gap. */
+.eyebrow {
+  display: block;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--sea-ink);
+  margin-bottom: 2rem;
+}
+
+.eyebrow--rule {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.eyebrow--rule::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
+}
+
+/* epam.com sets its hero light rather than hairline — museo-sans 300 at ~62px —
+   and saves weight 100 for the counted figures, which is the one place a
+   hairline reads as deliberate rather than as a font that failed to load. These
+   are a step up from the 100/200/300 this carried, and one step under epam's own
+   numbers because Hanken Grotesk is the lighter face of the two at equal weight.
+
+   Tracking follows them too: their headlines run at roughly their natural width,
+   and the -0.028em here was pulling words together tightly enough to read as a
+   different typographic register. */
+h1, h2, h3 { letter-spacing: 0.01em; line-height: 1.05; }
+h1 { font-weight: 300; }
+h2 { font-weight: 300; }
+h3 { font-weight: 400; }
+
+.display {
+  font-size: clamp(3rem, 5.2vw, 5.75rem);
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+/* Smaller than it was, in a wider column (see .split): at 3.9rem in a 5fr track
+   the headlines set in three and four lines and broke wherever the column ran
+   out. balance keeps the last line from running short. */
+.headline {
+  font-size: clamp(2rem, 3.9vw, 3.4rem);
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.subhead {
+  font-size: clamp(1.05rem, 1.45vw, 1.3rem);
+  font-weight: 300;
+  color: var(--text);
+  line-height: 1.6;
+  max-width: 60ch;
+}
+
+.lede {
+  font-size: clamp(1.1rem, 1.7vw, 1.45rem);
+  font-weight: 300;
+  color: var(--text);
+  line-height: 1.5;
+  max-width: 54ch;
+}
+
+/* The single permitted gradient keyword per headline. */
+.accent {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* epam.com sets the pairing this way — a light headline with the gradient phrase
+   bold inside it — and the weight is also what makes the sweep legible: the
+   gradient is clipped to the glyphs, and a 200 gives it too little stroke to
+   carry three stops. 700 is their own declared weight, and Hanken Grotesk is
+   light enough at it that no correction is needed; Sora took 650 because it ran
+   heavier. Available only because Layout.astro asks for the weight axis. */
+h1 .accent,
+h2 .accent { font-weight: 700; }
+
+/* Bold, the phrase breaks across lines on a phone and the gradient reads as two
+   half-sweeps. Holds only while the accents stay short — every one fits its own
+   line down to 320px today, and body has overflow-x: hidden, so a longer phrase
+   would be clipped rather than scrollable. Measure before writing one. */
+.accent { white-space: nowrap; }
+
+/* ===== layout ===== */
+/* Layout primitives
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   3. Layout primitives
+   -------------------------------------------------------------------------- */
+
+.shell {
+  width: 100%;
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+.band {
+  position: relative;
+  padding: var(--band-top) 0 var(--band-bottom);
+  border-top: 1px solid var(--hairline);
+  background: var(--canvas);
+  color: var(--text);
+  transition: background-color 0.35s var(--ease), color 0.35s var(--ease);
+}
+
+.band--flush { border-top: none; }
+
+/* Breaks up seven consecutive sections of the same arrangement on the same
+   canvas. Overrides the tokens, not just the background: cards measure from
+   --surface, and a band that moved only its own ground would swallow them. */
+.band--tint {
+  --canvas: var(--tint-canvas);
+  --surface: var(--tint-surface);
+  background: var(--canvas);
+}
+
+/* Editorial split: headline column + content column. Even columns rather than
+   5/7 — the headline is the longer of the two strings in every section that
+   uses this, and the narrower track was what forced the four-line settings. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 6fr) minmax(0, 6fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .split { grid-template-columns: 1fr; gap: 2rem; }
+}
+
+/* ===== ui ===== */
+/* Buttons, toast, reveal
+   Part of the DMTools landing page stylesheet, split by concern.
+   Load order is fixed by the <link> tags in index.html — see landing/README.md. */
+
+/* --------------------------------------------------------------------------
+   6. Buttons
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  height: 3.125rem;
+  padding: 0 1.75rem;
+  /* Fully round. The buttons are the one element repeated in every section, so
+     the shape they carry sets the page's register more than any single panel. */
+  border-radius: var(--radius-pill);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  transition: transform 0.2s var(--ease), background-color 0.2s var(--ease),
+              color 0.2s var(--ease), border-color 0.2s var(--ease),
+              filter 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+/* Lifts on hover, presses on click — the same 1px vocabulary the cards use. */
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(1px); }
+
+/* The primary action is the only filled gradient on the page. --btn-ink rather
+   than --canvas: the fill is mint at its left edge, and #060606 on mint is a
+   harsher step than the green-cast near-black. */
+.btn--solid {
+  background: var(--grad-btn);
+  color: var(--btn-ink);
+}
+.btn--solid:hover { filter: brightness(1.08); }
+
+.btn--ghost {
+  border: 1px solid var(--hairline-strong);
+  color: var(--text);
+}
+/* Picks up the accent rather than going brighter monochrome, so the pair reads
+   as primary/secondary of one system. */
+.btn--ghost:hover { border-color: var(--sea); color: var(--sea); }
+
+.btn--sm { height: 2.5rem; padding: 0 1.15rem; font-size: 0.875rem; }
+
+.textlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--hairline-strong);
+  padding-bottom: 0.15rem;
+  transition: border-color 0.2s var(--ease), gap 0.2s var(--ease);
+}
+.textlink:hover { border-color: var(--text); gap: 0.75rem; }
+
+/* --------------------------------------------------------------------------
+   18. Toast
+   -------------------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 2rem;
+  transform: translate(-50%, 1.5rem);
+  z-index: 200;
+  padding: 0.8rem 1.4rem;
+  border-radius: var(--radius);
+  background: var(--text);
+  color: var(--canvas);
+  font-size: 0.875rem;
+  font-weight: 600;
+  /* Hidden outright when idle — an empty toast is still a painted box. */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.35s var(--ease), opacity 0.3s var(--ease), visibility 0.3s;
+}
+
+.toast.is-visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --------------------------------------------------------------------------
+   19. Reveal
+   -------------------------------------------------------------------------- */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+.reveal.is-in { opacity: 1; transform: none; }
+
+.reveal[data-delay='1'] { transition-delay: 0.08s; }
+.reveal[data-delay='2'] { transition-delay: 0.16s; }
+.reveal[data-delay='3'] { transition-delay: 0.24s; }
+.reveal[data-delay='4'] { transition-delay: 0.32s; }
+
+@media (max-width: 480px) {
+  .btn { width: 100%; }
+}

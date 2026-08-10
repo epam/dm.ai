@@ -13,10 +13,14 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 public class CommandLineUtils {
 
@@ -62,7 +66,7 @@ public class CommandLineUtils {
      */
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv)
             throws IOException, InterruptedException {
-        return runCommand(command, workingDirectory, additionalEnv, null);
+        return runCommand(command, workingDirectory, additionalEnv, null, true, null, -1);
     }
 
     /**
@@ -84,7 +88,7 @@ public class CommandLineUtils {
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
                                     Consumer<String> lineConsumer)
             throws IOException, InterruptedException {
-        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, -1);
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, true, null, -1);
     }
 
     /**
@@ -110,9 +114,89 @@ public class CommandLineUtils {
     public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
                                     Consumer<String> lineConsumer, int maxLinesToLog)
             throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, true, null, maxLinesToLog);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * and optional shell-injection validation bypass.
+     *
+     * @param command The command to run
+     * @param workingDirectory The working directory for the command (null to use current directory)
+     * @param additionalEnv Additional environment variables to set
+     * @param lineConsumer Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     *                        Use only for trusted job configs where arbitrary shell syntax is required.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand, null, -1);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * optional shell-injection validation bypass, and an optional per-line stop predicate.
+     *
+     * @param command           The command to run
+     * @param workingDirectory  The working directory for the command (null to use current directory)
+     * @param additionalEnv     Additional environment variables to set
+     * @param lineConsumer      Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand   When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     * @param lineStopPredicate Optional predicate called for each output line; returning {@code true} stops
+     *                          the command and throws {@link CliExecutionStoppedException}.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand, lineStopPredicate, -1);
+    }
+
+    /**
+     * Runs a command-line command with full options, optional per-line output consumer,
+     * optional shell-injection validation bypass, optional per-line stop predicate, and
+     * a cap on how many output lines get logged at INFO level by default.
+     *
+     * @param command           The command to run
+     * @param workingDirectory  The working directory for the command (null to use current directory)
+     * @param additionalEnv     Additional environment variables to set
+     * @param lineConsumer      Optional consumer called for each output line as it is produced (null to skip)
+     * @param validateCommand   When {@code false}, skips {@link #validateNoShellInjection(String)}.
+     * @param lineStopPredicate Optional predicate called for each output line; returning {@code true} stops
+     *                          the command and throws {@link CliExecutionStoppedException}.
+     * @param maxLinesToLog     Caps how many output lines are logged at INFO level when
+     *                          DMTOOLS_JS_LOG_TOOL_CALLS is not enabled. Use -1 for no cap.
+     * @return The output of the command as a string
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the current thread is interrupted
+     */
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate, int maxLinesToLog)
+            throws IOException, InterruptedException {
+        return runCommand(command, workingDirectory, additionalEnv, lineConsumer, validateCommand,
+                lineStopPredicate, maxLinesToLog, null, null);
+    }
+
+    public static String runCommand(String command, File workingDirectory, Map<String, String> additionalEnv,
+                                    Consumer<String> lineConsumer, boolean validateCommand,
+                                    Predicate<String> lineStopPredicate, int maxLinesToLog,
+                                    String[] excludedEnvVariables, String[] excludedEnvRegexes)
+            throws IOException, InterruptedException {
 
         logger.debug("Running command: {}", SecurityUtils.maskCommand(command));
-        validateNoShellInjection(command);
+        if (validateCommand) {
+            validateNoShellInjection(command);
+        } else {
+            logger.info("Skipping shell-injection validation for command: {}", SecurityUtils.maskCommand(command));
+        }
 
         // Write command to a temp shell script to avoid shell-escaping issues with
         // special characters (em-dash, embedded quotes, etc.) in the command string.
@@ -142,6 +226,8 @@ public class CommandLineUtils {
         if (additionalEnv != null && !additionalEnv.isEmpty()) {
             processBuilder.environment().putAll(additionalEnv);
         }
+        removeExcludedEnvironmentVariables(
+                processBuilder.environment(), excludedEnvVariables, excludedEnvRegexes);
 
         // Merge stdout and stderr so all output is captured
         processBuilder.redirectErrorStream(true);
@@ -150,6 +236,11 @@ public class CommandLineUtils {
 
         // Drain stdout/stderr in real-time so the process doesn't block on a full pipe
         boolean verboseCommandOutputLogging = new PropertyReader().isJsToolCallLoggingEnabled();
+        // Path a full, untruncated transcript would be written to IF this command's
+        // output ends up exceeding the logging cap (computed upfront, from the same
+        // timestamp/uniqueId used for the temp script, so the truncation notice can
+        // point at it immediately instead of only after the fact).
+        Path fullOutputLogFile = resolveFullOutputLogFile(timestamp, uniqueId);
         StringBuilder output = new StringBuilder();
         int lineCount = 0;
         int loggedLineCount = 0;
@@ -168,9 +259,15 @@ public class CommandLineUtils {
                     logger.info(line);
                     loggedLineCount++;
                 } else if (!truncationNoticeLogged) {
-                    logger.info("... output truncated after {} line(s); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output ...", maxLinesToLog);
+                    if (fullOutputLogFile != null) {
+                        logger.info("... output truncated after {} line(s); full output will be saved to {} ...",
+                                maxLinesToLog, fullOutputLogFile);
+                    } else {
+                        logger.info("... output truncated after {} line(s); set DMTOOLS_JS_LOG_TOOL_CALLS=true to log full output ...", maxLinesToLog);
+                    }
                     truncationNoticeLogged = true;
                 }
+
                 output.append(line).append(System.lineSeparator());
                 if (lineConsumer != null) {
                     try {
@@ -178,6 +275,12 @@ public class CommandLineUtils {
                     } catch (Exception e) {
                         logger.warn("lineConsumer threw exception on line, ignoring: {}", e.getMessage());
                     }
+                }
+                if (lineStopPredicate != null && lineStopPredicate.test(line)) {
+                    logger.warn("Line stop predicate returned true on line, terminating process: {}", line);
+                    process.destroyForcibly();
+                    throw new CliExecutionStoppedException(
+                            "CLI execution stopped by line callback at line: " + line, line);
                 }
             }
         }
@@ -189,12 +292,86 @@ public class CommandLineUtils {
         }
         logger.debug("Process exited with code: {}", exitCode);
 
+        // Persist the complete transcript whenever the console logging was actually
+        // capped, regardless of exit code, so a failing/CI run is never left blind
+        // even before the exception below is thrown/handled by the caller.
+        if (truncationNoticeLogged && fullOutputLogFile != null) {
+            persistFullOutput(fullOutputLogFile, command, workingDirectory, output.toString(), lineCount, exitCode);
+        }
+
         // Propagate non-zero exit codes so callers are not silently misled.
         if (exitCode != 0) {
             throw new IOException("Command failed (exit code " + exitCode + "): " + command + "\nOutput:\n" + output.toString().trim());
         }
 
         return output.toString().trim();
+    }
+
+    /**
+     * Resolves (without creating) the path a full command-output transcript would be
+     * written to, or null if full-output persistence is disabled
+     * (DMTOOLS_CLI_LOG_DIR set to an empty string).
+     */
+    private static Path resolveFullOutputLogFile(String timestamp, String uniqueId) {
+        String logDirProperty = new PropertyReader().getCliFullOutputLogDir();
+        if (logDirProperty == null || logDirProperty.isBlank()) {
+            return null;
+        }
+        return Paths.get(logDirProperty).resolve(timestamp + "-" + uniqueId + ".log");
+    }
+
+    /**
+     * Writes the complete, untruncated output of a command to disk. Only called
+     * when the console logging was actually capped (see maxLinesToLog), so trivial
+     * commands whose full output already fit on the console never produce a file.
+     * Best-effort: failures to write are logged and swallowed, never propagated,
+     * so a read-only filesystem or full disk can't turn a successful command into
+     * a failure.
+     */
+    private static void persistFullOutput(Path logFile, String command, File workingDirectory,
+                                           String fullOutput, int lineCount, int exitCode) {
+        try {
+            Path parent = logFile.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            String header = "Command: " + SecurityUtils.maskCommand(command) + System.lineSeparator()
+                    + "Working directory: " + (workingDirectory != null ? workingDirectory.getAbsolutePath() : System.getProperty("user.dir")) + System.lineSeparator()
+                    + "Exit code: " + exitCode + System.lineSeparator()
+                    + "Total output lines: " + lineCount + System.lineSeparator()
+                    + "----" + System.lineSeparator();
+            Files.writeString(logFile, header + fullOutput);
+            logger.info("Full output ({} line(s)) written to: {}", lineCount, logFile.toAbsolutePath());
+        } catch (IOException e) {
+            logger.warn("Failed to persist full command output to {}: {}", logFile, e.getMessage());
+        }
+    }
+
+    static void removeExcludedEnvironmentVariables(Map<String, String> environment,
+                                                   String[] excludedEnvVariables,
+                                                   String[] excludedEnvRegexes) {
+        if (environment == null || environment.isEmpty()) {
+            return;
+        }
+        if (excludedEnvVariables != null) {
+            for (String name : excludedEnvVariables) {
+                if (name != null && !name.isBlank()) {
+                    environment.remove(name);
+                }
+            }
+        }
+        List<Pattern> patterns = new ArrayList<>();
+        if (excludedEnvRegexes != null) {
+            for (String regex : excludedEnvRegexes) {
+                if (regex != null && !regex.isBlank()) {
+                    patterns.add(Pattern.compile(regex));
+                }
+            }
+        }
+        if (!patterns.isEmpty()) {
+            environment.keySet().removeIf(name ->
+                    patterns.stream().anyMatch(pattern -> pattern.matcher(name).matches()));
+        }
     }
 
     /**

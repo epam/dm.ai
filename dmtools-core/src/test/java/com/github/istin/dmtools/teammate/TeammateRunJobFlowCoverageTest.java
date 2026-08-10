@@ -649,7 +649,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());
@@ -658,7 +658,7 @@ public class TeammateRunJobFlowCoverageTest {
 
                 assertEquals(1, results.size());
                 mocked.verify(() -> CommandLineUtils.runCommand(
-                        argThat(cmd -> cmd.startsWith("echo ok")), any(), any(), any()));
+                        argThat(cmd -> cmd.startsWith("echo ok")), any(), any(), any(), anyBoolean(), any(), anyInt()));
             }
         } finally {
             System.setProperty("user.dir", originalUserDir);
@@ -708,7 +708,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());
@@ -748,28 +748,26 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());
 
                 teammate.runJobImpl(params);
             }
+            // parent must never be fetched when includeParentConfluence=false
+            verify(trackerClient, never()).performTicket(eq("PARENT-1"), any());
+            // cleanupInputFolder=false keeps the input folder for inspection
+            Path inputFolder = tempDir.resolve("input").resolve("TEST-1");
+            try {
+                assertTrue(Files.exists(inputFolder));
+                assertTrue(Files.exists(inputFolder.resolve("request.md")));
+            } finally {
+                // remove the folder this test created in the module working directory
+                deleteRecursively(inputFolder);
+            }
         } finally {
             System.setProperty("user.dir", originalUserDir);
-        }
-
-        // parent must never be fetched when includeParentConfluence=false
-        verify(trackerClient, never()).performTicket(eq("PARENT-1"), any());
-        // cleanupInputFolder=false keeps the input folder for inspection; note that
-        // CliExecutionHelper resolves the relative input/ folder against the process cwd
-        Path inputFolder = java.nio.file.Paths.get("input", "TEST-1");
-        try {
-            assertTrue(Files.exists(inputFolder));
-            assertTrue(Files.exists(inputFolder.resolve("request.md")));
-        } finally {
-            // remove the folder this test created in the module working directory
-            deleteRecursively(inputFolder);
         }
     }
 
@@ -796,7 +794,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenThrow(new RuntimeException("boom"));
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());
@@ -829,7 +827,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenAnswer(inv -> {
                             Thread.sleep(1200);
                             return "ok\nExit Code: 0";
@@ -860,7 +858,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());
@@ -896,7 +894,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("ok\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());
@@ -921,7 +919,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("command output\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());
@@ -953,7 +951,7 @@ public class TeammateRunJobFlowCoverageTest {
             System.setProperty("user.dir", tempDir.toString());
 
             try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
-                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any()))
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
                         .thenReturn("command output\nExit Code: 0");
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                         .thenReturn(Map.of());

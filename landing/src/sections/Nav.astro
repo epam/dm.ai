@@ -1,0 +1,144 @@
+---
+import Brand from '../components/Brand.astro';
+import { navLinks } from '../data/content';
+
+const docsLink = navLinks.find((link) => link.label === 'Docs');
+---
+
+<header class="nav" id="nav">
+  <div class="nav__inner">
+    <div class="nav__left">
+      <Brand href="#top" label="DMTools by EPAM — back to top" />
+    </div>
+
+    <nav class="nav__links" id="nav-links" aria-label="Sections">
+      {navLinks.map((link) => (
+        <a
+          class="nav__link"
+          href={link.href}
+          target={link.external ? '_blank' : undefined}
+          rel={link.external ? 'noopener' : undefined}
+        >{link.label}</a>
+      ))}
+    </nav>
+
+    <div class="nav__actions">
+      {docsLink && <a class="nav__mobileDocs" href={docsLink.href}>Docs</a>}
+
+      <button class="theme-switch" id="theme-toggle" type="button" aria-label="Switch colour theme">
+        <span class="theme-switch__track" aria-hidden="true">
+          <span class="theme-switch__thumb">
+            <svg class="theme-switch__icon theme-switch__icon--sun" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="5"></circle>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+            </svg>
+            <svg class="theme-switch__icon theme-switch__icon--moon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </span>
+        </span>
+      </button>
+
+      <a class="btn btn--sm nav__cta" href="#install">Install DMTools</a>
+
+      <a class="nav__search" href="https://github.com/epam/dm.ai" target="_blank" rel="noopener" aria-label="DMTools on GitHub">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="M21 21l-4.35-4.35"></path>
+        </svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<script>
+  const nav = document.getElementById('nav');
+  const root = document.documentElement;
+
+  // ---- Snow / Night -------------------------------------------------------
+  // The initial value is applied by an inline script in <head>; it has to run
+  // before first paint. This only handles changes after load.
+  const THEME_KEY = 'dmtools-theme';
+  const toggle = document.getElementById('theme-toggle');
+
+  if (toggle) {
+    const applyTheme = (theme: string) => {
+      root.dataset.theme = theme;
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch {
+        /* private mode — the theme still applies for this session */
+      }
+    };
+
+    const labelToggle = () => {
+      toggle.setAttribute(
+        'aria-label',
+        root.dataset.theme === 'night' ? 'Switch to Snow theme' : 'Switch to Night theme',
+      );
+    };
+
+    labelToggle();
+    toggle.addEventListener('click', () => {
+      const next = root.dataset.theme === 'night' ? 'snow' : 'night';
+      applyTheme(next);
+      labelToggle();
+      if (typeof gtag === 'function') {
+        gtag('event', 'theme_switch', { event_category: 'engagement', event_label: next });
+      }
+    });
+  }
+
+  // No prefers-color-scheme listener. Night is the page's default rather than
+  // the OS's, so following a mid-session OS change to light would drop a reader
+  // onto Snow without them asking for it. The toggle is the only way across.
+
+  if (nav) {
+    // ---- Sticky hairline --------------------------------------------------
+    const setStuck = () => nav.classList.toggle('is-stuck', window.scrollY > 8);
+    setStuck();
+    window.addEventListener('scroll', setStuck, { passive: true });
+
+  }
+
+  // ---- Scroll spy ---------------------------------------------------------
+  // The header says which section the reader is standing in. The margins crop
+  // the viewport to a band across its middle, so the mark changes when a
+  // section reaches the reader rather than when it first appears at the bottom.
+  if ('IntersectionObserver' in window) {
+    const links = new Map<Element, Element>();
+    document.querySelectorAll('.nav__link[href^="#"]').forEach((link) => {
+      const section = document.querySelector(link.getAttribute('href') ?? '');
+      if (section) links.set(section, link);
+    });
+
+    if (links.size) {
+      const visible = new Set<Element>();
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) visible.add(entry.target);
+            else visible.delete(entry.target);
+          });
+
+          // With two sections in the band the reader is leaving the upper one,
+          // so the topmost wins and the header never runs ahead of them.
+          const current = [...visible].sort(
+            (a, b) => (a as HTMLElement).offsetTop - (b as HTMLElement).offsetTop,
+          )[0];
+
+          links.forEach((link, section) => {
+            const on = section === current;
+            link.classList.toggle('is-current', on);
+            if (on) link.setAttribute('aria-current', 'location');
+            else link.removeAttribute('aria-current');
+          });
+        },
+        { rootMargin: '-30% 0px -55% 0px' },
+      );
+
+      links.forEach((_, section) => observer.observe(section));
+    }
+  }
+</script>

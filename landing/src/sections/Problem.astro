@@ -1,0 +1,37 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+
+/** Decorative: the caption below carries the same point in words. */
+const chain = ['Tracker', 'Repo', 'Docs', 'CI/CD', 'AI'];
+---
+
+<section class="band" id="problem">
+  <div class="shell">
+    <SectionHead eyebrow="The problem">
+      <Fragment slot="headline">
+        You already have AI. Delivery still runs on <span class="accent">handoffs</span>.
+      </Fragment>
+      <Fragment slot="subhead">
+        Copilots sit in every team and a model sits in every IDE. But the work between
+        them still moves by hand: someone copies a ticket into a prompt, someone pastes
+        the answer into a branch, and the glue is a folder of scripts nobody owns.
+        The tools never learned to talk to each other.
+      </Fragment>
+    </SectionHead>
+
+    <div class="chain reveal" aria-hidden="true">
+      {chain.map((node, i) => (
+        <>
+          {i > 0 && <span class="chain__break"></span>}
+          <span class="chain__node">{node}</span>
+        </>
+      ))}
+    </div>
+    <p class="chain__caption reveal">Disconnected tools. Broken handoffs.</p>
+
+    <p class="pullquote reveal">
+      One-off scripts don't scale. What scales is an orchestration layer that
+      speaks every system's language.
+    </p>
+  </div>
+</section>

@@ -1,0 +1,91 @@
+---
+import SectionHead from '../components/SectionHead.astro';
+import { bars } from '../data/content';
+
+/**
+ * One axis, derived from the data. The domain is rounded up to a multiple of
+ * the tick step rather than to a plain ten, so the scale always ends on a
+ * labelled tick — otherwise the longest bar runs past the last gridline and the
+ * axis reads as unfinished. Bar lengths are fractions of that domain, so a
+ * changed count moves the bar and its label together.
+ */
+const max = Math.max(...bars.map((b) => b.tools));
+const step = max > 50 ? 20 : max > 20 ? 10 : 5;
+const domain = Math.ceil(max / step) * step;
+const ticks = Array.from({ length: domain / step + 1 }, (_, i) => i * step);
+const at = (value: number) => `${(value / domain) * 100}%`;
+
+const figures = [
+  {
+    countTo: 320,
+    suffix: '+',
+    label: 'CLI tools spanning trackers, repositories, wikis, design systems and AI providers',
+  },
+  {
+    countTo: 20,
+    suffix: '+',
+    label: 'System integrations, each with setup guides and a tool reference',
+  },
+  {
+    value: '17+',
+    label: 'Java baseline — runs anywhere your CI already runs',
+  },
+];
+---
+
+<section class="band" id="numbers">
+  <div class="shell">
+    <SectionHead eyebrow="By the numbers">
+      <Fragment slot="headline">
+        Wired. Documented. <span class="accent">Ready</span>.
+      </Fragment>
+      <Fragment slot="subhead">
+        Not a roadmap — what ships today. Every tool is generated from annotated Java
+        at compile time, documented in the repository, and callable the moment you install.
+      </Fragment>
+    </SectionHead>
+
+    <div class="figures">
+      {figures.map((figure, i) => (
+        <div class="figure reveal" data-delay={i > 0 ? i : undefined}>
+          <p class="figure__value">
+            {figure.countTo
+              ? <><span class="counter" data-to={figure.countTo}>0</span>{figure.suffix}</>
+              : figure.value}
+          </p>
+          <p class="figure__label">{figure.label}</p>
+        </div>
+      ))}
+    </div>
+
+    <figure class="bars reveal">
+      <figcaption class="bars__caption">Tools per integration</figcaption>
+
+      <div class="bars__plot">
+        {/* Behind the bars, and hidden from the accessibility tree: every value
+            is printed at its row end, so the grid is a reading aid, not data. */}
+        <div class="bars__grid" aria-hidden="true">
+          {ticks.map((tick) => (
+            <span class="bars__gridline" style={`left:${at(tick)}`}></span>
+          ))}
+        </div>
+
+        {bars.map((bar) => (
+          <div class="bar">
+            <span class="bar__name">{bar.name}</span>
+            <span class="bar__track">
+              <span class="bar__fill" style={`--w:${bar.tools / domain}`}></span>
+            </span>
+            <span class="bar__value">{bar.tools}</span>
+          </div>
+        ))}
+      </div>
+
+      <div class="bars__axis" aria-hidden="true">
+        {ticks.map((tick) => (
+          <span class="bars__tick" style={`left:${at(tick)}`}>{tick}</span>
+        ))}
+      </div>
+    </figure>
+  </div>
+</section>

@@ -59,7 +59,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
     @Getter
     @Setter
-    public static class TeammateParams extends JobTrackerParams<RequestDecompositionAgent.Result> {
+    public static class TeammateParams extends JobTrackerParams<RequestDecompositionAgent.Result> implements InputContextConfig {
 
         public static final String SYSTEM_REQUEST_COMMENT_ALIAS = "systemRequestCommentAlias";
 
@@ -73,7 +73,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         private String cliPrompt;
 
         @SerializedName("cliPrompts")
-        private String[] cliPrompts;
+        private CliPromptsConfig cliPromptsConfig = new CliPromptsConfig();
 
         @SerializedName("cliPromptsByTracker")
         private Map<String, String[]> cliPromptsByTracker;
@@ -143,6 +143,102 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
 
         @SerializedName("excludedEnvRegexes")
         private String[] excludedEnvRegexes;
+
+        // ----- InputContextConfig implementation (preserves existing Teammate behavior) -----
+
+        @Override
+        public boolean isSmart() {
+            return true;
+        }
+
+        @Override
+        public String[] getSources() {
+            return new String[] { "confluence" };
+        }
+
+        @Override
+        public int getDepth() {
+            return 0;
+        }
+
+        @Override
+        public boolean isIncludeComments() {
+            return true;
+        }
+
+        @Override
+        public boolean isIncludeAttachments() {
+            return true;
+        }
+
+        @Override
+        public boolean isIncludeLinkedTickets() {
+            return false;
+        }
+
+        @Override
+        public boolean isSkipVideoAttachments() {
+            return skipVideoAttachments;
+        }
+
+        @Override
+        public boolean isSkipAllAttachments() {
+            return skipAllAttachments;
+        }
+
+        public boolean isSkipPreJSAction() {
+            return skipPreJSAction;
+        }
+
+        public boolean isSkipPreCliJSAction() {
+            return skipPreCliJSAction;
+        }
+
+        public boolean isSkipPostJSAction() {
+            return skipPostJSAction;
+        }
+
+        @Override
+        public boolean isIgnoreClonedByRelationship() {
+            return ignoreClonedByRelationship;
+        }
+
+        @Override
+        public boolean isWriteAgentParamsToFiles() {
+            return writeAgentParamsToFiles;
+        }
+
+        @Override
+        public boolean isIncludeParentConfluence() {
+            return includeParentConfluence;
+        }
+
+        @Override
+        public int getConfluenceDepth() {
+            return confluenceDepth;
+        }
+
+        @Override
+        public boolean isConfluenceAttachments() {
+            return confluenceAttachments;
+        }
+
+        /**
+         * Backward-compatible accessor that returns {@code cliPrompts} as a plain string array.
+         */
+        public String[] getCliPrompts() {
+            if (cliPromptsConfig == null || cliPromptsConfig.getItems().isEmpty()) {
+                return null;
+            }
+            return cliPromptsConfig.toStringArray();
+        }
+
+        /**
+         * Backward-compatible mutator that accepts a plain string array.
+         */
+        public void setCliPrompts(String[] cliPrompts) {
+            this.cliPromptsConfig = CliPromptsConfig.fromStrings(cliPrompts);
+        }
 
     }
 
@@ -313,11 +409,10 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     "Alternatively, remove inputJql parameter if tracker integration is not needed."
                 );
             } else if (!hasCliCommands) {
-                // No tracker, no JQL query and no CLI commands - nothing to do
+                // No tracker, no JQL query, and no CLI commands - nothing to do
                 logger.info("No TrackerClient configured and no inputJql/cliCommands provided - skipping processing");
                 return new ArrayList<>();
             }
-            // Standalone CLI mode without trackerClient will be handled in processTicketOrStandalone
         }
 
         ExpertParams.OutputType outputType = expertParams.getOutputType();
@@ -373,85 +468,58 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         inputParams.setKnownInfo(processedKnownInfo);
         contextOrchestrator.clear();
 
+        // Standalone CLI mode: no JQL query but CLI commands are present
+        if (!hasJqlQuery && hasCliCommands) {
+            logger.info("Standalone CLI mode detected (no inputJql, cliCommands present)");
+            return processStandaloneCliMode(expertParams, inputParams, originalParams, initiator);
+        }
+
         List<ResultItem> results = new ArrayList<>();
-        if (hasJqlQuery) {
-            trackerClient.searchAndPerform(ticket -> {
-                ResultItem result = processTicketOrStandalone(expertParams, ticket, uriProcessingSources,
-                        inputParams, originalParams);
-                results.add(result);
-                return false;
-            }, inputJQL, trackerClient.getExtendedQueryFields());
-        } else {
-            logger.info("No inputJql provided - running Teammate in standalone CLI mode with ticket=null");
-            ResultItem result = processTicketOrStandalone(expertParams, null, uriProcessingSources,
-                    inputParams, originalParams);
-            results.add(result);
-        }
-        return results;
-    }
+        trackerClient.searchAndPerform(ticket -> {
+            long overallStart = System.currentTimeMillis();
+            logger.info("Processing ticket: {}", ticket.getKey());
 
-
-    /**
-     * Processes a single ticket or runs in standalone mode when ticket is null.
-     * <p>
-     * Standalone mode (no inputJql) is intended for testing CLI agents without querying
-     * real ticket systems. In this mode ticket-specific operations are skipped and only
-     * CLI command aggregation/execution is performed (plus optional AI processing).
-     */
-    private ResultItem processTicketOrStandalone(TeammateParams expertParams,
-                                                 ITicket ticket,
-                                                 List<? extends UriToObject> uriProcessingSources,
-                                                 RequestDecompositionAgent.Result inputParams,
-                                                 RequestDecompositionAgent.Result originalParams) throws Exception {
-        String ticketKey = ticket != null ? ticket.getTicketKey() : "standalone";
-        logger.info("Processing {}: {}", ticket != null ? "ticket" : "standalone CLI run", ticketKey);
-
-        ExpertParams.OutputType outputType = expertParams.getOutputType();
-        String initiator = expertParams.getInitiator();
-        String fieldName = expertParams.getFieldName();
-        String systemRequestCommentAlias = expertParams.getSystemRequestCommentAlias();
-
-        // Post "processing started" comment so CI run is traceable from the ticket immediately
-        String ciRunUrl = expertParams.getCiRunUrl();
-        if (ticket != null && ciRunUrl != null && !ciRunUrl.isEmpty()) {
-            if (shouldPostComments(expertParams)) {
-                try {
-                    logger.info("Tracing CI run URL to ticket {}: {}", ticketKey, ciRunUrl);
-                    trackerClient.postComment(ticketKey, agentNamePrefix(expertParams) + "Processing started. CI Run: " + ciRunUrl);
-                } catch (Exception e) {
-                    logger.warn("Failed to post CI run trace comment for ticket {} — continuing. Error: {}",
-                            ticketKey, e.getMessage());
+            // Post "processing started" comment so CI run is traceable from the ticket immediately
+            String ciRunUrl = expertParams.getCiRunUrl();
+            if (ciRunUrl != null && !ciRunUrl.isEmpty()) {
+                if (shouldPostComments(expertParams)) {
+                    try {
+                        logger.info("Tracing CI run URL to ticket {}: {}", ticket.getTicketKey(), ciRunUrl);
+                        trackerClient.postComment(ticket.getTicketKey(), agentNamePrefix(expertParams) + "Processing started. CI Run: " + ciRunUrl);
+                    } catch (Exception e) {
+                        logger.warn("Failed to post CI run trace comment for ticket {} — continuing. Error: {}",
+                                ticket.getTicketKey(), e.getMessage());
+                    }
+                } else {
+                    logger.debug("CI run URL provided ({}) but comments disabled - not posting to ticket {}", ciRunUrl, ticket.getTicketKey());
                 }
-            } else {
-                logger.debug("CI run URL provided ({}) but comments disabled - not posting to ticket {}", ciRunUrl, ticketKey);
             }
-        }
 
-        // Execute pre-action before AI processing unless explicitly skipped or running standalone
-        String preJSAction = expertParams.getPreJSAction();
-        if (preJSAction != null && !preJSAction.trim().isEmpty() && !expertParams.isSkipPreJSAction() && ticket != null) {
-            Object preActionResult = js(preJSAction)
-                    .mcp(trackerClient, ai, confluence, null)
-                    .withJobContext(expertParams, ticket, null)
+            // Execute pre-action before AI processing
+            String preJSAction = expertParams.getPreJSAction();
+            Object preActionResult = null;
+            if (preJSAction != null && !preJSAction.trim().isEmpty() && !expertParams.isSkipPreJSAction()) {
+                preActionResult = js(preJSAction)
+                    .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                    .withJobContext(expertParams, ticket, null) // response is null in pre-action
                     .with(TrackerParams.INITIATOR, initiator)
                     .execute();
-
-            if (preActionResult != null && preActionResult.equals(false)) {
-                logger.info("Pre-action returned false, skipping AI processing for ticket: {}", ticketKey);
-                return new ResultItem(ticketKey, "Skipped by pre-action");
+            } else if (expertParams.isSkipPreJSAction()) {
+                logger.info("Skipping preJSAction (skipPreJSAction=true) for {}", ticket.getKey());
             }
-        } else if (expertParams.isSkipPreJSAction()) {
-            logger.info("Skipping preJSAction (skipPreJSAction=true) for {}", ticketKey);
-        }
 
-        // Create and prepare ticket context
-        TicketContext ticketContext = null;
-        List<? extends IAttachment> attachments = null;
-        String textFieldsOnly = null;
-        if (ticket != null) {
-            ticketContext = new TicketContext(trackerClient, ticket);
+            // Check return value to determine if processing should continue
+            if (preActionResult != null && preActionResult.equals(false)) {
+                logger.info("Pre-action returned false, skipping AI processing for ticket: {}", ticket.getKey());
+                results.add(new ResultItem(ticket.getTicketKey(), "Skipped by pre-action"));
+                return false; // Skip this ticket
+            }
+            
+            // Create and prepare ticket context
+            TicketContext ticketContext = new TicketContext(trackerClient, ticket);
             ticketContext.prepareContext(true, false, expertParams.isIgnoreClonedByRelationship());
-            attachments = ticket.getAttachments();
+            // Get attachments and convert to text
+            List<? extends IAttachment> attachments = ticket.getAttachments();
             if (expertParams.isSkipAllAttachments()) {
                 logger.info("⏭️ Skipping all attachments (skipAllAttachments=true)");
                 attachments = null;
@@ -466,350 +534,347 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 }
                 attachments = filtered;
             }
-            textFieldsOnly = trackerClient.getTextFieldsOnly(ticket);
-        }
+            // Process content with ContextOrchestrator
+            //contextOrchestrator.processFullContent(ticket.getKey(), ticketText, (UriToObject) trackerClient, uriProcessingSources, expertParams.getTicketContextDepth());
+            
+            String textFieldsOnly = trackerClient.getTextFieldsOnly(ticket);
 
-        inputParams.setRequest(textFieldsOnly != null ? textFieldsOnly : "");
-        ChunkPreparation contextChunkPreparation = new ChunkPreparation();
-        int requestTokens = new Claude35TokenCounter().countTokens(inputParams.toString());
-        int systemTokenLimits = contextChunkPreparation.getTokenLimit();
-        int tokenLimit = (systemTokenLimits - requestTokens) / 2;
-        logger.info("GENERATION TOKEN LIMIT: " + tokenLimit);
-        contextOrchestrator.setTokenLimit(tokenLimit);
-        contextOrchestrator.processUrisInContent(textFieldsOnly, uriProcessingSources, 1);
-        contextOrchestrator.processUrisInContent(attachments, uriProcessingSources, 1);
-        List<ChunkPreparation.Chunk> chunksContext = contextOrchestrator.summarize();
-        contextOrchestrator.clear();
-        if (ticketContext != null) {
+            //inputParams.setKnownInfo(inputParams.getKnownInfo());
+
+            inputParams.setRequest(textFieldsOnly);
+            ChunkPreparation contextChunkPreparation = new ChunkPreparation();
+            int requestTokens = new Claude35TokenCounter().countTokens(inputParams.toString());
+            int systemTokenLimits = contextChunkPreparation.getTokenLimit();
+            int tokenLimit = (systemTokenLimits - requestTokens)/2;
+            logger.info("GENERATION TOKEN LIMIT: " + tokenLimit);
+            contextOrchestrator.setTokenLimit(tokenLimit);
+            contextOrchestrator.processUrisInContent(textFieldsOnly, uriProcessingSources, 1);
+            contextOrchestrator.processUrisInContent(attachments, uriProcessingSources, 1);
+            List<ChunkPreparation.Chunk> chunksContext = contextOrchestrator.summarize();
+            contextOrchestrator.clear();
             chunksContext.addAll(contextChunkPreparation.prepareChunks(ticketContext.getComments(), tokenLimit));
             chunksContext.addAll(contextChunkPreparation.prepareChunks(ticketContext.getExtraTickets(), tokenLimit));
-        }
 
-        // Process hooks as context first
-        String[] hooksAsContext = expertParams.getHooksAsContext();
-        StringBuilder globalHooksResponses = new StringBuilder();
-        if (hooksAsContext != null && sourceCodes != null) {
-            for (String hook : hooksAsContext) {
-                for (SourceCode sourceCode : sourceCodes) {
-                    try {
-                        String response = sourceCode.callHookAndWaitResponse(hook, inputParams.toString());
-                        if (response != null) {
-                            globalHooksResponses.append("Tools Information (").append(hook).append("):\n");
-                            globalHooksResponses.append(response).append("\n\n");
+            // Process hooks as context first
+            String[] hooksAsContext = expertParams.getHooksAsContext();
+            StringBuilder globalHooksResponses = new StringBuilder();
+            if (hooksAsContext != null && sourceCodes != null) {
+                for (String hook : hooksAsContext) {
+                    for (SourceCode sourceCode : sourceCodes) {
+                        try {
+                            String response = sourceCode.callHookAndWaitResponse(hook, inputParams.toString());
+                            if (response != null) {
+                                globalHooksResponses.append("Tools Information (").append(hook).append("):\n");
+                                globalHooksResponses.append(response).append("\n\n");
+                            }
+                        } catch (Exception e) {
+                            // Log but don't fail the workflow
+                            logger.error("Failed to call hook: " + hook + ", error: " + e.getMessage());
                         }
-                    } catch (Exception e) {
-                        logger.error("Failed to call hook: " + hook + ", error: " + e.getMessage());
                     }
                 }
             }
-        }
 
-        // Append hooks responses to knownInfo
-        if (!globalHooksResponses.isEmpty()) {
-            inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nAdditional Context:\n" + globalHooksResponses);
-        }
+            // Append hooks responses to knownInfo
+            if (!globalHooksResponses.isEmpty()) {
+                inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nAdditional Context:\n" + globalHooksResponses);
+            }
 
-        // Process CLI commands if configured
-        String[] cliCommands = expertParams.getCliCommands();
-        CliExecutionHelper cliHelper = new CliExecutionHelper();
-        CliExecutionHelper.CliExecutionResult cliResult = null;
-        Path inputContextPath = null;
+            // Process CLI commands if configured
+            CliExecutionHelper cliHelper = new CliExecutionHelper();
+            CliExecutionHelper.CliExecutionResult cliResult = null;
+            Path inputContextPath = null;
 
-        // Build timer JS action runnable if configured. Declared here (outer scope) so the
-        // SAME timer also wraps postJSAction below — a postJSAction can itself run a long
-        // CLI-driven loop (e.g. a feedback-loop quality-gate retry calling cli_execute_command
-        // repeatedly from JavaScript), which previously had zero periodic auto-save/auto-commit
-        // protection since the timer only covered the main cliCommands execution.
-        String timerJSAction = expertParams.getTimerJSAction();
-        int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
-        AtomicReference<String> liveCliOutput = new AtomicReference<>("");
-        Runnable timerRunnable = null;
-        if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
-            timerRunnable = () -> {
-                try {
-                    js(timerJSAction)
+            // Build timer JS action runnable if configured. Declared here (outer scope) so the
+            // SAME timer also wraps postJSAction below — a postJSAction can itself run a long
+            // CLI-driven loop (e.g. a feedback-loop quality-gate retry calling cli_execute_command
+            // repeatedly from JavaScript), which previously had zero periodic auto-save/auto-commit
+            // protection since the timer only covered the main cliCommands execution.
+            String timerJSAction = expertParams.getTimerJSAction();
+            int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
+            AtomicReference<String> liveCliOutput = new AtomicReference<>("");
+            Runnable timerRunnable = null;
+            if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
+                timerRunnable = () -> {
+                    try {
+                        js(timerJSAction)
                             .mcp(trackerClient, ai, confluence, null)
                             .withJobContext(expertParams, ticket, null)
                             .with(TrackerParams.INITIATOR, initiator)
                             .with("systemRequest", systemRequestCommentAlias)
                             .with("currentCliOutput", liveCliOutput.get())
                             .execute();
-                } catch (Exception e) {
-                    logger.warn("timerJSAction execution failed (continues): {}", e.getMessage());
-                }
-            };
-            logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
-        }
+                    } catch (Exception e) {
+                        logger.warn("timerJSAction execution failed (continues): {}", e.getMessage());
+                    }
+                };
+                logger.info("timerJSAction configured: {} (interval: {}s)", timerJSAction, timerIntervalSeconds);
+            }
 
-        if (cliCommands != null && cliCommands.length > 0) {
-            try {
-                // Merge base cliPrompts with tracker-specific prompts
-                String[] mergedCliPrompts = resolveCliPrompts(
-                        expertParams.getCliPrompts(), expertParams.getCliPromptsByTracker(),
-                        configuration != null ? configuration.getDefaultTracker() : null);
-                if (mergedCliPrompts != expertParams.getCliPrompts()) {
-                    logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
-                }
+            if (cliCommands != null && cliCommands.length > 0) {
+                try {
+                    // Build final CLI commands with aggregated prompt (shared logic with CliAgent)
+                    CliCommandBuilder cliCommandBuilder = new CliCommandBuilder(instructionProcessor, configuration);
+                    String[] finalCliCommands = cliCommandBuilder.buildCommands(
+                            cliCommands,
+                            expertParams.getCliPrompt(),
+                            expertParams.getCliPrompts(),
+                            expertParams.getCliPromptsByTracker());
 
-                // Build combined CLI prompt from cliPrompt + merged cliPrompts via InstructionProcessor
-                String processedPrompt = instructionProcessor.buildCombinedPrompt(
-                        expertParams.getCliPrompt(), mergedCliPrompts);
-                if (processedPrompt != null) {
-                    logger.info("Combined CLI prompt ready ({} chars)", processedPrompt.length());
-                }
+                    // Create input context for CLI commands via shared builder
+                    TicketInputContextBuilder contextBuilder = new TicketInputContextBuilder(instructionProcessor);
+                    TicketInputContextBuilder.Result contextResult = contextBuilder.build(
+                            expertParams, ticket, Paths.get(System.getProperty("user.dir")),
+                            trackerClient, confluence, null,
+                            expertParams.isWriteAgentParamsToFiles() ? originalParams : inputParams);
+                    inputContextPath = contextResult.getPath();
 
-                // Append processed prompt to each CLI command if available
-                String[] finalCliCommands = cliCommands;
-                if (processedPrompt != null && !processedPrompt.trim().isEmpty()) {
-                    finalCliCommands = CliExecutionHelper.appendPromptToCommands(cliCommands, processedPrompt);
-                    logger.info("Appended prompt to {} CLI commands", finalCliCommands.length);
-                }
-
-                // Create input context for CLI commands (supports null ticket for standalone mode)
-                inputContextPath = cliHelper.createInputContext(ticket, inputParams.toString(), trackerClient);
-
-                // Write comments.md alongside request.md when ticket context is available
-                if (ticketContext != null) {
-                    cliHelper.writeCommentsFile(inputContextPath, ticketContext.getComments());
-                }
-
-                // Write Confluence pages linked in the ticket text (and its parent's text) to input/confluence/
-                String confluenceScanText = buildConfluenceScanText(
-                        ticket, textFieldsOnly, trackerClient, expertParams.isIncludeParentConfluence());
-                cliHelper.writeConfluencePagesFile(
-                        confluenceScanText,
-                        inputContextPath,
-                        confluence,
-                        expertParams.getConfluenceDepth(),
-                        expertParams.isConfluenceAttachments());
-
-                // When writeAgentParamsToFiles=true: expand agent params into separate files in the
-                // input folder, then replace request.md with minimal ticket-only content.
-                if (expertParams.isWriteAgentParamsToFiles() && originalParams != null) {
-                    agentParamsFileWriter.writeToInputFolder(inputContextPath, originalParams);
-                    java.nio.file.Path requestMd = inputContextPath.resolve("request.md");
-                    java.nio.file.Files.writeString(requestMd,
-                            textFieldsOnly != null ? textFieldsOnly : "");
-                    logger.info("writeAgentParamsToFiles: rewrote request.md with ticket info only, params in input folder");
-                }
-
-                // Run preCliJSAction to allow extending input folder with extra content before CLI execution
-                String preCliJSAction = expertParams.getPreCliJSAction();
-                if (preCliJSAction != null && !preCliJSAction.trim().isEmpty()
-                        && !expertParams.isSkipPreCliJSAction() && ticket != null) {
-                    try {
-                        js(preCliJSAction)
+                    // Run preCliJSAction to allow extending input folder with extra content before CLI execution.
+                    // If it throws, or reports failure (returns false / {success:false, ...}), treat this as a
+                    // hard stop: the JS action has already posted its own failure comment, so nothing downstream
+                    // (CLI execution, postJSAction) should run for this ticket.
+                    String preCliJSAction = expertParams.getPreCliJSAction();
+                    if (preCliJSAction != null && !preCliJSAction.trim().isEmpty() && !expertParams.isSkipPreCliJSAction()) {
+                        Object preCliActionResult;
+                        try {
+                            preCliActionResult = js(preCliJSAction)
                                 .mcp(trackerClient, ai, confluence, null)
                                 .withJobContext(expertParams, ticket, null)
                                 .with(TrackerParams.INITIATOR, initiator)
                                 .with("inputFolderPath", inputContextPath.toAbsolutePath().toString())
                                 .execute();
-                        logger.info("preCliJSAction executed for ticket: {}", ticketKey);
-                    } catch (Exception e) {
-                        logger.warn("preCliJSAction failed for ticket {}, continuing with CLI execution: {}",
-                                ticketKey, e.getMessage());
+                            logger.info("preCliJSAction executed for ticket: {}", ticket.getKey());
+                        } catch (Exception e) {
+                            logger.warn("preCliJSAction threw for ticket {}, treating as setup failure (skipping CLI execution and postJSAction): {}",
+                                ticket.getKey(), e.getMessage());
+                            preCliActionResult = Boolean.FALSE;
+                        }
+
+                        if (isPreCliJSActionFailure(preCliActionResult)) {
+                            logger.warn("preCliJSAction reported failure for ticket {} — skipping CLI execution and postJSAction; " +
+                                "the JS action is responsible for its own failure notification.", ticket.getKey());
+                            results.add(new ResultItem(ticket.getTicketKey(), "Skipped: preCliJSAction reported failure"));
+                            return false;
+                        }
+                    } else if (expertParams.isSkipPreCliJSAction()) {
+                        logger.info("Skipping preCliJSAction (skipPreCliJSAction=true) for {}", ticket.getKey());
                     }
-                } else if (expertParams.isSkipPreCliJSAction()) {
-                    logger.info("Skipping preCliJSAction (skipPreCliJSAction=true) for {}", ticketKey);
-                }
 
-                // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
-                Path projectRoot = Paths.get(System.getProperty("user.dir"));
+                    // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
+                    Path projectRoot = Paths.get(System.getProperty("user.dir"));
 
-                cliResult = cliHelper.executeCliCommandsWithResult(
-                        finalCliCommands,
-                        projectRoot,
-                        null,
-                        timerRunnable,
-                        timerIntervalSeconds,
-                        liveCliOutput,
-                        false,
-                        expertParams.getExcludedEnvVariables(),
-                        expertParams.getExcludedEnvRegexes());
-
-                // Append CLI responses to knownInfo if not empty
-                StringBuilder cliResponses = cliResult.getCommandResponses();
-                if (!cliResponses.isEmpty()) {
-                    String cliContent = cliResponses.toString();
-                    // Include output response if available
-                    if (cliResult.hasOutputResponse()) {
-                        cliContent += cliResult.getOutputResponse() + "\n\n";
+                    cliResult = cliHelper.executeCliCommandsWithResult(
+                            finalCliCommands,
+                            projectRoot,
+                            null,
+                            timerRunnable,
+                            timerIntervalSeconds,
+                            liveCliOutput,
+                            false,
+                            expertParams.getExcludedEnvVariables(),
+                            expertParams.getExcludedEnvRegexes());
+                    
+                    // Append CLI responses to knownInfo if not empty
+                    StringBuilder cliResponses = cliResult.getCommandResponses();
+                    if (!cliResponses.isEmpty()) {
+                        String cliContent = cliResponses.toString();
+                        // Include output response if available
+                        if (cliResult.hasOutputResponse()) {
+                            cliContent += cliResult.getOutputResponse() + "\n\n";
+                        }
+                        inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nCLI Execution Results:\n" + cliContent);
                     }
-                    inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nCLI Execution Results:\n" + cliContent);
-                }
-
-            } catch (Exception e) {
-                logger.error("Failed to execute CLI commands for {}: {}", ticketKey, e.getMessage(), e);
-                StringBuilder errorResponse = new StringBuilder("CLI Execution Error: ").append(e.getMessage()).append("\n");
-                cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null);
-            } finally {
-                // Clean up input context
-                if (inputContextPath != null) {
-                    if (expertParams.isCleanupInputFolder()) {
-                        cliHelper.cleanupInputContext(inputContextPath);
-                        logger.info("Cleaned up input folder (cleanupInputFolder=true)");
-                    } else {
-                        logger.info("Keeping input folder for inspection (cleanupInputFolder=false): {}",
-                                inputContextPath.toAbsolutePath());
-                    }
-                }
-            }
-        }
-
-        // Process indexes if configured
-        IndexConfig[] indexes = expertParams.getIndexes();
-        List<ChunkPreparation.Chunk> indexChunks = new ArrayList<>();
-        if (indexes != null) {
-            for (IndexConfig indexConfig : indexes) {
-                try {
-                    List<ToText> indexData = executeIndexTool(indexConfig);
-                    if (indexData != null && !indexData.isEmpty()) {
-                        String indexName = indexConfig.getIntegration() != null ? indexConfig.getIntegration() : "index";
-                        if (expertParams.isSkipAIProcessing()) {
-                            String indexText = ToText.Utils.toText(indexData);
-                            inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nIndex Data (" + indexName + "):\n" + indexText);
-                            if (ticket != null) {
-                                attachResponse(this, "_index_" + indexName + ".txt", indexText, ticketKey, "text/plain");
-                                logger.info("Saved index data from {} as attachment for ticket {}", indexName, ticketKey);
-                            } else {
-                                logger.info("Index data from {} prepared for standalone mode", indexName);
-                            }
+                    
+                } catch (Exception e) {
+                    logger.error("Failed to execute CLI commands for ticket {}: {}", ticket.getKey(), e.getMessage(), e);
+                    // Create error result for consistent handling below
+                    StringBuilder errorResponse = new StringBuilder("CLI Execution Error: ").append(e.getMessage()).append("\n");
+                    cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null);
+                } finally {
+                    // Clean up input context
+                    if (inputContextPath != null) {
+                        if (expertParams.isCleanupInputFolder()) {
+                            cliHelper.cleanupInputContext(inputContextPath);
+                            logger.info("Cleaned up input folder (cleanupInputFolder=true)");
                         } else {
-                            logger.info("Index chunking for {}: story tokens={}, system limit={}, chunk limit={}",
-                                    indexName, systemTokenLimits, systemTokenLimits, tokenLimit);
-                            List<ChunkPreparation.Chunk> chunks = contextChunkPreparation.prepareChunks(indexData, tokenLimit);
-                            indexChunks.addAll(chunks);
-                            logger.info("Prepared {} chunks from index {} for {}", chunks.size(), indexName, ticketKey);
+                            logger.info("Keeping input folder for inspection (cleanupInputFolder=false): {}",
+                                       inputContextPath.toAbsolutePath());
                         }
                     }
-                } catch (Exception e) {
-                    String indexName = indexConfig.getIntegration() != null ? indexConfig.getIntegration() : "index";
-                    logger.error("Failed to execute index {} for {}: {}", indexName, ticketKey, e.getMessage(), e);
                 }
             }
-        }
 
-        String response;
-        boolean skipFieldUpdate = false;
-
-        if (expertParams.isSkipAIProcessing()) {
-            if (cliResult != null && cliResult.hasOutputResponse()) {
-                response = cliResult.getOutputResponse();
-                logger.info("Using CLI output response as final response for {}", ticketKey);
-            } else {
-                if (expertParams.isRequireCliOutputFile()) {
-                    logger.warn("CLI output file (response.md) is missing or empty for {}, " +
-                            "but requireCliOutputFile=true. Will skip field update and post error comment.",
-                            ticketKey);
-                    if (cliResult != null) {
-                        response = "CLI command executed but did not produce output file:\n" +
-                                cliResult.getCommandResponses().toString();
-                    } else {
-                        response = "No CLI commands executed or results available.";
+            // Process indexes if configured
+            IndexConfig[] indexes = expertParams.getIndexes();
+            List<ChunkPreparation.Chunk> indexChunks = new ArrayList<>();
+            if (indexes != null) {
+                for (IndexConfig indexConfig : indexes) {
+                    try {
+                        List<ToText> indexData = executeIndexTool(indexConfig);
+                        if (indexData != null && !indexData.isEmpty()) {
+                            String indexName = indexConfig.getIntegration() != null ? indexConfig.getIntegration() : "index";
+                            if (expertParams.isSkipAIProcessing()) {
+                                // Add to knownInfo as text and save as file
+                                String indexText = ToText.Utils.toText(indexData);
+                                inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nIndex Data (" + indexName + "):\n" + indexText);
+                                attachResponse(this, "_index_" + indexName + ".txt", indexText, ticket.getKey(), "text/plain");
+                                logger.info("Saved index data from {} as attachment for ticket {}", indexName, ticket.getKey());
+                            } else {
+                                // Prepare chunks for AI processing with reduced token limit
+                                // Account for story tokens (same pattern as TestCasesGenerator)
+                                logger.info("Index chunking for {}: story tokens={}, system limit={}, chunk limit={}",
+                                    indexName, systemTokenLimits, systemTokenLimits, tokenLimit);
+                                
+                                List<ChunkPreparation.Chunk> chunks = contextChunkPreparation.prepareChunks(indexData, tokenLimit);
+                                indexChunks.addAll(chunks);
+                                logger.info("Prepared {} chunks from index {} for ticket {}", chunks.size(), indexName, ticket.getKey());
+                            }
+                        }
+                    } catch (Exception e) {
+                        String indexName = indexConfig.getIntegration() != null ? indexConfig.getIntegration() : "index";
+                        logger.error("Failed to execute index {} for ticket {}: {}", indexName, ticket.getKey(), e.getMessage(), e);
                     }
-                    skipFieldUpdate = true;
+                }
+            }
+
+            String response;
+            boolean skipFieldUpdate = false;  // NEW: Flag to skip field update
+
+            if (expertParams.isSkipAIProcessing()) {
+                // Skip AI processing and use CLI output response if available
+                if (cliResult != null && cliResult.hasOutputResponse()) {
+                    // response.md file exists and has content
+                    response = cliResult.getOutputResponse();
+                    logger.info("Using CLI output response as final response for ticket {}", ticket.getKey());
                 } else {
-                    if (cliResult != null) {
-                        response = cliResult.getCommandResponses().toString();
-                        logger.info("Using CLI execution results as final response for {}", ticketKey);
+                    // response.md is missing or empty
+                    if (expertParams.isRequireCliOutputFile()) {
+                        // Strict mode: Don't use fallback, mark for skipping field update
+                        logger.warn("CLI output file (response.md) is missing or empty for ticket {}, " +
+                                   "but requireCliOutputFile=true. Will skip field update and post error comment.",
+                                   ticket.getKey());
+
+                        // Prepare error message for comment
+                        if (cliResult != null) {
+                            response = "CLI command executed but did not produce output file:\n" +
+                                      cliResult.getCommandResponses().toString();
+                        } else {
+                            response = "No CLI commands executed or results available.";
+                        }
+
+                        skipFieldUpdate = true;  // Mark to skip field update
                     } else {
-                        response = "No CLI commands executed or results available.";
-                        logger.info("No CLI results available for {}", ticketKey);
+                        // Permissive mode: Use fallback (backwards compatible)
+                        if (cliResult != null) {
+                            response = cliResult.getCommandResponses().toString();
+                            logger.info("Using CLI execution results as final response for ticket {}", ticket.getKey());
+                        } else {
+                            response = "No CLI commands executed or results available.";
+                            logger.info("No CLI results available for ticket {}", ticket.getKey());
+                        }
                     }
                 }
+            } else {
+                // Standard AI processing workflow with index chunks
+                if (!indexChunks.isEmpty()) {
+                    chunksContext.addAll(indexChunks);
+                }
+                GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, chunksContext, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
+                response = genericRequestAgent.run(genericRequesAgentParams);
             }
-        } else {
-            if (!indexChunks.isEmpty()) {
-                chunksContext.addAll(indexChunks);
-            }
-            GenericRequestAgent.Params genericRequestAgentParams = new GenericRequestAgent.Params(
-                    inputParams, null, chunksContext, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
-            response = genericRequestAgent.run(genericRequestAgentParams);
-        }
-
-        // Run postJSAction unless explicitly skipped. Wrapped in the same timer as the CLI
-        // execution so a long-running postJSAction (e.g. a JS-driven quality-gate retry loop)
-        // still benefits from the periodic auto-save/auto-commit protection.
-        String postJSAction = expertParams.getPostJSAction();
-        if (postJSAction != null && !postJSAction.trim().isEmpty() && !expertParams.isSkipPostJSAction() && ticket != null) {
-            AtomicReference<Exception> postJsError = new AtomicReference<>();
-            CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
-                try {
-                    js(postJSAction)
-                            .mcp(trackerClient, ai, confluence, null)
+            String postJSAction = expertParams.getPostJSAction();
+            if (postJSAction != null && !postJSAction.trim().isEmpty() && !expertParams.isSkipPostJSAction()) {
+                AtomicReference<Exception> postJsError = new AtomicReference<>();
+                CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
+                    try {
+                        js(postJSAction)
+                            .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
                             .withJobContext(expertParams, ticket, response)
                             .with(TrackerParams.INITIATOR, initiator)
                             .with("systemRequest", systemRequestCommentAlias)
                             .execute();
-                } catch (Exception e) {
-                    postJsError.set(e);
-                }
-            });
-            if (postJsError.get() != null) {
-                throw postJsError.get();
-            }
-        } else if (expertParams.isSkipPostJSAction()) {
-            logger.info("Skipping postJSAction (skipPostJSAction=true) for {}", ticketKey);
-        }
-
-        if (expertParams.isAttachResponseAsFile() && ticket != null) {
-            attachResponse(genericRequestAgent, "_final_answer.txt", response, ticketKey, "text/plain");
-        }
-
-        // Handle output based on outputType, skip publishing if outputType is 'none' or no ticket
-        if (ticket != null && outputType != Params.OutputType.none) {
-            if (skipFieldUpdate) {
-                logger.warn("Skipping output processing for {} due to missing CLI output file (requireCliOutputFile=true)", ticketKey);
-                String errorComment;
-                if (initiator != null && !initiator.isEmpty()) {
-                    errorComment = trackerClient.tag(initiator) + ", \n\n⚠️ CLI command execution issue:\n\n" + response;
-                } else {
-                    errorComment = "⚠️ CLI command execution issue:\n\n" + response;
-                }
-                trackerClient.postComment(ticketKey, errorComment);
-                logger.info("Posted error comment to {} instead of processing output (outputType={})", ticketKey, outputType);
-            } else {
-                if (outputType == Params.OutputType.field) {
-                    final String fieldCode = trackerClient.resolveFieldName(ticketKey, fieldName);
-                    String currentFieldValue = ticket.getFieldValueAsString(fieldCode);
-                    if (expertParams.getOperationType() == Params.OperationType.Append) {
-                        String newValue;
-                        if (currentFieldValue == null || currentFieldValue.trim().isEmpty()) {
-                            newValue = response;
-                        } else {
-                            newValue = currentFieldValue + "\n\n" + response;
-                        }
-                        trackerClient.updateTicket(ticketKey, fields -> fields.set(fieldCode, newValue));
-                    } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
-                        trackerClient.updateTicket(ticketKey, fields -> fields.set(fieldCode, response));
+                    } catch (Exception e) {
+                        postJsError.set(e);
                     }
+                });
+                if (postJsError.get() != null) {
+                    throw postJsError.get();
+                }
+            } else if (expertParams.isSkipPostJSAction()) {
+                logger.info("Skipping postJSAction (skipPostJSAction=true) for {}", ticket.getKey());
+            }
+            if (expertParams.isAttachResponseAsFile()) {
+                attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
+            }
+            
+            // Handle output based on outputType, skip publishing if outputType is 'none'
+            if (outputType != Params.OutputType.none) {
+                // NEW: Check if output should be skipped (when requireCliOutputFile=true and no output file)
+                if (skipFieldUpdate) {
+                    logger.warn("Skipping output processing for ticket {} due to missing CLI output file (requireCliOutputFile=true)",
+                               ticket.getKey());
+
+                    // Post error comment (when outputType is not 'none')
+                    String errorComment;
                     if (initiator != null && !initiator.isEmpty()) {
-                        String comment = trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.";
-                        if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
-                            comment = trackerClient.tag(initiator) + ", there is AI response in '" + fieldName + "' on your request: \n" +
-                                    "System Request: " + systemRequestCommentAlias;
-                        }
-                        trackerClient.postComment(ticketKey, comment);
+                        errorComment = trackerClient.tag(initiator) +
+                            ", \n\n⚠️ CLI command execution issue:\n\n" + response;
+                    } else {
+                        errorComment = "⚠️ CLI command execution issue:\n\n" + response;
                     }
-                } else {
-                    String comment = trackerClient.tag(initiator) + ", \n\nAI Response is: \n" + response;
-                    if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
-                        comment = trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n\nAI Response is: \n" + response;
-                    }
-                    trackerClient.postCommentIfNotExists(ticketKey, comment);
-                }
-            }
-        } else {
-            logger.info("Output type is '{}' or running standalone - skipping publishing results for {}",
-                    outputType, ticketKey);
-        }
+                    trackerClient.postComment(ticket.getTicketKey(), errorComment);
+                    logger.info("Posted error comment to ticket {} instead of processing output (outputType={})",
+                               ticket.getKey(), outputType);
 
-        // Post completion comment so the initiator is notified when the Teammate run finishes
-        if (ticket != null) {
-            postCompletionComment(trackerClient, ticketKey, ciRunUrl, initiator, expertParams);
-        }
-        return new ResultItem(ticketKey, response);
+                    // Skip further processing (no field update, no comment, no ticket creation)
+                } else {
+                    // Normal output processing flow (unchanged)
+                    if (outputType == Params.OutputType.field) {
+                        // Use tracker-agnostic field resolution
+                        final String fieldCode = trackerClient.resolveFieldName(ticket.getTicketKey(), fieldName);
+                        String currentFieldValue = ticket.getFieldValueAsString(fieldCode);
+
+                        if (expertParams.getOperationType() == Params.OperationType.Append) {
+                            String newValue;
+                            if (currentFieldValue == null || currentFieldValue.trim().isEmpty()) {
+                                newValue = response;
+                            } else {
+                                newValue = currentFieldValue + "\n\n" + response;
+                            }
+                            trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, newValue));
+                        } else if (expertParams.getOperationType() == Params.OperationType.Replace) {
+                            trackerClient.updateTicket(ticket.getTicketKey(), fields -> fields.set(fieldCode, response));
+                        }
+
+                        if (initiator != null && !initiator.isEmpty()) {
+                            String comment = trackerClient.tag(initiator) + ", \n\n AI response in '" + fieldName + "' on your request.";
+                            if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                                comment = trackerClient.tag(initiator) + ", there is AI response in '"+ fieldName + "' on your request: \n"+
+                                        "System Request: " + systemRequestCommentAlias;
+                            }
+                            trackerClient.postComment(ticket.getTicketKey(), comment);
+                        }
+                    } else {
+                        String comment = trackerClient.tag(initiator) + ", \n\nAI Response is: \n" + response;
+                        if (systemRequestCommentAlias != null && !systemRequestCommentAlias.isEmpty()) {
+                            comment = trackerClient.tag(initiator) + ", there is response on your request: \n" + "System Request: " + systemRequestCommentAlias + "\n\nAI Response is: \n" + response;
+                        }
+                        trackerClient.postCommentIfNotExists(ticket.getTicketKey(), comment);
+                    }
+                }
+            } else {
+                logger.info("Output type is 'none', skipping publishing results for ticket {}", ticket.getKey());
+            }
+
+            // Post completion comment so the initiator is notified when the Teammate run finishes
+            postCompletionComment(trackerClient, ticket.getTicketKey(), ciRunUrl, initiator, expertParams);
+
+            results.add(new ResultItem(ticket.getTicketKey(), response));
+            return false;
+        }, inputJQL, trackerClient.getExtendedQueryFields());
+        return results;
     }
+
 
     /**
      * Builds the completion comment text that tags the initiator and references the CI run URL.
@@ -826,6 +891,137 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             }
         }
         return "✅ Teammate run completed. CI Run: " + ciRunUrl;
+    }
+
+    /**
+     * Determines whether a {@code preCliJSAction} result should be treated as a hard-stop failure:
+     * an explicit {@code false}, or an object/map containing {@code success: false}. Any other
+     * value (including {@code null}/undefined, {@code true}, or an object without a {@code success}
+     * key) is treated as success, preserving backwards compatibility for actions that don't return
+     * a structured result.
+     */
+    static boolean isPreCliJSActionFailure(Object preCliActionResult) {
+        if (Boolean.FALSE.equals(preCliActionResult)) {
+            return true;
+        }
+        if (preCliActionResult instanceof JSONObject) {
+            JSONObject json = (JSONObject) preCliActionResult;
+            return json.has("success") && !json.optBoolean("success", true);
+        }
+        if (preCliActionResult instanceof Map) {
+            Object success = ((Map<?, ?>) preCliActionResult).get("success");
+            return Boolean.FALSE.equals(success);
+        }
+        return false;
+    }
+
+    /**
+     * Executes Teammate in standalone CLI mode when no {@code inputJql} is provided but
+     * {@code cliCommands} are present. No tracker tickets are queried and JS actions are
+     * skipped; only CLI commands (optionally aggregated with prompts) are executed.
+     */
+    private List<ResultItem> processStandaloneCliMode(TeammateParams expertParams,
+                                                       RequestDecompositionAgent.Result inputParams,
+                                                       RequestDecompositionAgent.Result originalParams,
+                                                       String initiator) throws Exception {
+        List<ResultItem> results = new ArrayList<>();
+        String[] cliCommands = expertParams.getCliCommands();
+
+        // Build final CLI commands with aggregated prompt
+        CliCommandBuilder cliCommandBuilder = new CliCommandBuilder(instructionProcessor, configuration);
+        String[] finalCliCommands = cliCommandBuilder.buildCommands(
+                cliCommands,
+                expertParams.getCliPrompt(),
+                expertParams.getCliPrompts(),
+                expertParams.getCliPromptsByTracker());
+
+        Path inputContextPath = null;
+        CliExecutionHelper cliHelper = new CliExecutionHelper();
+        CliExecutionHelper.CliExecutionResult cliResult = null;
+        try {
+            // Create input context without a ticket
+            TicketInputContextBuilder contextBuilder = new TicketInputContextBuilder(instructionProcessor);
+            TicketInputContextBuilder.Result contextResult = contextBuilder.build(
+                    expertParams, null, Paths.get(System.getProperty("user.dir")),
+                    trackerClient, confluence, null,
+                    expertParams.isWriteAgentParamsToFiles() ? originalParams : inputParams);
+            inputContextPath = contextResult.getPath();
+
+            // Execute CLI commands from project root directory
+            Path projectRoot = Paths.get(System.getProperty("user.dir"));
+            AtomicReference<String> liveCliOutput = new AtomicReference<>("");
+            cliResult = cliHelper.executeCliCommandsWithResult(
+                    finalCliCommands,
+                    projectRoot,
+                    null,
+                    null,
+                    0,
+                    liveCliOutput,
+                    false,
+                    expertParams.getExcludedEnvVariables(),
+                    expertParams.getExcludedEnvRegexes());
+
+            // Append CLI responses to knownInfo for optional downstream AI processing
+            StringBuilder cliResponses = cliResult.getCommandResponses();
+            if (!cliResponses.isEmpty()) {
+                String cliContent = cliResponses.toString();
+                if (cliResult.hasOutputResponse()) {
+                    cliContent += cliResult.getOutputResponse() + "\n\n";
+                }
+                inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nCLI Execution Results:\n" + cliContent);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to execute CLI commands in standalone mode: {}", e.getMessage(), e);
+            StringBuilder errorResponse = new StringBuilder("CLI Execution Error: ").append(e.getMessage()).append("\n");
+            cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null);
+        } finally {
+            if (inputContextPath != null) {
+                if (expertParams.isCleanupInputFolder()) {
+                    cliHelper.cleanupInputContext(inputContextPath);
+                    logger.info("Cleaned up input folder (cleanupInputFolder=true)");
+                } else {
+                    logger.info("Keeping input folder for inspection (cleanupInputFolder=false): {}",
+                            inputContextPath.toAbsolutePath());
+                }
+            }
+        }
+
+        String response;
+        if (expertParams.isSkipAIProcessing()) {
+            if (cliResult != null && cliResult.hasOutputResponse()) {
+                response = cliResult.getOutputResponse();
+                logger.info("Using CLI output response as final response for standalone mode");
+            } else {
+                if (expertParams.isRequireCliOutputFile()) {
+                    logger.warn("CLI output file (response.md) is missing or empty in standalone mode, " +
+                            "but requireCliOutputFile=true. Returning error response.");
+                    if (cliResult != null) {
+                        response = "CLI command executed but did not produce output file:\n" +
+                                cliResult.getCommandResponses().toString();
+                    } else {
+                        response = "No CLI commands executed or results available.";
+                    }
+                    results.add(new ResultItem("standalone", response));
+                    return results;
+                } else {
+                    if (cliResult != null) {
+                        response = cliResult.getCommandResponses().toString();
+                        logger.info("Using CLI execution results as final response for standalone mode");
+                    } else {
+                        response = "No CLI commands executed or results available.";
+                        logger.info("No CLI results available for standalone mode");
+                    }
+                }
+            }
+        } else {
+            GenericRequestAgent.Params genericRequestAgentParams = new GenericRequestAgent.Params(
+                    inputParams, null, new ArrayList<>(),
+                    expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
+            response = genericRequestAgent.run(genericRequestAgentParams);
+        }
+
+        results.add(new ResultItem("standalone", response));
+        return results;
     }
 
     /**
@@ -861,26 +1057,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
      * @return merged array of CLI prompts, or base prompts if no tracker-specific match found
      */
     static String[] resolveCliPrompts(String[] baseCliPrompts, Map<String, String[]> cliPromptsByTracker, String trackerType) {
-        String effectiveTracker = trackerType;
-        if (effectiveTracker == null || effectiveTracker.isBlank()) {
-            // Default to Markdown-based formatting when no tracker is configured.
-            effectiveTracker = "ado";
-        }
-        if (cliPromptsByTracker == null || !cliPromptsByTracker.containsKey(effectiveTracker)) {
-            return baseCliPrompts;
-        }
-
-        String[] trackerPrompts = cliPromptsByTracker.get(effectiveTracker);
-        if (trackerPrompts == null || trackerPrompts.length == 0) {
-            return baseCliPrompts;
-        }
-
-        List<String> merged = new ArrayList<>();
-        if (baseCliPrompts != null) {
-            merged.addAll(List.of(baseCliPrompts));
-        }
-        merged.addAll(List.of(trackerPrompts));
-        return merged.toArray(new String[0]);
+        return CliCommandBuilder.resolveCliPrompts(baseCliPrompts, cliPromptsByTracker, trackerType);
     }
 
     public void attachResponse(Object orchestratorClass, String file, String result, String ticketKey, String contentType) throws IOException {

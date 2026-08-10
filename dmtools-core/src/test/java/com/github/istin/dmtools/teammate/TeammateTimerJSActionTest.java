@@ -53,7 +53,7 @@ public class TeammateTimerJSActionTest {
 
         try (MockedStatic<CommandLineUtils> cmdMock = Mockito.mockStatic(CommandLineUtils.class)) {
             // Simulate a CLI command that takes ~300ms so the 1-second timer fires once
-            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any()))
+            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenAnswer(inv -> {
                         Thread.sleep(1200); // longer than 1s timer interval
                         return "output";
@@ -78,7 +78,7 @@ public class TeammateTimerJSActionTest {
         Runnable timerAction = fireCount::incrementAndGet;
 
         try (MockedStatic<CommandLineUtils> cmdMock = Mockito.mockStatic(CommandLineUtils.class)) {
-            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any()))
+            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("done");
             cmdMock.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -100,7 +100,7 @@ public class TeammateTimerJSActionTest {
         Runnable timerAction = fireCount::incrementAndGet;
 
         try (MockedStatic<CommandLineUtils> cmdMock = Mockito.mockStatic(CommandLineUtils.class)) {
-            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any()))
+            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("output");
             cmdMock.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -116,7 +116,7 @@ public class TeammateTimerJSActionTest {
     void testNullTimerActionDisablesTimer() {
         // Should not throw and should complete normally
         try (MockedStatic<CommandLineUtils> cmdMock = Mockito.mockStatic(CommandLineUtils.class)) {
-            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any()))
+            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenReturn("output");
             cmdMock.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
@@ -141,7 +141,7 @@ public class TeammateTimerJSActionTest {
 
         try (MockedStatic<CommandLineUtils> cmdMock = Mockito.mockStatic(CommandLineUtils.class)) {
             // Simulate command that emits lines via lineConsumer before returning
-            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any()))
+            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenAnswer(inv -> {
                         @SuppressWarnings("unchecked")
                         Consumer<String> consumer = (Consumer<String>) inv.getArgument(3);
@@ -171,7 +171,7 @@ public class TeammateTimerJSActionTest {
         Runnable timerAction = () -> { throw new RuntimeException("timer boom"); };
 
         try (MockedStatic<CommandLineUtils> cmdMock = Mockito.mockStatic(CommandLineUtils.class)) {
-            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any()))
+            cmdMock.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(Map.class), any(), anyBoolean(), any(), anyInt()))
                     .thenAnswer(inv -> {
                         Thread.sleep(1200);
                         cliCompletedCount.incrementAndGet();

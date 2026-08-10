@@ -1,11 +1,12 @@
 # Bitrise MCP Tools
 
-**Total Tools**: 23
+**Total Tools**: 24
 
 ## Available Tools
 
 | Tool Name | Description | Category |
 |-----------|-------------|----------|
+| `bitrise_test` | Test Bitrise connectivity by fetching the current user's profile. | system |
 | `bitrise_list_apps` | List all Bitrise apps accessible with the current token. Returns app slugs, titles, project types and repo URLs. | apps |
 | `bitrise_get_app` | Get details of a specific Bitrise app by its slug. | apps |
 | `bitrise_list_builds` | List builds for a Bitrise app. Optionally filter by workflow, branch or status. Status codes: not_started, in_progress, success, failed, aborted. | builds |

@@ -1,0 +1,19 @@
+---
+// Slots rather than props: the headline carries the one gradient keyword as a
+// <span class="accent">, and that is markup.
+interface Props {
+  eyebrow: string;
+}
+
+const { eyebrow } = Astro.props;
+---
+
+<div class="split">
+  <div>
+    <p class="eyebrow reveal">{eyebrow}</p>
+    <h2 class="headline reveal" data-delay="1"><slot name="headline" /></h2>
+  </div>
+  <div>
+    <p class="subhead reveal" data-delay="2"><slot name="subhead" /></p>
+  </div>
+</div>
