@@ -8,6 +8,7 @@ import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.CliCommandFailedException;
 import com.github.istin.dmtools.common.utils.CliExecutionStoppedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import org.apache.commons.io.FileUtils;
@@ -449,6 +450,81 @@ public class CliExecutionHelperTest {
             assertTrue(result.getCommandResponses().toString().contains("test"));
             assertTrue(result.hasOutputResponse());
             assertEquals(outputContent, result.getOutputResponse());
+        }
+    }
+
+    @Test
+    void testExecuteCliCommandsWithResult_Success_NoFatalError() throws IOException {
+        // Arrange - a successful command batch must report no fatal error
+        Path workingDir = Files.createTempDirectory(tempDir, "working");
+        String[] commands = {"echo hello"};
+
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("echo hello"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                      .thenReturn("hello\nExit Code: 0");
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                      .thenReturn(Map.of());
+
+            // Act
+            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(commands, workingDir, "dmtools.env");
+
+            // Assert
+            assertNotNull(result);
+            assertFalse(result.hasFatalError());
+            assertNull(result.getLastExitCode());
+            assertNull(result.getLastErrorMessage());
+        }
+    }
+
+    @Test
+    void testExecuteCliCommandsWithResult_FatalError_ExposesExitCodeAndMessage() throws IOException {
+        // Arrange - simulate a subprocess that exits non-zero (e.g. an invalid model ID
+        // rejected by a Bedrock/Claude API call), as thrown by CommandLineUtils.runCommand
+        Path workingDir = Files.createTempDirectory(tempDir, "working");
+        String[] commands = {"claude --model invalid-model"};
+
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("claude --model invalid-model"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                      .thenThrow(new CliCommandFailedException("claude --model invalid-model", 1,
+                              "API Error: 400 {\"detail\":\"ValidationException: The provided model identifier is invalid.\"}"));
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                      .thenReturn(Map.of());
+
+            // Act
+            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(commands, workingDir, "dmtools.env");
+
+            // Assert - the structured signal must be available without string-scanning commandResponses
+            assertNotNull(result);
+            assertTrue(result.hasFatalError());
+            assertEquals(1, result.getLastExitCode());
+            assertNotNull(result.getLastErrorMessage());
+            assertTrue(result.getLastErrorMessage().contains("ValidationException"));
+            // The free-text transcript still contains the error too (backward compatible)
+            assertTrue(result.getCommandResponses().toString().contains("Error:"));
+        }
+    }
+
+    @Test
+    void testExecuteCliCommandsWithResult_NonCliCommandFailedException_ExitCodeIsNull() throws IOException {
+        // Arrange - a generic IOException (not CliCommandFailedException) should still be
+        // flagged as a fatal error, but with no known exit code.
+        Path workingDir = Files.createTempDirectory(tempDir, "working");
+        String[] commands = {"some-tool"};
+
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("some-tool"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                      .thenThrow(new IOException("some-tool: command not found"));
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                      .thenReturn(Map.of());
+
+            // Act
+            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(commands, workingDir, "dmtools.env");
+
+            // Assert
+            assertNotNull(result);
+            assertTrue(result.hasFatalError());
+            assertNull(result.getLastExitCode());
+            assertNotNull(result.getLastErrorMessage());
         }
     }
     
@@ -1036,6 +1112,38 @@ public class CliExecutionHelperTest {
 
             assertTrue(latch.await(5, TimeUnit.SECONDS), "Timer action should fire within 5 seconds");
             assertTrue(fireCount.get() >= 1, "Timer action should have fired at least once");
+        }
+    }
+
+    @Test
+    void testExecuteCliCommandsWithResult_LiveErrorStatePublishedOnFatalError() throws IOException {
+        // Arrange - a fatal CLI failure must be published to liveErrorState synchronously
+        // (mirroring how liveOutput is updated), so a concurrent timerJSAction reading it
+        // afterwards observes the failure without waiting for the whole batch to finish.
+        Path workingDir = Files.createTempDirectory(tempDir, "working");
+        String[] commands = {"claude --model invalid-model"};
+        java.util.concurrent.atomic.AtomicReference<CliExecutionHelper.LiveCliErrorState> liveErrorState =
+                new java.util.concurrent.atomic.AtomicReference<>(CliExecutionHelper.LiveCliErrorState.NONE);
+
+        try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+            mockedUtils.when(() -> CommandLineUtils.runCommand(eq("claude --model invalid-model"), any(File.class), any(Map.class), any(), anyBoolean(), any(), anyInt()))
+                    .thenThrow(new CliCommandFailedException("claude --model invalid-model", 1, "ValidationException"));
+            mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of());
+
+            // Act - assert that liveErrorState starts as NONE, and is updated after execution
+            assertFalse(liveErrorState.get().hasFatalError());
+
+            CliExecutionHelper.CliExecutionResult result = cliHelper.executeCliCommandsWithResult(
+                    commands, workingDir, "dmtools.env", null, 0, null, false, null, null,
+                    null, null, CliExecutionHelper.OutputFolderPreference.LEGACY_OUTPUT_FIRST, liveErrorState);
+
+            // Assert
+            assertNotNull(result);
+            assertTrue(result.hasFatalError());
+            assertTrue(liveErrorState.get().hasFatalError());
+            assertEquals(1, liveErrorState.get().getExitCode());
+            assertNotNull(liveErrorState.get().getErrorMessage());
         }
     }
 

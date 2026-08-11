@@ -593,16 +593,21 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             String timerJSAction = expertParams.getTimerJSAction();
             int timerIntervalSeconds = expertParams.getTimerIntervalSeconds();
             AtomicReference<String> liveCliOutput = new AtomicReference<>("");
+            AtomicReference<CliExecutionHelper.LiveCliErrorState> liveCliErrorState =
+                    new AtomicReference<>(CliExecutionHelper.LiveCliErrorState.NONE);
             Runnable timerRunnable = null;
             if (timerJSAction != null && !timerJSAction.trim().isEmpty() && timerIntervalSeconds > 0) {
                 timerRunnable = () -> {
                     try {
+                        CliExecutionHelper.LiveCliErrorState errorState = liveCliErrorState.get();
                         js(timerJSAction)
                             .mcp(trackerClient, ai, confluence, null)
                             .withJobContext(expertParams, ticket, null)
                             .with(TrackerParams.INITIATOR, initiator)
                             .with("systemRequest", systemRequestCommentAlias)
                             .with("currentCliOutput", liveCliOutput.get())
+                            .with("currentCliHasFatalError", errorState.hasFatalError())
+                            .with("currentCliErrorMessage", errorState.getErrorMessage())
                             .execute();
                     } catch (Exception e) {
                         logger.warn("timerJSAction execution failed (continues): {}", e.getMessage());
@@ -672,7 +677,11 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             liveCliOutput,
                             false,
                             expertParams.getExcludedEnvVariables(),
-                            expertParams.getExcludedEnvRegexes());
+                            expertParams.getExcludedEnvRegexes(),
+                            null,
+                            null,
+                            CliExecutionHelper.OutputFolderPreference.LEGACY_OUTPUT_FIRST,
+                            liveCliErrorState);
                     
                     // Append CLI responses to knownInfo if not empty
                     StringBuilder cliResponses = cliResult.getCommandResponses();
@@ -687,9 +696,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     
                 } catch (Exception e) {
                     logger.error("Failed to execute CLI commands for ticket {}: {}", ticket.getKey(), e.getMessage(), e);
-                    // Create error result for consistent handling below
+                    // Create error result for consistent handling below. Also populate the
+                    // structured error fields (and the live signal timerJSAction reads) so a
+                    // hard failure surfaced here is just as visible to JS consumers as one
+                    // detected inside executeCliCommandsWithResult itself.
                     StringBuilder errorResponse = new StringBuilder("CLI Execution Error: ").append(e.getMessage()).append("\n");
-                    cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null);
+                    Integer exitCode = (e instanceof com.github.istin.dmtools.common.utils.CliCommandFailedException)
+                            ? ((com.github.istin.dmtools.common.utils.CliCommandFailedException) e).getExitCode()
+                            : null;
+                    cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null, true, exitCode, e.getMessage());
+                    liveCliErrorState.set(new CliExecutionHelper.LiveCliErrorState(true, exitCode, e.getMessage()));
                 } finally {
                     // Clean up input context
                     if (inputContextPath != null) {

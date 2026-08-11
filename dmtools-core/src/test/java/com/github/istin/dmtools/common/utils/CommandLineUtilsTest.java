@@ -76,6 +76,20 @@ class CommandLineUtilsTest {
     }
 
     @Test
+    void testRunCommand_NonZeroExitCode_ThrowsCliCommandFailedExceptionWithStructuredExitCode() {
+        // The thrown exception must be the structured CliCommandFailedException (an IOException
+        // subtype), exposing the real exit code without callers needing to parse the message.
+        String os = System.getProperty("os.name").toLowerCase();
+        if (!os.contains("win")) {
+            CliCommandFailedException ex = assertThrows(CliCommandFailedException.class,
+                    () -> CommandLineUtils.runCommand("false"));
+            assertEquals(1, ex.getExitCode());
+            assertEquals("false", ex.getCommand());
+            assertTrue(ex.getMessage().contains("exit code 1"));
+        }
+    }
+
+    @Test
     void testRunCommand_ExitCode128_ThrowsIOExceptionWithCode() {
         String os = System.getProperty("os.name").toLowerCase();
         if (!os.contains("win")) {
