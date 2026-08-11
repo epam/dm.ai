@@ -300,8 +300,11 @@ public class CommandLineUtils {
         }
 
         // Propagate non-zero exit codes so callers are not silently misled.
+        // Thrown as CliCommandFailedException (an IOException subtype) so existing
+        // callers that only catch IOException/Exception see no behavior change, while
+        // callers that need the structured exit code can catch it specifically.
         if (exitCode != 0) {
-            throw new IOException("Command failed (exit code " + exitCode + "): " + command + "\nOutput:\n" + output.toString().trim());
+            throw new CliCommandFailedException(command, exitCode, output.toString());
         }
 
         return output.toString().trim();
