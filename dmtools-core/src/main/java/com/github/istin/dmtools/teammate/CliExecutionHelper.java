@@ -8,6 +8,7 @@ import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.CliCommandFailedException;
 import com.github.istin.dmtools.common.utils.CliExecutionStoppedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.IOUtils;
@@ -436,11 +437,114 @@ public class CliExecutionHelper {
                                             AtomicReference<String> liveOutput, boolean allowAnyCommand,
                                             String[] excludedEnvVariables, String[] excludedEnvRegexes,
                                             Consumer<Exception> errorHandler, Predicate<String> lineStopPredicate) {
+        return executeCliCommandsInternal(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand,
+                excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate).getCommandResponses();
+    }
+
+    /**
+     * Internal outcome of a CLI command batch, tracking both the accumulated text
+     * responses and a structured signal for the last fatal (non-zero exit code)
+     * command failure encountered, if any. Used to populate {@link CliExecutionResult}
+     * without changing the public {@code executeCliCommands} return type.
+     */
+    private static class CliCommandsOutcome {
+        private final StringBuilder commandResponses;
+        private final boolean hasFatalError;
+        private final Integer lastExitCode;
+        private final String lastErrorMessage;
+
+        CliCommandsOutcome(StringBuilder commandResponses, boolean hasFatalError,
+                           Integer lastExitCode, String lastErrorMessage) {
+            this.commandResponses = commandResponses;
+            this.hasFatalError = hasFatalError;
+            this.lastExitCode = lastExitCode;
+            this.lastErrorMessage = lastErrorMessage;
+        }
+
+        StringBuilder getCommandResponses() {
+            return commandResponses;
+        }
+
+        boolean hasFatalError() {
+            return hasFatalError;
+        }
+
+        Integer getLastExitCode() {
+            return lastExitCode;
+        }
+
+        String getLastErrorMessage() {
+            return lastErrorMessage;
+        }
+    }
+
+    /**
+     * Immutable snapshot of the last fatal CLI command failure encountered so far,
+     * published live via an {@link AtomicReference} (analogous to {@code liveOutput})
+     * so a concurrent {@code timerJSAction} can react to a fatal error before the CLI
+     * command batch as a whole finishes — see {@code Teammate.runJobImpl}.
+     */
+    public static class LiveCliErrorState {
+        public static final LiveCliErrorState NONE = new LiveCliErrorState(false, null, null);
+
+        private final boolean hasFatalError;
+        private final Integer exitCode;
+        private final String errorMessage;
+
+        public LiveCliErrorState(boolean hasFatalError, Integer exitCode, String errorMessage) {
+            this.hasFatalError = hasFatalError;
+            this.exitCode = exitCode;
+            this.errorMessage = errorMessage;
+        }
+
+        public boolean hasFatalError() {
+            return hasFatalError;
+        }
+
+        public Integer getExitCode() {
+            return exitCode;
+        }
+
+        public String getErrorMessage() {
+            return errorMessage;
+        }
+    }
+
+    /**
+     * Executes CLI commands and collects their responses, additionally tracking a
+     * structured signal for the last fatal (non-zero exit code) command failure.
+     *
+     * <p>Unlike the public {@code executeCliCommands} overloads, callers here get
+     * access to the real subprocess exit code rather than only the free-text error
+     * message embedded in {@code cliResponses} — see {@link CliCommandFailedException}.
+     */
+    private CliCommandsOutcome executeCliCommandsInternal(String[] cliCommands, Path workingDirectory, String envVariablesFile,
+                                            AtomicReference<String> liveOutput, boolean allowAnyCommand,
+                                            String[] excludedEnvVariables, String[] excludedEnvRegexes,
+                                            Consumer<Exception> errorHandler, Predicate<String> lineStopPredicate) {
+        return executeCliCommandsInternal(cliCommands, workingDirectory, envVariablesFile, liveOutput, allowAnyCommand,
+                excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate, null);
+    }
+
+    /**
+     * Same as the overload above, additionally publishing a live snapshot of the last fatal
+     * CLI failure to {@code liveErrorState} (if non-null) as soon as it is detected — mirroring
+     * how {@code liveOutput} is updated after every line — so a concurrent {@code timerJSAction}
+     * can observe a fatal error before the whole command batch finishes.
+     */
+    private CliCommandsOutcome executeCliCommandsInternal(String[] cliCommands, Path workingDirectory, String envVariablesFile,
+                                            AtomicReference<String> liveOutput, boolean allowAnyCommand,
+                                            String[] excludedEnvVariables, String[] excludedEnvRegexes,
+                                            Consumer<Exception> errorHandler, Predicate<String> lineStopPredicate,
+                                            AtomicReference<LiveCliErrorState> liveErrorState) {
         StringBuilder cliResponses = new StringBuilder();
+        boolean hasFatalError = false;
+        Integer lastExitCode = null;
+        String lastErrorMessage = null;
 
         if (cliCommands == null || cliCommands.length == 0) {
             logger.info("No CLI commands to execute");
-            return cliResponses;
+            return new CliCommandsOutcome(cliResponses, false, null, null);
         }
 
         // Load environment variables from dmtools.env for CLI tools like cursor-agent
@@ -562,10 +666,23 @@ public class CliExecutionHelper {
                 if (liveOutput != null) {
                     liveOutput.set(cliResponses.toString());
                 }
+
+                // Track a structured fatal-error signal so downstream consumers
+                // (e.g. timerJSAction / postJSAction retry logic) can distinguish a
+                // real, non-retryable CLI failure from a transient interruption
+                // without string-scanning the free-text response above.
+                hasFatalError = true;
+                lastErrorMessage = errorMsg;
+                lastExitCode = (e instanceof CliCommandFailedException)
+                        ? ((CliCommandFailedException) e).getExitCode()
+                        : null;
+                if (liveErrorState != null) {
+                    liveErrorState.set(new LiveCliErrorState(true, lastExitCode, lastErrorMessage));
+                }
             }
         }
-        
-        return cliResponses;
+
+        return new CliCommandsOutcome(cliResponses, hasFatalError, lastExitCode, lastErrorMessage);
     }
 
     private boolean hasEnvironmentExclusions(String[] excludedEnvVariables, String[] excludedEnvRegexes) {
@@ -745,15 +862,43 @@ public class CliExecutionHelper {
                                                            Consumer<Exception> errorHandler,
                                                            Predicate<String> lineStopPredicate,
                                                            OutputFolderPreference outputFolderPreference) {
+        return executeCliCommandsWithResult(cliCommands, workingDirectory, envVariablesFile, timerAction, timerIntervalSeconds,
+                liveCliOutput, allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate,
+                outputFolderPreference, null);
+    }
+
+    /**
+     * Same as the overload above, additionally publishing a live snapshot of the last fatal CLI
+     * failure to {@code liveErrorState} (if non-null) as soon as it is detected — mirroring
+     * {@code liveCliOutput} — so a concurrent {@code timerJSAction} can observe and react to a
+     * fatal, non-retryable error (e.g. an invalid model ID rejected by the AI provider) before
+     * the whole CLI command batch finishes, rather than only being able to string-scan the raw
+     * output for error text.
+     *
+     * @param liveErrorState Optional shared AtomicReference updated with a {@link LiveCliErrorState}
+     *                       snapshot as soon as a fatal (non-zero exit code) command failure is detected
+     */
+    public CliExecutionResult executeCliCommandsWithResult(String[] cliCommands, Path workingDirectory,
+                                                           String envVariablesFile,
+                                                           Runnable timerAction, int timerIntervalSeconds,
+                                                           AtomicReference<String> liveCliOutput,
+                                                           boolean allowAnyCommand,
+                                                           String[] excludedEnvVariables,
+                                                           String[] excludedEnvRegexes,
+                                                           Consumer<Exception> errorHandler,
+                                                           Predicate<String> lineStopPredicate,
+                                                           OutputFolderPreference outputFolderPreference,
+                                                           AtomicReference<LiveCliErrorState> liveErrorState) {
         AtomicReference<String> liveOutput = liveCliOutput != null ? liveCliOutput
                 : (timerAction != null ? new AtomicReference<>("") : null);
 
         AtomicReference<CliExecutionResult> resultRef = new AtomicReference<>();
         runWithTimer(timerAction, timerIntervalSeconds, () -> {
-            StringBuilder cliResponses = executeCliCommands(cliCommands, workingDirectory, envVariablesFile, liveOutput,
-                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate);
+            CliCommandsOutcome outcome = executeCliCommandsInternal(cliCommands, workingDirectory, envVariablesFile, liveOutput,
+                    allowAnyCommand, excludedEnvVariables, excludedEnvRegexes, errorHandler, lineStopPredicate, liveErrorState);
             String outputResponse = processOutputResponse(workingDirectory, outputFolderPreference);
-            resultRef.set(new CliExecutionResult(cliResponses, outputResponse));
+            resultRef.set(new CliExecutionResult(outcome.getCommandResponses(), outputResponse,
+                    outcome.hasFatalError(), outcome.getLastExitCode(), outcome.getLastErrorMessage()));
         });
         return resultRef.get();
     }
@@ -1020,15 +1165,30 @@ public class CliExecutionHelper {
     }
 
     /**
-     * Result container for CLI execution that includes both command responses and output response.
+     * Result container for CLI execution that includes both command responses and output response,
+     * plus a structured signal for the last fatal (non-zero exit code) command failure encountered,
+     * if any. This lets callers (e.g. {@code timerJSAction}/{@code postJSAction} retry logic)
+     * distinguish a real, non-retryable CLI failure from a transient interruption without having
+     * to string-scan the free-text {@code commandResponses}.
      */
     public static class CliExecutionResult {
         private final StringBuilder commandResponses;
         private final String outputResponse;
+        private final boolean hasFatalError;
+        private final Integer lastExitCode;
+        private final String lastErrorMessage;
 
         public CliExecutionResult(StringBuilder commandResponses, String outputResponse) {
+            this(commandResponses, outputResponse, false, null, null);
+        }
+
+        public CliExecutionResult(StringBuilder commandResponses, String outputResponse,
+                                   boolean hasFatalError, Integer lastExitCode, String lastErrorMessage) {
             this.commandResponses = commandResponses;
             this.outputResponse = outputResponse;
+            this.hasFatalError = hasFatalError;
+            this.lastExitCode = lastExitCode;
+            this.lastErrorMessage = lastErrorMessage;
         }
 
         public StringBuilder getCommandResponses() {
@@ -1041,6 +1201,32 @@ public class CliExecutionHelper {
 
         public boolean hasOutputResponse() {
             return outputResponse != null && !outputResponse.trim().isEmpty();
+        }
+
+        /**
+         * @return {@code true} if the last CLI command in this batch failed with a non-zero
+         * exit code (a fatal, non-retryable error), as opposed to producing no output due to
+         * a transient interruption.
+         */
+        public boolean hasFatalError() {
+            return hasFatalError;
+        }
+
+        /**
+         * @return the exit code of the failing CLI command, or {@code null} if no command
+         * failed with a known exit code (e.g. a non-{@link com.github.istin.dmtools.common.utils.CliCommandFailedException}
+         * exception was thrown, or no command failed at all).
+         */
+        public Integer getLastExitCode() {
+            return lastExitCode;
+        }
+
+        /**
+         * @return a concise error message describing the last fatal CLI command failure,
+         * or {@code null} if no command failed.
+         */
+        public String getLastErrorMessage() {
+            return lastErrorMessage;
         }
     }
 }
