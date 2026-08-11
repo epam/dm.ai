@@ -25,6 +25,7 @@
     "typescript": "^5.8.3"
   },
   "overrides": {
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "nanoid": "^3.3.17"
   }
 }
