@@ -277,7 +277,7 @@ This solves the `ConfigurationMerger` limitation: when you override a config wit
 | `cliPrompts` | Array | - | Array of prompts — each entry is extracted via `InstructionProcessor` and all parts are joined with `\n\n` into one combined prompt. Combined with `cliPrompt` if both are set (`cliPrompt` comes first). Supports the same sources as `cliPrompt`. | `["./base.md", "https://confluence.co/...", "Also apply coding standards"]` |
 | `cliCommands` | Array | - | CLI commands to execute | `["./cicd/scripts/run-cursor-agent.sh"]` |
 | `preCliJSAction` | String | - | JS script path executed **after** input folder is created but **before** CLI commands run. Receives `params.inputFolderPath` (absolute path). Use to write extra files into the input folder. Errors in this script are logged but do NOT stop CLI execution. | `"agents/js/extendInputFolder.js"` |
-| `timerJSAction` | String | - | JS script path executed **periodically in a background thread** while CLI commands are running. Receives the same params as `postJSAction` + `params.currentCliOutput` (accumulated stdout so far). Use for side-effects like auto-committing, posting progress, or sending notifications. Errors are logged and never abort CLI execution. | `"agents/js/autoCommit.js"` |
+| `timerJSAction` | String | - | JS script path executed **periodically in a background thread** while CLI commands are running. Receives the same params as `postJSAction` + `params.currentCliOutput` (accumulated stdout so far), plus `params.currentCliHasFatalError` (boolean) and `params.currentCliErrorMessage` (string, may be null) — set as soon as a CLI command fails with a non-zero exit code, so retry logic can distinguish a real, non-retryable failure from a transient interruption. Use for side-effects like auto-committing, posting progress, or sending notifications. Errors are logged and never abort CLI execution. | `"agents/js/autoCommit.js"` |
 | `timerIntervalSeconds` | Integer | `60` | Interval in seconds between `timerJSAction` executions. Timer starts after the first interval elapses. Has no effect when `timerJSAction` is not set or when value is ≤ 0. | `300` |
 | `skipAIProcessing` | Boolean | `false` | Skip AI processing when using CLI agents | `true` |
 | `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133**: Require `output/response.md` before updating fields (strict mode prevents data loss) | `true` (recommended) |
@@ -576,6 +576,8 @@ A JS script executed **periodically in a background thread** while the CLI comma
 - `params` contains the full Teammate config (`agentParams`, `customParams`, etc.)
 - `ticket` is the current Jira/ADO ticket being processed
 - **Extra**: `params.currentCliOutput` — a string snapshot of the accumulated CLI stdout **up to the moment the timer fires**
+- **Extra**: `params.currentCliHasFatalError` — `true` as soon as a CLI command has failed with a non-zero exit code (e.g. an invalid model ID rejected by the AI provider); `false` otherwise. Use this instead of string-scanning `currentCliOutput` to distinguish a real, non-retryable failure from a transient interruption (no output yet, still running).
+- **Extra**: `params.currentCliErrorMessage` — a concise message describing the last fatal CLI failure, or `null`/empty if none occurred yet.
 
 **Threading model**:
 - Single daemon thread (`ScheduledExecutorService`)
