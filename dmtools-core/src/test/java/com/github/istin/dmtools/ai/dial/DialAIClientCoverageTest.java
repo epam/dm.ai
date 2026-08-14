@@ -173,7 +173,7 @@ public class DialAIClientCoverageTest {
 
         ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
         verify(spy).post(captor.capture());
-        assertEquals(BASE_PATH + "openai/deployments/" + MODEL + "/chat/completions",
+        assertEquals(BASE_PATH + "/openai/deployments/" + MODEL + "/chat/completions",
                 captor.getValue().url());
         String body = captor.getValue().getBody();
         assertTrue(body.contains("\"temperature\":0.1"));
