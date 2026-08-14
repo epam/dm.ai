@@ -3,10 +3,12 @@
 
 package com.github.istin.dmtools.ai.dial;
 
+import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import okhttp3.Request;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 
@@ -33,7 +35,58 @@ public class DialAIClientTest {
     @Test
     public void testPath() {
         String path = "test/path";
-        assertEquals(BASE_PATH + path, dialAIClient.path(path));
+        assertEquals(BASE_PATH + "/" + path, dialAIClient.path(path));
+    }
+
+    @Test
+    public void testPathWithTrailingSlashBase() throws IOException {
+        DialAIClient client = new DialAIClient(BASE_PATH + "/", AUTHORIZATION, MODEL);
+        assertEquals(BASE_PATH + "/test/path", client.path("test/path"));
+    }
+
+    @Test
+    public void testPathWithLeadingSlashPath() {
+        assertEquals(BASE_PATH + "/test/path", dialAIClient.path("/test/path"));
+    }
+
+    @Test
+    public void testChatUrlWhenBasePathHasNoTrailingSlash() throws Exception {
+        ApplicationConfiguration config = mock(ApplicationConfiguration.class);
+        when(config.getDialBathPath()).thenReturn("https://api.dial.com");
+        when(config.getDialApiKey()).thenReturn(AUTHORIZATION);
+        when(config.getDialModel()).thenReturn(MODEL);
+        when(config.getDialApiVersion()).thenReturn(null);
+
+        BasicDialAI client = new BasicDialAI(null, config);
+        DialAIClient spy = spy(client);
+        doReturn("{\"choices\":[]}").when(spy).post(any(GenericRequest.class));
+
+        spy.chat("Hi");
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spy).post(captor.capture());
+        assertEquals("https://api.dial.com/openai/deployments/" + MODEL + "/chat/completions",
+                captor.getValue().url());
+    }
+
+    @Test
+    public void testChatUrlWhenBasePathHasTrailingSlash() throws Exception {
+        ApplicationConfiguration config = mock(ApplicationConfiguration.class);
+        when(config.getDialBathPath()).thenReturn("https://api.dial.com/");
+        when(config.getDialApiKey()).thenReturn(AUTHORIZATION);
+        when(config.getDialModel()).thenReturn(MODEL);
+        when(config.getDialApiVersion()).thenReturn(null);
+
+        BasicDialAI client = new BasicDialAI(null, config);
+        DialAIClient spy = spy(client);
+        doReturn("{\"choices\":[]}").when(spy).post(any(GenericRequest.class));
+
+        spy.chat("Hi");
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spy).post(captor.capture());
+        assertEquals("https://api.dial.com/openai/deployments/" + MODEL + "/chat/completions",
+                captor.getValue().url());
     }
 
     @Test

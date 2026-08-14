@@ -95,7 +95,16 @@ public class DialAIClient extends AbstractRestClient implements AI {
 
     @Override
     public String path(String path) {
-        return getBasePath() + path;// + "?api-version=" + API_VERSION;
+        String base = getBasePath() == null ? "" : getBasePath();
+        if (path == null) {
+            path = "";
+        }
+        if (base.endsWith("/") && path.startsWith("/")) {
+            path = path.substring(1);
+        } else if (!base.isEmpty() && !base.endsWith("/") && !path.startsWith("/")) {
+            base += "/";
+        }
+        return base + path;
     }
 
     @Override
