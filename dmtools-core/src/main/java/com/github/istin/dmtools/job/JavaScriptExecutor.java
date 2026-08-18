@@ -222,6 +222,8 @@ public class JavaScriptExecutor {
         errorResult.put("success", false);
         errorResult.put("error", e.toString());
         errorResult.put("action", "error");
-        return errorResult.toString();
+        // Return JSONObject (not String) so Teammate.isPreCliJSActionFailure()
+        // can inspect the "success" field and hard-stop the job.
+        return errorResult;
     }
 }

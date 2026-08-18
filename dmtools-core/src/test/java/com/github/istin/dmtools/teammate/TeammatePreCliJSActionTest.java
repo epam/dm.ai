@@ -437,6 +437,18 @@ public class TeammatePreCliJSActionTest {
 
         assertTrue(Teammate.isPreCliJSActionFailure(Map.of("success", false)),
             "plain Map with success:false must also be recognized as failure");
+
+        // Regression test for the "JavaScriptExecutor returns String instead of JSONObject" bug:
+        // when JavaScriptExecutor.createErrorResult() was changed to return JSONObject instead of
+        // String, this assertion ensures isPreCliJSActionFailure recognises it as a failure.
+        // Before the fix, createErrorResult() returned errorResult.toString() (a String), which
+        // isPreCliJSActionFailure treated as "success" because String is not JSONObject/Map/Boolean.FALSE.
+        org.json.JSONObject errorResultFromExecutor = new org.json.JSONObject();
+        errorResultFromExecutor.put("success", false);
+        errorResultFromExecutor.put("error", "Git branch setup failed: ...");
+        errorResultFromExecutor.put("action", "error");
+        assertTrue(Teammate.isPreCliJSActionFailure(errorResultFromExecutor),
+            "JSONObject error result from JavaScriptExecutor.createErrorResult must be recognised as failure");
     }
 
     // ---- helpers ----
