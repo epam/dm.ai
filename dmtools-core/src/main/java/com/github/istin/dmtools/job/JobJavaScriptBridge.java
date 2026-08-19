@@ -287,6 +287,11 @@ public class JobJavaScriptBridge {
         boolean verboseToolLogging = isToolCallArgsLoggingEnabled();
         try {
             // Convert JavaScript object to Map
+            // Fetch the tool schema up front: the string-to-array guessing below is
+            // only allowed for parameters the schema does NOT explicitly declare as
+            // a non-array type (IstiN/dmtools-agents#360).
+            Map<String, Object> toolSchema = getToolSchema(toolName);
+
             Map<String, Object> argsMap = new HashMap<>();
             if (jsArgs != null) {
                 if (verboseToolLogging) {
@@ -317,23 +322,10 @@ public class JobJavaScriptBridge {
                             }
                             memberValue = objList;
                         } else if (memberValue instanceof String) {
-                            String strValue = ((String) memberValue).trim();
-                            // Only try to parse as JSON array if it looks like a valid JSON array
-                            // (starts with [ and ends with ])
-                            if (strValue.startsWith("[") && strValue.endsWith("]") && strValue.length() > 2) {
-                                // Handle case where JavaScript passes array as JSON string
-                                try {
-                                    JSONArray jsonArray = new JSONArray(strValue);
-                                    List<Object> objList = new ArrayList<>();
-                                    for (int i = 0; i < jsonArray.length(); i++) {
-                                        objList.add(jsonArray.get(i));
-                                    }
-                                    memberValue = objList;
-                                    logger.debug("Parsed JSON array string for {}: {} elements", key, objList.size());
-                                } catch (org.json.JSONException e) {
-                                    // If parsing fails, keep original value (it's just a string starting with [)
-                                    logger.debug("Failed to parse as JSON array for {} (keeping as string): {}", key, e.getMessage());
-                                }
+                            List<Object> parsedArray = tryParseArrayStringArg(toolName, key, (String) memberValue, toolSchema);
+                            if (parsedArray != null) {
+                                memberValue = parsedArray;
+                                logger.debug("Parsed JSON array string for {}: {} elements", key, parsedArray.size());
                             }
                             // Otherwise, it's just a regular string - keep it as-is
                         }
@@ -359,23 +351,10 @@ public class JobJavaScriptBridge {
                                 }
                                 hostMap.put(entry.getKey(), objList);
                             } else if (value instanceof String) {
-                                String strValue = ((String) value).trim();
-                                // Only try to parse as JSON array if it looks like a valid JSON array
-                                // (starts with [ and ends with ])
-                                if (strValue.startsWith("[") && strValue.endsWith("]") && strValue.length() > 2) {
-                                    // Handle case where JavaScript passes array as JSON string
-                                    try {
-                                        JSONArray jsonArray = new JSONArray(strValue);
-                                        List<Object> objList = new ArrayList<>();
-                                        for (int i = 0; i < jsonArray.length(); i++) {
-                                            objList.add(jsonArray.get(i));
-                                        }
-                                        hostMap.put(entry.getKey(), objList);
-                                        logger.debug("Parsed JSON array string for {}: {} elements", entry.getKey(), objList.size());
-                                    } catch (org.json.JSONException e) {
-                                        // If parsing fails, keep original value (it's just a string starting with [)
-                                        logger.debug("Failed to parse as JSON array for {} (keeping as string): {}", entry.getKey(), e.getMessage());
-                                    }
+                                List<Object> parsedArray = tryParseArrayStringArg(toolName, entry.getKey(), (String) value, toolSchema);
+                                if (parsedArray != null) {
+                                    hostMap.put(entry.getKey(), parsedArray);
+                                    logger.debug("Parsed JSON array string for {}: {} elements", entry.getKey(), parsedArray.size());
                                 }
                                 // Otherwise, it's just a regular string - keep it as-is
                             }
@@ -392,8 +371,7 @@ public class JobJavaScriptBridge {
                 logger.debug("Final args map for tool {}: {}", toolName, argsMap);
             }
             
-            // Get tool schema to check parameter types
-            Map<String, Object> toolSchema = getToolSchema(toolName);
+            // (tool schema was already fetched above, before argument conversion)
             
             // Convert ArrayList to String[] for MCP tools that expect array parameters
             // But keep as List<String> for parameters that require List (e.g., mermaid_index_generate patterns)
@@ -516,30 +494,100 @@ public class JobJavaScriptBridge {
     private boolean isArrayParameter(Map<String, Object> toolSchema, String paramName) {
         if (toolSchema == null) {
             // If schema not available, check known array parameter names
-            return paramName.equals("fields") || paramName.endsWith("s") && 
+            return paramName.equals("fields") || paramName.endsWith("s") &&
                    (paramName.contains("field") || paramName.contains("id") || paramName.contains("url"));
         }
-        
-        @SuppressWarnings("unchecked")
-        Map<String, Object> inputSchema = (Map<String, Object>) toolSchema.get("inputSchema");
-        if (inputSchema == null) {
-            return false;
-        }
-        
-        @SuppressWarnings("unchecked")
-        Map<String, Object> properties = (Map<String, Object>) inputSchema.get("properties");
-        if (properties == null) {
-            return false;
-        }
-        
-        @SuppressWarnings("unchecked")
-        Map<String, Object> paramSchema = (Map<String, Object>) properties.get(paramName);
+        Map<String, Object> paramSchema = getParamSchema(toolSchema, paramName);
         if (paramSchema == null) {
             return false;
         }
-        
         String type = (String) paramSchema.get("type");
         return "array".equals(type);
+    }
+
+    /**
+     * Returns the schema of a single tool parameter, or {@code null} when the
+     * tool schema does not describe it.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> getParamSchema(Map<String, Object> toolSchema, String paramName) {
+        Map<String, Object> inputSchema = (Map<String, Object>) toolSchema.get("inputSchema");
+        if (inputSchema == null) {
+            return null;
+        }
+        Map<String, Object> properties = (Map<String, Object>) inputSchema.get("properties");
+        if (properties == null) {
+            return null;
+        }
+        return (Map<String, Object>) properties.get(paramName);
+    }
+
+    /**
+     * Attempts to interpret a string argument as a JSON array, returning the
+     * parsed elements, or {@code null} when the value must stay a plain string.
+     *
+     * <p>Guards against IstiN/dmtools-agents#360: org.json's tokenizer is lenient
+     * and can "successfully" parse only a leading fragment of a string that merely
+     * starts with '[' and ends with ']' (e.g. "[label]: {...}\nInitiator:
+     * [~accountid:123]" parses as ["label"], silently discarding the payload).
+     * Two guards apply:
+     * <ul>
+     *   <li>the guess is skipped entirely when the tool schema explicitly declares
+     *   the parameter as a non-array type (e.g. jira_post_comment's string
+     *   'comment'); guessing is preserved for array-typed parameters, parameters
+     *   absent from the schema, and unknown tools (backward compatibility);</li>
+     *   <li>the parse must consume the ENTIRE string — any trailing content after
+     *   the balanced ']' means the value is kept as a plain string.</li>
+     * </ul>
+     */
+    private List<Object> tryParseArrayStringArg(String toolName, String paramName, String rawValue, Map<String, Object> toolSchema) {
+        String strValue = rawValue.trim();
+        if (strValue.length() <= 2 || !strValue.startsWith("[") || !strValue.endsWith("]")) {
+            return null;
+        }
+        if (!isArrayStringParsingAllowed(toolName, paramName, toolSchema)) {
+            return null;
+        }
+        try {
+            org.json.JSONTokener tokener = new org.json.JSONTokener(strValue);
+            JSONArray jsonArray = new JSONArray(tokener);
+            // org.json stops at the first balanced ']' and ignores the rest of the
+            // input — require full consumption so "[a]: {...}" is not misread as ["a"].
+            if (tokener.nextClean() != 0) {
+                return null;
+            }
+            List<Object> objList = new ArrayList<>();
+            for (int i = 0; i < jsonArray.length(); i++) {
+                objList.add(jsonArray.get(i));
+            }
+            return objList;
+        } catch (org.json.JSONException e) {
+            // Not a JSON array — the original string is kept as-is.
+            logger.debug("Failed to parse as JSON array for {} (keeping as string): {}", paramName, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Whether a string argument may be guessed as a JSON array: allowed for
+     * array-typed parameters, parameters missing from the schema and unknown
+     * tools (legacy behavior); denied when the schema explicitly declares the
+     * parameter with a non-array type.
+     */
+    private boolean isArrayStringParsingAllowed(String toolName, String paramName, Map<String, Object> toolSchema) {
+        if (shouldKeepAsList(toolName, paramName)) {
+            return true;
+        }
+        if (toolSchema == null) {
+            return true; // unknown tool — legacy behavior
+        }
+        Map<String, Object> paramSchema = getParamSchema(toolSchema, paramName);
+        if (paramSchema == null) {
+            return true; // parameter not described by the schema — legacy behavior
+        }
+        Object type = paramSchema.get("type");
+        // An explicitly declared non-array type (e.g. "string") must not be guessed.
+        return type == null || "array".equals(type);
     }
 
     /**
