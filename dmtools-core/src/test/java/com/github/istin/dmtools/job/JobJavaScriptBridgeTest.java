@@ -1005,6 +1005,192 @@ class JobJavaScriptBridgeTest {
             ));
         }
     }
+
+    @Test
+    void testBracketedCommentNotMisparsedAsJsonArray_Issue360() throws Exception {
+        // Regression for IstiN/dmtools-agents#360: a comment shaped as
+        // "[label]: {...json...}\nInitiator: [~accountid:<id>]" starts with '[' and
+        // ends with ']', and org.json's lenient tokenizer parsed only the leading
+        // "[label]" fragment as a JSON array, silently replacing the whole comment
+        // with "[\"label\"]" before it reached jira_post_comment.
+        // jira_post_comment.comment is schema-typed "string", so no array guessing
+        // may happen and the original text must arrive untouched.
+        String jsCode = """
+            function action(params) {
+                var comment = '[some-label]: ' + JSON.stringify({foo: 'bar', list: ['a', 'b']});
+                comment += '\\nInitiator: [~accountid:123]';
+                jira_post_comment('MAPC-123', comment);
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_post_comment"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            String expected = "[some-label]: {\"foo\":\"bar\",\"list\":[\"a\",\"b\"]}\nInitiator: [~accountid:123]";
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_post_comment"),
+                argThat(args -> expected.equals(args.get("comment"))),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testMentionOnlyBracketStringNotMisparsed() throws Exception {
+        // "[~accountid:123]" alone also matches the [ ... ] shape and org.json
+        // would read the bareword "~accountid:123" as a single array element.
+        // For a string-typed parameter it must stay exactly as written.
+        String jsCode = """
+            function action(params) {
+                jira_post_comment('MAPC-123', '[~accountid:123]');
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_post_comment"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_post_comment"),
+                argThat(args -> "[~accountid:123]".equals(args.get("comment"))),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testValidJsonArrayStringStillParsedForArrayParam() throws Exception {
+        // Backward compatibility: agents passing a JSON array as a string to an
+        // array-typed parameter (ado_get_work_item.fields) keep working — the
+        // string is parsed and converted to String[].
+        String jsCode = """
+            function action(params) {
+                ado_get_work_item('123', '["System.Title","System.State"]');
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("ado_get_work_item"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("ado_get_work_item"),
+                argThat(args -> {
+                    Object fields = args.get("fields");
+                    if (!(fields instanceof String[])) return false;
+                    String[] arr = (String[]) fields;
+                    return arr.length == 2
+                        && "System.Title".equals(arr[0])
+                        && "System.State".equals(arr[1]);
+                }),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testPartialJsonArrayWithTrailingContentKeptAsString() throws Exception {
+        // Full-consumption guard: even for an array-typed parameter, a string that
+        // has content after the first balanced ']' ("["a"] and ["b"]") must NOT be
+        // truncated to ["a"] — it stays the original string.
+        String jsCode = """
+            function action(params) {
+                ado_get_work_item('123', '["System.Title"] and ["System.State"]');
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("ado_get_work_item"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("ado_get_work_item"),
+                argThat(args -> "[\"System.Title\"] and [\"System.State\"]".equals(args.get("fields"))),
+                any(Map.class)
+            ));
+        }
+    }
+
+    @Test
+    void testJsonArrayStringForUndeclaredParamKeepsLegacyParsing() throws Exception {
+        // jira_post_comment only declares (key, comment); the extra arg travels as
+        // an undeclared parameter via the single-object call form.
+        // Backward compatibility: a parameter that is NOT described by the tool
+        // schema still gets the legacy guess-and-reconstruct treatment, so older
+        // agents relying on it do not break.
+        String jsCode = """
+            function action(params) {
+                var args = {key: 'MAPC-123', comment: 'plain comment', customData: '["x","y"]'};
+                jira_post_comment(args);
+                return { ok: true };
+            }
+            """;
+
+        JSONObject params = new JSONObject();
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_post_comment"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("OK");
+
+            Object result = bridge.executeJavaScript(jsCode, params);
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_post_comment"),
+                argThat(args -> {
+                    Object customData = args.get("customData");
+                    if (!(customData instanceof String)) return false;
+                    try {
+                        JSONArray arr = new JSONArray((String) customData);
+                        return arr.length() == 2 && "x".equals(arr.getString(0)) && "y".equals(arr.getString(1));
+                    } catch (org.json.JSONException e) {
+                        return false;
+                    }
+                }),
+                any(Map.class)
+            ));
+        }
+    }
 }
 
 
