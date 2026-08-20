@@ -264,7 +264,9 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         String nextPagePath = buildPagedPath(baseApiPath, limit, 0);
 
         while (nextPagePath != null) {
-            String response = executeGet(nextPagePath);
+            GenericRequest request = new GenericRequest(this, path(nextPagePath));
+            request.setIgnoreCache(true);
+            String response = request.execute();
 
             JSONObject responseObj = new JSONObject(response);
             JSONArray sections = responseObj.optJSONArray("sections");
@@ -468,7 +470,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         String nextPagePath = buildPagedPath(baseApiPath, limit, 0);
 
         while (nextPagePath != null) {
-            String response = executeGet(nextPagePath);
+            String response = executeGetIgnoreCache(nextPagePath);
 
             JSONObject responseObj = new JSONObject(response);
             JSONArray cases = responseObj.optJSONArray("cases");
@@ -1506,6 +1508,12 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
 
     String executeGet(String apiPath) throws IOException {
         GenericRequest request = new GenericRequest(this, path(apiPath));
+        return request.execute();
+    }
+
+    String executeGetIgnoreCache(String apiPath) throws IOException {
+        GenericRequest request = new GenericRequest(this, path(apiPath));
+        request.setIgnoreCache(true);
         return request.execute();
     }
 
