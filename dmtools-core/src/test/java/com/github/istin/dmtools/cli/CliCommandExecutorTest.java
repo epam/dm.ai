@@ -13,6 +13,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -207,6 +209,48 @@ public class CliCommandExecutorTest {
         assertNotNull("Result should not be null", result);
         assertTrue("Result should contain 'git version'", 
                 result.toLowerCase().contains("git version"));
+    }
+
+    @Test
+    public void testExecuteCommand_JobEnvOverrides_AppliedToSubprocess() throws IOException, InterruptedException {
+        // Regression test: per-job envVariables (PropertyReader thread-local overrides, set by
+        // JobRunner from the agent JSON "envVariables" param) must reach commands executed via
+        // cli_execute_command — not only the main CLI agent subprocess (CliExecutionHelper).
+        File tempDir = tempFolder.newFolder("test-job-overrides");
+        // dmtools.env sets the same var to a different value — the job override must win.
+        File envFile = new File(tempDir, "dmtools.env");
+        Files.writeString(envFile.toPath(), "DMTOOLS_TEST_OVERRIDE_VAR=from_env_file\n");
+
+        Map<String, String> overrides = new HashMap<>();
+        overrides.put("CLI_ALLOWED_COMMANDS", "bash");
+        overrides.put("DMTOOLS_TEST_OVERRIDE_VAR", "from_job_override");
+        PropertyReader.setOverrides(overrides);
+        try {
+            String result = executor.executeCommand("bash -c 'echo $DMTOOLS_TEST_OVERRIDE_VAR'", tempDir.getAbsolutePath());
+            assertTrue("Job envVariables override must be visible to the subprocess and win over dmtools.env; got: " + result,
+                    result.contains("from_job_override"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    public void testExecuteCommand_NoJobEnvOverrides_BehaviorUnchanged() throws IOException, InterruptedException {
+        // With no overrides set, the dmtools.env value must be used as before.
+        File tempDir = tempFolder.newFolder("test-no-overrides");
+        File envFile = new File(tempDir, "dmtools.env");
+        Files.writeString(envFile.toPath(), "DMTOOLS_TEST_OVERRIDE_VAR=from_env_file\n");
+
+        Map<String, String> overrides = new HashMap<>();
+        overrides.put("CLI_ALLOWED_COMMANDS", "bash");
+        PropertyReader.setOverrides(overrides);
+        try {
+            String result = executor.executeCommand("bash -c 'echo $DMTOOLS_TEST_OVERRIDE_VAR'", tempDir.getAbsolutePath());
+            assertTrue("Without a job override, dmtools.env value must be used; got: " + result,
+                    result.contains("from_env_file"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
     }
 
     // ============================================================================
