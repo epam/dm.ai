@@ -366,7 +366,17 @@ public class McpCliHandler {
             } else if ("--verbose".equals(arg) || "--debug".equals(arg)) {
                 // Shell-level flags handled by dmtools.sh; ignored here
             } else if (arg.startsWith("--")) {
-                logger.debug("Ignoring unknown flag: {}", arg);
+                // Generic named argument: --key value or --key=value
+                String key = arg.substring(2);
+                int eq = key.indexOf('=');
+                if (eq >= 0) {
+                    arguments.put(key.substring(0, eq), key.substring(eq + 1));
+                } else if (i + 1 < args.length) {
+                    arguments.put(key, args[i + 1]);
+                    i++; // Skip next argument as it was consumed
+                } else {
+                    logger.debug("Ignoring flag without value: {}", arg);
+                }
             } else {
                 // Positional argument - collect for now
                 // Only treat as key=value if it matches pattern: paramName=value (where paramName is valid identifier)

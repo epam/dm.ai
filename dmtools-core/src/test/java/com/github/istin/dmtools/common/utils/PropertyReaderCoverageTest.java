@@ -311,6 +311,16 @@ class PropertyReaderCoverageTest {
     }
 
     @Test
+    @DisplayName("Cache flag is disabled when explicitly set to false")
+    void testCacheFlagDisabled() {
+        Map<String, String> values = new HashMap<>();
+        values.put("DMTOOLS_CACHE_ENABLED", "false");
+        override(values);
+
+        assertFalse(propertyReader.isCacheEnabled());
+    }
+
+    @Test
     @DisplayName("Xray numeric settings parse valid overrides")
     void testXrayNumericValid() {
         Map<String, String> values = new HashMap<>();
