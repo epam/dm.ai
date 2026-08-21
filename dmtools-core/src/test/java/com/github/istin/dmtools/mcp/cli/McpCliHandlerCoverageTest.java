@@ -597,6 +597,44 @@ class McpCliHandlerCoverageTest {
     }
 
     // -------------------------------------------------------------------------
+    // Named argument parsing
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("--key value syntax maps to named tool argument")
+    void testNamedArgumentKeyValueSyntax() throws Exception {
+        java.lang.reflect.Method method = McpCliHandler.class.getDeclaredMethod(
+                "parseToolArguments", String[].class, String.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> arguments = (Map<String, Object>) method.invoke(handler,
+                new String[]{"mcp", "testrail_search_cases", "Project A", "--section_id", "42"},
+                "testrail_search_cases");
+
+        assertEquals("Project A", arguments.get("project_name"));
+        assertEquals("42", arguments.get("section_id"));
+        assertFalse(arguments.containsKey("suite_id"),
+                "section_id must not be misinterpreted as positional suite_id");
+    }
+
+    @Test
+    @DisplayName("--key=value syntax maps to named tool argument")
+    void testNamedArgumentEqualsSyntax() throws Exception {
+        java.lang.reflect.Method method = McpCliHandler.class.getDeclaredMethod(
+                "parseToolArguments", String[].class, String.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> arguments = (Map<String, Object>) method.invoke(handler,
+                new String[]{"mcp", "testrail_create_case_steps", "Project A", "--steps_json=[{\"c\":\"s\"}]"},
+                "testrail_create_case_steps");
+
+        assertEquals("Project A", arguments.get("project_name"));
+        assertEquals("[{\"c\":\"s\"}]", arguments.get("steps_json"));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

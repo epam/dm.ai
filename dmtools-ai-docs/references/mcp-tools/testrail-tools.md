@@ -1,6 +1,6 @@
 # TESTRAIL MCP Tools
 
-**Total Tools**: 17
+**Total Tools**: 18
 
 ## Quick Reference
 
@@ -25,9 +25,9 @@ const result = testrail_get_suites(...);
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
-| `testrail_create_case` | Create a new test case in TestRail | `description` (string, optional)<br>`priority_id` (string, optional)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`refs` (string, optional) |
-| `testrail_create_case_detailed` | Create a new test case in TestRail with detailed fields (preconditions, steps, expected results, labels, type). Note: TestRail uses its own table format in text fields: \|\|\|:Col 1\|:Col 2\|:Col 3\n\|\|val1\|val2\|val3. Standard Markdown tables (\| Col \| Col \|) will be auto-converted to TestRail format. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`expected` (string, optional)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`steps` (string, optional) |
-| `testrail_create_case_steps` | Create a TestRail test case using the 'Test Case (Steps)' template (template_id=2). Steps are provided as a JSON array: [{"content":"step text","expected":"expected result"}, ...]. Markdown tables in step content or expected are auto-converted to HTML tables. Use testrail_get_case_types for type_id, testrail_get_labels for label_ids. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`steps_json` (string, **required**)<br>`project_name` (string, **required**)<br>`title` (string, **required**) |
+| `testrail_create_case` | Create a new test case in TestRail | `description` (string, optional)<br>`priority_id` (string, optional)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`refs` (string, optional)<br>`section_id` (string, optional) |
+| `testrail_create_case_detailed` | Create a new test case in TestRail with detailed fields (preconditions, steps, expected results, labels, type). Note: TestRail uses its own table format in text fields: \|\|\|:Col 1\|:Col 2\|:Col 3\n\|\|val1\|val2\|val3. Standard Markdown tables (\| Col \| Col \|) will be auto-converted to TestRail format. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`expected` (string, optional)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`steps` (string, optional)<br>`section_id` (string, optional) |
+| `testrail_create_case_steps` | Create a TestRail test case using the 'Test Case (Steps)' template (template_id=2). Steps are provided as a JSON array: [{"content":"step text","expected":"expected result"}, ...]. Markdown tables in step content or expected are auto-converted to HTML tables. Use testrail_get_case_types for type_id, testrail_get_labels for label_ids. | `priority_id` (string, optional)<br>`refs` (string, optional)<br>`preconditions` (string, optional)<br>`type_id` (string, optional)<br>`label_ids` (string, optional)<br>`steps_json` (string, **required**)<br>`project_name` (string, **required**)<br>`title` (string, **required**)<br>`section_id` (string, optional) |
 | `testrail_delete_case` | Delete a test case in TestRail by case ID | `case_id` (string, **required**) |
 | `testrail_get_all_cases` | Get ALL test cases in a project (uses pagination to retrieve all cases). Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML. | `project_name` (string, **required**)<br>`format` (string, optional) |
 | `testrail_get_case` | Get a TestRail test case by ID. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML — raw HTML pasted from Google Docs/browsers can be 20-30x larger than necessary due to inline CSS styling on every tag. | `case_id` (string, **required**)<br>`format` (string, optional) |
@@ -36,6 +36,7 @@ const result = testrail_get_suites(...);
 | `testrail_get_label` | Get a single label by ID | `label_id` (string, **required**) |
 | `testrail_get_labels` | Get all labels for a project in TestRail | `project_name` (string, **required**) |
 | `testrail_get_projects` | Get list of all projects in TestRail | None |
+| `testrail_get_sections` | Get all test sections for a TestRail project and optional suite | `project_name` (string, **required**)<br>`suite_id` (string, optional) |
 | `testrail_get_suites` | Get all test suites for a TestRail project | `project_name` (string, **required**) |
 | `testrail_link_to_requirement` | Link a test case to a requirement by updating refs field | `case_id` (string, **required**)<br>`requirement_key` (string, **required**) |
 | `testrail_search_cases` | Search TestRail test cases by project and optional filters. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML. | `format` (string, optional)<br>`project_name` (string, **required**)<br>`section_id` (string, optional)<br>`suite_id` (string, optional) |
@@ -72,6 +73,10 @@ Create a new test case in TestRail
 - **`refs`** (string) ⚪ Optional
   - Reference to requirement (e.g., JIRA key)
   - Example: `PROJ-123`
+
+- **`section_id`** (string) ⚪ Optional
+  - Section ID where the case should be created. Uses the project's default section when omitted.
+  - Example: `42`
 
 **Example:**
 ```bash
@@ -127,6 +132,10 @@ Create a new test case in TestRail with detailed fields (preconditions, steps, e
   - Test steps separated by double newline (optional)
   - Example: `Navigate to login page.\n\nEnter username %Username%.\n\nClick Login button.`
 
+- **`section_id`** (string) ⚪ Optional
+  - Section ID where the case should be created. Uses the project's default section when omitted.
+  - Example: `42`
+
 **Example:**
 ```bash
 dmtools testrail_create_case_detailed "value" "value"
@@ -176,6 +185,10 @@ Create a TestRail test case using the 'Test Case (Steps)' template (template_id=
 - **`title`** (string) 🔴 Required
   - Test case title/summary
   - Example: `Verify login functionality`
+
+- **`section_id`** (string) ⚪ Optional
+  - Section ID where the case should be created. Uses the project's default section when omitted.
+  - Example: `42`
 
 **Example:**
 ```bash
@@ -387,6 +400,32 @@ dmtools testrail_get_suites "value"
 ```javascript
 // In JavaScript agent
 const result = testrail_get_suites("project_name");
+```
+
+---
+
+### `testrail_get_sections`
+
+Get all test sections for a TestRail project and optional suite. Sections define the hierarchy used to organize test cases.
+
+**Parameters:**
+
+- **`project_name`** (string) 🔴 Required
+  - Project name to get sections from
+  - Example: `My Project`
+
+- **`suite_id`** (string) ⚪ Optional
+  - Suite ID to filter by. Required for projects with multiple suites.
+  - Example: `1`
+
+**Example:**
+```bash
+dmtools testrail_get_sections "My Project" "1"
+```
+
+```javascript
+// In JavaScript agent
+const result = testrail_get_sections("project_name", "suite_id");
 ```
 
 ---
