@@ -363,6 +363,107 @@ class CommandLineUtilsTest {
     }
 
     @Test
+    void testMatchesCliLogFilter_CaseInsensitiveSubstring() {
+        assertTrue(CommandLineUtils.matchesCliLogFilter("agents/scripts/run-agent.sh prompt", new String[]{"run-agent"}));
+        assertTrue(CommandLineUtils.matchesCliLogFilter("cursor-agent --model auto", new String[]{"cursor-agent"}));
+        assertTrue(CommandLineUtils.matchesCliLogFilter("dmtools run agents/story.json", new String[]{"dmtools run"}));
+        assertTrue(CommandLineUtils.matchesCliLogFilter("RUN-AGENT upper case", new String[]{"run-agent"}));
+    }
+
+    @Test
+    void testMatchesCliLogFilter_MultipleFilters() {
+        assertTrue(CommandLineUtils.matchesCliLogFilter("run-agent", new String[]{"cursor-agent", "run-agent"}));
+        assertFalse(CommandLineUtils.matchesCliLogFilter("some other command", new String[]{"run-agent", "cursor-agent"}));
+    }
+
+    @Test
+    void testMatchesCliLogFilter_EmptyOrNullFilters() {
+        assertFalse(CommandLineUtils.matchesCliLogFilter("run-agent", new String[0]));
+        assertFalse(CommandLineUtils.matchesCliLogFilter("run-agent", null));
+        assertFalse(CommandLineUtils.matchesCliLogFilter(null, new String[]{"run-agent"}));
+    }
+
+    @Test
+    void testMatchesCliLogFilter_IgnoresBlankFilters() {
+        assertTrue(CommandLineUtils.matchesCliLogFilter("run-agent", new String[]{" ", "run-agent"}));
+        assertFalse(CommandLineUtils.matchesCliLogFilter("run-agent", new String[]{" ", ""}));
+    }
+
+    @Test
+    void testRunCommand_CliLogFilterMatch_WritesTranscriptFile() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        Path logDir = tempDir.resolve("cli-log-filter-logs");
+        try {
+            PropertyReader.setOverrides(Map.of(
+                    "DMTOOLS_CLI_LOG_DIR", logDir.toString(),
+                    "DMTOOLS_CLI_LOG_FILTER", "run-agent-test-marker"
+            ));
+
+            String result = CommandLineUtils.runCommand("echo run-agent-test-marker-output");
+            assertTrue(result.contains("run-agent-test-marker-output"));
+
+            assertTrue(Files.isDirectory(logDir), "Log dir should have been created");
+            try (var files = Files.list(logDir)) {
+                java.util.List<Path> written = files.toList();
+                assertEquals(1, written.size(), "Exactly one CLI log filter transcript should be written");
+                String content = Files.readString(written.get(0));
+                assertTrue(content.contains("run-agent-test-marker-output"),
+                        "Transcript should contain the command output");
+                assertTrue(content.contains("run-agent-test-marker"),
+                        "Transcript header should contain the matched command");
+                assertTrue(content.contains("Exit code: 0"));
+            }
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testRunCommand_CliLogFilterNoMatch_DoesNotWriteTranscriptFile() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        Path logDir = tempDir.resolve("cli-log-filter-logs-2");
+        try {
+            PropertyReader.setOverrides(Map.of(
+                    "DMTOOLS_CLI_LOG_DIR", logDir.toString(),
+                    "DMTOOLS_CLI_LOG_FILTER", "run-agent"
+            ));
+
+            CommandLineUtils.runCommand("echo some-unrelated-output");
+
+            assertFalse(Files.exists(logDir), "No transcript should be created when command does not match filter");
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testRunCommand_CliLogFilterMatch_LogDirDisabled_DoesNotWriteFile() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        Path logDir = tempDir.resolve("cli-log-filter-logs-3");
+        try {
+            PropertyReader.setOverrides(Map.of(
+                    "DMTOOLS_CLI_LOG_DIR", "",
+                    "DMTOOLS_CLI_LOG_FILTER", "run-agent"
+            ));
+
+            CommandLineUtils.runCommand("echo run-agent-output");
+
+            assertFalse(Files.exists(logDir), "No transcript should be written when DMTOOLS_CLI_LOG_DIR is empty");
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
     void testRunCommand_UntruncatedOutput_DoesNotWriteLogFile() throws IOException, InterruptedException {
         String os = System.getProperty("os.name").toLowerCase();
         if (os.contains("win")) {

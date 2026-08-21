@@ -72,6 +72,36 @@ GEMINI_API_KEY=your_personal_key
 | `PROMPT_CHUNK_MAX_SINGLE_FILE_SIZE_MB` | Max file size for context | No | `4` |
 | `DMTOOLS_DEBUG` | Enable debug logging | No | `true` |
 
+### CLI Logging and Transcripts
+
+When DMTools runs in normal CLI mode, most Java-side logging is suppressed to keep output clean. Use these variables to control CLI command output visibility and persistence.
+
+| Variable | Description | Required | Example |
+|----------|-------------|----------|---------|
+| `DMTOOLS_CLI_LOG_FILTER` | Comma-separated substrings; matching CLI commands tee output to console and file | No | `run-agent,cursor-agent` |
+| `DMTOOLS_CLI_LOG_DIR` | Directory for full CLI output transcripts | No | `.dmtools-logs/cli` |
+| `DMTOOLS_JS_LOG_TOOL_CALLS` | Verbose logging of JS/MCP tool calls and args | No | `true` |
+
+#### Selective CLI output with `DMTOOLS_CLI_LOG_FILTER`
+
+Use this variable to make specific long-running CLI commands visible without enabling all debug logging.
+
+```bash
+# Tee run-agent.sh output to console and file
+DMTOOLS_CLI_LOG_FILTER=run-agent ./dmtools.sh run agents/story_development.json
+
+# Match multiple command patterns
+DMTOOLS_CLI_LOG_FILTER=run-agent,cursor-agent,dmtools run ./dmtools.sh run agents/pr_review.json
+```
+
+How it works:
+- Matching is case-insensitive and ignores surrounding whitespace.
+- When a command matches, every line of its output is printed to the console even if `log4j2-cli.xml` would otherwise suppress logs.
+- The same output is also written to a timestamped transcript file under `DMTOOLS_CLI_LOG_DIR` (default: `.dmtools-logs/cli`).
+- In `--debug` mode the console output is already visible, so the filter only avoids duplication there; the transcript file is still written.
+
+This covers commands executed both as Teammate `cliCommands` and via the `cli_execute_command` MCP tool from JavaScript actions.
+
 ### Integration Credentials
 
 | Integration | Required Variables | Optional Variables |

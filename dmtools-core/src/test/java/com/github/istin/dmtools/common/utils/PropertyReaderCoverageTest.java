@@ -166,6 +166,30 @@ class PropertyReaderCoverageTest {
     }
 
     @Test
+    @DisplayName("getCliLogFilter() returns empty array when unset")
+    void testGetCliLogFilterEmptyByDefault() {
+        assertEquals(0, propertyReader.getCliLogFilter().length);
+    }
+
+    @Test
+    @DisplayName("getCliLogFilter() parses comma-separated values and trims whitespace")
+    void testGetCliLogFilterParsesCommaSeparatedValues() {
+        override("DMTOOLS_CLI_LOG_FILTER", "run-agent, cursor-agent ,dmtools run");
+
+        String[] filters = propertyReader.getCliLogFilter();
+        assertArrayEquals(new String[]{"run-agent", "cursor-agent", "dmtools run"}, filters);
+    }
+
+    @Test
+    @DisplayName("getCliLogFilter() ignores empty tokens")
+    void testGetCliLogFilterIgnoresEmptyTokens() {
+        override("DMTOOLS_CLI_LOG_FILTER", "run-agent,, ,cursor-agent");
+
+        String[] filters = propertyReader.getCliLogFilter();
+        assertArrayEquals(new String[]{"run-agent", "cursor-agent"}, filters);
+    }
+
+    @Test
     @DisplayName("findProjectRoot() falls back to user.dir when no Gradle markers exist")
     void testProjectRootFallbackWithoutGradleMarkers(@TempDir Path tempDir) throws IOException {
         // Temp dirs have no settings.gradle ancestor, so findProjectRoot() falls back to user.dir
