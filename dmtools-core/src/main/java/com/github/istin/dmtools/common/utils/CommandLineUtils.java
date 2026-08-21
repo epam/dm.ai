@@ -7,6 +7,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -232,10 +233,36 @@ public class CommandLineUtils {
         // Merge stdout and stderr so all output is captured
         processBuilder.redirectErrorStream(true);
 
+        // DMTOOLS_CLI_LOG_FILTER allows selectively teeing a command's full output to
+        // both the console and a transcript file, even when log4j is configured to
+        // discard logs (e.g. log4j2-cli.xml with Root=OFF). This is useful for making
+        // long-running agent commands (run-agent.sh, cursor-agent, etc.) visible
+        // without enabling all CLI tool logging.
+        PropertyReader propertyReader = new PropertyReader();
+        String[] cliLogFilters = propertyReader.getCliLogFilter();
+        boolean shouldTeeCliOutput = matchesCliLogFilter(command, cliLogFilters);
+        Path teeLogFile = shouldTeeCliOutput ? resolveFullOutputLogFile(timestamp, uniqueId) : null;
+        BufferedWriter teeWriter = null;
+        if (teeLogFile != null) {
+            try {
+                Path parent = teeLogFile.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                teeWriter = Files.newBufferedWriter(teeLogFile);
+                teeWriter.write("Command: " + SecurityUtils.maskCommand(command) + System.lineSeparator());
+                teeWriter.write("Working directory: " + (workingDirectory != null ? workingDirectory.getAbsolutePath() : System.getProperty("user.dir")) + System.lineSeparator());
+                teeWriter.write("----" + System.lineSeparator());
+            } catch (IOException e) {
+                logger.warn("Failed to initialize CLI log filter transcript {}: {}", teeLogFile, e.getMessage());
+                teeWriter = null;
+            }
+        }
+
         Process process = processBuilder.start();
 
         // Drain stdout/stderr in real-time so the process doesn't block on a full pipe
-        boolean verboseCommandOutputLogging = new PropertyReader().isJsToolCallLoggingEnabled();
+        boolean verboseCommandOutputLogging = propertyReader.isJsToolCallLoggingEnabled();
         // Path a full, untruncated transcript would be written to IF this command's
         // output ends up exceeding the logging cap (computed upfront, from the same
         // timestamp/uniqueId used for the temp script, so the truncation notice can
@@ -269,6 +296,25 @@ public class CommandLineUtils {
                 }
 
                 output.append(line).append(System.lineSeparator());
+
+                // Tee matched CLI output to console and file independently of log4j.
+                // Console output is skipped when log4j is already printing, to avoid
+                // duplicate lines in --debug mode.
+                if (shouldTeeCliOutput) {
+                    if (!logger.isInfoEnabled()) {
+                        System.out.println(line);
+                    }
+                    if (teeWriter != null) {
+                        try {
+                            teeWriter.write(line);
+                            teeWriter.newLine();
+                        } catch (IOException e) {
+                            logger.warn("Failed to write CLI log filter transcript line: {}", e.getMessage());
+                            teeWriter = null;
+                        }
+                    }
+                }
+
                 if (lineConsumer != null) {
                     try {
                         lineConsumer.accept(line);
@@ -299,6 +345,26 @@ public class CommandLineUtils {
             persistFullOutput(fullOutputLogFile, command, workingDirectory, output.toString(), lineCount, exitCode);
         }
 
+        // Finalize the CLI log filter transcript, if any.
+        if (shouldTeeCliOutput) {
+            if (teeWriter != null) {
+                try {
+                    teeWriter.write("----" + System.lineSeparator());
+                    teeWriter.write("Exit code: " + exitCode + System.lineSeparator());
+                    teeWriter.close();
+                } catch (IOException e) {
+                    logger.warn("Failed to close CLI log filter transcript: {}", e.getMessage());
+                }
+            }
+            if (teeLogFile != null) {
+                if (logger.isInfoEnabled()) {
+                    logger.info("CLI log filter transcript written to: {}", teeLogFile.toAbsolutePath());
+                } else {
+                    System.out.println("CLI log filter transcript written to: " + teeLogFile.toAbsolutePath());
+                }
+            }
+        }
+
         // Propagate non-zero exit codes so callers are not silently misled.
         // Thrown as CliCommandFailedException (an IOException subtype) so existing
         // callers that only catch IOException/Exception see no behavior change, while
@@ -321,6 +387,23 @@ public class CommandLineUtils {
             return null;
         }
         return Paths.get(logDirProperty).resolve(timestamp + "-" + uniqueId + ".log");
+    }
+
+    /**
+     * Checks whether the given command matches any substring configured in
+     * {@code DMTOOLS_CLI_LOG_FILTER}. Matching is case-insensitive.
+     */
+    static boolean matchesCliLogFilter(String command, String[] filters) {
+        if (command == null || filters == null || filters.length == 0) {
+            return false;
+        }
+        String lowerCommand = command.toLowerCase();
+        for (String filter : filters) {
+            if (filter != null && !filter.isBlank() && lowerCommand.contains(filter.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
