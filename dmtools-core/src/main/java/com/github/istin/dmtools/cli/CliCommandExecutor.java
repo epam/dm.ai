@@ -316,7 +316,15 @@ public class CliCommandExecutor {
         } else {
             logger.debug("No dmtools.env file found in working directory: {}. Continuing with system environment.", workingDirectory.getAbsolutePath());
         }
-        
+
+        // Per-job envVariables (agent JSON) take highest precedence — also for commands run
+        // from JS actions via cli_execute_command (quality gates, git ops, etc.), not just the
+        // main CLI agent subprocess (CliExecutionHelper already applies them there).
+        Map<String, String> jobOverrides = PropertyReader.getOverrides();
+        if (!jobOverrides.isEmpty()) {
+            envVars.putAll(jobOverrides);
+        }
+
         return envVars;
     }
     
