@@ -41,11 +41,13 @@ public class TestRailClientCoverageTest {
         final String method;
         final String url;
         final String body;
+        final boolean ignoreCache;
 
-        RecordedRequest(String method, String url, String body) {
+        RecordedRequest(String method, String url, String body, boolean ignoreCache) {
             this.method = method;
             this.url = url;
             this.body = body;
+            this.ignoreCache = ignoreCache;
         }
     }
 
@@ -84,7 +86,7 @@ public class TestRailClientCoverageTest {
 
         @Override
         public String execute(GenericRequest genericRequest) throws IOException {
-            requests.add(new RecordedRequest("GET", genericRequest.url(), genericRequest.getBody()));
+            requests.add(new RecordedRequest("GET", genericRequest.url(), genericRequest.getBody(), genericRequest.isIgnoreCache()));
             if (queuedGetResponses.isEmpty()) {
                 throw new IOException("No queued GET response for " + genericRequest.url());
             }
@@ -93,7 +95,7 @@ public class TestRailClientCoverageTest {
 
         @Override
         public String post(GenericRequest genericRequest) throws IOException {
-            requests.add(new RecordedRequest("POST", genericRequest.url(), genericRequest.getBody()));
+            requests.add(new RecordedRequest("POST", genericRequest.url(), genericRequest.getBody(), genericRequest.isIgnoreCache()));
             if (queuedPostResponses.isEmpty()) {
                 throw new IOException("No queued POST response for " + genericRequest.url());
             }
@@ -1023,6 +1025,44 @@ public class TestRailClientCoverageTest {
         assertEquals(42, client.getDefaultSectionId(5));
 
         assertEquals(1, client.getRequests().size()); // second call served from cache
+    }
+
+    @Test
+    public void testGetSectionsIgnoresCache() throws Exception {
+        StubTestRailClient client = newStubClient();
+        client.queueGet(sectionsPage(new JSONObject().put("id", 42).put("name", "Test Cases")));
+
+        String response = client.getSectionsByProjectId(5, null);
+
+        JSONArray sections = new JSONArray(response);
+        assertEquals(1, sections.length());
+        assertTrue("get_sections should bypass cache to avoid stale hierarchy after creates/updates",
+                client.lastRequest().ignoreCache);
+    }
+
+    @Test
+    public void testSearchCasesBySectionIdBuildsCorrectUrl() throws Exception {
+        StubTestRailClient client = newStubClient();
+        client.queueGet(casesPage(null));
+
+        client.getCasesByProjectId(5, null, "42", null);
+
+        String url = client.lastRequest().url;
+        assertTrue("URL should filter by section_id. Got: " + url,
+                url.contains("section_id=42"));
+        assertFalse("suite_id must not be set to the section_id value. Got: " + url,
+                url.contains("suite_id=42"));
+    }
+
+    @Test
+    public void testGetCasesByProjectIdIgnoresCache() throws Exception {
+        StubTestRailClient client = newStubClient();
+        client.queueGet(casesPage(null));
+
+        client.getCasesByProjectId(2, null, null, null);
+
+        assertTrue("get_cases should bypass cache to avoid stale lists after creates/updates",
+                client.lastRequest().ignoreCache);
     }
 
     // ========== TrackerClient behavior ==========

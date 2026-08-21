@@ -238,6 +238,59 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
     }
 
     @MCPTool(
+            name = "testrail_get_sections",
+            description = "Get all test sections for a TestRail project and optional suite. Sections define the hierarchy used to organize test cases.",
+            integration = "testrail",
+            category = "sections"
+    )
+    public String getSections(
+            @MCPParam(name = "project_name", description = "Project name to get sections from", required = true, example = "My Project")
+            String projectName,
+            @MCPParam(name = "suite_id", description = "Suite ID to filter by (optional). Required for projects with multiple suites.", required = false, example = "1")
+            String suiteId
+    ) throws IOException {
+        return getSectionsByProjectId(getProjectId(projectName), suiteId);
+    }
+
+    /** ID-based variant — bypasses project name resolution. */
+    String getSectionsByProjectId(int projectId, String suiteId) throws IOException {
+        List<JSONObject> allSections = new ArrayList<>();
+        int limit = 250;
+        StringBuilder baseApiPathBuilder = new StringBuilder("/get_sections/" + projectId);
+        if (suiteId != null && !suiteId.isEmpty()) {
+            baseApiPathBuilder.append("&suite_id=").append(suiteId);
+        }
+        String baseApiPath = baseApiPathBuilder.toString();
+        String nextPagePath = buildPagedPath(baseApiPath, limit, 0);
+
+        while (nextPagePath != null) {
+            GenericRequest request = new GenericRequest(this, path(nextPagePath));
+            request.setIgnoreCache(true);
+            String response = request.execute();
+
+            JSONObject responseObj = new JSONObject(response);
+            JSONArray sections = responseObj.optJSONArray("sections");
+
+            if (sections == null || sections.length() == 0) {
+                break;
+            }
+
+            for (int i = 0; i < sections.length(); i++) {
+                allSections.add(sections.getJSONObject(i));
+            }
+
+            nextPagePath = getNextPagePath(responseObj, baseApiPath, limit, sections.length());
+        }
+
+        JSONArray result = new JSONArray();
+        for (JSONObject section : allSections) {
+            result.put(section);
+        }
+        log("Retrieved " + allSections.size() + " sections for project ID " + projectId);
+        return result.toString(2);
+    }
+
+    @MCPTool(
             name = "testrail_get_case",
             description = "Get a TestRail test case by ID. Set format='markdown' to receive preconditions/steps/expected-result HTML fields converted to clean Markdown (tables preserved as GitHub-Flavoured Markdown) instead of raw TestRail HTML — raw HTML pasted from Google Docs/browsers can be 20-30x larger than necessary due to inline CSS styling on every tag.",
             integration = "testrail",
@@ -417,7 +470,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         String nextPagePath = buildPagedPath(baseApiPath, limit, 0);
 
         while (nextPagePath != null) {
-            String response = executeGet(nextPagePath);
+            String response = executeGetIgnoreCache(nextPagePath);
 
             JSONObject responseObj = new JSONObject(response);
             JSONArray cases = responseObj.optJSONArray("cases");
@@ -506,6 +559,19 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         return results;
     }
 
+    /**
+     * Backward-compatible variant without explicit section ID.
+     */
+    public String createCase(
+            String projectName,
+            String title,
+            String description,
+            String priorityId,
+            String refs
+    ) throws IOException {
+        return createCase(projectName, title, description, priorityId, refs, null);
+    }
+
     @MCPTool(
             name = "testrail_create_case",
             description = "Create a new test case in TestRail",
@@ -522,23 +588,66 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
             @MCPParam(name = "priority_id", description = "Priority ID: 1=Low, 2=Medium, 3=High, 4=Critical (optional, default=2)", required = false, example = "3")
             String priorityId,
             @MCPParam(name = "refs", description = "Reference to requirement (e.g., JIRA key)", required = false, example = "PROJ-123")
-            String refs
+            String refs,
+            @MCPParam(name = "section_id", description = "Section ID where the case should be created (optional). Uses the project's default section when omitted.", required = false, example = "42")
+            String sectionId
     ) throws IOException {
-        return createTicketInProject(projectName, "Test Case", title, description, fields -> {
-            if (priorityId != null && !priorityId.isEmpty()) {
-                try {
-                    fields.set("priority_id", Integer.parseInt(priorityId));
-                } catch (NumberFormatException e) {
-                    fields.set("priority_id", 2); // Default to Medium
-                }
-            } else {
-                fields.set("priority_id", 2); // Default to Medium
-            }
+        return createCaseByProjectId(getProjectId(projectName), title, description, priorityId, refs, sectionId);
+    }
 
-            if (refs != null && !refs.isEmpty()) {
-                fields.set("refs", refs);
+    /** ID-based variant of {@link #createCase} — bypasses project name resolution. */
+    String createCaseByProjectId(int projectId, String title, String description,
+            String priorityId, String refs, String sectionId) throws IOException {
+        int effectiveSectionId = resolveSectionId(projectId, sectionId);
+
+        JSONObject caseData = new JSONObject();
+        caseData.put("title", title);
+
+        if (description != null && !description.isEmpty()) {
+            caseData.put("custom_preconds", description);
+        }
+
+        if (priorityId != null && !priorityId.isEmpty()) {
+            try {
+                caseData.put("priority_id", Integer.parseInt(priorityId));
+            } catch (NumberFormatException e) {
+                caseData.put("priority_id", 2); // Default to Medium
             }
-        });
+        } else {
+            caseData.put("priority_id", 2); // Default to Medium
+        }
+
+        if (refs != null && !refs.isEmpty()) {
+            caseData.put("refs", refs);
+        }
+
+        GenericRequest request = new GenericRequest(this, path("/add_case/" + effectiveSectionId));
+        request.setBody(caseData.toString());
+        String response = request.post();
+
+        JSONObject responseObj = new JSONObject(response);
+        Integer caseId = responseObj.optInt("id");
+        log("Created test case: C" + caseId);
+        return response;
+    }
+
+    /**
+     * Backward-compatible variant without explicit section ID.
+     * Delegates to {@link #createCaseDetailed(String, String, String, String, String, String, String, String, String, String)}
+     * using the project's default section.
+     */
+    public String createCaseDetailed(
+            String projectName,
+            String title,
+            String preconditions,
+            String steps,
+            String expected,
+            String priorityId,
+            String typeId,
+            String refs,
+            String labelIds
+    ) throws IOException {
+        return createCaseDetailed(projectName, title, preconditions, steps, expected, priorityId, typeId, refs, labelIds, null);
     }
 
     @MCPTool(
@@ -567,16 +676,27 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
             @MCPParam(name = "refs", description = "Reference to requirement (e.g., JIRA key)", required = false, example = "PROJ-123")
             String refs,
             @MCPParam(name = "label_ids", description = "Comma-separated label IDs (optional). Use testrail_get_labels to find IDs.", required = false, example = "7,8")
-            String labelIds
+            String labelIds,
+            @MCPParam(name = "section_id", description = "Section ID where the case should be created (optional). Uses the project's default section when omitted.", required = false, example = "42")
+            String sectionId
     ) throws IOException {
-        return createCaseDetailedByProjectId(getProjectId(projectName), title, preconditions, steps, expected, priorityId, typeId, refs, labelIds);
+        return createCaseDetailedByProjectId(getProjectId(projectName), title, preconditions, steps, expected, priorityId, typeId, refs, labelIds, sectionId);
+    }
+
+    /**
+     * Backward-compatible ID-based variant without explicit section ID.
+     */
+    String createCaseDetailedByProjectId(int projectId, String title, String preconditions,
+            String steps, String expected, String priorityId, String typeId,
+            String refs, String labelIds) throws IOException {
+        return createCaseDetailedByProjectId(projectId, title, preconditions, steps, expected, priorityId, typeId, refs, labelIds, null);
     }
 
     /** ID-based variant of {@link #createCaseDetailed} — bypasses project name resolution. */
     String createCaseDetailedByProjectId(int projectId, String title, String preconditions,
             String steps, String expected, String priorityId, String typeId,
-            String refs, String labelIds) throws IOException {
-        int sectionId = getDefaultSectionId(projectId);
+            String refs, String labelIds, String sectionId) throws IOException {
+        int effectiveSectionId = resolveSectionId(projectId, sectionId);
 
         JSONObject caseData = new JSONObject();
         caseData.put("title", title);
@@ -638,7 +758,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         }
 
         // Create case
-        GenericRequest request = new GenericRequest(this, path("/add_case/" + sectionId));
+        GenericRequest request = new GenericRequest(this, path("/add_case/" + effectiveSectionId));
         request.setBody(caseData.toString());
         String response = request.post();
 
@@ -647,6 +767,22 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
 
         log("Created test case: C" + caseId);
         return response;
+    }
+
+    /**
+     * Backward-compatible variant without explicit section ID.
+     */
+    public String createCaseSteps(
+            String projectName,
+            String title,
+            String preconditions,
+            String stepsJson,
+            String priorityId,
+            String typeId,
+            String refs,
+            String labelIds
+    ) throws IOException {
+        return createCaseSteps(projectName, title, preconditions, stepsJson, priorityId, typeId, refs, labelIds, null);
     }
 
     @MCPTool(
@@ -674,16 +810,27 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
             @MCPParam(name = "refs", description = "Reference to requirement (e.g., JIRA key)", required = false, example = "PROJ-123")
             String refs,
             @MCPParam(name = "label_ids", description = "Comma-separated label IDs (optional). Use testrail_get_labels to find IDs.", required = false, example = "7,8")
-            String labelIds
+            String labelIds,
+            @MCPParam(name = "section_id", description = "Section ID where the case should be created (optional). Uses the project's default section when omitted.", required = false, example = "42")
+            String sectionId
     ) throws IOException {
-        return createCaseStepsByProjectId(getProjectId(projectName), title, preconditions, stepsJson, priorityId, typeId, refs, labelIds);
+        return createCaseStepsByProjectId(getProjectId(projectName), title, preconditions, stepsJson, priorityId, typeId, refs, labelIds, sectionId);
+    }
+
+    /**
+     * Backward-compatible ID-based variant without explicit section ID.
+     */
+    String createCaseStepsByProjectId(int projectId, String title, String preconditions,
+            String stepsJson, String priorityId, String typeId,
+            String refs, String labelIds) throws IOException {
+        return createCaseStepsByProjectId(projectId, title, preconditions, stepsJson, priorityId, typeId, refs, labelIds, null);
     }
 
     /** ID-based variant of {@link #createCaseSteps} — bypasses project name resolution. */
     String createCaseStepsByProjectId(int projectId, String title, String preconditions,
             String stepsJson, String priorityId, String typeId,
-            String refs, String labelIds) throws IOException {
-        int sectionId = getDefaultSectionId(projectId);
+            String refs, String labelIds, String sectionId) throws IOException {
+        int effectiveSectionId = resolveSectionId(projectId, sectionId);
 
         JSONObject caseData = new JSONObject();
         caseData.put("title", title);
@@ -754,7 +901,7 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
             }
         }
 
-        GenericRequest request = new GenericRequest(this, path("/add_case/" + sectionId));
+        GenericRequest request = new GenericRequest(this, path("/add_case/" + effectiveSectionId));
         request.setBody(caseData.toString());
         String response = request.post();
 
@@ -1364,6 +1511,12 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
         return request.execute();
     }
 
+    String executeGetIgnoreCache(String apiPath) throws IOException {
+        GenericRequest request = new GenericRequest(this, path(apiPath));
+        request.setIgnoreCache(true);
+        return request.execute();
+    }
+
     private String buildCasesPath(int projectId, String suiteId, String sectionId, String labelId) {
         StringBuilder path = new StringBuilder("/get_cases/" + projectId);
         if (suiteId != null && !suiteId.isEmpty()) {
@@ -1481,6 +1634,20 @@ public class TestRailClient extends AbstractRestClient implements TrackerClient<
 
         log("Created default section for project ID " + projectId);
         return sectionId;
+    }
+
+    /**
+     * Resolves an explicit section ID or falls back to the project's default section.
+     */
+    int resolveSectionId(int projectId, String sectionId) throws IOException {
+        if (sectionId != null && !sectionId.isEmpty()) {
+            try {
+                return Integer.parseInt(sectionId);
+            } catch (NumberFormatException e) {
+                log("Invalid section_id: " + sectionId + ", using default section");
+            }
+        }
+        return getDefaultSectionId(projectId);
     }
 
     /**

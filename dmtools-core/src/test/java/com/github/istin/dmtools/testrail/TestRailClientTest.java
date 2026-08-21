@@ -52,6 +52,11 @@ public class TestRailClientTest {
             }
             return queuedResponses.remove();
         }
+
+        @Override
+        String executeGetIgnoreCache(String apiPath) throws IOException {
+            return executeGet(apiPath);
+        }
     }
 
     @Before
