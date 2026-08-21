@@ -461,6 +461,33 @@ public class PropertyReader {
     return getValue("DMTOOLS_CLI_LOG_DIR", ".dmtools-logs/cli");
   }
 
+  /**
+   * Comma-separated list of substrings that, when found in a CLI command, force the
+   * command's full output to be written both to the console and to a transcript file.
+   * This works independently of the active log4j configuration, so it is useful when
+   * CLI logging is otherwise suppressed (e.g. {@code log4j2-cli.xml} with Root=OFF).
+   * <p>
+   * Example: {@code DMTOOLS_CLI_LOG_FILTER=run-agent,cursor-agent,dmtools run}
+   * <p>
+   * Matching is case-insensitive and ignores surrounding whitespace. An empty or
+   * unset value disables the filter.
+   */
+  public String[] getCliLogFilter() {
+    String value = getValue("DMTOOLS_CLI_LOG_FILTER");
+    if (value == null || value.isBlank()) {
+      return new String[0];
+    }
+    String[] parts = value.split(",");
+    List<String> trimmed = new ArrayList<>();
+    for (String part : parts) {
+      String pattern = part.trim();
+      if (!pattern.isEmpty()) {
+        trimmed.add(pattern);
+      }
+    }
+    return trimmed.toArray(new String[0]);
+  }
+
   public boolean isXrayCacheGetRequestsEnabled() {
     String value = getValue("XRAY_CACHE_GET_REQUESTS_ENABLED");
     if (value == null) {
