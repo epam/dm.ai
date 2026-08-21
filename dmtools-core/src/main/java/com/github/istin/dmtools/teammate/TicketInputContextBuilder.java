@@ -73,11 +73,22 @@ public class TicketInputContextBuilder {
                         Confluence confluence,
                         FigmaClient figmaClient,
                         RequestDecompositionAgent.Result agentParams) throws Exception {
-        if (ticket == null) {
-            throw new IllegalArgumentException("Ticket cannot be null");
-        }
         if (config == null) {
             throw new IllegalArgumentException("InputContextConfig cannot be null");
+        }
+
+        CliExecutionHelper cliHelper = new CliExecutionHelper();
+
+        if (ticket == null) {
+            logger.info("Building input context for standalone CLI mode");
+            String requestContent = agentParams != null ? agentParams.toString() : "";
+            Path inputFolderPath = cliHelper.createInputContext(
+                    null, requestContent, trackerClient, workingDirectory, null, true);
+            if (agentParams != null && config.isWriteAgentParamsToFiles() && agentParamsFileWriter != null) {
+                agentParamsFileWriter.writeToInputFolder(inputFolderPath, agentParams);
+            }
+            logger.info("Standalone input context ready at: {}", inputFolderPath.toAbsolutePath());
+            return new Result(inputFolderPath, null);
         }
 
         String ticketKey = ticket.getTicketKey();
@@ -98,7 +109,6 @@ public class TicketInputContextBuilder {
 
         // ADO attachments are represented by relations, which are not present in field-only responses.
         // Enrich before reading and filtering the attachment list.
-        CliExecutionHelper cliHelper = new CliExecutionHelper();
         if (config.isIncludeAttachments() && !config.isSkipAllAttachments()) {
             cliHelper.enrichTicketWithRelations(ticket, trackerClient);
         }
