@@ -22,6 +22,10 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO="epam/dm.ai"
+MANIFEST_URL="${DMTOOLS_MANIFEST_URL:-https://dmtools.lab.epam.com/cli-manifest.json}"
+# Populated by fetch_manifest() when available.
+MANIFEST_JSON=""
+MANIFEST_BASE_URL=""
 INSTALL_DIR="${DMTOOLS_INSTALL_DIR:-$HOME/.dmtools}"
 BIN_DIR="${DMTOOLS_BIN_DIR:-$INSTALL_DIR/bin}"
 JAR_PATH="$INSTALL_DIR/dmtools.jar"
@@ -817,6 +821,73 @@ get_latest_version_from_git_tags() {
     echo "$version"
 }
 
+# Fetch the public CLI manifest from the landing site. The manifest lets the
+# installer discover the latest version without hitting the GitHub API, which
+# has a low unauthenticated rate limit.
+fetch_manifest() {
+    if [ -n "$MANIFEST_JSON" ]; then
+        return 0
+    fi
+
+    local manifest
+    manifest=$(curl -fsSL --connect-timeout 5 --max-time 15 "$MANIFEST_URL" 2>/dev/null) || true
+
+    if [ -z "$manifest" ]; then
+        return 1
+    fi
+
+    # Basic validation: must be JSON and contain a latest object.
+    if ! echo "$manifest" | grep -q '"latest"'; then
+        return 1
+    fi
+
+    MANIFEST_JSON="$manifest"
+
+    # Cache the download base if present and valid.
+    local base
+    base=$(echo "$MANIFEST_JSON" | sed -n '/"latest":/,/}/p' | grep -o '"download_base"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"download_base"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    if [ -n "$base" ]; then
+        MANIFEST_BASE_URL="$base"
+    fi
+
+    return 0
+}
+
+# Extract a string value from the manifest's "latest" object.
+manifest_latest_value() {
+    local key="$1"
+    if [ -z "$MANIFEST_JSON" ]; then
+        return 1
+    fi
+
+    echo "$MANIFEST_JSON" | sed -n '/"latest":/,/}/p' | grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/"
+}
+
+# Return the download base URL for a specific version, preferring the manifest
+# when it matches the requested version.
+get_release_download_base() {
+    local version="$1"
+
+    # get_latest_version is often called in a command substitution, so any
+    # manifest it loaded lives only in that subshell. Fetch it again here in
+    # the current shell so the cached download base is available for downloads.
+    if [ -z "$MANIFEST_JSON" ]; then
+        fetch_manifest >/dev/null 2>&1 || true
+    fi
+
+    # If the manifest is for the same version, use its download_base.
+    if [ -n "$MANIFEST_BASE_URL" ] && [ -n "$MANIFEST_JSON" ]; then
+        local manifest_version
+        manifest_version=$(manifest_latest_value "version")
+        if [ "$manifest_version" = "$version" ]; then
+            echo "$MANIFEST_BASE_URL"
+            return 0
+        fi
+    fi
+
+    echo "https://github.com/${REPO}/releases/download/${version}"
+}
+
 # Get latest CLI release version (filters out skill/standalone releases, paginates if needed)
 get_latest_version() {
     progress "Fetching latest CLI release information..." >&2
@@ -829,6 +900,19 @@ get_latest_version() {
     local latest_lookup_exit_code=0
     local latest_lookup_response=""
     local git_lookup_status="not attempted"
+
+    # Try the public manifest first to avoid GitHub API rate limits.
+    # fetch_manifest is called directly (not in a subshell) so that the
+    # manifest cache and download base persist for later downloads.
+    if fetch_manifest; then
+        version=$(manifest_latest_value "version")
+        if [ -n "$version" ] && echo "$version" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            progress "Found latest CLI release from manifest: $version" >&2
+            echo "$version"
+            return 0
+        fi
+        warn "Manifest did not contain a valid latest CLI version, falling back to GitHub API." >&2
+    fi
 
     # Paginate through releases until a CLI release (^vX.Y.Z$) is found or no more pages
     while true; do
@@ -1566,7 +1650,9 @@ download_script_from_repo() {
 # not leave a corrupted file behind to be used by verify_jar_checksum.
 download_checksum_file() {
     local version="$1"
-    local checksum_url="https://github.com/${REPO}/releases/download/${version}/dmtools-checksums.sha256"
+    local download_base
+    download_base=$(get_release_download_base "$version")
+    local checksum_url="${download_base}/dmtools-checksums.sha256"
     local checksum_path="$INSTALL_DIR/dmtools-checksums.sha256"
 
     rm -f "$checksum_path" 2>/dev/null
@@ -1645,7 +1731,9 @@ verify_jar_checksum() {
 # Verifies SHA-256 checksum when the checksum file is published in the release.
 download_dmtools_jar() {
     local version="$1"
-    local jar_url="https://github.com/${REPO}/releases/download/${version}/dmtools-${version}-all.jar"
+    local download_base
+    download_base=$(get_release_download_base "$version")
+    local jar_url="${download_base}/dmtools-${version}-all.jar"
     local expected_checksum
     expected_checksum=$(get_jar_expected_checksum "$version")
 
@@ -1703,7 +1791,9 @@ Or try installing the previous known-good version manually:
 # Download DMTools shell script
 download_dmtools_shell_script() {
     local version="$1"
-    local script_url="https://github.com/${REPO}/releases/download/${version}/dmtools.sh"
+    local download_base
+    download_base=$(get_release_download_base "$version")
+    local script_url="${download_base}/dmtools.sh"
 
     # Download shell script - try multiple methods
     # Method 1: Try redirect-based URL (standard GitHub release URL)

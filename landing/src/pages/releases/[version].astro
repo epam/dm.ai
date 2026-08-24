@@ -1,0 +1,167 @@
+---
+import { micromark } from 'micromark';
+import Page from '../../layouts/Page.astro';
+import releases from '../../data/releases.json';
+
+export async function getStaticPaths() {
+  return releases.map((release) => ({
+    params: { version: release.version },
+    props: { release },
+  }));
+}
+
+const { release } = Astro.props;
+const title = `${release.version} — DMTools release notes`;
+const description = `Release notes, download links and checksums for DMTools ${release.version}.`;
+const notesHtml = micromark(release.releaseNotes || 'No release notes available.');
+const base = import.meta.env.BASE_URL;
+---
+
+<Page title={title} description={description} canonicalPath={`releases/${release.version}/`}>
+  <section class="band release-detail">
+    <div class="shell">
+      <a class="release-detail__back" href={`${base}releases/`}>← All releases</a>
+
+      <h1 class="release-detail__title">{release.version}</h1>
+      <p class="release-detail__date">Released on {release.date}</p>
+
+      <div class="release-detail__install">
+        <h2 class="release-detail__section-title">Install this version</h2>
+        <div class="cmd">
+          <code>curl -fsSL {release.download_base}/install.sh | bash -s -- {release.version}</code>
+        </div>
+        <div class="cmd">
+          <code>irm {release.download_base}/install.ps1 | iex</code>
+        </div>
+      </div>
+
+      <div class="release-detail__notes">
+        <h2 class="release-detail__section-title">What’s changed</h2>
+        <article class="release-detail__body" set:html={notesHtml} />
+      </div>
+
+      {Object.keys(release.checksums_sha256).length > 0 && (
+        <div class="release-detail__checksums">
+          <h2 class="release-detail__section-title">Checksums</h2>
+          <dl class="release-detail__checksum-list">
+            {Object.entries(release.checksums_sha256).map(([file, hash]) => (
+              <div class="release-detail__checksum">
+                <dt>{file}</dt>
+                <dd><code>{hash}</code></dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  </section>
+</Page>
+
+<style>
+  .release-detail {
+    padding-block: var(--space-2xl) var(--space-3xl);
+  }
+
+  .release-detail__back {
+    display: inline-block;
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-bottom: var(--space-lg);
+  }
+
+  .release-detail__back:hover {
+    color: var(--accent);
+  }
+
+  .release-detail__title {
+    font-size: var(--font-3xl);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    margin-bottom: var(--space-xs);
+  }
+
+  .release-detail__date {
+    color: var(--text-muted);
+    margin-bottom: var(--space-xl);
+  }
+
+  .release-detail__section-title {
+    font-size: var(--font-xl);
+    font-weight: 700;
+    margin-top: var(--space-xl);
+    margin-bottom: var(--space-md);
+  }
+
+  .release-detail__install .cmd {
+    margin-bottom: var(--space-sm);
+  }
+
+  .release-detail__body {
+    max-width: 75ch;
+  }
+
+  .release-detail__body :global(h2) {
+    font-size: var(--font-xl);
+    font-weight: 700;
+    margin-top: var(--space-lg);
+    margin-bottom: var(--space-sm);
+  }
+
+  .release-detail__body :global(h3) {
+    font-size: var(--font-lg);
+    font-weight: 600;
+    margin-top: var(--space-md);
+    margin-bottom: var(--space-xs);
+  }
+
+  .release-detail__body :global(p) {
+    margin-bottom: var(--space-sm);
+  }
+
+  .release-detail__body :global(ul),
+  .release-detail__body :global(ol) {
+    padding-left: var(--space-lg);
+    margin-bottom: var(--space-sm);
+  }
+
+  .release-detail__body :global(li) {
+    margin-bottom: var(--space-xs);
+  }
+
+  .release-detail__body :global(code) {
+    font-family: var(--font-mono);
+    background: var(--surface);
+    padding: 0.1em 0.35em;
+    border-radius: 0.25em;
+  }
+
+  .release-detail__body :global(pre) {
+    background: var(--surface);
+    padding: var(--space-md);
+    border-radius: 0.5em;
+    overflow-x: auto;
+    margin-bottom: var(--space-md);
+  }
+
+  .release-detail__body :global(pre code) {
+    background: transparent;
+    padding: 0;
+  }
+
+  .release-detail__checksum-list {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .release-detail__checksum dt {
+    font-weight: 600;
+    margin-bottom: var(--space-xs);
+  }
+
+  .release-detail__checksum dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-sm);
+    word-break: break-all;
+  }
+</style>
