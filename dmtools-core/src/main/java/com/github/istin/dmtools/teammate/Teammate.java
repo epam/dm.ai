@@ -126,6 +126,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("confluenceAttachments")
         private boolean confluenceAttachments = true;
 
+        @SerializedName("includeConfluenceComments")
+        private boolean includeConfluenceComments = true;
+
         @SerializedName("includeParentConfluence")
         private boolean includeParentConfluence = true;
 
@@ -200,6 +203,11 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @Override
         public boolean isConfluenceAttachments() {
             return confluenceAttachments;
+        }
+
+        @Override
+        public boolean isIncludeConfluenceComments() {
+            return includeConfluenceComments;
         }
 
         /**

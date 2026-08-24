@@ -87,4 +87,11 @@ public interface InputContextConfig {
     default boolean isConfluenceAttachments() {
         return true;
     }
+
+    /**
+     * Whether to fetch inline comments (annotations) for fetched Confluence pages.
+     */
+    default boolean isIncludeConfluenceComments() {
+        return false;
+    }
 }
