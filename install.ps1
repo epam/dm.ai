@@ -26,14 +26,71 @@ function Write-Error-Message {
 
 # Configuration
 $REPO = "epam/dm.ai"
+$MANIFEST_URL = if ($env:DMTOOLS_MANIFEST_URL) { $env:DMTOOLS_MANIFEST_URL } else { "https://dmtools.lab.epam.com/cli-manifest.json" }
+# Cached manifest object, populated on first successful fetch.
+$script:Manifest = $null
 $INSTALL_DIR = "$env:USERPROFILE\.dmtools"
 $BIN_DIR = "$INSTALL_DIR\bin"
 $JAR_PATH = "$INSTALL_DIR\dmtools.jar"
 $SCRIPT_PATH = "$BIN_DIR\dmtools.cmd"
 
+# Fetch the public CLI manifest from the landing site.
+function Get-Manifest {
+    if ($script:Manifest -ne $null) {
+        return $script:Manifest
+    }
+
+    try {
+        $manifest = Invoke-RestMethod -Uri $MANIFEST_URL -TimeoutSec 15 -ErrorAction Stop
+        if ($manifest -and $manifest.latest) {
+            $script:Manifest = $manifest
+            return $manifest
+        }
+    } catch {
+        # Manifest is best-effort; failures fall back to the GitHub API.
+    }
+
+    return $null
+}
+
+# Resolve the latest stable CLI version from the public manifest.
+function Get-LatestVersionFromManifest {
+    $manifest = Get-Manifest
+    if ($manifest -eq $null) {
+        return $null
+    }
+
+    $version = $manifest.latest.version
+    if ($version -match '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+        Write-Progress-Message "Found latest CLI release from manifest: $version"
+        return $version
+    }
+
+    Write-Warn "Manifest latest version ($version) is not a stable CLI release."
+    return $null
+}
+
+# Return the download base URL for a specific version, preferring the manifest.
+function Get-DownloadBase {
+    param([string]$Version)
+
+    $manifest = Get-Manifest
+    if ($manifest -ne $null -and $manifest.latest.version -eq $Version -and $manifest.latest.download_base) {
+        return $manifest.latest.download_base
+    }
+
+    return "https://github.com/$REPO/releases/download/$Version"
+}
+
 # Get latest CLI release version (filters out skill releases)
 function Get-LatestVersion {
     Write-Progress-Message "Fetching latest CLI release information..."
+
+    # Try the public manifest first to avoid GitHub API rate limits.
+    $manifestVersion = Get-LatestVersionFromManifest
+    if ($manifestVersion -ne $null) {
+        return $manifestVersion
+    }
 
     try {
         # Get all releases (not just latest) to filter CLI releases
@@ -332,8 +389,9 @@ function Check-Java {
 function Download-DMTools {
     param([string]$Version)
     
-    $jarUrl = "https://github.com/$REPO/releases/download/$Version/dmtools-$Version-all.jar"
-    $scriptUrl = "https://github.com/$REPO/releases/download/$Version/dmtools.sh"
+    $downloadBase = Get-DownloadBase -Version $Version
+    $jarUrl = "$downloadBase/dmtools-$Version-all.jar"
+    $scriptUrl = "$downloadBase/dmtools.sh"
     
     # Download JAR
     Download-File -Url $jarUrl -Output $JAR_PATH -Description "DMTools JAR"
