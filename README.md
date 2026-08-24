@@ -62,7 +62,7 @@ All maintained documentation lives under [dmtools-ai-docs/](dmtools-ai-docs/).
 
 ### Installation
 
-**Latest Version:** [![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=)](https://github.com/epam/dm.ai/releases/latest) — browse the [latest releases page](https://github.com/epam/dm.ai/releases/latest) for installer assets.
+**Latest Version:** [![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=)](https://github.com/epam/dm.ai/releases/latest) — browse the [latest releases page](https://github.com/epam/dm.ai/releases/latest) for installer assets, or the [release notes site](https://dmtools.lab.epam.com/releases/) for changelogs and pinned install commands.
 
 **macOS / Linux / Git Bash:**
 
