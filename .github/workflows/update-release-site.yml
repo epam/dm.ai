@@ -90,6 +90,8 @@ jobs:
             --site-url "https://dmtools.lab.epam.com"
 
       - name: Commit and push changes
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           git add landing/public/cli-manifest.json landing/src/data/releases.json
           if git diff --cached --quiet; then
@@ -99,4 +101,14 @@ jobs:
 
           VERSION="${{ steps.inputs.outputs.version }}"
           git commit -m "chore(release): update site data for ${VERSION}"
-          git push origin main
+          # Push to a transient branch and open a PR so the change goes through
+          # the required status checks on main instead of bypassing them.
+          BRANCH="chore/release-site-data-${VERSION}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore(release): update site data for ${VERSION}" \
+            --body "Automated release site data update for ${VERSION}." \
+            --base main \
+            --head "$BRANCH" \
+            --repo "${{ github.repository }}"
