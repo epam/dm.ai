@@ -1,21 +1,34 @@
 ---
 import Brand from '../components/Brand.astro';
-import { navLinks } from '../data/content';
+import { navLinks, basePath } from '../data/content';
 
 const docsLink = navLinks.find((link) => link.label === 'Docs');
+
+// On non-home pages the in-page anchor links (e.g. #problem) do not exist,
+// so turn them into links back to the homepage anchors. The homepage is
+// recognised by pathname matching the base path (/ or /repo/).
+const pathname = Astro.url.pathname;
+const isHome = pathname === basePath || pathname === `${basePath}index.html`;
+
+function navHref(link: typeof navLinks[0]) {
+  if (link.external) return link.href;
+  if (isHome || link.href.startsWith(basePath)) return link.href;
+  // Absolute path link for a hash-only anchor on another page.
+  return `${basePath}${link.href.replace(/^\//, '')}`;
+}
 ---
 
 <header class="nav" id="nav">
   <div class="nav__inner">
     <div class="nav__left">
-      <Brand href="#top" label="DMTools by EPAM — back to top" />
+      <Brand href={isHome ? '#top' : basePath} label="DMTools by EPAM — back to top" />
     </div>
 
     <nav class="nav__links" id="nav-links" aria-label="Sections">
       {navLinks.map((link) => (
         <a
           class="nav__link"
-          href={link.href}
+          href={navHref(link)}
           target={link.external ? '_blank' : undefined}
           rel={link.external ? 'noopener' : undefined}
         >{link.label}</a>
@@ -39,7 +52,7 @@ const docsLink = navLinks.find((link) => link.label === 'Docs');
         </span>
       </button>
 
-      <a class="btn btn--sm nav__cta" href="#install">Install DMTools</a>
+      <a class="btn btn--sm nav__cta" href={isHome ? '#install' : `${basePath}#install`}>Install DMTools</a>
 
       <a class="nav__search" href="https://github.com/epam/dm.ai" target="_blank" rel="noopener" aria-label="DMTools on GitHub">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
