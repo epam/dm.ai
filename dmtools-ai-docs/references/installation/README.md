@@ -10,6 +10,8 @@ The fastest way to install DMtools:
 curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
 ```
 
+Browse the [release notes site](https://dmtools.lab.epam.com/releases/) for every version, its changelog and a pinned install command.
+
 If you only need focused AI assistant skills, see [Install Only the Skills You Need](#install-only-the-skills-you-need).
 
 This script will:

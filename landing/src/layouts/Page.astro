@@ -1,0 +1,81 @@
+---
+// Generic page layout used by /releases and other non-homepage routes.
+// It keeps the same global styles, nav and footer as the landing page without
+// pulling in the homepage-only structured data.
+import '../styles/tokens.css';
+import '../styles/base.css';
+import '../styles/sections.css';
+import '../styles/a11y.css';
+
+import Analytics from '../components/Analytics.astro';
+import Nav from '../sections/Nav.astro';
+import Footer from '../sections/Footer.astro';
+import { meta, asset, basePath } from '../data/content';
+
+interface Props {
+  title: string;
+  description: string;
+  canonicalPath?: string;
+  ogImage?: string;
+}
+
+const { title, description, canonicalPath = '', ogImage = meta.ogImage } = Astro.props;
+const canonical = new URL(canonicalPath, Astro.site).href;
+const absolute = (path: string) => new URL(asset(path), Astro.site).href;
+const ogImageUrl = absolute(ogImage);
+---
+
+<!DOCTYPE html>
+<html lang={meta.lang} data-theme="night">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonical} />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={meta.siteName} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:image" content={ogImageUrl} />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image" content={ogImageUrl} />
+
+  <meta name="theme-color" content={meta.themeColor} />
+  <link rel="icon" href={asset(meta.favicon)} type="image/svg+xml" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+
+  <script is:inline>
+    (function () {
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('dmtools-theme') || 'night';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'night';
+      }
+    })();
+  </script>
+
+  <Analytics />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <Nav />
+  <main id="main">
+    <slot />
+  </main>
+  <Footer />
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
