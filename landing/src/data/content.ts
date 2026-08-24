@@ -129,6 +129,7 @@ export const navLinks: NavLink[] = [
   { label: 'FAQ', href: '#faq' },
   // The rendered docs, not the folder listing on GitHub.
   { label: 'Docs', href: `${basePath}docs/` },
+  { label: 'Releases', href: `${basePath}releases/` },
 ];
 
 export interface FooterColumn {
@@ -150,7 +151,7 @@ export const footerColumns: FooterColumn[] = [
     title: 'Community',
     links: [
       { label: 'GitHub', href: REPO },
-      { label: 'Releases', href: `${REPO}/releases` },
+      { label: 'Releases', href: `${basePath}releases/` },
       { label: 'Contributing', href: `${REPO}/blob/main/CONTRIBUTING.md` },
       { label: 'Issues', href: `${REPO}/issues` },
     ],

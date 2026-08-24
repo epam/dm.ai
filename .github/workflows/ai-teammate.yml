@@ -111,7 +111,7 @@ jobs:
           echo "Using Copilot model: ${COPILOT_MODEL}"
 
       - name: Export tool cache keys
-        run: bash agents/setup/cache.sh keys dmtools:v1.7.196 codegraph
+        run: bash agents/setup/cache.sh keys dmtools:v1.7.243 codegraph
 
       - name: Cache DMTools
         uses: actions/cache@v6
@@ -139,8 +139,8 @@ jobs:
             ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-${{ github.ref_name }}-
             ${{ env.CODEGRAPH_INDEX_CACHE_KEY }}-
 
-      - name: Install DMTools v1.7.196
-        run: bash agents/setup/install.sh dmtools:v1.7.196
+      - name: Install DMTools v1.7.243
+        run: bash agents/setup/install.sh dmtools:v1.7.243
 
       - name: Install and init CodeGraph
         run: bash agents/setup/codegraph.sh

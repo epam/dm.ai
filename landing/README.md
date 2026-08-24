@@ -146,6 +146,15 @@ Astro's `site` and `base`. The `base` half matters on a project page: the site
 lives under `/<repo>/`, and every generated asset link has to carry that prefix.
 Unset, it falls back to `http://localhost:4321` for local work.
 
+### Custom domain
+
+When the repository uses a GitHub Pages custom domain, `configure-pages` reports
+that domain and `base` becomes `/`. The DNS record must point to GitHub Pages
+(CNAME to `<user>.github.io` or A records to GitHub's IPs) and the domain must
+be entered in **Settings → Pages → Custom domain**. GitHub then provisions the
+SSL certificate and `Enforce HTTPS` can be enabled. After changing the domain,
+re-run the deploy workflow so the build picks up the new `SITE_URL`.
+
 ## Google Analytics
 
 Set `GA_MEASUREMENT_ID` at build time and the gtag block is rendered; leave it unset
