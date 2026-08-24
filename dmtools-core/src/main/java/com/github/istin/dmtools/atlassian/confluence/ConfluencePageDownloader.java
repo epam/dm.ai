@@ -6,6 +6,8 @@ package com.github.istin.dmtools.atlassian.confluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -60,13 +62,19 @@ public class ConfluencePageDownloader {
      */
     public int downloadPages(List<String> seedUrls, File outputDir, int depth, boolean downloadAttachments)
             throws IOException {
+        return downloadPages(seedUrls, outputDir, depth, downloadAttachments, false);
+    }
+
+    public int downloadPages(List<String> seedUrls, File outputDir, int depth, boolean downloadAttachments,
+                             boolean includeComments)
+            throws IOException {
         if (confluence == null || seedUrls == null || seedUrls.isEmpty()) {
             return 0;
         }
 
         Files.createDirectories(outputDir.toPath());
-        logger.info("Downloading Confluence pages to {} with depth={} attachments={}",
-                outputDir.getAbsolutePath(), depth, downloadAttachments);
+        logger.info("Downloading Confluence pages to {} with depth={} attachments={} comments={}",
+                outputDir.getAbsolutePath(), depth, downloadAttachments, includeComments);
 
         Queue<PageLevel> queue = new LinkedList<>();
         Set<String> processedIds = new HashSet<>();
@@ -128,6 +136,11 @@ public class ConfluencePageDownloader {
                     }
                 } else {
                     logger.warn("Confluence page '{}' has empty body, skipping text write", title);
+                }
+
+                // Fetch and write inline comments
+                if (includeComments && contentId != null && !contentId.isBlank()) {
+                    writeInlineCommentsFile(contentId, title, pageFolder);
                 }
 
                 // Download attachments
@@ -280,6 +293,55 @@ public class ConfluencePageDownloader {
                     files.size(), contentId, targetDir.getAbsolutePath());
         } catch (Exception e) {
             logger.warn("Could not download attachments for content {} (skipping): {}", contentId, e.getMessage());
+        }
+    }
+
+    /**
+     * Fetches inline comments for a Confluence page and writes them as {@code comments.md}
+     * inside the page folder so CLI agents can read the discussion context.
+     */
+    private void writeInlineCommentsFile(String contentId, String pageTitle, Path pageFolder) {
+        try {
+            String response = confluence.getPageInlineComments(contentId, 100);
+            JSONObject json = new JSONObject(response);
+            JSONArray results = json.optJSONArray("results");
+            if (results == null || results.isEmpty()) {
+                logger.info("No inline comments for Confluence page {}", contentId);
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("# Inline comments: ").append(pageTitle != null ? pageTitle : contentId).append("\n\n");
+            for (int i = 0; i < results.length(); i++) {
+                JSONObject comment = results.getJSONObject(i);
+                String commentId = comment.optString("id", "unknown");
+                String status = comment.optString("resolutionStatus", "unknown");
+                JSONObject bodyObj = comment.optJSONObject("body");
+                String bodyStorage = "";
+                if (bodyObj != null) {
+                    JSONObject storage = bodyObj.optJSONObject("storage");
+                    if (storage != null) {
+                        bodyStorage = storage.optString("value", "");
+                    }
+                }
+                String bodyMarkdown = bodyStorage.isBlank() ? "" : ConfluenceStorageMarkdown.toMarkdown(bodyStorage);
+                JSONObject props = comment.optJSONObject("properties");
+                String selection = props != null ? props.optString("inlineOriginalSelection", "") : "";
+
+                sb.append("## Comment ").append(commentId).append("\n");
+                sb.append("- **Status**: ").append(status).append("\n");
+                if (!selection.isBlank()) {
+                    sb.append("- **Selected text**: ").append(selection).append("\n");
+                }
+                sb.append("- **Body**:\n\n").append(bodyMarkdown.isBlank() ? "_(empty)_" : bodyMarkdown).append("\n\n");
+            }
+
+            Path commentsFile = pageFolder.resolve("comments.md");
+            Files.write(commentsFile, sb.toString().getBytes(StandardCharsets.UTF_8));
+            logger.info("Wrote {} inline comment(s) for page {} -> {}",
+                    results.length(), contentId, commentsFile);
+        } catch (Exception e) {
+            logger.warn("Could not fetch inline comments for content {} (skipping): {}", contentId, e.getMessage());
         }
     }
 

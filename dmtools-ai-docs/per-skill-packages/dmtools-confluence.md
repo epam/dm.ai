@@ -54,18 +54,27 @@ You can edit Confluence pages locally as Markdown and push them back, including 
    See [spec](assets/spec.pdf).
    ```
 
-3. Create or update the page and upload referenced attachments automatically:
-   ```bash
-   # Create a new page
-   dmtools confluence_create_page_from_markdown_file_with_attachments \
-       "Design Doc" "654321" "/tmp/design.md" "TEAM" "/tmp/assets"
+3. Publish the Markdown and attachments to Confluence using the directory-sync tool:
 
-   # Update an existing page
-   dmtools confluence_update_page_from_markdown_file_with_attachments \
-       "123456" "Design Doc" "654321" "/tmp/design.md" "TEAM" "/tmp/assets"
+   Put your Markdown file and its referenced files in a directory:
+   ```text
+   /tmp/design/
+   ├── index.md
+   └── assets/
+       ├── architecture.png
+       └── spec.pdf
    ```
 
-Existing attachments are skipped, so the same command can be run repeatedly without re-uploading files.
+   Then sync the directory to a parent Confluence page:
+   ```bash
+   dmtools confluence_sync_markdown_directory \
+       "/tmp/design" "654321" "TEAM" "false" "/tmp/design/assets"
+   ```
+
+   - `654321` is the parent Confluence page ID.
+   - `index.md` supplies the body of the synced page tree.
+   - Referenced local files are uploaded as attachments idempotently.
+   - Rerun the same command to update; existing pages and attachments are matched by title/name and skipped if unchanged.
 
 For manual attachment management, use:
 
