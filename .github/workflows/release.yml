@@ -549,7 +549,10 @@ jobs:
       - name: Create Unified Release
         uses: softprops/action-gh-release@v3
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT_TOKEN so the release:published event fires and triggers
+          # the Update Release Site Data workflow (events from GITHUB_TOKEN
+          # do not trigger downstream workflows).
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
           tag_name: v${{ needs.version-and-tag.outputs.version }}
           name: "DMTools v${{ needs.version-and-tag.outputs.version }}"
