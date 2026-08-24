@@ -1,0 +1,102 @@
+name: Update Release Site Data
+
+# Updates the public cli-manifest.json and the landing /releases pages when a
+# CLI release is published. The install scripts read the manifest from Pages to
+# avoid GitHub API rate limits during version detection.
+#
+# The workflow commits updated files to main; the existing deploy-landing.yml
+# workflow then deploys the site automatically.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag (e.g., v1.7.200)'
+        required: true
+      release_notes_file:
+        description: 'Path to release notes markdown file'
+        required: false
+        default: 'release_notes.md'
+      checksums_file:
+        description: 'Path to CLI checksums file'
+        required: false
+        default: 'dmtools-checksums.sha256'
+
+permissions:
+  contents: write
+
+jobs:
+  update-site-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 1
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine release inputs
+        id: inputs
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release notes (release event)
+        if: github.event_name == 'release'
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          mkdir -p release-site-tmp
+          python3 -c "import os; open('release-site-tmp/release_notes.md','w',encoding='utf-8').write(os.environ['RELEASE_BODY'] or '')"
+
+      - name: Download checksums asset (release event)
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.inputs.outputs.version }}"
+          mkdir -p release-site-tmp
+          gh release download "$VERSION" \
+            --repo "${{ github.repository }}" \
+            --pattern "dmtools-checksums.sha256" \
+            --dir release-site-tmp
+
+      - name: Generate site data
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            NOTES="release-site-tmp/release_notes.md"
+            SUMS="release-site-tmp/dmtools-checksums.sha256"
+          else
+            NOTES="${{ inputs.release_notes_file }}"
+            SUMS="${{ inputs.checksums_file }}"
+          fi
+
+          python3 .github/scripts/generate-release-site-data.py \
+            --version "${{ steps.inputs.outputs.version }}" \
+            --release-notes "$NOTES" \
+            --checksums "$SUMS" \
+            --site-url "https://dmtools.lab.epam.com"
+
+      - name: Commit and push changes
+        run: |
+          git add landing/public/cli-manifest.json landing/src/data/releases.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          VERSION="${{ steps.inputs.outputs.version }}"
+          git commit -m "chore(release): update site data for ${VERSION}"
+          git push origin main

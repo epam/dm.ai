@@ -1,0 +1,91 @@
+---
+import Page from '../layouts/Page.astro';
+import releases from '../data/releases.json';
+
+const title = 'DMTools releases';
+const description = 'History of DMTools CLI releases with changelogs and install commands.';
+const base = import.meta.env.BASE_URL;
+---
+
+<Page title={title} description={description} canonicalPath="releases/">
+  <section class="band release-list">
+    <div class="shell">
+      <h1 class="release-list__title">Releases</h1>
+      <p class="release-list__intro">
+        Every CLI release, its changelog and the exact install command.
+      </p>
+
+      {releases.length === 0 ? (
+        <p class="release-list__empty">No releases published yet.</p>
+      ) : (
+        <ol class="release-list__items">
+          {releases.map((release) => (
+            <li class="release-list__item">
+              <a class="release-list__link" href={`${base}releases/${release.version}/`}>
+                {release.version}
+              </a>
+              <span class="release-list__date">{release.date}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  </section>
+</Page>
+
+<style>
+  .release-list {
+    padding-block: var(--space-3xl) var(--space-2xl);
+  }
+
+  .release-list__title {
+    font-size: var(--font-3xl);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    margin-bottom: var(--space-sm);
+  }
+
+  .release-list__intro {
+    color: var(--text-muted);
+    font-size: var(--font-lg);
+    margin-bottom: var(--space-xl);
+  }
+
+  .release-list__items {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .release-list__item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-md) 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .release-list__link {
+    font-family: var(--font-mono);
+    font-size: var(--font-lg);
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .release-list__link:hover {
+    color: var(--accent);
+  }
+
+  .release-list__date {
+    color: var(--text-muted);
+    font-size: var(--font-sm);
+    white-space: nowrap;
+  }
+
+  .release-list__empty {
+    color: var(--text-muted);
+  }
+</style>
