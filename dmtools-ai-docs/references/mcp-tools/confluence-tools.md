@@ -30,7 +30,7 @@ const result = confluence_content_by_id(...);
 | `confluence_content_by_title_and_space` | Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional)<br>`space` (string, **required**) |
 | `confluence_contents_by_urls` | Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown. | `format` (string, optional)<br>`urlStrings` (array, **required**) |
 | `confluence_create_page` | Create a new Confluence page with specified title, parent, body content, and space. Returns the created content object. | `title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
-| `confluence_create_page_from_markdown_file_with_attachments` | Create a Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images (e.g. ./assets/doc.pdf) are resolved against the Markdown file's directory or an explicit attachmentsDir. Existing attachments are skipped. | `attachmentsDir` (string, optional)<br>`filePath` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`title` (string, **required**) |
+| `confluence_get_page_inline_comments` | Get inline comments (annotations) for a Confluence page. Uses the Confluence REST API v2 and returns comment bodies in storage format. | `pageId` (string, **required**)<br>`limit` (number, optional) |
 | `confluence_download_attachment` | Download an attachment file from Confluence to a specified directory. | `attachment` (object, **required**)<br>`targetDir` (object, **required**) |
 | `confluence_download_pages` | Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth. | `urlStrings` (array, **required**)<br>`depth` (number, optional)<br>`downloadAttachments` (boolean, optional)<br>`outputPath` (string, **required**) |
 | `confluence_find_content` | Find a Confluence page by title in the default space. Returns the page content if found. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional) |
@@ -46,7 +46,7 @@ const result = confluence_content_by_id(...);
 | `confluence_test` | Test Confluence connectivity by fetching the current user's profile | None |
 | `confluence_update_page` | Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
 | `confluence_update_page_with_history` | Update an existing Confluence page with new content and add a history comment. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`historyComment` (string, **required**) |
-| `confluence_update_page_from_markdown_file_with_attachments` | Update an existing Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images are resolved against the Markdown file's directory or an explicit attachmentsDir. Existing attachments are skipped. | `attachmentsDir` (string, optional)<br>`contentId` (string, **required**)<br>`filePath` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`title` (string, **required**) |
+| `confluence_reply_to_inline_comment` | Reply to an existing inline comment (annotation) on a Confluence page. The reply body is treated as plain text and converted to Confluence storage format. | `pageId` (string, **required**)<br>`commentId` (string, **required**)<br>`body` (string, **required**) |
 | `confluence_upload_attachment` | Upload a single file as an attachment to a Confluence page. Skips the upload if an attachment with the same filename already exists (idempotent). Returns the attachment metadata. | `contentId` (string, **required**)<br>`filePath` (string, **required**)<br>`updateIfExists` (boolean, optional) |
 | `confluence_upload_attachments` | Upload all files from a local directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a summary of uploaded and skipped files. | `contentId` (string, **required**)<br>`directoryPath` (string, **required**)<br>`updateIfExists` (boolean, optional) |
 
@@ -629,86 +629,58 @@ const result = confluence_update_page_with_history("contentId", "title");
 
 ---
 
-### `confluence_create_page_from_markdown_file_with_attachments`
+### `confluence_get_page_inline_comments`
 
-Create a Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images (e.g. `./assets/doc.pdf`) are resolved against the Markdown file's directory or an explicit `attachmentsDir`. Existing attachments are skipped.
+Get inline comments (annotations) for a Confluence page. Uses the Confluence REST API v2 and returns comment bodies in storage format.
 
 **Parameters:**
 
-- **`title`** (string) 🔴 Required
-  - The title of the new page
-  - Example: `New Project Page`
-
-- **`parentId`** (string) 🔴 Required
-  - The ID of the parent page
+- **`pageId`** (string) 🔴 Required
+  - The content ID of the Confluence page
   - Example: `123456`
 
-- **`filePath`** (string) 🔴 Required
-  - Path to the Markdown file
-  - Example: `/tmp/page.md`
-
-- **`space`** (string) 🔴 Required
-  - The space key where to create the page
-  - Example: `PROJ`
-
-- **`attachmentsDir`** (string) ⚪ Optional
-  - Directory to resolve attachment references from. Defaults to the Markdown file's parent directory.
-  - Example: `/tmp/assets`
+- **`limit`** (number) ⚪ Optional
+  - Maximum number of inline comments to return
+  - Example: `25`
 
 **Example:**
 ```bash
-dmtools confluence_create_page_from_markdown_file_with_attachments "New Project Page" "123456" "/tmp/page.md" "PROJ" "/tmp/assets"
+dmtools confluence_get_page_inline_comments "123456" "25"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_create_page_from_markdown_file_with_attachments(
-    "New Project Page", "123456", "/tmp/page.md", "PROJ", "/tmp/assets"
-);
+const result = confluence_get_page_inline_comments("123456", 25);
 ```
 
 ---
 
-### `confluence_update_page_from_markdown_file_with_attachments`
+### `confluence_reply_to_inline_comment`
 
-Update an existing Confluence page from a Markdown file and upload any referenced local attachments. Relative paths in links/images are resolved against the Markdown file's directory or an explicit `attachmentsDir`. Existing attachments are skipped.
+Reply to an existing inline comment (annotation) on a Confluence page. The reply body is treated as plain text and converted to Confluence storage format.
 
 **Parameters:**
 
-- **`contentId`** (string) 🔴 Required
-  - The ID of the page to update
+- **`pageId`** (string) 🔴 Required
+  - The content ID of the Confluence page where the inline comment is located
   - Example: `123456`
 
-- **`title`** (string) 🔴 Required
-  - The new title for the page
-  - Example: `Updated Project Page`
+- **`commentId`** (string) 🔴 Required
+  - The ID of the inline comment (annotation) to reply to
+  - Example: `789012`
 
-- **`parentId`** (string) 🔴 Required
-  - The ID of the parent page
-  - Example: `123456`
-
-- **`filePath`** (string) 🔴 Required
-  - Path to the Markdown file
-  - Example: `/tmp/page.md`
-
-- **`space`** (string) 🔴 Required
-  - The space key where the page is located
-  - Example: `PROJ`
-
-- **`attachmentsDir`** (string) ⚪ Optional
-  - Directory to resolve attachment references from. Defaults to the Markdown file's parent directory.
-  - Example: `/tmp/assets`
+- **`body`** (string) 🔴 Required
+  - The reply text in plain text. Line breaks are converted to paragraphs.
+  - Example: `Thanks for the note!`
 
 **Example:**
 ```bash
-dmtools confluence_update_page_from_markdown_file_with_attachments "123456" "Updated Project Page" "123456" "/tmp/page.md" "PROJ" "/tmp/assets"
+dmtools confluence_reply_to_inline_comment "123456" "789012" "Thanks for the note!"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_update_page_from_markdown_file_with_attachments(
-    "123456", "Updated Project Page", "123456", "/tmp/page.md", "PROJ", "/tmp/assets"
-);
+const result = confluence_reply_to_inline_comment("123456", "789012", "Thanks for the note!");
 ```
 
 ---
@@ -781,7 +753,7 @@ DMTools supports a full round-trip workflow between local Markdown files and Con
 
 2. **Edit locally** and place attachment files next to the Markdown file (or in a separate directory referenced with relative paths like `./assets/doc.pdf`).
 
-3. **Push back** with `confluence_update_page_from_markdown_file_with_attachments` (or `confluence_create_page_from_markdown_file_with_attachments` for a new page). The tool:
+3. **Push back** with `confluence_sync_markdown_directory` (or `confluence_create_page` for a single new page). The tool:
    - Converts Markdown to Confluence Storage Format.
    - Finds all local attachment references.
    - Uploads any files that are not already attached to the page.
@@ -801,5 +773,5 @@ See [requirements](Requirements and Specifications) for context.
 Download the [specification](./assets/spec.pdf).
 ```
 
-When pushed with `confluence_create_page_from_markdown_file_with_attachments`, the page will contain `ri:page` and `ri:attachment` references, and `architecture.png` and `spec.pdf` will be uploaded from `./assets` if they exist and are not already attached.
+When pushed with `confluence_sync_markdown_directory`, the page will contain `ri:page` and `ri:attachment` references, and `architecture.png` and `spec.pdf` will be uploaded from `./assets` if they exist and are not already attached.
 

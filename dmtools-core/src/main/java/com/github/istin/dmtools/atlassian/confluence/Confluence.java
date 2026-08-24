@@ -25,6 +25,7 @@ import dagger.multibindings.StringKey;
 import lombok.Getter;
 import lombok.Setter;
 import okhttp3.*;
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -384,6 +385,67 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
             logger.error(response);
             throw e;
         }
+    }
+
+    @MCPTool(
+        name = "confluence_get_page_inline_comments",
+        description = "Get inline comments (annotations) for a Confluence page. Uses the Confluence REST API v2 and returns comment bodies in storage format.",
+        integration = "confluence",
+        category = "content_retrieval"
+    )
+    public String getPageInlineComments(
+        @MCPParam(name = "pageId", description = "The content ID of the Confluence page", required = true, example = "123456")
+        String pageId,
+        @MCPParam(name = "limit", description = "Maximum number of inline comments to return. Defaults to 25 if not provided.", required = false, example = "25")
+        Integer limit
+    ) throws IOException {
+        GenericRequest request = new GenericRequest(this, getBasePath() + "/api/v2/pages/" + pageId + "/inline-comments");
+        request.param("body-format", "storage");
+        if (limit != null && limit > 0) {
+            request.param("limit", String.valueOf(limit));
+        }
+        return execute(request);
+    }
+
+    @MCPTool(
+        name = "confluence_reply_to_inline_comment",
+        description = "Reply to an existing inline comment (annotation) on a Confluence page. The reply body is treated as plain text and converted to Confluence storage format.",
+        integration = "confluence",
+        category = "content_management"
+    )
+    public String replyToInlineComment(
+        @MCPParam(name = "pageId", description = "The content ID of the Confluence page where the inline comment is located", required = true, example = "123456")
+        String pageId,
+        @MCPParam(name = "commentId", description = "The ID of the inline comment (annotation) to reply to", required = true, example = "789012")
+        String commentId,
+        @MCPParam(name = "body", description = "The reply text in plain text. Line breaks are converted to paragraphs.", required = true, example = "Thanks for the note, I will check it.")
+        String body
+    ) throws IOException {
+        GenericRequest request = new GenericRequest(this, getBasePath() + "/api/v2/inline-comments");
+        request.setBody(new JSONObject()
+            .put("parentCommentId", commentId)
+            .put("body", new JSONObject()
+                .put("representation", "storage")
+                .put("value", prepareInlineCommentBody(body)))
+            .toString());
+        return request.post();
+    }
+
+    private String prepareInlineCommentBody(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return "<p></p>";
+        }
+        String[] paragraphs = text.split("\\n");
+        StringBuilder sb = new StringBuilder();
+        for (String paragraph : paragraphs) {
+            String trimmed = paragraph.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            sb.append("<p>").append(StringEscapeUtils.escapeHtml4(trimmed)).append("</p>\n");
+        }
+        String result = sb.toString().trim();
+        return result.isEmpty() ? "<p></p>" : result;
     }
 
     public ContentResult getContentVersions(String contentId) throws IOException {

@@ -38,6 +38,7 @@ public class InputParams implements InputContextConfig {
     private boolean skipVideoAttachments = false;
     private boolean skipAllAttachments = false;
     private boolean ignoreClonedByRelationship = true;
+    private boolean includeConfluenceComments = true;
 
     public InputParams() {
     }
@@ -65,5 +66,10 @@ public class InputParams implements InputContextConfig {
             }
         }
         return false;
+    }
+
+    @Override
+    public boolean isIncludeConfluenceComments() {
+        return includeConfluenceComments;
     }
 }

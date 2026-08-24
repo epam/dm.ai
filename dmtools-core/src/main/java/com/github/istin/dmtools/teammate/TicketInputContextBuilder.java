@@ -127,7 +127,8 @@ public class TicketInputContextBuilder {
                         inputFolderPath,
                         confluence,
                         config.getConfluenceDepth(),
-                        config.isConfluenceAttachments());
+                        config.isConfluenceAttachments(),
+                        config.isIncludeConfluenceComments());
             }
             if (isSourceEnabled(config, SOURCE_FIGMA)) {
                 writeFigmaFiles(smartText, inputFolderPath, figmaClient);

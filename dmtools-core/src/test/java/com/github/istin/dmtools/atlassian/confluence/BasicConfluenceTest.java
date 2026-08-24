@@ -6,9 +6,11 @@ package com.github.istin.dmtools.atlassian.confluence;
 import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
 import com.github.istin.dmtools.atlassian.confluence.model.ContentResult;
+import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.report.freemarker.GenericReport;
 import freemarker.template.TemplateException;
 import org.apache.commons.io.FileUtils;
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -115,5 +117,42 @@ public class BasicConfluenceTest {
 
         List<Content> contentList = basicConfluence.getChildrenOfContentByName(contentName);
         assertNotNull(contentList);
+    }
+
+    @Test
+    public void testGetPageInlineComments() throws IOException {
+        String pageId = "12345";
+        doAnswer(invocation -> {
+            GenericRequest request = invocation.getArgument(0);
+            String url = request.url();
+            assertTrue(url.contains("/api/v2/pages/" + pageId + "/inline-comments"));
+            assertTrue(url.contains("body-format=storage"));
+            assertTrue(url.contains("limit=10"));
+            return "{\"results\":[{\"id\":\"1\"}]}";
+        }).when(basicConfluence).execute(any(GenericRequest.class));
+
+        String result = basicConfluence.getPageInlineComments(pageId, 10);
+        assertTrue(result.contains("\"id\":\"1\""));
+    }
+
+    @Test
+    public void testReplyToInlineComment() throws IOException {
+        String pageId = "12345";
+        String commentId = "67890";
+        String body = "Hello\nWorld";
+
+        doAnswer(invocation -> {
+            GenericRequest request = invocation.getArgument(0);
+            assertEquals(BASE_PATH + "/api/v2/inline-comments", request.url());
+            JSONObject json = new JSONObject(request.getBody());
+            assertEquals(commentId, json.getString("parentCommentId"));
+            JSONObject bodyJson = json.getJSONObject("body");
+            assertEquals("storage", bodyJson.getString("representation"));
+            assertEquals("<p>Hello</p>\n<p>World</p>", bodyJson.getString("value"));
+            return "{\"id\":\"111\"}";
+        }).when(basicConfluence).post(any(GenericRequest.class));
+
+        String result = basicConfluence.replyToInlineComment(pageId, commentId, body);
+        assertTrue(result.contains("\"id\":\"111\""));
     }
 }
