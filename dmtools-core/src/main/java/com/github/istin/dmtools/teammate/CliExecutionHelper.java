@@ -246,7 +246,15 @@ public class CliExecutionHelper {
      * @param confluence      Confluence client; if {@code null} the method does nothing
      */
     public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence) {
-        writeConfluencePagesFile(textContent, inputFolderPath, confluence, 0, true);
+        writeConfluencePagesFile(textContent, inputFolderPath, confluence, 0, true, false);
+    }
+
+    /**
+     * Backward-compatible overload that does not fetch inline comments.
+     */
+    public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence,
+                                         int confluenceDepth, boolean confluenceAttachments) {
+        writeConfluencePagesFile(textContent, inputFolderPath, confluence, confluenceDepth, confluenceAttachments, false);
     }
 
     /**
@@ -261,14 +269,16 @@ public class CliExecutionHelper {
      * Delegates to {@link ConfluencePageDownloader} so that Teammate and the
      * {@code confluence_download_pages} MCP tool use the exact same download logic.
      *
-     * @param textContent           Any text that may contain Confluence URLs (e.g. full ticket text)
-     * @param inputFolderPath       The base input folder (e.g. {@code input/PROJ-123})
-     * @param confluence            Confluence client; if {@code null} the method does nothing
-     * @param confluenceDepth       How many levels of linked/child pages to follow (0 = only ticket links)
-     * @param confluenceAttachments Whether to download attachments for each fetched page
+     * @param textContent              Any text that may contain Confluence URLs (e.g. full ticket text)
+     * @param inputFolderPath          The base input folder (e.g. {@code input/PROJ-123})
+     * @param confluence               Confluence client; if {@code null} the method does nothing
+     * @param confluenceDepth          How many levels of linked/child pages to follow (0 = only ticket links)
+     * @param confluenceAttachments    Whether to download attachments for each fetched page
+     * @param includeConfluenceComments Whether to fetch inline comments for each fetched page
      */
     public void writeConfluencePagesFile(String textContent, Path inputFolderPath, Confluence confluence,
-                                         int confluenceDepth, boolean confluenceAttachments) {
+                                         int confluenceDepth, boolean confluenceAttachments,
+                                         boolean includeConfluenceComments) {
         if (confluence == null || textContent == null || textContent.isBlank()) return;
         try {
             Set<String> seedUrls = confluence.parseUris(textContent);
@@ -276,12 +286,12 @@ public class CliExecutionHelper {
                 logger.info("No Confluence URLs detected in ticket text");
                 return;
             }
-            logger.info("Found {} Confluence URL(s), writing to input/confluence/ with depth={} attachments={}",
-                    seedUrls.size(), confluenceDepth, confluenceAttachments);
+            logger.info("Found {} Confluence URL(s), writing to input/confluence/ with depth={} attachments={} comments={}",
+                    seedUrls.size(), confluenceDepth, confluenceAttachments, includeConfluenceComments);
 
             Path confluenceFolder = inputFolderPath.resolve("confluence");
             new ConfluencePageDownloader(confluence).downloadPages(
-                    new ArrayList<>(seedUrls), confluenceFolder.toFile(), confluenceDepth, confluenceAttachments);
+                    new ArrayList<>(seedUrls), confluenceFolder.toFile(), confluenceDepth, confluenceAttachments, includeConfluenceComments);
         } catch (Exception e) {
             logger.warn("writeConfluencePagesFile failed (non-fatal): {}", e.getMessage());
         }
