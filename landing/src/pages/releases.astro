@@ -6,19 +6,35 @@ const title = 'DMTools releases';
 const description = 'History of DMTools CLI releases with changelogs and install commands.';
 const base = import.meta.env.BASE_URL;
 
+/** Changelog sections worth surfacing on the card — install/usage blocks are noise. */
+const CHANGELOG_SECTIONS = new Set([
+  'Features',
+  'Bug Fixes',
+  'Fixes',
+  'Dependencies',
+  'Maintenance',
+  'Refactoring',
+  'Tests',
+  'Documentation',
+  'Other Changes',
+  'Performance',
+]);
+
 /** Pull "### Section" headings and per-section item counts out of the notes. */
 function noteSections(notes: string): { label: string; count: number }[] {
   const sections: { label: string; count: number }[] = [];
   let current: { label: string; count: number } | null = null;
   for (const line of notes.split('\n')) {
+    // The boilerplate part of the release body ("What's Included", "Quick
+    // Start", …) starts after the What's Changed block — stop parsing there.
+    if (/^---\s*$/.test(line)) break;
+    if (/^##\s+/.test(line) && !/What's Changed/i.test(line)) break;
     const heading = line.match(/^###\s+(.+)$/);
     if (heading) {
       if (current && current.count > 0) sections.push(current);
       // Strip emoji prefixes like "🚀 Features" → "Features".
-      current = {
-        label: heading[1].replace(/^[^\p{L}]+/u, '').trim(),
-        count: 0,
-      };
+      const label = heading[1].replace(/^[^\p{L}]+/u, '').trim();
+      current = CHANGELOG_SECTIONS.has(label) ? { label, count: 0 } : null;
     } else if (current && /^\s*-\s+/.test(line)) {
       current.count += 1;
     }
