@@ -15,6 +15,8 @@ const title = `${release.version} — DMTools release notes`;
 const description = `Release notes, download links and checksums for DMTools ${release.version}.`;
 const notesHtml = micromark(release.releaseNotes || 'No release notes available.');
 const base = import.meta.env.BASE_URL;
+const githubUrl = `https://github.com/epam/dm.ai/releases/tag/${release.version}`;
+const checksums = Object.entries(release.checksums_sha256 || {});
 ---
 
 <Page title={title} description={description} canonicalPath={`releases/${release.version}/`}>
@@ -22,8 +24,15 @@ const base = import.meta.env.BASE_URL;
     <div class="shell">
       <a class="release-detail__back" href={`${base}releases/`}>← All releases</a>
 
-      <h1 class="release-detail__title">{release.version}</h1>
-      <p class="release-detail__date">Released on {release.date}</p>
+      <header class="release-detail__header">
+        <h1 class="release-detail__title">{release.version}</h1>
+        <div class="release-detail__meta">
+          <span class="release-detail__date">{release.date}</span>
+          <a class="release-detail__github" href={githubUrl} target="_blank" rel="noopener">
+            View on GitHub ↗
+          </a>
+        </div>
+      </header>
 
       <div class="release-detail__install">
         <h2 class="release-detail__section-title">Install this version</h2>
@@ -40,17 +49,17 @@ const base = import.meta.env.BASE_URL;
         <article class="release-detail__body" set:html={notesHtml} />
       </div>
 
-      {Object.keys(release.checksums_sha256).length > 0 && (
+      {checksums.length > 0 && (
         <div class="release-detail__checksums">
-          <h2 class="release-detail__section-title">Checksums</h2>
-          <dl class="release-detail__checksum-list">
-            {Object.entries(release.checksums_sha256).map(([file, hash]) => (
+          <h2 class="release-detail__section-title">SHA-256 checksums</h2>
+          <div class="release-detail__checksum-table">
+            {checksums.map(([file, hash]) => (
               <div class="release-detail__checksum">
-                <dt>{file}</dt>
-                <dd><code>{hash}</code></dd>
+                <span class="release-detail__checksum-file">{file}</span>
+                <code class="release-detail__checksum-hash">{hash}</code>
               </div>
             ))}
-          </dl>
+          </div>
         </div>
       )}
     </div>
@@ -59,88 +68,146 @@ const base = import.meta.env.BASE_URL;
 
 <style>
   .release-detail {
-    padding-block: var(--space-2xl) var(--space-3xl);
+    padding-block: var(--band-top) var(--band-bottom);
   }
 
   .release-detail__back {
     display: inline-block;
-    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
     text-decoration: none;
-    margin-bottom: var(--space-lg);
+    margin-bottom: 2rem;
+    transition: color 0.2s var(--ease);
   }
 
   .release-detail__back:hover {
-    color: var(--accent);
+    color: var(--sea);
+  }
+
+  .release-detail__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 1rem 2rem;
+    padding-bottom: 1.75rem;
+    border-bottom: 1px solid var(--hairline);
+    margin-bottom: 2.5rem;
   }
 
   .release-detail__title {
-    font-size: var(--font-3xl);
-    font-weight: 900;
-    letter-spacing: -0.03em;
-    margin-bottom: var(--space-xs);
+    font-family: var(--mono);
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .release-detail__meta {
+    display: flex;
+    align-items: baseline;
+    gap: 1.25rem;
   }
 
   .release-detail__date {
-    color: var(--text-muted);
-    margin-bottom: var(--space-xl);
+    color: var(--faint);
+    font-size: 0.875rem;
+  }
+
+  .release-detail__github {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--sea);
+    text-decoration: none;
+  }
+
+  .release-detail__github:hover {
+    text-decoration: underline;
   }
 
   .release-detail__section-title {
-    font-size: var(--font-xl);
-    font-weight: 700;
-    margin-top: var(--space-xl);
-    margin-bottom: var(--space-md);
+    font-size: 1rem;
+    font-weight: 900;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    color: var(--sea);
+    margin-top: clamp(2.5rem, 5vw, 4rem);
+    margin-bottom: 1.5rem;
   }
 
   .release-detail__install .cmd {
-    margin-bottom: var(--space-sm);
+    margin-bottom: 0.75rem;
   }
 
   .release-detail__body {
     max-width: 75ch;
+    line-height: 1.7;
+  }
+
+  .release-detail__body :global(h1) {
+    font-size: 1.6rem;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
   }
 
   .release-detail__body :global(h2) {
-    font-size: var(--font-xl);
+    font-size: 1.25rem;
     font-weight: 700;
-    margin-top: var(--space-lg);
-    margin-bottom: var(--space-sm);
+    margin: 2rem 0 0.75rem;
   }
 
   .release-detail__body :global(h3) {
-    font-size: var(--font-lg);
-    font-weight: 600;
-    margin-top: var(--space-md);
-    margin-bottom: var(--space-xs);
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 1.5rem 0 0.5rem;
   }
 
   .release-detail__body :global(p) {
-    margin-bottom: var(--space-sm);
+    margin-bottom: 0.75rem;
   }
 
   .release-detail__body :global(ul),
   .release-detail__body :global(ol) {
-    padding-left: var(--space-lg);
-    margin-bottom: var(--space-sm);
+    padding-left: 1.5rem;
+    margin-bottom: 0.75rem;
   }
 
   .release-detail__body :global(li) {
-    margin-bottom: var(--space-xs);
+    margin-bottom: 0.35rem;
+  }
+
+  .release-detail__body :global(a) {
+    color: var(--sea);
+    text-decoration: none;
+  }
+
+  .release-detail__body :global(a:hover) {
+    text-decoration: underline;
+  }
+
+  .release-detail__body :global(hr) {
+    border: 0;
+    border-top: 1px solid var(--hairline);
+    margin: 2rem 0;
   }
 
   .release-detail__body :global(code) {
-    font-family: var(--font-mono);
-    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--surface-alt);
     padding: 0.1em 0.35em;
     border-radius: 0.25em;
   }
 
   .release-detail__body :global(pre) {
-    background: var(--surface);
-    padding: var(--space-md);
-    border-radius: 0.5em;
+    background: var(--surface-alt);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.25rem;
     overflow-x: auto;
-    margin-bottom: var(--space-md);
+    margin-bottom: 1rem;
   }
 
   .release-detail__body :global(pre code) {
@@ -148,20 +215,46 @@ const base = import.meta.env.BASE_URL;
     padding: 0;
   }
 
-  .release-detail__checksum-list {
+  .release-detail__checksum-table {
     display: grid;
-    gap: var(--space-md);
+    gap: 0;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    overflow: hidden;
   }
 
-  .release-detail__checksum dt {
+  .release-detail__checksum {
+    display: grid;
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+    gap: 1rem;
+    padding: 0.65rem 1.25rem;
+    background: var(--surface);
+  }
+
+  .release-detail__checksum:nth-child(even) {
+    background: var(--surface-alt);
+  }
+
+  .release-detail__checksum-file {
+    font-family: var(--mono);
+    font-size: 0.8125rem;
     font-weight: 600;
-    margin-bottom: var(--space-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .release-detail__checksum dd {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--font-sm);
+  .release-detail__checksum-hash {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
     word-break: break-all;
+  }
+
+  @media (max-width: 640px) {
+    .release-detail__checksum {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.25rem;
+    }
   }
 </style>
