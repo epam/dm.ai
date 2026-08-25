@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-25T08:24:10.529287Z",
+  "generated_at": "2026-08-25T10:03:24.892738Z",
   "repository": "epam/dm.ai",
   "site_url": "https://dmtools.lab.epam.com",
   "latest": {
@@ -16,15 +16,222 @@
       "wrapper": "dmtools.sh",
       "checksums": "dmtools-checksums.sha256"
     },
-    "checksums_sha256": {},
+    "checksums_sha256": {
+      "dmtools-v1.7.245-all.jar": "f2dda759d85bb787c72d82bd731fbdf2ffc725cf283497a820173c4c81350456",
+      "install.sh": "fbf8e1100712859bded72c386da26e9a1680b202faacb10766e96259b6f5fbd9",
+      "install.bat": "c3b8e597878211433773d22dcc3989a82571ab2c17cea5ebab4821d76ff00f0f",
+      "install.ps1": "66191fef7c684fa902f8528e11ee9226347de394deeb3ec13817904e6932d5b0",
+      "dmtools.sh": "3febfcfe9e45224801c559cd9857691b2c2f27defd0f115b88c51c1d46104c34",
+      "dmtools-checksums.sha256": "f4beb6b003c1412f5fe919c1d7a6665362c7d80400af0d58df78ac025258b126"
+    },
     "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.245/",
-    "changelog_excerpt": ""
+    "changelog_excerpt": "# 🚀 DMTools Release v1.7.245\n\n## 📝 What's Changed\n\nFull diff: [v1.7.244...v1.7.245](https://github.com/epam/dm.ai/compare/v1.7.244...v1.7.245)\n\nNo conventional commits found between v1.7.244 and v1.7.245.\n\n---\n\nThis release includes the **DMTools CLI** and **Agent Skill** for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows.\n\n## 📦 What's Included\n\n### 🖥️ DMTools CLI\n- **Command-line interface** for DMTools operations\n- **Java-based** automation and integration tools\n- **Cross-platform install scripts** for easy setup (`install`, `install.sh`, `install.bat`, `install.ps1`)\n- **Wrapper script** (`dmtools.sh`)\n\n### 🤖 DMTools Agent Skill\n- **AI assistant skill** for MCP, AI agents, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems\n- **Complete DMtools documentation** (67+ MCP tools, JavaScript agent development, and configuration guides)\n- **Cross-platform support** (works with all major AI coding assistants)\n\n## 🎯 Quick Start\n\n### Install DMTools CLI\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex\n```\n\n### Install DMTools Agent Skill\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.245/skill-install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/download/v1.7.245/skill-install.ps1 | iex\n```\n\n**Focused skill install:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.245/skill-install.sh | bash -s -- --skills jira,github\n```\n\n**Focused packages:**\n- `dmtools-jira-skill.zip` → `/dmtools-jira`\n- `dmtools-github-skill.zip` → `/dmtools-github`\n- `dmtools-ado-skill.zip` → `/dmtools-ado`\n- `dmtools-testrail-skill.zip` → `/dmtools-testrail`\n\n**Manual In..."
   },
   "releases": [
     {
       "version": "v1.7.245",
       "date": "2026-08-25",
       "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.245/"
+    },
+    {
+      "version": "v1.7.244",
+      "date": "2026-08-24",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.244/"
+    },
+    {
+      "version": "v1.7.243",
+      "date": "2026-08-21",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.243/"
+    },
+    {
+      "version": "v1.7.242",
+      "date": "2026-08-18",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.242/"
+    },
+    {
+      "version": "v1.7.241",
+      "date": "2026-08-11",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.241/"
+    },
+    {
+      "version": "v1.7.240",
+      "date": "2026-08-07",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.240/"
+    },
+    {
+      "version": "v1.7.239",
+      "date": "2026-08-03",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.239/"
+    },
+    {
+      "version": "v1.7.238",
+      "date": "2026-07-30",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.238/"
+    },
+    {
+      "version": "v1.7.237",
+      "date": "2026-07-30",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.237/"
+    },
+    {
+      "version": "v1.7.236",
+      "date": "2026-07-29",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.236/"
+    },
+    {
+      "version": "v1.7.235",
+      "date": "2026-07-23",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.235/"
+    },
+    {
+      "version": "v1.7.234",
+      "date": "2026-07-23",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.234/"
+    },
+    {
+      "version": "v1.7.233",
+      "date": "2026-07-22",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.233/"
+    },
+    {
+      "version": "v1.7.232",
+      "date": "2026-07-22",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.232/"
+    },
+    {
+      "version": "v1.7.231",
+      "date": "2026-07-22",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.231/"
+    },
+    {
+      "version": "v1.7.230",
+      "date": "2026-07-21",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.230/"
+    },
+    {
+      "version": "v1.7.229",
+      "date": "2026-07-21",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.229/"
+    },
+    {
+      "version": "v1.7.228",
+      "date": "2026-07-16",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.228/"
+    },
+    {
+      "version": "v1.7.227",
+      "date": "2026-07-08",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.227/"
+    },
+    {
+      "version": "v1.7.226",
+      "date": "2026-07-08",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.226/"
+    },
+    {
+      "version": "v1.7.225",
+      "date": "2026-07-04",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.225/"
+    },
+    {
+      "version": "v1.7.224",
+      "date": "2026-07-04",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.224/"
+    },
+    {
+      "version": "v1.7.223",
+      "date": "2026-07-04",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.223/"
+    },
+    {
+      "version": "v1.7.222",
+      "date": "2026-07-03",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.222/"
+    },
+    {
+      "version": "v1.7.221",
+      "date": "2026-07-03",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.221/"
+    },
+    {
+      "version": "v1.7.220",
+      "date": "2026-07-01",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.220/"
+    },
+    {
+      "version": "v1.7.219",
+      "date": "2026-06-30",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.219/"
+    },
+    {
+      "version": "v1.7.218",
+      "date": "2026-06-29",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.218/"
+    },
+    {
+      "version": "v1.7.217",
+      "date": "2026-06-27",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.217/"
+    },
+    {
+      "version": "v1.7.216",
+      "date": "2026-06-26",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.216/"
+    },
+    {
+      "version": "v1.7.215",
+      "date": "2026-06-23",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.215/"
+    },
+    {
+      "version": "v1.7.214",
+      "date": "2026-06-22",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.214/"
+    },
+    {
+      "version": "v1.7.213",
+      "date": "2026-06-22",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.213/"
+    },
+    {
+      "version": "v1.7.212",
+      "date": "2026-06-16",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.212/"
+    },
+    {
+      "version": "v1.7.211",
+      "date": "2026-06-15",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.211/"
+    },
+    {
+      "version": "v1.7.210",
+      "date": "2026-06-15",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.210/"
+    },
+    {
+      "version": "v1.7.209",
+      "date": "2026-06-11",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.209/"
+    },
+    {
+      "version": "v1.7.208",
+      "date": "2026-06-10",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.208/"
+    },
+    {
+      "version": "v1.7.207",
+      "date": "2026-06-09",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.207/"
+    },
+    {
+      "version": "v1.7.206",
+      "date": "2026-06-08",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.206/"
+    },
+    {
+      "version": "v1.7.205",
+      "date": "2026-06-07",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.205/"
     }
   ]
 }

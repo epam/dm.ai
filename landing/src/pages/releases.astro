@@ -5,26 +5,65 @@ import releases from '../data/releases.json';
 const title = 'DMTools releases';
 const description = 'History of DMTools CLI releases with changelogs and install commands.';
 const base = import.meta.env.BASE_URL;
+
+/** Pull "### Section" headings and per-section item counts out of the notes. */
+function noteSections(notes: string): { label: string; count: number }[] {
+  const sections: { label: string; count: number }[] = [];
+  let current: { label: string; count: number } | null = null;
+  for (const line of notes.split('\n')) {
+    const heading = line.match(/^###\s+(.+)$/);
+    if (heading) {
+      if (current && current.count > 0) sections.push(current);
+      // Strip emoji prefixes like "🚀 Features" → "Features".
+      current = {
+        label: heading[1].replace(/^[^\p{L}]+/u, '').trim(),
+        count: 0,
+      };
+    } else if (current && /^\s*-\s+/.test(line)) {
+      current.count += 1;
+    }
+  }
+  if (current && current.count > 0) sections.push(current);
+  return sections.slice(0, 4);
+}
+
+const items = releases.map((release, index) => ({
+  ...release,
+  isLatest: index === 0,
+  sections: noteSections(release.releaseNotes || ''),
+}));
 ---
 
 <Page title={title} description={description} canonicalPath="releases/">
   <section class="band release-list">
     <div class="shell">
-      <h1 class="release-list__title">Releases</h1>
+      <p class="release-list__eyebrow">Releases</p>
+      <h1 class="release-list__title">Every DMTools CLI release, with changelog and install command.</h1>
       <p class="release-list__intro">
-        Every CLI release, its changelog and the exact install command.
+        Stable releases only — beta builds are on
+        <a href="https://github.com/epam/dm.ai/releases">GitHub</a>.
       </p>
 
-      {releases.length === 0 ? (
+      {items.length === 0 ? (
         <p class="release-list__empty">No releases published yet.</p>
       ) : (
         <ol class="release-list__items">
-          {releases.map((release) => (
-            <li class="release-list__item">
-              <a class="release-list__link" href={`${base}releases/${release.version}/`}>
-                {release.version}
+          {items.map((release) => (
+            <li>
+              <a class="release-card" href={`${base}releases/${release.version}/`}>
+                <span class="release-card__head">
+                  <span class="release-card__version">{release.version}</span>
+                  {release.isLatest && <span class="release-card__pill">Latest</span>}
+                  <span class="release-card__date">{release.date}</span>
+                </span>
+                {release.sections.length > 0 && (
+                  <span class="release-card__sections">
+                    {release.sections.map((section) => (
+                      <span class="release-card__section">{section.label} · {section.count}</span>
+                    ))}
+                  </span>
+                )}
               </a>
-              <span class="release-list__date">{release.date}</span>
             </li>
           ))}
         </ol>
@@ -35,57 +74,119 @@ const base = import.meta.env.BASE_URL;
 
 <style>
   .release-list {
-    padding-block: var(--space-3xl) var(--space-2xl);
+    padding-block: var(--band-top) var(--band-bottom);
+  }
+
+  .release-list__eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    color: var(--sea-ink);
+    margin-bottom: 1rem;
   }
 
   .release-list__title {
-    font-size: var(--font-3xl);
+    font-size: clamp(1.9rem, 3.4vw, 2.75rem);
     font-weight: 900;
     letter-spacing: -0.03em;
-    margin-bottom: var(--space-sm);
+    line-height: 1.08;
+    max-width: 22ch;
+    margin-bottom: 1.25rem;
   }
 
   .release-list__intro {
-    color: var(--text-muted);
-    font-size: var(--font-lg);
-    margin-bottom: var(--space-xl);
+    color: var(--muted);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    margin-bottom: clamp(2rem, 4vw, 3.5rem);
+  }
+
+  .release-list__intro a {
+    color: var(--sea);
+    text-decoration: none;
+  }
+
+  .release-list__intro a:hover {
+    text-decoration: underline;
   }
 
   .release-list__items {
     list-style: none;
     padding: 0;
+    margin: 0;
     display: grid;
-    gap: var(--space-md);
+    gap: 1rem;
   }
 
-  .release-list__item {
+  .release-card {
+    display: block;
+    padding: 1.35rem 1.5rem;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    text-decoration: none;
+    transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+  }
+
+  .release-card:hover {
+    border-color: var(--sea);
+    transform: translateY(-1px);
+  }
+
+  .release-card__head {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-md);
-    padding: var(--space-md) 0;
-    border-bottom: 1px solid var(--border);
+    gap: 0.85rem;
   }
 
-  .release-list__link {
-    font-family: var(--font-mono);
-    font-size: var(--font-lg);
+  .release-card__version {
+    font-family: var(--mono);
+    font-size: 1.125rem;
     font-weight: 600;
     color: var(--text);
-    text-decoration: none;
   }
 
-  .release-list__link:hover {
-    color: var(--accent);
+  .release-card:hover .release-card__version {
+    color: var(--sea);
   }
 
-  .release-list__date {
-    color: var(--text-muted);
-    font-size: var(--font-sm);
+  .release-card__pill {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--btn-ink);
+    background: var(--grad-btn);
+    border-radius: var(--radius-pill);
+    padding: 0.25rem 0.7rem;
+    align-self: center;
+  }
+
+  .release-card__date {
+    margin-left: auto;
+    color: var(--faint);
+    font-size: 0.8125rem;
     white-space: nowrap;
   }
 
+  .release-card__sections {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+
+  .release-card__section {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
+    padding: 0.2rem 0.7rem;
+  }
+
   .release-list__empty {
-    color: var(--text-muted);
+    color: var(--muted);
   }
 </style>
