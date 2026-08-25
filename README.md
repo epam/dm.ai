@@ -1,5 +1,7 @@
 # DMTools
 
+**Website:** [dmtools.lab.epam.com](https://dmtools.lab.epam.com) · **Releases & changelogs:** [dmtools.lab.epam.com/releases](https://dmtools.lab.epam.com/releases/) · **Docs:** [dmtools.lab.epam.com/docs](https://dmtools.lab.epam.com/docs/)
+
 Enterprise dark-factory orchestrator for automating delivery workflows across trackers, source control, documentation, design systems, AI providers, and CI/CD.
 
 > Quick install
@@ -10,6 +12,7 @@ Enterprise dark-factory orchestrator for automating delivery workflows across tr
 >
 > PowerShell: https://github.com/epam/dm.ai/releases/latest/download/install.ps1
 
+[![Website](https://img.shields.io/badge/website-dmtools.lab.epam.com-0088A0)](https://dmtools.lab.epam.com)
 [![Latest Release](https://img.shields.io/github/v/release/epam/dm.ai?label=latest%20version)](https://github.com/epam/dm.ai/releases/latest)
 [![Coverage](.github/badges/jacoco.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
 [![Branches](.github/badges/branches.svg)](https://github.com/epam/dm.ai/actions/workflows/coverage.yml)
