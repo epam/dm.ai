@@ -129,6 +129,7 @@ export const navLinks: NavLink[] = [
   { label: 'FAQ', href: '#faq' },
   // The rendered docs, not the folder listing on GitHub.
   { label: 'Docs', href: `${basePath}docs/` },
+  { label: 'Agents', href: `${basePath}agents/` },
   { label: 'Releases', href: `${basePath}releases/` },
 ];
 
@@ -145,6 +146,7 @@ export const footerColumns: FooterColumn[] = [
       { label: 'Configuration', href: `${basePath}docs/references/configuration/` },
       { label: 'MCP tools', href: `${basePath}docs/references/mcp-tools/` },
       { label: 'Jobs and agents', href: `${basePath}docs/references/jobs/` },
+      { label: 'Agents reference', href: `${basePath}agents/` },
     ],
   },
   {
