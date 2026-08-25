@@ -2,6 +2,8 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { basePath, lastModified } from '../data/content';
 import { hrefOf } from '../lib/docs';
+import { agentHrefOf } from '../lib/agentDocs';
+import releases from '../data/releases.json';
 
 /**
  * One page today. This grows a URL per reference document once the docs in
@@ -16,6 +18,17 @@ export const GET: APIRoute = async ({ site }) => {
   const docs = await getCollection('docs');
   const docUrls = [...new Set(docs.map((doc) => new URL(hrefOf(doc.id, basePath), site).href))]
     .sort();
+
+  const agents = await getCollection('agentDocs');
+  const agentUrls = [
+    new URL(`${basePath}agents/`, site).href,
+    ...agents.map((doc) => new URL(agentHrefOf(doc.id, basePath), site).href),
+  ].sort();
+
+  const releaseUrls = [
+    new URL(`${basePath}releases/`, site).href,
+    ...releases.map((r) => new URL(`${basePath}releases/${r.version}/`, site).href),
+  ].sort();
 
   // pricing.md is listed because nothing on the site links to it.
   const body = `<?xml version="1.0" encoding="UTF-8"?>
@@ -37,6 +50,18 @@ ${docUrls.map((loc) => `  <url>
     <lastmod>${lastModified}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>${loc.endsWith('/docs/') ? '0.9' : '0.7'}</priority>
+  </url>`).join('\n')}
+${agentUrls.map((loc) => `  <url>
+    <loc>${loc}</loc>
+    <lastmod>${lastModified}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>${loc.endsWith('/agents/') ? '0.8' : '0.6'}</priority>
+  </url>`).join('\n')}
+${releaseUrls.map((loc) => `  <url>
+    <loc>${loc}</loc>
+    <lastmod>${lastModified}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>${loc.endsWith('/releases/') ? '0.8' : '0.6'}</priority>
   </url>`).join('\n')}
 </urlset>
 `;

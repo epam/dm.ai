@@ -1,0 +1,29 @@
+---
+import { getCollection, render } from 'astro:content';
+import AgentDoc from '../../layouts/AgentDoc.astro';
+import { agentTitleOf, agentSummaryOf } from '../../lib/agentDocs';
+
+export async function getStaticPaths() {
+  const agents = await getCollection('agentDocs');
+  return agents.map((doc) => ({ params: { slug: doc.id }, props: { doc } }));
+}
+
+const { doc } = Astro.props;
+const { Content, headings } = await render(doc);
+
+const title = agentTitleOf(doc);
+const summary = agentSummaryOf(doc);
+
+const description = summary
+  || `${title} — a DMTools delivery agent: what it does, what it reads and writes, and every parameter it accepts.`;
+---
+
+<AgentDoc
+  title={title}
+  description={description}
+  id={doc.id}
+  headings={headings}
+  sourcePath={`${doc.id}.json`}
+>
+  <Content />
+</AgentDoc>

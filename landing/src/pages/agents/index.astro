@@ -1,0 +1,48 @@
+---
+import { getCollection } from 'astro:content';
+import AgentDoc from '../../layouts/AgentDoc.astro';
+import { agentHrefOf, agentTitleOf, agentSummaryOf, groupAgents } from '../../lib/agentDocs';
+
+const agents = await getCollection('agentDocs');
+const groups = groupAgents(agents);
+const total = agents.length;
+const summaries = new Map(agents.map((doc) => [doc.id, agentSummaryOf(doc)]));
+---
+
+<AgentDoc
+  title="Agents"
+  description={`Every DMTools delivery agent — what it does, what it reads and writes, and every parameter it accepts. ${total} agents, rendered from the agents repository.`}
+  id=""
+  headings={[]}
+>
+  <h1>DMTools agents</h1>
+  <p>
+    Every delivery agent in the DMTools fleet — story development, PR review and rework,
+    test automation, recovery and housekeeping. Each page lists what the agent reads and
+    writes, its side effects, and every parameter it accepts.
+  </p>
+  <p>
+    Rendered from the
+    <a href="https://github.com/epam/dm.ai/tree/main/agents" target="_blank" rel="noopener">agents repository</a>:
+    the human-written description and the auto-extracted reference stay in sync with the
+    agent configs by a coverage test.
+  </p>
+
+  <h2 id="all-agents">All {total} agents</h2>
+
+  <div class="docs__index" not-prose>
+    {groups.map((group) => (
+      <section class="docs__indexGroup">
+        <h3 class="docs__indexTitle">{group.label}</h3>
+        <ul class="docs__indexList">
+          {group.items.map((item) => (
+            <li>
+              <a class="docs__indexLink" href={agentHrefOf(item.id, import.meta.env.BASE_URL)}>{agentTitleOf(item)}</a>
+              {summaries.get(item.id) && <p class="docs__indexDesc">{summaries.get(item.id)}</p>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </div>
+</AgentDoc>
