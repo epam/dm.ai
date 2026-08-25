@@ -5,6 +5,7 @@ import { unified } from '@astrojs/markdown-remark';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { remarkDocLinks } from './src/lib/remark-doc-links.mjs';
+import { remarkAgentLinks } from './src/lib/remark-agent-links.mjs';
 import { rehypeDocIcons } from './src/lib/rehype-doc-icons.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -46,6 +47,9 @@ export default defineConfig({
     shikiConfig: { theme: 'github-dark-default', wrap: false },
     processor: unified({
       remarkPlugins: [
+        // Agent snapshot links must be rewritten before the generic doc-link
+        // resolver turns them into (broken) GitHub blob URLs.
+        remarkAgentLinks({ base: pathname }),
         remarkDocLinks({
           docsRoot: DOCS_ROOT,
           repoRoot: REPO_ROOT,

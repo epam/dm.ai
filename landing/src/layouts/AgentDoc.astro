@@ -10,7 +10,8 @@ import '../styles/a11y.css';
 
 import Analytics from '../components/Analytics.astro';
 import Brand from '../components/Brand.astro';
-import { meta, basePath, REPO, organization, lastModified } from '../data/content';
+import Mermaid from '../components/Mermaid.astro';
+import { meta, basePath, REPO, AGENTS_REPO, organization, lastModified } from '../data/content';
 import { agentHrefOf, agentTitleOf, groupAgents } from '../lib/agentDocs';
 import { getCollection } from 'astro:content';
 import type { MarkdownHeading } from 'astro';
@@ -187,13 +188,15 @@ const schema = {
         <slot />
       </article>
 
+      <Mermaid />
+
       {sourcePath && (
         <footer class="docs__foot">
-          <a class="textlink" href={`${REPO}/blob/main/agents/${sourcePath}`} target="_blank" rel="noopener">
+          <a class="textlink" href={`${AGENTS_REPO}/blob/main/${sourcePath}`} target="_blank" rel="noopener">
             View the agent config on GitHub →
           </a>
           <p class="docs__footNote">
-            Generated from <code>agents/{sourcePath}</code> and its human doc — edit either and the page follows.
+            Generated from <code>{sourcePath}</code> in the agents repository and its human doc — edit either and the page follows.
             Last updated <time datetime={lastModified}>{lastModified}</time>.
           </p>
         </footer>
@@ -217,7 +220,7 @@ const schema = {
   <footer class="docs__pageFoot">
     <div class="docs__barInner">
       <p>© 2026 EPAM Systems, Inc. DMTools is open source software, Apache 2.0.</p>
-      <a class="docs__barLink" href={`${REPO}/tree/main/agents`} target="_blank" rel="noopener">Agents source</a>
+      <a class="docs__barLink" href={AGENTS_REPO} target="_blank" rel="noopener">Agents source</a>
     </div>
   </footer>
 
