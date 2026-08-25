@@ -30,6 +30,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # The /agents pages render from the agents submodule.
+          submodules: true
 
       - name: Set up Node
         uses: actions/setup-node@v7

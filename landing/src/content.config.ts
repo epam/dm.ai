@@ -27,4 +27,17 @@ const docs = defineCollection({
   }),
 });
 
-export const collections = { docs };
+/**
+ * The agent reference, read from the agents submodule: one generated page per
+ * agent config (human description embedded, plus the auto-extracted actions,
+ * artifacts and parameters reference).
+ */
+const agentDocs = defineCollection({
+  loader: glob({
+    base: '../agents/docs/agents/generated',
+    pattern: ['*.md'],
+    generateId: ({ entry }) => entry.replace(/\.md$/i, '').toLowerCase(),
+  }),
+});
+
+export const collections = { docs, agentDocs };
