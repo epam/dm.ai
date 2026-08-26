@@ -20,9 +20,17 @@ export const GET: APIRoute = async ({ site }) => {
     .sort();
 
   const agents = await getCollection('agentDocs');
+  const snapshots = await getCollection('agentSnapshots');
+  const snapshotIds = new Set(snapshots.map((s) => s.id));
   const agentUrls = [
     new URL(`${basePath}agents/`, site).href,
-    ...agents.map((doc) => new URL(agentHrefOf(doc.id, basePath), site).href),
+    ...agents.flatMap((doc) => {
+      const urls = [new URL(agentHrefOf(doc.id, basePath), site).href];
+      if (snapshotIds.has(doc.id)) {
+        urls.push(new URL(`${basePath}agents/${doc.id}/prompt/`, site).href);
+      }
+      return urls;
+    }),
   ].sort();
 
   const releaseUrls = [

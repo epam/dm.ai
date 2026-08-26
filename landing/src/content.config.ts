@@ -40,4 +40,13 @@ const agentDocs = defineCollection({
   }),
 });
 
-export const collections = { docs, agentDocs };
+/** Full prompt/instruction snapshots, one per agent — rendered at /agents/<name>/prompt/. */
+const agentSnapshots = defineCollection({
+  loader: glob({
+    base: '../agents/snapshots',
+    pattern: ['*.md'],
+    generateId: ({ entry }) => entry.replace(/\.md$/i, '').toLowerCase(),
+  }),
+});
+
+export const collections = { docs, agentDocs, agentSnapshots };

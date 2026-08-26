@@ -1,0 +1,35 @@
+---
+import { getCollection, render } from 'astro:content';
+import AgentDoc from '../../../layouts/AgentDoc.astro';
+import { agentTitleOf } from '../../../lib/agentDocs';
+import { basePath } from '../../../data/content';
+
+export async function getStaticPaths() {
+  const agents = await getCollection('agentDocs');
+  const snapshots = await getCollection('agentSnapshots');
+  const byId = new Map(snapshots.map((s) => [s.id, s]));
+  // Only agents that actually have a snapshot get a prompt page.
+  return agents
+    .filter((doc) => byId.has(doc.id))
+    .map((doc) => ({ params: { slug: doc.id }, props: { doc, snapshot: byId.get(doc.id)! } }));
+}
+
+const { doc, snapshot } = Astro.props;
+const { Content, headings } = await render(snapshot);
+
+const title = `${agentTitleOf(doc)} — prompt`;
+const description = `The full prompt and instruction set the ${agentTitleOf(doc)} agent runs with — entry prompt, instructions and rules, rendered from the agents repository.`;
+---
+
+<AgentDoc
+  title={title}
+  description={description}
+  id={doc.id}
+  headings={headings}
+  sourcePath={`snapshots/${doc.id}.md`}
+>
+  <p>
+    <a href={`${basePath}agents/${doc.id}/`}>← {agentTitleOf(doc)} overview</a>
+  </p>
+  <Content />
+</AgentDoc>
