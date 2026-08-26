@@ -1492,6 +1492,79 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @MCPTool(
+            name = "github_submit_pr_review",
+            description = "Submit a formal GitHub pull request review (a native reviewer decision, distinct from labels/comments). event=APPROVE marks the PR as approved by this reviewer; event=REQUEST_CHANGES formally blocks the PR (visible as 'Changes requested', and enforced by branch protection rules requiring approvals) until a new review or github_dismiss_pr_review clears it; event=COMMENT leaves a review without approving or blocking. 'body' is required for REQUEST_CHANGES and COMMENT.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String submitPullRequestReview(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId,
+            @MCPParam(name = "event", description = "The review decision: APPROVE, REQUEST_CHANGES, or COMMENT", required = true, example = "REQUEST_CHANGES")
+            String event,
+            @MCPParam(name = "body", description = "The review's summary text. Required for REQUEST_CHANGES and COMMENT.", required = false, example = "Blocking issues found, please address before merge.")
+            String body) throws IOException {
+        String path = path(String.format("repos/%s/%s/pulls/%s/reviews", workspace, repository, pullRequestId));
+        GenericRequest postRequest = new GenericRequest(this, path);
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("event", event);
+        if (body != null && !body.trim().isEmpty()) {
+            requestBody.put("body", body);
+        }
+        postRequest.setBody(requestBody.toString());
+        return post(postRequest);
+    }
+
+    @MCPTool(
+            name = "github_list_pr_reviews",
+            description = "List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String listPullRequestReviews(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId) throws IOException {
+        String path = path(String.format("repos/%s/%s/pulls/%s/reviews", workspace, repository, pullRequestId));
+        GenericRequest getRequest = new GenericRequest(this, path);
+        String response = execute(getRequest);
+        return response != null ? response : "[]";
+    }
+
+    @MCPTool(
+            name = "github_dismiss_pr_review",
+            description = "Dismiss a previously submitted GitHub pull request review (e.g. clear a REQUEST_CHANGES decision once the issues have been fixed and a new review approves). Requires repository admin rights, or being listed as allowed to dismiss reviews, on protected branches.",
+            integration = "github",
+            category = "pull_requests"
+    )
+    public String dismissPullRequestReview(
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
+            String workspace,
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
+            String repository,
+            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
+            String pullRequestId,
+            @MCPParam(name = "reviewId", description = "The ID of the review to dismiss (from github_list_pr_reviews or the response of github_submit_pr_review)", required = true, example = "1234567")
+            String reviewId,
+            @MCPParam(name = "message", description = "The reason for dismissing this review", required = true, example = "Superseded — issues fixed and re-reviewed as APPROVE.")
+            String message) throws IOException {
+        String path = path(String.format("repos/%s/%s/pulls/%s/reviews/%s/dismissals", workspace, repository, pullRequestId, reviewId));
+        GenericRequest putRequest = new GenericRequest(this, path);
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("message", message);
+        requestBody.put("event", "DISMISS");
+        putRequest.setBody(requestBody.toString());
+        return put(putRequest);
+    }
+
+    @MCPTool(
             name = "github_merge_pr",
             description = "Merge a GitHub pull request. Supports merge, squash, and rebase merge methods.",
             integration = "github",
