@@ -5,17 +5,33 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  quality-gate:
-    name: Quality gate
+  # Quality gate, Java unit tests, and the agents JS suite used to be three
+  # separate jobs (= three concurrently-requested runners per PR push, all
+  # competing for the org's shared runner pool). They're merged into one job
+  # on one runner, run sequentially. This job's `name:` stays "Java unit
+  # tests" because that literal string is the required status check in the
+  # "Protect main" branch ruleset — do not rename it without also updating
+  # the ruleset.
+  #
+  # Quality-gate and agents-JS-tests steps keep `continue-on-error: true` so
+  # a failure there is visible (annotated, non-zero step, workflow summary)
+  # but does NOT fail this job / block merge — preserving the exact
+  # pre-merge semantics these two checks had as independent, non-required
+  # jobs before this consolidation.
+  test:
+    name: Java unit tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      checks: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with submodules
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Node.js (for jscpd)
         uses: actions/setup-node@v7
@@ -25,7 +41,9 @@ jobs:
       - name: Install jscpd
         run: npm install -g jscpd@5.0.11
 
-      - name: Check Java file sizes
+      - name: 'Quality gate: check Java file sizes'
+        id: quality_gate_file_sizes
+        continue-on-error: true
         run: |
           MAX_LINES=2800
           FAILED=0
@@ -49,7 +67,9 @@ jobs:
             exit 1
           fi
 
-      - name: Check code duplication against baseline
+      - name: 'Quality gate: check code duplication against baseline'
+        id: quality_gate_duplication
+        continue-on-error: true
         run: |
           jscpd --min-tokens 50 --min-lines 5 --reporters json --output /tmp/jscpd-check dmtools-core/src/main/java/ >/dev/null 2>&1 || true
           CURRENT=$(python3 -c '
@@ -71,17 +91,6 @@ jobs:
           echo "Current duplication: $CURRENT%"
           echo "Baseline: $BASELINE%"
           python3 -c "import sys; sys.exit(0 if float('$CURRENT') <= float('$BASELINE') else 1)"
-
-  test:
-    name: Java unit tests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
 
       - name: Set up Java 17
         uses: actions/setup-java@v5.7.0
@@ -110,33 +119,7 @@ jobs:
           reporter: java-junit
           fail-on-error: false
 
-  dmtools-agents-js-tests:
-    name: DMTools Agents JS unit tests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-
-    steps:
-      - name: Checkout repository with submodules
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v5.7.0
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
-
-      - name: Configure Git for tests
-        run: |
-          git config --global user.name "dm.ai"
-          git config --global user.email "dm.ai@epam.com"
-
-      - name: Build DMTools shadow JAR
+      - name: Build DMTools shadow JAR (for agents JS tests)
         run: ./gradlew :dmtools-core:shadowJar --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -148,14 +131,17 @@ jobs:
           echo "Installed DMTools CLI:"
           java -jar "$HOME/.dmtools/dmtools.jar" --version
 
-      - name: Run DMTools Agents JS unit tests
+      - name: 'Agents JS tests: run'
         id: agents_tests
+        continue-on-error: true
         run: |
           cd agents
           ../dmtools.sh run js/unit-tests/run_all.json > ../agents-test-output.json 2>&1 || true
           cat ../agents-test-output.json
 
-      - name: Validate agents test results
+      - name: 'Agents JS tests: validate results'
+        id: agents_tests_validate
+        continue-on-error: true
         run: |
           PASSED=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
           FAILED=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
@@ -167,4 +153,25 @@ jobs:
           if [ "$FAILED" -ne 0 ]; then
             echo "Some agents JS tests failed. See output above for details."
             exit 1
+          fi
+
+      - name: Summary of advisory (non-blocking) checks
+        if: always()
+        run: |
+          fail=0
+          check() {
+            local label="$1" outcome="$2"
+            if [ "$outcome" = "failure" ]; then
+              echo "❌ $label: FAILED (advisory — did not block this required check)" >> "$GITHUB_STEP_SUMMARY"
+              fail=1
+            else
+              echo "✅ $label: passed" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          check "Quality gate: file sizes" "${{ steps.quality_gate_file_sizes.outcome }}"
+          check "Quality gate: duplication" "${{ steps.quality_gate_duplication.outcome }}"
+          check "Agents JS tests: run" "${{ steps.agents_tests.outcome }}"
+          check "Agents JS tests: validate" "${{ steps.agents_tests_validate.outcome }}"
+          if [ "$fail" -ne 0 ]; then
+            echo "::warning::One or more advisory checks failed — see step summary for details."
           fi
