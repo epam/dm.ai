@@ -674,10 +674,22 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "deleteOrphans", description = "Whether to delete child pages not present in the directory tree", required = false, example = "false")
         Boolean deleteOrphans,
         @MCPParam(name = "attachmentsDir", description = "Optional directory containing referenced attachments. Defaults to the Markdown file's directory.", required = false, example = "/path/to/attachments")
-        String attachmentsDir
+        String attachmentsDir,
+        @MCPParam(name = "preserveInlineComments", description = "Whether to carry inline comment anchors over from the existing page bodies (default: true). When enabled, ac:inline-comment-marker elements are re-applied after the body is replaced, and [[ic:REF]]...[[/ic]] placeholders in the Markdown are converted into real markers.", required = false, example = "true")
+        Boolean preserveInlineComments
     ) throws IOException {
         MarkdownConfluenceSync sync = new MarkdownConfluenceSync(getAttachmentHelper(), new ConfluencePageOperations(this));
-        return sync.syncDirectory(new File(directory), parentId, space, deleteOrphans != null && deleteOrphans, attachmentsDir);
+        return sync.syncDirectory(new File(directory), parentId, space, deleteOrphans != null && deleteOrphans, attachmentsDir,
+                preserveInlineComments == null || preserveInlineComments);
+    }
+
+    /**
+     * Java-facing overload without {@code preserveInlineComments} (defaults to true).
+     * Kept for source compatibility with pre-existing callers.
+     */
+    public String syncMarkdownDirectory(String directory, String parentId, String space,
+                                        Boolean deleteOrphans, String attachmentsDir) throws IOException {
+        return syncMarkdownDirectory(directory, parentId, space, deleteOrphans, attachmentsDir, Boolean.TRUE);
     }
 
     private ConfluenceAttachmentHelper attachmentHelper;
