@@ -4,7 +4,7 @@ run-name: "SM Agent : ${{ github.event_name == 'schedule' && 'scheduled' || 'man
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:
