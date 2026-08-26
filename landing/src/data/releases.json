@@ -1,5 +1,22 @@
 [
   {
+    "version": "v1.7.249",
+    "tag": "v1.7.249",
+    "date": "2026-08-26",
+    "download_base": "https://github.com/epam/dm.ai/releases/download/v1.7.249",
+    "assets": {
+      "jar": "dmtools-v1.7.249-all.jar",
+      "install_sh": "install.sh",
+      "install_bat": "install.bat",
+      "install_ps1": "install.ps1",
+      "wrapper": "dmtools.sh",
+      "checksums": "dmtools-checksums.sha256"
+    },
+    "checksums_sha256": {},
+    "releaseNotes": "",
+    "releaseNotesUrl": "https://dmtools.lab.epam.com/releases/v1.7.249/"
+  },
+  {
     "version": "v1.7.245",
     "tag": "v1.7.245",
     "date": "2026-08-25",
