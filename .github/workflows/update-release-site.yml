@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update-site-data:
@@ -35,7 +36,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: main
-          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 1
 
       - name: Configure Git
@@ -53,43 +53,51 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare release notes (release event)
-        if: github.event_name == 'release'
+      - name: Prepare release notes
         env:
           RELEASE_BODY: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          VERSION="${{ steps.inputs.outputs.version }}"
           mkdir -p release-site-tmp
-          python3 -c "import os; open('release-site-tmp/release_notes.md','w',encoding='utf-8').write(os.environ['RELEASE_BODY'] or '')"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            python3 -c "import os; open('release-site-tmp/release_notes.md','w',encoding='utf-8').write(os.environ.get('RELEASE_BODY') or '')"
+          elif [ -n "${{ inputs.release_notes_file }}" ] && [ -f "${{ inputs.release_notes_file }}" ]; then
+            cp "${{ inputs.release_notes_file }}" release-site-tmp/release_notes.md
+          else
+            # Fall back to fetching the release body via the API so a manual
+            # workflow_dispatch (e.g. triggered right after `gh release create`)
+            # doesn't need any local files checked out.
+            gh release view "$VERSION" --repo "${{ github.repository }}" --json body -q .body > release-site-tmp/release_notes.md
+          fi
 
-      - name: Download checksums asset (release event)
-        if: github.event_name == 'release'
+      - name: Download checksums asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.inputs.outputs.version }}"
           mkdir -p release-site-tmp
-          gh release download "$VERSION" \
-            --repo "${{ github.repository }}" \
-            --pattern "dmtools-checksums.sha256" \
-            --dir release-site-tmp
+          if [ -n "${{ inputs.checksums_file }}" ] && [ -f "${{ inputs.checksums_file }}" ]; then
+            cp "${{ inputs.checksums_file }}" release-site-tmp/dmtools-checksums.sha256
+          else
+            gh release download "$VERSION" \
+              --repo "${{ github.repository }}" \
+              --pattern "dmtools-checksums.sha256" \
+              --dir release-site-tmp \
+              --clobber
+          fi
 
       - name: Generate site data
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            NOTES="release-site-tmp/release_notes.md"
-            SUMS="release-site-tmp/dmtools-checksums.sha256"
-          else
-            NOTES="${{ inputs.release_notes_file }}"
-            SUMS="${{ inputs.checksums_file }}"
-          fi
-
           python3 .github/scripts/generate-release-site-data.py \
             --version "${{ steps.inputs.outputs.version }}" \
-            --release-notes "$NOTES" \
-            --checksums "$SUMS" \
+            --release-notes "release-site-tmp/release_notes.md" \
+            --checksums "release-site-tmp/dmtools-checksums.sha256" \
             --site-url "https://dmtools.lab.epam.com"
 
       - name: Commit and push changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git add landing/public/cli-manifest.json landing/src/data/releases.json
           if git diff --cached --quiet; then
@@ -109,4 +117,10 @@ jobs:
             --body "Automated release site data update for ${VERSION}." \
             --base main \
             --head "$BRANCH" \
+            --repo "${{ github.repository }}" || true
+          # Enable auto-merge so this data-only PR lands as soon as the
+          # required "Java unit tests" check passes, without manual action.
+          gh pr merge "$BRANCH" \
+            --squash \
+            --auto \
             --repo "${{ github.repository }}" || true
