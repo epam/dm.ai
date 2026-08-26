@@ -231,6 +231,61 @@ class TeammateCliPromptsTest {
     }
 
     // -------------------------------------------------------------------------
+    // resolvePromptTrackerType — contentOutput.target = "confluence" routing
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testResolvePromptTrackerType_ConfluenceTargetSelectsConfluenceKey() {
+        Map<String, String[]> byTracker = Map.of(
+                "jira", new String[]{"jira1"},
+                "confluence", new String[]{"conf1"});
+        Map<String, Object> customParams = Map.of("contentOutput", Map.of("target", "confluence"));
+        String result = CliCommandBuilder.resolvePromptTrackerType(byTracker, "jira", customParams);
+        assertEquals("confluence", result);
+    }
+
+    @Test
+    void testResolvePromptTrackerType_KeepsTrackerWhenNoConfluenceKeyDeclared() {
+        Map<String, String[]> byTracker = Map.of("jira", new String[]{"jira1"});
+        Map<String, Object> customParams = Map.of("contentOutput", Map.of("target", "confluence"));
+        String result = CliCommandBuilder.resolvePromptTrackerType(byTracker, "jira", customParams);
+        assertEquals("jira", result);
+    }
+
+    @Test
+    void testResolvePromptTrackerType_KeepsTrackerForBothTarget() {
+        Map<String, String[]> byTracker = Map.of(
+                "jira", new String[]{"jira1"},
+                "confluence", new String[]{"conf1"});
+        Map<String, Object> customParams = Map.of("contentOutput", Map.of("target", "both"));
+        String result = CliCommandBuilder.resolvePromptTrackerType(byTracker, "jira", customParams);
+        assertEquals("jira", result);
+    }
+
+    @Test
+    void testResolvePromptTrackerType_KeepsTrackerWithoutContentOutput() {
+        Map<String, String[]> byTracker = Map.of(
+                "jira", new String[]{"jira1"},
+                "confluence", new String[]{"conf1"});
+        assertEquals("jira", CliCommandBuilder.resolvePromptTrackerType(byTracker, "jira", null));
+        assertEquals("jira", CliCommandBuilder.resolvePromptTrackerType(byTracker, "jira", Map.of()));
+        assertEquals("jira", CliCommandBuilder.resolvePromptTrackerType(byTracker, "jira",
+                Map.of("contentOutput", Map.of("target", "jira_field"))));
+    }
+
+    @Test
+    void testResolvePromptTrackerType_ConfluenceKeyDrivesPromptSelection() {
+        String[] base = {"base1"};
+        Map<String, String[]> byTracker = Map.of(
+                "jira", new String[]{"jira1"},
+                "confluence", new String[]{"conf1"});
+        String tracker = CliCommandBuilder.resolvePromptTrackerType(byTracker, "jira",
+                Map.of("contentOutput", Map.of("target", "confluence")));
+        String[] result = Teammate.resolveCliPrompts(base, byTracker, tracker);
+        assertArrayEquals(new String[]{"base1", "conf1"}, result);
+    }
+
+    // -------------------------------------------------------------------------
     // Structured cliPrompts (new format)
     // -------------------------------------------------------------------------
 

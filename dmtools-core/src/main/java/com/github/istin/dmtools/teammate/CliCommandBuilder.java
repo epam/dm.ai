@@ -32,6 +32,41 @@ public class CliCommandBuilder {
     }
 
     /**
+     * Pseudo-tracker key used in {@code cliPromptsByTracker} for prompts that produce
+     * Confluence (Markdown) output. Selected when the job routes its generated content
+     * exclusively to Confluence via {@code customParams.contentOutput.target = "confluence"},
+     * regardless of the configured {@code DEFAULT_TRACKER}.
+     */
+    public static final String TRACKER_CONFLUENCE = "confluence";
+
+    /**
+     * Resolves the tracker key used to select tracker-specific CLI prompts.
+     * <p>
+     * When {@code customParams.contentOutput.target} is {@code "confluence"} (content is
+     * published only to a Confluence page, not to the tracker field) and the agent declares
+     * {@code cliPromptsByTracker.confluence} prompts, the {@code "confluence"} key wins over
+     * the configured tracker so the CLI agent produces Markdown instead of tracker-specific
+     * markup. In all other cases (no contentOutput routing, target "both", or no confluence
+     * prompts declared) the configured tracker type is kept, preserving existing behavior.
+     */
+    public static String resolvePromptTrackerType(Map<String, String[]> cliPromptsByTracker,
+                                                  String trackerType,
+                                                  Map<String, Object> customParams) {
+        if (customParams != null) {
+            Object contentOutput = customParams.get("contentOutput");
+            if (contentOutput instanceof Map) {
+                Object target = ((Map<?, ?>) contentOutput).get("target");
+                if (TRACKER_CONFLUENCE.equals(target)
+                        && cliPromptsByTracker != null
+                        && cliPromptsByTracker.containsKey(TRACKER_CONFLUENCE)) {
+                    return TRACKER_CONFLUENCE;
+                }
+            }
+        }
+        return trackerType;
+    }
+
+    /**
      * Resolves the effective CLI prompts by merging base {@code cliPrompts} with tracker-specific
      * prompts from {@code cliPromptsByTracker} when a matching tracker type is configured.
      */
@@ -75,7 +110,25 @@ public class CliCommandBuilder {
     public String[] buildCommands(String[] cliCommands, String cliPrompt, String[] cliPrompts,
                                    Map<String, String[]> cliPromptsByTracker) throws IOException {
         return buildCommands(cliCommands, cliPrompt,
-                CliPromptsConfig.fromStrings(cliPrompts), cliPromptsByTracker);
+                CliPromptsConfig.fromStrings(cliPrompts), cliPromptsByTracker, null);
+    }
+
+    /**
+     * Builds the final CLI commands for execution.
+     *
+     * @param cliCommands       base CLI commands from the job config
+     * @param cliPrompt         single base CLI prompt (may be null)
+     * @param cliPrompts        array of CLI prompts (may be null)
+     * @param cliPromptsByTracker tracker-specific prompts (may be null)
+     * @param customParams      job custom params (may be null); used to detect
+     *                          {@code contentOutput.target = "confluence"} routing
+     * @return commands with aggregated prompt appended, or original commands if no prompt provided
+     */
+    public String[] buildCommands(String[] cliCommands, String cliPrompt, String[] cliPrompts,
+                                   Map<String, String[]> cliPromptsByTracker,
+                                   Map<String, Object> customParams) throws IOException {
+        return buildCommands(cliCommands, cliPrompt,
+                CliPromptsConfig.fromStrings(cliPrompts), cliPromptsByTracker, customParams);
     }
 
     /**
@@ -89,11 +142,29 @@ public class CliCommandBuilder {
      */
     public String[] buildCommands(String[] cliCommands, String cliPrompt, CliPromptsConfig cliPrompts,
                                    Map<String, String[]> cliPromptsByTracker) throws IOException {
+        return buildCommands(cliCommands, cliPrompt, cliPrompts, cliPromptsByTracker, null);
+    }
+
+    /**
+     * Builds the final CLI commands for execution using the structured prompt config.
+     *
+     * @param cliCommands       base CLI commands from the job config
+     * @param cliPrompt         single base CLI prompt (may be null)
+     * @param cliPrompts        structured CLI prompts config (may be null)
+     * @param cliPromptsByTracker tracker-specific prompts (may be null)
+     * @param customParams      job custom params (may be null); used to detect
+     *                          {@code contentOutput.target = "confluence"} routing
+     * @return commands with aggregated prompt appended, or original commands if no prompt provided
+     */
+    public String[] buildCommands(String[] cliCommands, String cliPrompt, CliPromptsConfig cliPrompts,
+                                   Map<String, String[]> cliPromptsByTracker,
+                                   Map<String, Object> customParams) throws IOException {
         if (cliCommands == null || cliCommands.length == 0) {
             return cliCommands;
         }
 
         String trackerType = configuration != null ? configuration.getDefaultTracker() : null;
+        trackerType = resolvePromptTrackerType(cliPromptsByTracker, trackerType, customParams);
         String[] flatPrompts = cliPrompts != null ? cliPrompts.toStringArray() : null;
         String[] mergedCliPrompts = resolveCliPrompts(flatPrompts, cliPromptsByTracker, trackerType);
         if (mergedCliPrompts != flatPrompts) {
