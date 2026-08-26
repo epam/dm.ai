@@ -46,6 +46,7 @@ public class MarkdownConfluenceSync {
 
     private final ConfluenceAttachmentHelper attachmentHelper;
     private final PageOperations pageOps;
+    private boolean preserveInlineComments = true;
 
     /**
      * Callbacks for Confluence page CRUD operations.
@@ -74,6 +75,23 @@ public class MarkdownConfluenceSync {
      */
     public String syncDirectory(File rootDir, String parentId, String space,
                                 boolean deleteOrphans, String attachmentsDir) throws IOException {
+        return syncDirectory(rootDir, parentId, space, deleteOrphans, attachmentsDir, true);
+    }
+
+    /**
+     * Synchronizes a local directory tree to a Confluence page subtree.
+     *
+     * @param preserveInlineComments when true (default via the 5-arg overload), inline
+     *   comment anchors ({@code ac:inline-comment-marker}) from each existing page body are
+     *   carried over into the freshly converted body before it replaces the old one, and
+     *   {@code [[ic:REF]]...[[/ic]]} placeholders in the Markdown are converted into real
+     *   markers — otherwise every sync would orphan the page's inline comments
+     *   (they remain in the API but disappear from the page UI).
+     */
+    public String syncDirectory(File rootDir, String parentId, String space,
+                                boolean deleteOrphans, String attachmentsDir,
+                                boolean preserveInlineComments) throws IOException {
+        this.preserveInlineComments = preserveInlineComments;
         DirNode root = buildDirTree(rootDir);
         Map<String, String> pathToTitle = buildPathToTitleMap(rootDir, root);
         Set<String> expectedTitles = new HashSet<>(pathToTitle.values());
@@ -143,6 +161,7 @@ public class MarkdownConfluenceSync {
 
         List<String> uploadedAttachmentNames = uploadDirectoryAttachments(node, referencedAttachmentNames);
         folderBody = appendAttachmentLinks(folderBody, uploadedAttachmentNames);
+        folderBody = preserveAnchors(node.contentId, folderBody);
         pageOps.updatePage(node.contentId, node.title,
                 node.parentId != null ? node.parentId : node.contentId,
                 folderBody, space, "");
@@ -166,6 +185,7 @@ public class MarkdownConfluenceSync {
                 }
             }
             storage = appendAttachmentLinks(storage, extraAttachmentNames);
+            storage = preserveAnchors(page.getId(), storage);
             pageOps.updatePage(page.getId(), fileNode.title, node.contentId, storage, space, "");
             fileNode.contentId = page.getId();
         }
@@ -363,6 +383,32 @@ public class MarkdownConfluenceSync {
         }
         File parent = markdownFile.getParentFile();
         return parent != null ? parent : new File(".");
+    }
+
+    /**
+     * Carries inline comment anchors over from the page's current body into the freshly
+     * converted one. Non-fatal: any failure (page just created, lookup error) leaves the
+     * new body unchanged.
+     */
+    private String preserveAnchors(String contentId, String newStorageBody) {
+        if (!preserveInlineComments || contentId == null || newStorageBody == null) {
+            return newStorageBody;
+        }
+        try {
+            Content existing = pageOps.getContent(contentId);
+            String oldBody = (existing != null && existing.getStorage() != null)
+                    ? existing.getStorage().getValue() : null;
+            String restored = InlineCommentAnchorPreserver.restoreAnchors(
+                    newStorageBody, InlineCommentAnchorPreserver.extractMarkers(oldBody));
+            if (!restored.equals(newStorageBody)) {
+                logger.info("Preserved inline comment anchors on page {}", contentId);
+            }
+            return restored;
+        } catch (Exception e) {
+            logger.warn("Failed to preserve inline comment anchors for page {} — continuing without preservation: {}",
+                    contentId, e.getMessage());
+            return newStorageBody;
+        }
     }
 
     private static String appendAttachmentLinks(String storageBody, List<String> attachmentNames) {
