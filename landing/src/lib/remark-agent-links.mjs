@@ -19,7 +19,10 @@ export function remarkAgentLinks({ base, agentsRepoUrl }) {
       if (node.type === 'link' && typeof node.url === 'string') {
         const snapshot = node.url.match(snapshotRe);
         if (snapshot) {
-          node.url = `${base}agents/${snapshot[1]}/prompt/`;
+          // Agent doc/snapshot ids are lowercased by the content collection
+          // loaders (see content.config.ts), so the site route is always
+          // lowercase regardless of the original file's casing.
+          node.url = `${base}agents/${snapshot[1].toLowerCase()}/prompt/`;
         } else {
           const repoPath = node.url.match(agentsRepoRe);
           if (repoPath) {
