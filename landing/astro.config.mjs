@@ -12,6 +12,7 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(here, '..');
 const DOCS_ROOT = resolve(REPO_ROOT, 'dmtools-ai-docs');
 const REPO_URL = 'https://github.com/epam/dm.ai';
+const AGENTS_REPO_URL = 'https://github.com/IstiN/dmtools-agents';
 
 /**
  * The published address differs per repository — a fork publishes to its own
@@ -49,7 +50,7 @@ export default defineConfig({
       remarkPlugins: [
         // Agent snapshot links must be rewritten before the generic doc-link
         // resolver turns them into (broken) GitHub blob URLs.
-        remarkAgentLinks({ base: pathname }),
+        remarkAgentLinks({ base: pathname, agentsRepoUrl: AGENTS_REPO_URL }),
         remarkDocLinks({
           docsRoot: DOCS_ROOT,
           repoRoot: REPO_ROOT,
