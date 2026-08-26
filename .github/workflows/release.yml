@@ -361,6 +361,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Download CLI Package
@@ -600,7 +601,22 @@ jobs:
             skill/skill-install.sh
             skill/skill-install.ps1
             skill/skill-checksums.sha256
-      
+
+      - name: Trigger release site data update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Explicitly dispatch update-release-site.yml instead of relying on
+          # the "release: published" event to cascade: GitHub does not run
+          # downstream workflows for events produced by a token whose identity
+          # collapses to the default GITHUB_TOKEN (github-actions[bot]), which
+          # is what happens here even when GITHUB_TOKEN is overridden with
+          # PAT_TOKEN above. A direct `gh workflow run` call is a normal API
+          # request and always works with actions: write permission.
+          gh workflow run update-release-site.yml \
+            --repo "${{ github.repository }}" \
+            -f version="v${{ needs.version-and-tag.outputs.version }}"
+
       - name: Summary
         run: |
           echo "## 🎉 Unified Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
