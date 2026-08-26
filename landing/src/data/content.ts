@@ -17,6 +17,8 @@ export const asset = (path: string): string => basePath + path.replace(/^\//, ''
 
 export const REPO = 'https://github.com/epam/dm.ai';
 export const DOCS = `${REPO}/tree/main/dmtools-ai-docs`;
+/** The agents submodule is its own repository — config/snapshot links go there, not into REPO. */
+export const AGENTS_REPO = 'https://github.com/IstiN/dmtools-agents';
 const RELEASE = `${REPO}/releases/latest/download`;
 
 /**

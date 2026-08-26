@@ -12,6 +12,7 @@
   "dependencies": {
     "@astrojs/react": "^6.0.2",
     "lucide-react": "^0.460.0",
+    "mermaid": "^11.17.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

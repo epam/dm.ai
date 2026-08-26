@@ -1,0 +1,67 @@
+---
+/**
+ * Client-side Mermaid rendering for Markdown code blocks.
+ *
+ * Astro/Shiki renders ```mermaid blocks as <pre class="astro-code" …><code>.
+ * This component finds them after load and replaces each with the rendered
+ * SVG. The theme follows the page's data-theme (night default).
+ *
+ * Included by layouts that render Markdown which may contain diagrams
+ * (agents reference pages, prompt snapshots).
+ */
+---
+
+<script>
+  import mermaid from 'mermaid';
+
+  const isNight = () => document.documentElement.dataset.theme !== 'snow';
+
+  async function renderMermaidBlocks() {
+    // Shiki marks fences via data-language on the <pre>, not a class on <code>.
+    const blocks = document.querySelectorAll('pre[data-language="mermaid"]');
+    if (!blocks.length) return;
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: isNight() ? 'dark' : 'neutral',
+      securityLevel: 'strict',
+    });
+
+    let i = 0;
+    for (const pre of blocks) {
+      if (pre.dataset.mermaidDone) continue;
+      pre.dataset.mermaidDone = 'true';
+      const code = pre.querySelector('code');
+      const source = (code || pre).textContent || '';
+      try {
+        const { svg } = await mermaid.render(`mermaid-${i++}`, source);
+        const holder = document.createElement('figure');
+        holder.className = 'mermaid-figure';
+        holder.innerHTML = svg;
+        pre.replaceWith(holder);
+      } catch (e) {
+        // Leave the source block visible when a diagram fails to parse.
+        console.warn('mermaid render failed:', e);
+      }
+    }
+  }
+
+  renderMermaidBlocks();
+</script>
+
+<style>
+  .mermaid-figure {
+    margin: 1.25rem 0;
+    padding: 1.25rem;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow-x: auto;
+    text-align: center;
+  }
+
+  .mermaid-figure svg {
+    max-width: 100%;
+    height: auto;
+  }
+</style>
