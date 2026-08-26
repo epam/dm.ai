@@ -598,7 +598,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             cliCommands,
                             expertParams.getCliPrompt(),
                             expertParams.getCliPrompts(),
-                            expertParams.getCliPromptsByTracker());
+                            expertParams.getCliPromptsByTracker(),
+                            expertParams.getCustomParams());
 
                     // Create input context for CLI commands via shared builder
                     TicketInputContextBuilder contextBuilder = new TicketInputContextBuilder(instructionProcessor);

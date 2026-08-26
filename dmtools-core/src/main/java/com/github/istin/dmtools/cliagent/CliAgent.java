@@ -185,7 +185,8 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     params.getCliCommands(),
                     params.getCliPrompt(),
                     params.getCliPromptsConfig(),
-                    params.getCliPromptsByTracker());
+                    params.getCliPromptsByTracker(),
+                    params.getCustomParams());
 
             ensureOutputFolder(workingDirectory);
 
