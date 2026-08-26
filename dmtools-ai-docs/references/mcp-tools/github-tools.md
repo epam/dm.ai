@@ -1,6 +1,6 @@
 # GITHUB MCP Tools
 
-**Total Tools**: 35
+**Total Tools**: 38
 
 ## Quick Reference
 
@@ -32,6 +32,7 @@ const result = github_list_prs_filtered(...);
 | `github_create_commit_status` | Create a commit status (the colored dot in PR checks). Use state=pending when AI analysis starts, success/failure/error when complete. The 'context' field acts as the status name and must be unique per check. | `workspace` (string, **required**)<br>`context` (string, optional)<br>`description` (string, optional)<br>`state` (string, **required**)<br>`repository` (string, **required**)<br>`sha` (string, **required**)<br>`targetUrl` (string, optional) |
 | `github_delete_pr_comment` | Delete a comment on a GitHub pull request or issue by its comment ID. | `repository` (string, **required**)<br>`commentId` (string, **required**)<br>`workspace` (string, **required**) |
 | `github_delete_release_asset` | Delete a GitHub release asset by its asset ID. Use github_list_release_assets to find asset IDs. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`assetId` (string, **required**) |
+| `github_dismiss_pr_review` | Dismiss a previously submitted GitHub pull request review (e.g. clear a REQUEST_CHANGES decision once the issues have been fixed and a new review approves). Requires repository admin rights, or being listed as allowed to dismiss reviews, on protected branches. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewId` (string, **required**)<br>`message` (string, **required**) |
 | `github_get_commit_check_runs` | Get all check runs (CI/CD status checks) for a commit SHA in a GitHub repository. Returns details about each check including status, conclusion, and output. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`commitSha` (string, **required**) |
 | `github_get_commits_from_branches` | Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually. | `branchNameRegex` (string, **required**)<br>`workspace` (string, **required**)<br>`repository` (string, **required**)<br>`since` (string, optional) |
 | `github_get_job_logs` | Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job. | `repository` (string, **required**)<br>`jobId` (string, **required**)<br>`workspace` (string, **required**) |
@@ -48,6 +49,7 @@ const result = github_list_prs_filtered(...);
 | `github_get_workflow_run_logs` | Download and extract complete logs for all jobs in a GitHub Actions workflow run. Returns full untruncated log content from the ZIP archive GitHub provides. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`runId` (string, **required**) |
 | `github_list_prs` | List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`state` (string, **required**) |
 | `github_list_prs_filtered` | List pull requests in a GitHub repository filtered by a regex pattern on the PR title. Fetches all PRs matching the given state and returns only those whose title matches the regex. Useful for large repos to narrow down results without loading entire history. | `titleRegex` (string, **required**)<br>`workspace` (string, **required**)<br>`state` (string, **required**)<br>`repository` (string, **required**) |
+| `github_list_pr_reviews` | List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `github_list_release_assets` | List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url. | `repository` (string, **required**)<br>`releaseId` (string, **required**)<br>`workspace` (string, **required**) |
 | `github_list_workflow_runs` | List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file. Use status='failure' to get all failed runs. | `workspace` (string, **required**)<br>`perPage` (number, optional)<br>`created` (string, optional)<br>`page` (number, optional)<br>`repository` (string, **required**)<br>`workflowId` (string, optional)<br>`status` (string, optional) |
 | `github_merge_pr` | Merge a GitHub pull request. Supports merge, squash, and rebase merge methods. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`commitMessage` (string, optional)<br>`mergeMethod` (string, optional)<br>`commitTitle` (string, optional) |
@@ -55,6 +57,7 @@ const result = github_list_prs_filtered(...);
 | `github_reply_to_pr_thread` | Reply to an existing inline code review comment thread in a GitHub pull request. Use the comment ID of the root comment (or any comment) in the thread as inReplyToId. | `workspace` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`inReplyToId` (string, **required**) |
 | `github_repository_dispatch` | Trigger a GitHub repository dispatch event. Workflows listening to 'on: repository_dispatch' with the matching event_type will be triggered. | `workspace` (string, **required**)<br>`eventType` (string, **required**)<br>`clientPayload` (string, optional)<br>`repository` (string, **required**) |
 | `github_resolve_pr_thread` | Resolve a review thread in a GitHub pull request. Requires the thread's GraphQL node ID, which can be obtained from github_get_pr_review_threads (the 'id' field of each thread). | `threadId` (string, **required**) |
+| `github_submit_pr_review` | Submit a formal GitHub pull request review (a native reviewer decision, distinct from labels/comments). event=APPROVE marks the PR as approved by this reviewer; event=REQUEST_CHANGES formally blocks the PR (visible as 'Changes requested', and enforced by branch protection rules requiring approvals) until a new review or github_dismiss_pr_review clears it; event=COMMENT leaves a review without approving or blocking. 'body' is required for REQUEST_CHANGES and COMMENT. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`event` (string, **required**)<br>`body` (string, optional) |
 | `github_test` | Test GitHub connectivity by fetching the current user's profile | None |
 | `github_trigger_workflow` | Trigger a specific GitHub Actions workflow by filename (workflow dispatch). The workflow must have 'on: workflow_dispatch' configured. | `workspace` (string, **required**)<br>`ref` (string, optional)<br>`repository` (string, **required**)<br>`workflowId` (string, **required**)<br>`inputs` (string, optional) |
 | `github_update_check_run` | Update an existing GitHub Check Run — set it to completed with success/failure conclusion, update summary and detailed text. Call this after github_create_check_run to finalize the check. | `conclusion` (string, optional)<br>`summary` (string, optional)<br>`workspace` (string, **required**)<br>`checkRunId` (string, **required**)<br>`text` (string, optional)<br>`repository` (string, **required**)<br>`title` (string, optional)<br>`status` (string, **required**) |
@@ -341,6 +344,44 @@ dmtools github_delete_release_asset "value" "value"
 ```javascript
 // In JavaScript agent
 const result = github_delete_release_asset("repository", "workspace");
+```
+
+---
+
+### `github_dismiss_pr_review`
+
+Dismiss a previously submitted GitHub pull request review (e.g. clear a REQUEST_CHANGES decision once the issues have been fixed and a new review approves). Requires repository admin rights, or being listed as allowed to dismiss reviews, on protected branches.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`reviewId`** (string) 🔴 Required
+  - The ID of the review to dismiss (from github_list_pr_reviews or the response of github_submit_pr_review)
+  - Example: `1234567`
+
+- **`message`** (string) 🔴 Required
+  - The reason for dismissing this review
+  - Example: `Superseded — issues fixed and re-reviewed as APPROVE.`
+
+**Example:**
+```bash
+dmtools github_dismiss_pr_review "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_dismiss_pr_review("workspace", "repository");
 ```
 
 ---
@@ -845,6 +886,36 @@ const result = github_list_prs_filtered("titleRegex", "workspace");
 
 ---
 
+### `github_list_pr_reviews`
+
+List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+**Example:**
+```bash
+dmtools github_list_pr_reviews "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_list_pr_reviews("workspace", "repository");
+```
+
+---
+
 ### `github_list_release_assets`
 
 List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url.
@@ -1087,6 +1158,44 @@ dmtools github_resolve_pr_thread "value"
 ```javascript
 // In JavaScript agent
 const result = github_resolve_pr_thread("threadId");
+```
+
+---
+
+### `github_submit_pr_review`
+
+Submit a formal GitHub pull request review (a native reviewer decision, distinct from labels/comments). event=APPROVE marks the PR as approved by this reviewer; event=REQUEST_CHANGES formally blocks the PR (visible as 'Changes requested', and enforced by branch protection rules requiring approvals) until a new review or github_dismiss_pr_review clears it; event=COMMENT leaves a review without approving or blocking. 'body' is required for REQUEST_CHANGES and COMMENT.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request number
+  - Example: `74`
+
+- **`event`** (string) 🔴 Required
+  - The review decision: APPROVE, REQUEST_CHANGES, or COMMENT
+  - Example: `REQUEST_CHANGES`
+
+- **`body`** (string) ⚪ Optional
+  - The review's summary text. Required for REQUEST_CHANGES and COMMENT.
+  - Example: `Blocking issues found, please address before merge.`
+
+**Example:**
+```bash
+dmtools github_submit_pr_review "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_submit_pr_review("workspace", "repository");
 ```
 
 ---
