@@ -5,6 +5,11 @@ name: Coverage
 # It is intentionally a standalone workflow (not part of build-and-test.yml) so it
 # runs in parallel with the release pipeline and can never block a release.
 #
+# Runs only on push to main / manual dispatch — NOT on pull_request. The badge is
+# only ever published from main, so re-running the full test suite again on every
+# PR push (duplicating unit-tests.yml's "Java unit tests" job) bought nothing but
+# an extra ~4 min runner slot per PR event.
+#
 # The badge SVGs land on `main` via a small auto-merge PR: the "Protect main"
 # ruleset requires the "Java unit tests" status check, so a direct push from a
 # workflow is rejected. The PR gets the required check from unit-tests.yml,
@@ -19,8 +24,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    types: [opened, synchronize, reopened]
   # Manual trigger, e.g. to refresh the badge after an auto-merged PR (squash
   # merges created by the GitHub Actions bot do not fire the push trigger).
   workflow_dispatch:
