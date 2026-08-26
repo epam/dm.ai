@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Regression coverage for {@link MarkdownConfluenceSync#syncDirectory}, in particular two
@@ -38,6 +40,7 @@ public class MarkdownConfluenceSyncTest {
     private static class FakePageOperations implements MarkdownConfluenceSync.PageOperations {
         final Map<String, String> parentsById = new HashMap<>();
         final Map<String, String> titlesById = new HashMap<>();
+        final Map<String, String> bodiesById = new HashMap<>();
         final List<String[]> updateCalls = new ArrayList<>(); // {contentId, title, parentId, body}
         int nextId = 1000;
 
@@ -71,16 +74,24 @@ public class MarkdownConfluenceSyncTest {
         public Content getContent(String contentId) throws IOException {
             String parentId = parentsById.get(contentId);
             String title = titlesById.containsKey(contentId) ? titlesById.get(contentId) : "existing";
-            return contentFor(contentId, title, parentId);
+            return contentFor(contentId, title, parentId, bodiesById.get(contentId));
         }
 
         private Content contentFor(String id, String title, String parentId) {
+            return contentFor(id, title, parentId, null);
+        }
+
+        private Content contentFor(String id, String title, String parentId, String body) {
             JSONObject json = new JSONObject();
             json.put("id", id);
             json.put("title", title);
             if (parentId != null) {
                 JSONObject ancestor = new JSONObject().put("id", parentId);
                 json.put("ancestors", new org.json.JSONArray().put(ancestor));
+            }
+            if (body != null) {
+                json.put("body", new JSONObject().put("storage",
+                        new JSONObject().put("value", body).put("representation", "storage")));
             }
             return new Content(json);
         }
@@ -225,6 +236,100 @@ public class MarkdownConfluenceSyncTest {
             String[] childUpdate = pageOps.updateCalls.get(1);
             assertEquals("child page's parent must be the root page (555), not the grandparent",
                     "555", childUpdate[2]);
+        } finally {
+            FileUtils.deleteDirectory(tempDir);
+        }
+    }
+
+    private static final String REF_A = "a40ec14d-0d73-4f55-9a69-7026900b6623";
+
+    @Test
+    public void syncDirectory_preservesInlineCommentMarker_fromExistingBody() throws IOException {
+        File tempDir = newTempDir();
+        try {
+            // New content still contains the anchored text but no marker (Markdown never
+            // carries one) — the sync must re-wrap the text with the original marker.
+            FileUtils.write(new File(tempDir, "index.md"), "# Landing\n\n- Item one\n- Item two\n", "UTF-8");
+
+            FakePageOperations pageOps = new FakePageOperations();
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
+            pageOps.bodiesById.put("555",
+                    "<ul><li><ac:inline-comment-marker ac:ref=\"" + REF_A + "\">Item one</ac:inline-comment-marker></li><li>Item two</li></ul>");
+
+            MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null);
+
+            String updatedBody = pageOps.updateCalls.get(0)[3];
+            assertTrue("marker with original ref must be re-applied around the anchor text",
+                    updatedBody.contains("<ac:inline-comment-marker ac:ref=\"" + REF_A + "\">Item one</ac:inline-comment-marker>"));
+        } finally {
+            FileUtils.deleteDirectory(tempDir);
+        }
+    }
+
+    @Test
+    public void syncDirectory_convertsPlaceholderInMarkdown_intoRealMarker() throws IOException {
+        File tempDir = newTempDir();
+        try {
+            FileUtils.write(new File(tempDir, "index.md"),
+                    "# Landing\n\n- [[ic:" + REF_A + "]]Item one[[/ic]]\n", "UTF-8");
+
+            FakePageOperations pageOps = new FakePageOperations();
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
+            pageOps.bodiesById.put("555", "<p>old body without markers</p>");
+
+            MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null);
+
+            String updatedBody = pageOps.updateCalls.get(0)[3];
+            assertTrue("placeholder must become a real marker",
+                    updatedBody.contains("<ac:inline-comment-marker ac:ref=\"" + REF_A + "\">Item one</ac:inline-comment-marker>"));
+            assertFalse("no leftover placeholder tags", updatedBody.contains("[[ic:"));
+            assertFalse("no leftover placeholder close tags", updatedBody.contains("[[/ic]]"));
+        } finally {
+            FileUtils.deleteDirectory(tempDir);
+        }
+    }
+
+    @Test
+    public void syncDirectory_preserveInlineCommentsFalse_leavesPlaceholdersUntouched() throws IOException {
+        File tempDir = newTempDir();
+        try {
+            FileUtils.write(new File(tempDir, "index.md"),
+                    "# Landing\n\n- [[ic:" + REF_A + "]]Item one[[/ic]]\n", "UTF-8");
+
+            FakePageOperations pageOps = new FakePageOperations();
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
+            pageOps.bodiesById.put("555",
+                    "<ul><li><ac:inline-comment-marker ac:ref=\"" + REF_A + "\">Item one</ac:inline-comment-marker></li></ul>");
+
+            MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null, false);
+
+            String updatedBody = pageOps.updateCalls.get(0)[3];
+            assertFalse("marker must NOT be re-applied when preservation is disabled",
+                    updatedBody.contains("ac:inline-comment-marker"));
+        } finally {
+            FileUtils.deleteDirectory(tempDir);
+        }
+    }
+
+    @Test
+    public void syncDirectory_anchorTextGone_doesNotFailSync() throws IOException {
+        File tempDir = newTempDir();
+        try {
+            FileUtils.write(new File(tempDir, "index.md"), "# Landing\n\n- completely new content\n", "UTF-8");
+
+            FakePageOperations pageOps = new FakePageOperations();
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
+            pageOps.bodiesById.put("555",
+                    "<ul><li><ac:inline-comment-marker ac:ref=\"" + REF_A + "\">Item one</ac:inline-comment-marker></li></ul>");
+
+            MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null);
+
+            String updatedBody = pageOps.updateCalls.get(0)[3];
+            assertFalse(updatedBody.contains("ac:inline-comment-marker"));
         } finally {
             FileUtils.deleteDirectory(tempDir);
         }
