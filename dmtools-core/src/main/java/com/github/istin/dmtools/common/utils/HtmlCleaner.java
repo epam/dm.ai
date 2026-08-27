@@ -114,6 +114,39 @@ public class HtmlCleaner {
         return doc.body().html();
     }
 
+    /**
+     * Same normalization as {@link #convertLinksUrlsToConfluenceFormat(String)} but safe
+     * for bodies containing Confluence storage-format macros: Jsoup's HTML parsing
+     * destroys CDATA sections inside {@code <ac:plain-text-body>} elements (emptying
+     * code/diagram macros), so macro elements are masked out before parsing and
+     * restored afterwards, untouched.
+     */
+    public static String convertLinksUrlsToConfluenceFormatPreservingCdata(String body) {
+        java.util.List<String> masked = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("<ac:structured-macro\\b[\\s\\S]*?</ac:structured-macro>")
+                .matcher(body);
+        StringBuffer sb = new StringBuffer();
+        int i = 0;
+        while (m.find()) {
+            String token = "DMTOOLS_MACRO_" + i + "_TOKEN";
+            masked.add(m.group(0));
+            m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(
+                    "<span data-dmtools-macro=\"" + token + "\"></span>"));
+            i++;
+        }
+        m.appendTail(sb);
+        if (masked.isEmpty()) {
+            return convertLinksUrlsToConfluenceFormat(body);
+        }
+        String parsed = convertLinksUrlsToConfluenceFormat(sb.toString());
+        for (int j = 0; j < masked.size(); j++) {
+            parsed = parsed.replace("<span data-dmtools-macro=\"DMTOOLS_MACRO_" + j + "_TOKEN\"></span>",
+                    java.util.regex.Matcher.quoteReplacement(masked.get(j)));
+        }
+        return parsed;
+    }
+
     private static final Set<String> SIZE_RELATED_ATTRIBUTES = Set.of(
             "width", "height", "min-width", "min-height", "max-width", "max-height",
             "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
