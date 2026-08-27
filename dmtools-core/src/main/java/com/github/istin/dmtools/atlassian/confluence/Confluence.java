@@ -559,7 +559,16 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "historyComment", description = "Comment to add to the page history", required = true, example = "Updated content based on user feedback")
         String historyComment
     ) throws IOException {
-        body = prepareBodyForConfluence(body);
+        // Bodies produced by MarkdownToConfluenceStorage contain ac:structured-macro
+        // elements with CDATA plain-text bodies (code blocks, diagrams). The generic
+        // prepareBodyForConfluence re-parses the whole body through Jsoup's HTML parser,
+        // which destroys those CDATA sections — use the macro-preserving variant for
+        // storage-format bodies.
+        if (body.contains("<ac:structured-macro")) {
+            body = prepareStorageBodyForConfluence(body);
+        } else {
+            body = prepareBodyForConfluence(body);
+        }
         logger.info("{} {} {} {} {} {}", contentId, title, parentId, body, space, historyComment);
         Content oldContent = new Content(new GenericRequest(this, path("content/" + contentId + "?expand=version")).execute());
 
@@ -600,6 +609,20 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         body = body.replaceAll("<br>", "\n").replaceAll("<br/>", "\n");
         body = HtmlCleaner.convertLinksUrlsToConfluenceFormat(body);
         return body;
+    }
+
+    /**
+     * Variant of {@link #prepareBodyForConfluence(String)} for bodies that already
+     * contain Confluence storage-format macros ({@code ac:structured-macro} with
+     * CDATA plain-text bodies — e.g. produced by {@link MarkdownToConfluenceStorage}).
+     * The generic variant re-parses the whole body through Jsoup's HTML parser, which
+     * destroys CDATA sections and empties code/diagram macros; this variant performs
+     * the same normalizations without re-serializing macro elements.
+     */
+    @NotNull
+    public static String prepareStorageBodyForConfluence(String body) {
+        String prepared = body.replaceAll("<br>", "\n").replaceAll("<br/>", "\n");
+        return HtmlCleaner.convertLinksUrlsToConfluenceFormatPreservingCdata(prepared);
     }
 
     public static String macroHTML(String body) {
