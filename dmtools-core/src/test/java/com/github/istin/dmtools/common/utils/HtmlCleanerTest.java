@@ -27,4 +27,40 @@ public class HtmlCleanerTest extends TestCase {
         assertEquals(expectedOutput, convertedOutput);
     }
 
+
+    public void testPreservingCdata_keepsCodeMacroContent() {
+        String body = "<h1>Title</h1>"
+                + "<ac:structured-macro ac:name=\"code\" ac:schema-version=\"1\">"
+                + "<ac:parameter ac:name=\"language\">mermaid</ac:parameter>"
+                + "<ac:plain-text-body><![CDATA[flowchart TD\nA --> B]]></ac:plain-text-body>"
+                + "</ac:structured-macro>"
+                + "<p>after <a href=\"https://example.com\">link</a></p>";
+        String result = HtmlCleaner.convertLinksUrlsToConfluenceFormatPreservingCdata(body);
+        assertTrue("CDATA content must survive",
+                result.contains("<![CDATA[flowchart TD\nA --> B]]>"));
+        assertTrue("link must still be processed",
+                result.contains("https://example.com"));
+        assertFalse("masking token must not leak", result.contains("DMTOOLS_MACRO_"));
+    }
+
+    public void testPreservingCdata_noMacros_behavesLikePlainConversion() {
+        String body = "<p>hello <a href=\"https://example.com\">link</a></p>";
+        String result = HtmlCleaner.convertLinksUrlsToConfluenceFormatPreservingCdata(body);
+        assertTrue(result.contains("hello"));
+        assertTrue(result.contains("https://example.com"));
+    }
+
+    public void testPlainConversion_destroysCdata_regressionDocumentation() {
+        // Documents WHY the preserving variant exists: Jsoup HTML parsing converts the
+        // CDATA section into a bogus comment, so the macro body is no longer a CDATA
+        // section — Confluence then stores the macro as EMPTY.
+        String body = "<ac:structured-macro ac:name=\"code\">"
+                + "<ac:plain-text-body><![CDATA[graph TD\nA --> B]]></ac:plain-text-body>"
+                + "</ac:structured-macro>";
+        String result = HtmlCleaner.convertLinksUrlsToConfluenceFormat(body);
+        assertFalse("real CDATA markers must be gone after plain conversion",
+                result.contains("<![CDATA["));
+        assertTrue("text degrades into a bogus comment",
+                result.contains("<!--[CDATA["));
+    }
 }
