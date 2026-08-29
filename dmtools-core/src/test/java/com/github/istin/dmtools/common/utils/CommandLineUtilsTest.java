@@ -3,11 +3,15 @@
 
 package com.github.istin.dmtools.common.utils;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -505,6 +509,49 @@ class CommandLineUtilsTest {
             assertFalse(Files.exists(logDir), "No log file should be written when DMTOOLS_CLI_LOG_DIR is empty");
         } finally {
             PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    void testRunCommand_CliLogFilterMatch_Log4jInfoEnabled_StillTeesLinesBeyondCap() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            return;
+        }
+        // Reproduces the ai-teammate `dmtools --debug run ...` setup: log4j INFO logging is
+        // enabled (as in --debug mode) AND DMTOOLS_CLI_LOG_FILTER matches the command. Lines
+        // beyond maxLinesToLog are dropped by log4j (see the cap above), so the CLI-log-filter
+        // tee must still print them to System.out — checking only logger.isInfoEnabled()
+        // (which is level-wide, not per-line) previously caused the tee to also skip them,
+        // silently losing all output past the cap even though the filter matched.
+        var loggerContext = (org.apache.logging.log4j.core.LoggerContext) org.apache.logging.log4j.LogManager.getContext(false);
+        Configurator.setLevel(CommandLineUtils.class.getName(), Level.INFO);
+        try {
+            Path testFile = tempDir.resolve("beyond-cap.txt");
+            Files.writeString(testFile, "L1\nL2\nL3\nL4\nL5\n");
+
+            PropertyReader.setOverrides(Map.of("DMTOOLS_CLI_LOG_FILTER", "beyond-cap"));
+
+            PrintStream originalOut = System.out;
+            ByteArrayOutputStream capturedOut = new ByteArrayOutputStream();
+            System.setOut(new PrintStream(capturedOut));
+            try {
+                // maxLinesToLog=2 guarantees L3/L4/L5 are beyond the cap and thus never
+                // reach the console via logger.info(line).
+                CommandLineUtils.runCommand(
+                        "cat " + testFile.toAbsolutePath(), null, Map.of(), null, false, null, 2);
+            } finally {
+                System.setOut(originalOut);
+            }
+
+            String consoleOutput = capturedOut.toString();
+            assertTrue(consoleOutput.contains("L4") && consoleOutput.contains("L5"),
+                    "Lines beyond maxLinesToLog must still be teed to console when "
+                            + "DMTOOLS_CLI_LOG_FILTER matches, even with log4j INFO enabled");
+        } finally {
+            PropertyReader.clearOverrides();
+            Configurator.setLevel(CommandLineUtils.class.getName(), (Level) null);
+            loggerContext.updateLoggers();
         }
     }
 }
