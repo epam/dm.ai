@@ -41,6 +41,20 @@ public final class InlineCommentAnchorPreserver {
     private static final Pattern LEFTOVER_OPEN_PATTERN = Pattern.compile("\\[\\[ic:[0-9a-fA-F-]{36}\\]\\]");
     private static final Pattern STRIP_TAGS_PATTERN = Pattern.compile("<[^>]+>");
 
+    /** Minimum anchor-text length eligible for the fallback text-match. */
+    static final int MIN_FALLBACK_ANCHOR_LENGTH = 4;
+
+    /** Markdown structural prefixes stripped before the fallback text-match:
+     *  heading hashes, list bullets/numbers, blockquotes (possibly chained). */
+    private static final Pattern MD_STRUCTURAL_PREFIX = Pattern.compile(
+            "^(?:#{1,6}\\s+|[-*+]\\s+|\\d+[.)]\\s+|>\\s*)+");
+
+    /** A paragraph consisting solely of a marker whose content starts with heading
+     *  hashes — the signature of a placeholder that wrapped a Markdown heading prefix
+     *  and broke heading conversion. */
+    private static final Pattern BROKEN_HEADING_PATTERN = Pattern.compile(
+            "<p>\\s*(<ac:inline-comment-marker\\s+ac:ref=\"[^\"]+\"[^>]*>)\\s*(#{1,6})\\s+([\\s\\S]*?)(</ac:inline-comment-marker>)\\s*</p>");
+
     private InlineCommentAnchorPreserver() {
     }
 
@@ -98,6 +112,11 @@ public final class InlineCommentAnchorPreserver {
         pm.appendTail(sb);
         body = sb.toString();
 
+        // 1b. Repair headings broken by placeholders that wrapped the heading's Markdown
+        //     prefix: a paragraph consisting solely of a marker whose content starts with
+        //     heading hashes never became an <hN> during conversion — restore it.
+        body = repairMarkerWrappedHeadings(body);
+
         // 2. Text-match fallback for anchors from the old body that didn't make it over.
         for (Anchor anchor : oldAnchors == null ? List.<Anchor>of() : oldAnchors) {
             if (anchor == null || anchor.ref == null || anchor.text == null) {
@@ -106,9 +125,15 @@ public final class InlineCommentAnchorPreserver {
             if (body.contains("ac:ref=\"" + anchor.ref + "\"")) {
                 continue;
             }
-            body = wrapFirstOccurrence(body, escapeXml(anchor.text), anchor.ref);
+            String normalized = stripMarkdownStructuralPrefix(anchor.text);
+            // Too short selections (e.g. a stray "h2." from legacy markup) match random
+            // fragments — better to leave the comment orphaned than mis-anchor it.
+            if (normalized.length() < MIN_FALLBACK_ANCHOR_LENGTH) {
+                continue;
+            }
+            body = wrapFirstOccurrence(body, escapeXml(normalized), anchor.ref);
             if (!body.contains("ac:ref=\"" + anchor.ref + "\"")) {
-                body = wrapFirstOccurrence(body, anchor.text, anchor.ref);
+                body = wrapFirstOccurrence(body, normalized, anchor.ref);
             }
         }
 
@@ -118,17 +143,78 @@ public final class InlineCommentAnchorPreserver {
         return body;
     }
 
+    /**
+     * Converts a paragraph that consists solely of an inline comment marker whose content
+     * starts with Markdown heading hashes into a proper heading element. This happens when
+     * a {@code [[ic:REF]]...[[/ic]]} placeholder wrapped the heading's {@code ## } prefix in
+     * the agent's Markdown — the line no longer parsed as a heading.
+     */
+    static String repairMarkerWrappedHeadings(String storageBody) {
+        if (storageBody == null || storageBody.indexOf("inline-comment-marker") == -1) {
+            return storageBody;
+        }
+        Matcher m = BROKEN_HEADING_PATTERN.matcher(storageBody);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            int level = m.group(2).length();
+            String replacement = "<h" + level + ">" + m.group(1) + m.group(3) + m.group(4) + "</h" + level + ">";
+            m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
+     * Removes Markdown structural prefixes (heading hashes, list markers, blockquotes)
+     * from an anchor text so the fallback text-match works against the rendered content.
+     */
+    static String stripMarkdownStructuralPrefix(String text) {
+        if (text == null) {
+            return "";
+        }
+        return MD_STRUCTURAL_PREFIX.matcher(text).replaceFirst("").trim();
+    }
+
     private static String wrapFirstOccurrence(String body, String needle, String ref) {
         if (needle == null || needle.isEmpty()) {
             return body;
         }
-        int idx = body.indexOf(needle);
-        if (idx == -1) {
-            return body;
+        int from = 0;
+        while (true) {
+            int idx = body.indexOf(needle, from);
+            if (idx == -1) {
+                return body;
+            }
+            if (isWordBoundary(body, idx, needle.length())) {
+                return body.substring(0, idx)
+                        + "<ac:inline-comment-marker ac:ref=\"" + ref + "\">" + needle + "</ac:inline-comment-marker>"
+                        + body.substring(idx + needle.length());
+            }
+            from = idx + 1;
         }
-        return body.substring(0, idx)
-                + "<ac:inline-comment-marker ac:ref=\"" + ref + "\">" + needle + "</ac:inline-comment-marker>"
-                + body.substring(idx + needle.length());
+    }
+
+    /**
+     * Word-boundary check for the fallback text-match: the characters surrounding the
+     * candidate occurrence must not be letters or digits (or a tag-open that would place
+     * the match inside an attribute). Prevents short selections from latching onto
+     * unrelated longer words or markup.
+     */
+    private static boolean isWordBoundary(String body, int idx, int length) {
+        if (idx > 0) {
+            char before = body.charAt(idx - 1);
+            if (Character.isLetterOrDigit(before) || before == '"' || before == '<' || before == '=') {
+                return false;
+            }
+        }
+        int after = idx + length;
+        if (after < body.length()) {
+            char c = body.charAt(after);
+            if (Character.isLetterOrDigit(c)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String escapeXml(String text) {
