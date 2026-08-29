@@ -282,9 +282,17 @@ public class CommandLineUtils {
                 // session); otherwise once DMTOOLS_JS_LOG_TOOL_CALLS is not set, only the first
                 // maxLinesToLog lines are logged and a single truncation notice follows.
                 boolean withinCap = maxLinesToLog < 0 || loggedLineCount < maxLinesToLog;
+                // Whether THIS line was actually emitted to console by log4j — used below to
+                // decide whether the CLI-log-filter tee also needs to print it, so lines beyond
+                // maxLinesToLog (which log4j silently drops) are not lost when log4j itself is
+                // enabled (e.g. --debug mode). Checking logger.isInfoEnabled() alone is not
+                // enough here: it reflects the logger's configured level, not whether THIS
+                // specific line passed the maxLinesToLog cap above.
+                boolean loggedByLog4jThisLine = false;
                 if (verboseCommandOutputLogging || withinCap) {
                     logger.info(line);
                     loggedLineCount++;
+                    loggedByLog4jThisLine = logger.isInfoEnabled();
                 } else if (!truncationNoticeLogged) {
                     if (fullOutputLogFile != null) {
                         logger.info("... output truncated after {} line(s); full output will be saved to {} ...",
@@ -298,10 +306,12 @@ public class CommandLineUtils {
                 output.append(line).append(System.lineSeparator());
 
                 // Tee matched CLI output to console and file independently of log4j.
-                // Console output is skipped when log4j is already printing, to avoid
-                // duplicate lines in --debug mode.
+                // Console output is skipped only when log4j ALREADY printed this exact line
+                // (see loggedByLog4jThisLine above), to avoid duplicate lines in --debug mode —
+                // but lines beyond maxLinesToLog (which log4j drops even in --debug mode) must
+                // still reach the console when DMTOOLS_CLI_LOG_FILTER matched.
                 if (shouldTeeCliOutput) {
-                    if (!logger.isInfoEnabled()) {
+                    if (!loggedByLog4jThisLine) {
                         System.out.println(line);
                     }
                     if (teeWriter != null) {
