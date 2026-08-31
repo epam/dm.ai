@@ -125,9 +125,9 @@ dependencies {
     api 'io.swagger.core.v3:swagger-annotations:2.2.54'
 
     // AWS SDK for Bedrock IAM authentication
-    api 'software.amazon.awssdk:auth:2.54.1'
-    api 'software.amazon.awssdk:aws-core:2.54.1'
-    api 'software.amazon.awssdk:regions:2.54.1'
+    api 'software.amazon.awssdk:auth:2.54.6'
+    api 'software.amazon.awssdk:aws-core:2.54.6'
+    api 'software.amazon.awssdk:regions:2.54.6'
 
     // Google Cloud authentication for Vertex AI
     api 'com.google.auth:google-auth-library-oauth2-http:1.51.0'
