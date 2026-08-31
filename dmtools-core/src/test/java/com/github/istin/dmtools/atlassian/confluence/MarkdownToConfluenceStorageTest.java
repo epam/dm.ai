@@ -70,6 +70,20 @@ public class MarkdownToConfluenceStorageTest {
     }
 
     @Test
+    public void testFencedCodeBlockPreservesNewlines() {
+        // Regression test: code.text() (jsoup) collapses newlines into spaces, which
+        // corrupts multi-line content such as Mermaid diagrams (statements run
+        // together without a separator, producing invalid diagram syntax).
+        String md = "```mermaid\nflowchart TD\n    A --> B\n    B --> C\n```";
+        String storage = MarkdownToConfluenceStorage.toStorage(md);
+
+        assertTrue("Should contain CDATA body with preserved newlines",
+                storage.contains("<![CDATA[flowchart TD\n    A --> B\n    B --> C]]>"));
+        assertFalse("Should not collapse newlines into spaces",
+                storage.contains("flowchart TD A --> B B --> C"));
+    }
+
+    @Test
     public void testInlineCode() {
         String md = "Use `System.out.println` for output.";
         String storage = MarkdownToConfluenceStorage.toStorage(md);
