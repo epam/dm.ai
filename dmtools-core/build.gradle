@@ -130,7 +130,7 @@ dependencies {
     api 'software.amazon.awssdk:regions:2.54.1'
 
     // Google Cloud authentication for Vertex AI
-    api 'com.google.auth:google-auth-library-oauth2-http:1.50.0'
+    api 'com.google.auth:google-auth-library-oauth2-http:1.51.0'
     api 'com.google.cloud:google-cloud-core:2.73.0'
 
     // TOON format serialization for LLM-optimized CLI output (2.0.0 uses Jackson 3.1.3+)
