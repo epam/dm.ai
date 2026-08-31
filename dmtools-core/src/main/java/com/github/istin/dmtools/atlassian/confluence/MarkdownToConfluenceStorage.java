@@ -189,7 +189,12 @@ public final class MarkdownToConfluenceStorage {
                     language = classAttr;
                 }
             }
-            String codeText = code != null ? code.text() : pre.text();
+            // Use wholeText() instead of text(): text() normalizes/collapses whitespace
+            // (including newlines), which corrupts multi-line code/diagram content
+            // (e.g. Mermaid diagrams become invalid because statement-separating
+            // newlines are collapsed into single spaces). wholeText() preserves the
+            // original line breaks exactly as authored.
+            String codeText = (code != null ? code.wholeText() : pre.wholeText()).strip();
 
             StringBuilder macro = new StringBuilder();
             macro.append("<ac:structured-macro ac:name=\"code\" ac:schema-version=\"1\">");
