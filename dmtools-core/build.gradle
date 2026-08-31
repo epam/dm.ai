@@ -72,7 +72,7 @@ dependencies {
 
     // Document processing
     //TODO check tests, some markdown tests are failing if update to 1.21.2
-    api 'org.jsoup:jsoup:1.23.1'
+    api 'org.jsoup:jsoup:1.23.2'
     // Apache POI dependencies - ensure consistent versions
     api "org.apache.poi:poi:${versions.poi}"
     api "org.apache.poi:poi-ooxml:${versions.poi}"
@@ -130,7 +130,7 @@ dependencies {
     api 'software.amazon.awssdk:regions:2.54.6'
 
     // Google Cloud authentication for Vertex AI
-    api 'com.google.auth:google-auth-library-oauth2-http:1.50.0'
+    api 'com.google.auth:google-auth-library-oauth2-http:1.51.0'
     api 'com.google.cloud:google-cloud-core:2.74.0'
 
     // TOON format serialization for LLM-optimized CLI output (2.0.0 uses Jackson 3.1.3+)
