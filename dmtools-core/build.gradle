@@ -66,7 +66,7 @@ dependencies {
     // Apache Commons
     api 'commons-io:commons-io:2.22.0'
     //api 'commons-codec:commons-codec:1.17.1'
-    api 'org.freemarker:freemarker:2.3.34'
+    api 'org.freemarker:freemarker:2.3.35'
     //api 'org.apache.commons:commons-collections4:4.4'
     //api 'org.apache.commons:commons-jexl3:3.4.0'
 
