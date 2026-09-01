@@ -305,7 +305,17 @@ public final class MarkdownToConfluenceStorage {
                 String spaceKey = null;
                 String title = href;
                 int colonIndex = href.indexOf(':');
-                if (colonIndex > 0) {
+                // Only treat "SPACE:Title" as an explicit cross-space reference when
+                // the colon is immediately followed by the title with no space, e.g.
+                // "PROJ:Home". A same-space page whose OWN title merely starts with a
+                // single word + colon (e.g. "Recommendations: Some Feature") always has
+                // a space after the colon (normal punctuation), so requiring no space
+                // there disambiguates the two cases without breaking the legacy
+                // "SPACE:Title" syntax (see testPageLinkWithSpaceKey). Without this
+                // check, such a page title got misparsed as a link into a
+                // non-existent "Recommendations" space, producing a broken Confluence
+                // link that rendered as a "create this page" prompt instead.
+                if (colonIndex > 0 && colonIndex + 1 < href.length() && !Character.isWhitespace(href.charAt(colonIndex + 1))) {
                     String candidateSpace = href.substring(0, colonIndex);
                     if (isValidSpaceKey(candidateSpace)) {
                         spaceKey = candidateSpace;
