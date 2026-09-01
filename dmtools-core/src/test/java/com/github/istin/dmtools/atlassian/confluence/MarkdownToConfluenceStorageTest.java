@@ -144,6 +144,22 @@ public class MarkdownToConfluenceStorageTest {
     }
 
     @Test
+    public void testPageLinkToSameSpaceTitleStartingWithWordAndColonIsNotMisparsedAsSpaceKey() {
+        // Regression test: a same-space page whose own title is "SingleWord: Rest of title"
+        // (e.g. "Recommendations: Primary Biospecimen QC at Accessioning") must NOT be
+        // misinterpreted as an explicit "SPACE:Title" cross-space reference just because
+        // the first word before the colon happens to look like a valid space key. Real
+        // page titles always have a space after the colon, unlike the legacy "PROJ:Home"
+        // syntax (no space after colon) — see testPageLinkWithSpaceKey.
+        String md = "See [Recommendations](Recommendations: Primary Biospecimen QC at Accessioning).";
+        String storage = MarkdownToConfluenceStorage.toStorage(md);
+
+        assertFalse("Should not contain a bogus ri:space-key", storage.contains("ri:space-key="));
+        assertTrue("Should keep the whole string as the content title",
+                storage.contains("ri:content-title=\"Recommendations: Primary Biospecimen QC at Accessioning\""));
+    }
+
+    @Test
     public void testLocalImageConvertedToAttachment() {
         String md = "![architecture.png](architecture.png)";
         String storage = MarkdownToConfluenceStorage.toStorage(md);
