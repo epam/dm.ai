@@ -1,6 +1,6 @@
 # GITHUB MCP Tools
 
-**Total Tools**: 38
+**Total Tools**: 39
 
 ## Quick Reference
 
@@ -35,6 +35,7 @@ const result = github_list_prs_filtered(...);
 | `github_dismiss_pr_review` | Dismiss a previously submitted GitHub pull request review (e.g. clear a REQUEST_CHANGES decision once the issues have been fixed and a new review approves). Requires repository admin rights, or being listed as allowed to dismiss reviews, on protected branches. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewId` (string, **required**)<br>`message` (string, **required**) |
 | `github_get_commit_check_runs` | Get all check runs (CI/CD status checks) for a commit SHA in a GitHub repository. Returns details about each check including status, conclusion, and output. | `repository` (string, **required**)<br>`workspace` (string, **required**)<br>`commitSha` (string, **required**) |
 | `github_get_commits_from_branches` | Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually. | `branchNameRegex` (string, **required**)<br>`workspace` (string, **required**)<br>`repository` (string, **required**)<br>`since` (string, optional) |
+| `github_get_issue` | Get details of a GitHub issue including title, description, state, author, labels, assignees, and comments count. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`issueNumber` (string, **required**) |
 | `github_get_job_logs` | Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job. | `repository` (string, **required**)<br>`jobId` (string, **required**)<br>`workspace` (string, **required**) |
 | `github_get_or_create_draft_release` | Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`targetCommitish` (string, optional)<br>`body` (string, optional)<br>`releaseName` (string, optional) |
 | `github_get_pr` | Get details of a GitHub pull request including title, description, status, author, branches, and merge info. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`workspace` (string, **required**) |
@@ -446,6 +447,39 @@ dmtools github_get_commits_from_branches "value" "value"
 ```javascript
 // In JavaScript agent
 const result = github_get_commits_from_branches("branchNameRegex", "workspace");
+```
+
+---
+
+### `github_get_issue`
+
+Get details of a GitHub issue including title, description, state, author, labels, assignees, and comments count.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - The GitHub owner/organization name
+  - Example: `IstiN`
+
+- **`repository`** (string) 🔴 Required
+  - The GitHub repository name
+  - Example: `dmtools`
+
+- **`issueNumber`** (string) 🔴 Required
+  - The issue number
+  - Example: `42`
+
+**Example:**
+```bash
+dmtools github_get_issue IstiN dmtools 42
+```
+
+```javascript
+// In JavaScript agent
+const issue = github_get_issue("IstiN", "dmtools", "42");
+console.log(issue.title);
+console.log(issue.body);
+console.log(issue.state);
 ```
 
 ---

@@ -954,6 +954,7 @@ function action(params) {
 - [JavaScript Agents](javascript-agents.md)
 - [Teammate Configuration Guide](teammate-configs.md)
 - [GitHub Actions Workflow](../workflows/github-actions-teammate.md)
+- [Trigger CliAgent from a GitHub Issue](cli-agent-github-issue-trigger.md)
 
 ## Summary
 
