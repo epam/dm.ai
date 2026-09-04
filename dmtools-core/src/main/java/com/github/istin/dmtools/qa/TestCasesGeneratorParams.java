@@ -48,6 +48,9 @@ public class TestCasesGeneratorParams extends Params {
     public static final String IGNORE_CLONED_BY_RELATIONSHIP = "ignoreClonedByRelationship";
     public static final String RELATED_TEST_CASE_EXPLANATION_PROMPT = "relatedTestCaseExplanationPrompt";
     public static final String POST_LINKED_TEST_CASES_COMMENT = "postLinkedTestCasesComment";
+    public static final String MERMAID_INDEX_STORAGE_PATH = "mermaidIndexStoragePath";
+    public static final String MERMAID_INDEX_INTEGRATION = "mermaidIndexIntegration";
+    public static final String USE_MERMAID_SNAPSHOT_FOR_GENERATION = "useMermaidSnapshotForGeneration";
 
     @SerializedName(EXISTING_TEST_CASES_JQL)
     private String existingTestCasesJql;
@@ -120,4 +123,13 @@ public class TestCasesGeneratorParams extends Params {
 
     @SerializedName(POST_LINKED_TEST_CASES_COMMENT)
     private boolean postLinkedTestCasesComment = false;
+
+    @SerializedName(MERMAID_INDEX_STORAGE_PATH)
+    private String mermaidIndexStoragePath;
+
+    @SerializedName(MERMAID_INDEX_INTEGRATION)
+    private String mermaidIndexIntegration = "jira";
+
+    @SerializedName(USE_MERMAID_SNAPSHOT_FOR_GENERATION)
+    private boolean useMermaidSnapshotForGeneration = false;
 }
