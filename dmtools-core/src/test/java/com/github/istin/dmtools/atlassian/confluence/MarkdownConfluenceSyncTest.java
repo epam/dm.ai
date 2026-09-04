@@ -41,7 +41,9 @@ public class MarkdownConfluenceSyncTest {
         final Map<String, String> parentsById = new HashMap<>();
         final Map<String, String> titlesById = new HashMap<>();
         final Map<String, String> bodiesById = new HashMap<>();
+        final Map<String, List<String>> childrenByParent = new HashMap<>();
         final List<String[]> updateCalls = new ArrayList<>(); // {contentId, title, parentId, body}
+        final List<String> createCalls = new ArrayList<>(); // titles, in creation order
         int nextId = 1000;
 
         @Override
@@ -49,7 +51,10 @@ public class MarkdownConfluenceSyncTest {
             String id = String.valueOf(nextId++);
             parentsById.put(id, parentId);
             titlesById.put(id, title);
-            return contentFor(id, title, parentId);
+            bodiesById.put(id, body);
+            childrenByParent.computeIfAbsent(parentId, k -> new ArrayList<>()).add(id);
+            createCalls.add(title);
+            return contentFor(id, title, parentId, body);
         }
 
         @Override
@@ -57,12 +62,29 @@ public class MarkdownConfluenceSyncTest {
             updateCalls.add(new String[]{contentId, title, parentId, body});
             parentsById.put(contentId, parentId);
             titlesById.put(contentId, title);
-            return contentFor(contentId, title, parentId);
+            bodiesById.put(contentId, body);
+            return contentFor(contentId, title, parentId, body);
         }
 
         @Override
         public List<Content> getChildren(String contentId) {
-            return new ArrayList<>();
+            List<Content> result = new ArrayList<>();
+            for (String childId : childrenByParent.getOrDefault(contentId, new ArrayList<>())) {
+                result.add(contentFor(childId, titlesById.get(childId), parentsById.get(childId), bodiesById.get(childId)));
+            }
+            return result;
+        }
+
+        /**
+         * Pre-seeds an existing child page (e.g. simulating a page left over from a
+         * previous {@code syncDirectory} run) directly, without going through
+         * {@link #createPage}.
+         */
+        void seedChild(String id, String parentId, String title, String body) {
+            parentsById.put(id, parentId);
+            titlesById.put(id, title);
+            bodiesById.put(id, body);
+            childrenByParent.computeIfAbsent(parentId, k -> new ArrayList<>()).add(id);
         }
 
         @Override
@@ -236,6 +258,76 @@ public class MarkdownConfluenceSyncTest {
             String[] childUpdate = pageOps.updateCalls.get(1);
             assertEquals("child page's parent must be the root page (555), not the grandparent",
                     "555", childUpdate[2]);
+        } finally {
+            FileUtils.deleteDirectory(tempDir);
+        }
+    }
+
+    @Test
+    public void syncDirectory_childFile_rewordedH1OnRerun_updatesSamePageInsteadOfDuplicating() throws IOException {
+        File tempDir = newTempDir();
+        try {
+            // Run 1: recommendations.md has one H1 heading.
+            FileUtils.write(new File(tempDir, "index.md"), "# Landing page", "UTF-8");
+            FileUtils.write(new File(tempDir, "recommendations.md"), "# Recommendations\ncontent v1", "UTF-8");
+
+            FakePageOperations pageOps = new FakePageOperations();
+            pageOps.parentsById.put("555", "999");
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
+
+            MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null);
+
+            assertEquals("exactly one child page created on the first run", 1, pageOps.createCalls.size());
+            String childId = pageOps.childrenByParent.get("555").get(0);
+
+            // Run 2: the SAME source file (recommendations.md) now has a reworded H1 — the
+            // filename/identity of the document hasn't changed, only its title text. Before
+            // the fix, findOrCreateChildPage matched purely by exact title equality, so this
+            // would silently create a SECOND "Recommendations & Next Steps" child page
+            // instead of updating the existing one.
+            FileUtils.write(new File(tempDir, "recommendations.md"), "# Recommendations & Next Steps\ncontent v2", "UTF-8");
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null);
+
+            assertEquals("re-run with a reworded H1 must NOT create a second child page",
+                    1, pageOps.createCalls.size());
+            assertEquals("exactly one child page must still exist under the root",
+                    1, pageOps.childrenByParent.get("555").size());
+            assertEquals("the existing page (by id) must be the one updated, not a new one",
+                    childId, pageOps.childrenByParent.get("555").get(0));
+            assertEquals("the existing page's title must be renamed to the new heading",
+                    "Recommendations & Next Steps", pageOps.titlesById.get(childId));
+            assertTrue("the updated body must contain the new content",
+                    pageOps.bodiesById.get(childId).contains("content v2"));
+        } finally {
+            FileUtils.deleteDirectory(tempDir);
+        }
+    }
+
+    @Test
+    public void syncDirectory_childFile_legacyPageWithoutMarker_stillMatchesByTitleOnFirstPostFixSync() throws IOException {
+        File tempDir = newTempDir();
+        try {
+            // Simulates a page created by a pre-fix version of this sync (no source-path
+            // marker in its body yet) — the very first sync after upgrading must still find
+            // it via the old title-matching fallback (not create a duplicate), and from then
+            // on it carries the marker for future reworded-H1 reruns to match reliably.
+            FileUtils.write(new File(tempDir, "index.md"), "# Landing page", "UTF-8");
+            FileUtils.write(new File(tempDir, "recommendations.md"), "# Recommendations\ncontent v1", "UTF-8");
+
+            FakePageOperations pageOps = new FakePageOperations();
+            pageOps.parentsById.put("555", "999");
+            pageOps.titlesById.put("555", "TICKET-123 Some feature");
+            pageOps.seedChild("2000", "555", "Recommendations", "<p>legacy body, no marker</p>");
+
+            MarkdownConfluenceSync sync = new MarkdownConfluenceSync(new NoopAttachmentHelper(), pageOps);
+            sync.syncDirectory(tempDir, "555", "SPACE", false, null);
+
+            assertEquals("must update the pre-existing legacy page, not create a new one",
+                    0, pageOps.createCalls.size());
+            assertEquals("2000", pageOps.updateCalls.get(pageOps.updateCalls.size() - 1)[0]);
+            assertTrue("the marker must now be present for future reworded-H1 reruns to match",
+                    pageOps.bodiesById.get("2000").contains("dmtools:source-path=recommendations.md"));
         } finally {
             FileUtils.deleteDirectory(tempDir);
         }
