@@ -5,6 +5,7 @@ package com.github.istin.dmtools.atlassian.confluence;
 
 import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
+import com.github.istin.dmtools.atlassian.confluence.model.Storage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -171,9 +172,10 @@ public class MarkdownConfluenceSync {
             String processed = processMarkdownLinks(markdown, rootDir, fileNode.file, pathToTitle);
             Set<String> fileReferenced = MarkdownToConfluenceStorage.extractAttachmentReferences(processed);
             String storage = MarkdownToConfluenceStorage.toStorage(processed);
+            String sourceRelPath = relativePath(rootDir, fileNode.file);
 
             Content page = findOrCreateChildPage(fileNode.title, node.contentId, space,
-                    MarkdownToConfluenceStorage.toStorage("<p>Placeholder</p>"));
+                    MarkdownToConfluenceStorage.toStorage("<p>Placeholder</p>"), sourceRelPath);
 
             baseDir = resolveAttachmentsDir(fileNode.file, attachmentsDir);
             List<String> fileUploadedAttachmentNames = attachmentHelper.uploadReferencedAttachments(
@@ -186,13 +188,18 @@ public class MarkdownConfluenceSync {
             }
             storage = appendAttachmentLinks(storage, extraAttachmentNames);
             storage = preserveAnchors(page.getId(), storage);
+            storage = appendSourceMarker(storage, sourceRelPath);
             pageOps.updatePage(page.getId(), fileNode.title, node.contentId, storage, space, "");
             fileNode.contentId = page.getId();
         }
 
         for (DirNode subdir : node.subdirs) {
+            // Folder pages are matched by title only — unlike a FileNode's title (derived
+            // from the Markdown file's own H1 heading, which the content author may
+            // legitimately reword between runs), a subdir's title is always its directory's
+            // stable basename, so title-matching alone is safe here.
             Content folderPage = findOrCreateChildPage(subdir.title, node.contentId, space,
-                    MarkdownToConfluenceStorage.toStorage("<p>" + MarkdownToConfluenceStorage.escapeXml(subdir.title) + "</p>"));
+                    MarkdownToConfluenceStorage.toStorage("<p>" + MarkdownToConfluenceStorage.escapeXml(subdir.title) + "</p>"), null);
             subdir.contentId = folderPage.getId();
             subdir.parentId = node.contentId;
             syncDirNode(subdir, rootDir, pathToTitle, space, attachmentsDir);
@@ -223,8 +230,61 @@ public class MarkdownConfluenceSync {
         return uploadedAttachmentNames;
     }
 
-    private Content findOrCreateChildPage(String title, String parentId, String space, String placeholderBody) throws IOException {
+    /**
+     * Marker prefix embedded (as an HTML comment) at the end of a FileNode page's storage
+     * body, identifying the Markdown source file (path relative to the sync root) that
+     * produced it — e.g. {@code <!-- dmtools:source-path=recommendations.md -->}.
+     *
+     * Why this exists: a FileNode page's TITLE is derived from the Markdown file's own H1
+     * heading ({@link #extractTitle}), not from its filename — so the content author is free
+     * to reword that heading between runs (e.g. "# Recommendations" → "# Recommendations &
+     * Next Steps"). {@link #findOrCreateChildPage} used to match existing children by exact
+     * title equality only, so any such reword silently created a BRAND NEW duplicate page
+     * instead of updating the existing one for the same source file — while the filename
+     * (and hence the file's identity/purpose) never changed. This marker gives
+     * findOrCreateChildPage a title-independent, stable match key instead.
+     */
+    private static final String SOURCE_MARKER_PREFIX = "<!-- dmtools:source-path=";
+    private static final String SOURCE_MARKER_SUFFIX = " -->";
+    private static final Pattern SOURCE_MARKER_PATTERN = Pattern.compile(
+            Pattern.quote(SOURCE_MARKER_PREFIX) + "(.*?)" + Pattern.quote(SOURCE_MARKER_SUFFIX));
+
+    private static String appendSourceMarker(String storageBody, String sourceRelPath) {
+        if (sourceRelPath == null) {
+            return storageBody;
+        }
+        return storageBody + "\n" + SOURCE_MARKER_PREFIX + sourceRelPath + SOURCE_MARKER_SUFFIX;
+    }
+
+    private static String extractSourceMarker(String storageBody) {
+        if (storageBody == null) {
+            return null;
+        }
+        Matcher matcher = SOURCE_MARKER_PATTERN.matcher(storageBody);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * Finds an existing child page to update, or creates a new one.
+     *
+     * @param sourceRelPath the Markdown source file's path relative to the sync root, used
+     *   as a title-independent match key (see {@link #SOURCE_MARKER_PREFIX}'s docblock) — or
+     *   {@code null} for nodes whose title is already guaranteed stable across runs (e.g.
+     *   folder/subdir pages, whose title is always the directory's own basename), in which
+     *   case matching falls back to title equality only.
+     */
+    private Content findOrCreateChildPage(String title, String parentId, String space, String placeholderBody,
+                                          String sourceRelPath) throws IOException {
         List<Content> children = pageOps.getChildren(parentId);
+        if (sourceRelPath != null) {
+            for (Content child : children) {
+                Storage childStorage = child.getStorage();
+                String childBody = childStorage != null ? childStorage.getValue() : null;
+                if (sourceRelPath.equals(extractSourceMarker(childBody))) {
+                    return child;
+                }
+            }
+        }
         for (Content child : children) {
             if (title.equals(child.getTitle())) {
                 return child;
