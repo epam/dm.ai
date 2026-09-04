@@ -79,8 +79,11 @@ public class CliExecutionHelper {
     /**
      * Creates input context folder and files for CLI command execution.
      * All attachments (including videos) are downloaded so the CLI tool has full access.
+     * <p>
+     * When {@code ticket} is {@code null}, a standalone input folder ({@code input/standalone/})
+     * is created without ticket-specific enrichment or attachments.
      *
-     * @param ticket The ticket to create context for
+     * @param ticket The ticket to create context for; may be null for standalone CLI mode
      * @param inputParams The input parameters to save as request.md
      * @param trackerClient The tracker client for downloading attachments
      * @return Path to the created input folder
@@ -93,8 +96,11 @@ public class CliExecutionHelper {
     /**
      * Creates input context folder and files for CLI command execution under an optional base directory.
      * All attachments (including videos) are downloaded so the CLI tool has full access.
+     * <p>
+     * When {@code ticket} is {@code null}, a standalone input folder ({@code input/standalone/})
+     * is created without ticket-specific enrichment or attachments.
      *
-     * @param ticket The ticket to create context for
+     * @param ticket The ticket to create context for; may be null for standalone CLI mode
      * @param inputParams The input parameters to save as request.md
      * @param trackerClient The tracker client for downloading attachments
      * @param baseDirectory Base directory for the {@code input/} folder; if null, uses the current working directory
@@ -108,8 +114,11 @@ public class CliExecutionHelper {
     /**
      * Creates input context folder and files for CLI command execution under an optional base directory,
      * with an optional override for the attachment list to download.
+     * <p>
+     * When {@code ticket} is {@code null}, a standalone input folder ({@code input/standalone/})
+     * is created without ticket-specific enrichment or attachments.
      *
-     * @param ticket The ticket to create context for
+     * @param ticket The ticket to create context for; may be null for standalone CLI mode
      * @param inputParams The input parameters to save as request.md
      * @param trackerClient The tracker client for downloading attachments
      * @param baseDirectory Base directory for the {@code input/} folder; if null, uses the current working directory
@@ -125,16 +134,13 @@ public class CliExecutionHelper {
     Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient,
                             Path baseDirectory, List<? extends IAttachment> attachmentsOverride,
                             boolean relationsAlreadyEnriched) throws IOException {
-        if (ticket == null) {
-            throw new IllegalArgumentException("Ticket cannot be null");
-        }
-
-        String ticketKey = ticket.getTicketKey();
+        boolean isStandalone = ticket == null;
+        String ticketKey = isStandalone ? "standalone" : ticket.getTicketKey();
         if (ticketKey == null || ticketKey.trim().isEmpty()) {
             throw new IllegalArgumentException("Ticket key cannot be null or empty");
         }
 
-        // Create input folder structure: [baseDirectory/]input/[TICKET-KEY]/
+        // Create input folder structure: [baseDirectory/]input/[TICKET-KEY]/ or input/standalone/
         Path inputFolderPath = baseDirectory != null
                 ? baseDirectory.resolve(INPUT_FOLDER_PREFIX).resolve(ticketKey)
                 : Paths.get(INPUT_FOLDER_PREFIX, ticketKey);
@@ -146,6 +152,11 @@ public class CliExecutionHelper {
             Path requestFilePath = inputFolderPath.resolve(REQUEST_FILE_NAME);
             Files.write(requestFilePath, inputParams.getBytes(StandardCharsets.UTF_8));
             logger.info("Created request file: {} ({} bytes)", requestFilePath.toAbsolutePath(), inputParams.length());
+        }
+
+        if (isStandalone) {
+            logger.info("Standalone CLI mode - skipping ticket enrichment and attachments");
+            return inputFolderPath;
         }
 
         if (!relationsAlreadyEnriched) {

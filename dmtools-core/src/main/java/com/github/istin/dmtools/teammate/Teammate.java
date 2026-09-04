@@ -102,6 +102,15 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @SerializedName("skipAllAttachments")
         private boolean skipAllAttachments = false;
 
+        @SerializedName("skipPreJSAction")
+        private boolean skipPreJSAction = false;
+
+        @SerializedName("skipPreCliJSAction")
+        private boolean skipPreCliJSAction = false;
+
+        @SerializedName("skipPostJSAction")
+        private boolean skipPostJSAction = false;
+
         @SerializedName("additionalInstructions")
         private String[] additionalInstructions;
 
@@ -178,6 +187,18 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         @Override
         public boolean isSkipAllAttachments() {
             return skipAllAttachments;
+        }
+
+        public boolean isSkipPreJSAction() {
+            return skipPreJSAction;
+        }
+
+        public boolean isSkipPreCliJSAction() {
+            return skipPreCliJSAction;
+        }
+
+        public boolean isSkipPostJSAction() {
+            return skipPostJSAction;
         }
 
         @Override
@@ -382,6 +403,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         String inputJQL = expertParams.getInputJql();
         boolean hasJqlQuery = inputJQL != null && !inputJQL.trim().isEmpty();
 
+        String[] cliCommands = expertParams.getCliCommands();
+        boolean hasCliCommands = cliCommands != null && cliCommands.length > 0;
+
         if (trackerClient == null) {
             if (hasJqlQuery) {
                 // TrackerClient is required when inputJql is provided
@@ -392,10 +416,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     "Rally (RALLY_PATH + RALLY_TOKEN). " +
                     "Alternatively, remove inputJql parameter if tracker integration is not needed."
                 );
-            } else {
-                // No tracker and no JQL query - return empty results
-                // (non-tracker execution path - useful for direct AI processing without tickets)
-                logger.info("No TrackerClient configured and no inputJql provided - skipping ticket processing");
+            } else if (!hasCliCommands) {
+                // No tracker, no JQL query, and no CLI commands - nothing to do
+                logger.info("No TrackerClient configured and no inputJql/cliCommands provided - skipping processing");
                 return new ArrayList<>();
             }
         }
@@ -453,6 +476,12 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         inputParams.setKnownInfo(processedKnownInfo);
         contextOrchestrator.clear();
 
+        // Standalone CLI mode: no JQL query but CLI commands are present
+        if (!hasJqlQuery && hasCliCommands) {
+            logger.info("Standalone CLI mode detected (no inputJql, cliCommands present)");
+            return processStandaloneCliMode(expertParams, inputParams, originalParams, initiator);
+        }
+
         List<ResultItem> results = new ArrayList<>();
         trackerClient.searchAndPerform(ticket -> {
             long overallStart = System.currentTimeMillis();
@@ -475,11 +504,17 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             }
 
             // Execute pre-action before AI processing
-            Object preActionResult = js(expertParams.getPreJSAction())
-                .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
-                .withJobContext(expertParams, ticket, null) // response is null in pre-action
-                .with(TrackerParams.INITIATOR, initiator)
-                .execute();
+            String preJSAction = expertParams.getPreJSAction();
+            Object preActionResult = null;
+            if (preJSAction != null && !preJSAction.trim().isEmpty() && !expertParams.isSkipPreJSAction()) {
+                preActionResult = js(preJSAction)
+                    .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                    .withJobContext(expertParams, ticket, null) // response is null in pre-action
+                    .with(TrackerParams.INITIATOR, initiator)
+                    .execute();
+            } else if (expertParams.isSkipPreJSAction()) {
+                logger.info("Skipping preJSAction (skipPreJSAction=true) for {}", ticket.getKey());
+            }
 
             // Check return value to determine if processing should continue
             if (preActionResult != null && preActionResult.equals(false)) {
@@ -554,7 +589,6 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             }
 
             // Process CLI commands if configured
-            String[] cliCommands = expertParams.getCliCommands();
             CliExecutionHelper cliHelper = new CliExecutionHelper();
             CliExecutionHelper.CliExecutionResult cliResult = null;
             Path inputContextPath = null;
@@ -614,7 +648,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     // hard stop: the JS action has already posted its own failure comment, so nothing downstream
                     // (CLI execution, postJSAction) should run for this ticket.
                     String preCliJSAction = expertParams.getPreCliJSAction();
-                    if (preCliJSAction != null && !preCliJSAction.trim().isEmpty()) {
+                    if (preCliJSAction != null && !preCliJSAction.trim().isEmpty() && !expertParams.isSkipPreCliJSAction()) {
                         Object preCliActionResult;
                         try {
                             preCliActionResult = js(preCliJSAction)
@@ -636,6 +670,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             results.add(new ResultItem(ticket.getTicketKey(), "Skipped: preCliJSAction reported failure"));
                             return false;
                         }
+                    } else if (expertParams.isSkipPreCliJSAction()) {
+                        logger.info("Skipping preCliJSAction (skipPreCliJSAction=true) for {}", ticket.getKey());
                     }
 
                     // Execute CLI commands from project root directory (where cursor-agent can find workspace config)
@@ -771,21 +807,26 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, chunksContext, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
                 response = genericRequestAgent.run(genericRequesAgentParams);
             }
-            AtomicReference<Exception> postJsError = new AtomicReference<>();
-            CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
-                try {
-                    js(expertParams.getPostJSAction())
-                        .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
-                        .withJobContext(expertParams, ticket, response)
-                        .with(TrackerParams.INITIATOR, initiator)
-                        .with("systemRequest", systemRequestCommentAlias)
-                        .execute();
-                } catch (Exception e) {
-                    postJsError.set(e);
+            String postJSAction = expertParams.getPostJSAction();
+            if (postJSAction != null && !postJSAction.trim().isEmpty() && !expertParams.isSkipPostJSAction()) {
+                AtomicReference<Exception> postJsError = new AtomicReference<>();
+                CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
+                    try {
+                        js(postJSAction)
+                            .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                            .withJobContext(expertParams, ticket, response)
+                            .with(TrackerParams.INITIATOR, initiator)
+                            .with("systemRequest", systemRequestCommentAlias)
+                            .execute();
+                    } catch (Exception e) {
+                        postJsError.set(e);
+                    }
+                });
+                if (postJsError.get() != null) {
+                    throw postJsError.get();
                 }
-            });
-            if (postJsError.get() != null) {
-                throw postJsError.get();
+            } else if (expertParams.isSkipPostJSAction()) {
+                logger.info("Skipping postJSAction (skipPostJSAction=true) for {}", ticket.getKey());
             }
             if (expertParams.isAttachResponseAsFile()) {
                 attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
@@ -897,6 +938,115 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             return Boolean.FALSE.equals(success);
         }
         return false;
+    }
+
+    /**
+     * Executes Teammate in standalone CLI mode when no {@code inputJql} is provided but
+     * {@code cliCommands} are present. No tracker tickets are queried and JS actions are
+     * skipped; only CLI commands (optionally aggregated with prompts) are executed.
+     */
+    private List<ResultItem> processStandaloneCliMode(TeammateParams expertParams,
+                                                       RequestDecompositionAgent.Result inputParams,
+                                                       RequestDecompositionAgent.Result originalParams,
+                                                       String initiator) throws Exception {
+        List<ResultItem> results = new ArrayList<>();
+        String[] cliCommands = expertParams.getCliCommands();
+
+        // Build final CLI commands with aggregated prompt
+        CliCommandBuilder cliCommandBuilder = new CliCommandBuilder(instructionProcessor, configuration);
+        String[] finalCliCommands = cliCommandBuilder.buildCommands(
+                cliCommands,
+                expertParams.getCliPrompt(),
+                expertParams.getCliPrompts(),
+                expertParams.getCliPromptsByTracker());
+
+        Path inputContextPath = null;
+        CliExecutionHelper cliHelper = new CliExecutionHelper();
+        CliExecutionHelper.CliExecutionResult cliResult = null;
+        try {
+            // Create input context without a ticket
+            TicketInputContextBuilder contextBuilder = new TicketInputContextBuilder(instructionProcessor);
+            TicketInputContextBuilder.Result contextResult = contextBuilder.build(
+                    expertParams, null, Paths.get(System.getProperty("user.dir")),
+                    trackerClient, confluence, null,
+                    expertParams.isWriteAgentParamsToFiles() ? originalParams : inputParams);
+            inputContextPath = contextResult.getPath();
+
+            // Execute CLI commands from project root directory
+            Path projectRoot = Paths.get(System.getProperty("user.dir"));
+            AtomicReference<String> liveCliOutput = new AtomicReference<>("");
+            cliResult = cliHelper.executeCliCommandsWithResult(
+                    finalCliCommands,
+                    projectRoot,
+                    null,
+                    null,
+                    0,
+                    liveCliOutput,
+                    false,
+                    expertParams.getExcludedEnvVariables(),
+                    expertParams.getExcludedEnvRegexes());
+
+            // Append CLI responses to knownInfo for optional downstream AI processing
+            StringBuilder cliResponses = cliResult.getCommandResponses();
+            if (!cliResponses.isEmpty()) {
+                String cliContent = cliResponses.toString();
+                if (cliResult.hasOutputResponse()) {
+                    cliContent += cliResult.getOutputResponse() + "\n\n";
+                }
+                inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nCLI Execution Results:\n" + cliContent);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to execute CLI commands in standalone mode: {}", e.getMessage(), e);
+            StringBuilder errorResponse = new StringBuilder("CLI Execution Error: ").append(e.getMessage()).append("\n");
+            cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null);
+        } finally {
+            if (inputContextPath != null) {
+                if (expertParams.isCleanupInputFolder()) {
+                    cliHelper.cleanupInputContext(inputContextPath);
+                    logger.info("Cleaned up input folder (cleanupInputFolder=true)");
+                } else {
+                    logger.info("Keeping input folder for inspection (cleanupInputFolder=false): {}",
+                            inputContextPath.toAbsolutePath());
+                }
+            }
+        }
+
+        String response;
+        if (expertParams.isSkipAIProcessing()) {
+            if (cliResult != null && cliResult.hasOutputResponse()) {
+                response = cliResult.getOutputResponse();
+                logger.info("Using CLI output response as final response for standalone mode");
+            } else {
+                if (expertParams.isRequireCliOutputFile()) {
+                    logger.warn("CLI output file (response.md) is missing or empty in standalone mode, " +
+                            "but requireCliOutputFile=true. Returning error response.");
+                    if (cliResult != null) {
+                        response = "CLI command executed but did not produce output file:\n" +
+                                cliResult.getCommandResponses().toString();
+                    } else {
+                        response = "No CLI commands executed or results available.";
+                    }
+                    results.add(new ResultItem("standalone", response));
+                    return results;
+                } else {
+                    if (cliResult != null) {
+                        response = cliResult.getCommandResponses().toString();
+                        logger.info("Using CLI execution results as final response for standalone mode");
+                    } else {
+                        response = "No CLI commands executed or results available.";
+                        logger.info("No CLI results available for standalone mode");
+                    }
+                }
+            }
+        } else {
+            GenericRequestAgent.Params genericRequestAgentParams = new GenericRequestAgent.Params(
+                    inputParams, null, new ArrayList<>(),
+                    expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
+            response = genericRequestAgent.run(genericRequestAgentParams);
+        }
+
+        results.add(new ResultItem("standalone", response));
+        return results;
     }
 
     /**
