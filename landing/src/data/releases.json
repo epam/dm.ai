@@ -1,5 +1,28 @@
 [
   {
+    "version": "v1.7.256",
+    "tag": "v1.7.256",
+    "date": "2026-09-04",
+    "download_base": "https://github.com/epam/dm.ai/releases/download/v1.7.256",
+    "assets": {
+      "jar": "dmtools-v1.7.256-all.jar",
+      "install_sh": "install.sh",
+      "install_bat": "install.bat",
+      "install_ps1": "install.ps1",
+      "wrapper": "dmtools.sh",
+      "checksums": "dmtools-checksums.sha256"
+    },
+    "checksums_sha256": {
+      "dmtools-v1.7.256-all.jar": "35e96edfc415d027f6d5321efd6a11acdcd066c7bb87c7263d5bfc0c8e138a5c",
+      "install.sh": "fbf8e1100712859bded72c386da26e9a1680b202faacb10766e96259b6f5fbd9",
+      "install.bat": "c3b8e597878211433773d22dcc3989a82571ab2c17cea5ebab4821d76ff00f0f",
+      "install.ps1": "66191fef7c684fa902f8528e11ee9226347de394deeb3ec13817904e6932d5b0",
+      "dmtools.sh": "3febfcfe9e45224801c559cd9857691b2c2f27defd0f115b88c51c1d46104c34"
+    },
+    "releaseNotes": "# 🚀 DMTools Release v1.7.256\n\n## 📝 What's Changed\n\nFull diff: [v1.7.255...v1.7.256](https://github.com/epam/dm.ai/compare/v1.7.255...v1.7.256)\n\n### 🐛 Bug Fixes\n- Match markdown-synced child pages by stable source path, not H1 title (#520) (47ee93d2)\n\n### 🛠 Maintenance\n- Bump fast-uri from 3.1.5 to 3.1.7 in /landing (#519) (d2acf5e1)\n\n---\n\nThis release includes the **DMTools CLI** and **Agent Skill** for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows.\n\n## 📦 What's Included\n\n### 🖥️ DMTools CLI\n- **Command-line interface** for DMTools operations\n- **Java-based** automation and integration tools\n- **Cross-platform install scripts** for easy setup (`install`, `install.sh`, `install.bat`, `install.ps1`)\n- **Wrapper script** (`dmtools.sh`)\n\n### 🤖 DMTools Agent Skill\n- **AI assistant skill** for MCP, AI agents, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems\n- **Complete DMtools documentation** (67+ MCP tools, JavaScript agent development, and configuration guides)\n- **Cross-platform support** (works with all major AI coding assistants)\n\n## 🎯 Quick Start\n\n### Install DMTools CLI\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex\n```\n\n### Install DMTools Agent Skill\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.256/skill-install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/download/v1.7.256/skill-install.ps1 | iex\n```\n\n**Focused skill install:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.256/skill-install.sh | bash -s -- --skills jira,github\n```\n\n**Focused packages:**\n- `dmtools-jira-skill.zip` → `/dmtools-jira`\n- `dmtools-github-skill.zip` → `/dmtools-github`\n- `dmtools-ado-skill.zip` → `/dmtools-ado`\n- `dmtools-testrail-skill.zip` → `/dmtools-testrail`\n\n**Manual Installation:**\n1. Download `dmtools-skill.zip` or a focused package such as `dmtools-jira-skill.zip`\n2. Extract to one of these directories:\n   - `.cursor/skills/` (project-level Cursor)\n   - `.claude/skills/` (project-level Claude)\n   - `~/.claude/skills/` (global Claude)\n   - `.codex/skills/` (project-level Codex)\n\n### Install Specific Version (v1.7.256)\n\n**DMTools CLI - macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.256/install.sh | bash -s -- v1.7.256\n```\n\n**DMTools CLI - Windows (cmd.exe):**\n```cmd\nset DMTOOLS_VERSION=v1.7.256 && curl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.256/install.bat -o \"%TEMP%\\dmtools-install.bat\" && \"%TEMP%\\dmtools-install.bat\"\n```\n\n**DMTools CLI - Windows (PowerShell):**\n```powershell\n$env:DMTOOLS_VERSION = \"v1.7.256\"\nirm https://github.com/epam/dm.ai/releases/download/v1.7.256/install.ps1 | iex\n```\n\n## 📋 System Requirements\n\n- **Java 17+** (required)\n- **2GB RAM** minimum, 4GB recommended\n- **1GB disk space** for application and data\n\n## 📊 Build Information\n\n- **Version:** v1.7.256\n- **Build Date:** 2026-09-04 14:42:57 UTC\n- **CLI JAR Size:** 93M\n- **Skill ZIP Size:** 276K\n- **Skill TAR Size:** 220K\n- **Git Commit:** `47ee93d2`\n\n## 🐛 Troubleshooting\n\n### Common Issues\n\n1. **Java version:** Ensure Java 17+ is installed (`java -version`)\n2. **Memory issues:** Increase heap size with `-Xmx4g`\n\n### Getting Help\n\n- **Issues:** [GitHub Issues](https://github.com/epam/dm.ai/issues)\n- **Documentation:** [Main Repository](https://github.com/epam/dm.ai)\n\n",
+    "releaseNotesUrl": "https://dmtools.lab.epam.com/releases/v1.7.256/"
+  },
+  {
     "version": "v1.7.254",
     "tag": "v1.7.254",
     "date": "2026-09-01",
