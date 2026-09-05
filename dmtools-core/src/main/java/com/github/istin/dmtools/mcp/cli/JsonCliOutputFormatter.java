@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.mcp.cli;
 
 import com.github.istin.dmtools.common.utils.JSONUtils;
+import com.google.gson.GsonBuilder;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -37,7 +38,8 @@ public class JsonCliOutputFormatter implements CliOutputFormatter {
 
     @Override
     public String formatList(Map<String, Object> toolsList) {
-        return new JSONObject(toolsList).toString(2);
+        // Preserve insertion order of the schema maps (org.json.JSONObject loses it).
+        return new GsonBuilder().setPrettyPrinting().create().toJson(toolsList);
     }
 
     @Override
