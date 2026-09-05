@@ -679,6 +679,8 @@ Full example — object with all options:
 - No shell-injection whitelist: any shell syntax (`&&`, `|`, `>`, etc.) is allowed in `cliCommands`, `setup`, `cache`, `reset`.
 - Simpler lifecycle focused purely on CLI execution.
 
+**See also**: [Triggering CliAgent from a GitHub Issue](../agents/cli-agent-github-issue-trigger.md)
+
 ---
 
 ### Expert
