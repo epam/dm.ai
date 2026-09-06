@@ -6,6 +6,7 @@ package com.github.istin.dmtools.mcp.cli;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.utils.JSONUtils;
 import com.github.istin.dmtools.common.utils.LLMOptimizedJson;
+import com.google.gson.GsonBuilder;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -72,7 +73,7 @@ public class MiniCliOutputFormatter implements CliOutputFormatter {
 
     @Override
     public String formatList(Map<String, Object> toolsList) {
-        return safeFormat(new JSONObject(toolsList).toString());
+        return safeFormat(new GsonBuilder().create().toJson(toolsList));
     }
 
     @Override
