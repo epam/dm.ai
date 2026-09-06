@@ -12,20 +12,28 @@ OUTPUT_DIR="$PROJECT_ROOT/dmtools-ai-docs/references/mcp-tools"
 echo "🔄 Generating MCP tools documentation as tables..."
 
 # Check if dmtools is available
-if ! command -v dmtools &> /dev/null && [ ! -f ~/.dmtools/dmtools.jar ]; then
-    echo "❌ Error: dmtools not found. Run ./buildInstallLocal.sh first"
-    exit 1
-fi
-
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# Get the tools list as JSON
-echo "📥 Fetching tools from dmtools..."
-TOOLS_JSON=$(dmtools list 2>/dev/null || java -jar ~/.dmtools/dmtools.jar list 2>/dev/null || ./dmtools.sh list 2>/dev/null)
+if [ -n "$SKIP_DMTOOLS_LIST" ]; then
+    echo "⏭️  Skipping dmtools list fetch; using existing $OUTPUT_DIR/tools-raw.json"
+    if [ ! -f "$OUTPUT_DIR/tools-raw.json" ]; then
+        echo "❌ Error: $OUTPUT_DIR/tools-raw.json not found"
+        exit 1
+    fi
+else
+    if ! command -v dmtools &> /dev/null && [ ! -f ~/.dmtools/dmtools.jar ]; then
+        echo "❌ Error: dmtools not found. Run ./buildInstallLocal.sh first"
+        exit 1
+    fi
 
-# Save raw JSON for reference
-echo "$TOOLS_JSON" > "$OUTPUT_DIR/tools-raw.json"
+    # Get the tools list as JSON
+    echo "📥 Fetching tools from dmtools..."
+    TOOLS_JSON=$(dmtools list 2>/dev/null || java -jar ~/.dmtools/dmtools.jar list 2>/dev/null || ./dmtools.sh list 2>/dev/null)
+
+    # Save raw JSON for reference
+    echo "$TOOLS_JSON" > "$OUTPUT_DIR/tools-raw.json"
+fi
 
 # Create a Python script to parse and generate markdown
 cat > /tmp/parse_mcp_tools.py << 'PYTHON_SCRIPT'
