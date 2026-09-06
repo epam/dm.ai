@@ -15,6 +15,7 @@ import com.github.istin.dmtools.common.model.IAttachment;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.CliCommandFailedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.context.ContextOrchestrator;
 import com.github.istin.dmtools.context.UriToObjectFactory;
@@ -844,6 +845,53 @@ public class TeammateRunJobFlowCoverageTest {
 
         assertTrue(teammate.jsCalls.contains("agents/js/timer.js"),
                 "timerJSAction must be executed at least once during a long CLI command");
+    }
+
+    @Test
+    void testPostJSActionReceivesFatalCliErrorSignal() throws Exception {
+        JavaScriptExecutor postExecutor = mock(JavaScriptExecutor.class);
+        when(postExecutor.mcp(any(), any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.withJobContext(any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.with(anyString(), any())).thenReturn(postExecutor);
+        when(postExecutor.execute()).thenReturn(null);
+        teammate.scriptedExecutors.put("agents/js/post.js", postExecutor);
+
+        params.setCliCommands(new String[]{"claude --model invalid-model"});
+        params.setPostJSAction("agents/js/post.js");
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                        .thenThrow(new CliCommandFailedException("claude --model invalid-model", 1,
+                                "API Error: 400 ValidationException: invalid model identifier"));
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                        .thenReturn(Map.of());
+
+                List<ResultItem> results = teammate.runJobImpl(params);
+                assertEquals(1, results.size());
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> valueCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(postExecutor, atLeastOnce()).with(keyCaptor.capture(), valueCaptor.capture());
+
+        Map<String, Object> capturedParams = new HashMap<>();
+        List<String> keys = keyCaptor.getAllValues();
+        List<Object> values = valueCaptor.getAllValues();
+        for (int i = 0; i < keys.size(); i++) {
+            capturedParams.put(keys.get(i), values.get(i));
+        }
+
+        assertEquals(Boolean.TRUE, capturedParams.get("currentCliHasFatalError"),
+                "postJSAction must be told the CLI command batch failed fatally");
+        assertNotNull(capturedParams.get("currentCliErrorMessage"));
+        assertTrue(((String) capturedParams.get("currentCliErrorMessage")).contains("ValidationException"));
     }
 
     // ---- additional branch coverage ----

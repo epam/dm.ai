@@ -189,6 +189,8 @@ function action(params) {
 | `params.response` | String | AI response (`null` in preJSAction, filled in postJSAction) |
 | `params.initiator` | String | User who triggered the job |
 | `params.inputFolderPath` | String | Absolute path to input folder (preCliJSAction only) |
+| `params.currentCliHasFatalError` | Boolean | `true` if the CLI command batch failed with a non-zero exit code (postJSAction and timerJSAction only; `false` when no `cliCommands` are configured) |
+| `params.currentCliErrorMessage` | String | Error message from the last fatal CLI failure, or `null` if none (postJSAction and timerJSAction only) |
 
 ### Instruction Sources
 
@@ -278,6 +280,7 @@ This solves the `ConfigurationMerger` limitation: when you override a config wit
 | `cliCommands` | Array | - | CLI commands to execute | `["./cicd/scripts/run-cursor-agent.sh"]` |
 | `preCliJSAction` | String | - | JS script path executed **after** input folder is created but **before** CLI commands run. Receives `params.inputFolderPath` (absolute path). Use to write extra files into the input folder. Errors in this script are logged but do NOT stop CLI execution. | `"agents/js/extendInputFolder.js"` |
 | `timerJSAction` | String | - | JS script path executed **periodically in a background thread** while CLI commands are running. Receives the same params as `postJSAction` + `params.currentCliOutput` (accumulated stdout so far), plus `params.currentCliHasFatalError` (boolean) and `params.currentCliErrorMessage` (string, may be null) — set as soon as a CLI command fails with a non-zero exit code, so retry logic can distinguish a real, non-retryable failure from a transient interruption. Use for side-effects like auto-committing, posting progress, or sending notifications. Errors are logged and never abort CLI execution. | `"agents/js/autoCommit.js"` |
+| `postJSAction` | String | - | JS script path executed **after** CLI execution (if any) and AI processing complete. Also receives `params.currentCliHasFatalError` (boolean) and `params.currentCliErrorMessage` (string, may be null), reflecting the final CLI outcome — use this to skip PR creation or notify differently on a fatal CLI failure. | `"agents/js/developTicketAndCreatePR.js"` |
 | `timerIntervalSeconds` | Integer | `60` | Interval in seconds between `timerJSAction` executions. Timer starts after the first interval elapses. Has no effect when `timerJSAction` is not set or when value is ≤ 0. | `300` |
 | `skipAIProcessing` | Boolean | `false` | Skip AI processing when using CLI agents | `true` |
 | `requireCliOutputFile` | Boolean | `true` | **NEW v1.7.133**: Require `output/response.md` before updating fields (strict mode prevents data loss) | `true` (recommended) |

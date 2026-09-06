@@ -772,6 +772,9 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 response = genericRequestAgent.run(genericRequesAgentParams);
             }
             AtomicReference<Exception> postJsError = new AtomicReference<>();
+            // cliResult is null when no cliCommands are configured; treat that as no fatal error.
+            boolean cliHasFatalError = cliResult != null && cliResult.hasFatalError();
+            String cliErrorMessage = cliResult != null ? cliResult.getLastErrorMessage() : null;
             CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
                 try {
                     js(expertParams.getPostJSAction())
@@ -779,6 +782,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                         .withJobContext(expertParams, ticket, response)
                         .with(TrackerParams.INITIATOR, initiator)
                         .with("systemRequest", systemRequestCommentAlias)
+                        .with("currentCliHasFatalError", cliHasFatalError)
+                        .with("currentCliErrorMessage", cliErrorMessage)
                         .execute();
                 } catch (Exception e) {
                     postJsError.set(e);
