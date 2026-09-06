@@ -1,0 +1,19 @@
+{
+  "name": "CliAgent",
+  "params": {
+    "metadata": {
+      "contextId": "github_issue_development"
+    },
+    "preJSAction": "agents/js/prepareGitHubIssueContext.js",
+    "cliCommands": [
+      "./agents/scripts/run-cursor-agent.sh \"Read input/github_issue_development/context.md, implement the request, and write your changes to the working tree.\""
+    ],
+    "postJSAction": "agents/js/commitAndPushBranch.js",
+    "outputType": "none",
+    "cleanupInputFolder": true,
+    "cleanupOutputsFolder": false,
+    "customParams": {
+      "baseBranch": "main"
+    }
+  }
+}

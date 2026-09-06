@@ -5,6 +5,7 @@ package com.github.istin.dmtools.github;
 
 import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
 import com.github.istin.dmtools.common.networking.GenericRequest;
+import com.github.istin.dmtools.github.model.GitHubIssue;
 import okhttp3.Request;
 import org.junit.Before;
 import org.junit.Test;
@@ -186,5 +187,24 @@ public class GitHubTest {
     public void testParseUris_noGithubUrls() throws Exception {
         Set<String> uris = gitHub.parseUris("Just some text without any GitHub links.");
         assertTrue(uris.isEmpty());
+    }
+
+    @Test
+    public void testGetIssueFetchesExpectedUrl() throws Exception {
+        GitHub spyGitHub = spy(gitHub);
+        doReturn("{\"number\":42,\"title\":" +
+                "\"Add github issue tool\",\"state\":\"open\"}").when(spyGitHub).execute(any(GenericRequest.class));
+
+        GitHubIssue issue = spyGitHub.issue("testWorkspace", "testRepo", "42");
+
+        assertNotNull(issue);
+        assertEquals(Integer.valueOf(42), issue.getNumber());
+        assertEquals("Add github issue tool", issue.getTitle());
+        assertEquals("open", issue.getState());
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spyGitHub).execute(captor.capture());
+        String url = captor.getValue().url();
+        assertEquals("https://api.github.com/repos/testWorkspace/testRepo/issues/42", url);
     }
 }
