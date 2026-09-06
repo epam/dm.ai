@@ -27,7 +27,7 @@ public class GitHubIssueTest {
 
     @Test
     public void testGetNumber() {
-        when(mockJsonObject.getInt("number")).thenReturn(42);
+        when(mockJsonObject.optInt("number")).thenReturn(42);
         assertEquals(Integer.valueOf(42), gitHubIssue.getNumber());
     }
 
@@ -57,7 +57,7 @@ public class GitHubIssueTest {
 
     @Test
     public void testGetCommentsCount() {
-        when(mockJsonObject.getInt("comments")).thenReturn(5);
+        when(mockJsonObject.optInt("comments")).thenReturn(5);
         assertEquals(Integer.valueOf(5), gitHubIssue.getCommentsCount());
     }
 

@@ -1,6 +1,6 @@
 ---
 name: dmtools
-description: Comprehensive documentation and assistance for DMTools - an enterprise dark-factory orchestrator with 334+ MCP tools for Jira, Azure DevOps, GitHub, GitLab, Figma, Confluence, Teams, and test automation. Use when working with DMTools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows (Teammate/CliAgent), or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator/CliAgent jobs.
+description: Comprehensive documentation and assistance for DMTools - an enterprise dark-factory orchestrator with 335+ MCP tools for Jira, Azure DevOps, GitHub, GitLab, Figma, Confluence, Teams, and test automation. Use when working with DMTools, configuring integrations, developing JavaScript agents, generating test cases, building reports (ReportGenerator/ReportVisualizer), creating CLI agent workflows (Teammate/CliAgent), or setting up CI/CD run tracing (ciRunUrl) for Teammate/Expert/TestCasesGenerator/CliAgent jobs.
 license: Apache-2.0
 compatibility:
   - Java 17+
@@ -14,7 +14,7 @@ metadata:
 
 # DMtools Development Assistant
 
-DMTools is an enterprise dark-factory orchestrator that integrates with multiple platforms and provides 334+ MCP tools for reusable delivery automation.
+DMTools is an enterprise dark-factory orchestrator that integrates with multiple platforms and provides 335+ MCP tools for reusable delivery automation.
 
 ## 🔧 FIRST-TIME SETUP (DO THIS PROACTIVELY)
 
@@ -180,7 +180,7 @@ See [Installation Guide](references/installation/README.md#️-configuration-set
 
 ### Common Commands
 ```bash
-dmtools list                          # List all 334+ MCP tools
+dmtools list                          # List all 335+ MCP tools
 dmtools jira_get_ticket PROJ-123      # Get Jira ticket
 dmtools run agents/config.json        # Run configuration
 dmtools run agents/config.json --ciRunUrl "https://ci.example.com/runs/42"  # With CI tracing
@@ -189,7 +189,7 @@ dmtools run agents/config.json "${ENCODED_CONFIG}" --inputJql "key=PROJ-1"  # Wi
 
 ## Core Capabilities
 
-### 334+ MCP Tools Available
+### 335+ MCP Tools Available
 
 **Complete Reference**: [references/mcp-tools/README.md](references/mcp-tools/README.md) - Auto-generated from actual DMtools build
 
@@ -269,11 +269,11 @@ function action(params) {
 | | [ReportVisualizer](references/jobs/README.md#reportvisualizer) | Render an existing report JSON as interactive HTML |
 | | [KBProcessingJob](references/jobs/README.md#kbprocessingjob) | Process source material into knowledge-base artifacts |
 | **Agents** | [Agent Best Practices](references/agents/best-practices.md) | **⚠️ CRITICAL**: Patterns and lessons learned |
-| | [JavaScript Agents](references/agents/javascript-agents.md) | GraalJS development with 334+ MCP tools |
+| | [JavaScript Agents](references/agents/javascript-agents.md) | GraalJS development with 335+ MCP tools |
 | | [Teammate Configs](references/agents/teammate-configs.md) | JSON-based AI workflows (CLI safety v1.7.133+) |
 | | [CLI Integration](references/agents/cli-integration.md) | Cursor, Claude, Copilot, Gemini CLI agents |
 | **Testing** | [Test Generation](references/test-generation/xray-manual.md) | Xray test case creation |
-| **MCP Tools** | [MCP Tools Reference](references/mcp-tools/README.md) | Auto-generated list of 334+ tools (20 integrations) |
+| **MCP Tools** | [MCP Tools Reference](references/mcp-tools/README.md) | Auto-generated list of 335+ tools (20 integrations) |
 | **CI/CD** | [GitHub Actions](references/workflows/github-actions-teammate.md) | Automated ticket processing + CI run tracing |
 
 ## ⚠️ CRITICAL: JSON Configuration "name" Field
