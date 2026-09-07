@@ -37,7 +37,7 @@ public class EncodingDetector {
             logger.info("Successfully decoded parameter using base64 encoding");
             return decoded;
         } catch (Exception e) {
-            logger.debug("Base64 decoding failed, attempting URL decoding: {}", e.getMessage());
+            logger.debug("Base64 decoding failed, falling back to URL decoding (this is expected when the parameter is URL-encoded rather than base64): {}", e.getMessage());
             
             try {
                 // Fallback to URL decoding
