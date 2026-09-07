@@ -1,0 +1,29 @@
+name: Deploy Landing After Site Data Merge
+
+# update-release-site.yml opens a "chore/release-site-data-*" PR and enables
+# auto-merge; GitHub completes that merge asynchronously once required checks
+# pass. That completion does not reliably fire deploy-landing.yml's `push`
+# trigger (observed: v1.7.250 through v1.7.257 all merged cli-manifest.json
+# updates without a matching push-triggered deploy run), so the live
+# cli-manifest.json served from dmtools.lab.epam.com can lag behind main by
+# several releases, which in turn makes install.sh report a stale version.
+# Explicitly (re-)trigger the deploy once the PR actually merges instead of
+# relying on that push trigger for this specific PR flow.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  trigger-deploy:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'chore/release-site-data-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger landing page deploy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-landing.yml --repo "${{ github.repository }}" --ref main
