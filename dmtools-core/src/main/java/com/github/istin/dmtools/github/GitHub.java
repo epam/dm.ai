@@ -348,20 +348,8 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return new GitHubPullRequest(response);
     }
 
-    @MCPTool(
-            name = "github_get_issue",
-            description = "Get details of a GitHub issue including title, description, state, author, labels, assignees, and comments count.",
-            integration = "github",
-            category = "issues",
-            aliases = {"source_code_get_issue"}
-    )
-    public GitHubIssue issue(
-            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
-            String workspace,
-            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
-            String repository,
-            @MCPParam(name = "issueNumber", description = "The issue number", required = true, example = "42")
-            String issueNumber) throws IOException {
+    @MCPTool(name = "github_get_issue", description = "Get details of a GitHub issue including title, description, state, author, labels, assignees, and comments count.", integration = "github", category = "issues", aliases = {"source_code_get_issue"})
+    public GitHubIssue issue(@MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN") String workspace, @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools") String repository, @MCPParam(name = "issueNumber", description = "The issue number", required = true, example = "42") String issueNumber) throws IOException {
         String path = path(String.format("repos/%s/%s/issues/%s", workspace, repository, issueNumber));
         GenericRequest getRequest = new GenericRequest(this, path);
         return new GitHubIssue(execute(getRequest));
