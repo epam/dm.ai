@@ -15,13 +15,13 @@ import java.util.Base64;
  * Supports auto-detection of base64 and URL encoding formats.
  */
 public class EncodingDetector {
-    
+
     private static final Logger logger = LogManager.getLogger(EncodingDetector.class);
-    
+
     /**
      * Auto-detects encoding format and decodes the input string.
      * Attempts base64 decoding first, falls back to URL decoding if base64 fails.
-     * 
+     *
      * @param encoded The encoded string to decode
      * @return The decoded string
      * @throws IllegalArgumentException if neither base64 nor URL decoding succeeds
@@ -30,7 +30,7 @@ public class EncodingDetector {
         if (encoded == null || encoded.trim().isEmpty()) {
             throw new IllegalArgumentException("Encoded parameter cannot be null or empty");
         }
-        
+
         try {
             // Try base64 decoding first
             String decoded = decodeBase64(encoded);
@@ -38,7 +38,7 @@ public class EncodingDetector {
             return decoded;
         } catch (Exception e) {
             logger.debug("Base64 decoding failed, falling back to URL decoding (this is expected when the parameter is URL-encoded rather than base64): {}", e.getMessage());
-            
+
             try {
                 // Fallback to URL decoding
                 String decoded = decodeUrl(encoded);
@@ -53,11 +53,11 @@ public class EncodingDetector {
             }
         }
     }
-    
+
     /**
      * Decodes a base64-encoded string.
      * Implemented directly to avoid dependency on JobRunner static initialization.
-     * 
+     *
      * @param input The base64-encoded string
      * @return The decoded string
      * @throws IllegalArgumentException if base64 decoding fails
@@ -70,10 +70,10 @@ public class EncodingDetector {
             throw new IllegalArgumentException("Invalid base64 encoding: " + e.getMessage(), e);
         }
     }
-    
+
     /**
      * Decodes a URL-encoded string.
-     * 
+     *
      * @param input The URL-encoded string
      * @return The decoded string
      * @throws IllegalArgumentException if URL decoding fails
