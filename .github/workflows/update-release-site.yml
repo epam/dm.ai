@@ -97,7 +97,11 @@ jobs:
 
       - name: Commit and push changes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT_TOKEN (not GITHUB_TOKEN) when creating the PR and enabling
+          # auto-merge. PRs opened via GITHUB_TOKEN do not trigger `pull_request`
+          # workflow runs automatically, so the required status checks would stay
+          # in "Expected" state and auto-merge would never complete.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           git add landing/public/cli-manifest.json landing/src/data/releases.json
           if git diff --cached --quiet; then
@@ -117,10 +121,10 @@ jobs:
             --body "Automated release site data update for ${VERSION}." \
             --base main \
             --head "$BRANCH" \
-            --repo "${{ github.repository }}" || true
+            --repo "${{ github.repository }}"
           # Enable auto-merge so this data-only PR lands as soon as the
           # required "Java unit tests" check passes, without manual action.
           gh pr merge "$BRANCH" \
             --squash \
             --auto \
-            --repo "${{ github.repository }}" || true
+            --repo "${{ github.repository }}"
