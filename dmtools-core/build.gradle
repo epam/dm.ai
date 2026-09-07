@@ -107,8 +107,8 @@ dependencies {
 
     // Annotation processors
     annotationProcessor 'com.google.dagger:dagger-compiler:2.60.1'
-    compileOnly 'org.projectlombok:lombok:1.18.46'
-    annotationProcessor 'org.projectlombok:lombok:1.18.46'
+    compileOnly 'org.projectlombok:lombok:1.18.48'
+    annotationProcessor 'org.projectlombok:lombok:1.18.48'
     
     // MCP annotations from separate module
     api project(':dmtools-mcp-annotations')
