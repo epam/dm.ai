@@ -47,7 +47,7 @@ public class GitHubIssuesTest {
         doReturn("{\"number\":42,\"title\":\"New bug\",\"state\":\"open\"}")
                 .when(spy).post(any(GenericRequest.class));
 
-        String result = spy.createIssue("acme", "widgets", "New bug", "It broke");
+        String result = spy.createIssue("acme", "widgets", "New bug", "It broke", null);
 
         assertTrue(result.contains("\"number\":42"));
 
@@ -64,7 +64,7 @@ public class GitHubIssuesTest {
         GitHubIssues spy = spy(gitHub);
         doReturn("{\"number\":43}").when(spy).post(any(GenericRequest.class));
 
-        spy.createIssue("acme", "widgets", "Title only", "   ");
+        spy.createIssue("acme", "widgets", "Title only", "   ", null);
 
         ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
         verify(spy).post(captor.capture());
@@ -79,7 +79,7 @@ public class GitHubIssuesTest {
         doReturn("{\"number\":7,\"state\":\"closed\"}")
                 .when(spy).patch(any(GenericRequest.class));
 
-        String result = spy.closeIssue("acme", "widgets", 7);
+        String result = spy.closeIssue("acme", "widgets", 7, null);
 
         assertTrue(result.contains("\"state\":\"closed\""));
 
@@ -96,7 +96,7 @@ public class GitHubIssuesTest {
         doReturn("[{\"name\":\"bug\"},{\"name\":\"ai\"}]")
                 .when(spy).post(any(GenericRequest.class));
 
-        String result = spy.addLabels("acme", "widgets", 7, new String[]{"bug", "ai"});
+        String result = spy.addLabels("acme", "widgets", 7, new String[]{"bug", "ai"}, null);
 
         assertTrue(result.contains("bug"));
 
@@ -114,7 +114,7 @@ public class GitHubIssuesTest {
         GitHubIssues spy = spy(gitHub);
         doReturn("").when(spy).delete(any(GenericRequest.class));
 
-        spy.removeLabel("acme", "widgets", 7, "help wanted");
+        spy.removeLabel("acme", "widgets", 7, "help wanted", null);
 
         ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
         verify(spy).delete(captor.capture());
@@ -127,7 +127,7 @@ public class GitHubIssuesTest {
         GitHubIssues spy = spy(gitHub);
         doReturn("{\"id\":1,\"body\":\"hello\"}").when(spy).post(any(GenericRequest.class));
 
-        String result = spy.createComment("acme", "widgets", "7", "hello");
+        String result = spy.createComment("acme", "widgets", "7", "hello", null);
 
         assertTrue(result.contains("hello"));
 

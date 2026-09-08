@@ -1,6 +1,6 @@
 # GITHUB MCP Tools
 
-**Total Tools**: 73
+**Total Tools**: 77
 
 ## Quick Reference
 
@@ -27,16 +27,17 @@ const result = github_list_prs_filtered(...);
 |-----------|-------------|------------|
 | `github_add_collaborator` | Add a collaborator to a GitHub repository | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`username` (string, **required**)<br>`permission` (string, **required**) |
 | `github_add_inline_comment` | Create a new inline code review comment on a specific file and line in a GitHub pull request. To comment on a range of lines, provide both startLine and line. Side is 'RIGHT' for new code (default) or 'LEFT' for old code. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`path` (string, **required**)<br>`line` (string, **required**)<br>`text` (string, **required**)<br>`commitId` (string, optional)<br>`startLine` (string, optional)<br>`side` (string, optional) |
-| `github_add_labels` | Add labels to a GitHub issue | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`number` (number, **required**)<br>`labels` (array, **required**) |
+| `github_add_labels` | Add labels to a GitHub issue | `owner` (string, optional)<br>`repo` (string, optional)<br>`number` (number, optional)<br>`labels` (array, **required**)<br>`key` (string, optional) |
 | `github_add_pr_comment` | Add a comment to a GitHub pull request discussion. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`text` (string, **required**) |
 | `github_add_pr_label` | Add a label to a GitHub pull request. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`label` (string, **required**) |
-| `github_close_issue` | Close a GitHub issue | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`number` (number, **required**) |
+| `github_assign_issue` | Assign a GitHub issue to a user | `user` (string, **required**)<br>`owner` (string, optional)<br>`repo` (string, optional)<br>`number` (number, optional)<br>`key` (string, optional) |
+| `github_close_issue` | Close a GitHub issue | `owner` (string, optional)<br>`repo` (string, optional)<br>`number` (number, optional)<br>`key` (string, optional) |
 | `github_close_pr` | Close a GitHub pull request | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`number` (number, **required**) |
 | `github_create_branch` | Create a new branch from an existing commit SHA | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`branch` (string, **required**)<br>`from_sha` (string, **required**) |
 | `github_create_check_run` | Create a GitHub Check Run — a rich CI check with progress, annotations, and a full log visible in the PR 'Checks' tab. Use status=in_progress when starting, then call github_update_check_run to complete it. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`name` (string, **required**)<br>`headSha` (string, **required**)<br>`status` (string, optional)<br>`title` (string, optional)<br>`summary` (string, optional)<br>`text` (string, optional)<br>`externalId` (string, optional) |
-| `github_create_comment` | Create a comment on a GitHub issue or pull request (PRs are issues upstream). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`body` (string, **required**) |
+| `github_create_comment` | Create a comment on a GitHub issue or pull request (PRs are issues upstream). | `workspace` (string, optional)<br>`repository` (string, optional)<br>`pullRequestId` (string, optional)<br>`body` (string, **required**)<br>`key` (string, optional) |
 | `github_create_commit_status` | Create a commit status (the colored dot in PR checks). Use state=pending when AI analysis starts, success/failure/error when complete. The 'context' field acts as the status name and must be unique per check. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`sha` (string, **required**)<br>`state` (string, **required**)<br>`description` (string, optional)<br>`context` (string, optional)<br>`targetUrl` (string, optional) |
-| `github_create_issue` | Create a GitHub issue | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, optional) |
+| `github_create_issue` | Create a GitHub issue | `owner` (string, optional)<br>`repo` (string, optional)<br>`title` (string, **required**)<br>`body` (string, optional)<br>`key` (string, optional) |
 | `github_create_pr` | Create a GitHub pull request | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`title` (string, **required**)<br>`head` (string, **required**)<br>`base` (string, **required**) |
 | `github_create_release` | Create a GitHub release for a tag | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`tag_name` (string, **required**)<br>`body` (string, optional) |
 | `github_create_review` | Create a review on a GitHub pull request | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`number` (number, **required**)<br>`body` (string, **required**)<br>`event` (string, **required**) |
@@ -53,7 +54,7 @@ const result = github_list_prs_filtered(...);
 | `github_get_commit_check_runs` | Get all check runs (CI/CD status checks) for a commit SHA in a GitHub repository. Returns details about each check including status, conclusion, and output. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`commitSha` (string, **required**) |
 | `github_get_commits_from_branches` | Fetch commits from all branches whose name matches a given regex pattern, aggregated and de-duplicated. Useful for collecting commits from feature/*, release/* or similar groups of branches without specifying each branch individually. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`branchNameRegex` (string, **required**)<br>`since` (string, optional) |
 | `github_get_file_content` | Get the contents of a file in a GitHub repository | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`path` (string, **required**)<br>`ref` (string, optional) |
-| `github_get_issue` | Get details of a GitHub issue including title, description, state, author, labels, assignees, and comments count. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`issueNumber` (string, **required**) |
+| `github_get_issue` | Get details of a GitHub issue including title, description, state, author, labels, assignees, and comments count. | `workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `github_get_job_logs` | Get the raw text logs for a specific GitHub Actions job. Returns the complete log output from all steps in the job. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`jobId` (string, **required**) |
 | `github_get_or_create_draft_release` | Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`releaseName` (string, optional)<br>`targetCommitish` (string, optional)<br>`body` (string, optional) |
 | `github_get_pr` | Get details of a GitHub pull request including title, description, status, author, branches, and merge info. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
@@ -81,15 +82,18 @@ const result = github_list_prs_filtered(...);
 | `github_list_releases` | List GitHub releases for a repository | `owner` (string, **required**)<br>`repo` (string, **required**) |
 | `github_list_workflow_runs` | List GitHub Actions workflow runs for a repository, optionally filtered by status or specific workflow file. Use status='failure' to get all failed runs. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`status` (string, optional)<br>`workflowId` (string, optional)<br>`perPage` (number, optional)<br>`page` (number, optional)<br>`created` (string, optional) |
 | `github_merge_pr` | Merge a GitHub pull request. Supports merge, squash, and rebase merge methods. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`mergeMethod` (string, optional)<br>`commitTitle` (string, optional)<br>`commitMessage` (string, optional) |
+| `github_move_issue_to_status` | Move a GitHub issue to a status. 'done'/'closed' close the issue, 'open'/'reopened' reopen it; any other status is applied as an issue label. | `statusName` (string, **required**)<br>`owner` (string, optional)<br>`repo` (string, optional)<br>`number` (number, optional)<br>`key` (string, optional) |
 | `github_remove_collaborator` | Remove a collaborator from a GitHub repository | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`username` (string, **required**) |
-| `github_remove_label` | Remove a label from a GitHub issue | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`number` (number, **required**)<br>`label` (string, **required**) |
+| `github_remove_label` | Remove a label from a GitHub issue | `owner` (string, optional)<br>`repo` (string, optional)<br>`number` (number, optional)<br>`label` (string, **required**)<br>`key` (string, optional) |
 | `github_remove_pr_label` | Remove a label from a GitHub pull request. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`label` (string, **required**) |
+| `github_reopen_issue` | Reopen a closed GitHub issue | `owner` (string, optional)<br>`repo` (string, optional)<br>`number` (number, optional)<br>`key` (string, optional) |
 | `github_reopen_pr` | Reopen a GitHub pull request | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`number` (number, **required**) |
 | `github_reply_to_pr_thread` | Reply to an existing inline code review comment thread in a GitHub pull request. Use the comment ID of the root comment (or any comment) in the thread as inReplyToId. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`inReplyToId` (string, **required**)<br>`text` (string, **required**) |
 | `github_repository_dispatch` | Trigger a GitHub repository dispatch event. Workflows listening to 'on: repository_dispatch' with the matching event_type will be triggered. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`eventType` (string, **required**)<br>`clientPayload` (string, optional) |
 | `github_request_reviewers` | Request reviewers on a GitHub pull request | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`number` (number, **required**)<br>`reviewers` (array, **required**) |
 | `github_rerun_workflow` | Re-run a GitHub Actions workflow run by id | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`run_id` (number, **required**) |
 | `github_resolve_pr_thread` | Resolve a review thread in a GitHub pull request. Requires the thread's GraphQL node ID, which can be obtained from github_get_pr_review_threads (the 'id' field of each thread). | `threadId` (string, **required**) |
+| `github_search_issues` | Search GitHub issues (and pull requests) with a query string. Returns a JSON object with 'items'. | `query` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional) |
 | `github_submit_pr_review` | Submit a formal GitHub pull request review (a native reviewer decision, distinct from labels/comments). event=APPROVE marks the PR as approved by this reviewer; event=REQUEST_CHANGES formally blocks the PR (visible as 'Changes requested', and enforced by branch protection rules requiring approvals) until a new review or github_dismiss_pr_review clears it; event=COMMENT leaves a review without approving or blocking. 'body' is required for REQUEST_CHANGES and COMMENT. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`event` (string, **required**)<br>`body` (string, optional) |
 | `github_test` | Test GitHub connectivity by fetching the current user's profile | None |
 | `github_trigger_workflow` | Trigger a specific GitHub Actions workflow by filename (workflow dispatch). The workflow must have 'on: workflow_dispatch' configured. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`workflowId` (string, **required**)<br>`inputs` (string, optional)<br>`ref` (string, optional) |
@@ -195,21 +199,25 @@ Add labels to a GitHub issue
 
 **Parameters:**
 
-- **`owner`** (string) 🔴 Required
+- **`owner`** (string) ⚪ Optional
   - The repository owner (user or organization)
   - Example: `IstiN`
 
-- **`repo`** (string) 🔴 Required
+- **`repo`** (string) ⚪ Optional
   - The repository name
   - Example: `dmtools`
 
-- **`number`** (number) 🔴 Required
+- **`number`** (number) ⚪ Optional
   - The issue number
   - Example: `42`
 
 - **`labels`** (array) 🔴 Required
   - The label names to add
   - Example: `["bug","help wanted"]`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to owner/repo/number)
+  - Example: `IstiN/dmtools#42`
 
 **Example:**
 ```bash
@@ -291,23 +299,65 @@ const result = github_add_pr_label("workspace", "repository");
 
 ---
 
+### `github_assign_issue`
+
+Assign a GitHub issue to a user
+
+**Parameters:**
+
+- **`user`** (string) 🔴 Required
+  - The assignee GitHub login
+  - Example: `octocat`
+
+- **`owner`** (string) ⚪ Optional
+  - The repository owner (user or organization)
+  - Example: `IstiN`
+
+- **`repo`** (string) ⚪ Optional
+  - The repository name
+  - Example: `dmtools`
+
+- **`number`** (number) ⚪ Optional
+  - The issue number
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to owner/repo/number)
+  - Example: `IstiN/dmtools#42`
+
+**Example:**
+```bash
+dmtools github_assign_issue "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_assign_issue("user", "owner");
+```
+
+---
+
 ### `github_close_issue`
 
 Close a GitHub issue
 
 **Parameters:**
 
-- **`owner`** (string) 🔴 Required
+- **`owner`** (string) ⚪ Optional
   - The repository owner (user or organization)
   - Example: `IstiN`
 
-- **`repo`** (string) 🔴 Required
+- **`repo`** (string) ⚪ Optional
   - The repository name
   - Example: `dmtools`
 
-- **`number`** (number) 🔴 Required
+- **`number`** (number) ⚪ Optional
   - The issue number
   - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to owner/repo/number)
+  - Example: `IstiN/dmtools#42`
 
 **Example:**
 ```bash
@@ -445,21 +495,25 @@ Create a comment on a GitHub issue or pull request (PRs are issues upstream).
 
 **Parameters:**
 
-- **`workspace`** (string) 🔴 Required
+- **`workspace`** (string) ⚪ Optional
   - The GitHub owner/organization name
   - Example: `IstiN`
 
-- **`repository`** (string) 🔴 Required
+- **`repository`** (string) ⚪ Optional
   - The GitHub repository name
   - Example: `dmtools`
 
-- **`pullRequestId`** (string) 🔴 Required
+- **`pullRequestId`** (string) ⚪ Optional
   - The issue or pull request number
   - Example: `74`
 
 - **`body`** (string) 🔴 Required
   - The comment body text
   - Example: `Looks good!`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to workspace/repository/pullRequestId)
+  - Example: `IstiN/dmtools#42`
 
 **Example:**
 ```bash
@@ -525,11 +579,11 @@ Create a GitHub issue
 
 **Parameters:**
 
-- **`owner`** (string) 🔴 Required
+- **`owner`** (string) ⚪ Optional
   - The repository owner (user or organization)
   - Example: `IstiN`
 
-- **`repo`** (string) 🔴 Required
+- **`repo`** (string) ⚪ Optional
   - The repository name
   - Example: `dmtools`
 
@@ -540,6 +594,10 @@ Create a GitHub issue
 - **`body`** (string) ⚪ Optional
   - The issue description (markdown)
   - Example: `Steps to reproduce...`
+
+- **`key`** (string) ⚪ Optional
+  - Composite project key 'owner/repo' (alternative to owner/repo)
+  - Example: `IstiN/dmtools`
 
 **Example:**
 ```bash
@@ -1079,17 +1137,21 @@ Get details of a GitHub issue including title, description, state, author, label
 
 **Parameters:**
 
-- **`workspace`** (string) 🔴 Required
+- **`workspace`** (string) ⚪ Optional
   - The GitHub owner/organization name
   - Example: `IstiN`
 
-- **`repository`** (string) 🔴 Required
+- **`repository`** (string) ⚪ Optional
   - The GitHub repository name
   - Example: `dmtools`
 
-- **`issueNumber`** (string) 🔴 Required
+- **`issueNumber`** (string) ⚪ Optional
   - The issue number
   - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to workspace/repository/issueNumber)
+  - Example: `IstiN/dmtools#42`
 
 **Example:**
 ```bash
@@ -1937,6 +1999,44 @@ const result = github_merge_pr("workspace", "repository");
 
 ---
 
+### `github_move_issue_to_status`
+
+Move a GitHub issue to a status. 'done'/'closed' close the issue, 'open'/'reopened' reopen it; any other status is applied as an issue label.
+
+**Parameters:**
+
+- **`statusName`** (string) 🔴 Required
+  - The target status name
+  - Example: `Done`
+
+- **`owner`** (string) ⚪ Optional
+  - The repository owner (user or organization)
+  - Example: `IstiN`
+
+- **`repo`** (string) ⚪ Optional
+  - The repository name
+  - Example: `dmtools`
+
+- **`number`** (number) ⚪ Optional
+  - The issue number
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to owner/repo/number)
+  - Example: `IstiN/dmtools#42`
+
+**Example:**
+```bash
+dmtools github_move_issue_to_status "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_move_issue_to_status("statusName", "owner");
+```
+
+---
+
 ### `github_remove_collaborator`
 
 Remove a collaborator from a GitHub repository
@@ -1973,21 +2073,25 @@ Remove a label from a GitHub issue
 
 **Parameters:**
 
-- **`owner`** (string) 🔴 Required
+- **`owner`** (string) ⚪ Optional
   - The repository owner (user or organization)
   - Example: `IstiN`
 
-- **`repo`** (string) 🔴 Required
+- **`repo`** (string) ⚪ Optional
   - The repository name
   - Example: `dmtools`
 
-- **`number`** (number) 🔴 Required
+- **`number`** (number) ⚪ Optional
   - The issue number
   - Example: `42`
 
 - **`label`** (string) 🔴 Required
   - The name of the label to remove
   - Example: `bug`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to owner/repo/number)
+  - Example: `IstiN/dmtools#42`
 
 **Example:**
 ```bash
@@ -2031,6 +2135,40 @@ dmtools github_remove_pr_label "value" "value"
 ```javascript
 // In JavaScript agent
 const result = github_remove_pr_label("workspace", "repository");
+```
+
+---
+
+### `github_reopen_issue`
+
+Reopen a closed GitHub issue
+
+**Parameters:**
+
+- **`owner`** (string) ⚪ Optional
+  - The repository owner (user or organization)
+  - Example: `IstiN`
+
+- **`repo`** (string) ⚪ Optional
+  - The repository name
+  - Example: `dmtools`
+
+- **`number`** (number) ⚪ Optional
+  - The issue number
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to owner/repo/number)
+  - Example: `IstiN/dmtools#42`
+
+**Example:**
+```bash
+dmtools github_reopen_issue "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_reopen_issue("owner", "repo");
 ```
 
 ---
@@ -2219,6 +2357,36 @@ dmtools github_resolve_pr_thread "value"
 ```javascript
 // In JavaScript agent
 const result = github_resolve_pr_thread("threadId");
+```
+
+---
+
+### `github_search_issues`
+
+Search GitHub issues (and pull requests) with a query string. Returns a JSON object with 'items'.
+
+**Parameters:**
+
+- **`query`** (string) 🔴 Required
+  - The GitHub issue search query (e.g. 'repo:owner/name is:open label:bug')
+  - Example: `repo:IstiN/dmtools is:open`
+
+- **`workspace`** (string) ⚪ Optional
+  - The GitHub owner/organization to scope the search to
+  - Example: `IstiN`
+
+- **`repository`** (string) ⚪ Optional
+  - The GitHub repository to scope the search to
+  - Example: `dmtools`
+
+**Example:**
+```bash
+dmtools github_search_issues "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = github_search_issues("query", "workspace");
 ```
 
 ---
