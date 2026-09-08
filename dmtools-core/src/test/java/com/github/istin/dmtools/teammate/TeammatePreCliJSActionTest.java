@@ -232,10 +232,12 @@ public class TeammatePreCliJSActionTest {
     }
 
     @Test
-    void testPreCliJSActionExceptionStopsCliExecution() throws Exception {
+    void testPreCliJSActionExceptionStopsCliExecutionAndFailsJob() throws Exception {
         // Regression test for the "engine ignores preCliJSAction failure" bug: when the JS action
-        // throws (e.g. because it couldn't find a PR to review/rework), the engine must NOT proceed
-        // to run CLI commands — the JS action has already posted its own failure comment.
+        // throws an *uncaught* exception (e.g. a git command failure during branch setup), the
+        // engine must NOT proceed to run CLI commands, AND the job must fail overall — an uncaught
+        // exception is unexpected (unlike a deliberate false/{success:false} return), so silently
+        // reporting job success would hide the failure from CI.
         JavaScriptExecutor throwingExecutor = mock(JavaScriptExecutor.class);
         when(throwingExecutor.mcp(any(), any(), any(), any())).thenReturn(throwingExecutor);
         when(throwingExecutor.withJobContext(any(), any(), any())).thenReturn(throwingExecutor);
@@ -258,7 +260,8 @@ public class TeammatePreCliJSActionTest {
                 mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
                     .thenReturn(Map.of());
 
-                assertDoesNotThrow(() -> spy.runJobImpl(params));
+                Exception thrown = assertThrows(Exception.class, () -> spy.runJobImpl(params));
+                assertTrue(thrown.getMessage().contains("TEST-1"), "failure message should mention the failing ticket");
 
                 // CLI command must NOT have been executed — the JS setup failure is a hard stop.
                 mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
@@ -271,6 +274,8 @@ public class TeammatePreCliJSActionTest {
     @Test
     void testPreCliJSActionFalseReturnStopsCliExecution() throws Exception {
         // preparePRForReview.js / preCliReworkSetup.js return `false` (not throw) when no PR is found.
+        // This is an expected business-logic skip (no exception thrown), so unlike the uncaught-exception
+        // case above, the job must NOT fail overall.
         JavaScriptExecutor falseExecutor = mock(JavaScriptExecutor.class);
         when(falseExecutor.mcp(any(), any(), any(), any())).thenReturn(falseExecutor);
         when(falseExecutor.withJobContext(any(), any(), any())).thenReturn(falseExecutor);
@@ -305,6 +310,8 @@ public class TeammatePreCliJSActionTest {
     @Test
     void testPreCliJSActionSuccessFalseObjectStopsCliExecution() throws Exception {
         // preCliReworkSetup.js returns {success: false, error: ...} when setup fails but doesn't throw.
+        // Also an expected skip (no exception), so the job must NOT fail overall — only an uncaught
+        // exception (see testPreCliJSActionExceptionStopsCliExecutionAndFailsJob) does that.
         org.json.JSONObject failureResult = new org.json.JSONObject();
         failureResult.put("success", false);
         failureResult.put("error", "No Pull Request found for ticket TEST-1");

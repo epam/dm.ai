@@ -288,7 +288,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     MermaidIndexTools mermaidIndexTools;
 
     // JavaScript bridge is now inherited from AbstractJob
-    
+
     InstructionProcessor instructionProcessor;
     AgentParamsFileWriter agentParamsFileWriter;
 
@@ -323,52 +323,52 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
     @Override
     protected void initializeStandalone() {
         logger.info("Initializing Teammate in STANDALONE mode using TeammateComponent with BasicGeminiAI");
-        
+
         // Use existing Dagger component for standalone mode
         if (teammateComponent == null) {
             logger.info("Creating new DaggerTeammateComponent for standalone mode");
             teammateComponent = DaggerTeammateComponent.create();
         }
-        
+
         logger.info("Injecting dependencies using TeammateComponent");
         teammateComponent.inject(this);
-        
+
         // Initialize instruction processor after dependencies are injected
         this.instructionProcessor = new InstructionProcessor(confluence);
         this.agentParamsFileWriter = new AgentParamsFileWriter(this.instructionProcessor);
-        
-        logger.info("Teammate standalone initialization completed - AI type: {}", 
+
+        logger.info("Teammate standalone initialization completed - AI type: {}",
                    (ai != null ? ai.getClass().getSimpleName() : "null"));
-        
+
         // TeamAssistantAgent is now automatically injected by Dagger
     }
 
     @Override
     protected void initializeServerManaged(JSONObject resolvedIntegrations) {
         logger.info("Initializing Teammate in SERVER_MANAGED mode using ServerManagedIntegrationsModule");
-        logger.info("Resolved integrations: {}", 
+        logger.info("Resolved integrations: {}",
                    (resolvedIntegrations != null ? resolvedIntegrations.length() + " integrations" : "null"));
-        
+
         // Create dynamic component with pre-resolved integrations
         try {
             logger.info("Creating ServerManagedIntegrationsModule with resolved credentials");
             ServerManagedIntegrationsModule module = new ServerManagedIntegrationsModule(resolvedIntegrations);
-            
+
             logger.info("Building ServerManagedExpertComponent for Teammate");
             ServerManagedExpertComponent component = DaggerTeammate_ServerManagedExpertComponent.builder()
                     .serverManagedIntegrationsModule(module)
                     .build();
-            
+
             logger.info("Injecting dependencies using ServerManagedExpertComponent");
             component.inject(this);
-            
+
             // Initialize instruction processor after dependencies are injected
             this.instructionProcessor = new InstructionProcessor(confluence);
             this.agentParamsFileWriter = new AgentParamsFileWriter(this.instructionProcessor);
-            
-            logger.info("Teammate server-managed initialization completed - AI type: {}", 
+
+            logger.info("Teammate server-managed initialization completed - AI type: {}",
                        (ai != null ? ai.getClass().getSimpleName() : "null"));
-            
+
             // TeamAssistantAgent is now automatically injected by Dagger with server-managed dependencies
         } catch (Exception e) {
             logger.error("Failed to initialize Teammate in server-managed mode: {}", e.getMessage(), e);
@@ -454,6 +454,12 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         contextOrchestrator.clear();
 
         List<ResultItem> results = new ArrayList<>();
+        // Tickets whose preCliJSAction threw an *uncaught* exception (e.g. a git command failure
+        // during branch setup) — as opposed to a deliberate business-logic skip (JS explicitly
+        // returning false/{success:false} without throwing, e.g. "no PR found yet"). An uncaught
+        // exception is unexpected, so the job must fail loudly at the end instead of silently
+        // reporting overall success with a hidden per-ticket "Skipped" result.
+        List<String> unexpectedSetupFailures = new ArrayList<>();
         trackerClient.searchAndPerform(ticket -> {
             long overallStart = System.currentTimeMillis();
             logger.info("Processing ticket: {}", ticket.getKey());
@@ -487,7 +493,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 results.add(new ResultItem(ticket.getTicketKey(), "Skipped by pre-action"));
                 return false; // Skip this ticket
             }
-            
+
             // Create and prepare ticket context
             TicketContext ticketContext = new TicketContext(trackerClient, ticket);
             ticketContext.prepareContext(true, false, expertParams.isIgnoreClonedByRelationship());
@@ -509,7 +515,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             }
             // Process content with ContextOrchestrator
             //contextOrchestrator.processFullContent(ticket.getKey(), ticketText, (UriToObject) trackerClient, uriProcessingSources, expertParams.getTicketContextDepth());
-            
+
             String textFieldsOnly = trackerClient.getTextFieldsOnly(ticket);
 
             //inputParams.setKnownInfo(inputParams.getKnownInfo());
@@ -616,6 +622,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     String preCliJSAction = expertParams.getPreCliJSAction();
                     if (preCliJSAction != null && !preCliJSAction.trim().isEmpty()) {
                         Object preCliActionResult;
+                        boolean preCliJSActionThrew = false;
                         try {
                             preCliActionResult = js(preCliJSAction)
                                 .mcp(trackerClient, ai, confluence, null)
@@ -628,12 +635,19 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             logger.warn("preCliJSAction threw for ticket {}, treating as setup failure (skipping CLI execution and postJSAction): {}",
                                 ticket.getKey(), e.getMessage());
                             preCliActionResult = Boolean.FALSE;
+                            preCliJSActionThrew = true;
                         }
 
                         if (isPreCliJSActionFailure(preCliActionResult)) {
                             logger.warn("preCliJSAction reported failure for ticket {} — skipping CLI execution and postJSAction; " +
                                 "the JS action is responsible for its own failure notification.", ticket.getKey());
                             results.add(new ResultItem(ticket.getTicketKey(), "Skipped: preCliJSAction reported failure"));
+                            if (preCliJSActionThrew) {
+                                // Only an uncaught exception (e.g. a git command failure) is "unexpected" —
+                                // a deliberate false/{success:false} return without throwing is a normal
+                                // business skip and must not fail the job.
+                                unexpectedSetupFailures.add(ticket.getKey());
+                            }
                             return false;
                         }
                     }
@@ -655,7 +669,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             null,
                             CliExecutionHelper.OutputFolderPreference.LEGACY_OUTPUT_FIRST,
                             liveCliErrorState);
-                    
+
                     // Append CLI responses to knownInfo if not empty
                     StringBuilder cliResponses = cliResult.getCommandResponses();
                     if (!cliResponses.isEmpty()) {
@@ -666,7 +680,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                         }
                         inputParams.setKnownInfo(inputParams.getKnownInfo() + "\n\nCLI Execution Results:\n" + cliContent);
                     }
-                    
+
                 } catch (Exception e) {
                     logger.error("Failed to execute CLI commands for ticket {}: {}", ticket.getKey(), e.getMessage(), e);
                     // Create error result for consistent handling below. Also populate the
@@ -713,7 +727,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                                 // Account for story tokens (same pattern as TestCasesGenerator)
                                 logger.info("Index chunking for {}: story tokens={}, system limit={}, chunk limit={}",
                                     indexName, systemTokenLimits, systemTokenLimits, tokenLimit);
-                                
+
                                 List<ChunkPreparation.Chunk> chunks = contextChunkPreparation.prepareChunks(indexData, tokenLimit);
                                 indexChunks.addAll(chunks);
                                 logger.info("Prepared {} chunks from index {} for ticket {}", chunks.size(), indexName, ticket.getKey());
@@ -795,7 +809,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             if (expertParams.isAttachResponseAsFile()) {
                 attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
             }
-            
+
             // Handle output based on outputType, skip publishing if outputType is 'none'
             if (outputType != Params.OutputType.none) {
                 // NEW: Check if output should be skipped (when requireCliOutputFile=true and no output file)
@@ -861,6 +875,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             results.add(new ResultItem(ticket.getTicketKey(), response));
             return false;
         }, inputJQL, trackerClient.getExtendedQueryFields());
+
+        // All matched tickets have been attempted (a batch run keeps processing every ticket
+        // even if one fails setup), but if any preCliJSAction threw an uncaught exception
+        // (e.g. a git command failure), the overall job must fail so the CI step actually
+        // fails instead of exiting 0 with the setup failure hidden inside a ResultItem string.
+        if (!unexpectedSetupFailures.isEmpty()) {
+            throw new RuntimeException("Teammate job aborted: preCliJSAction threw an unexpected error (e.g. a git " +
+                "command failure) for ticket(s) " + unexpectedSetupFailures + " — see the warnings logged above " +
+                "for the underlying error(s).");
+        }
         return results;
     }
 
