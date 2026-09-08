@@ -9,6 +9,7 @@ import com.github.istin.dmtools.broadcom.rally.BasicRallyClient;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.github.GitHubTrackerClient;
 import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import dagger.Module;
 import dagger.Provides;
@@ -33,6 +34,7 @@ public class TrackerModule {
         boolean jiraAttempted = false;
         boolean adoAttempted = false;
         boolean rallyAttempted = false;
+        boolean githubAttempted = false;
         
         // Check if a specific default tracker is configured
         String defaultTracker = configuration.getDefaultTracker();
@@ -90,8 +92,20 @@ public class TrackerModule {
                     logger.error("Failed to initialize XrayClient (DEFAULT_TRACKER=jira_xray): " + e.getMessage());
                 }
                 jiraAttempted = true; // X-ray uses Jira config, so mark Jira as attempted
+            } else if ("github".equalsIgnoreCase(defaultTracker.trim())) {
+                try {
+                    logger.debug("Attempting to initialize TrackerClient via GitHubTrackerClient as DEFAULT_TRACKER=github...");
+                    TrackerClient<? extends ITicket> githubClient = GitHubTrackerClient.getInstance();
+                    if (githubClient != null) {
+                        logger.debug("GitHubTrackerClient initialized successfully.");
+                        return githubClient;
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to initialize GitHubTrackerClient (DEFAULT_TRACKER=github): " + e.getMessage());
+                }
+                githubAttempted = true;
             } else {
-                logger.warn("Unknown DEFAULT_TRACKER value: '{}'. Valid values: 'jira', 'ado', 'rally', 'jira_xray'", defaultTracker);
+                logger.warn("Unknown DEFAULT_TRACKER value: '{}'. Valid values: 'jira', 'ado', 'rally', 'jira_xray', 'github'", defaultTracker);
             }
         }
         
@@ -137,6 +151,20 @@ public class TrackerModule {
                 }
             } catch (Exception e) {
                 logger.debug("BasicRallyClient auto-detection failed: {}", e.getMessage());
+            }
+        }
+
+        // Try GitHub if not already attempted (last resort: issues as tracker)
+        if (!githubAttempted) {
+            try {
+                logger.debug("Attempting to auto-detect GitHubTrackerClient...");
+                TrackerClient<? extends ITicket> githubClient = GitHubTrackerClient.getInstance();
+                if (githubClient != null) {
+                    logger.debug("GitHubTrackerClient auto-detected and initialized successfully.");
+                    return githubClient;
+                }
+            } catch (Exception e) {
+                logger.debug("GitHubTrackerClient auto-detection failed: {}", e.getMessage());
             }
         }
         
