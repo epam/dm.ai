@@ -686,7 +686,12 @@ public class CliExecutionHelper {
                 // real, non-retryable CLI failure from a transient interruption
                 // without string-scanning the free-text response above.
                 hasFatalError = true;
-                lastErrorMessage = errorMsg;
+                // Unlike errorMsg/the log above, this structured field must still carry (a bounded
+                // tail of) the captured output — it's a documented contract JS consumers rely on
+                // to detect known failure signatures (e.g. an API validation message).
+                lastErrorMessage = (e instanceof CliCommandFailedException)
+                        ? ((CliCommandFailedException) e).getTruncatedDiagnosticMessage()
+                        : errorMsg;
                 lastExitCode = (e instanceof CliCommandFailedException)
                         ? ((CliCommandFailedException) e).getExitCode()
                         : null;

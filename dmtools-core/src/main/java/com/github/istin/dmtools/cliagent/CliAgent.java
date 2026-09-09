@@ -329,9 +329,9 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 CommandLineUtils.runCommand(script, workingDirectory.toFile(), PropertyReader.getOverrides(), null, false);
             }
         } catch (Exception e) {
-            // e.getMessage() no longer carries the raw output for CliCommandFailedException — append it.
+            // e.getMessage() no longer carries the raw output for CliCommandFailedException — getDiagnosticMessage() does.
             String msg = e instanceof CliCommandFailedException
-                    ? e.getMessage() + "\nOutput:\n" + ((CliCommandFailedException) e).getOutput()
+                    ? ((CliCommandFailedException) e).getDiagnosticMessage()
                     : e.getMessage();
             logger.warn("{} hook failed, continuing: {}", hookName, msg, e);
         }
