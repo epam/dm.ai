@@ -691,8 +691,13 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     Integer exitCode = (e instanceof com.github.istin.dmtools.common.utils.CliCommandFailedException)
                             ? ((com.github.istin.dmtools.common.utils.CliCommandFailedException) e).getExitCode()
                             : null;
-                    cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null, true, exitCode, e.getMessage());
-                    liveCliErrorState.set(new CliExecutionHelper.LiveCliErrorState(true, exitCode, e.getMessage()));
+                    // Unlike the log line above, the structured field must still carry (a bounded
+                    // tail of) the captured output so JS consumers can detect known failure signatures.
+                    String structuredErrorMessage = (e instanceof com.github.istin.dmtools.common.utils.CliCommandFailedException)
+                            ? ((com.github.istin.dmtools.common.utils.CliCommandFailedException) e).getTruncatedDiagnosticMessage()
+                            : e.getMessage();
+                    cliResult = new CliExecutionHelper.CliExecutionResult(errorResponse, null, true, exitCode, structuredErrorMessage);
+                    liveCliErrorState.set(new CliExecutionHelper.LiveCliErrorState(true, exitCode, structuredErrorMessage));
                 } finally {
                     // Clean up input context
                     if (inputContextPath != null) {
