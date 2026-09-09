@@ -166,7 +166,6 @@ public class CliExecutionHelper {
             downloadAttachments(attachments, inputFolderPath, trackerClient);
         } else {
             if (attachments == null || attachments.isEmpty()) {
-                logger.debug("ℹ️ No attachments found for ticket {}", ticketKey);
             }
             if (trackerClient == null) {
                 logger.warn("⚠️ TrackerClient is null, cannot download attachments");
