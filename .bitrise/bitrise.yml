@@ -76,7 +76,8 @@ workflows:
           inputs:
             # Full history + submodules: the file-size gate diffs against the
             # PR base branch and the agents/ submodule holds the JS test suite.
-            - clone_depth: ''
+            # clone_depth -1 disables the depth limit (full clone).
+            - clone_depth: '-1'
             - update_submodules: 'yes'
 
       - cache-pull@2:
