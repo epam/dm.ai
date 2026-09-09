@@ -63,6 +63,55 @@ pipelines:
     workflows:
       dependency-check: {}
 
+  # ----------------------------------------------------------------------
+  # Automations (were PR-triggered GitHub workflows; not status checks).
+  # ----------------------------------------------------------------------
+
+  # Was .github/workflows/auto-update-prs.yml — keeps open PRs up to date with
+  # main. Push to main / schedule updates ALL open PRs; a PR event updates just
+  # the triggering PR. (The 15-min cron fallback is configured in the Bitrise
+  # app: Scheduled builds -> every 15 min -> this pipeline.)
+  auto-update-open-prs:
+    title: Auto-update open PRs
+    status_report_name: auto-update-prs
+    triggers:
+      push:
+        - branch: main
+      pull_request:
+        - source_branch: "*"
+          target_branch: main
+          draft_enabled: false
+    workflows:
+      auto-update-prs: {}
+
+  # Was .github/workflows/dependabot-auto-merge.yml — enables auto-merge
+  # (squash) on non-draft dependabot PRs targeting main.
+  dependabot-auto-merge:
+    title: Dependabot auto-merge
+    status_report_name: dependabot-auto-merge
+    triggers:
+      pull_request:
+        - source_branch:
+            regex: '^dependabot/.*'
+          target_branch: main
+          draft_enabled: false
+    workflows:
+      dependabot-auto-merge: {}
+
+  # Was .github/workflows/deploy-landing-on-site-data-merge.yml — after a
+  # "chore(release): update site data for ..." squash-merge lands on main,
+  # re-trigger the landing deploy (bot merges don't fire GitHub push triggers).
+  deploy-landing-on-site-data-merge:
+    title: Deploy Landing After Site Data Merge
+    status_report_name: deploy-landing-on-site-data-merge
+    triggers:
+      push:
+        - branch: main
+          commit_message:
+            regex: 'chore\(release\): update site data for'
+    workflows:
+      trigger-landing-deploy: {}
+
 workflows:
 
   # ------------------------------------------------------------------------
@@ -272,3 +321,153 @@ workflows:
           is_skippable: true
           inputs:
             - paths: $HOME/.gradle/dependency-check-data
+
+  # ------------------------------------------------------------------------
+  # Auto-update open PRs when main or PRs change.
+  # Was .github/workflows/auto-update-prs.yml.
+  # ------------------------------------------------------------------------
+  auto-update-prs:
+    title: Auto-update open PRs
+    summary: Updates open PRs that are behind main (gh pr update-branch)
+    steps:
+      - script@1:
+          title: Install gh CLI if missing
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                if ! command -v gh >/dev/null 2>&1; then
+                  echo "Installing GitHub CLI..."
+                  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null || true
+                  (command -v apt-get >/dev/null 2>&1 && apt-get install -y gh >/dev/null 2>&1) || true
+                fi
+                gh --version
+
+      - script@1:
+          title: Update open PRs behind main
+          envs:
+            - GH_TOKEN: $PAT_TOKEN
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                REPO="${BITRISEIO_GIT_REPOSITORY_OWNER}/${BITRISEIO_GIT_REPOSITORY_SLUG}"
+
+                if [ -n "$BITRISE_PULL_REQUEST" ] && [ "$BITRISE_PULL_REQUEST" != "null" ]; then
+                  # pull_request event: update only the triggering PR.
+                  echo "Updating triggering PR #$BITRISE_PULL_REQUEST..."
+                  gh pr update-branch "$BITRISE_PULL_REQUEST" --repo "$REPO" \
+                    || echo "PR #$BITRISE_PULL_REQUEST skipped (already up to date or conflict)"
+                  exit 0
+                fi
+
+                # push to main / schedule / manual: update all open PRs behind main.
+                # GitHub recomputes mergeability asynchronously after a push to main —
+                # retry until no PRs are stuck in UNKNOWN (up to ~90s) so the MERGEABLE
+                # filter doesn't miss them.
+                for attempt in $(seq 1 6); do
+                  unknown=$(gh pr list --repo "$REPO" --state open --base main \
+                    --json number,mergeable \
+                    --jq '[.[] | select(.mergeable == "UNKNOWN")] | length')
+                  echo "Attempt $attempt: $unknown PR(s) still in UNKNOWN mergeability state"
+                  [ "$unknown" -eq 0 ] && break
+                  sleep 15
+                done
+
+                prs=$(gh pr list --repo "$REPO" --state open --base main \
+                  --json number,mergeable,isDraft,mergeStateStatus \
+                  --jq '.[]
+                         | select(.isDraft == false)
+                         | select(.mergeable == "MERGEABLE")
+                         | select(.mergeStateStatus != "DIRTY")
+                         | .number')
+
+                if [ -z "$prs" ]; then
+                  echo "No candidate PRs found."
+                  exit 0
+                fi
+
+                for pr in $prs; do
+                  echo "Attempting to update PR #$pr..."
+                  gh pr update-branch "$pr" --repo "$REPO" \
+                    || echo "PR #$pr skipped (already up to date or conflict)"
+                done
+
+  # ------------------------------------------------------------------------
+  # Dependabot auto-merge (squash) for non-draft PRs targeting main.
+  # Was .github/workflows/dependabot-auto-merge.yml.
+  # ------------------------------------------------------------------------
+  dependabot-auto-merge:
+    title: Dependabot auto-merge
+    summary: Enable auto-merge (squash) for non-draft dependabot PRs to main
+    steps:
+      - script@1:
+          title: Install gh CLI if missing
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                if ! command -v gh >/dev/null 2>&1; then
+                  (command -v apt-get >/dev/null 2>&1 && apt-get install -y gh >/dev/null 2>&1) || true
+                fi
+                gh --version
+
+      - script@1:
+          title: Enable auto-merge for Dependabot PR
+          envs:
+            - GH_TOKEN: $PAT_TOKEN
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                REPO="${BITRISEIO_GIT_REPOSITORY_OWNER}/${BITRISEIO_GIT_REPOSITORY_SLUG}"
+                PR_NUMBER="$BITRISE_PULL_REQUEST"
+
+                if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+                  echo "Not a pull request build; nothing to do."
+                  exit 0
+                fi
+
+                # Guard: only dependabot[bot] PRs (trigger regex already matched the
+                # dependabot/* branch; double-check the author for safety).
+                author=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json author --jq '.author.login')
+                if [ "$author" != "dependabot[bot]" ]; then
+                  echo "PR #$PR_NUMBER author is '$author', not dependabot[bot]; skipping."
+                  exit 0
+                fi
+
+                echo "Enabling auto-merge (squash) for Dependabot PR #$PR_NUMBER..."
+                # PAT (not GITHUB_TOKEN) so the merge commit triggers further builds.
+                gh pr merge --auto --squash "$PR_NUMBER" --repo "$REPO"
+
+  # ------------------------------------------------------------------------
+  # Deploy landing after a release-site-data squash-merge lands on main.
+  # Was .github/workflows/deploy-landing-on-site-data-merge.yml. Bot merges
+  # don't fire GitHub push triggers, so this re-triggers deploy-landing.yml.
+  # ------------------------------------------------------------------------
+  trigger-landing-deploy:
+    title: Trigger landing page deploy
+    summary: After a release site-data merge to main, re-run deploy-landing.yml
+    steps:
+      - script@1:
+          title: Install gh CLI if missing
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                if ! command -v gh >/dev/null 2>&1; then
+                  (command -v apt-get >/dev/null 2>&1 && apt-get install -y gh >/dev/null 2>&1) || true
+                fi
+                gh --version
+
+      - script@1:
+          title: Trigger landing page deploy
+          envs:
+            - GH_TOKEN: $GITHUB_TOKEN
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                REPO="${BITRISEIO_GIT_REPOSITORY_OWNER}/${BITRISEIO_GIT_REPOSITORY_SLUG}"
+                echo "Triggering deploy-landing.yml on main in $REPO..."
+                gh workflow run deploy-landing.yml --repo "$REPO" --ref main
