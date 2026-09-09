@@ -45,9 +45,9 @@ import java.util.regex.Pattern;
  * Handles context preparation, command execution, and output processing.
  */
 public class CliExecutionHelper {
-    
+
     private static final Logger logger = LogManager.getLogger(CliExecutionHelper.class);
-    
+
     private static final String INPUT_FOLDER_PREFIX = "input";
     private static final String REQUEST_FILE_NAME = "request.md";
     private static final String OUTPUT_FOLDER = "outputs";
@@ -154,7 +154,7 @@ public class CliExecutionHelper {
 
         // Download ticket attachments to the input folder
         List<? extends IAttachment> attachments = attachmentsOverride != null ? attachmentsOverride : ticket.getAttachments();
-        logger.info("📎 Ticket {} has {} attachments", ticketKey, attachments != null ? attachments.size() : 0);
+        logger.debug("📎 Ticket {} has {} attachments", ticketKey, attachments != null ? attachments.size() : 0);
 
         if (attachments != null && !attachments.isEmpty() && trackerClient != null) {
             logger.info("⬇️ Downloading {} attachments for ticket {}", attachments.size(), ticketKey);
@@ -166,7 +166,6 @@ public class CliExecutionHelper {
             downloadAttachments(attachments, inputFolderPath, trackerClient);
         } else {
             if (attachments == null || attachments.isEmpty()) {
-                logger.info("ℹ️ No attachments found for ticket {}", ticketKey);
             }
             if (trackerClient == null) {
                 logger.warn("⚠️ TrackerClient is null, cannot download attachments");
@@ -272,7 +271,7 @@ public class CliExecutionHelper {
         try {
             Set<String> seedUrls = confluence.parseUris(textContent);
             if (seedUrls == null || seedUrls.isEmpty()) {
-                logger.info("No Confluence URLs detected in ticket text");
+                logger.debug("No Confluence URLs detected in ticket text");
                 return;
             }
             logger.info("Found {} Confluence URL(s), writing to input/confluence/ with depth={} attachments={} comments={}",
@@ -300,7 +299,7 @@ public class CliExecutionHelper {
 
     /**
      * Downloads ticket attachments to the specified folder.
-     * 
+     *
      * @param attachments List of attachments to download
      * @param targetFolder Target folder to save attachments
      * @param trackerClient Tracker client for downloading files
@@ -309,14 +308,14 @@ public class CliExecutionHelper {
     private void downloadAttachments(List<? extends IAttachment> attachments, Path targetFolder, TrackerClient<?> trackerClient) throws IOException {
         int successCount = 0;
         int failCount = 0;
-        
+
         for (IAttachment attachment : attachments) {
             if (attachment == null) {
                 logger.warn("⚠️ Skipping null attachment");
                 failCount++;
                 continue;
             }
-            
+
             try {
                 String fileName = attachment.getName();
                 if (fileName == null || fileName.trim().isEmpty()) {
@@ -324,12 +323,12 @@ public class CliExecutionHelper {
                     failCount++;
                     continue;
                 }
-                
+
                 // Ensure safe filename (remove path separators)
                 fileName = fileName.replaceAll("[/\\\\]", "_");
-                
+
                 Path attachmentPath = targetFolder.resolve(fileName);
-                
+
                 // Download attachment using TrackerClient
                 String attachmentUrl = attachment.getUrl();
                 if (attachmentUrl != null && !attachmentUrl.trim().isEmpty()) {
@@ -354,14 +353,14 @@ public class CliExecutionHelper {
                 // Continue with other attachments instead of failing completely
             }
         }
-        
-        logger.info("📊 Attachment download summary: {} succeeded, {} failed out of {} total", 
+
+        logger.info("📊 Attachment download summary: {} succeeded, {} failed out of {} total",
             successCount, failCount, attachments.size());
     }
-    
+
     /**
      * Executes CLI commands and collects their responses.
-     * 
+     *
      * @param cliCommands Array of CLI commands to execute
      * @param workingDirectory Working directory for command execution (optional)
      * @return StringBuilder containing all command responses
@@ -710,7 +709,7 @@ public class CliExecutionHelper {
         }
         return false;
     }
-    
+
     /**
      * Executes CLI commands in the specified working directory and processes output response.
      *
@@ -1037,26 +1036,26 @@ public class CliExecutionHelper {
                 ? workingDirectory.resolve(folder).resolve(RESPONSE_FILE_NAME)
                 : Paths.get(folder, RESPONSE_FILE_NAME);
     }
-    
+
     /**
      * Cleans up temporary input folders and files.
-     * 
+     *
      * @param inputFolderPath Path to the input folder to clean up
      */
     public void cleanupInputContext(Path inputFolderPath) {
         if (inputFolderPath == null || !Files.exists(inputFolderPath)) {
             return;
         }
-        
+
         try {
             IOUtils.deleteRecursively(inputFolderPath);
             logger.info("Cleaned up input folder: {}", inputFolderPath.toAbsolutePath());
         } catch (IOException e) {
-            logger.warn("Failed to cleanup input folder {}: {}", 
+            logger.warn("Failed to cleanup input folder {}: {}",
                        inputFolderPath.toAbsolutePath(), e.getMessage());
         }
     }
-    
+
     /**
      * Filters environment variables by exact name and/or regex patterns.
      * Returns a new map with matching keys removed. If both filters are null/empty,
