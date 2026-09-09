@@ -9,7 +9,7 @@ import com.github.istin.dmtools.common.utils.PropertyReader;
 
 import java.io.IOException;
 
-public class BasicGithub extends GitHub {
+public class BasicGithub extends GitHubActions {
 
     private static SourceCodeConfig DEFAULT_CONFIG;
 
