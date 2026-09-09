@@ -18,7 +18,9 @@ public class CliCommandFailedException extends IOException {
     private final String output;
 
     public CliCommandFailedException(String command, int exitCode, String output) {
-        super("Command failed (exit code " + exitCode + "): " + command + "\nOutput:\n" + output.trim());
+        // Message intentionally excludes the raw output (use getOutput()) so every catch site
+        // that logs/propagates e.getMessage() doesn't reprint the full captured CLI output.
+        super("Command failed (exit code " + exitCode + "): " + command);
         this.command = command;
         this.exitCode = exitCode;
         this.output = output;

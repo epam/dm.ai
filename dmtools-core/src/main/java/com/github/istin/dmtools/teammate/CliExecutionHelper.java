@@ -672,7 +672,12 @@ public class CliExecutionHelper {
                     }
                 }
                 cliResponses.append("CLI Command: ").append(command).append("\n");
-                cliResponses.append("Error: ").append(errorMsg).append("\n\n");
+                cliResponses.append("Error: ").append(errorMsg).append("\n");
+                // e.getMessage() no longer carries the raw output — surface it here once.
+                if (e instanceof CliCommandFailedException) {
+                    cliResponses.append("Output:\n").append(((CliCommandFailedException) e).getOutput().trim()).append("\n");
+                }
+                cliResponses.append("\n");
                 if (liveOutput != null) {
                     liveOutput.set(cliResponses.toString());
                 }
