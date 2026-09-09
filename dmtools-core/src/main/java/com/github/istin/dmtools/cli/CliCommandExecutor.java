@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.cli;
 
+import com.github.istin.dmtools.common.utils.CliCommandFailedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.common.utils.SecurityUtils;
@@ -141,7 +142,11 @@ public class CliCommandExecutor {
             logger.error("Command execution failed: {} - {}", maskedCommand, maskedError, e);
             
             // Re-throw with masked error message
-            if (e instanceof IOException) {
+            if (e instanceof CliCommandFailedException) {
+                // e.getMessage() no longer carries the raw output — append it so callers still see it.
+                String maskedOutput = maskSensitiveData(((CliCommandFailedException) e).getOutput());
+                throw new IOException("Command execution failed: " + maskedError + "\nOutput:\n" + maskedOutput, e);
+            } else if (e instanceof IOException) {
                 throw new IOException("Command execution failed: " + maskedError, e);
             } else {
                 throw (InterruptedException) e;

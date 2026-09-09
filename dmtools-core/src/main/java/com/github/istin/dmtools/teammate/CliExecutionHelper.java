@@ -671,7 +671,12 @@ public class CliExecutionHelper {
                     }
                 }
                 cliResponses.append("CLI Command: ").append(command).append("\n");
-                cliResponses.append("Error: ").append(errorMsg).append("\n\n");
+                cliResponses.append("Error: ").append(errorMsg).append("\n");
+                // e.getMessage() no longer carries the raw output — surface it here once.
+                if (e instanceof CliCommandFailedException) {
+                    cliResponses.append("Output:\n").append(((CliCommandFailedException) e).getOutput().trim()).append("\n");
+                }
+                cliResponses.append("\n");
                 if (liveOutput != null) {
                     liveOutput.set(cliResponses.toString());
                 }
@@ -681,7 +686,12 @@ public class CliExecutionHelper {
                 // real, non-retryable CLI failure from a transient interruption
                 // without string-scanning the free-text response above.
                 hasFatalError = true;
-                lastErrorMessage = errorMsg;
+                // Unlike errorMsg/the log above, this structured field must still carry (a bounded
+                // tail of) the captured output — it's a documented contract JS consumers rely on
+                // to detect known failure signatures (e.g. an API validation message).
+                lastErrorMessage = (e instanceof CliCommandFailedException)
+                        ? ((CliCommandFailedException) e).getTruncatedDiagnosticMessage()
+                        : errorMsg;
                 lastExitCode = (e instanceof CliCommandFailedException)
                         ? ((CliCommandFailedException) e).getExitCode()
                         : null;

@@ -10,6 +10,7 @@ import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.CliCommandFailedException;
 import com.github.istin.dmtools.common.utils.CommandLineUtils;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
@@ -328,7 +329,11 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                 CommandLineUtils.runCommand(script, workingDirectory.toFile(), PropertyReader.getOverrides(), null, false);
             }
         } catch (Exception e) {
-            logger.warn("{} hook failed, continuing: {}", hookName, e.getMessage(), e);
+            // e.getMessage() no longer carries the raw output for CliCommandFailedException — getDiagnosticMessage() does.
+            String msg = e instanceof CliCommandFailedException
+                    ? ((CliCommandFailedException) e).getDiagnosticMessage()
+                    : e.getMessage();
+            logger.warn("{} hook failed, continuing: {}", hookName, msg, e);
         }
     }
 
