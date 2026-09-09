@@ -1,0 +1,273 @@
+# Bitrise CI configuration — PR checks migrated from GitHub Actions.
+#
+# This file replicates the repository's GitHub PR checks:
+#   - "Java unit tests"   (required status check, was .github/workflows/unit-tests.yml)
+#   - "OWASP dependency check (advisory)" (was .github/workflows/dependency-check.yml)
+#
+# The other pull_request workflows in .github/workflows (auto-update-prs,
+# dependabot-auto-merge, deploy-landing-on-site-data-merge) are automation,
+# not checks, and stay on GitHub Actions.
+#
+# Location: this config is stored at .bitrise/bitrise.yml (a custom path).
+# In the Bitrise app settings set "Config source" = repository, custom path
+# ".bitrise/bitrise.yml", so Bitrise reads it from the repo.
+#
+# Status reports use the exact GitHub check contexts ("Java unit tests",
+# "OWASP dependency check (advisory)") so the existing branch ruleset keeps
+# matching without changes.
+
+format_version: "25"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: java
+
+title: DM Tools — PR checks
+summary: Java unit tests, quality gates, agents JS suite, OWASP dependency check
+description: >-
+  Bitrise port of the GitHub PR checks. The "Java unit tests" pipeline is the
+  required check; the OWASP dependency check stays advisory (never blocks).
+
+# Default stack: Ubuntu with Java 17 + Node available (Android stack carries both).
+meta:
+  bitrise.io:
+    stack: linux-docker-android-22.04
+    machine_type_id: g2.linux.2medium
+
+app:
+  envs:
+    # Tests read GITHUB_TOKEN (used by GitHub-integration unit tests).
+    - GITHUB_TOKEN: $GITHUB_TOKEN
+    # OWASP dependency check NVD API key (advisory workflow).
+    - NVD_API_KEY: $NVD_API_KEY
+    - GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+    - DMTOOLS_CACHE_ENABLED: "false"
+
+pipelines:
+  # Required PR check — mirrors the "Java unit tests" GitHub status check.
+  pr-unit-tests:
+    title: Java unit tests
+    status_report_name: Java unit tests
+    triggers:
+      pull_request:
+        - target_branch: "*"
+    workflows:
+      unit-tests: {}
+
+  # Advisory PR check — mirrors the OWASP dependency check GitHub workflow.
+  # Runs in parallel; is_skippable steps keep it from ever blocking the build.
+  pr-dependency-check:
+    title: OWASP dependency check (advisory)
+    status_report_name: OWASP dependency check (advisory)
+    triggers:
+      pull_request:
+        - target_branch: "*"
+    workflows:
+      dependency-check: {}
+
+workflows:
+
+  # ------------------------------------------------------------------------
+  # Java unit tests + quality gates + agents JS suite (required check).
+  # ------------------------------------------------------------------------
+  unit-tests:
+    title: Java unit tests
+    summary: Quality gates, dmtools-core unit tests, and the agents JS suite
+    steps:
+      - git-clone@8:
+          inputs:
+            # Full history + submodules: the file-size gate diffs against the
+            # PR base branch and the agents/ submodule holds the JS test suite.
+            - clone_depth: ''
+            - update_submodules: 'yes'
+
+      - cache-pull@2:
+          inputs:
+            - cache_key: gradle-{{ checksum "gradle.properties" }}
+
+      - script@1:
+          title: Set up Node.js + jscpd
+          is_skippable: true
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                node --version
+                npm install -g jscpd@5.0.11
+
+      - script@1:
+          title: 'Quality gate: check Java file sizes (advisory)'
+          is_skippable: true
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                BASE_REF="${BITRISEIO_PULL_REQUEST_DEST_BRANCH:-main}"
+                git fetch origin "$BASE_REF" --depth=1 >/dev/null 2>&1 || true
+                MAX_LINES=2800
+                FAILED=0
+                while IFS= read -r file; do
+                  case "$file" in
+                    *.java)
+                      head_lines=$(wc -l < "$file")
+                      base_lines=$(git show origin/"$BASE_REF":"$file" 2>/dev/null | wc -l || echo 0)
+                      if (( head_lines > MAX_LINES && base_lines <= MAX_LINES )); then
+                        echo "❌ $file: $head_lines lines (max $MAX_LINES); was $base_lines on $BASE_REF"
+                        FAILED=1
+                      fi
+                      ;;
+                  esac
+                done < <(git diff --name-only --diff-filter=ACMR origin/"$BASE_REF"...HEAD)
+                if [ "$FAILED" -ne 0 ]; then
+                  echo "Quality gate failed: changed Java files exceed $MAX_LINES lines."
+                  exit 1
+                fi
+
+      - script@1:
+          title: 'Quality gate: code duplication vs baseline (advisory)'
+          is_skippable: true
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                jscpd --min-tokens 50 --min-lines 5 --reporters json --output /tmp/jscpd-check dmtools-core/src/main/java/ >/dev/null 2>&1 || true
+                CURRENT=$(python3 -c '
+                import json
+                try:
+                    with open("/tmp/jscpd-check/jscpd-report.json") as f:
+                        d=json.load(f)
+                    print(d["statistics"]["total"]["percentage"])
+                except Exception:
+                    print("0.0")
+                ')
+                BASELINE=$(python3 -c '
+                import json
+                try:
+                    with open("scripts/jscpd-baseline.json") as f:
+                        d=json.load(f)
+                    print(d.get("percentage", 999.0))
+                except Exception:
+                    print("999.0")
+                ')
+                echo "Current duplication: $CURRENT%"
+                echo "Baseline: $BASELINE%"
+                python3 -c "import sys; sys.exit(0 if float('$CURRENT') <= float('$BASELINE') else 1)"
+
+      - script@1:
+          title: Set up Java 17 + configure git
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                # The stack ships Java 17; expose it explicitly and fail loudly otherwise.
+                if ! java -version 2>&1 | grep -q '17'; then
+                  echo "Java 17 is required but not on PATH" >&2
+                  exit 1
+                fi
+                java -version
+                git config --global user.name "dm.ai"
+                git config --global user.email "dm.ai@epam.com"
+
+      - script@1:
+          title: Run unit tests (dmtools-core)
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                ./gradlew :dmtools-core:test --no-daemon -x integrationTest
+
+      - script@1:
+          title: Build DMTools shadow JAR (for agents JS tests)
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                ./gradlew :dmtools-core:shadowJar --no-daemon
+                mkdir -p "$HOME/.dmtools"
+                cp "build/libs/dmtools-v$(grep '^version=' gradle.properties | cut -d'=' -f2)-all.jar" "$HOME/.dmtools/dmtools.jar"
+                java -jar "$HOME/.dmtools/dmtools.jar" --version
+
+      - script@1:
+          title: 'Agents JS tests: run + validate (advisory)'
+          is_skippable: true
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                cd agents
+                ../dmtools.sh run js/unit-tests/run_all.json > ../agents-test-output.json 2>&1 || true
+                cat ../agents-test-output.json
+                cd ..
+                PASSED=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
+                FAILED=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
+                echo "Agents JS tests: $PASSED passed, $FAILED failed"
+                if [ -z "$PASSED" ] || [ -z "$FAILED" ]; then
+                  echo "Could not parse agents test results"
+                  exit 1
+                fi
+                if [ "$FAILED" -ne 0 ]; then
+                  echo "Some agents JS tests failed. See output above for details."
+                  exit 1
+                fi
+
+      - deploy-to-bitrise-io@2:
+          title: Publish test results + agents output
+          is_always_run: true
+          is_skippable: true
+          inputs:
+            - path: |
+                **/build/test-results/test/TEST-*.xml
+                agents-test-output.json
+
+      - cache-push@2:
+          title: Push Gradle cache
+          is_skippable: true
+          inputs:
+            - paths: |
+                $HOME/.gradle/caches
+                $HOME/.gradle/wrapper
+
+  # ------------------------------------------------------------------------
+  # OWASP dependency check (advisory, never blocks).
+  # ------------------------------------------------------------------------
+  dependency-check:
+    title: OWASP dependency check (advisory)
+    summary: Advisory dependency vulnerability scan; findings never block merge
+    steps:
+      - git-clone@8: {}
+
+      - cache-pull@2:
+          is_skippable: true
+          inputs:
+            - cache_key: owasp-{{ checksum "build.gradle" }}-{{ checksum "gradle.properties" }}
+
+      - script@1:
+          title: Set up Java 17
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                if ! java -version 2>&1 | grep -q '17'; then
+                  echo "Java 17 is required but not on PATH" >&2
+                  exit 1
+                fi
+                java -version
+
+      - script@1:
+          title: Run OWASP dependency check (advisory)
+          # Advisory: a scan failure/findings must not fail the build.
+          is_skippable: true
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                ./gradlew dependencyCheckAnalyze --no-daemon
+
+      - deploy-to-bitrise-io@2:
+          title: Upload dependency-check report
+          is_always_run: true
+          is_skippable: true
+          inputs:
+            - path: '**/build/reports/dependency-check-report.html'
+
+      - cache-push@2:
+          title: Push OWASP data cache
+          is_skippable: true
+          inputs:
+            - paths: $HOME/.gradle/dependency-check-data
