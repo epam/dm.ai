@@ -1,12 +1,14 @@
 # Bitrise CI configuration — PR checks migrated from GitHub Actions.
 #
-# This file replicates the repository's GitHub PR checks:
+# This file replicates the repository's GitHub PR checks and PR automations:
 #   - "Java unit tests"   (required status check, was .github/workflows/unit-tests.yml)
-#   - "OWASP dependency check (advisory)" (was .github/workflows/dependency-check.yml)
+#   - auto-update-prs, dependabot-auto-merge, deploy-landing-on-site-data-merge
+#     (PR automations, were .github/workflows/*.yml)
 #
-# The other pull_request workflows in .github/workflows (auto-update-prs,
-# dependabot-auto-merge, deploy-landing-on-site-data-merge) are automation,
-# not checks, and stay on GitHub Actions.
+# The OWASP dependency check was removed: NVD_API_KEY resolves to an empty value
+# at runtime, so every run failed the live NVD update and scanned a stale cached
+# snapshot. It provided no real value and was dropped from both GitHub Actions
+# and Bitrise.
 #
 # Location: this config is stored at .bitrise/bitrise.yml (a custom path).
 # In the Bitrise app settings set "Config source" = repository, custom path
@@ -36,8 +38,6 @@ app:
   envs:
     # Tests read GITHUB_TOKEN (used by GitHub-integration unit tests).
     - GITHUB_TOKEN: $GITHUB_TOKEN
-    # OWASP dependency check NVD API key (advisory workflow).
-    - NVD_API_KEY: $NVD_API_KEY
     - GRADLE_OPTS: "-Dorg.gradle.daemon=false"
     - DMTOOLS_CACHE_ENABLED: "false"
 
@@ -51,17 +51,6 @@ pipelines:
         - target_branch: "*"
     workflows:
       unit-tests: {}
-
-  # Advisory PR check — mirrors the OWASP dependency check GitHub workflow.
-  # Runs in parallel; is_skippable steps keep it from ever blocking the build.
-  pr-dependency-check:
-    title: OWASP dependency check (advisory)
-    status_report_name: OWASP dependency check (advisory)
-    triggers:
-      pull_request:
-        - target_branch: "*"
-    workflows:
-      dependency-check: {}
 
   # ----------------------------------------------------------------------
   # Automations (were PR-triggered GitHub workflows; not status checks).
@@ -273,54 +262,6 @@ workflows:
             - paths: |
                 $HOME/.gradle/caches
                 $HOME/.gradle/wrapper
-
-  # ------------------------------------------------------------------------
-  # OWASP dependency check (advisory, never blocks).
-  # ------------------------------------------------------------------------
-  dependency-check:
-    title: OWASP dependency check (advisory)
-    summary: Advisory dependency vulnerability scan; findings never block merge
-    steps:
-      - git-clone@8: {}
-
-      - cache-pull@2:
-          is_skippable: true
-          inputs:
-            - cache_key: owasp-{{ checksum "build.gradle" }}-{{ checksum "gradle.properties" }}
-
-      - script@1:
-          title: Set up Java 17
-          inputs:
-            - content: |-
-                #!/usr/bin/env bash
-                set -e
-                if ! java -version 2>&1 | grep -q '17'; then
-                  echo "Java 17 is required but not on PATH" >&2
-                  exit 1
-                fi
-                java -version
-
-      - script@1:
-          title: Run OWASP dependency check (advisory)
-          # Advisory: a scan failure/findings must not fail the build.
-          is_skippable: true
-          inputs:
-            - content: |-
-                #!/usr/bin/env bash
-                ./gradlew dependencyCheckAnalyze --no-daemon
-
-      - deploy-to-bitrise-io@2:
-          title: Upload dependency-check report
-          is_always_run: true
-          is_skippable: true
-          inputs:
-            - path: '**/build/reports/dependency-check-report.html'
-
-      - cache-push@2:
-          title: Push OWASP data cache
-          is_skippable: true
-          inputs:
-            - paths: $HOME/.gradle/dependency-check-data
 
   # ------------------------------------------------------------------------
   # Auto-update open PRs when main or PRs change.
