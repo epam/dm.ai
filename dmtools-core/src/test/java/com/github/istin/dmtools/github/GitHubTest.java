@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
  */
 public class GitHubTest {
 
-    private GitHub gitHub;
+    private GitHubIssues gitHub;
     private static final String BASE_PATH = "https://api.github.com";
     private static final String AUTHORIZATION = "token";
 
@@ -87,7 +87,7 @@ public class GitHubTest {
 
     @Test
     public void testListWorkflowRunsAddsPageParameter() throws Exception {
-        GitHub spyGitHub = spy(gitHub);
+        GitHubIssues spyGitHub = spy(gitHub);
         doReturn("{\"workflow_runs\":[]}").when(spyGitHub).execute(any(GenericRequest.class));
 
         spyGitHub.listWorkflowRuns("testWorkspace", "testRepo", "completed", "ai-teammate.yml", 100, 3, null);
@@ -103,7 +103,7 @@ public class GitHubTest {
 
     @Test
     public void testListWorkflowRunsOmitsPageWhenNotProvided() throws Exception {
-        GitHub spyGitHub = spy(gitHub);
+        GitHubIssues spyGitHub = spy(gitHub);
         doReturn("{\"workflow_runs\":[]}").when(spyGitHub).execute(any(GenericRequest.class));
 
         spyGitHub.listWorkflowRuns("testWorkspace", "testRepo", "failure", null, 50, null, null);
@@ -119,7 +119,7 @@ public class GitHubTest {
 
     @Test
     public void testListWorkflowRunsAddsCreatedFilter() throws Exception {
-        GitHub spyGitHub = spy(gitHub);
+        GitHubIssues spyGitHub = spy(gitHub);
         doReturn("{\"workflow_runs\":[]}").when(spyGitHub).execute(any(GenericRequest.class));
 
         spyGitHub.listWorkflowRuns("testWorkspace", "testRepo", "completed", "ai-teammate.yml", 100, 1, "2026-05-01..2026-05-31");
@@ -191,11 +191,11 @@ public class GitHubTest {
 
     @Test
     public void testGetIssueFetchesExpectedUrl() throws Exception {
-        GitHub spyGitHub = spy(gitHub);
+        GitHubIssues spyGitHub = spy(gitHub);
         doReturn("{\"number\":42,\"title\":" +
                 "\"Add github issue tool\",\"state\":\"open\"}").when(spyGitHub).execute(any(GenericRequest.class));
 
-        GitHubIssue issue = spyGitHub.issue("testWorkspace", "testRepo", "42");
+        GitHubIssue issue = spyGitHub.issue("testWorkspace", "testRepo", "42", null);
 
         assertNotNull(issue);
         assertEquals(Integer.valueOf(42), issue.getNumber());
