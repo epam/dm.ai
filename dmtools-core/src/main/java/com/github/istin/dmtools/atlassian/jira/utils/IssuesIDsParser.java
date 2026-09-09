@@ -172,7 +172,7 @@ public class IssuesIDsParser {
         // Create pattern to match both /wiki/ and /l/cp/ URLs
         String pattern = escapedDomain + "/(wiki/|l/cp/)[^\"\\s|\\]\\\\]+";
 
-        logger.info("Using pattern: " + pattern);
+        logger.debug("Using pattern: " + pattern);
 
         // Compile the regex
         Pattern regex = Pattern.compile(pattern);
