@@ -10,6 +10,7 @@ import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.NoOpTrackerClient;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.github.GitHubTrackerClient;
 import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,10 +88,12 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenThrow(new IOException("jira down"));
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(adoClient);
             rally.when(BasicRallyClient::getInstance).thenReturn(null);
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
@@ -123,7 +126,8 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenReturn(null);
             ado.when(BasicAzureDevOpsClient::getInstance).thenThrow(new IOException("ado down"));
             rally.when(BasicRallyClient::getInstance).thenReturn(rallyClient);
@@ -143,7 +147,8 @@ public class TrackerModuleTest {
         when(configuration.getDefaultTracker()).thenReturn("rally");
         BasicRallyClient rallyClient = mock(BasicRallyClient.class);
 
-        try (MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+        try (MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             rally.when(BasicRallyClient::getInstance).thenReturn(rallyClient);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
@@ -158,10 +163,12 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenReturn(null);
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
             rally.when(BasicRallyClient::getInstance).thenThrow(new IOException("rally down"));
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
@@ -169,6 +176,64 @@ public class TrackerModuleTest {
             assertNotNull(result);
             assertTrue(result instanceof NoOpTrackerClient);
             rally.verify(BasicRallyClient::getInstance, org.mockito.Mockito.times(1));
+        }
+    }
+
+    // ---------- DEFAULT_TRACKER=github ----------
+
+    @Test
+    void testProvideTrackerClient_DefaultTrackerGithubSuccess() {
+        when(configuration.getDefaultTracker()).thenReturn("github");
+        GitHubTrackerClient githubClient = mock(GitHubTrackerClient.class);
+
+        try (MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
+            github.when(GitHubTrackerClient::getInstance).thenReturn(githubClient);
+
+            TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
+
+            assertSame(githubClient, result);
+        }
+    }
+
+    @Test
+    void testProvideTrackerClient_DefaultTrackerGithubThrowsGithubNotRetriedJiraUsed() {
+        when(configuration.getDefaultTracker()).thenReturn("github");
+        TrackerClient<? extends ITicket> jiraClient = trackerMock();
+
+        try (MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class);
+             MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
+             MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+            github.when(GitHubTrackerClient::getInstance).thenThrow(new IOException("github down"));
+            jira.when(BasicJiraClient::getInstance).thenReturn(jiraClient);
+            ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
+            rally.when(BasicRallyClient::getInstance).thenReturn(null);
+
+            TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
+
+            // GitHub was already attempted (and failed), so it must be skipped in auto-detection
+            assertSame(jiraClient, result);
+            github.verify(GitHubTrackerClient::getInstance, org.mockito.Mockito.times(1));
+        }
+    }
+
+    @Test
+    void testProvideTrackerClient_AutoDetectsGithubWhenOthersUnconfigured() {
+        when(configuration.getDefaultTracker()).thenReturn(null);
+        GitHubTrackerClient githubClient = mock(GitHubTrackerClient.class);
+
+        try (MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class);
+             MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
+             MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+            github.when(GitHubTrackerClient::getInstance).thenReturn(githubClient);
+            jira.when(BasicJiraClient::getInstance).thenReturn(null);
+            ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
+            rally.when(BasicRallyClient::getInstance).thenReturn(null);
+
+            TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
+
+            assertSame(githubClient, result);
         }
     }
 
@@ -196,11 +261,13 @@ public class TrackerModuleTest {
         try (MockedStatic<XrayClient> xray = mockStatic(XrayClient.class);
              MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             xray.when(XrayClient::getInstance).thenThrow(new IOException("xray down"));
             jira.when(BasicJiraClient::getInstance).thenReturn(trackerMock());
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(adoClient);
             rally.when(BasicRallyClient::getInstance).thenReturn(null);
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
@@ -219,10 +286,12 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenReturn(jiraClient);
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
             rally.when(BasicRallyClient::getInstance).thenReturn(null);
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
@@ -237,10 +306,12 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenReturn(jiraClient);
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
             rally.when(BasicRallyClient::getInstance).thenReturn(null);
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
@@ -255,10 +326,12 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenReturn(null);
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(adoClient);
             rally.when(BasicRallyClient::getInstance).thenReturn(null);
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
@@ -273,7 +346,8 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenReturn(null);
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
             rally.when(BasicRallyClient::getInstance).thenReturn(rallyClient);
@@ -293,10 +367,12 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenThrow(new IOException("jira down"));
             ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(adoClient);
             rally.when(BasicRallyClient::getInstance).thenReturn(null);
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
@@ -310,10 +386,12 @@ public class TrackerModuleTest {
 
         try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
              MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class)) {
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class)) {
             jira.when(BasicJiraClient::getInstance).thenThrow(new IOException("jira down"));
             ado.when(BasicAzureDevOpsClient::getInstance).thenThrow(new IOException("ado down"));
             rally.when(BasicRallyClient::getInstance).thenThrow(new IOException("rally down"));
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
 
             TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 

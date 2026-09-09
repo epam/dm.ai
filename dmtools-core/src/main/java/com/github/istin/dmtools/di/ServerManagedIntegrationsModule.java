@@ -23,7 +23,7 @@ import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.config.InMemoryConfiguration;
 
-import com.github.istin.dmtools.github.GitHub;
+import com.github.istin.dmtools.github.GitHubActions;
 
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -816,7 +816,7 @@ public class ServerManagedIntegrationsModule {
      * Custom GitHub implementation that replicates BasicGithub functionality
      * but uses resolved credentials instead of static properties from PropertyReader
      */
-    private static class CustomServerManagedGitHub extends GitHub {
+    private static class CustomServerManagedGitHub extends GitHubActions {
         private final SourceCodeConfig config;
         
         public CustomServerManagedGitHub(String basePath, String token, String workspace, String repository) throws IOException {

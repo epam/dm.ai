@@ -106,7 +106,8 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             name = "github_test",
             description = "Test GitHub connectivity by fetching the current user's profile",
             integration = "github",
-            category = "system"
+            category = "system",
+            aliases = {"tracker_get_my_profile"}
     )
     public Map<String, Object> testConnection() {
         return testConnectionDetailed();
@@ -346,13 +347,6 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String pullRequestId) throws IOException {
         String response = getPullRequestResponse(workspace, repository, pullRequestId, false);
         return new GitHubPullRequest(response);
-    }
-
-    @MCPTool(name = "github_get_issue", description = "Get details of a GitHub issue including title, description, state, author, labels, assignees, and comments count.", integration = "github", category = "issues", aliases = {"source_code_get_issue"})
-    public GitHubIssue issue(@MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN") String workspace, @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools") String repository, @MCPParam(name = "issueNumber", description = "The issue number", required = true, example = "42") String issueNumber) throws IOException {
-        String path = path(String.format("repos/%s/%s/issues/%s", workspace, repository, issueNumber));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        return new GitHubIssue(execute(getRequest));
     }
 
     public String triggerAction(String workspace, String repository, JSONObject params) throws IOException {
@@ -658,19 +652,9 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
     }
 
     @Override
-    @MCPTool(
-            name = "github_get_pr_comments",
-            description = "Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date.",
-            integration = "github",
-            category = "pull_requests",
-            aliases = {"source_code_get_pr_comments"}
-    )
     public List<IComment> pullRequestComments(
-            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = true, example = "IstiN")
             String workspace,
-            @MCPParam(name = "repository", description = "The GitHub repository name", required = true, example = "dmtools")
             String repository,
-            @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
             String pullRequestId) throws IOException {
         List<IComment> result = new ArrayList<>();
         int perPage = 100;
