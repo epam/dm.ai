@@ -36,8 +36,9 @@ meta:
 
 app:
   envs:
-    # Tests read GITHUB_TOKEN (used by GitHub-integration unit tests).
-    - GITHUB_TOKEN: $GITHUB_TOKEN
+    # Secrets are NOT declared here — they live in the Bitrise "Secrets" tab
+    # (server-side only, never committed to the repo) and are injected into
+    # builds automatically by name: GITHUB_TOKEN, PAT_TOKEN.
     - GRADLE_OPTS: "-Dorg.gradle.daemon=false"
     - DMTOOLS_CACHE_ENABLED: "false"
 
