@@ -8,8 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -97,6 +99,62 @@ class FileToTextTransformerTest {
 
         List<FileToTextTransformer.TransformationResult> results = FileToTextTransformer.transform(xlsFile.toFile());
         assertNull(results);
+    }
+
+    @Test
+    void testTransformBinaryVideoFile() throws Exception {
+        Path mp4File = tempDir.resolve("recording.mp4");
+        Files.write(mp4File, new byte[]{1, 2, 3, 4}); // Dummy binary content
+
+        List<FileToTextTransformer.TransformationResult> results = FileToTextTransformer.transform(mp4File.toFile());
+        assertNull(results);
+    }
+
+    @Test
+    void testTransformBinaryVideoMovFile() throws Exception {
+        Path movFile = tempDir.resolve("recording.mov");
+        Files.write(movFile, new byte[]{1, 2, 3, 4});
+
+        List<FileToTextTransformer.TransformationResult> results = FileToTextTransformer.transform(movFile.toFile());
+        assertNull(results);
+    }
+
+    @Test
+    void testTransformBinaryArchiveFile() throws Exception {
+        Path zipFile = tempDir.resolve("archive.zip");
+        Files.write(zipFile, new byte[]{1, 2, 3, 4});
+
+        List<FileToTextTransformer.TransformationResult> results = FileToTextTransformer.transform(zipFile.toFile());
+        assertNull(results);
+    }
+
+    @Test
+    void testTransformLargeTextFileReturnsNull() throws Exception {
+        // OOM guard: files larger than FILE_TO_TEXT_MAX_FILE_SIZE_MB (default 4MB)
+        // must not be read into memory as text - null means "pass as file reference"
+        Path largeFile = tempDir.resolve("large.txt");
+        byte[] chunk = new byte[1024 * 1024]; // 1MB
+        Arrays.fill(chunk, (byte) 'a');
+        try (OutputStream os = Files.newOutputStream(largeFile)) {
+            for (int i = 0; i < 5; i++) { // 5MB total > default 4MB limit
+                os.write(chunk);
+            }
+        }
+
+        List<FileToTextTransformer.TransformationResult> results = FileToTextTransformer.transform(largeFile.toFile());
+        assertNull(results);
+    }
+
+    @Test
+    void testTransformSmallTextFileStillReadAsText() throws Exception {
+        Path textFile = tempDir.resolve("notes.log");
+        String content = "some log output";
+        Files.writeString(textFile, content);
+
+        List<FileToTextTransformer.TransformationResult> results = FileToTextTransformer.transform(textFile.toFile());
+        assertNotNull(results);
+        assertEquals(1, results.size());
+        assertTrue(results.get(0).text().contains(content));
     }
 
     @Test

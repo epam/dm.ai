@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.context;
 
 import com.github.istin.dmtools.common.model.IAttachment;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.context.converter.DocxToImagesConverter;
 import com.github.istin.dmtools.context.converter.FileConverter;
 import com.github.istin.dmtools.context.converter.PptxToImagesConverter;
@@ -26,7 +27,14 @@ public class FileToTextTransformer {
 
     private static final Set<String> BINARY_EXTENSIONS = Set.of(
             "pdf", "csv", "doc", "docx", "xls", "xlsx",
-            "jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"
+            "jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp",
+            // Video files - must be passed as file references, never read into memory as text
+            "mp4", "m4v", "mov", "webm", "avi", "mkv", "wmv", "flv", "mpg", "mpeg", "3gp",
+            // Audio files
+            "mp3", "wav", "ogg", "m4a", "flac", "aac",
+            // Archives and other binary formats
+            "zip", "tar", "gz", "tgz", "bz2", "7z", "rar", "jar",
+            "exe", "dll", "so", "dmg", "iso", "bin", "psd", "heic", "heif"
     );
     
     // Office document extensions that can be converted to images
@@ -64,10 +72,21 @@ public class FileToTextTransformer {
             return transformPdf(file);
         }
 
-        // Return null for binary files
+        // Return null for binary files (they are passed as file references downstream)
         if (BINARY_EXTENSIONS.stream().anyMatch(ext -> fileName.endsWith("." + ext))) {
             return null;
         }
+
+        // Guard against reading very large files into memory as text (OOM protection).
+        // Oversized files are passed as file references downstream instead.
+        long maxTextFileSize = new PropertyReader().getFileToTextMaxTextFileSize();
+        if (file.length() > maxTextFileSize) {
+            logger.warn("File {} ({} bytes) exceeds max text file size of {} bytes, " +
+                            "skipping text extraction and passing it as a file reference",
+                    file.getName(), file.length(), maxTextFileSize);
+            return null;
+        }
+
         // Read text files
         return List.of(new TransformationResult(file.getName() + "\n" + FileUtils.readFileToString(file, "UTF-8"), null));
     }

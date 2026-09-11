@@ -888,6 +888,7 @@ public class PropertyReader {
   private static final long DEFAULT_PROMPT_CHUNK_MAX_SINGLE_FILE_SIZE = 4 * 1024 * 1024; // 5MB
   private static final long DEFAULT_PROMPT_CHUNK_MAX_TOTAL_FILES_SIZE = 4 * 1024 * 1024; // 5MB
   private static final int DEFAULT_PROMPT_CHUNK_MAX_FILES = 10;
+  private static final long DEFAULT_FILE_TO_TEXT_MAX_TEXT_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 
   /**
    * Gets the maximum token limit for AI model
@@ -952,6 +953,25 @@ public class PropertyReader {
       return Integer.parseInt(value);
     } catch (NumberFormatException e) {
       return DEFAULT_PROMPT_CHUNK_MAX_FILES;
+    }
+  }
+
+  /**
+   * Gets the maximum size in bytes for a file to be read into memory as text
+   * by FileToTextTransformer. Larger files are passed as file references instead
+   * (OOM protection). Configured via {@code FILE_TO_TEXT_MAX_FILE_SIZE_MB}.
+   * @return maximum text file size in bytes, default is 4MB
+   */
+  public long getFileToTextMaxTextFileSize() {
+    String value = getValue("FILE_TO_TEXT_MAX_FILE_SIZE_MB");
+    if (value == null || value.trim().isEmpty()) {
+      return DEFAULT_FILE_TO_TEXT_MAX_TEXT_FILE_SIZE;
+    }
+    try {
+      // Convert MB to bytes
+      return Long.parseLong(value.trim()) * 1024 * 1024;
+    } catch (NumberFormatException e) {
+      return DEFAULT_FILE_TO_TEXT_MAX_TEXT_FILE_SIZE;
     }
   }
 
