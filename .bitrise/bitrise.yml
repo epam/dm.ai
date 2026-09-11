@@ -110,6 +110,18 @@ workflows:
     title: Java unit tests
     summary: Quality gates, dmtools-core unit tests, and the agents JS suite
     steps:
+      - script@1:
+          title: Report pending status to GitHub
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                curl -sS -X POST \
+                  -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Accept: application/vnd.github+json" \
+                  "https://api.github.com/repos/$BITRISEIO_GIT_REPOSITORY_OWNER/$BITRISEIO_GIT_REPOSITORY_SLUG/statuses/$BITRISE_GIT_COMMIT" \
+                  -d "{\"state\":\"pending\",\"context\":\"Bitrise / Java unit tests\",\"target_url\":\"$BITRISE_BUILD_URL\",\"description\":\"Bitrise build #$BITRISE_BUILD_NUMBER running\"}" \
+                  | grep -o '"state": *"[^"]*"' | head -1 || true
+
       - git-clone@8:
           inputs:
             # Full history (clone_depth -1): the file-size gate diffs against
@@ -275,6 +287,24 @@ workflows:
             - paths: |
                 $HOME/.gradle/caches
                 $HOME/.gradle/wrapper
+
+      - script@1:
+          title: Report final status to GitHub
+          is_always_run: true
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                if [ "$BITRISE_BUILD_STATUS" = "0" ]; then
+                  STATE=success; DESC="Bitrise build #$BITRISE_BUILD_NUMBER passed"
+                else
+                  STATE=failure; DESC="Bitrise build #$BITRISE_BUILD_NUMBER failed"
+                fi
+                curl -sS -X POST \
+                  -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Accept: application/vnd.github+json" \
+                  "https://api.github.com/repos/$BITRISEIO_GIT_REPOSITORY_OWNER/$BITRISEIO_GIT_REPOSITORY_SLUG/statuses/$BITRISE_GIT_COMMIT" \
+                  -d "{\"state\":\"$STATE\",\"context\":\"Bitrise / Java unit tests\",\"target_url\":\"$BITRISE_BUILD_URL\",\"description\":\"$DESC\"}" \
+                  | grep -o '"state": *"[^"]*"' | head -1 || true
 
   # ------------------------------------------------------------------------
   # Auto-update open PRs when main or PRs change.
