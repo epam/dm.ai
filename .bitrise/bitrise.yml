@@ -14,19 +14,18 @@
 # In the Bitrise app settings set "Config source" = repository, custom path
 # ".bitrise/bitrise.yml", so Bitrise reads it from the repo.
 #
-# Status reports use the exact GitHub check contexts ("Java unit tests",
-# "OWASP dependency check (advisory)") so the existing branch ruleset keeps
-# matching without changes.
+# Status reports use the exact GitHub check context ("Java unit tests") so the
+# existing branch ruleset keeps matching without changes.
 
 format_version: "25"
 default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
 project_type: java
 
 title: DM Tools — PR checks
-summary: Java unit tests, quality gates, agents JS suite, OWASP dependency check
+summary: Java unit tests, quality gates, agents JS suite
 description: >-
   Bitrise port of the GitHub PR checks. The "Java unit tests" pipeline is the
-  required check; the OWASP dependency check stays advisory (never blocks).
+  required check.
 
 # Default stack: Ubuntu with Java 17 + Node available (Android stack carries both).
 meta:
@@ -36,8 +35,9 @@ meta:
 
 app:
   envs:
-    # Tests read GITHUB_TOKEN (used by GitHub-integration unit tests).
-    - GITHUB_TOKEN: $GITHUB_TOKEN
+    # Secrets are NOT declared here — they live in the Bitrise "Secrets" tab
+    # (server-side only, never committed to the repo) and are injected into
+    # builds automatically by name: GITHUB_TOKEN, PAT_TOKEN.
     - GRADLE_OPTS: "-Dorg.gradle.daemon=false"
     - DMTOOLS_CACHE_ENABLED: "false"
 
@@ -112,11 +112,24 @@ workflows:
     steps:
       - git-clone@8:
           inputs:
-            # Full history + submodules: the file-size gate diffs against the
-            # PR base branch and the agents/ submodule holds the JS test suite.
-            # clone_depth -1 disables the depth limit (full clone).
+            # Full history (clone_depth -1): the file-size gate diffs against
+            # the PR base branch. Submodules are updated in the next step.
             - clone_depth: '-1'
-            - update_submodules: 'yes'
+            # Submodule URL is SSH (git@github.com:...); the git-clone step
+            # would try SSH with no key and fail. We update submodules manually
+            # after rewriting the URL to HTTPS.
+            - update_submodules: 'no'
+
+      - script@1:
+          title: Init submodules over HTTPS
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -e
+                # The agents submodule is public; rewrite its SSH URL to HTTPS
+                # so no SSH key is needed.
+                git config --global url."https://github.com/".insteadOf "git@github.com:"
+                git submodule update --init --recursive
 
       - cache-pull@2:
           inputs:
