@@ -7,6 +7,8 @@ import com.github.istin.dmtools.common.model.ToText;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import lombok.Data;
 import lombok.Getter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,6 +17,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ChunkPreparation {
+    private static final Logger logger = LogManager.getLogger(ChunkPreparation.class);
+
     // Configuration fields
     @Getter
     private final int tokenLimit;
@@ -107,6 +111,8 @@ public class ChunkPreparation {
      */
     private boolean tryAddFile(File file, ChunkAccumulator current) {
         if (file.length() > maxSingleFileSize) {
+            logger.warn("Skipping file {} ({} bytes): exceeds PROMPT_CHUNK_MAX_SINGLE_FILE_SIZE_MB limit of {} bytes",
+                    file.getName(), file.length(), maxSingleFileSize);
             return true; // Skip this file but don't create new chunk
         }
 

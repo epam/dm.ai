@@ -526,13 +526,24 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             int systemTokenLimits = contextChunkPreparation.getTokenLimit();
             int tokenLimit = (systemTokenLimits - requestTokens)/2;
             logger.info("GENERATION TOKEN LIMIT: " + tokenLimit);
-            contextOrchestrator.setTokenLimit(tokenLimit);
-            contextOrchestrator.processUrisInContent(textFieldsOnly, uriProcessingSources, 1);
-            contextOrchestrator.processUrisInContent(attachments, uriProcessingSources, 1);
-            List<ChunkPreparation.Chunk> chunksContext = contextOrchestrator.summarize();
-            contextOrchestrator.clear();
-            chunksContext.addAll(contextChunkPreparation.prepareChunks(ticketContext.getComments(), tokenLimit));
-            chunksContext.addAll(contextChunkPreparation.prepareChunks(ticketContext.getExtraTickets(), tokenLimit));
+            List<ChunkPreparation.Chunk> chunksContext = new ArrayList<>();
+            if (!expertParams.isSkipAIProcessing()) {
+                contextOrchestrator.setTokenLimit(tokenLimit);
+                contextOrchestrator.processUrisInContent(textFieldsOnly, uriProcessingSources, 1);
+                contextOrchestrator.processUrisInContent(attachments, uriProcessingSources, 1);
+                chunksContext = contextOrchestrator.summarize();
+                contextOrchestrator.clear();
+                chunksContext.addAll(contextChunkPreparation.prepareChunks(ticketContext.getComments(), tokenLimit));
+                chunksContext.addAll(contextChunkPreparation.prepareChunks(ticketContext.getExtraTickets(), tokenLimit));
+            } else {
+                // With skipAIProcessing=true the response comes from CLI execution, not from
+                // GenericRequestAgent, so context chunks are never consumed. Attachments are
+                // delivered to the CLI agent via the input folder (TicketInputContextBuilder),
+                // hence downloading + transforming them here is pure overhead and risks OOM
+                // on large binaries (e.g. mp4 read into a String).
+                logger.info("skipAIProcessing=true: skipping context/attachment chunk building; " +
+                        "attachments are delivered to the CLI agent via the input folder");
+            }
 
             // Process hooks as context first
             String[] hooksAsContext = expertParams.getHooksAsContext();
