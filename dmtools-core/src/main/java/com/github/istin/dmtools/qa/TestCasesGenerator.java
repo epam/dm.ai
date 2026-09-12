@@ -23,6 +23,7 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.StringUtils;
 import com.github.istin.dmtools.di.DaggerTestCasesGeneratorComponent;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
+import com.github.istin.dmtools.index.mermaid.MermaidSnapshotResolver;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.job.TrackerParams;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
@@ -39,7 +40,9 @@ import javax.inject.Singleton;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 
 public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, List<TestCasesGenerator.TestCasesResult>> {
@@ -223,13 +226,47 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         if (!currentlyLinked.isEmpty()) {
             logger.debug("[DEBUG-LINKING] alreadyLinked keys: " + currentlyLinked.stream().map(t -> { try { return t.getKey(); } catch (Exception e) { return "?"; } }).collect(java.util.stream.Collectors.joining(", ")));
         }
+
+        // Prepare optional Mermaid snapshot resolver and ticket wrappers for search.
+        // The feature is enabled when TestCasesGeneratorParams.mermaidIndexStoragePath is set.
+        // In that case existing test cases are wrapped so that toText() returns the Mermaid
+        // snapshot instead of the full ticket text during the relevant-test search.
+        MermaidSnapshotResolver snapshotResolver = null;
+        Map<String, ITicket> originalTicketsByKey = new HashMap<>();
+        List<ITicket> searchTickets = listOfAllTestCases != null ? new ArrayList<>(listOfAllTestCases) : Collections.emptyList();
+        if (listOfAllTestCases != null && !listOfAllTestCases.isEmpty()) {
+            for (ITicket ticket : listOfAllTestCases) {
+                originalTicketsByKey.put(ticket.getKey(), ticket);
+            }
+            String snapshotPath = params.getMermaidIndexStoragePath();
+            boolean useMermaidSnapshotForSearch = snapshotPath != null && !snapshotPath.trim().isEmpty();
+            if (useMermaidSnapshotForSearch) {
+                snapshotResolver = new MermaidSnapshotResolver(snapshotPath, params.getMermaidIndexIntegration());
+                searchTickets = new ArrayList<>(listOfAllTestCases.size());
+                for (ITicket ticket : listOfAllTestCases) {
+                    searchTickets.add(new MermaidSnapshotTicketWrapper(ticket, snapshotResolver));
+                }
+                logger.info("Using Mermaid snapshots for relevant-test-case search from {}", snapshotPath);
+            }
+        }
+
         List<VerifiedTestCase> verifiedResults = params.isFindRelated()
-                ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, listOfAllTestCases, params.isLinkRelated(), params.getRelatedTestCasesRules(), existingRelationship, currentlyLinked, params, customAdapter)
+                ? findAndLinkSimilarTestCasesBySummary(ticketContext.getTicket().getTicketKey(), ticketText, searchTickets, listOfAllTestCases, originalTicketsByKey, params.isLinkRelated(), params.getRelatedTestCasesRules(), existingRelationship, currentlyLinked, params, customAdapter)
                 : Collections.emptyList();
 
         List<ITicket> finaResults = new ArrayList<>();
         for (VerifiedTestCase vc : verifiedResults) {
-            finaResults.add(vc.getTicket());
+            ITicket verifiedTicket = vc.getTicket();
+            ITicket original = originalTicketsByKey.get(verifiedTicket.getKey());
+            if (original != null) {
+                // Use snapshot text for generation when explicitly requested, otherwise keep full ticket text
+                if (params.isUseMermaidSnapshotForGeneration() && snapshotResolver != null) {
+                    verifiedTicket = new MermaidSnapshotTicketWrapper(original, snapshotResolver);
+                } else {
+                    verifiedTicket = original;
+                }
+            }
+            finaResults.add(verifiedTicket);
         }
 
         if (params.isPostLinkedTestCasesComment() && !verifiedResults.isEmpty()) {
@@ -742,6 +779,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
             String ticketKey,
             String ticketText,
             List<? extends ITicket> listOfAllTestCases,
+            Map<String, ITicket> originalTicketsByKey,
             boolean isLink,
             String relationship,
             List<? extends ITicket> currentlyLinkedTestCases,
@@ -759,7 +797,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         );
         logger.debug("[DEBUG-LINKING] AI returned keys: " + testCaseKeys.toString());
 
-        // Prepare list of test cases to verify
+        // Prepare list of test cases to verify (prefer original full-text tickets when available)
         List<ITicket> testCasesToVerify = new ArrayList<>();
         for (int j = 0; j < testCaseKeys.length(); j++) {
             String rawKey = testCaseKeys.get(j).toString();
@@ -769,6 +807,12 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
                 .filter(t -> t.getKey().equals(testCaseKey))
                 .findFirst()
                 .orElse(null);
+            if (testCase != null && originalTicketsByKey != null && !originalTicketsByKey.isEmpty()) {
+                ITicket original = originalTicketsByKey.get(testCaseKey);
+                if (original != null) {
+                    testCase = original;
+                }
+            }
             if (testCase != null) {
                 testCasesToVerify.add(testCase);
                 logger.debug("[DEBUG-LINKING] Found in listOfAllTestCases: " + testCaseKey);
@@ -829,11 +873,16 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
 
     @NotNull
     public List<VerifiedTestCase> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params) throws Exception {
-        return findAndLinkSimilarTestCasesBySummary(ticketKey, ticketText, listOfAllTestCases, isLink, relatedTestCasesRulesLink, relationship, currentlyLinkedTestCases, params, null);
+        return findAndLinkSimilarTestCasesBySummary(ticketKey, ticketText, listOfAllTestCases, listOfAllTestCases, new HashMap<>(), isLink, relatedTestCasesRulesLink, relationship, currentlyLinkedTestCases, params, null);
     }
 
     @NotNull
     public List<VerifiedTestCase> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> listOfAllTestCases, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params, TestCasesTrackerAdapter customAdapter) throws Exception {
+        return findAndLinkSimilarTestCasesBySummary(ticketKey, ticketText, listOfAllTestCases, listOfAllTestCases, new HashMap<>(), isLink, relatedTestCasesRulesLink, relationship, currentlyLinkedTestCases, params, customAdapter);
+    }
+
+    @NotNull
+    public List<VerifiedTestCase> findAndLinkSimilarTestCasesBySummary(String ticketKey, String ticketText, List<? extends ITicket> searchTickets, List<? extends ITicket> originalTickets, Map<String, ITicket> originalTicketsByKey, boolean isLink, String relatedTestCasesRulesLink, String relationship, List<? extends ITicket> currentlyLinkedTestCases, TestCasesGeneratorParams params, TestCasesTrackerAdapter customAdapter) throws Exception {
         List<VerifiedTestCase> finaResults = new ArrayList<>();
         String extraRelatedTestCaseRulesFromConfluence = extractFromConfluence(relatedTestCasesRulesLink);
         ChunkPreparation chunkPreparation = new ChunkPreparation();
@@ -844,7 +893,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         logger.info("SYSTEM TOKEN LIMITS: " + systemTokenLimits);
         int tokenLimit = (systemTokenLimits - storyTokens)/2;
         logger.info("TESTCASES TOKEN LIMITS: " + tokenLimit);
-        List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(listOfAllTestCases, tokenLimit);
+        List<ChunkPreparation.Chunk> chunks = chunkPreparation.prepareChunks(searchTickets, tokenLimit);
 
         if (params.isEnableParallelTestCaseCheck()) {
             // Parallel chunk processing
@@ -854,7 +903,7 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
 
                 for (ChunkPreparation.Chunk chunk : chunks) {
                     futures.add(executorService.submit(() ->
-                        processChunk(chunk, ticketKey, ticketText, listOfAllTestCases, isLink,
+                        processChunk(chunk, ticketKey, ticketText, originalTickets, originalTicketsByKey, isLink,
                                    relationship, currentlyLinkedTestCases, extraRelatedTestCaseRulesFromConfluence, params, customAdapter)
                     ));
                 }
@@ -881,8 +930,8 @@ public class TestCasesGenerator extends AbstractJob<TestCasesGeneratorParams, Li
         } else {
             // Sequential chunk processing
             for (ChunkPreparation.Chunk chunk : chunks) {
-                List<VerifiedTestCase> chunkResults = processChunk(chunk, ticketKey, ticketText, listOfAllTestCases,
-                                                          isLink, relationship, currentlyLinkedTestCases,
+                List<VerifiedTestCase> chunkResults = processChunk(chunk, ticketKey, ticketText, originalTickets,
+                                                          originalTicketsByKey, isLink, relationship, currentlyLinkedTestCases,
                                                           extraRelatedTestCaseRulesFromConfluence, params, customAdapter);
                 for (VerifiedTestCase result : chunkResults) {
                     if (finaResults.stream().noneMatch(v -> v.getTicket().equals(result.getTicket()))) {

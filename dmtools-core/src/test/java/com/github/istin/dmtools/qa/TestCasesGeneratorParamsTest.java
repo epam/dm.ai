@@ -131,6 +131,9 @@ public class TestCasesGeneratorParamsTest {
             , true                              // ignoreClonedByRelationship
             , null                              // relatedTestCaseExplanationPrompt
             , false                             // postLinkedTestCasesComment
+            , null                              // mermaidIndexStoragePath
+            , "jira"                            // mermaidIndexIntegration
+            , false                             // useMermaidSnapshotForGeneration
         );
 
         assertTrue("Constructor should set enableParallelTestCaseCheck correctly",
