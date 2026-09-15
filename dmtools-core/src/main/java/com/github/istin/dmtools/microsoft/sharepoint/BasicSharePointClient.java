@@ -36,6 +36,7 @@ public class BasicSharePointClient {
     public static synchronized SharePointClient getInstance() throws IOException {
         if (instance == null) {
             String clientId = propertyReader.getTeamsClientId();
+            validateClientId(clientId);
             String tenantId = propertyReader.getTeamsTenantId();
             String scopes = propertyReader.getSharePointScopes(); // Uses Teams scopes + Files.Read
             String authMethod = propertyReader.getTeamsAuthMethod();
@@ -60,6 +61,23 @@ public class BasicSharePointClient {
         return instance;
     }
     
+    /**
+     * Validates that the Teams/SharePoint client id is configured. SharePoint
+     * reuses the Teams (TEAMS_*) auth configuration; without a client id the
+     * SharePointClient constructor would still start an OAuth token flow with
+     * a null client id — in browser auth mode that even opens a browser window
+     * for a login that can never succeed. BasicTeamsClient fails fast in the
+     * same situation; mirror that here.
+     */
+    static void validateClientId(String clientId) {
+        if (clientId == null || clientId.trim().isEmpty()) {
+            throw new IllegalStateException(
+                "TEAMS_CLIENT_ID environment variable is required for the SharePoint integration " +
+                "(SharePoint reuses the Teams authentication configuration)."
+            );
+        }
+    }
+
     /**
      * Resets the singleton instance (useful for testing or reconfiguration).
      */
