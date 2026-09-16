@@ -589,8 +589,6 @@ public class ConfigDoctorCoverageTest {
 
         assertTrue(integrations.contains("cli"));
         assertTrue(integrations.contains("file"));
-        assertTrue(integrations.contains("kb"));
-        assertTrue(integrations.contains("mermaid"));
         // teams_auth stays: teams_auth_start is the bootstrap entry point for configuration
         assertTrue(integrations.contains("teams_auth"));
         assertFalse(integrations.contains("jira"));
@@ -600,6 +598,10 @@ public class ConfigDoctorCoverageTest {
         assertFalse(integrations.contains("rally"));
         assertFalse(integrations.contains("teams"));
         assertFalse(integrations.contains("sharepoint"));
+        // ai is key-gated; kb/mermaid follow ai (their core tools are AI-driven)
+        assertFalse(integrations.contains("ai"));
+        assertFalse(integrations.contains("kb"));
+        assertFalse(integrations.contains("mermaid"));
     }
 
     @Test
@@ -620,6 +622,22 @@ public class ConfigDoctorCoverageTest {
         assertTrue(integrations.contains("teams_auth"));
         assertTrue(integrations.contains("sharepoint"));
         assertTrue(integrations.contains("ai"));
+        assertTrue(integrations.contains("kb"));
+        assertTrue(integrations.contains("mermaid"));
+    }
+
+    @Test
+    public void testGetConfiguredIntegrationsAiAloneUnlocksKbAndMermaid() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getOllamaModel()).thenReturn("llama3");
+
+        java.util.Set<String> integrations = ConfigDoctor.getConfiguredIntegrations(config);
+
+        assertTrue(integrations.contains("ai"));
+        assertTrue("kb core tools are AI-driven and must follow ai", integrations.contains("kb"));
+        assertTrue("mermaid_index_generate is an AI agent and must follow ai",
+                integrations.contains("mermaid"));
+        assertFalse(integrations.contains("jira"));
     }
 
     @Test

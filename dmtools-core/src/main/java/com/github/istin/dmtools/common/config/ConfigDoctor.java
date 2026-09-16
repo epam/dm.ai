@@ -223,9 +223,12 @@ public class ConfigDoctor {
      * Registry integrations that need no external credentials and are therefore
      * always listable. "teams_auth" stays: teams_auth_start is the bootstrap
      * entry point used to obtain the Teams configuration itself.
+     * kb/mermaid are deliberately NOT here: their core tools are AI-driven
+     * (KBOrchestrator runs AI analysis agents; mermaid_index_generate is an AI
+     * agent), so they follow the "ai" readiness below.
      */
     private static final Set<String> ALWAYS_AVAILABLE_INTEGRATIONS =
-            new LinkedHashSet<>(Arrays.asList("cli", "file", "kb", "mermaid", "other", "teams_auth"));
+            new LinkedHashSet<>(Arrays.asList("cli", "file", "other", "teams_auth"));
 
     /**
      * Returns the registry integration names whose credentials are present in the
@@ -256,7 +259,14 @@ public class ConfigDoctor {
         addIfReady(integrations, checks, "testrail", "testrail");
         addIfReady(integrations, checks, "bitrise", "bitrise");
         addIfReady(integrations, checks, "jenkins", "jenkins");
-        addIfReady(integrations, checks, "ai", "ai");
+        if (isReady(checks, "ai")) {
+            // kb and mermaid core tools are AI-driven (KB analysis/aggregation
+            // agents, mermaid_index_generate) — without an AI provider they have
+            // no useful functionality, so they follow ai readiness.
+            integrations.add("ai");
+            integrations.add("kb");
+            integrations.add("mermaid");
+        }
         if (isReady(checks, "teams")) {
             // SharePoint reuses the Teams (TEAMS_*) OAuth configuration.
             integrations.add("teams");
