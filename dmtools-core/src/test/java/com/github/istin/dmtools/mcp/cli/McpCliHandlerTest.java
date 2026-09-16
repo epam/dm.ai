@@ -3,14 +3,18 @@
 
 package com.github.istin.dmtools.mcp.cli;
 
+import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for McpCliHandler.
@@ -168,9 +172,46 @@ class McpCliHandlerTest {
     }
 
     @Test
+    @DisplayName("resolveAvailableIntegrations: DMTOOLS_INTEGRATIONS wins verbatim when set")
+    void testResolveAvailableIntegrationsEnvOverride() {
+        Set<String> result =
+                McpCliHandler.resolveAvailableIntegrations("jira, cli ,github", null);
+
+        assertEquals(3, result.size());
+        assertTrue(result.contains("jira"));
+        assertTrue(result.contains("cli"));
+        assertTrue(result.contains("github"));
+    }
+
+    @Test
+    @DisplayName("resolveAvailableIntegrations: without env var, only configured + token-less integrations are listed")
+    void testResolveAvailableIntegrationsConfigDetected() {
+        ApplicationConfiguration config = mock(ApplicationConfiguration.class);
+        when(config.getJenkinsBasePath()).thenReturn("https://jenkins.example.com");
+        when(config.getJenkinsUser()).thenReturn("user");
+        when(config.getJenkinsApiToken()).thenReturn("token");
+
+        Set<String> result = McpCliHandler.resolveAvailableIntegrations(null, config);
+
+        // Configured integration shows up (regression: #570 — jenkins was never listed)
+        assertTrue(result.contains("jenkins"));
+        // Token-less integrations always show up
+        assertTrue(result.contains("cli"));
+        assertTrue(result.contains("file"));
+        // Unconfigured integrations do not
+        assertFalse(result.contains("jira"));
+        assertFalse(result.contains("bitbucket"));
+        assertFalse(result.contains("bitrise"));
+        assertFalse(result.contains("rally"));
+
+        // Empty env value behaves like unset
+        Set<String> emptyEnv = McpCliHandler.resolveAvailableIntegrations("  ", config);
+        assertEquals(result, emptyEnv);
+    }
+
+    @Test
     @DisplayName("Should handle environment variable DMTOOLS_INTEGRATIONS")
-    void testEnvironmentVariableHandling() {
-        // Test with environment variable set
+    void testEnvironmentVariableHandling() {        // Test with environment variable set
         try {
             // This test verifies the handler doesn't crash when env var is set
             // We can't easily mock System.getenv in this context, but we can verify
