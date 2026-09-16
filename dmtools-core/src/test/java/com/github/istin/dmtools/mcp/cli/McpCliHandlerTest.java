@@ -454,21 +454,25 @@ class McpCliHandlerTest {
     @Test
     @DisplayName("Should filter tools by description, not just name")
     void testFilterToolsByDescription() {
-        // "transition" appears in jira_move_to_status description but not in its name
-        String[] args = {"mcp", "list", "transition"};
+        // "inaccessible" appears in the file_read description but not in its name.
+        // file_read is token-less, so it is listed regardless of which integrations
+        // are configured on the machine running the tests (see #570: without
+        // DMTOOLS_INTEGRATIONS the list is config-detected, and jira tools are not
+        // guaranteed to be present in CI).
+        String[] args = {"mcp", "list", "inaccessible"};
         String result = mcpCliHandler.processMcpCommand(args);
 
         JSONObject response = new JSONObject(result);
         assertTrue(response.has("tools"));
         org.json.JSONArray tools = response.getJSONArray("tools");
 
-        // Should find tools where "transition" is in the description
+        // Should find tools where "inaccessible" is in the description
         boolean foundByDescription = false;
         for (int i = 0; i < tools.length(); i++) {
             JSONObject tool = tools.getJSONObject(i);
             String name = tool.getString("name");
-            // If a tool was found whose name does NOT contain "transition", it was matched by description
-            if (!name.toLowerCase().contains("transition")) {
+            // If a tool was found whose name does NOT contain "inaccessible", it was matched by description
+            if (!name.toLowerCase().contains("inaccessible")) {
                 foundByDescription = true;
                 break;
             }
