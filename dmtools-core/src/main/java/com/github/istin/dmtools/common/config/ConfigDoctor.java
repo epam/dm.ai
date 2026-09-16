@@ -6,9 +6,12 @@ package com.github.istin.dmtools.common.config;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Validates DMTools configuration and reports which integrations are ready to use.
@@ -58,9 +61,11 @@ public class ConfigDoctor {
         results.add(checkRally(config));
         results.add(checkTestRail(config));
         results.add(checkBitrise(config));
+        results.add(checkJenkins(config));
         results.add(checkXray(config));
         results.add(checkAi(config));
         results.add(checkTeams(config));
+        results.add(checkSharePoint(config));
         results.add(checkDefaults(config));
         return results;
     }
@@ -171,6 +176,22 @@ public class ConfigDoctor {
         return result("teams", missing, "Microsoft Teams OAuth credentials");
     }
 
+    private static CheckResult checkJenkins(ApplicationConfiguration config) {
+        List<String> missing = new ArrayList<>();
+        if (isBlank(config.getJenkinsBasePath())) missing.add(PropertyReader.JENKINS_BASE_PATH);
+        if (isBlank(config.getJenkinsUser())) missing.add(PropertyReader.JENKINS_USER);
+        if (isBlank(config.getJenkinsApiToken())) missing.add(PropertyReader.JENKINS_API_TOKEN);
+        return result("jenkins", missing, "Jenkins authentication");
+    }
+
+    private static CheckResult checkSharePoint(ApplicationConfiguration config) {
+        // SharePoint reuses the Teams (TEAMS_*) OAuth configuration.
+        List<String> missing = new ArrayList<>();
+        if (isBlank(config.getTeamsClientId())) missing.add(PropertyReader.TEAMS_CLIENT_ID);
+        if (isBlank(config.getTenantId())) missing.add(PropertyReader.TEAMS_TENANT_ID);
+        return result("sharepoint", missing, "SharePoint via Teams OAuth credentials");
+    }
+
     private static CheckResult checkDefaults(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
@@ -196,5 +217,74 @@ public class ConfigDoctor {
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    /**
+     * Registry integrations that need no external credentials and are therefore
+     * always listable. "teams_auth" stays: teams_auth_start is the bootstrap
+     * entry point used to obtain the Teams configuration itself.
+     * kb/mermaid are deliberately NOT here: their core tools are AI-driven
+     * (KBOrchestrator runs AI analysis agents; mermaid_index_generate is an AI
+     * agent), so they follow the "ai" readiness below.
+     */
+    private static final Set<String> ALWAYS_AVAILABLE_INTEGRATIONS =
+            new LinkedHashSet<>(Arrays.asList("cli", "file", "other", "teams_auth"));
+
+    /**
+     * Returns the registry integration names whose credentials are present in the
+     * given configuration — presence of tokens/paths only, no network calls and
+     * no client construction. Used by `dmtools list` when DMTOOLS_INTEGRATIONS
+     * is not set, so the listing reflects what this machine can actually run
+     * (e.g. Jenkins tools show up exactly when JENKINS_* is configured).
+     */
+    public static Set<String> getConfiguredIntegrations(ApplicationConfiguration config) {
+        Map<String, CheckResult> checks = new LinkedHashMap<>();
+        for (CheckResult result : diagnose(config)) {
+            checks.put(result.getName(), result);
+        }
+
+        Set<String> integrations = new LinkedHashSet<>(ALWAYS_AVAILABLE_INTEGRATIONS);
+        addIfReady(integrations, checks, "jira", "jira");
+        // Xray tools run against the Jira host and need both credential sets.
+        if (isReady(checks, "jira") && isReady(checks, "xray")) {
+            integrations.add("jira_xray");
+        }
+        addIfReady(integrations, checks, "confluence", "confluence");
+        addIfReady(integrations, checks, "figma", "figma");
+        addIfReady(integrations, checks, "github", "github");
+        addIfReady(integrations, checks, "gitlab", "gitlab");
+        addIfReady(integrations, checks, "bitbucket", "bitbucket");
+        addIfReady(integrations, checks, "ado", "ado");
+        addIfReady(integrations, checks, "rally", "rally");
+        addIfReady(integrations, checks, "testrail", "testrail");
+        addIfReady(integrations, checks, "bitrise", "bitrise");
+        addIfReady(integrations, checks, "jenkins", "jenkins");
+        if (isReady(checks, "ai")) {
+            // kb and mermaid core tools are AI-driven (KB analysis/aggregation
+            // agents, mermaid_index_generate) — without an AI provider they have
+            // no useful functionality, so they follow ai readiness.
+            integrations.add("ai");
+            integrations.add("kb");
+            integrations.add("mermaid");
+        }
+        if (isReady(checks, "teams")) {
+            // SharePoint reuses the Teams (TEAMS_*) OAuth configuration.
+            integrations.add("teams");
+            integrations.add("teams_auth");
+            integrations.add("sharepoint");
+        }
+        return integrations;
+    }
+
+    private static boolean isReady(Map<String, CheckResult> checks, String name) {
+        CheckResult result = checks.get(name);
+        return result != null && result.isReady();
+    }
+
+    private static void addIfReady(Set<String> integrations, Map<String, CheckResult> checks,
+                                   String checkName, String integrationName) {
+        if (isReady(checks, checkName)) {
+            integrations.add(integrationName);
+        }
     }
 }

@@ -28,7 +28,8 @@ public class ConfigDoctorCoverageTest {
 
     private static final String[] EXPECTED_CHECKS = {
             "jira", "confluence", "figma", "github", "gitlab", "bitbucket",
-            "ado", "rally", "testrail", "bitrise", "xray", "ai", "teams", "defaults"
+            "ado", "rally", "testrail", "bitrise", "jenkins", "xray", "ai",
+            "teams", "sharepoint", "defaults"
     };
 
     /**
@@ -535,5 +536,148 @@ public class ConfigDoctorCoverageTest {
         // guard for the custom default answer used in the "all ready" test
         assertEquals("configured", config.getRallyToken());
         assertEquals("configured", config.getTeamsClientId());
+    }
+
+    // ------------------------------------------------------------------
+    // Jenkins
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testJenkinsReadyWithBasePathUserAndToken() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getJenkinsBasePath()).thenReturn("https://jenkins.example.com");
+        when(config.getJenkinsUser()).thenReturn("user");
+        when(config.getJenkinsApiToken()).thenReturn("token");
+
+        assertReady(byName(ConfigDoctor.diagnose(config)), "jenkins");
+    }
+
+    @Test
+    public void testJenkinsIncompleteWithoutToken() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getJenkinsBasePath()).thenReturn("https://jenkins.example.com");
+        when(config.getJenkinsUser()).thenReturn("user");
+
+        assertIncomplete(byName(ConfigDoctor.diagnose(config)), "jenkins");
+    }
+
+    // ------------------------------------------------------------------
+    // SharePoint (reuses Teams credentials)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testSharePointReadyWithTeamsCredentials() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getTeamsClientId()).thenReturn("client-id");
+        when(config.getTenantId()).thenReturn("tenant-id");
+
+        assertReady(byName(ConfigDoctor.diagnose(config)), "sharepoint");
+    }
+
+    @Test
+    public void testSharePointIncompleteWithoutTeamsCredentials() {
+        assertIncomplete(byName(ConfigDoctor.diagnose(emptyConfig())), "sharepoint");
+    }
+
+    // ------------------------------------------------------------------
+    // getConfiguredIntegrations()
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetConfiguredIntegrationsWithEmptyConfigReturnsOnlyAlwaysAvailable() {
+        java.util.Set<String> integrations = ConfigDoctor.getConfiguredIntegrations(emptyConfig());
+
+        assertTrue(integrations.contains("cli"));
+        assertTrue(integrations.contains("file"));
+        // teams_auth stays: teams_auth_start is the bootstrap entry point for configuration
+        assertTrue(integrations.contains("teams_auth"));
+        assertFalse(integrations.contains("jira"));
+        assertFalse(integrations.contains("jenkins"));
+        assertFalse(integrations.contains("bitbucket"));
+        assertFalse(integrations.contains("bitrise"));
+        assertFalse(integrations.contains("rally"));
+        assertFalse(integrations.contains("teams"));
+        assertFalse(integrations.contains("sharepoint"));
+        // ai is key-gated; kb/mermaid follow ai (their core tools are AI-driven)
+        assertFalse(integrations.contains("ai"));
+        assertFalse(integrations.contains("kb"));
+        assertFalse(integrations.contains("mermaid"));
+    }
+
+    @Test
+    public void testGetConfiguredIntegrationsWithFullyConfiguredContainsAll() {
+        java.util.Set<String> integrations = ConfigDoctor.getConfiguredIntegrations(fullyConfigured());
+
+        assertTrue(integrations.contains("jira"));
+        assertTrue(integrations.contains("jira_xray"));
+        assertTrue(integrations.contains("confluence"));
+        assertTrue(integrations.contains("github"));
+        assertTrue(integrations.contains("gitlab"));
+        assertTrue(integrations.contains("jenkins"));
+        assertTrue(integrations.contains("bitbucket"));
+        assertTrue(integrations.contains("bitrise"));
+        assertTrue(integrations.contains("rally"));
+        assertTrue(integrations.contains("testrail"));
+        assertTrue(integrations.contains("teams"));
+        assertTrue(integrations.contains("teams_auth"));
+        assertTrue(integrations.contains("sharepoint"));
+        assertTrue(integrations.contains("ai"));
+        assertTrue(integrations.contains("kb"));
+        assertTrue(integrations.contains("mermaid"));
+    }
+
+    @Test
+    public void testGetConfiguredIntegrationsAiAloneUnlocksKbAndMermaid() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getOllamaModel()).thenReturn("llama3");
+
+        java.util.Set<String> integrations = ConfigDoctor.getConfiguredIntegrations(config);
+
+        assertTrue(integrations.contains("ai"));
+        assertTrue("kb core tools are AI-driven and must follow ai", integrations.contains("kb"));
+        assertTrue("mermaid_index_generate is an AI agent and must follow ai",
+                integrations.contains("mermaid"));
+        assertFalse(integrations.contains("jira"));
+    }
+
+    @Test
+    public void testGetConfiguredIntegrationsJiraAloneDoesNotEnableXray() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getJiraBasePath()).thenReturn("https://jira.example.com");
+        when(config.getJiraLoginPassToken()).thenReturn("token");
+
+        java.util.Set<String> integrations = ConfigDoctor.getConfiguredIntegrations(config);
+
+        assertTrue(integrations.contains("jira"));
+        assertFalse("jira_xray requires both jira and xray credentials",
+                integrations.contains("jira_xray"));
+    }
+
+    @Test
+    public void testGetConfiguredIntegrationsJiraPlusXrayEnablesXray() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getJiraBasePath()).thenReturn("https://jira.example.com");
+        when(config.getJiraLoginPassToken()).thenReturn("token");
+        when(config.getXrayClientId()).thenReturn("id");
+        when(config.getXrayClientSecret()).thenReturn("secret");
+        when(config.getXrayBasePath()).thenReturn("https://xray.example.com");
+
+        java.util.Set<String> integrations = ConfigDoctor.getConfiguredIntegrations(config);
+
+        assertTrue(integrations.contains("jira"));
+        assertTrue(integrations.contains("jira_xray"));
+    }
+
+    @Test
+    public void testGetConfiguredIntegrationsJenkinsAloneEnablesJenkins() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getJenkinsBasePath()).thenReturn("https://jenkins.example.com");
+        when(config.getJenkinsUser()).thenReturn("user");
+        when(config.getJenkinsApiToken()).thenReturn("token");
+
+        java.util.Set<String> integrations = ConfigDoctor.getConfiguredIntegrations(config);
+
+        assertTrue(integrations.contains("jenkins"));
+        assertFalse(integrations.contains("jira"));
     }
 }

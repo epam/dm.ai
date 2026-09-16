@@ -6,6 +6,7 @@ package com.github.istin.dmtools.mcp.cli;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.ConversationObserver;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
+import com.github.istin.dmtools.common.config.ConfigDoctor;
 import com.github.istin.dmtools.common.config.PropertyReaderConfiguration;
 import com.github.istin.dmtools.di.AIComponentsModule;
 import com.github.istin.dmtools.atlassian.confluence.BasicConfluence;
@@ -54,7 +55,10 @@ public class McpCliHandler {
 
     private volatile Map<String, Object> clientInstances;
     private volatile Map<String, AI> availableAIClients;
-    private volatile Map<String, Object> cachedToolsResponse;
+    // Full-registry schema cache for error messages/usage hints: it must cover
+    // every registered tool — even ones whose integration is not configured on
+    // this machine.
+    private volatile Map<String, Object> cachedAllToolsSchemaResponse;
 
     /** Active output formatter – resolved per {@link #processMcpCommand(String[])} call. */
     private CliOutputFormatter formatter = CliOutputFormatterFactory.create();
@@ -498,15 +502,18 @@ public class McpCliHandler {
      */
     private Map<String, Object> getToolSchema(String toolName) {
         try {
-            if (cachedToolsResponse == null) {
+            if (cachedAllToolsSchemaResponse == null) {
                 synchronized (this) {
-                    if (cachedToolsResponse == null) {
-                        cachedToolsResponse = MCPSchemaGenerator.generateToolsListResponse(getAvailableIntegrations());
+                    if (cachedAllToolsSchemaResponse == null) {
+                        // Full registry, not the configured/listable subset: usage hints and
+                        // parameter error messages must work for every executable tool.
+                        cachedAllToolsSchemaResponse =
+                                MCPSchemaGenerator.generateToolsListResponse(MCPToolRegistry.getAvailableIntegrations());
                     }
                 }
             }
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> tools = (List<Map<String, Object>>) cachedToolsResponse.get("tools");
+            List<Map<String, Object>> tools = (List<Map<String, Object>>) cachedAllToolsSchemaResponse.get("tools");
 
             for (Map<String, Object> tool : tools) {
                 if (toolName.equals(tool.get("name"))) {
@@ -882,23 +889,36 @@ public class McpCliHandler {
      * This is important for fast 'list' command execution.
      */
     private Set<String> getAvailableIntegrations() {
+        return resolveAvailableIntegrations(System.getenv("DMTOOLS_INTEGRATIONS"), new PropertyReaderConfiguration());
+    }
+
+    /**
+     * Resolves which integrations are listed/exposed. Package-private for tests.
+     *
+     * When DMTOOLS_INTEGRATIONS is set it wins verbatim (explicit restriction of the
+     * tool surface). Otherwise the set is derived from the local configuration —
+     * presence of the required tokens/paths only (ConfigDoctor), never network calls
+     * or client construction — plus token-less integrations. This keeps
+     * `dmtools list` truthful: tools for an integration appear exactly when that
+     * integration is actually configured (fixes jenkins/bitbucket/bitrise/rally
+     * never showing up on installed machines, where the installer always writes a
+     * DMTOOLS_INTEGRATIONS subset that cannot contain them).
+     */
+    static Set<String> resolveAvailableIntegrations(String envIntegrations, ApplicationConfiguration config) {
         Set<String> integrations = new HashSet<>();
 
-        // Check environment variable first
-        String envIntegrations = System.getenv("DMTOOLS_INTEGRATIONS");
+        // Explicit environment variable wins as-is (documented override)
         if (envIntegrations != null && !envIntegrations.trim().isEmpty()) {
             String[] parts = envIntegrations.split(",");
             for (String part : parts) {
                 integrations.add(part.trim());
             }
+            return integrations;
         }
 
-        // If no environment variable, return all known integration types from the generated registry
-        // Do NOT create clients just to check - this is for listing only
-        if (integrations.isEmpty()) {
-            integrations.addAll(MCPToolRegistry.getAvailableIntegrations());
-        }
-        logger.debug("Available integrations: {}", integrations);
+        // No explicit list: show what is actually configured (token presence only)
+        integrations.addAll(ConfigDoctor.getConfiguredIntegrations(config));
+        logger.debug("Available integrations (config-detected): {}", integrations);
         return integrations;
     }
 
