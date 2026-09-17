@@ -82,8 +82,8 @@ ADO_ITERATION_PATH=YourProject\\Sprint 23
 
 | Tool | Description | Example |
 |------|-------------|---------|
-| `ado_add_comment` | Add comment | `dmtools ado_add_comment 12345 "Review complete"` |
-| `ado_get_comments` | Get all comments | `dmtools ado_get_comments 12345` |
+| `ado_add_work_item_comment` | Add comment | `dmtools ado_add_work_item_comment 12345 "Review complete"` |
+| `ado_get_work_item_comments` | Get all comments | `dmtools ado_get_work_item_comments 12345` |
 | `ado_add_relation` | Link work items | `dmtools ado_add_relation 12345 12346 "Parent"` |
 
 ### Pull Request Operations
