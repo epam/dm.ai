@@ -116,9 +116,9 @@ class ToolWizardCoverageTest {
 
     @Test
     void runHandlesParamsWithoutExampleAndObjectType() {
-        // ado_get_comments: id (string) and ticket (object), neither has an example
+        // ado_get_work_item_comments: id (string) and ticket (object), neither has an example
         ScriptedTerminal terminal = new ScriptedTerminal("123", "T-1");
-        ToolWizard.Result result = new ToolWizard(terminal).run("ado_get_comments");
+        ToolWizard.Result result = new ToolWizard(terminal).run("ado_get_work_item_comments");
 
         assertFalse(result.isCancelled());
         Map<String, Object> params = result.getParams();
@@ -161,7 +161,7 @@ class ToolWizardCoverageTest {
     @Test
     void resultOkParamsAreUnmodifiableCopy() {
         ScriptedTerminal terminal = new ScriptedTerminal("123", "T-1");
-        ToolWizard.Result result = new ToolWizard(terminal).run("ado_get_comments");
+        ToolWizard.Result result = new ToolWizard(terminal).run("ado_get_work_item_comments");
 
         assertThrows(UnsupportedOperationException.class,
                 () -> result.getParams().put("extra", "x"));

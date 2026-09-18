@@ -59,7 +59,7 @@ const result = github_list_prs_filtered(...);
 | `github_get_or_create_draft_release` | Find an existing draft release by tag or name, or create one if it does not exist. Useful for a stable PR attachment storage release. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`releaseName` (string, optional)<br>`targetCommitish` (string, optional)<br>`body` (string, optional) |
 | `github_get_pr` | Get details of a GitHub pull request including title, description, status, author, branches, and merge info. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `github_get_pr_activities` | Get all activities for a GitHub pull request including reviews (approvals, change requests), inline code comments, and general discussion comments. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
-| `github_get_pr_comments` | Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `github_get_pr_comments` | Get all comments for a GitHub pull request or issue, including both inline code review comments and general discussion comments. Results are sorted by creation date. | `workspace` (string, optional)<br>`repository` (string, optional)<br>`pullRequestId` (string, optional)<br>`key` (string, optional) |
 | `github_get_pr_conversations` | Get all review conversations (inline code comment threads) for a GitHub pull request. Groups inline code review comments into threads showing root comment and replies. Also includes general PR discussion comments as separate entries. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `github_get_pr_diff` | Get the diff statistics for a GitHub pull request (files changed, additions, deletions). Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestID` (string, **required**) |
 | `github_get_pr_diff_text` | Get the raw unified diff text for a GitHub pull request. Requires IS_READ_PULL_REQUEST_DIFF env/config to be enabled. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestID` (string, **required**) |
@@ -1299,21 +1299,25 @@ const result = github_get_pr_activities("workspace", "repository");
 
 ### `github_get_pr_comments`
 
-Get all comments for a GitHub pull request, including both inline code review comments and general discussion comments. Results are sorted by creation date.
+Get all comments for a GitHub pull request or issue, including both inline code review comments and general discussion comments. Results are sorted by creation date.
 
 **Parameters:**
 
-- **`workspace`** (string) 🔴 Required
+- **`workspace`** (string) ⚪ Optional
   - The GitHub owner/organization name
   - Example: `IstiN`
 
-- **`repository`** (string) 🔴 Required
+- **`repository`** (string) ⚪ Optional
   - The GitHub repository name
   - Example: `dmtools`
 
-- **`pullRequestId`** (string) 🔴 Required
-  - The pull request number
+- **`pullRequestId`** (string) ⚪ Optional
+  - The pull request or issue number
   - Example: `74`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'owner/repo#123' (alternative to workspace/repository/pullRequestId)
+  - Example: `IstiN/dmtools#42`
 
 **Example:**
 ```bash

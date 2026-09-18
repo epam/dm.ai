@@ -135,11 +135,27 @@ class McpCliHandlerAliasTest {
     }
 
     @Test
-    @DisplayName("tracker_post_comment resolves to ado_post_comment for ado")
+    @DisplayName("tracker_post_comment resolves to ado_add_work_item_comment for ado")
     void testTrackerPostCommentAdo() {
         MCPToolDefinition tool = MCPToolRegistry.getToolByAliasAndIntegration("tracker_post_comment", "ado");
         assertNotNull(tool);
-        assertEquals("ado_post_comment", tool.getName());
+        assertEquals("ado_add_work_item_comment", tool.getName());
+    }
+
+    @Test
+    @DisplayName("ado_post_comment stays a CLI-resolvable alias of ado_add_work_item_comment")
+    void testAdoPostCommentAlias() {
+        MCPToolDefinition tool = MCPToolRegistry.getToolByAliasAndIntegration("ado_post_comment", "ado");
+        assertNotNull(tool);
+        assertEquals("ado_add_work_item_comment", tool.getName());
+    }
+
+    @Test
+    @DisplayName("ado_get_comments stays a CLI-resolvable alias of ado_get_work_item_comments")
+    void testAdoGetCommentsAlias() {
+        MCPToolDefinition tool = MCPToolRegistry.getToolByAliasAndIntegration("ado_get_comments", "ado");
+        assertNotNull(tool);
+        assertEquals("ado_get_work_item_comments", tool.getName());
     }
 
     @Test
