@@ -340,11 +340,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
     @Override
     @MCPTool(
-            name = "ado_get_comments",
+            name = "ado_get_work_item_comments",
             description = "Get all comments for a work item",
             integration = "ado",
             category = "comment_management",
-            aliases = {"tracker_get_comments"}
+            aliases = {"ado_get_comments", "tracker_get_comments"}
     )
     public List<? extends IComment> getComments(
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
@@ -371,16 +371,16 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
     @Override
     @MCPTool(
-            name = "ado_post_comment",
-            description = "Post a comment to a work item",
+            name = "ado_add_work_item_comment",
+            description = "Add a comment to an Azure DevOps work item",
             integration = "ado",
             category = "comment_management",
-            aliases = {"tracker_post_comment"}
+            aliases = {"ado_post_comment", "tracker_post_comment"}
     )
     public void postComment(
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
             String workItemId,
-            @MCPParam(name = "comment", description = "The comment text", required = true)
+            @MCPParam(name = "comment", description = "The comment text", required = true, aliases = {"text"})
             String comment
     ) throws IOException {
         String path = String.format("/%s/_apis/wit/workItems/%s/comments", project, workItemId);

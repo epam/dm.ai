@@ -32,20 +32,20 @@ const result = teams_chats(...);
 | `teams_chats` | List chats showing only chat/contact names, last message (truncated to 100 chars), and date | `limit` (number, optional) |
 | `teams_chats_raw` | List chats for the current user with topic, type, and participant information (returns raw JSON) | `limit` (number, optional) |
 | `teams_download_file` | Download a file from Teams (Graph API hostedContents or SharePoint sharing URL). Auto-detects URL type and uses appropriate method. | `url` (string, **required**)<br>`outputPath` (string, **required**) |
-| `teams_download_recording_transcript` | Download transcript (VTT) file from a Teams recording using SharePoint API. Requires driveId, itemId, and transcriptId. | `itemId` (string, **required**)<br>`driveId` (string, **required**)<br>`outputPath` (string, **required**)<br>`transcriptId` (string, **required**) |
+| `teams_download_recording_transcript` | Download transcript (VTT) file from a Teams recording using SharePoint API. Requires driveId, itemId, and transcriptId. | `driveId` (string, **required**)<br>`itemId` (string, **required**)<br>`transcriptId` (string, **required**)<br>`outputPath` (string, **required**) |
 | `teams_extract_transcript_from_sharepoint` | Extract transcript information by parsing SharePoint HTML page. Useful for finding transcript IDs. | `webUrl` (string, **required**) |
-| `teams_find_channel_by_name_raw` | Find a channel by name within a team (case-insensitive partial match) (returns raw JSON) | `channelName` (string, **required**)<br>`teamId` (string, **required**) |
+| `teams_find_channel_by_name_raw` | Find a channel by name within a team (case-insensitive partial match) (returns raw JSON) | `teamId` (string, **required**)<br>`channelName` (string, **required**) |
 | `teams_find_team_by_name_raw` | Find a team by display name (case-insensitive partial match) (returns raw JSON) | `teamName` (string, **required**) |
 | `teams_get_call_transcripts` | Get transcripts for a call/meeting using Call Records API. Returns list of transcripts with download URLs. | `callId` (string, **required**) |
-| `teams_get_channel_messages_by_name_raw` | Get messages from a channel by team and channel names (returns raw JSON) | `teamName` (string, **required**)<br>`limit` (number, optional)<br>`channelName` (string, **required**) |
+| `teams_get_channel_messages_by_name_raw` | Get messages from a channel by team and channel names (returns raw JSON) | `teamName` (string, **required**)<br>`channelName` (string, **required**)<br>`limit` (number, optional) |
 | `teams_get_joined_teams_raw` | List teams the user is a member of (returns raw JSON) | None |
 | `teams_get_message_hosted_contents` | Get hosted contents (files/transcripts) for a specific message. Returns list of files with download URLs. | `chatId` (string, **required**)<br>`messageId` (string, **required**) |
-| `teams_get_recording_transcripts` | Get transcript metadata for a recording file. Returns list of available transcripts with download URLs. | `itemId` (string, **required**)<br>`driveId` (string, **required**) |
+| `teams_get_recording_transcripts` | Get transcript metadata for a recording file. Returns list of available transcripts with download URLs. | `driveId` (string, **required**)<br>`itemId` (string, **required**) |
 | `teams_get_team_channels_raw` | Get channels in a specific team (returns raw JSON) | `teamId` (string, **required**) |
-| `teams_list_recording_transcripts` | List available transcripts for a recording file. Returns transcript IDs that can be downloaded. | `itemId` (string, **required**)<br>`driveId` (string, **required**) |
-| `teams_messages` | Get messages from a chat with simplified output showing only: author, body, date, reactions, mentions, and attachments | `limit` (number, optional)<br>`chatName` (string, **required**)<br>`sorting` (string, optional) |
+| `teams_list_recording_transcripts` | List available transcripts for a recording file. Returns transcript IDs that can be downloaded. | `driveId` (string, **required**)<br>`itemId` (string, **required**) |
+| `teams_messages` | Get messages from a chat with simplified output showing only: author, body, date, reactions, mentions, and attachments | `chatName` (string, **required**)<br>`limit` (number, optional)<br>`sorting` (string, optional) |
 | `teams_messages_by_chat_id_raw` | Get messages from a chat by ID with optional server-side filtering. Use $filter syntax with lastModifiedDateTime: 'lastModifiedDateTime gt 2025-01-01T00:00:00Z' (returns raw JSON). Note: createdDateTime is not supported in filters. | `chatId` (string, **required**)<br>`limit` (number, optional)<br>`filter` (string, optional) |
-| `teams_messages_raw` | Get messages from a chat by name (combines find + get messages) (returns raw JSON) | `limit` (number, optional)<br>`chatName` (string, **required**) |
+| `teams_messages_raw` | Get messages from a chat by name (combines find + get messages) (returns raw JSON) | `chatName` (string, **required**)<br>`limit` (number, optional) |
 | `teams_messages_since` | Get messages from a chat by name starting from a specific date (ISO 8601 format). Returns simplified format. Uses smart pagination with early exit for performance. | `chatName` (string, **required**)<br>`sinceDate` (string, **required**)<br>`sorting` (string, optional) |
 | `teams_messages_since_by_id` | Get messages from a chat starting from a specific date (ISO 8601 format, e.g., '2025-10-08T00:00:00Z'). Returns simplified format. Uses smart pagination with early exit for performance. | `chatId` (string, **required**)<br>`sinceDate` (string, **required**)<br>`sorting` (string, optional) |
 | `teams_myself_messages` | Get messages from your personal self chat (notes to yourself) with simplified output | `limit` (number, optional) |
@@ -210,17 +210,17 @@ Download transcript (VTT) file from a Teams recording using SharePoint API. Requ
 
 **Parameters:**
 
-- **`itemId`** (string) 🔴 Required
-  - Recording item ID
-
 - **`driveId`** (string) 🔴 Required
   - Drive ID
 
-- **`outputPath`** (string) 🔴 Required
-  - Local file path to save
+- **`itemId`** (string) 🔴 Required
+  - Recording item ID
 
 - **`transcriptId`** (string) 🔴 Required
   - Transcript ID (UUID)
+
+- **`outputPath`** (string) 🔴 Required
+  - Local file path to save
 
 **Example:**
 ```bash
@@ -229,7 +229,7 @@ dmtools teams_download_recording_transcript "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = teams_download_recording_transcript("itemId", "driveId");
+const result = teams_download_recording_transcript("driveId", "itemId");
 ```
 
 ---
@@ -261,11 +261,11 @@ Find a channel by name within a team (case-insensitive partial match) (returns r
 
 **Parameters:**
 
-- **`channelName`** (string) 🔴 Required
-  - The channel name to search for
-
 - **`teamId`** (string) 🔴 Required
   - The team ID
+
+- **`channelName`** (string) 🔴 Required
+  - The channel name to search for
 
 **Example:**
 ```bash
@@ -274,7 +274,7 @@ dmtools teams_find_channel_by_name_raw "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = teams_find_channel_by_name_raw("channelName", "teamId");
+const result = teams_find_channel_by_name_raw("teamId", "channelName");
 ```
 
 ---
@@ -330,12 +330,12 @@ Get messages from a channel by team and channel names (returns raw JSON)
 - **`teamName`** (string) 🔴 Required
   - The team name to search for
 
+- **`channelName`** (string) 🔴 Required
+  - The channel name to search for
+
 - **`limit`** (number) ⚪ Optional
   - Maximum number of messages (0 for all, default: 100)
   - Example: `100`
-
-- **`channelName`** (string) 🔴 Required
-  - The channel name to search for
 
 **Example:**
 ```bash
@@ -344,7 +344,7 @@ dmtools teams_get_channel_messages_by_name_raw "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = teams_get_channel_messages_by_name_raw("teamName", "limit");
+const result = teams_get_channel_messages_by_name_raw("teamName", "channelName");
 ```
 
 ---
@@ -397,11 +397,11 @@ Get transcript metadata for a recording file. Returns list of available transcri
 
 **Parameters:**
 
-- **`itemId`** (string) 🔴 Required
-  - Item ID of the recording file
-
 - **`driveId`** (string) 🔴 Required
   - Drive ID from the recording file
+
+- **`itemId`** (string) 🔴 Required
+  - Item ID of the recording file
 
 **Example:**
 ```bash
@@ -410,7 +410,7 @@ dmtools teams_get_recording_transcripts "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = teams_get_recording_transcripts("itemId", "driveId");
+const result = teams_get_recording_transcripts("driveId", "itemId");
 ```
 
 ---
@@ -442,11 +442,11 @@ List available transcripts for a recording file. Returns transcript IDs that can
 
 **Parameters:**
 
-- **`itemId`** (string) 🔴 Required
-  - Recording item ID
-
 - **`driveId`** (string) 🔴 Required
   - Drive ID
+
+- **`itemId`** (string) 🔴 Required
+  - Recording item ID
 
 **Example:**
 ```bash
@@ -455,7 +455,7 @@ dmtools teams_list_recording_transcripts "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = teams_list_recording_transcripts("itemId", "driveId");
+const result = teams_list_recording_transcripts("driveId", "itemId");
 ```
 
 ---
@@ -466,12 +466,12 @@ Get messages from a chat with simplified output showing only: author, body, date
 
 **Parameters:**
 
+- **`chatName`** (string) 🔴 Required
+  - The chat name to search for
+
 - **`limit`** (number) ⚪ Optional
   - Maximum number of messages (0 for all, default: 100)
   - Example: `100`
-
-- **`chatName`** (string) 🔴 Required
-  - The chat name to search for
 
 - **`sorting`** (string) ⚪ Optional
   - Sort order: 'asc' for oldest first, 'desc' for newest first (default: 'desc')
@@ -484,7 +484,7 @@ dmtools teams_messages "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = teams_messages("limit", "chatName");
+const result = teams_messages("chatName", "limit");
 ```
 
 ---
@@ -524,12 +524,12 @@ Get messages from a chat by name (combines find + get messages) (returns raw JSO
 
 **Parameters:**
 
+- **`chatName`** (string) 🔴 Required
+  - The chat name to search for
+
 - **`limit`** (number) ⚪ Optional
   - Maximum number of messages (0 for all, default: 100)
   - Example: `100`
-
-- **`chatName`** (string) 🔴 Required
-  - The chat name to search for
 
 **Example:**
 ```bash
@@ -538,7 +538,7 @@ dmtools teams_messages_raw "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = teams_messages_raw("limit", "chatName");
+const result = teams_messages_raw("chatName", "limit");
 ```
 
 ---
@@ -708,19 +708,17 @@ Send a message to a chat by name or participant name (finds chat, then sends mes
   - Message content (plain text or HTML)
 
 - **`contentType`** (string) ⚪ Optional
-  - Message content type: `"text"` or `"html"`. Defaults to `"text"` when omitted.
-  - Use `"html"` to render `content` as formatted HTML in Teams.
+  - Message content type: 'text' or 'html'
+  - Example: `text`
 
 **Example:**
 ```bash
-dmtools teams_send_message "Project" "Hello team"
-dmtools teams_send_message "Project" "<b>Bold update</b>" "html"
+dmtools teams_send_message "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
 const result = teams_send_message("chatName", "content");
-const htmlResult = teams_send_message("chatName", "<b>HTML content</b>", "html");
 ```
 
 ---
@@ -738,19 +736,17 @@ Send a message to a chat by ID (returns raw JSON)
   - Message content (plain text or HTML)
 
 - **`contentType`** (string) ⚪ Optional
-  - Message content type: `"text"` or `"html"`. Defaults to `"text"` when omitted.
-  - Use `"html"` to render `content` as formatted HTML in Teams.
+  - Message content type: 'text' or 'html'
+  - Example: `text`
 
 **Example:**
 ```bash
-dmtools teams_send_message_by_id "19:abc@thread.v2" "Hello team"
-dmtools teams_send_message_by_id "19:abc@thread.v2" "<b>Bold update</b>" "html"
+dmtools teams_send_message_by_id "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
 const result = teams_send_message_by_id("chatId", "content");
-const htmlResult = teams_send_message_by_id("chatId", "<b>HTML content</b>", "html");
 ```
 
 ---
@@ -765,19 +761,17 @@ Send a message to your personal self chat (notes to yourself)
   - Message content (plain text or HTML)
 
 - **`contentType`** (string) ⚪ Optional
-  - Message content type: `"text"` or `"html"`. Defaults to `"text"` when omitted.
-  - Use `"html"` to render `content` as formatted HTML in Teams.
+  - Message content type: 'text' or 'html'
+  - Example: `text`
 
 **Example:**
 ```bash
-dmtools teams_send_myself_message "Buy milk"
-dmtools teams_send_myself_message "<b>Reminder</b>: buy milk" "html"
+dmtools teams_send_myself_message "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = teams_send_myself_message("content");
-const htmlResult = teams_send_myself_message("<b>HTML content</b>", "html");
+const result = teams_send_myself_message("content", "contentType");
 ```
 
 ---

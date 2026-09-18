@@ -359,6 +359,87 @@ public class GitLabTest {
     }
 
     @Test
+    public void testUnapproveMergeRequest() throws IOException {
+        doReturn("{\"id\": 1, \"approved_by\": []}").when(gitLab).post(any());
+        String result = gitLab.unapproveMergeRequest("workspace", "repo", "1");
+        assertNotNull(result);
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).post(requestCaptor.capture());
+        assertTrue(requestCaptor.getValue().url().contains("merge_requests/1/unapprove"));
+        assertEquals("{}", requestCaptor.getValue().getBody());
+    }
+
+    @Test
+    public void testGetMergeRequestPipelines() throws IOException {
+        doReturn("[{\"id\": 101, \"status\": \"success\"}, {\"id\": 100, \"status\": \"failed\"}]")
+                .when(gitLab).execute(any(GenericRequest.class));
+        String result = gitLab.getMergeRequestPipelines("workspace", "repo", "42");
+        assertNotNull(result);
+
+        JSONArray pipelines = new JSONArray(result);
+        assertEquals(2, pipelines.length());
+        assertEquals("success", pipelines.getJSONObject(0).getString("status"));
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).execute(requestCaptor.capture());
+        assertTrue(requestCaptor.getValue().url().contains("merge_requests/42/pipelines"));
+    }
+
+    @Test
+    public void testListIssuesDefaults() throws IOException {
+        doReturn("[{\"iid\": 1, \"title\": \"a\", \"labels\": [\"agent:dev\"]}]")
+                .when(gitLab).execute(any(GenericRequest.class));
+        String result = gitLab.listIssues("workspace", "repo", null, null);
+        assertNotNull(result);
+
+        JSONArray issues = new JSONArray(result);
+        assertEquals(1, issues.length());
+        assertEquals(1, issues.getJSONObject(0).getInt("iid"));
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).execute(requestCaptor.capture());
+        String url = requestCaptor.getValue().url();
+        assertTrue(url.contains("/issues?state=opened"));
+        assertTrue(url.contains("per_page=100"));
+    }
+
+    @Test
+    public void testListIssuesWithStateAndPerPage() throws IOException {
+        doReturn("[]").when(gitLab).execute(any(GenericRequest.class));
+        gitLab.listIssues("workspace", "repo", "closed", 25);
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).execute(requestCaptor.capture());
+        String url = requestCaptor.getValue().url();
+        assertTrue(url.contains("state=closed"));
+        assertTrue(url.contains("per_page=25"));
+    }
+
+    @Test
+    public void testListIssuesPerPageCappedAt100() throws IOException {
+        doReturn("[]").when(gitLab).execute(any(GenericRequest.class));
+        gitLab.listIssues("workspace", "repo", "all", 500);
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).execute(requestCaptor.capture());
+        assertTrue(requestCaptor.getValue().url().contains("per_page=100"));
+    }
+
+    @Test
+    public void testCreateMergeRequestNote() throws IOException {
+        doReturn("{\"id\": 7, \"body\": \"note text\"}").when(gitLab).post(any());
+        String result = gitLab.createMergeRequestNote("workspace", "repo", "5", "note text");
+        assertNotNull(result);
+
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(1)).post(requestCaptor.capture());
+        assertTrue(requestCaptor.getValue().url().contains("merge_requests/5/notes"));
+        JSONObject body = new JSONObject(requestCaptor.getValue().getBody());
+        assertEquals("note text", body.getString("body"));
+    }
+
+    @Test
     public void testMergeMergeRequestWithMessage() throws IOException {
         doReturn("{\"iid\": 1, \"state\": \"merged\", \"title\": \"Test MR\"}").when(gitLab).put(any());
         String result = gitLab.mergeMergeRequest("workspace", "repo", "1", "Custom merge commit message");

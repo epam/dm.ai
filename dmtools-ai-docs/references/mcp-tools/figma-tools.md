@@ -25,27 +25,27 @@ const result = figma_test(...);
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
-| `figma_download_image_as_file` | Download image as file by node ID and format. Use this after figma_get_icons to download actual icon files. | `format` (string, **required**)<br>`nodeId` (string, **required**)<br>`href` (string, **required**) |
+| `figma_download_image_as_file` | Download image as file by node ID and format. Use this after figma_get_icons to download actual icon files. | `href` (string, **required**)<br>`nodeId` (string, **required**)<br>`format` (string, **required**) |
 | `figma_download_image_of_file` | Download image by URL as File type. Converts Figma design URL to downloadable image file. | `href` (string, **required**) |
-| `figma_download_node_image` | Download image of specific node/component. Useful for visual preview of design pieces before processing structure. | `format` (string, optional)<br>`scale` (number, optional)<br>`href` (string, **required**)<br>`nodeId` (string, **required**) |
+| `figma_download_node_image` | Download image of specific node/component. Useful for visual preview of design pieces before processing structure. | `href` (string, **required**)<br>`nodeId` (string, **required**)<br>`format` (string, optional)<br>`scale` (number, optional) |
 | `figma_get_file_comments` | Get all comments left on a Figma design file, including comment text, author, and creation date. Accepts either a raw Figma file key or a full Figma design file URL. | `href` (string, **required**) |
 | `figma_get_file_structure` | Get full JSON structure of a Figma design file by URL. Returns the complete document tree (nodes, frames, components, text, styles). Response is large by design — intended for pre-CLI artifact preparation and file output, not inline AI context. If the URL contains node-id, returns only that subtree. | `href` (string, **required**) |
 | `figma_get_icons` | Find and extract all exportable visual elements (vectors, shapes, graphics, text) from Figma design by URL. Focuses on actual visual elements to avoid complex component references. | `href` (string, **required**) |
 | `figma_get_image_fills` | Get original image fill URLs for all imageRefs in a Figma file. Resolves imageRef placeholders to actual downloadable S3 URLs. Use after inspecting file structure to download original photos/images embedded by the designer. | `href` (string, **required**) |
 | `figma_get_layers` | Get first-level layers (direct children) to understand structure. Returns layer names, IDs, types, sizes. Essential first step before getting details. | `href` (string, **required**) |
-| `figma_get_layers_batch` | Get layers for multiple nodes at once. More efficient for analyzing multiple screens/containers. Returns map of nodeId to layers. | `nodeIds` (string, **required**)<br>`href` (string, **required**) |
+| `figma_get_layers_batch` | Get layers for multiple nodes at once. More efficient for analyzing multiple screens/containers. Returns map of nodeId to layers. | `href` (string, **required**)<br>`nodeIds` (string, **required**) |
 | `figma_get_node_children` | Get immediate children IDs and basic info for a node. Non-recursive, returns only direct children. | `href` (string, **required**) |
-| `figma_get_node_details` | Get detailed properties for specific node(s) including colors, fonts, text, dimensions, and styles. Returns small focused response. | `nodeIds` (string, **required**)<br>`href` (string, **required**) |
+| `figma_get_node_details` | Get detailed properties for specific node(s) including colors, fonts, text, dimensions, and styles. Returns small focused response. | `href` (string, **required**)<br>`nodeIds` (string, **required**) |
 | `figma_get_screen_source` | Get screen source content by URL. Returns the image URL for the specified Figma design node. | `url` (string, **required**) |
 | `figma_get_styles` | Get design tokens (colors, text styles) defined in Figma file. | `href` (string, **required**) |
-| `figma_get_svg_content` | Get SVG content as text by node ID. Use this after figma_get_icons to get SVG code for vector icons. | `nodeId` (string, **required**)<br>`href` (string, **required**) |
-| `figma_get_text_content` | Extract text content from text nodes. Returns map of nodeId to text content. | `nodeIds` (string, **required**)<br>`href` (string, **required**) |
+| `figma_get_svg_content` | Get SVG content as text by node ID. Use this after figma_get_icons to get SVG code for vector icons. | `href` (string, **required**)<br>`nodeId` (string, **required**) |
+| `figma_get_text_content` | Extract text content from text nodes. Returns map of nodeId to text content. | `href` (string, **required**)<br>`nodeIds` (string, **required**) |
 | `figma_list_project_files` | List all design files within a Figma project, returning each file's key, name, and thumbnail so a specific file URL can be built for use with file-specific tools like figma_get_layers or figma_get_file_structure. Use figma_list_team_projects first to discover project IDs from a team. Accepts either a raw numeric project ID or any Figma URL containing a '/project/<projectId>' path segment. | `projectIdOrUrl` (string, **required**) |
 | `figma_list_team_projects` | List all projects within a Figma team, so a team-level 'files' listing URL (which is not a single design file and cannot be passed to file-specific tools like figma_get_layers) can be broken down into browsable projects. Accepts either a raw numeric team ID or any Figma URL containing a '/team/<teamId>' path segment. | `teamIdOrUrl` (string, **required**) |
 | `figma_me` | Gets current user information from the Figma API using the /me endpoint. Returns user details including id, handle, and email. Can also be used to verify API connectivity. | None |
-| `figma_oauth2_exchange_code` | Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh. | `redirectUri` (string, optional)<br>`code` (string, **required**) |
+| `figma_oauth2_exchange_code` | Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use the code from the redirect URL after completing the browser authorization flow started by figma_oauth2_get_auth_url. Store FIGMA_OAUTH_REFRESH_TOKEN from the response in your dmtools.env to enable automatic token refresh. | `code` (string, **required**)<br>`redirectUri` (string, optional) |
 | `figma_oauth2_get_auth_url` | Generates the Figma OAuth2 authorization URL for the initial authorization code flow. Open the returned URL in a browser, authorize the app, and copy the 'code' parameter from the redirect URL. Then call figma_oauth2_exchange_code to get access and refresh tokens. Requires FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET to be configured. Optional scope can be passed explicitly or via FIGMA_SCOPE/FIGMA_OAUTH_SCOPES env variable. | `redirectUri` (string, optional)<br>`state` (string, optional)<br>`scope` (string, optional) |
-| `figma_render_nodes` | Render multiple Figma nodes as images in a single batched API call. Automatically batches up to 100 node IDs per request. Returns map of nodeId to render URL. Use for exporting many icons or frames efficiently. | `format` (string, optional)<br>`nodeIds` (string, **required**)<br>`href` (string, **required**) |
+| `figma_render_nodes` | Render multiple Figma nodes as images in a single batched API call. Automatically batches up to 100 node IDs per request. Returns map of nodeId to render URL. Use for exporting many icons or frames efficiently. | `href` (string, **required**)<br>`nodeIds` (string, **required**)<br>`format` (string, optional) |
 | `figma_test` | Test Figma connectivity by fetching the current user's profile | None |
 
 ## Detailed Parameter Information
@@ -56,17 +56,17 @@ Download image as file by node ID and format. Use this after figma_get_icons to 
 
 **Parameters:**
 
-- **`format`** (string) 🔴 Required
-  - Export format
-  - Example: `png`
+- **`href`** (string) 🔴 Required
+  - Figma design URL to extract file ID from
+  - Example: `https://www.figma.com/file/abc123/Design`
 
 - **`nodeId`** (string) 🔴 Required
   - Node ID to export (from figma_get_icons result)
   - Example: `123:456`
 
-- **`href`** (string) 🔴 Required
-  - Figma design URL to extract file ID from
-  - Example: `https://www.figma.com/file/abc123/Design`
+- **`format`** (string) 🔴 Required
+  - Export format
+  - Example: `png`
 
 **Example:**
 ```bash
@@ -75,7 +75,7 @@ dmtools figma_download_image_as_file "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_download_image_as_file("format", "nodeId");
+const result = figma_download_image_as_file("href", "nodeId");
 ```
 
 ---
@@ -108,17 +108,17 @@ Download image of specific node/component. Useful for visual preview of design p
 
 **Parameters:**
 
-- **`format`** (string) ⚪ Optional
-  - Image format: png or jpg
-
-- **`scale`** (number) ⚪ Optional
-  - Scale factor: 1, 2, or 4
-
 - **`href`** (string) 🔴 Required
   - Figma design URL
 
 - **`nodeId`** (string) 🔴 Required
   - Node ID to download
+
+- **`format`** (string) ⚪ Optional
+  - Image format: png or jpg
+
+- **`scale`** (number) ⚪ Optional
+  - Scale factor: 1, 2, or 4
 
 **Example:**
 ```bash
@@ -127,7 +127,7 @@ dmtools figma_download_node_image "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_download_node_image("format", "scale");
+const result = figma_download_node_image("href", "nodeId");
 ```
 
 ---
@@ -245,11 +245,11 @@ Get layers for multiple nodes at once. More efficient for analyzing multiple scr
 
 **Parameters:**
 
-- **`nodeIds`** (string) 🔴 Required
-  - Comma-separated node IDs (max 10)
-
 - **`href`** (string) 🔴 Required
   - Figma design URL
+
+- **`nodeIds`** (string) 🔴 Required
+  - Comma-separated node IDs (max 10)
 
 **Example:**
 ```bash
@@ -258,7 +258,7 @@ dmtools figma_get_layers_batch "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_get_layers_batch("nodeIds", "href");
+const result = figma_get_layers_batch("href", "nodeIds");
 ```
 
 ---
@@ -290,11 +290,11 @@ Get detailed properties for specific node(s) including colors, fonts, text, dime
 
 **Parameters:**
 
-- **`nodeIds`** (string) 🔴 Required
-  - Comma-separated node IDs (max 10)
-
 - **`href`** (string) 🔴 Required
   - Figma design URL
+
+- **`nodeIds`** (string) 🔴 Required
+  - Comma-separated node IDs (max 10)
 
 **Example:**
 ```bash
@@ -303,7 +303,7 @@ dmtools figma_get_node_details "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_get_node_details("nodeIds", "href");
+const result = figma_get_node_details("href", "nodeIds");
 ```
 
 ---
@@ -357,13 +357,13 @@ Get SVG content as text by node ID. Use this after figma_get_icons to get SVG co
 
 **Parameters:**
 
-- **`nodeId`** (string) 🔴 Required
-  - Node ID to export as SVG (from figma_get_icons result)
-  - Example: `123:456`
-
 - **`href`** (string) 🔴 Required
   - Figma design URL to extract file ID from
   - Example: `https://www.figma.com/file/abc123/Design`
+
+- **`nodeId`** (string) 🔴 Required
+  - Node ID to export as SVG (from figma_get_icons result)
+  - Example: `123:456`
 
 **Example:**
 ```bash
@@ -372,7 +372,7 @@ dmtools figma_get_svg_content "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_get_svg_content("nodeId", "href");
+const result = figma_get_svg_content("href", "nodeId");
 ```
 
 ---
@@ -383,11 +383,11 @@ Extract text content from text nodes. Returns map of nodeId to text content.
 
 **Parameters:**
 
-- **`nodeIds`** (string) 🔴 Required
-  - Comma-separated text node IDs (max 20)
-
 - **`href`** (string) 🔴 Required
   - Figma design URL
+
+- **`nodeIds`** (string) 🔴 Required
+  - Comma-separated text node IDs (max 20)
 
 **Example:**
 ```bash
@@ -396,7 +396,7 @@ dmtools figma_get_text_content "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_get_text_content("nodeIds", "href");
+const result = figma_get_text_content("href", "nodeIds");
 ```
 
 ---
@@ -469,13 +469,13 @@ Exchanges a Figma OAuth2 authorization code for access and refresh tokens. Use t
 
 **Parameters:**
 
-- **`redirectUri`** (string) ⚪ Optional
-  - Same redirect URI used in figma_oauth2_get_auth_url. If omitted, uses FIGMA_REDIRECT_URI env variable.
-  - Example: `http://localhost:8080/callback`
-
 - **`code`** (string) 🔴 Required
   - Authorization code received from Figma OAuth2 redirect
   - Example: `figma_auth_code_abc123`
+
+- **`redirectUri`** (string) ⚪ Optional
+  - Same redirect URI used in figma_oauth2_get_auth_url. If omitted, uses FIGMA_REDIRECT_URI env variable.
+  - Example: `http://localhost:8080/callback`
 
 **Example:**
 ```bash
@@ -484,7 +484,7 @@ dmtools figma_oauth2_exchange_code "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_oauth2_exchange_code("redirectUri", "code");
+const result = figma_oauth2_exchange_code("code", "redirectUri");
 ```
 
 ---
@@ -525,14 +525,14 @@ Render multiple Figma nodes as images in a single batched API call. Automaticall
 
 **Parameters:**
 
-- **`format`** (string) ⚪ Optional
-  - Export format: png, jpg, svg, pdf. Default: png
+- **`href`** (string) 🔴 Required
+  - Figma design URL
 
 - **`nodeIds`** (string) 🔴 Required
   - Comma-separated node IDs to render (e.g. '1:2,3:4,5:6')
 
-- **`href`** (string) 🔴 Required
-  - Figma design URL
+- **`format`** (string) ⚪ Optional
+  - Export format: png, jpg, svg, pdf. Default: png
 
 **Example:**
 ```bash
@@ -541,7 +541,7 @@ dmtools figma_render_nodes "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = figma_render_nodes("format", "nodeIds");
+const result = figma_render_nodes("href", "nodeIds");
 ```
 
 ---

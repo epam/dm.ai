@@ -18,25 +18,25 @@ dmtools ado_get_work_item [arguments]
 // Direct function calls for ado tools
 const result = ado_get_work_item(...);
 const result = ado_search_by_wiql(...);
-const result = ado_get_comments(...);
+const result = ado_get_work_item_comments(...);
 ```
 
 ## Available Tools
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
-| `ado_add_inline_comment` | Create a new inline code comment on a specific file and line range in an Azure DevOps pull request. Creates a new thread with file context. | `side` (string, optional)<br>`line` (string, **required**)<br>`filePath` (string, **required**)<br>`startLine` (string, optional)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `ado_add_inline_comment` | Create a new inline code comment on a specific file and line range in an Azure DevOps pull request. Creates a new thread with file context. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`filePath` (string, **required**)<br>`line` (string, **required**)<br>`text` (string, **required**)<br>`startLine` (string, optional)<br>`side` (string, optional) |
 | `ado_add_pr_comment` | Add a general comment to an Azure DevOps pull request (creates a new thread). For inline code comments, use ado_add_inline_comment instead. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`text` (string, **required**) |
 | `ado_add_pr_label` | Add a label (tag) to an Azure DevOps pull request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`label` (string, **required**) |
-| `ado_add_pr_reviewer` | Add a reviewer to an Azure DevOps pull request. Optionally set their initial vote. | `reviewerId` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`vote` (string, optional) |
-| `ado_assign_work_item` | Assign a work item to a user | `userEmail` (string, **required**)<br>`id` (string, **required**) |
-| `ado_create_work_item` | Create a new work item in Azure DevOps | `workItemType` (string, **required**)<br>`project` (string, **required**)<br>`description` (string, optional)<br>`fieldsJson` (object, optional)<br>`title` (string, **required**) |
-| `ado_delete_pr_comment` | Delete a comment from a pull request thread. Requires both threadId and commentId. | `threadId` (string, **required**)<br>`commentId` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `ado_add_pr_reviewer` | Add a reviewer to an Azure DevOps pull request. Optionally set their initial vote. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewerId` (string, **required**)<br>`vote` (string, optional) |
+| `ado_add_work_item_comment` | Add a comment to an Azure DevOps work item | `id` (string, **required**)<br>`comment` (string, **required**) |
+| `ado_assign_work_item` | Assign a work item to a user | `id` (string, **required**)<br>`userEmail` (string, **required**) |
+| `ado_create_work_item` | Create a new work item in Azure DevOps | `project` (string, **required**)<br>`workItemType` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`fieldsJson` (object, optional) |
+| `ado_delete_pr_comment` | Delete a comment from a pull request thread. Requires both threadId and commentId. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`commentId` (string, **required**) |
 | `ado_download_attachment` | Download an ADO work item attachment by URL and save it as a file | `href` (string, **required**) |
-| `ado_get_changelog` | Get the complete history/changelog of a work item | `ticket` (object, optional)<br>`id` (string, **required**) |
-| `ado_get_comments` | Get all comments for a work item | `ticket` (object, **required**)<br>`id` (string, **required**) |
+| `ado_get_changelog` | Get the complete history/changelog of a work item | `id` (string, **required**)<br>`ticket` (object, optional) |
 | `ado_get_my_profile` | Get the current user's profile information from Azure DevOps | None |
-| `ado_get_pipeline_logs` | Get combined logs for all tasks in a pipeline run (build ID). Equivalent to github_get_job_logs. | `tailLines` (number, optional)<br>`buildId` (number, **required**)<br>`taskName` (string, optional) |
+| `ado_get_pipeline_logs` | Get combined logs for all tasks in a pipeline run (build ID). Equivalent to github_get_job_logs. | `buildId` (number, **required**)<br>`taskName` (string, optional)<br>`tailLines` (number, optional) |
 | `ado_get_pipeline_run` | Get details of a specific pipeline run including state and result. | `pipelineId` (number, **required**)<br>`runId` (number, **required**) |
 | `ado_get_pr` | Get details of an Azure DevOps pull request including title, description, status, author, reviewers, branches, and merge info. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `ado_get_pr_comments` | Get all comment threads for an Azure DevOps pull request. Each thread contains comments, file context for inline comments, and status (active, fixed, closed, etc.). | `repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
@@ -44,24 +44,24 @@ const result = ado_get_comments(...);
 | `ado_get_pr_reviewers` | Get all reviewers for an Azure DevOps pull request with their vote status. Vote: 10=approved, 5=approved with suggestions, 0=no vote, -5=waiting for author, -10=rejected. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `ado_get_pr_work_items` | Get work items linked to an Azure DevOps pull request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `ado_get_user_by_email` | Get user information by email address in Azure DevOps | `email` (string, **required**) |
-| `ado_get_work_item` | Get a specific Azure DevOps work item by ID with optional field filtering | `fields` (array, optional)<br>`id` (string, **required**) |
+| `ado_get_work_item` | Get a specific Azure DevOps work item by ID with optional field filtering | `id` (string, **required**)<br>`fields` (array, optional) |
+| `ado_get_work_item_comments` | Get all comments for a work item | `id` (string, **required**)<br>`ticket` (object, **required**) |
 | `ado_link_work_items` | Link two work items with a relationship (e.g., Parent-Child, Related, Tested By) | `sourceId` (string, **required**)<br>`targetId` (string, **required**)<br>`relationship` (string, **required**) |
-| `ado_list_pipeline_runs` | List recent runs of a pipeline. Equivalent to github_list_workflow_runs. | `top` (number, optional)<br>`pipelineId` (number, **required**) |
+| `ado_list_pipeline_runs` | List recent runs of a pipeline. Equivalent to github_list_workflow_runs. | `pipelineId` (number, **required**)<br>`top` (number, optional) |
 | `ado_list_pipelines` | List all pipelines defined in the ADO project. | None |
 | `ado_list_prs` | List pull requests in an Azure DevOps Git repository by status. Status can be 'active', 'completed', or 'abandoned'. | `repository` (string, **required**)<br>`status` (string, **required**) |
-| `ado_merge_pr` | Complete (merge) an Azure DevOps pull request. Sets status to 'completed' with the specified merge strategy. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`commitMessage` (string, optional)<br>`mergeStrategy` (string, optional)<br>`deleteSourceBranch` (string, optional) |
+| `ado_merge_pr` | Complete (merge) an Azure DevOps pull request. Sets status to 'completed' with the specified merge strategy. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`mergeStrategy` (string, optional)<br>`deleteSourceBranch` (string, optional)<br>`commitMessage` (string, optional) |
 | `ado_move_to_state` | Move a work item to a specific state | `id` (string, **required**)<br>`state` (string, **required**) |
-| `ado_post_comment` | Post a comment to a work item | `comment` (string, **required**)<br>`id` (string, **required**) |
 | `ado_remove_pr_label` | Remove a label (tag) from an Azure DevOps pull request. Requires the labelId (from ado_get_pr or ado_list_prs labels array). | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`labelId` (string, **required**) |
-| `ado_reply_to_pr_thread` | Reply to an existing comment thread in an Azure DevOps pull request. Use the threadId from ado_get_pr_comments. | `threadId` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
-| `ado_resolve_pr_thread` | Resolve (close) a comment thread in an Azure DevOps pull request. Sets the thread status to 'fixed'. Other statuses: 'active', 'closed', 'byDesign', 'pending', 'wontFix'. | `threadId` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`status` (string, optional) |
-| `ado_search_by_wiql` | Search for work items using WIQL (Work Item Query Language) | `fields` (array, optional)<br>`wiql` (string, **required**) |
-| `ado_set_pr_vote` | Set the current user's vote on a pull request. Vote values: 10=approve, 5=approve with suggestions, 0=reset/no vote, -5=wait for author, -10=reject. | `reviewerId` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`vote` (string, **required**) |
+| `ado_reply_to_pr_thread` | Reply to an existing comment thread in an Azure DevOps pull request. Use the threadId from ado_get_pr_comments. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`text` (string, **required**) |
+| `ado_resolve_pr_thread` | Resolve (close) a comment thread in an Azure DevOps pull request. Sets the thread status to 'fixed'. Other statuses: 'active', 'closed', 'byDesign', 'pending', 'wontFix'. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`status` (string, optional) |
+| `ado_search_by_wiql` | Search for work items using WIQL (Work Item Query Language) | `wiql` (string, **required**)<br>`fields` (array, optional) |
+| `ado_set_pr_vote` | Set the current user's vote on a pull request. Vote values: 10=approve, 5=approve with suggestions, 0=reset/no vote, -5=wait for author, -10=reject. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewerId` (string, **required**)<br>`vote` (string, **required**) |
 | `ado_test` | Test Azure DevOps connectivity by fetching the current user's profile | None |
-| `ado_trigger_pipeline` | Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow. | `branch` (string, optional)<br>`variables` (string, optional)<br>`pipelineId` (number, **required**) |
-| `ado_update_description` | Update the description of a work item | `description` (string, **required**)<br>`id` (string, **required**) |
-| `ado_update_pr` | Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate. | `description` (string, optional)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`title` (string, optional)<br>`status` (string, optional) |
-| `ado_update_pr_comment` | Update (edit) an existing comment in a pull request thread. Requires both threadId and commentId. | `threadId` (string, **required**)<br>`commentId` (string, **required**)<br>`text` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `ado_trigger_pipeline` | Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow. | `pipelineId` (number, **required**)<br>`branch` (string, optional)<br>`variables` (string, optional) |
+| `ado_update_description` | Update the description of a work item | `id` (string, **required**)<br>`description` (string, **required**) |
+| `ado_update_pr` | Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`title` (string, optional)<br>`description` (string, optional)<br>`status` (string, optional) |
+| `ado_update_pr_comment` | Update (edit) an existing comment in a pull request thread. Requires both threadId and commentId. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`commentId` (string, **required**)<br>`text` (string, **required**) |
 | `ado_update_tags` | Update the tags of a work item (semicolon-separated string) | `id` (string, **required**)<br>`tags` (string, **required**) |
 
 ## Detailed Parameter Information
@@ -72,26 +72,6 @@ Create a new inline code comment on a specific file and line range in an Azure D
 
 **Parameters:**
 
-- **`side`** (string) ⚪ Optional
-  - Which diff side to comment on: 'right' (new code, default) or 'left' (old code)
-  - Example: `right`
-
-- **`line`** (string) 🔴 Required
-  - The line number to comment on (1-based)
-  - Example: `42`
-
-- **`filePath`** (string) 🔴 Required
-  - The relative file path in the repository (must start with /)
-  - Example: `/src/main/java/com/example/Foo.java`
-
-- **`startLine`** (string) ⚪ Optional
-  - For multi-line comments: the first line of the range. Must be less than or equal to line.
-  - Example: `40`
-
-- **`text`** (string) 🔴 Required
-  - The comment text (Markdown supported)
-  - Example: `This should be refactored.`
-
 - **`repository`** (string) 🔴 Required
   - The Git repository name
   - Example: `ai-native-sdlc-blueprint`
@@ -100,6 +80,26 @@ Create a new inline code comment on a specific file and line range in an Azure D
   - The pull request ID
   - Example: `1`
 
+- **`filePath`** (string) 🔴 Required
+  - The relative file path in the repository (must start with /)
+  - Example: `/src/main/java/com/example/Foo.java`
+
+- **`line`** (string) 🔴 Required
+  - The line number to comment on (1-based)
+  - Example: `42`
+
+- **`text`** (string) 🔴 Required
+  - The comment text (Markdown supported)
+  - Example: `This should be refactored.`
+
+- **`startLine`** (string) ⚪ Optional
+  - For multi-line comments: the first line of the range. Must be less than or equal to line.
+  - Example: `40`
+
+- **`side`** (string) ⚪ Optional
+  - Which diff side to comment on: 'right' (new code, default) or 'left' (old code)
+  - Example: `right`
+
 **Example:**
 ```bash
 dmtools ado_add_inline_comment "value" "value"
@@ -107,7 +107,7 @@ dmtools ado_add_inline_comment "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_add_inline_comment("side", "line");
+const result = ado_add_inline_comment("repository", "pullRequestId");
 ```
 
 ---
@@ -178,10 +178,6 @@ Add a reviewer to an Azure DevOps pull request. Optionally set their initial vot
 
 **Parameters:**
 
-- **`reviewerId`** (string) 🔴 Required
-  - The reviewer's ID (GUID from ado_get_user_by_email or uniqueName)
-  - Example: `ab1c2d3e-...`
-
 - **`repository`** (string) 🔴 Required
   - The Git repository name
   - Example: `ai-native-sdlc-blueprint`
@@ -189,6 +185,10 @@ Add a reviewer to an Azure DevOps pull request. Optionally set their initial vot
 - **`pullRequestId`** (string) 🔴 Required
   - The pull request ID
   - Example: `1`
+
+- **`reviewerId`** (string) 🔴 Required
+  - The reviewer's ID (GUID from ado_get_user_by_email or uniqueName)
+  - Example: `ab1c2d3e-...`
 
 - **`vote`** (string) ⚪ Optional
   - Optional initial vote: 10=approve, 5=approve with suggestions, 0=no vote, -5=wait for author, -10=reject
@@ -201,7 +201,31 @@ dmtools ado_add_pr_reviewer "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_add_pr_reviewer("reviewerId", "repository");
+const result = ado_add_pr_reviewer("repository", "pullRequestId");
+```
+
+---
+
+### `ado_add_work_item_comment`
+
+Add a comment to an Azure DevOps work item
+
+**Parameters:**
+
+- **`id`** (string) 🔴 Required
+  - The work item ID
+
+- **`comment`** (string) 🔴 Required
+  - The comment text
+
+**Example:**
+```bash
+dmtools ado_add_work_item_comment "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_add_work_item_comment("id", "comment");
 ```
 
 ---
@@ -212,11 +236,11 @@ Assign a work item to a user
 
 **Parameters:**
 
-- **`userEmail`** (string) 🔴 Required
-  - The user email or display name
-
 - **`id`** (string) 🔴 Required
   - The work item ID
+
+- **`userEmail`** (string) 🔴 Required
+  - The user email or display name
 
 **Example:**
 ```bash
@@ -225,7 +249,7 @@ dmtools ado_assign_work_item "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_assign_work_item("userEmail", "id");
+const result = ado_assign_work_item("id", "userEmail");
 ```
 
 ---
@@ -236,20 +260,20 @@ Create a new work item in Azure DevOps
 
 **Parameters:**
 
+- **`project`** (string) 🔴 Required
+  - The project name
+
 - **`workItemType`** (string) 🔴 Required
   - The work item type (Bug, Task, User Story, etc.)
 
-- **`project`** (string) 🔴 Required
-  - The project name
+- **`title`** (string) 🔴 Required
+  - The work item title
 
 - **`description`** (string) ⚪ Optional
   - The work item description (HTML)
 
 - **`fieldsJson`** (object) ⚪ Optional
   - Additional fields as JSON object (e.g., {"Microsoft.VSTS.Common.Priority": 1})
-
-- **`title`** (string) 🔴 Required
-  - The work item title
 
 **Example:**
 ```bash
@@ -258,7 +282,7 @@ dmtools ado_create_work_item "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_create_work_item("workItemType", "project");
+const result = ado_create_work_item("project", "workItemType");
 ```
 
 ---
@@ -269,14 +293,6 @@ Delete a comment from a pull request thread. Requires both threadId and commentI
 
 **Parameters:**
 
-- **`threadId`** (string) 🔴 Required
-  - The ID of the thread containing the comment
-  - Example: `42`
-
-- **`commentId`** (string) 🔴 Required
-  - The ID of the comment to delete
-  - Example: `2`
-
 - **`repository`** (string) 🔴 Required
   - The Git repository name
   - Example: `ai-native-sdlc-blueprint`
@@ -285,6 +301,14 @@ Delete a comment from a pull request thread. Requires both threadId and commentI
   - The pull request ID
   - Example: `1`
 
+- **`threadId`** (string) 🔴 Required
+  - The ID of the thread containing the comment
+  - Example: `42`
+
+- **`commentId`** (string) 🔴 Required
+  - The ID of the comment to delete
+  - Example: `2`
+
 **Example:**
 ```bash
 dmtools ado_delete_pr_comment "value" "value"
@@ -292,7 +316,7 @@ dmtools ado_delete_pr_comment "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_delete_pr_comment("threadId", "commentId");
+const result = ado_delete_pr_comment("repository", "pullRequestId");
 ```
 
 ---
@@ -324,11 +348,11 @@ Get the complete history/changelog of a work item
 
 **Parameters:**
 
-- **`ticket`** (object) ⚪ Optional
-  - Optional work item object (can be null)
-
 - **`id`** (string) 🔴 Required
   - The work item ID
+
+- **`ticket`** (object) ⚪ Optional
+  - Optional work item object (can be null)
 
 **Example:**
 ```bash
@@ -337,31 +361,7 @@ dmtools ado_get_changelog "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_get_changelog("ticket", "id");
-```
-
----
-
-### `ado_get_comments`
-
-Get all comments for a work item
-
-**Parameters:**
-
-- **`ticket`** (object) 🔴 Required
-  - Parameter ticket
-
-- **`id`** (string) 🔴 Required
-  - The work item ID
-
-**Example:**
-```bash
-dmtools ado_get_comments "value" "value"
-```
-
-```javascript
-// In JavaScript agent
-const result = ado_get_comments("ticket", "id");
+const result = ado_get_changelog("id", "ticket");
 ```
 
 ---
@@ -390,14 +390,14 @@ Get combined logs for all tasks in a pipeline run (build ID). Equivalent to gith
 
 **Parameters:**
 
-- **`tailLines`** (number) ⚪ Optional
-  - Lines to return from the end of each task log (default 200, 0 = all)
-
 - **`buildId`** (number) 🔴 Required
   - The build/run ID returned by ado_trigger_pipeline or ado_list_pipeline_runs
 
 - **`taskName`** (string) ⚪ Optional
   - Optional: filter logs to a specific task name (case-insensitive substring match)
+
+- **`tailLines`** (number) ⚪ Optional
+  - Lines to return from the end of each task log (default 200, 0 = all)
 
 **Example:**
 ```bash
@@ -406,7 +406,7 @@ dmtools ado_get_pipeline_logs "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_get_pipeline_logs("tailLines", "buildId");
+const result = ado_get_pipeline_logs("buildId", "taskName");
 ```
 
 ---
@@ -592,12 +592,12 @@ Get a specific Azure DevOps work item by ID with optional field filtering
 
 **Parameters:**
 
-- **`fields`** (array) ⚪ Optional
-  - Optional array of fields to include in the response
-
 - **`id`** (string) 🔴 Required
   - The work item ID (numeric)
   - Example: `12345`
+
+- **`fields`** (array) ⚪ Optional
+  - Optional array of fields to include in the response
 
 **Example:**
 ```bash
@@ -606,7 +606,31 @@ dmtools ado_get_work_item "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_get_work_item("fields", "id");
+const result = ado_get_work_item("id", "fields");
+```
+
+---
+
+### `ado_get_work_item_comments`
+
+Get all comments for a work item
+
+**Parameters:**
+
+- **`id`** (string) 🔴 Required
+  - The work item ID
+
+- **`ticket`** (object) 🔴 Required
+  - Parameter ticket
+
+**Example:**
+```bash
+dmtools ado_get_work_item_comments "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_get_work_item_comments("id", "ticket");
 ```
 
 ---
@@ -645,11 +669,11 @@ List recent runs of a pipeline. Equivalent to github_list_workflow_runs.
 
 **Parameters:**
 
-- **`top`** (number) ⚪ Optional
-  - Number of runs to return (default 10)
-
 - **`pipelineId`** (number) 🔴 Required
   - The pipeline ID
+
+- **`top`** (number) ⚪ Optional
+  - Number of runs to return (default 10)
 
 **Example:**
 ```bash
@@ -658,7 +682,7 @@ dmtools ado_list_pipeline_runs "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_list_pipeline_runs("top", "pipelineId");
+const result = ado_list_pipeline_runs("pipelineId", "top");
 ```
 
 ---
@@ -721,10 +745,6 @@ Complete (merge) an Azure DevOps pull request. Sets status to 'completed' with t
   - The pull request ID to complete/merge
   - Example: `1`
 
-- **`commitMessage`** (string) ⚪ Optional
-  - Optional merge commit message
-  - Example: `Merging feature branch`
-
 - **`mergeStrategy`** (string) ⚪ Optional
   - The merge strategy: 'squash' (default), 'noFastForward', 'rebase', 'rebaseMerge'
   - Example: `squash`
@@ -732,6 +752,10 @@ Complete (merge) an Azure DevOps pull request. Sets status to 'completed' with t
 - **`deleteSourceBranch`** (string) ⚪ Optional
   - Whether to delete the source branch after merging (default: true)
   - Example: `true`
+
+- **`commitMessage`** (string) ⚪ Optional
+  - Optional merge commit message
+  - Example: `Merging feature branch`
 
 **Example:**
 ```bash
@@ -766,30 +790,6 @@ dmtools ado_move_to_state "value" "value"
 ```javascript
 // In JavaScript agent
 const result = ado_move_to_state("id", "state");
-```
-
----
-
-### `ado_post_comment`
-
-Post a comment to a work item
-
-**Parameters:**
-
-- **`comment`** (string) 🔴 Required
-  - The comment text
-
-- **`id`** (string) 🔴 Required
-  - The work item ID
-
-**Example:**
-```bash
-dmtools ado_post_comment "value" "value"
-```
-
-```javascript
-// In JavaScript agent
-const result = ado_post_comment("comment", "id");
 ```
 
 ---
@@ -830,14 +830,6 @@ Reply to an existing comment thread in an Azure DevOps pull request. Use the thr
 
 **Parameters:**
 
-- **`threadId`** (string) 🔴 Required
-  - The ID of the thread to reply to (from ado_get_pr_comments)
-  - Example: `42`
-
-- **`text`** (string) 🔴 Required
-  - The reply text (Markdown supported)
-  - Example: `Fixed in the latest commit.`
-
 - **`repository`** (string) 🔴 Required
   - The Git repository name
   - Example: `ai-native-sdlc-blueprint`
@@ -846,6 +838,14 @@ Reply to an existing comment thread in an Azure DevOps pull request. Use the thr
   - The pull request ID
   - Example: `1`
 
+- **`threadId`** (string) 🔴 Required
+  - The ID of the thread to reply to (from ado_get_pr_comments)
+  - Example: `42`
+
+- **`text`** (string) 🔴 Required
+  - The reply text (Markdown supported)
+  - Example: `Fixed in the latest commit.`
+
 **Example:**
 ```bash
 dmtools ado_reply_to_pr_thread "value" "value"
@@ -853,7 +853,7 @@ dmtools ado_reply_to_pr_thread "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_reply_to_pr_thread("threadId", "text");
+const result = ado_reply_to_pr_thread("repository", "pullRequestId");
 ```
 
 ---
@@ -864,10 +864,6 @@ Resolve (close) a comment thread in an Azure DevOps pull request. Sets the threa
 
 **Parameters:**
 
-- **`threadId`** (string) 🔴 Required
-  - The ID of the thread to resolve (from ado_get_pr_comments)
-  - Example: `42`
-
 - **`repository`** (string) 🔴 Required
   - The Git repository name
   - Example: `ai-native-sdlc-blueprint`
@@ -875,6 +871,10 @@ Resolve (close) a comment thread in an Azure DevOps pull request. Sets the threa
 - **`pullRequestId`** (string) 🔴 Required
   - The pull request ID
   - Example: `1`
+
+- **`threadId`** (string) 🔴 Required
+  - The ID of the thread to resolve (from ado_get_pr_comments)
+  - Example: `42`
 
 - **`status`** (string) ⚪ Optional
   - The new status: 'fixed' (default/resolved), 'closed', 'byDesign', 'wontFix', 'pending', 'active'
@@ -887,7 +887,7 @@ dmtools ado_resolve_pr_thread "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_resolve_pr_thread("threadId", "repository");
+const result = ado_resolve_pr_thread("repository", "pullRequestId");
 ```
 
 ---
@@ -898,12 +898,12 @@ Search for work items using WIQL (Work Item Query Language)
 
 **Parameters:**
 
-- **`fields`** (array) ⚪ Optional
-  - Optional array of fields to include
-
 - **`wiql`** (string) 🔴 Required
   - WIQL query string
   - Example: `SELECT [System.Id] FROM WorkItems WHERE [System.WorkItemType] = 'Bug'`
+
+- **`fields`** (array) ⚪ Optional
+  - Optional array of fields to include
 
 **Example:**
 ```bash
@@ -912,7 +912,7 @@ dmtools ado_search_by_wiql "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_search_by_wiql("fields", "wiql");
+const result = ado_search_by_wiql("wiql", "fields");
 ```
 
 ---
@@ -923,10 +923,6 @@ Set the current user's vote on a pull request. Vote values: 10=approve, 5=approv
 
 **Parameters:**
 
-- **`reviewerId`** (string) 🔴 Required
-  - The reviewer's ID (GUID) — use ado_get_my_profile or ado_get_user_by_email to get it
-  - Example: `ab1c2d3e-...`
-
 - **`repository`** (string) 🔴 Required
   - The Git repository name
   - Example: `ai-native-sdlc-blueprint`
@@ -934,6 +930,10 @@ Set the current user's vote on a pull request. Vote values: 10=approve, 5=approv
 - **`pullRequestId`** (string) 🔴 Required
   - The pull request ID
   - Example: `1`
+
+- **`reviewerId`** (string) 🔴 Required
+  - The reviewer's ID (GUID) — use ado_get_my_profile or ado_get_user_by_email to get it
+  - Example: `ab1c2d3e-...`
 
 - **`vote`** (string) 🔴 Required
   - Vote value: 10=approve, 5=approve with suggestions, 0=reset, -5=wait for author, -10=reject
@@ -946,7 +946,7 @@ dmtools ado_set_pr_vote "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_set_pr_vote("reviewerId", "repository");
+const result = ado_set_pr_vote("repository", "pullRequestId");
 ```
 
 ---
@@ -975,14 +975,14 @@ Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow.
 
 **Parameters:**
 
+- **`pipelineId`** (number) 🔴 Required
+  - The pipeline ID to trigger
+
 - **`branch`** (string) ⚪ Optional
   - The branch to run the pipeline on (e.g. 'main')
 
 - **`variables`** (string) ⚪ Optional
   - JSON object of pipeline variables, e.g. {"myVar":"value"}
-
-- **`pipelineId`** (number) 🔴 Required
-  - The pipeline ID to trigger
 
 **Example:**
 ```bash
@@ -991,7 +991,7 @@ dmtools ado_trigger_pipeline "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_trigger_pipeline("branch", "variables");
+const result = ado_trigger_pipeline("pipelineId", "branch");
 ```
 
 ---
@@ -1002,11 +1002,11 @@ Update the description of a work item
 
 **Parameters:**
 
-- **`description`** (string) 🔴 Required
-  - The new description (HTML format)
-
 - **`id`** (string) 🔴 Required
   - The work item ID
+
+- **`description`** (string) 🔴 Required
+  - The new description (HTML format)
 
 **Example:**
 ```bash
@@ -1015,7 +1015,7 @@ dmtools ado_update_description "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_update_description("description", "id");
+const result = ado_update_description("id", "description");
 ```
 
 ---
@@ -1025,10 +1025,6 @@ const result = ado_update_description("description", "id");
 Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate.
 
 **Parameters:**
-
-- **`description`** (string) ⚪ Optional
-  - New description for the pull request (Markdown supported)
-  - Example: `Updated description`
 
 - **`repository`** (string) 🔴 Required
   - The Git repository name
@@ -1042,6 +1038,10 @@ Update pull request properties such as title, description, or status. Use status
   - New title for the pull request
   - Example: `Updated PR title`
 
+- **`description`** (string) ⚪ Optional
+  - New description for the pull request (Markdown supported)
+  - Example: `Updated description`
+
 - **`status`** (string) ⚪ Optional
   - New status: 'active' or 'abandoned'
   - Example: `active`
@@ -1053,7 +1053,7 @@ dmtools ado_update_pr "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_update_pr("description", "repository");
+const result = ado_update_pr("repository", "pullRequestId");
 ```
 
 ---
@@ -1063,6 +1063,14 @@ const result = ado_update_pr("description", "repository");
 Update (edit) an existing comment in a pull request thread. Requires both threadId and commentId.
 
 **Parameters:**
+
+- **`repository`** (string) 🔴 Required
+  - The Git repository name
+  - Example: `ai-native-sdlc-blueprint`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - The pull request ID
+  - Example: `1`
 
 - **`threadId`** (string) 🔴 Required
   - The ID of the thread containing the comment
@@ -1076,14 +1084,6 @@ Update (edit) an existing comment in a pull request thread. Requires both thread
   - The new comment text (replaces existing content)
   - Example: `Updated analysis.`
 
-- **`repository`** (string) 🔴 Required
-  - The Git repository name
-  - Example: `ai-native-sdlc-blueprint`
-
-- **`pullRequestId`** (string) 🔴 Required
-  - The pull request ID
-  - Example: `1`
-
 **Example:**
 ```bash
 dmtools ado_update_pr_comment "value" "value"
@@ -1091,7 +1091,7 @@ dmtools ado_update_pr_comment "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = ado_update_pr_comment("threadId", "commentId");
+const result = ado_update_pr_comment("repository", "pullRequestId");
 ```
 
 ---
