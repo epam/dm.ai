@@ -1,6 +1,6 @@
 # GITLAB MCP Tools
 
-**Total Tools**: 30
+**Total Tools**: 34
 
 ## Quick Reference
 
@@ -31,6 +31,7 @@ const result = gitlab_add_mr_label(...);
 | `gitlab_approve_mr` | Approve a GitLab merge request. Adds your approval to the MR. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_cancel_job` | Cancel a GitLab CI job. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`jobId` (string, **required**) |
 | `gitlab_create_mr` | Create a GitLab merge request from a source branch into a target branch. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`sourceBranch` (string, **required**)<br>`targetBranch` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`removeSourceBranch` (string, optional) |
+| `gitlab_create_mr_note` | Create a note (comment) on a GitLab merge request. Same endpoint as gitlab_add_mr_comment; the dmtools-dart catalog exposes both names. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`text` (string, **required**) |
 | `gitlab_delete_release_asset` | Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`assetName` (string, **required**)<br>`packageName` (string, optional) |
 | `gitlab_download_release_asset` | Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`assetName` (string, **required**)<br>`targetFilePath` (string, **required**)<br>`packageName` (string, optional) |
 | `gitlab_get_commit_statuses` | Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per status report (e.g. posted by an external CI like Jenkins via the gitlabBuilds plugin, or GitLab's own pipeline). Equivalent of GitHub's 'check runs' for GitLab. When the same status name was reported more than once for this commit (e.g. a CI job was retried), only the most recent report per name is returned. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`commitSha` (string, **required**) |
@@ -41,8 +42,10 @@ const result = gitlab_add_mr_label(...);
 | `gitlab_get_mr_diff` | Get diff stats and changed files for a GitLab merge request. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_get_mr_diff_text` | Get the raw unified diff text for a GitLab merge request (suitable for locating file/line positions, e.g. for inline review comments). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_get_mr_discussions` | Get all discussion threads for a GitLab merge request. Each discussion contains notes (comments) and a resolved status. Use the discussion id with gitlab_resolve_mr_thread. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_get_mr_pipelines` | List CI pipelines for a specific GitLab merge request (the CI verdict for the MR head). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_get_or_create_release` | Find an existing GitLab release by tag, or create one if it does not exist. Useful for a stable artefact storage release (mirrors github_get_or_create_draft_release). Note: GitLab releases have no draft concept; releases are visible as soon as they are created. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`releaseName` (string, optional)<br>`targetCommitish` (string, optional)<br>`body` (string, optional) |
 | `gitlab_get_pipeline_jobs` | List jobs for a GitLab CI pipeline. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pipelineId` (string, **required**) |
+| `gitlab_list_issues` | List issues in a GitLab project. State can be 'opened', 'closed', or 'all'. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`state` (string, optional)<br>`perPage` (number, optional) |
 | `gitlab_list_mrs` | List merge requests for a GitLab project. State can be 'opened', 'closed', 'merged', or 'all'. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`state` (string, **required**) |
 | `gitlab_list_pipeline_runs` | List recent GitLab CI pipelines. Optionally filter by status, ref, and limit. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`status` (string, optional)<br>`ref` (string, optional)<br>`limit` (string, optional) |
 | `gitlab_list_project_jobs` | List recent GitLab CI jobs for a project. | `workspace` (string, **required**)<br>`repository` (string, **required**) |
@@ -54,6 +57,7 @@ const result = gitlab_add_mr_label(...);
 | `gitlab_resolve_mr_thread` | Resolve (close) a review discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`discussionId` (string, **required**) |
 | `gitlab_test` | Test GitLab connectivity by fetching the current user's profile | None |
 | `gitlab_trigger_pipeline` | Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`ref` (string, **required**)<br>`variablesJson` (string, optional) |
+| `gitlab_unapprove_mr` | Unapprove a GitLab merge request. Revokes your approval from the MR. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_upload_release_asset` | Upload a local file as a GitLab release asset. Internally publishes the file to the project's Generic Package Registry and attaches it to the release as an asset link, so it is discoverable the same way as a GitHub release asset. Returns the release link metadata including direct_asset_url. Set overwrite=true to automatically replace an existing asset with the same name before uploading (GitLab's Generic Package Registry rejects duplicate uploads with 409 Conflict otherwise). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`filePath` (string, **required**)<br>`assetName` (string, optional)<br>`contentType` (string, optional)<br>`packageName` (string, optional)<br>`overwrite` (string, optional) |
 
 ## Detailed Parameter Information
@@ -100,9 +104,14 @@ Create a new inline code review comment on a specific file and line in a GitLab 
   - Start commit SHA from MR diff_refs
   - Example: `abc123`
 
+**Example:**
+```bash
+dmtools gitlab_add_inline_mr_comment "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_add_inline_mr_comment("workspace", "line");
+const result = gitlab_add_inline_mr_comment("workspace", "repository");
 ```
 
 ---
@@ -129,9 +138,14 @@ Add a general discussion comment to a GitLab merge request.
   - Comment text
   - Example: `LGTM!`
 
+**Example:**
+```bash
+dmtools gitlab_add_mr_comment "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_add_mr_comment("workspace", "text");
+const result = gitlab_add_mr_comment("workspace", "repository");
 ```
 
 ---
@@ -158,9 +172,14 @@ Add a label to a GitLab merge request.
   - Label to add
   - Example: `pr_approved`
 
+**Example:**
+```bash
+dmtools gitlab_add_mr_label "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_add_mr_label("workspace", "label");
+const result = gitlab_add_mr_label("workspace", "repository");
 ```
 
 ---
@@ -183,9 +202,14 @@ Approve a GitLab merge request. Adds your approval to the MR.
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_approve_mr "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_approve_mr("repository", "pullRequestId");
+const result = gitlab_approve_mr("workspace", "repository");
 ```
 
 ---
@@ -208,9 +232,14 @@ Cancel a GitLab CI job.
   - GitLab job ID
   - Example: `123456`
 
+**Example:**
+```bash
+dmtools gitlab_cancel_job "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_cancel_job("repository", "jobId");
+const result = gitlab_cancel_job("workspace", "repository");
 ```
 
 ---
@@ -249,9 +278,48 @@ Create a GitLab merge request from a source branch into a target branch.
   - Remove source branch after merge
   - Example: `true`
 
+**Example:**
+```bash
+dmtools gitlab_create_mr "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_create_mr("removeSourceBranch", "workspace");
+const result = gitlab_create_mr("workspace", "repository");
+```
+
+---
+
+### `gitlab_create_mr_note`
+
+Create a note (comment) on a GitLab merge request. Same endpoint as gitlab_add_mr_comment; the dmtools-dart catalog exposes both names.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+- **`text`** (string) 🔴 Required
+  - The note body text
+  - Example: `Looks good`
+
+**Example:**
+```bash
+dmtools gitlab_create_mr_note "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_create_mr_note("workspace", "repository");
 ```
 
 ---
@@ -282,9 +350,14 @@ Delete a GitLab release asset by its asset name. Removes both the release link a
   - Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.
   - Example: `release-assets`
 
+**Example:**
+```bash
+dmtools gitlab_delete_release_asset "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_delete_release_asset("assetName", "workspace");
+const result = gitlab_delete_release_asset("workspace", "repository");
 ```
 
 ---
@@ -319,9 +392,14 @@ Download a GitLab release asset (a file published to the Generic Package Registr
   - Optional Generic Package Registry package name the asset was uploaded under. Defaults to 'release-assets'.
   - Example: `release-assets`
 
+**Example:**
+```bash
+dmtools gitlab_download_release_asset "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_download_release_asset("assetName", "workspace");
+const result = gitlab_download_release_asset("workspace", "repository");
 ```
 
 ---
@@ -344,9 +422,14 @@ Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per s
   - The commit SHA to get statuses for
   - Example: `abc123...`
 
+**Example:**
+```bash
+dmtools gitlab_get_commit_statuses "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_commit_statuses("repository", "workspace");
+const result = gitlab_get_commit_statuses("workspace", "repository");
 ```
 
 ---
@@ -369,9 +452,14 @@ Get GitLab CI job trace logs.
   - GitLab job ID
   - Example: `123456`
 
+**Example:**
+```bash
+dmtools gitlab_get_job_logs "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_job_logs("repository", "jobId");
+const result = gitlab_get_job_logs("workspace", "repository");
 ```
 
 ---
@@ -394,9 +482,14 @@ Get details of a specific GitLab merge request including title, description, sta
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_get_mr "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_mr("repository", "pullRequestId");
+const result = gitlab_get_mr("workspace", "repository");
 ```
 
 ---
@@ -419,9 +512,14 @@ Get all activities for a GitLab merge request. Approvals are fetched from the re
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_get_mr_activities "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_mr_activities("repository", "pullRequestId");
+const result = gitlab_get_mr_activities("workspace", "repository");
 ```
 
 ---
@@ -444,9 +542,14 @@ Get all comments for a GitLab merge request, including both inline code review c
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_get_mr_comments "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_mr_comments("repository", "pullRequestId");
+const result = gitlab_get_mr_comments("workspace", "repository");
 ```
 
 ---
@@ -469,9 +572,14 @@ Get diff stats and changed files for a GitLab merge request.
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_get_mr_diff "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_mr_diff("repository", "pullRequestId");
+const result = gitlab_get_mr_diff("workspace", "repository");
 ```
 
 ---
@@ -494,9 +602,14 @@ Get the raw unified diff text for a GitLab merge request (suitable for locating 
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_get_mr_diff_text "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_mr_diff_text("repository", "pullRequestId");
+const result = gitlab_get_mr_diff_text("workspace", "repository");
 ```
 
 ---
@@ -519,9 +632,44 @@ Get all discussion threads for a GitLab merge request. Each discussion contains 
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_get_mr_discussions "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_mr_discussions("repository", "pullRequestId");
+const result = gitlab_get_mr_discussions("workspace", "repository");
+```
+
+---
+
+### `gitlab_get_mr_pipelines`
+
+List CI pipelines for a specific GitLab merge request (the CI verdict for the MR head).
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+**Example:**
+```bash
+dmtools gitlab_get_mr_pipelines "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_mr_pipelines("workspace", "repository");
 ```
 
 ---
@@ -556,6 +704,11 @@ Find an existing GitLab release by tag, or create one if it does not exist. Usef
   - Optional Markdown release notes/description.
   - Example: `Internal storage release for PR attachments.`
 
+**Example:**
+```bash
+dmtools gitlab_get_or_create_release "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
 const result = gitlab_get_or_create_release("workspace", "repository");
@@ -581,9 +734,48 @@ List jobs for a GitLab CI pipeline.
   - GitLab pipeline ID
   - Example: `123456`
 
+**Example:**
+```bash
+dmtools gitlab_get_pipeline_jobs "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_get_pipeline_jobs("repository", "workspace");
+const result = gitlab_get_pipeline_jobs("workspace", "repository");
+```
+
+---
+
+### `gitlab_list_issues`
+
+List issues in a GitLab project. State can be 'opened', 'closed', or 'all'.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`state`** (string) ⚪ Optional
+  - Issue state filter: opened, closed, all
+  - Example: `opened`
+
+- **`perPage`** (number) ⚪ Optional
+  - Page size (max 100)
+  - Example: `50`
+
+**Example:**
+```bash
+dmtools gitlab_list_issues "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_list_issues("workspace", "repository");
 ```
 
 ---
@@ -606,9 +798,14 @@ List merge requests for a GitLab project. State can be 'opened', 'closed', 'merg
   - MR state: opened, closed, merged, all. 'open' is also accepted as a synonym for 'opened'.
   - Example: `opened`
 
+**Example:**
+```bash
+dmtools gitlab_list_mrs "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_list_mrs("repository", "workspace");
+const result = gitlab_list_mrs("workspace", "repository");
 ```
 
 ---
@@ -639,9 +836,14 @@ List recent GitLab CI pipelines. Optionally filter by status, ref, and limit.
   - Maximum number of pipelines to return
   - Example: `50`
 
+**Example:**
+```bash
+dmtools gitlab_list_pipeline_runs "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_list_pipeline_runs("limit", "workspace");
+const result = gitlab_list_pipeline_runs("workspace", "repository");
 ```
 
 ---
@@ -660,9 +862,14 @@ List recent GitLab CI jobs for a project.
   - Repository name
   - Example: `myrepo`
 
+**Example:**
+```bash
+dmtools gitlab_list_project_jobs "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_list_project_jobs("repository", "workspace");
+const result = gitlab_list_project_jobs("workspace", "repository");
 ```
 
 ---
@@ -685,9 +892,14 @@ List all assets (asset links) attached to a GitLab release. Returns a JSON array
   - The tag name of the release.
   - Example: `pr-attachments-storage`
 
+**Example:**
+```bash
+dmtools gitlab_list_release_assets "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_list_release_assets("repository", "tagName");
+const result = gitlab_list_release_assets("workspace", "repository");
 ```
 
 ---
@@ -714,9 +926,14 @@ Merge a GitLab merge request. Optionally provide a custom merge commit message.
   - Optional custom merge commit message
   - Example: `Merge feature branch`
 
+**Example:**
+```bash
+dmtools gitlab_merge_mr "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_merge_mr("workspace", "mergeCommitMessage");
+const result = gitlab_merge_mr("workspace", "repository");
 ```
 
 ---
@@ -739,9 +956,14 @@ Ask GitLab to rebase/update a merge request source branch with its target branch
   - Merge request IID
   - Example: `42`
 
+**Example:**
+```bash
+dmtools gitlab_rebase_mr "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_rebase_mr("repository", "pullRequestId");
+const result = gitlab_rebase_mr("workspace", "repository");
 ```
 
 ---
@@ -768,9 +990,14 @@ Remove a label from a GitLab merge request.
   - Label to remove
   - Example: `pr_approved`
 
+**Example:**
+```bash
+dmtools gitlab_remove_mr_label "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_remove_mr_label("workspace", "label");
+const result = gitlab_remove_mr_label("workspace", "repository");
 ```
 
 ---
@@ -801,9 +1028,14 @@ Reply to an existing discussion thread in a GitLab merge request. Use the discus
   - Reply text
   - Example: `Addressed in latest commit`
 
+**Example:**
+```bash
+dmtools gitlab_reply_to_mr_thread "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_reply_to_mr_thread("workspace", "text");
+const result = gitlab_reply_to_mr_thread("workspace", "repository");
 ```
 
 ---
@@ -829,6 +1061,11 @@ Resolve (close) a review discussion thread in a GitLab merge request. Use the di
 - **`discussionId`** (string) 🔴 Required
   - Discussion thread ID to resolve
   - Example: `6a9c1750b37d57bba1079be3bbd13a...`
+
+**Example:**
+```bash
+dmtools gitlab_resolve_mr_thread "value" "value"
+```
 
 ```javascript
 // In JavaScript agent
@@ -861,21 +1098,21 @@ Trigger a GitLab CI pipeline for a branch or tag using the authenticated API tok
 
 **Parameters:**
 
-- **`variablesJson`** (string) ⚪ Optional
-  - Optional JSON object of CI variables
-  - Example: `{"CONFIG_FILE":"agents/story_development.json"}`
-
 - **`workspace`** (string) 🔴 Required
   - GitLab group or namespace
   - Example: `mygroup`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
 
 - **`ref`** (string) 🔴 Required
   - Branch or tag ref
   - Example: `main`
 
-- **`repository`** (string) 🔴 Required
-  - Repository name
-  - Example: `myrepo`
+- **`variablesJson`** (string) ⚪ Optional
+  - Optional JSON object of CI variables
+  - Example: `{"CONFIG_FILE":"agents/story_development.json"}`
 
 **Example:**
 ```bash
@@ -884,7 +1121,37 @@ dmtools gitlab_trigger_pipeline "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = gitlab_trigger_pipeline("variablesJson", "workspace");
+const result = gitlab_trigger_pipeline("workspace", "repository");
+```
+
+---
+
+### `gitlab_unapprove_mr`
+
+Unapprove a GitLab merge request. Revokes your approval from the MR.
+
+**Parameters:**
+
+- **`workspace`** (string) 🔴 Required
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) 🔴 Required
+  - Repository name
+  - Example: `myrepo`
+
+- **`pullRequestId`** (string) 🔴 Required
+  - Merge request IID
+  - Example: `42`
+
+**Example:**
+```bash
+dmtools gitlab_unapprove_mr "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_unapprove_mr("workspace", "repository");
 ```
 
 ---
@@ -927,9 +1194,14 @@ Upload a local file as a GitLab release asset. Internally publishes the file to 
   - If true, delete any existing asset (release link + underlying generic package file) with the same name before uploading. Defaults to false.
   - Example: `true`
 
+**Example:**
+```bash
+dmtools gitlab_upload_release_asset "value" "value"
+```
+
 ```javascript
 // In JavaScript agent
-const result = gitlab_upload_release_asset("workspace", "filePath");
+const result = gitlab_upload_release_asset("workspace", "repository");
 ```
 
 ---

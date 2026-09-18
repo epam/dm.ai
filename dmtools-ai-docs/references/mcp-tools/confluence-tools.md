@@ -27,28 +27,28 @@ const result = confluence_content_by_id(...);
 |-----------|-------------|------------|
 | `confluence_content_by_id` | Get Confluence content by its unique content ID. Returns detailed content information including body, version, and metadata. Use format=md to convert body.storage.value to Markdown. | `contentId` (string, **required**)<br>`format` (string, optional) |
 | `confluence_content_by_title` | Get Confluence content by title in the default space. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional) |
-| `confluence_content_by_title_and_space` | Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional)<br>`space` (string, **required**) |
-| `confluence_contents_by_urls` | Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown. | `format` (string, optional)<br>`urlStrings` (array, **required**) |
-| `confluence_create_page` | Create a new Confluence page with specified title, parent, body content, and space. Returns the created content object. | `title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
-| `confluence_get_page_inline_comments` | Get inline comments (annotations) for a Confluence page. Uses the Confluence REST API v2 and returns comment bodies in storage format. | `pageId` (string, **required**)<br>`limit` (number, optional) |
+| `confluence_content_by_title_and_space` | Get Confluence content by title and space key. Returns content result with metadata and body information. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`space` (string, **required**)<br>`format` (string, optional) |
+| `confluence_contents_by_urls` | Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown. | `urlStrings` (array, **required**)<br>`format` (string, optional) |
+| `confluence_create_page` | Create a new Confluence page with specified title, parent, body content, and space. Returns the created content object. | `title` (string, **required**)<br>`parentId` (string, **required**)<br>`body` (string, **required**)<br>`space` (string, **required**) |
 | `confluence_download_attachment` | Download an attachment file from Confluence to a specified directory. | `attachment` (object, **required**)<br>`targetDir` (object, **required**) |
-| `confluence_download_pages` | Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth. | `urlStrings` (array, **required**)<br>`depth` (number, optional)<br>`downloadAttachments` (boolean, optional)<br>`outputPath` (string, **required**) |
+| `confluence_download_pages` | Download Confluence pages and their attachments to a local folder. Recursively follows linked pages, children macros, and internal ac:link references up to the specified depth. | `urlStrings` (array, **required**)<br>`outputPath` (string, **required**)<br>`depth` (number, optional)<br>`downloadAttachments` (boolean, optional) |
 | `confluence_find_content` | Find a Confluence page by title in the default space. Returns the page content if found. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional) |
-| `confluence_find_content_by_title_and_space` | Find Confluence content by title and space key. Returns the first matching content or null if not found. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`format` (string, optional)<br>`space` (string, **required**) |
-| `confluence_find_or_create` | Find a Confluence page by title in the default space, or create it if it doesn't exist. Returns the found or created content. | `title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**) |
+| `confluence_find_content_by_title_and_space` | Find Confluence content by title and space key. Returns the first matching content or null if not found. Use format=md to convert body.storage.value to Markdown. | `title` (string, **required**)<br>`space` (string, **required**)<br>`format` (string, optional) |
+| `confluence_find_or_create` | Find a Confluence page by title in the default space, or create it if it doesn't exist. Returns the found or created content. | `title` (string, **required**)<br>`parentId` (string, **required**)<br>`body` (string, **required**) |
 | `confluence_get_children_by_id` | Get child pages of a Confluence page by content ID. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown. | `contentId` (string, **required**)<br>`format` (string, optional) |
-| `confluence_get_children_by_name` | Get child pages of a Confluence page by space key and content name. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown. | `spaceKey` (string, **required**)<br>`format` (string, optional)<br>`contentName` (string, **required**) |
+| `confluence_get_children_by_name` | Get child pages of a Confluence page by space key and content name. Returns a list of child content objects. Use format=md to convert body.storage.value to Markdown. | `spaceKey` (string, **required**)<br>`contentName` (string, **required**)<br>`format` (string, optional) |
 | `confluence_get_content_attachments` | Get all attachments for a specific Confluence content. Returns a list of attachment objects with metadata. | `contentId` (string, **required**) |
 | `confluence_get_current_user_profile` | Get the current user's profile information from Confluence. Returns user details for the authenticated user. | None |
+| `confluence_get_page_inline_comments` | Get inline comments (annotations) for a Confluence page. Uses the Confluence REST API v2 and returns comment bodies in storage format. | `pageId` (string, **required**)<br>`limit` (number, optional) |
 | `confluence_get_user_profile_by_id` | Get a specific user's profile information from Confluence by user ID. Returns user details for the specified user. | `userId` (string, **required**) |
-| `confluence_search_content_by_text` | Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified. | `limit` (number, optional)<br>`query` (string, **required**) |
-| `confluence_sync_markdown_directory` | Synchronize a local directory tree of Markdown files to a Confluence page subtree. Subdirectories become parent pages, Markdown files become child pages, .md cross-links become Confluence page links, referenced attachments are uploaded idempotently, and non-Markdown files in each directory are attached and linked at the bottom of the matching page. Optionally deletes Confluence pages that no longer match the file structure. | `directoryPath` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`deleteOrphans` (boolean, optional)<br>`attachmentsDir` (string, optional) |
-| `confluence_test` | Test Confluence connectivity by fetching the current user's profile | None |
-| `confluence_update_page` | Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**) |
-| `confluence_update_page_with_history` | Update an existing Confluence page with new content and add a history comment. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`body` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`historyComment` (string, **required**) |
 | `confluence_reply_to_inline_comment` | Reply to an existing inline comment (annotation) on a Confluence page. The reply body is treated as plain text and converted to Confluence storage format. | `pageId` (string, **required**)<br>`commentId` (string, **required**)<br>`body` (string, **required**) |
-| `confluence_upload_attachment` | Upload a single file as an attachment to a Confluence page. Skips the upload if an attachment with the same filename already exists (idempotent). Returns the attachment metadata. | `contentId` (string, **required**)<br>`filePath` (string, **required**)<br>`updateIfExists` (boolean, optional) |
-| `confluence_upload_attachments` | Upload all files from a local directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a summary of uploaded and skipped files. | `contentId` (string, **required**)<br>`directoryPath` (string, **required**)<br>`updateIfExists` (boolean, optional) |
+| `confluence_search_content_by_text` | Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified. | `query` (string, **required**)<br>`limit` (number, optional) |
+| `confluence_sync_markdown_directory` | Synchronize a local Markdown directory tree to a Confluence page subtree. Markdown files become child pages, images and other files become attachments. Links between Markdown files are rewritten to Confluence page links. Returns a JSON summary. | `directory` (string, **required**)<br>`parentId` (string, **required**)<br>`space` (string, **required**)<br>`deleteOrphans` (boolean, optional)<br>`attachmentsDir` (string, optional)<br>`preserveInlineComments` (boolean, optional) |
+| `confluence_test` | Test Confluence connectivity by fetching the current user's profile | None |
+| `confluence_update_page` | Update an existing Confluence page with new title, parent, body content, and space. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`parentId` (string, **required**)<br>`body` (string, **required**)<br>`space` (string, **required**) |
+| `confluence_update_page_with_history` | Update an existing Confluence page with new content and add a history comment. Returns the updated content object. | `contentId` (string, **required**)<br>`title` (string, **required**)<br>`parentId` (string, **required**)<br>`body` (string, **required**)<br>`space` (string, **required**)<br>`historyComment` (string, **required**) |
+| `confluence_upload_attachment` | Upload a single file as an attachment to a Confluence page. Skips existing attachments by default. Returns the attachment object. | `contentId` (string, **required**)<br>`file` (object, **required**)<br>`updateIfExists` (boolean, optional) |
+| `confluence_upload_attachments` | Upload all files in a directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a JSON summary. | `contentId` (string, **required**)<br>`directory` (string, **required**)<br>`updateIfExists` (boolean, optional) |
 
 ## Detailed Parameter Information
 
@@ -114,13 +114,13 @@ Get Confluence content by title and space key. Returns content result with metad
   - The title of the Confluence page
   - Example: `Project Documentation`
 
-- **`format`** (string) ⚪ Optional
-  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
-  - Example: `md`
-
 - **`space`** (string) 🔴 Required
   - The space key where the content is located
   - Example: `PROJ`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 **Example:**
 ```bash
@@ -129,7 +129,7 @@ dmtools confluence_content_by_title_and_space "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_content_by_title_and_space("title", "format");
+const result = confluence_content_by_title_and_space("title", "space");
 ```
 
 ---
@@ -140,13 +140,13 @@ Get Confluence content by multiple URLs. Returns a list of content objects for e
 
 **Parameters:**
 
-- **`format`** (string) ⚪ Optional
-  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
-  - Example: `md`
-
 - **`urlStrings`** (array) 🔴 Required
   - Array of Confluence URLs to retrieve content from
   - Example: `['https://confluence.example.com/wiki/spaces/SPACE/pages/123/Page+Title']`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 **Example:**
 ```bash
@@ -155,7 +155,7 @@ dmtools confluence_contents_by_urls "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_contents_by_urls("format", "urlStrings");
+const result = confluence_contents_by_urls("urlStrings", "format");
 ```
 
 ---
@@ -170,13 +170,13 @@ Create a new Confluence page with specified title, parent, body content, and spa
   - The title of the new page
   - Example: `New Project Page`
 
-- **`body`** (string) 🔴 Required
-  - The body content of the page in Confluence storage format
-  - Example: `<p>This is the page content.</p>`
-
 - **`parentId`** (string) 🔴 Required
   - The ID of the parent page
   - Example: `123456`
+
+- **`body`** (string) 🔴 Required
+  - The body content of the page in Confluence storage format
+  - Example: `<p>This is the page content.</p>`
 
 - **`space`** (string) 🔴 Required
   - The space key where to create the page
@@ -189,7 +189,7 @@ dmtools confluence_create_page "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_create_page("title", "body");
+const result = confluence_create_page("title", "parentId");
 ```
 
 ---
@@ -229,6 +229,10 @@ Download Confluence pages and their attachments to a local folder. Recursively f
   - Array of Confluence page URLs to download
   - Example: `['https://wiki.example.com/wiki/spaces/SPACE/pages/123/Page']`
 
+- **`outputPath`** (string) 🔴 Required
+  - Local folder path where pages and attachments will be saved
+  - Example: `/tmp/confluence-pages`
+
 - **`depth`** (number) ⚪ Optional
   - How many levels of linked/child pages to follow. Default is 1.
   - Example: `1`
@@ -237,10 +241,6 @@ Download Confluence pages and their attachments to a local folder. Recursively f
   - Whether to download page attachments. Default is true.
   - Example: `true`
 
-- **`outputPath`** (string) 🔴 Required
-  - Local folder path where pages and attachments will be saved
-  - Example: `/tmp/confluence-pages`
-
 **Example:**
 ```bash
 dmtools confluence_download_pages "value" "value"
@@ -248,7 +248,7 @@ dmtools confluence_download_pages "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_download_pages("urlStrings", "depth");
+const result = confluence_download_pages("urlStrings", "outputPath");
 ```
 
 ---
@@ -289,13 +289,13 @@ Find Confluence content by title and space key. Returns the first matching conte
   - The title of the content to find
   - Example: `Project Documentation`
 
-- **`format`** (string) ⚪ Optional
-  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
-  - Example: `md`
-
 - **`space`** (string) 🔴 Required
   - The space key where to search for the content
   - Example: `PROJ`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 **Example:**
 ```bash
@@ -304,7 +304,7 @@ dmtools confluence_find_content_by_title_and_space "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_find_content_by_title_and_space("title", "format");
+const result = confluence_find_content_by_title_and_space("title", "space");
 ```
 
 ---
@@ -319,13 +319,13 @@ Find a Confluence page by title in the default space, or create it if it doesn't
   - Title of the page to find or create
   - Example: `Project Documentation`
 
-- **`body`** (string) 🔴 Required
-  - Body content for the new page (if creation is needed)
-  - Example: `<p>This is the page content.</p>`
-
 - **`parentId`** (string) 🔴 Required
   - ID of the parent page for creation
   - Example: `123456`
+
+- **`body`** (string) 🔴 Required
+  - Body content for the new page (if creation is needed)
+  - Example: `<p>This is the page content.</p>`
 
 **Example:**
 ```bash
@@ -334,7 +334,7 @@ dmtools confluence_find_or_create "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_find_or_create("title", "body");
+const result = confluence_find_or_create("title", "parentId");
 ```
 
 ---
@@ -375,13 +375,13 @@ Get child pages of a Confluence page by space key and content name. Returns a li
   - The space key where the parent page is located
   - Example: `PROJ`
 
-- **`format`** (string) ⚪ Optional
-  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
-  - Example: `md`
-
 - **`contentName`** (string) 🔴 Required
   - The name/title of the parent page
   - Example: `Project Documentation`
+
+- **`format`** (string) ⚪ Optional
+  - Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.
+  - Example: `md`
 
 **Example:**
 ```bash
@@ -390,7 +390,7 @@ dmtools confluence_get_children_by_name "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_get_children_by_name("spaceKey", "format");
+const result = confluence_get_children_by_name("spaceKey", "contentName");
 ```
 
 ---
@@ -435,6 +435,32 @@ const result = confluence_get_current_user_profile();
 
 ---
 
+### `confluence_get_page_inline_comments`
+
+Get inline comments (annotations) for a Confluence page. Uses the Confluence REST API v2 and returns comment bodies in storage format.
+
+**Parameters:**
+
+- **`pageId`** (string) 🔴 Required
+  - The content ID of the Confluence page
+  - Example: `123456`
+
+- **`limit`** (number) ⚪ Optional
+  - Maximum number of inline comments to return. Defaults to 25 if not provided.
+  - Example: `25`
+
+**Example:**
+```bash
+dmtools confluence_get_page_inline_comments "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_get_page_inline_comments("pageId", "limit");
+```
+
+---
+
 ### `confluence_get_user_profile_by_id`
 
 Get a specific user's profile information from Confluence by user ID. Returns user details for the specified user.
@@ -457,19 +483,49 @@ const result = confluence_get_user_profile_by_id("userId");
 
 ---
 
+### `confluence_reply_to_inline_comment`
+
+Reply to an existing inline comment (annotation) on a Confluence page. The reply body is treated as plain text and converted to Confluence storage format.
+
+**Parameters:**
+
+- **`pageId`** (string) 🔴 Required
+  - The content ID of the Confluence page where the inline comment is located
+  - Example: `123456`
+
+- **`commentId`** (string) 🔴 Required
+  - The ID of the inline comment (annotation) to reply to
+  - Example: `789012`
+
+- **`body`** (string) 🔴 Required
+  - The reply text in plain text. Line breaks are converted to paragraphs.
+  - Example: `Thanks for the note, I will check it.`
+
+**Example:**
+```bash
+dmtools confluence_reply_to_inline_comment "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = confluence_reply_to_inline_comment("pageId", "commentId");
+```
+
+---
+
 ### `confluence_search_content_by_text`
 
 Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified.
 
 **Parameters:**
 
-- **`limit`** (number) ⚪ Optional
-  - Maximum number of search results to return. Default is 20 if not provided.
-  - Example: `10`
-
 - **`query`** (string) 🔴 Required
   - Search query text to find in Confluence content
   - Example: `project documentation`
+
+- **`limit`** (number) ⚪ Optional
+  - Maximum number of search results to return. Default is 20 if not provided.
+  - Example: `10`
 
 **Example:**
 ```bash
@@ -478,56 +534,50 @@ dmtools confluence_search_content_by_text "value" "value"
 
 ```javascript
 // In JavaScript agent
-const result = confluence_search_content_by_text("limit", "query");
+const result = confluence_search_content_by_text("query", "limit");
 ```
 
 ---
 
 ### `confluence_sync_markdown_directory`
 
-Synchronize a local directory tree of Markdown files to a Confluence page subtree. Subdirectories become parent pages, Markdown files become child pages, `.md` cross-links become Confluence page links, referenced attachments are uploaded idempotently, and non-Markdown files in each directory are attached and linked at the bottom of the matching page. Optionally deletes Confluence pages under `parentId` whose titles do not match any directory or Markdown file.
+Synchronize a local Markdown directory tree to a Confluence page subtree. Markdown files become child pages, images and other files become attachments. Links between Markdown files are rewritten to Confluence page links. Returns a JSON summary.
 
 **Parameters:**
 
-- **`directoryPath`** (string) 🔴 Required
-  - Root directory containing Markdown files and subdirectories
-  - Example: `/tmp/docs`
+- **`directory`** (string) 🔴 Required
+  - The local directory containing Markdown files and attachments
+  - Example: `/path/to/docs`
 
 - **`parentId`** (string) 🔴 Required
-  - Existing Confluence page ID that represents the root directory
+  - The content ID of the parent Confluence page
   - Example: `123456`
 
 - **`space`** (string) 🔴 Required
-  - The space key where the pages are located
+  - The space key where the pages should be created
   - Example: `PROJ`
 
 - **`deleteOrphans`** (boolean) ⚪ Optional
-  - If true, delete Confluence pages under `parentId` whose titles do not match any directory or Markdown file. Default is false.
+  - Whether to delete child pages not present in the directory tree
   - Example: `false`
 
 - **`attachmentsDir`** (string) ⚪ Optional
-  - Optional fallback directory for resolving attachment references. Defaults to each Markdown file's parent directory.
-  - Example: `/tmp/assets`
+  - Optional directory containing referenced attachments. Defaults to the Markdown file's directory.
+  - Example: `/path/to/attachments`
+
+- **`preserveInlineComments`** (boolean) ⚪ Optional
+  - Whether to carry inline comment anchors over from the existing page bodies (default: true). When enabled, ac:inline-comment-marker elements are re-applied after the body is replaced, and [[ic:REF]]...[[/ic]] placeholders in the Markdown are converted into real markers.
+  - Example: `true`
 
 **Example:**
 ```bash
-dmtools confluence_sync_markdown_directory "/tmp/docs" "123456" "PROJ" "false" "/tmp/assets"
+dmtools confluence_sync_markdown_directory "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_sync_markdown_directory("/tmp/docs", "123456", "PROJ", false, "/tmp/assets");
+const result = confluence_sync_markdown_directory("directory", "parentId");
 ```
-
-**Directory mapping rules:**
-
-- The root directory maps to the existing `parentId` page.
-- Each subdirectory becomes a Confluence child page titled with the directory name. If the directory contains `index.md` or `README.md`, that file's content becomes the folder page body.
-- Each regular `.md` file becomes a Confluence child page of its parent directory page. The page title is read from the first `# Heading` or falls back to the filename without `.md`.
-- Local `.md` links such as `[text](./other.md)` are rewritten to Confluence `ri:page` references.
-- Local attachment references (e.g. `![diagram](assets/diagram.png)`) are uploaded idempotently; existing attachments are skipped.
-- Non-Markdown files inside a directory (e.g. `folder1/report.pdf`, `folder1/page.html`) are also uploaded as attachments to the matching Confluence folder/Markdown page. If a file is not already referenced in the page body, an **Attachments** section with explicit links is appended to the page so the files remain visible and downloadable.
-- With `deleteOrphans=true`, any child page under `parentId` whose title does not match a directory or Markdown file is deleted recursively.
 
 ---
 
@@ -563,13 +613,13 @@ Update an existing Confluence page with new title, parent, body content, and spa
   - The new title for the page
   - Example: `Updated Project Page`
 
-- **`body`** (string) 🔴 Required
-  - The new body content of the page in Confluence storage format
-  - Example: `<p>This is the updated page content.</p>`
-
 - **`parentId`** (string) 🔴 Required
   - The ID of the new parent page
   - Example: `123456`
+
+- **`body`** (string) 🔴 Required
+  - The new body content of the page in Confluence storage format
+  - Example: `<p>This is the updated page content.</p>`
 
 - **`space`** (string) 🔴 Required
   - The space key where the page is located
@@ -601,13 +651,13 @@ Update an existing Confluence page with new content and add a history comment. R
   - The new title for the page
   - Example: `Updated Project Page`
 
-- **`body`** (string) 🔴 Required
-  - The new body content of the page in Confluence storage format
-  - Example: `<p>This is the updated page content.</p>`
-
 - **`parentId`** (string) 🔴 Required
   - The ID of the new parent page
   - Example: `123456`
+
+- **`body`** (string) 🔴 Required
+  - The new body content of the page in Confluence storage format
+  - Example: `<p>This is the updated page content.</p>`
 
 - **`space`** (string) 🔴 Required
   - The space key where the page is located
@@ -629,149 +679,63 @@ const result = confluence_update_page_with_history("contentId", "title");
 
 ---
 
-### `confluence_get_page_inline_comments`
-
-Get inline comments (annotations) for a Confluence page. Uses the Confluence REST API v2 and returns comment bodies in storage format.
-
-**Parameters:**
-
-- **`pageId`** (string) 🔴 Required
-  - The content ID of the Confluence page
-  - Example: `123456`
-
-- **`limit`** (number) ⚪ Optional
-  - Maximum number of inline comments to return
-  - Example: `25`
-
-**Example:**
-```bash
-dmtools confluence_get_page_inline_comments "123456" "25"
-```
-
-```javascript
-// In JavaScript agent
-const result = confluence_get_page_inline_comments("123456", 25);
-```
-
----
-
-### `confluence_reply_to_inline_comment`
-
-Reply to an existing inline comment (annotation) on a Confluence page. The reply body is treated as plain text and converted to Confluence storage format.
-
-**Parameters:**
-
-- **`pageId`** (string) 🔴 Required
-  - The content ID of the Confluence page where the inline comment is located
-  - Example: `123456`
-
-- **`commentId`** (string) 🔴 Required
-  - The ID of the inline comment (annotation) to reply to
-  - Example: `789012`
-
-- **`body`** (string) 🔴 Required
-  - The reply text in plain text. Line breaks are converted to paragraphs.
-  - Example: `Thanks for the note!`
-
-**Example:**
-```bash
-dmtools confluence_reply_to_inline_comment "123456" "789012" "Thanks for the note!"
-```
-
-```javascript
-// In JavaScript agent
-const result = confluence_reply_to_inline_comment("123456", "789012", "Thanks for the note!");
-```
-
----
-
 ### `confluence_upload_attachment`
 
-Upload a single file as an attachment to a Confluence page. Skips the upload if an attachment with the same filename already exists (idempotent). Returns the attachment metadata.
+Upload a single file as an attachment to a Confluence page. Skips existing attachments by default. Returns the attachment object.
 
 **Parameters:**
 
 - **`contentId`** (string) 🔴 Required
-  - The ID of the Confluence page to attach the file to
+  - The content ID of the page to attach the file to
   - Example: `123456`
 
-- **`filePath`** (string) 🔴 Required
-  - Absolute path to the file to upload
-  - Example: `/tmp/document.pdf`
+- **`file`** (object) 🔴 Required
+  - The local file to upload
+  - Example: `/path/to/image.png`
 
 - **`updateIfExists`** (boolean) ⚪ Optional
-  - If true, overwrite an existing attachment with the same filename. Default is false.
+  - Whether to overwrite an existing attachment with the same name
   - Example: `false`
 
 **Example:**
 ```bash
-dmtools confluence_upload_attachment "123456" "/tmp/document.pdf"
+dmtools confluence_upload_attachment "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_upload_attachment("123456", "/tmp/document.pdf");
+const result = confluence_upload_attachment("contentId", "file");
 ```
 
 ---
 
 ### `confluence_upload_attachments`
 
-Upload all files from a local directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a summary of uploaded and skipped files.
+Upload all files in a directory as attachments to a Confluence page. Existing attachments are skipped by default. Returns a JSON summary.
 
 **Parameters:**
 
 - **`contentId`** (string) 🔴 Required
-  - The ID of the Confluence page to attach the files to
+  - The content ID of the page to attach files to
   - Example: `123456`
 
-- **`directoryPath`** (string) 🔴 Required
-  - Absolute path to the directory containing files to upload
-  - Example: `/tmp/attachments`
+- **`directory`** (string) 🔴 Required
+  - The local directory containing files to upload
+  - Example: `/path/to/attachments`
 
 - **`updateIfExists`** (boolean) ⚪ Optional
-  - If true, overwrite existing attachments with the same filename. Default is false.
+  - Whether to overwrite existing attachments with the same names
   - Example: `false`
 
 **Example:**
 ```bash
-dmtools confluence_upload_attachments "123456" "/tmp/attachments"
+dmtools confluence_upload_attachments "value" "value"
 ```
 
 ```javascript
 // In JavaScript agent
-const result = confluence_upload_attachments("123456", "/tmp/attachments");
+const result = confluence_upload_attachments("contentId", "directory");
 ```
 
 ---
-
-## Markdown Round-Trip with Attachments
-
-DMTools supports a full round-trip workflow between local Markdown files and Confluence pages:
-
-1. **Export** a page with `confluence_content_by_id <pageId> md` or `confluence_download_pages`. Attachment references are emitted as `[filename](filename)` or `![alt](filename)`.
-
-2. **Edit locally** and place attachment files next to the Markdown file (or in a separate directory referenced with relative paths like `./assets/doc.pdf`).
-
-3. **Push back** with `confluence_sync_markdown_directory` (or `confluence_create_page` for a single new page). The tool:
-   - Converts Markdown to Confluence Storage Format.
-   - Finds all local attachment references.
-   - Uploads any files that are not already attached to the page.
-   - Leaves Confluence page links, external URLs, and anchors untouched.
-
-4. **Re-push safely** — existing attachments are skipped, so repeated edits do not re-upload files.
-
-### Example Markdown
-
-```markdown
-# Design Document
-
-See [requirements](Requirements and Specifications) for context.
-
-![architecture](assets/architecture.png)
-
-Download the [specification](./assets/spec.pdf).
-```
-
-When pushed with `confluence_sync_markdown_directory`, the page will contain `ri:page` and `ri:attachment` references, and `architecture.png` and `spec.pdf` will be uploaded from `./assets` if they exist and are not already attached.
 
