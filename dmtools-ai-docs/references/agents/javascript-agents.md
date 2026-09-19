@@ -128,7 +128,29 @@ function action(params) {
 
 ## 🔌 MCP Tools Access
 
-All 67+ MCP tools are available as direct JavaScript functions:
+All MCP tools are available as direct JavaScript functions.
+
+### Vendor-agnostic `tracker_*` family
+
+Agent scripts written against the `tracker_*` family run unchanged on Jira, ADO
+Boards, or GitHub Issues. The alias resolves per call through
+`ToolAliasResolver`: explicit `gh-N` / `owner/repo#N` keys always route to
+GitHub, otherwise `DEFAULT_TRACKER` from the config chain decides, otherwise
+the key format (`PROJ-123` → Jira, bare integer → ADO):
+
+```javascript
+const ticket = tracker_get_ticket("PROJ-123");       // → jira_get_ticket
+const issue  = tracker_get_ticket("gh-42");           // → github_get_issue
+const item   = tracker_get_ticket("12345");           // → ado_get_work_item
+
+tracker_post_comment("PROJ-123", "Reviewed");
+tracker_add_label("PROJ-123", "ai_generated");
+tracker_move_to_status("PROJ-123", "In Review");
+tracker_assign("PROJ-123", accountId);
+```
+
+See [Default Integration Aliases](../mcp-tools/default-integrations.md) for the
+full routing table.
 
 ### Jira Tools (35+)
 

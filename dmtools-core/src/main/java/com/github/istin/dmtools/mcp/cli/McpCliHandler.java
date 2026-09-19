@@ -15,6 +15,7 @@ import com.github.istin.dmtools.atlassian.jira.xray.XrayClient;
 import com.github.istin.dmtools.atlassian.bitbucket.BasicBitbucket;
 import com.github.istin.dmtools.cli.CliCommandExecutor;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
 import com.github.istin.dmtools.di.KnowledgeBaseComponent;
 import com.github.istin.dmtools.di.DaggerMermaidIndexComponent;
@@ -33,6 +34,7 @@ import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
 import com.github.istin.dmtools.mcp.generated.MCPToolRegistry;
 import com.github.istin.dmtools.mcp.MCPToolDefinition;
+import com.github.istin.dmtools.mcp.ToolAliasResolver;
 import com.github.istin.dmtools.broadcom.rally.BasicRallyClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -294,7 +296,7 @@ public class McpCliHandler {
         String toolName = null;
         try {
             toolName = args[1];
-            toolName = resolveToolAlias(toolName);
+            toolName = resolveToolAlias(toolName, extractKeyHint(args));
             Map<String, Object> arguments = parseToolArguments(args, toolName);
 
             logger.info("Executing MCP tool: {} with arguments: {}", toolName, arguments);
@@ -746,57 +748,78 @@ public class McpCliHandler {
     /**
      * Resolves an abstract tool alias to the canonical tool name for the configured default integration.
      *
-     * <p>If the given name is already a known tool, it is returned unchanged.
-     * If it matches an alias shared by multiple integrations (e.g. "source_code_list_prs"),
-     * the correct concrete tool is chosen via:
-     * <ul>
-     *   <li>{@code DEFAULT_SOURCE_CODE} env var for {@code source_code_*} aliases</li>
-     *   <li>{@code DEFAULT_TRACKER} env var for {@code tracker_*} aliases</li>
-     * </ul>
+     * <p>Delegates to {@link ToolAliasResolver}: if the given name is already a known tool it is
+     * returned unchanged; a shared alias (e.g. {@code tracker_get_ticket}) is resolved via
+     * explicit key-format detection ({@code gh-123}/{@code owner/repo#123} → GitHub),
+     * {@code DEFAULT_TRACKER}/{@code DEFAULT_SOURCE_CODE} from the property chain, then
+     * key-format heuristics ({@code PROJ-123} → Jira, bare integer → ADO), then first candidate.
      *
      * @param toolName the raw tool name (may be an alias)
      * @return the resolved canonical tool name, or the original if no alias matched
      */
     String resolveToolAlias(String toolName) {
-        if (toolName == null) {
-            return null;
+        return ToolAliasResolver.resolve(toolName);
+    }
+
+    /**
+     * Resolves an abstract tool alias using a key hint from the call arguments for
+     * vendor detection (explicit {@code gh-123}/{@code owner/repo#123} keys route to
+     * GitHub regardless of {@code DEFAULT_TRACKER}).
+     *
+     * @param toolName the raw tool name (may be an alias)
+     * @param keyHint  the issue/ticket key extracted from the call arguments, or null
+     * @return the resolved canonical tool name, or the original if no alias matched
+     */
+    String resolveToolAlias(String toolName, String keyHint) {
+        String resolved = ToolAliasResolver.resolve(toolName, keyHint, new PropertyReader());
+        if (!resolved.equals(toolName)) {
+            logger.info("Resolved alias '{}' -> '{}'", toolName, resolved);
         }
-        // Already a direct tool — no resolution needed
-        if (MCPToolRegistry.hasTool(toolName)) {
-            return toolName;
-        }
-        List<MCPToolDefinition> candidates = MCPToolRegistry.getToolsByAlias(toolName);
-        if (candidates == null || candidates.isEmpty()) {
-            return toolName;
-        }
-        if (candidates.size() == 1) {
-            return candidates.get(0).getName();
-        }
-        // Multiple implementations — pick by configured default integration
-        String defaultIntegration = resolveDefaultIntegrationForAlias(toolName);
-        if (defaultIntegration != null) {
-            MCPToolDefinition matched = MCPToolRegistry.getToolByAliasAndIntegration(toolName, defaultIntegration);
-            if (matched != null) {
-                logger.info("Resolved alias '{}' -> '{}' via DEFAULT integration '{}'",
-                        toolName, matched.getName(), defaultIntegration);
-                return matched.getName();
-            }
-        }
-        // Fallback: first candidate
-        String resolved = candidates.get(0).getName();
-        logger.warn("No default integration configured for alias '{}'. Falling back to first candidate: '{}'",
-                toolName, resolved);
         return resolved;
     }
 
-    private String resolveDefaultIntegrationForAlias(String alias) {
-        if (alias.startsWith("source_code_")) {
-            String val = System.getenv("DEFAULT_SOURCE_CODE");
-            return val != null ? val.trim().toLowerCase() : null;
+    /**
+     * Extracts a ticket/issue key hint from raw CLI arguments, used for vendor
+     * detection when resolving {@code tracker_*} aliases. Looks at {@code key=...}
+     * pairs, {@code --data}/{@code --stdin-data} JSON payloads, and the first
+     * positional argument.
+     */
+    static String extractKeyHint(String[] args) {
+        if (args == null) {
+            return null;
         }
-        if (alias.startsWith("tracker_")) {
-            String val = System.getenv("DEFAULT_TRACKER");
-            return val != null ? val.trim().toLowerCase() : null;
+        String firstPositional = null;
+        for (int i = 2; i < args.length; i++) {
+            String arg = args[i];
+            if (("--data".equals(arg) || "--stdin-data".equals(arg)) && i + 1 < args.length) {
+                String hint = keyFromJson(args[i + 1]);
+                if (hint != null) {
+                    return hint;
+                }
+                i++;
+                continue;
+            }
+            if (arg != null && arg.matches("^(?:key|ticketKey|ticket|issueKey)=.*")) {
+                return arg.substring(arg.indexOf('=') + 1);
+            }
+            if (arg != null && !arg.startsWith("--") && !arg.contains("=") && firstPositional == null) {
+                firstPositional = arg;
+            }
+        }
+        return firstPositional;
+    }
+
+    private static String keyFromJson(String json) {
+        try {
+            JSONObject obj = new JSONObject(json);
+            for (String field : new String[]{"key", "ticketKey", "ticket", "issueKey", "id"}) {
+                Object value = obj.opt(field);
+                if (value != null) {
+                    return String.valueOf(value);
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not parse key hint from JSON payload: {}", e.getMessage());
         }
         return null;
     }
