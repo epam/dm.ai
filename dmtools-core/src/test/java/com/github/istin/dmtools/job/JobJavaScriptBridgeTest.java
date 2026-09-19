@@ -1191,6 +1191,95 @@ class JobJavaScriptBridgeTest {
             ));
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Unified tracker_* family: aliases exposed to JS and routed per call
+    // -----------------------------------------------------------------------
+
+    @Test
+    void testTrackerAliasIsExposedToJSAndRoutesPerKeyFormat() throws Exception {
+        // A tracker_* call with a Jira-style key must dispatch to the Jira tool.
+        String jsCode = """
+            function action(params) {
+                return tracker_get_ticket('PROJ-123');
+            }
+            """;
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_get_ticket"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("{\"key\":\"PROJ-123\"}");
+
+            Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+            assertNotNull(result);
+            assertTrue(result.toString().contains("PROJ-123"), "got: " + result);
+
+            // The alias must NOT reach the executor — it resolves to the canonical tool.
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_get_ticket"),
+                any(Map.class),
+                any(Map.class)
+            ));
+            mcpMock.verifyNoMoreInteractions();
+        }
+    }
+
+    @Test
+    void testTrackerAliasRoutesToGithubForGhKey() throws Exception {
+        // gh-N keys route to GitHub even though the configured default tracker is Jira
+        // (PropertyReader has no DEFAULT_TRACKER in tests).
+        String jsCode = """
+            function action(params) {
+                return tracker_get_ticket('gh-42');
+            }
+            """;
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("github_get_issue"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("{\"number\":42}");
+
+            Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("github_get_issue"),
+                any(Map.class),
+                any(Map.class)
+            ));
+            mcpMock.verifyNoMoreInteractions();
+        }
+    }
+
+    @Test
+    void testTrackerAliasObjectArgsPassThroughToResolvedTool() throws Exception {
+        String jsCode = """
+            function action(params) {
+                return tracker_get_ticket({ key: 'PROJ-9' });
+            }
+            """;
+
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("jira_get_ticket"),
+                any(Map.class),
+                any(Map.class)
+            )).thenReturn("{\"key\":\"PROJ-9\"}");
+
+            Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+            assertNotNull(result);
+
+            mcpMock.verify(() -> MCPToolExecutor.executeTool(
+                eq("jira_get_ticket"),
+                argThat(args -> "PROJ-9".equals(args.get("key"))),
+                any(Map.class)
+            ));
+        }
+    }
 }
 
 

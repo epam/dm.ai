@@ -1,6 +1,6 @@
 # ADO MCP Tools
 
-**Total Tools**: 38
+**Total Tools**: 40
 
 ## Quick Reference
 
@@ -30,6 +30,7 @@ const result = ado_get_work_item_comments(...);
 | `ado_add_pr_label` | Add a label (tag) to an Azure DevOps pull request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`label` (string, **required**) |
 | `ado_add_pr_reviewer` | Add a reviewer to an Azure DevOps pull request. Optionally set their initial vote. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewerId` (string, **required**)<br>`vote` (string, optional) |
 | `ado_add_work_item_comment` | Add a comment to an Azure DevOps work item | `id` (string, **required**)<br>`comment` (string, **required**) |
+| `ado_add_work_item_label` | Add a single label (tag) to a work item, keeping existing tags | `id` (string, **required**)<br>`label` (string, **required**) |
 | `ado_assign_work_item` | Assign a work item to a user | `id` (string, **required**)<br>`userEmail` (string, **required**) |
 | `ado_create_work_item` | Create a new work item in Azure DevOps | `project` (string, **required**)<br>`workItemType` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`fieldsJson` (object, optional) |
 | `ado_delete_pr_comment` | Delete a comment from a pull request thread. Requires both threadId and commentId. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`commentId` (string, **required**) |
@@ -53,6 +54,7 @@ const result = ado_get_work_item_comments(...);
 | `ado_merge_pr` | Complete (merge) an Azure DevOps pull request. Sets status to 'completed' with the specified merge strategy. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`mergeStrategy` (string, optional)<br>`deleteSourceBranch` (string, optional)<br>`commitMessage` (string, optional) |
 | `ado_move_to_state` | Move a work item to a specific state | `id` (string, **required**)<br>`state` (string, **required**) |
 | `ado_remove_pr_label` | Remove a label (tag) from an Azure DevOps pull request. Requires the labelId (from ado_get_pr or ado_list_prs labels array). | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`labelId` (string, **required**) |
+| `ado_remove_work_item_label` | Remove a single label (tag) from a work item, keeping other tags | `id` (string, **required**)<br>`label` (string, **required**) |
 | `ado_reply_to_pr_thread` | Reply to an existing comment thread in an Azure DevOps pull request. Use the threadId from ado_get_pr_comments. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`text` (string, **required**) |
 | `ado_resolve_pr_thread` | Resolve (close) a comment thread in an Azure DevOps pull request. Sets the thread status to 'fixed'. Other statuses: 'active', 'closed', 'byDesign', 'pending', 'wontFix'. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`status` (string, optional) |
 | `ado_search_by_wiql` | Search for work items using WIQL (Work Item Query Language) | `wiql` (string, **required**)<br>`fields` (array, optional) |
@@ -226,6 +228,31 @@ dmtools ado_add_work_item_comment "value" "value"
 ```javascript
 // In JavaScript agent
 const result = ado_add_work_item_comment("id", "comment");
+```
+
+---
+
+### `ado_add_work_item_label`
+
+Add a single label (tag) to a work item, keeping existing tags
+
+**Parameters:**
+
+- **`id`** (string) 🔴 Required
+  - The work item ID
+
+- **`label`** (string) 🔴 Required
+  - The label to add
+  - Example: `ai_generated`
+
+**Example:**
+```bash
+dmtools ado_add_work_item_label "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_add_work_item_label("id", "label");
 ```
 
 ---
@@ -820,6 +847,31 @@ dmtools ado_remove_pr_label "value" "value"
 ```javascript
 // In JavaScript agent
 const result = ado_remove_pr_label("repository", "pullRequestId");
+```
+
+---
+
+### `ado_remove_work_item_label`
+
+Remove a single label (tag) from a work item, keeping other tags
+
+**Parameters:**
+
+- **`id`** (string) 🔴 Required
+  - The work item ID
+
+- **`label`** (string) 🔴 Required
+  - The label to remove
+  - Example: `ai_generated`
+
+**Example:**
+```bash
+dmtools ado_remove_work_item_label "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_remove_work_item_label("id", "label");
 ```
 
 ---

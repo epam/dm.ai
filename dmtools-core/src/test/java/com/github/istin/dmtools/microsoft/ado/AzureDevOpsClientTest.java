@@ -477,6 +477,37 @@ public class AzureDevOpsClientTest {
         assertEquals("alpha;gamma", ops.getJSONObject(0).getString("value"));
     }
 
+    // ========== ado_add_work_item_label / ado_remove_work_item_label MCP tools ==========
+
+    @Test
+    void testAddWorkItemLabel_fetchesTagsThenAppends() throws IOException {
+        client.setMockResponse("/_apis/wit/workitems/123", new JSONObject()
+                .put("id", 123)
+                .put("fields", new JSONObject().put("System.Tags", "alpha; beta"))
+                .toString());
+        mockOkHttp(buildOkResponse(200, "application/json", "ok"));
+
+        client.addWorkItemLabel("123", "gamma");
+
+        JSONArray ops = new JSONArray(capturePatchedBody());
+        assertEquals("alpha;beta;gamma", ops.getJSONObject(0).getString("value"));
+        assertEquals("System.Tags", ops.getJSONObject(0).getString("path").substring("/fields/".length()));
+    }
+
+    @Test
+    void testRemoveWorkItemLabel_fetchesTagsThenRemoves() throws IOException {
+        client.setMockResponse("/_apis/wit/workitems/123", new JSONObject()
+                .put("id", 123)
+                .put("fields", new JSONObject().put("System.Tags", "alpha; beta; gamma"))
+                .toString());
+        mockOkHttp(buildOkResponse(200, "application/json", "ok"));
+
+        client.removeWorkItemLabel("123", "beta");
+
+        JSONArray ops = new JSONArray(capturePatchedBody());
+        assertEquals("alpha;gamma", ops.getJSONObject(0).getString("value"));
+    }
+
     // ========== linkIssueWithRelationship / mapRelationshipType ==========
 
     private void assertRelationshipPatched(String relationship, String expectedRel) throws IOException {

@@ -7,6 +7,7 @@ import com.github.istin.dmtools.common.code.model.SourceCodeConfig;
 import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.networking.RestClient;
+import com.github.istin.dmtools.github.model.GitHubIssue;
 import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
@@ -88,6 +89,37 @@ public class GitHubIssuesTest {
         assertEquals("https://api.github.com/repos/acme/widgets/issues/7", captor.getValue().url());
         JSONObject body = new JSONObject(captor.getValue().getBody());
         assertEquals("closed", body.getString("state"));
+    }
+
+    @Test
+    public void testIssueAcceptsGhPrefixedKeyUsingDefaultRepo() throws Exception {
+        // gh-N is the dmtools-agents ecosystem convention for GitHub issue keys;
+        // it resolves to issue N on the configured default workspace/repository
+        // (testWorkspace/testRepo from setUp config).
+        GitHubIssues spy = spy(gitHub);
+        doReturn("{\"number\":42,\"title\":\"Bug\",\"state\":\"open\"}")
+                .when(spy).execute(any(GenericRequest.class));
+
+        GitHubIssue issue = spy.issue(null, null, null, "gh-42");
+
+        assertEquals(42, issue.getNumber().intValue());
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spy).execute(captor.capture());
+        assertEquals("https://api.github.com/repos/testWorkspace/testRepo/issues/42",
+                captor.getValue().url());
+    }
+
+    @Test
+    public void testIssueGhPrefixIsCaseInsensitive() throws Exception {
+        GitHubIssues spy = spy(gitHub);
+        doReturn("{\"number\":7}").when(spy).execute(any(GenericRequest.class));
+
+        spy.issue(null, null, null, "GH-7");
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spy).execute(captor.capture());
+        assertTrue(captor.getValue().url().endsWith("/issues/7"));
     }
 
     @Test

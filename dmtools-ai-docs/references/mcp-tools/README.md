@@ -3,9 +3,9 @@
 Complete reference for all MCP tools available in DMtools.
 
 **Total Integrations**: 24
-**Total Tools**: 377
+**Total Tools**: 379
 
-*Auto-generated from `dmtools list` on: 2026-09-18 01:34:53*
+*Auto-generated from `dmtools list` on: 2026-09-19 11:47:09*
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ dmtools <tool_name> [arguments]
 
 | Integration | Tools | Documentation |
 |-------------|-------|---------------|
-| **ADO** | 38 | [ado-tools.md](ado-tools.md) |
+| **ADO** | 40 | [ado-tools.md](ado-tools.md) |
 | **ANTHROPIC** | 3 | [anthropic-tools.md](anthropic-tools.md) |
 | **BEDROCK** | 2 | [bedrock-tools.md](bedrock-tools.md) |
 | **BITBUCKET** | 1 | [bitbucket-tools.md](bitbucket-tools.md) |
@@ -66,7 +66,7 @@ file_write('output.txt', 'content');
 ### Issue Tracking
 
 - [JIRA](jira-tools.md) - 69 tools
-- [ADO](ado-tools.md) - 38 tools
+- [ADO](ado-tools.md) - 40 tools
 
 ### Communication
 

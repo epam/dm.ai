@@ -10,8 +10,10 @@ import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.file.FileTools;
+import com.github.istin.dmtools.mcp.ToolAliasResolver;
 import com.github.istin.dmtools.mcp.generated.MCPSchemaGenerator;
 import com.github.istin.dmtools.mcp.generated.MCPToolExecutor;
+import com.github.istin.dmtools.mcp.generated.MCPToolRegistry;
 import com.github.istin.dmtools.github.BasicGithub;
 import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import com.github.istin.dmtools.microsoft.teams.BasicTeamsClient;
@@ -33,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -286,6 +289,13 @@ public class JobJavaScriptBridge {
     public Object executeToolFromJS(String toolName, Object jsArgs) {
         boolean verboseToolLogging = isToolCallArgsLoggingEnabled();
         try {
+            // Resolve vendor-agnostic aliases (tracker_*, source_code_*) to the
+            // canonical tool for the configured backend (DEFAULT_TRACKER /
+            // DEFAULT_SOURCE_CODE via the property chain, with key-format
+            // detection). This is what lets agent scripts written against the
+            // tracker_* family run unchanged on Jira, ADO, or GitHub Issues.
+            toolName = ToolAliasResolver.resolve(toolName, extractKeyHint(jsArgs), new PropertyReader());
+
             // Convert JavaScript object to Map
             // Fetch the tool schema up front: the string-to-array guessing below is
             // only allowed for parameters the schema does NOT explicitly declare as
@@ -436,6 +446,49 @@ public class JobJavaScriptBridge {
         }
     }
 
+    /**
+     * Extracts a ticket/issue key hint from the raw JS call arguments, used for
+     * vendor detection when resolving {@code tracker_*} aliases. Handles both
+     * JS objects (Graal values with members) and host Maps.
+     */
+    static String extractKeyHint(Object jsArgs) {
+        if (jsArgs == null) {
+            return null;
+        }
+        try {
+            if (jsArgs instanceof java.util.Map) {
+                return keyFromMap((java.util.Map<?, ?>) jsArgs);
+            }
+            Value value = Value.asValue(jsArgs);
+            if (value != null && value.hasMembers()) {
+                for (String field : new String[]{"key", "ticketKey", "ticket", "issueKey", "id"}) {
+                    if (value.hasMember(field)) {
+                        Value member = value.getMember(field);
+                        if (member != null) {
+                            Object converted = member.as(Object.class);
+                            if (converted != null) {
+                                return String.valueOf(converted);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not extract key hint from JS args: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private static String keyFromMap(java.util.Map<?, ?> map) {
+        for (String field : new String[]{"key", "ticketKey", "ticket", "issueKey", "id"}) {
+            Object value = map.get(field);
+            if (value != null) {
+                return String.valueOf(value);
+            }
+        }
+        return null;
+    }
+
     // Cache for tool schemas
     private Map<String, Map<String, Object>> toolSchemasCache = null;
 
@@ -473,7 +526,26 @@ public class JobJavaScriptBridge {
                 logger.info("Exposed Mermaid tool to JavaScript: {}", toolName);
             }
         }
-        
+
+        // Expose vendor-agnostic aliases (tracker_*, source_code_*) as JS functions.
+        // They dispatch under the ALIAS name so ToolAliasResolver re-routes every call —
+        // this keeps per-call key-format detection (gh-123 → GitHub, PROJ-123 → Jira,
+        // bare integer → ADO) working even when DEFAULT_TRACKER is unset.
+        Set<String> exposedAliases = new HashSet<>();
+        for (Map<String, Object> tool : tools) {
+            String toolName = (String) tool.get("name");
+            com.github.istin.dmtools.mcp.MCPToolDefinition def = MCPToolRegistry.getTool(toolName);
+            if (def == null) {
+                continue;
+            }
+            for (String alias : def.getToolAliases()) {
+                if (MCPToolRegistry.hasTool(alias) || !exposedAliases.add(alias)) {
+                    continue; // never shadow a canonical tool or double-expose a shared alias
+                }
+                exposeToolToJS(alias, tool);
+            }
+        }
+
         logger.info("Exposed {} MCP tools to JavaScript using generated infrastructure", tools.size());
     }
 
