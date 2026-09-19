@@ -66,15 +66,21 @@ public abstract class GitHubIssues extends GitHub {
             String k = key.trim();
             java.util.regex.Matcher m = java.util.regex.Pattern
                     .compile("^[\\w.-]+/[\\w.-]+#(\\d+)$").matcher(k);
+            java.util.regex.Matcher gh = java.util.regex.Pattern
+                    .compile("^gh-(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(k);
             if (m.find()) {
                 resolvedNumber = Integer.valueOf(m.group(1));
                 resolvedOwner = k.substring(0, k.indexOf('/'));
                 resolvedRepo = k.substring(k.indexOf('/') + 1, k.indexOf('#'));
+            } else if (gh.find()) {
+                // Ecosystem convention (dmtools-agents): gh-N is issue N on the
+                // configured default repository.
+                resolvedNumber = Integer.valueOf(gh.group(1));
             } else if (k.matches("^\\d+$")) {
                 resolvedNumber = Integer.valueOf(k);
             } else {
                 throw new IllegalArgumentException("Cannot parse GitHub issue key: '" + key
-                        + "'. Expected 'owner/repo#123' or a bare issue number.");
+                        + "'. Expected 'owner/repo#123', 'gh-123', or a bare issue number.");
             }
         }
         if (resolvedOwner == null || resolvedOwner.trim().isEmpty()) {
@@ -336,7 +342,7 @@ public abstract class GitHubIssues extends GitHub {
             description = "Assign a GitHub issue to a user",
             integration = "github",
             category = "issues",
-            aliases = {"tracker_assign_ticket"}
+            aliases = {"tracker_assign_ticket", "tracker_assign"}
     )
     public String assignIssue(
             @MCPParam(name = "user", description = "The assignee GitHub login", required = true, example = "octocat", aliases = {"accountId", "assignee", "userName"})
@@ -364,7 +370,8 @@ public abstract class GitHubIssues extends GitHub {
             name = "github_add_labels",
             description = "Add labels to a GitHub issue",
             integration = "github",
-            category = "issues"
+            category = "issues",
+            aliases = {"tracker_add_label"}
     )
     public String addLabels(
             @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
@@ -396,7 +403,8 @@ public abstract class GitHubIssues extends GitHub {
             name = "github_remove_label",
             description = "Remove a label from a GitHub issue",
             integration = "github",
-            category = "issues"
+            category = "issues",
+            aliases = {"tracker_remove_label"}
     )
     public String removeLabel(
             @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
