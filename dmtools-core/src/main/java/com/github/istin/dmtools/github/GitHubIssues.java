@@ -336,7 +336,7 @@ public abstract class GitHubIssues extends GitHub {
             description = "Assign a GitHub issue to a user",
             integration = "github",
             category = "issues",
-            aliases = {"tracker_assign_ticket"}
+            aliases = {"tracker_assign_ticket", "tracker_assign"}
     )
     public String assignIssue(
             @MCPParam(name = "user", description = "The assignee GitHub login", required = true, example = "octocat", aliases = {"accountId", "assignee", "userName"})
@@ -364,7 +364,8 @@ public abstract class GitHubIssues extends GitHub {
             name = "github_add_labels",
             description = "Add labels to a GitHub issue",
             integration = "github",
-            category = "issues"
+            category = "issues",
+            aliases = {"tracker_add_label"}
     )
     public String addLabels(
             @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
@@ -396,7 +397,8 @@ public abstract class GitHubIssues extends GitHub {
             name = "github_remove_label",
             description = "Remove a label from a GitHub issue",
             integration = "github",
-            category = "issues"
+            category = "issues",
+            aliases = {"tracker_remove_label"}
     )
     public String removeLabel(
             @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")

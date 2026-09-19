@@ -423,7 +423,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             description = "Assign a work item to a user",
             integration = "ado",
             category = "work_item_management",
-            aliases = {"tracker_assign_ticket"}
+            aliases = {"tracker_assign_ticket", "tracker_assign"}
     )
     public String assignTo(
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
@@ -552,6 +552,40 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     }
 
     // ========== Label/Tag Operations ==========
+
+    @MCPTool(
+            name = "ado_add_work_item_label",
+            description = "Add a single label (tag) to a work item, keeping existing tags",
+            integration = "ado",
+            category = "work_item_management",
+            aliases = {"tracker_add_label"}
+    )
+    public void addWorkItemLabel(
+            @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
+            String workItemId,
+            @MCPParam(name = "label", description = "The label to add", required = true, example = "ai_generated")
+            String label
+    ) throws IOException {
+        WorkItem ticket = performTicket(workItemId, new String[]{"System.Tags"});
+        addLabelIfNotExists(ticket, label);
+    }
+
+    @MCPTool(
+            name = "ado_remove_work_item_label",
+            description = "Remove a single label (tag) from a work item, keeping other tags",
+            integration = "ado",
+            category = "work_item_management",
+            aliases = {"tracker_remove_label"}
+    )
+    public void removeWorkItemLabel(
+            @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
+            String workItemId,
+            @MCPParam(name = "label", description = "The label to remove", required = true, example = "ai_generated")
+            String label
+    ) throws IOException {
+        WorkItem ticket = performTicket(workItemId, new String[]{"System.Tags"});
+        deleteLabelInTicket(ticket, label);
+    }
 
     @Override
     public void addLabelIfNotExists(com.github.istin.dmtools.common.model.ITicket ticket, String label) throws IOException {

@@ -263,7 +263,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             description = "Assigns a Jira ticket to user",
             integration = "jira",
             category = "ticket_management",
-            aliases = {"tracker_assign_ticket"}
+            aliases = {"tracker_assign_ticket", "tracker_assign"}
     )
     public String assignTo(
             @MCPParam(name = "key", description = "The Jira ticket key to assign", required = true, example = "PRJ-123")
@@ -318,7 +318,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             name = "jira_add_label",
             description = "Adding label to specific ticket key",
             integration = "jira",
-            category = "ticket_management"
+            category = "ticket_management",
+            aliases = {"tracker_add_label"}
     )
     public void addLabel(
             @MCPParam(name = "key", description = "The Jira ticket key to assign", required = true, example = "PRJ-123")
@@ -389,7 +390,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             name = "jira_remove_label",
             description = "Remove a label from a specific Jira ticket. Fetches current labels and removes the specified one.",
             integration = "jira",
-            category = "ticket_management"
+            category = "ticket_management",
+            aliases = {"tracker_remove_label"}
     )
     public void removeLabel(
             @MCPParam(name = "key", description = "The Jira ticket key to remove label from", required = true, example = "PRJ-123")
