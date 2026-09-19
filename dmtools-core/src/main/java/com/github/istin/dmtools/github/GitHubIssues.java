@@ -66,15 +66,21 @@ public abstract class GitHubIssues extends GitHub {
             String k = key.trim();
             java.util.regex.Matcher m = java.util.regex.Pattern
                     .compile("^[\\w.-]+/[\\w.-]+#(\\d+)$").matcher(k);
+            java.util.regex.Matcher gh = java.util.regex.Pattern
+                    .compile("^gh-(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(k);
             if (m.find()) {
                 resolvedNumber = Integer.valueOf(m.group(1));
                 resolvedOwner = k.substring(0, k.indexOf('/'));
                 resolvedRepo = k.substring(k.indexOf('/') + 1, k.indexOf('#'));
+            } else if (gh.find()) {
+                // Ecosystem convention (dmtools-agents): gh-N is issue N on the
+                // configured default repository.
+                resolvedNumber = Integer.valueOf(gh.group(1));
             } else if (k.matches("^\\d+$")) {
                 resolvedNumber = Integer.valueOf(k);
             } else {
                 throw new IllegalArgumentException("Cannot parse GitHub issue key: '" + key
-                        + "'. Expected 'owner/repo#123' or a bare issue number.");
+                        + "'. Expected 'owner/repo#123', 'gh-123', or a bare issue number.");
             }
         }
         if (resolvedOwner == null || resolvedOwner.trim().isEmpty()) {
