@@ -642,6 +642,16 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                                 .with("inputFolderPath", inputContextPath.toAbsolutePath().toString())
                                 .execute();
                             logger.info("preCliJSAction executed for ticket: {}", ticket.getKey());
+                            if (isUncaughtJSExecutionError(preCliActionResult)) {
+                                // JavaScriptExecutor.execute() never lets exceptions escape to this call site —
+                                // it catches them internally and returns createErrorResult(e) instead, so the
+                                // catch block below is never reached for a genuine uncaught JS/tool error. Detect
+                                // that wrapped-error marker here so it still counts as "threw", not a deliberate
+                                // business skip, otherwise unexpectedSetupFailures below is never populated.
+                                logger.warn("preCliJSAction for ticket {} swallowed an uncaught exception (see JavaScriptExecutor log above), treating as setup failure",
+                                    ticket.getKey());
+                                preCliJSActionThrew = true;
+                            }
                         } catch (Exception e) {
                             logger.warn("preCliJSAction threw for ticket {}, treating as setup failure (skipping CLI execution and postJSAction): {}",
                                 ticket.getKey(), e.getMessage());
@@ -940,6 +950,22 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         if (preCliActionResult instanceof Map) {
             Object success = ((Map<?, ?>) preCliActionResult).get("success");
             return Boolean.FALSE.equals(success);
+        }
+        return false;
+    }
+
+    /**
+     * Detects the {@code uncaughtException} marker that {@code JavaScriptExecutor#createErrorResult}
+     * attaches when it swallows a genuine uncaught JS/tool exception instead of letting it propagate.
+     * Without this check that failure is indistinguishable from a deliberate {@code {success:false}}
+     * business-logic skip, which would silently defeat the {@code unexpectedSetupFailures} hard-stop.
+     */
+    static boolean isUncaughtJSExecutionError(Object result) {
+        if (result instanceof JSONObject) {
+            return ((JSONObject) result).optBoolean("uncaughtException", false);
+        }
+        if (result instanceof Map) {
+            return Boolean.TRUE.equals(((Map<?, ?>) result).get("uncaughtException"));
         }
         return false;
     }
