@@ -272,6 +272,52 @@ public class TeammatePreCliJSActionTest {
     }
 
     @Test
+    void testPreCliJSActionSwallowedUncaughtExceptionStopsCliExecutionAndFailsJob() throws Exception {
+        // Regression test for the "JavaScriptExecutor swallows the throw" bug: JavaScriptExecutor.execute()
+        // never actually lets a JS/tool exception escape to this call site — it catches it internally and
+        // returns createErrorResult(e) (a JSONObject with success:false + uncaughtException:true) instead of
+        // rethrowing. Before this fix that result was indistinguishable from a deliberate {success:false}
+        // business skip, so the job reported overall success even though the JS setup genuinely crashed.
+        org.json.JSONObject swallowedError = new org.json.JSONObject();
+        swallowedError.put("success", false);
+        swallowedError.put("error", "java.lang.RuntimeException: Git branch setup failed: ...");
+        swallowedError.put("action", "error");
+        swallowedError.put("uncaughtException", true);
+
+        JavaScriptExecutor swallowingExecutor = mock(JavaScriptExecutor.class);
+        when(swallowingExecutor.mcp(any(), any(), any(), any())).thenReturn(swallowingExecutor);
+        when(swallowingExecutor.withJobContext(any(), any(), any())).thenReturn(swallowingExecutor);
+        when(swallowingExecutor.with(anyString(), any())).thenReturn(swallowingExecutor);
+        when(swallowingExecutor.execute()).thenReturn(swallowedError);
+
+        TeammateWithJsSpy spy = buildSpy("agents/js/extendFolder.js", swallowingExecutor);
+
+        params.setPreCliJSAction("agents/js/extendFolder.js");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setCleanupInputFolder(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("ok\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                    .thenReturn(Map.of());
+
+                Exception thrown = assertThrows(Exception.class, () -> spy.runJobImpl(params));
+                assertTrue(thrown.getMessage().contains("TEST-1"), "failure message should mention the failing ticket");
+
+                // CLI command must NOT have been executed — the JS setup failure is a hard stop.
+                mocked.verify(() -> CommandLineUtils.runCommand(eq("echo ok"), any(), any(), any(), anyBoolean(), any(), anyInt()), never());
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
     void testPreCliJSActionFalseReturnStopsCliExecution() throws Exception {
         // preparePRForReview.js / preCliReworkSetup.js return `false` (not throw) when no PR is found.
         // This is an expected business-logic skip (no exception thrown), so unlike the uncaught-exception
@@ -456,6 +502,29 @@ public class TeammatePreCliJSActionTest {
         errorResultFromExecutor.put("action", "error");
         assertTrue(Teammate.isPreCliJSActionFailure(errorResultFromExecutor),
             "JSONObject error result from JavaScriptExecutor.createErrorResult must be recognised as failure");
+    }
+
+    @Test
+    void testIsUncaughtJSExecutionErrorDetectsMarkerOnly() {
+        // Direct unit coverage for the marker JavaScriptExecutor.createErrorResult attaches to
+        // distinguish "execute() swallowed a real throw" from a deliberate {success:false} skip.
+        assertFalse(Teammate.isUncaughtJSExecutionError(null));
+        assertFalse(Teammate.isUncaughtJSExecutionError(Boolean.FALSE));
+
+        org.json.JSONObject deliberateFailure = new org.json.JSONObject();
+        deliberateFailure.put("success", false);
+        deliberateFailure.put("error", "No Pull Request found for ticket TEST-1");
+        assertFalse(Teammate.isUncaughtJSExecutionError(deliberateFailure),
+            "a deliberate {success:false} business result without the marker must not count as an uncaught exception");
+
+        org.json.JSONObject swallowedException = new org.json.JSONObject();
+        swallowedException.put("success", false);
+        swallowedException.put("error", "java.lang.RuntimeException: Git branch setup failed: ...");
+        swallowedException.put("uncaughtException", true);
+        assertTrue(Teammate.isUncaughtJSExecutionError(swallowedException));
+
+        assertTrue(Teammate.isUncaughtJSExecutionError(Map.of("uncaughtException", true)),
+            "plain Map with uncaughtException:true must also be recognized");
     }
 
     // ---- helpers ----

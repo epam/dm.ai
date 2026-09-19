@@ -25,22 +25,22 @@ import java.util.Map;
  * Provides a fluent API for configuring and executing JavaScript code with MCP tool access.
  */
 public class JavaScriptExecutor {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(JavaScriptExecutor.class);
-    
+
     private final String jsCode;
     private final Map<String, Object> parameters = new HashMap<>();
-    
+
     private TrackerClient<?> trackerClient;
     private AI ai;
     private Confluence confluence;
     private SourceCode sourceCode;
     private com.github.istin.dmtools.common.kb.tool.KBTools kbTools;
-    
+
     public JavaScriptExecutor(String jsCode) {
         this.jsCode = jsCode;
     }
-    
+
     /**
      * Configure MCP clients for JavaScript execution
      */
@@ -51,7 +51,7 @@ public class JavaScriptExecutor {
         this.sourceCode = sourceCode;
         return this;
     }
-    
+
     /**
      * Configure MCP clients including KB tools for JavaScript execution
      */
@@ -63,7 +63,7 @@ public class JavaScriptExecutor {
         this.kbTools = kbTools;
         return this;
     }
-    
+
     /**
      * Add job context parameters (jobParams, ticket, response)
      */
@@ -73,7 +73,7 @@ public class JavaScriptExecutor {
         this.parameters.put("response", response);
         return this;
     }
-    
+
     /**
      * Add a custom parameter
      */
@@ -81,7 +81,7 @@ public class JavaScriptExecutor {
         this.parameters.put(key, value);
         return this;
     }
-    
+
     /**
      * Execute the JavaScript code with configured parameters and MCP tools
      */
@@ -90,23 +90,23 @@ public class JavaScriptExecutor {
             logger.debug("No JavaScript code provided, skipping execution");
             return null;
         }
-        
+
         try {
             logger.info("Executing JavaScript post-processing");
-            
+
             // Create JobJavaScriptBridge instance
             JobJavaScriptBridge jsBridge = new JobJavaScriptBridge(trackerClient, ai, confluence, sourceCode, kbTools);
-            
+
             // Convert parameters for JavaScript execution
             Map<String, Object> jsParams = convertParametersForJS();
-            
+
             // Execute JavaScript - convert Map to JSONObject
             JSONObject jsParamsJson = new JSONObject();
             for (Map.Entry<String, Object> entry : jsParams.entrySet()) {
                 jsParamsJson.put(entry.getKey(), entry.getValue());
             }
             Object result = jsBridge.executeJavaScript(jsCode, jsParamsJson);
-            
+
             if (new PropertyReader().isJsToolCallLoggingEnabled()) {
                 logger.info("JavaScript executed successfully: {}", result);
             } else {
@@ -114,14 +114,14 @@ public class JavaScriptExecutor {
                         result != null ? result.getClass().getSimpleName() : "null");
             }
             return result;
-            
+
         } catch (Exception e) {
             logger.error("JavaScript post-processing failed", e);
             // Don't throw - let job continue execution
             return createErrorResult(e);
         }
     }
-    
+
     /**
      * Convert Java parameters to JavaScript-compatible format
      */
@@ -167,12 +167,12 @@ public class JavaScriptExecutor {
                     ticketJson.put("priority", ticket.getPriority());
                     ticketJson.put("created", ticket.getCreated());
                     ticketJson.put("labels", ticket.getTicketLabels());
-                    
+
                     // Add creator if available
                     if (ticket.getCreator() != null) {
                         ticketJson.put("creator", ticket.getCreator().toString());
                     }
-                    
+
                     // Add the raw JSON fields for full access
                     JSONObject fieldsJson = ticket.getFieldsAsJSON();
                     if (fieldsJson != null) {
@@ -210,10 +210,10 @@ public class JavaScriptExecutor {
                 }
             }
         }
-        
+
         return jsParams;
     }
-    
+
     /**
      * Create error result object for JavaScript execution failures
      */
@@ -224,6 +224,9 @@ public class JavaScriptExecutor {
         errorResult.put("action", "error");
         // Return JSONObject (not String) so Teammate.isPreCliJSActionFailure()
         // can inspect the "success" field and hard-stop the job.
+        // uncaughtException distinguishes "execute() swallowed a real throw" from a JS action
+        // deliberately returning {success:false, ...} — see Teammate#isUncaughtJSExecutionError.
+        errorResult.put("uncaughtException", true);
         return errorResult;
     }
 }
