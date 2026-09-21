@@ -20,7 +20,13 @@ jobs:
   # jobs before this consolidation.
   test:
     name: Java unit tests
-    runs-on: ubuntu-latest
+    # Runs on Bitrise Build Hub infrastructure (GitHub Actions stays the
+    # orchestrator — only the runner changes). The label
+    # "bitrise-runner-dmtools-ci" targets the Build Hub machine pool named
+    # "dmtools-ci" (Bitrise auto-creates a "bitrise-runner-<pool>" label per
+    # pool). If the pool is ever renamed, update this label to match.
+    # Fallback: change back to "ubuntu-latest" to run on GitHub-hosted runners.
+    runs-on: bitrise-runner-dmtools-ci
     permissions:
       contents: read
       checks: write
