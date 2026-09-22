@@ -828,6 +828,7 @@ public class JobJavaScriptBridge {
     public Object executeJavaScript(String jsSourceOrPath, JSONObject parameters) throws Exception {
         ensureJavaScriptContext();
 
+        AsyncJobWorkerPool asyncPool = null;
         try {
             // Set current script directory for relative path resolution
             setCurrentScriptDirectory(jsSourceOrPath);
@@ -852,6 +853,10 @@ public class JobJavaScriptBridge {
                 throw new IllegalArgumentException("JavaScript code must define an 'action' function");
             }
             
+            // runAsync(fn, args) wiring — default-off; enabled when the
+            // job's params carry parallelWorkers >= 2 (dmtools-dart#224).
+            asyncPool = wireRunAsyncIfEnabled(parameters);
+
             // Convert JSONObject to JavaScript-compatible object
             Object jsCompatibleParams = convertToJSCompatible(parameters);
             
@@ -883,6 +888,10 @@ public class JobJavaScriptBridge {
             logger.error("JavaScript execution failed for source: {}", 
                          jsSourceOrPath.length() > 100 ? jsSourceOrPath.substring(0, 100) + "..." : jsSourceOrPath, e);
             throw new RuntimeException("JavaScript execution failed: " + e.getMessage(), e);
+        } finally {
+            if (asyncPool != null) {
+                asyncPool.shutdown();
+            }
         }
     }
 
@@ -1284,4 +1293,101 @@ public class JobJavaScriptBridge {
         }
         moduleCache.clear();
     }
+
+    // ── runAsync(fn, args) — parallel JS over the engine-worker pool ──────
+    // (dmtools-dart#224; the Dart port is the reference implementation)
+
+    /**
+     * Wires the {@code runAsync} API onto this context when the job's
+     * params enable it ({@code params.jobParams.parallelWorkers >= 2});
+     * returns the pool to shut down after execution, or null when the knob
+     * is absent/disabled — the default-off contract keeps the scripting
+     * surface unchanged.
+     */
+    private AsyncJobWorkerPool wireRunAsyncIfEnabled(JSONObject parameters) {
+        int workers = 0;
+        if (parameters != null) {
+            JSONObject jobParams = parameters.optJSONObject("jobParams");
+            if (jobParams != null) {
+                workers = jobParams.optInt("parallelWorkers", 0);
+            }
+        }
+        if (workers < 2) {
+            return null;
+        }
+        AsyncJobWorkerPool pool = new AsyncJobWorkerPool(workers,
+                () -> new JobJavaScriptBridge(trackerClient, ai, confluence, sourceCode, kbTools));
+        RunAsyncJobSupport.wire(this, jsContext, pool, parameters);
+        return pool;
+    }
+
+    /**
+     * Evaluates one runAsync-dispatched function on this context — the
+     * worker-thread side of the pool. The pool creates a fresh bridge per
+     * job <b>on the worker thread</b> (GraalJS contexts are thread-confined),
+     * mirroring both the Java per-execution bridge lifecycle and the Dart
+     * fresh-engine-per-job isolation: per-job require cache, per-job
+     * set_env_variable overrides, per-job script directory.
+     */
+    public AsyncJobWorkerPool.AsyncJobResult runAsyncJob(String fnSource, String argsJson,
+                                                         String scriptDirectory,
+                                                         JSONObject parameters) {
+        try {
+            ensureJavaScriptContext();
+            setCurrentScriptDirectory(scriptDirectory == null || scriptDirectory.isEmpty()
+                    ? "" : scriptDirectory + "/__jsr_job__.js");
+            jsContext.eval("js", ASYNC_WORKER_BOOTSTRAP);
+            if (parameters != null) {
+                jsContext.getBindings("js").putMember("params", convertToJSCompatible(parameters));
+            }
+            Value result = jsContext.eval("js", "__jsrCall(" + JSONObject.quote(fnSource)
+                    + ", " + JSONObject.quote(argsJson) + ")");
+            return AsyncJobWorkerPool.AsyncJobResult.ok(convertPolyglotValueToJSON(result.as(Object.class)));
+        } catch (Exception e) {
+            return AsyncJobWorkerPool.AsyncJobResult.error(
+                    e.getMessage() != null ? e.getMessage() : e.toString());
+        }
+    }
+
+    /**
+     * JSON text of the dispatch args (worker contract: source + JSON args).
+     */
+    String asyncArgsJson(Value argsValue) {
+        if (argsValue == null || argsValue.isNull()) {
+            return "null";
+        }
+        return toJsonString(convertPolyglotValueToJSON(argsValue.as(Object.class)));
+    }
+
+    /**
+     * The dispatching script's directory, captured at wiring time so worker
+     * {@code require('./…')} resolves exactly like the main engine's.
+     */
+    String asyncScriptDirectory() {
+        return currentScriptDirectory;
+    }
+
+    /**
+     * Converts a worker envelope result into a real JS value on the
+     * waiting (main) engine.
+     */
+    Object asyncWaitResult(AsyncJobWorkerPool.AsyncJobResult result) {
+        return convertToJSCompatible(result.getResult());
+    }
+
+    /**
+     * Worker-side bootstrap: materializes and runs one dispatched function.
+     * Kept in lockstep with the Dart {@code asyncWorkerBootstrap}.
+     */
+    private static final String ASYNC_WORKER_BOOTSTRAP = """
+            (function() {
+                globalThis.__jsrCall = function(fnSource, argsJson) {
+                    var fn = eval('(' + fnSource + ')');
+                    if (typeof fn !== 'function') {
+                        throw new Error('runAsync: dispatched value is not a function');
+                    }
+                    return fn(JSON.parse(argsJson));
+                };
+            })();
+            """;
 }
