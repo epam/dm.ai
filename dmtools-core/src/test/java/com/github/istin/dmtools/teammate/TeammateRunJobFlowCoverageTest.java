@@ -1059,7 +1059,7 @@ public class TeammateRunJobFlowCoverageTest {
     }
 
     @Test
-    void testPostJSActionUncaughtExceptionResultIsRethrown() {
+    void testPostJSActionUncaughtExceptionResultIsRethrown() throws Exception {
         JavaScriptExecutor postExecutor = mock(JavaScriptExecutor.class);
         when(postExecutor.mcp(any(), any(), any(), any())).thenReturn(postExecutor);
         when(postExecutor.withJobContext(any(), any(), any())).thenReturn(postExecutor);
