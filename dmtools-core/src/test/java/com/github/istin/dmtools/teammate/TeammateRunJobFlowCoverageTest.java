@@ -1059,6 +1059,30 @@ public class TeammateRunJobFlowCoverageTest {
     }
 
     @Test
+    void testPostJSActionUncaughtExceptionResultIsRethrown() throws Exception {
+        JavaScriptExecutor postExecutor = mock(JavaScriptExecutor.class);
+        when(postExecutor.mcp(any(), any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.withJobContext(any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.with(anyString(), any())).thenReturn(postExecutor);
+
+        Map<String, Object> uncaughtResult = new HashMap<>();
+        uncaughtResult.put("success", false);
+        uncaughtResult.put("uncaughtException", true);
+        uncaughtResult.put("error", "Error: Failed to create 3 of 3 question subtask(s) under TEST-1");
+        when(postExecutor.execute()).thenReturn(uncaughtResult);
+        teammate.scriptedExecutors.put("agents/js/post.js", postExecutor);
+
+        params.setPostJSAction("agents/js/post.js");
+
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> teammate.runJobImpl(params));
+        assertTrue(exception.getMessage().contains("postJSAction threw an uncaught exception for ticket TEST-1"),
+                "message must identify the ticket: " + exception.getMessage());
+        assertTrue(exception.getMessage().contains("Failed to create 3 of 3 question subtask(s)"),
+                "message must surface the JS error text: " + exception.getMessage());
+    }
+
+    @Test
     void testNullIndexConfigInArrayIsSkipped() throws Exception {
         params.setIndexes(new Teammate.IndexConfig[]{null});
 
