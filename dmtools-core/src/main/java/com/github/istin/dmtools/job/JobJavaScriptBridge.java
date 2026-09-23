@@ -843,7 +843,13 @@ public class JobJavaScriptBridge {
 
             // Ensure set_env_variable is available for this execution
             jsContext.getBindings("js").putMember("set_env_variable", new SetEnvVariableProxy());
-            
+
+            // Node/js compat layer — default-off, same knob contract as
+            // parallelWorkers (params.jobParams.nodeCompat === true).
+            if (JsNodeCompat.isEnabled(parameters)) {
+                JsNodeCompat.install(jsContext);
+            }
+
             // Evaluate the JavaScript code
             jsContext.eval("js", jsCode);
             
@@ -1336,6 +1342,9 @@ public class JobJavaScriptBridge {
             ensureJavaScriptContext();
             setCurrentScriptDirectory(scriptDirectory == null || scriptDirectory.isEmpty()
                     ? "" : scriptDirectory + "/__jsr_job__.js");
+            if (JsNodeCompat.isEnabled(parameters)) {
+                JsNodeCompat.install(jsContext);
+            }
             jsContext.eval("js", ASYNC_WORKER_BOOTSTRAP);
             if (parameters != null) {
                 jsContext.getBindings("js").putMember("params", convertToJSCompatible(parameters));
