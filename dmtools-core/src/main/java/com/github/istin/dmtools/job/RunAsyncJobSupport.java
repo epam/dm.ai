@@ -53,7 +53,7 @@ public final class RunAsyncJobSupport {
                     if (typeof fn !== 'function') {
                         throw new Error('runAsync expects a function as its first argument');
                     }
-                    return __jsrDispatch(fn, args === undefined ? null : args);
+                    return __jsrDispatch(fn.toString(), args === undefined ? null : args);
                 }
                 runAsync.all = function(jobs) {
                     if (!Array.isArray(jobs)) {
@@ -99,10 +99,14 @@ public final class RunAsyncJobSupport {
 
         @Override
         public Object execute(Value... arguments) {
-            if (arguments.length < 1 || !arguments[0].canExecute()) {
+            // The prelude sends `fn.toString()` (real Function.prototype.toString):
+            // polyglot Value.toString() is a DEBUG display string and truncates
+            // long function sources with `...<omitted>...`, which would corrupt
+            // the dispatched source (Dart prelude parity: stringify in JS).
+            if (arguments.length < 1 || !arguments[0].isString()) {
                 throw new IllegalArgumentException("runAsync expects a function as its first argument");
             }
-            String fnSource = arguments[0].toString();
+            String fnSource = arguments[0].asString();
             Value argsValue = arguments.length > 1 ? arguments[1] : null;
             String argsJson = bridge.asyncArgsJson(argsValue);
             Future<AsyncJobWorkerPool.AsyncJobResult> future = pool.dispatch(
