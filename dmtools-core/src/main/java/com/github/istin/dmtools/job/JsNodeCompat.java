@@ -4,60 +4,74 @@
 package com.github.istin.dmtools.job;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyArray;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
-import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
  * Opt-in Node/js compatibility layer for the GraalJS bridge — the Java
- * mirror of the {@code quickjs_runtime} {@code installNodeCompat} API
- * (IstiN/quickjs_runtime issue #3 / PR #4; the Dart implementation is the
- * reference). The two runtimes expose the same surface and the same error
- * texts so AI-written agent scripts behave identically on both.
+ * mirror of the {@code quickjs_runtime} {@code installNodeCompat} API.
+ * The JS surface is the <b>same prelude source</b> the Dart runtime ships
+ * ({@code src/main/resources/jsr/node_compat*.js}, byte-identical with the
+ * quickjs_runtime preludes), so scripts see one surface on both runtimes;
+ * only the host hooks differ (this class implements them with the JVM).
  *
- * <p>Two tiers:</p>
- * <ul>
- *   <li><b>Tier 1 — real:</b> {@code global} alias, {@code console.*}
- *       (pluggable sink), {@code process} (env snapshot, platform/arch/
- *       version, exitCode, cwd, exit), {@code path} (posix subset),
- *       {@code assert} / {@code util} (node-like subsets),
- *       {@code TextEncoder}/{@code TextDecoder} (utf-8, pure JS),
- *       {@code atob}/{@code btoa}, {@code performance.now()},
- *       {@code crypto.randomUUID()}/{@code getRandomValues()},
- *       {@code structuredClone} (JSON fidelity), and a {@code require()}
- *       that resolves builtin compat modules, consumer-registered modules
- *       ({@link #installModule}) and falls back to a pre-existing
- *       {@code require} loader.</li>
- *   <li><b>Tier 2 — self-documenting stubs:</b> {@code Buffer},
- *       {@code fetch}, {@code AbortController}, {@code setTimeout}/{@code
- *       setInterval}/{@code setImmediate}, {@code process.nextTick} —
- *       typeof-safe (feature guards keep working) and throw the working
- *       alternative on call.</li>
- * </ul>
+ * <p>Surface: {@code global}, {@code console} (timers/table/group/count),
+ * {@code process} (env/argv/hrtime/memoryUsage/stdout/stderr/on('exit')),
+ * {@code path}/{@code os}/{@code url}/{@code buffer}/{@code events} as
+ * {@code require()} builtins, real {@code Buffer} (Uint8Array subclass),
+ * {@code URL}/{@code URLSearchParams}, {@code util} (inspect with Node
+ * quoting, legacy predicates, promisify/callbackify), {@code assert},
+ * {@code TextEncoder}/{@code TextDecoder}, {@code atob}/{@code btoa},
+ * {@code performance}, {@code crypto}, {@code structuredClone},
+ * Intl typeof-safe stubs, real timers driven by the host
+ * ({@code setTimeout}/{@code setImmediate}/{@code setInterval} +
+ * {@code queueMicrotask}/{@code process.nextTick}) via
+ * {@link Handle#drainTimers()}, and a sync hook-backed {@code fetch}.</p>
  *
  * <p>Everything is opt-in: wired by {@link JobJavaScriptBridge} only when
  * the job's params carry {@code params.jobParams.nodeCompat === true}
- * (same default-off contract as {@code parallelWorkers}), so the scripting
- * surface of existing configs is byte-for-byte unchanged.</p>
+ * (same default-off contract as {@code parallelWorkers}).</p>
  *
- * <p>Interop note (allowAllAccess(false)): hook proxies only exchange
- * primitives (String/int/double) — the sanctioned interop path; everything
- * array-shaped (utf-8 bytes, base64) is implemented in pure JS.</p>
+ * <p>Interop note (allowAllAccess(false)): hook proxies exchange
+ * primitives and plain lists only; the preludes marshal anything complex
+ * through JSON strings.</p>
  */
 public final class JsNodeCompat {
 
     private JsNodeCompat() {
     }
+
+    /** Resource paths of the shared preludes, in install order. */
+    private static final String[] PRELUDES = {
+            "/jsr/node_compat.js",
+            "/jsr/node_compat_async.js",
+            "/jsr/node_compat_buffer.js",
+            "/jsr/node_compat_url.js",
+    };
 
     /**
      * Whether the job's params enable the layer
@@ -73,18 +87,42 @@ public final class JsNodeCompat {
 
     /**
      * Installs the compat surface with default config (OS env/platform,
-     * user.dir cwd, wall clock, SecureRandom, stdout console).
+     * user.dir cwd, wall clock, SecureRandom, stdout console, no fetch
+     * transport — {@code fetch} stays a typeof-safe stub).
+     *
+     * @return the drain handle ({@link Handle#drainTimers()})
      */
-    public static void install(Context context) {
-        install(context, new Config());
+    public static Handle install(Context context) {
+        return install(context, new Config());
     }
 
     /**
      * Installs the compat surface with the given hooks. Idempotent per
      * context (reinstalling replaces the previous surface).
+     *
+     * @return the drain handle ({@link Handle#drainTimers()})
      */
-    public static void install(Context context, Config config) {
+    public static Handle install(Context context, Config config) {
         var bindings = context.getBindings("js");
+
+        // The config object the preludes read: one JSON.parse so arrays
+        // and maps cross as real JS values (env, argv, ...).
+        JSONObject cfg = new JSONObject(new LinkedHashMap<>());
+        cfg.put("env", new JSONObject(config.env));
+        cfg.put("platform", config.platform);
+        cfg.put("arch", config.arch);
+        cfg.put("nodeVersion", config.nodeVersion);
+        cfg.put("argv", new JSONArray(config.argv));
+        cfg.put("scriptPath", config.scriptPath == null ? JSONObject.NULL : config.scriptPath);
+        cfg.put("pid", config.pid);
+        cfg.put("cpusCount", config.cpusCount);
+        cfg.put("hostname", config.hostname);
+        cfg.put("tmpdir", config.tmpdir == null ? JSONObject.NULL : config.tmpdir.get());
+        cfg.put("homedir", config.homedir == null ? JSONObject.NULL : config.homedir.get());
+        bindings.putMember("__ncConfigRaw", cfg.toString());
+        context.eval("js", "globalThis.__ncConfig = JSON.parse(__ncConfigRaw);");
+        bindings.putMember("__ncMaxTimerCallbacks", config.maxTimerCallbacks);
+
         bindings.putMember("__ncConsoleWrite", (ProxyExecutable) args -> {
             try {
                 config.consoleSink.accept(
@@ -102,27 +140,50 @@ public final class JsNodeCompat {
             config.exitHook.accept(code);
             return null;
         });
-        bindings.putMember("__ncRandomByte", (ProxyExecutable) args -> config.randomByte.getAsInt());
         bindings.putMember("__ncRandomUuid", (ProxyExecutable) args -> config.randomUuid.get());
-        bindings.putMember("__ncEnvJson", (ProxyExecutable) args -> {
-            // primitives-only interop: env crosses as a JSON string
-            return new JSONObject(config.env).toString();
+        bindings.putMember("__ncRandomValues", (ProxyExecutable) args -> {
+            int length = args.length > 0 && args[0].isNumber() ? Math.max(0, args[0].asInt()) : 0;
+            byte[] bytes = new byte[length];
+            config.randomFiller.accept(bytes);
+            return jsBytes(bytes);
         });
-        context.eval("js", "globalThis.__ncConfig = "
-                + new JSONObject()
-                .put("platform", config.platform)
-                .put("arch", config.arch)
-                .put("nodeVersion", config.nodeVersion)
-                + ";");
-        context.eval("js", PRELUDE);
+        bindings.putMember("__ncUtf8Encode", (ProxyExecutable) args -> jsBytes(
+                args.length > 0 && args[0].isString()
+                        ? args[0].asString().getBytes(StandardCharsets.UTF_8)
+                        : new byte[0]));
+        bindings.putMember("__ncUtf8Decode", (ProxyExecutable) args -> bytes(
+                args.length > 0 ? args[0] : null, raw -> new String(raw, StandardCharsets.UTF_8)));
+        bindings.putMember("__ncBase64Encode", (ProxyExecutable) args -> {
+            byte[] bytes = args.length > 0 && args[0].isString()
+                    ? args[0].asString().getBytes(StandardCharsets.UTF_8)
+                    : new byte[0];
+            return java.util.Base64.getEncoder().encodeToString(bytes);
+        });
+        // Node atob semantics: the binary string of the decoded bytes
+        // (jsr default `_b64Decode` parity — UTF-8 decoded string).
+        bindings.putMember("__ncBase64Decode", (ProxyExecutable) args ->
+                args.length > 0 && args[0].isString()
+                        ? new String(java.util.Base64.getDecoder().decode(args[0].asString()),
+                                StandardCharsets.UTF_8)
+                        : "");
+        bindings.putMember("__ncFetch", (ProxyExecutable) args -> config.httpFetch == null
+                ? null
+                : config.httpFetch.apply(args.length > 0 ? valueToJson(args[0]) : "null"));
+
+        for (String prelude : PRELUDES) {
+            context.eval("js", resource(prelude));
+        }
+        if (config.httpFetch != null) {
+            context.eval("js", resource("/jsr/node_compat_fetch.js"));
+        }
+        return new Handle(context, config);
     }
 
     /**
      * Registers (or replaces) one consumer-provided builtin module visible
      * to the compat {@code require} (e.g. {@code 'fs'} mapped onto file
      * tools). The factory receives the module name and returns the module
-     * exports; keep the return value JS-compatible (primitives or values
-     * already converted for the bridge).
+     * exports; keep the return value JS-compatible.
      */
     public static void installModule(Context context, String name,
                                      UnaryOperator<String> jsonFactory) {
@@ -136,71 +197,198 @@ public final class JsNodeCompat {
                 + "(moduleName); };");
     }
 
+    private static String bytes(Value value, java.util.function.Function<byte[], String> decoder) {
+        if (value == null || value.isNull()) {
+            return decoder.apply(new byte[0]);
+        }
+        int size = value.hasArrayElements() ? (int) value.getArraySize() : 0;
+        byte[] bytes = new byte[size];
+        for (int i = 0; i < size; i++) {
+            bytes[i] = (byte) value.getArrayElement(i).asInt();
+        }
+        return decoder.apply(bytes);
+    }
+
     /**
-     * Hook configuration; every field has a self-contained default, so
-     * {@code new Config()} works without any setup.
+     * Byte arrays cross the interop boundary as real JS arrays
+     * ({@link ProxyArray}) — the jsr host convention (the Dart bridge
+     * decodes its returned JSON into a plain array).
      */
+    private static ProxyArray jsBytes(byte[] bytes) {
+        Integer[] out = new Integer[bytes.length];
+        for (int i = 0; i < bytes.length; i++) {
+            out[i] = bytes[i] & 0xFF;
+        }
+        return ProxyArray.fromArray((Object[]) out);
+    }
+
+    /**
+     * Marshals one guest value to JSON text — the jsr bridge convention
+     * (each JS argument arrives at the host hook as its JSON encoding).
+     */
+    private static String valueToJson(Value value) {
+        if (value == null || value.isNull()) {
+            return "null";
+        }
+        if (value.isString()) {
+            return JSONObject.quote(value.asString());
+        }
+        if (value.isBoolean()) {
+            return String.valueOf(value.asBoolean());
+        }
+        if (value.isNumber()) {
+            return value.as(Object.class).toString();
+        }
+        if (value.hasArrayElements()) {
+            StringBuilder out = new StringBuilder("[");
+            long size = value.getArraySize();
+            for (long i = 0; i < size; i++) {
+                if (i > 0) {
+                    out.append(',');
+                }
+                out.append(valueToJson(value.getArrayElement(i)));
+            }
+            return out.append(']').toString();
+        }
+        if (value.hasMembers()) {
+            StringBuilder out = new StringBuilder("{");
+            boolean first = true;
+            for (String key : value.getMemberKeys()) {
+                if (!first) {
+                    out.append(',');
+                }
+                first = false;
+                out.append(JSONObject.quote(key)).append(':')
+                        .append(valueToJson(value.getMember(key)));
+            }
+            return out.append('}').toString();
+        }
+        return "null";
+    }
+
+    private static String resource(String path) {
+        InputStream stream = JsNodeCompat.class.getResourceAsStream(path);
+        if (stream == null) {
+            throw new IllegalStateException("jsr prelude missing from the classpath: " + path);
+        }
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            StringBuilder out = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                out.append(line).append('\n');
+            }
+            return out.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("jsr prelude unreadable: " + path, e);
+        }
+    }
+
+    /** How {@link Handle#drainTimers()} runs due timers and immediates. */
+    public enum TimerDrainMode {
+
+        /**
+         * Runs one drain pass (immediates, then due timers) and returns —
+         * never waits. Safe everywhere; pending later timers simply stay
+         * queued.
+         */
+        READY,
+
+        /**
+         * Additionally sleeps until the earliest non-unref'd timer is due
+         * and keeps draining until the queue empties, the wall-clock budget
+         * elapses (raises), or {@code maxTimerCallbacks} is exceeded per
+         * pass (raises — the {@code setInterval(fn, 0)} storm guard).
+         * Headless CLI parity with the Dart product wiring.
+         */
+        BLOCK,
+
+        /** No-op: timers are registered but never run. */
+        NONE
+    }
+
+    /** Timer drain knobs + stats (jsr {@code NodeCompatConfig} parity). */
     public static final class Config {
 
-        /**
-         * {@code process.env} snapshot.
-         */
+        /** {@code process.env} snapshot. */
         public Map<String, String> env = new LinkedHashMap<>(System.getenv());
 
-        /**
-         * {@code process.platform} (node-style: linux/darwin/win32).
-         */
+        /** {@code process.platform} (node-style: linux/darwin/win32). */
         public String platform = platformDefault();
 
-        /**
-         * {@code process.arch}.
-         */
+        /** {@code process.arch}. */
         public String arch = System.getProperty("os.arch", "x64");
 
-        /**
-         * {@code process.version}.
-         */
+        /** {@code process.version}. */
         public String nodeVersion = "v22.0.0-compat";
 
-        /**
-         * {@code process.cwd()}.
-         */
+        /** {@code process.argv}. */
+        public List<String> argv = List.of("graaljs");
+
+        /** Script path for {@code __dirname}/{@code __filename}; {@code null} = unset. */
+        public String scriptPath;
+
+        /** {@code process.pid} stand-in. */
+        public int pid = 1;
+
+        /** {@code os.cpus().length} stand-in. */
+        public int cpusCount = 1;
+
+        /** {@code os.hostname()}. */
+        public String hostname = "localhost";
+
+        /** {@code os.tmpdir()}; {@code null} = the prelude's platform default. */
+        public Supplier<String> tmpdir;
+
+        /** {@code os.homedir()}; {@code null} = the prelude's env-based default. */
+        public Supplier<String> homedir;
+
+        /** {@code process.cwd()}. */
         public Supplier<String> cwd = () -> System.getProperty("user.dir", "/");
 
-        /**
-         * {@code performance.now()} in fractional ms.
-         */
+        /** {@code performance.now()} / the timer clock, fractional ms. */
         public DoubleSupplier clock = () -> System.nanoTime() / 1_000_000.0;
 
-        /**
-         * One secure random byte ({@code crypto.getRandomValues} filler).
-         */
-        public IntSupplier randomByte = new IntSupplier() {
-            private final SecureRandom random = new SecureRandom();
+        /** Fills a byte array with secure random bytes. */
+        public Consumer<byte[]> randomFiller = bytes -> new SecureRandom().nextBytes(bytes);
 
-            @Override
-            public int getAsInt() {
-                return random.nextInt(256);
-            }
-        };
-
-        /**
-         * {@code crypto.randomUUID()}.
-         */
+        /** {@code crypto.randomUUID()}. */
         public Supplier<String> randomUuid = () -> UUID.randomUUID().toString();
 
-        /**
-         * {@code console} sink: {@code (level, message)}.
-         */
+        /** {@code console} sink: {@code (level, message)}. */
         public BiConsumer<String, String> consoleSink =
                 (level, message) -> System.out.println(message);
 
-        /**
-         * {@code process.exit(code)} notification (the JS side still throws
-         * a {@code ProcessExit} error so sync scripts stop).
-         */
+        /** {@code process.exit(code)} notification. */
         public Consumer<Integer> exitHook = code -> {
         };
+
+        /**
+         * The sync {@code fetch} transport: {@code requestJson → responseJson}
+         * ({@code null} = transport miss). {@code null} keeps {@code fetch}
+         * as the typeof-safe stub; the bridge wires the real JVM transport.
+         */
+        public UnaryOperator<String> httpFetch;
+
+        /** Timer drain mode (see {@link TimerDrainMode}). */
+        public TimerDrainMode timerDrain = TimerDrainMode.READY;
+
+        /** Storm guard: max callbacks per {@link Handle#drainTimers()} pass. */
+        public int maxTimerCallbacks = 1000;
+
+        /** Block-mode budget for a single drain. */
+        public long maxTimerDrainWallClockMs = Duration.ofSeconds(30).toMillis();
+
+        /**
+         * Headless CLI defaults: block-mode timer drain ("setTimeout as
+         * sleep" behaves like Node). Product wiring parity with the Dart
+         * {@code wireEngine} default.
+         */
+        public static Config cliDefaults() {
+            Config config = new Config();
+            config.timerDrain = TimerDrainMode.BLOCK;
+            return config;
+        }
 
         private static String platformDefault() {
             String os = System.getProperty("os.name", "").toLowerCase();
@@ -214,417 +402,176 @@ public final class JsNodeCompat {
         }
     }
 
+    /** Stats from one {@link Handle#drainTimers()} run. */
+    public static final class TimerDrainStats {
+
+        /** Callbacks that ran. */
+        public final int ran;
+
+        /** Timers still queued after the drain. */
+        public final int pending;
+
+        TimerDrainStats(int ran, int pending) {
+            this.ran = ran;
+            this.pending = pending;
+        }
+    }
+
     /**
-     * The compat surface as one JS bootstrap.
-     *
-     * Tier-2 stubs are call-time errors and typeof-safe. The utf-8 and
-     * base64 codecs are pure JS: under {@code allowAllAccess(false)} hook
-     * proxies exchange primitives only, so nothing array-shaped crosses
-     * the interop boundary. Error texts are byte-identical with the Dart
-     * {@code quickjs_runtime} implementation on purpose — cross-runtime
-     * script parity.
+     * Per-context drain handle: runs the timer queue the preludes
+     * registered (the JS side is a plain table — there is no background
+     * event loop, the host drives it).
      */
-    static final String PRELUDE = """
-            (function () {
-                var cfg = globalThis.__ncConfig || {
-                    platform: 'linux', arch: 'x64', nodeVersion: 'v22.0.0-compat'
-                };
+    public static final class Handle {
 
-                function safeStringify(v) {
-                    try { return JSON.stringify(v); } catch (e) { return String(v); }
-                }
-                function unsupported(name, alternative) {
-                    return function () {
-                        throw new Error(name + ' is not available in quickjs_runtime: ' +
-                            alternative);
-                    };
-                }
+        private final Context context;
+        private final Config config;
 
-                // ── console ──
-                var consoleObj = {};
-                ['log', 'info', 'warn', 'error', 'debug', 'trace'].forEach(function (level) {
-                    consoleObj[level] = function () {
-                        var parts = [];
-                        for (var i = 0; i < arguments.length; i++) {
-                            var a = arguments[i];
-                            parts.push(typeof a === 'string' ? a : safeStringify(a));
-                        }
-                        __ncConsoleWrite(level, parts.join(' '));
-                    };
-                });
-                globalThis.console = consoleObj;
+        Handle(Context context, Config config) {
+            this.context = context;
+            this.config = config;
+        }
 
-                // ── global ──
-                globalThis.global = globalThis;
+        /**
+         * Updates {@code __dirname}/{@code __filename} for the next script
+         * (the product bridge calls this before each script eval).
+         */
+        public void setScriptPath(String scriptPath) {
+            context.getBindings("js").putMember("__ncScriptPathRaw",
+                    scriptPath == null ? "null" : JSONObject.quote(scriptPath));
+            context.eval("js", "if (typeof __ncSetScriptPath === 'function') "
+                    + "__ncSetScriptPath(JSON.parse(__ncScriptPathRaw));");
+        }
 
-                // ── process ──
-                var envObj = JSON.parse(__ncEnvJson());
-                function cwdSafe() {
-                    try { return __ncCwd(); } catch (e) { return '/'; }
+        /**
+         * Runs due timers and immediates. READY: one pass. BLOCK: sleeps
+         * between passes until the queue empties or a budget raises.
+         * Callbacks run as fresh top-level evals — never re-entrantly.
+         */
+        public TimerDrainStats drainTimers() {
+            if (config.timerDrain == TimerDrainMode.NONE) {
+                return new TimerDrainStats(0, 0);
+            }
+            long wallStart = System.nanoTime();
+            long limitMs = config.maxTimerDrainWallClockMs;
+            int ran = 0;
+            while (true) {
+                DrainPass pass = drainPass();
+                ran += pass.ran;
+                // promise reactions queued by callbacks run before the next
+                // pass: GraalJS drains the job queue at the end of this eval
+                if (config.timerDrain != TimerDrainMode.BLOCK || pass.nextDue == null) {
+                    return finish(ran);
                 }
-                globalThis.process = {
-                    env: envObj,
-                    platform: cfg.platform,
-                    arch: cfg.arch,
-                    version: cfg.nodeVersion,
-                    exitCode: 0,
-                    argv: ['graaljs'],
-                    cwd: cwdSafe,
-                    exit: function (code) {
-                        try { __ncExit(code || 0); } catch (e) { /* host hook only */ }
-                        throw new Error('ProcessExit: ' + (code || 0));
-                    },
-                    nextTick: unsupported('process.nextTick',
-                        'no scheduling beyond promises — run the work directly')
-                };
-
-                // ── performance ──
-                globalThis.performance = {
-                    timeOrigin: 0,
-                    now: function () { return __ncNow(); }
-                };
-
-                // ── base64 (pure JS: primitives-only interop) ──
-                var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-                function b64Encode(str) {
-                    var bytes = utf8EncodeBytes(String(str));
-                    var out = '';
-                    for (var i = 0; i < bytes.length; i += 3) {
-                        var b0 = bytes[i];
-                        var b1 = i + 1 < bytes.length ? bytes[i + 1] : null;
-                        var b2 = i + 2 < bytes.length ? bytes[i + 2] : null;
-                        out += B64[b0 >> 2];
-                        out += B64[((b0 & 3) << 4) | ((b1 === null ? 0 : b1) >> 4)];
-                        out += b1 === null ? '=' : B64[((b1 & 15) << 2) | ((b2 === null ? 0 : b2) >> 6)];
-                        out += b2 === null ? '=' : B64[b2 & 63];
+                long waitMs = (long) Math.ceil(pass.nextDue - config.clock.getAsDouble());
+                long elapsedMs = (System.nanoTime() - wallStart) / 1_000_000;
+                if (waitMs > 0) {
+                    if (elapsedMs >= limitMs) {
+                        throw new IllegalStateException(
+                                "node_compat timer drain exceeded maxTimerDrainWallClock ("
+                                        + limitMs + "ms) with " + pass.pending
+                                        + " timers still pending — an interval that never ends?");
                     }
-                    return out;
-                }
-                function b64Decode(text) {
-                    var clean = String(text).replace(/=+$/, '');
-                    var out = [];
-                    for (var i = 0; i < clean.length; i += 4) {
-                        var n = [0, 0, 0, 0];
-                        for (var k = 0; k < 4; k++) {
-                            n[k] = i + k < clean.length ? B64.indexOf(clean.charAt(i + k)) : 0;
-                        }
-                        out.push((n[0] << 2) | (n[1] >> 4));
-                        if (i + 2 < clean.length) out.push(((n[1] & 15) << 4) | (n[2] >> 2));
-                        if (i + 3 < clean.length) out.push(((n[2] & 3) << 6) | n[3]);
-                    }
-                    return utf8DecodeBytes(out);
-                }
-
-                // ── utf-8 (pure JS) ──
-                function utf8EncodeBytes(str) {
-                    var out = [];
-                    for (var i = 0; i < str.length; i++) {
-                        var c = str.charCodeAt(i);
-                        if (c < 0x80) {
-                            out.push(c);
-                        } else if (c < 0x800) {
-                            out.push(0xC0 | (c >> 6), 0x80 | (c & 63));
-                        } else if (c >= 0xD800 && c < 0xDC00 && i + 1 < str.length) {
-                            var c2 = str.charCodeAt(++i);
-                            var cp = 0x10000 + ((c & 0x3FF) << 10) + (c2 & 0x3FF);
-                            out.push(0xF0 | (cp >> 18), 0x80 | ((cp >> 12) & 63),
-                                0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
-                        } else {
-                            out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
-                        }
-                    }
-                    return out;
-                }
-                function utf8DecodeBytes(bytes) {
-                    var out = '';
-                    for (var i = 0; i < bytes.length;) {
-                        var b = bytes[i];
-                        if (b < 0x80) {
-                            out += String.fromCharCode(b);
-                            i += 1;
-                        } else if (b < 0xE0) {
-                            out += String.fromCharCode(((b & 31) << 6) | (bytes[i + 1] & 63));
-                            i += 2;
-                        } else if (b < 0xF0) {
-                            out += String.fromCharCode(((b & 15) << 12) |
-                                ((bytes[i + 1] & 63) << 6) | (bytes[i + 2] & 63));
-                            i += 3;
-                        } else {
-                            var cp = ((b & 7) << 18) | ((bytes[i + 1] & 63) << 12) |
-                                ((bytes[i + 2] & 63) << 6) | (bytes[i + 3] & 63);
-                            cp -= 0x10000;
-                            out += String.fromCharCode(0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF));
-                            i += 4;
-                        }
-                    }
-                    return out;
-                }
-
-                globalThis.btoa = b64Encode;
-                globalThis.atob = b64Decode;
-
-                // ── TextEncoder / TextDecoder ──
-                function TextEncoder() {}
-                TextEncoder.prototype.encoding = 'utf-8';
-                TextEncoder.prototype.encode = function (text) {
-                    return Uint8Array.from(utf8EncodeBytes(text === undefined ? '' : String(text)));
-                };
-                TextEncoder.prototype.encodeInto = unsupported('TextEncoder.encodeInto',
-                    'use encode() instead');
-                globalThis.TextEncoder = TextEncoder;
-
-                function TextDecoder() {}
-                TextDecoder.prototype.encoding = 'utf-8';
-                TextDecoder.prototype.decode = function (bytes) {
-                    var arr = [];
-                    if (bytes) {
-                        for (var i = 0; i < bytes.length; i++) arr.push(bytes[i] & 255);
-                    }
-                    return utf8DecodeBytes(arr);
-                };
-                globalThis.TextDecoder = TextDecoder;
-
-                // ── crypto (subset) ──
-                globalThis.crypto = {
-                    getRandomValues: function (array) {
-                        for (var i = 0; i < array.length; i++) {
-                            array[i] = __ncRandomByte();
-                        }
-                        return array;
-                    },
-                    randomUUID: function () { return __ncRandomUuid(); }
-                };
-
-                // ── structuredClone (JSON fidelity, documented) ──
-                globalThis.structuredClone = function (value) {
-                    return JSON.parse(JSON.stringify(value));
-                };
-
-                // ── path (posix subset) ──
-                function isAbsolute(p) {
-                    return typeof p === 'string' && p.charAt(0) === '/';
-                }
-                function normalize(p) {
-                    var abs = isAbsolute(p);
-                    var parts = String(p).split('/');
-                    var out = [];
-                    for (var i = 0; i < parts.length; i++) {
-                        var part = parts[i];
-                        if (part === '' || part === '.') continue;
-                        if (part === '..') {
-                            if (out.length && out[out.length - 1] !== '..') out.pop();
-                            else if (!abs) out.push('..');
-                            continue;
-                        }
-                        out.push(part);
-                    }
-                    var joined = out.join('/');
-                    return (abs ? '/' : '') + (joined || (abs ? '' : '.'));
-                }
-                function join() {
-                    var parts = [];
-                    for (var i = 0; i < arguments.length; i++) {
-                        if (typeof arguments[i] === 'string' && arguments[i] !== '') {
-                            parts.push(arguments[i]);
-                        }
-                    }
-                    return normalize(parts.join('/'));
-                }
-                function resolve() {
-                    var parts = [];
-                    for (var i = arguments.length - 1; i >= 0; i--) {
-                        var a = arguments[i];
-                        if (typeof a === 'string' && a !== '') {
-                            parts.unshift(a);
-                            if (isAbsolute(a)) break;
-                        }
-                    }
-                    if (!parts.length || !isAbsolute(parts[0])) parts.unshift(cwdSafe());
-                    return normalize(parts.join('/'));
-                }
-                function basename(p, ext) {
-                    var b = String(p).split('/').pop() || '';
-                    if (ext && b.slice(-ext.length) === ext && b !== ext) {
-                        b = b.slice(0, b.length - ext.length);
-                    }
-                    return b;
-                }
-                function dirname(p) {
-                    var s = String(p);
-                    var idx = s.lastIndexOf('/');
-                    if (idx < 0) return '.';
-                    if (idx === 0) return '/';
-                    return s.slice(0, idx) || '/';
-                }
-                function extname(p) {
-                    var b = basename(p);
-                    var idx = b.lastIndexOf('.');
-                    return idx <= 0 ? '' : b.slice(idx);
-                }
-                function relative(from, to) {
-                    from = resolve(from);
-                    to = resolve(to);
-                    if (from === to) return '';
-                    var f = from.split('/').filter(Boolean);
-                    var t = to.split('/').filter(Boolean);
-                    var i = 0;
-                    while (i < f.length && i < t.length && f[i] === t[i]) i++;
-                    var out = [];
-                    for (var u = 0; u < f.length - i; u++) out.push('..');
-                    for (var d = i; d < t.length; d++) out.push(t[d]);
-                    return out.join('/') || '.';
-                }
-                var path = {
-                    sep: '/',
-                    delimiter: ':',
-                    posix: null,
-                    win32: unsupported('path.win32', 'posix only in this runtime'),
-                    isAbsolute: isAbsolute,
-                    normalize: normalize,
-                    join: join,
-                    resolve: resolve,
-                    basename: basename,
-                    dirname: dirname,
-                    extname: extname,
-                    relative: relative
-                };
-                path.posix = path;
-                globalThis.path = path;
-
-                // ── assert (node-like subset) ──
-                function fail(message) {
-                    var err = new Error(message);
-                    err.name = 'AssertionError';
-                    return err;
-                }
-                function assert(value, message) {
-                    if (!value) {
-                        throw fail(message ||
-                            'The expression evaluated to a falsy value.');
-                    }
-                }
-                assert.ok = assert;
-                assert.equal = function (a, b, m) {
-                    if (a != b) {
-                        throw fail(m || 'Expected ' + safeStringify(a) +
-                            ' == ' + safeStringify(b));
-                    }
-                };
-                assert.notEqual = function (a, b, m) {
-                    if (a == b) {
-                        throw fail(m || 'Expected ' + safeStringify(a) +
-                            ' != ' + safeStringify(b));
-                    }
-                };
-                assert.deepEqual = function (a, b, m) {
-                    if (safeStringify(a) !== safeStringify(b)) {
-                        throw fail(m || 'Expected ' + safeStringify(a) +
-                            ' to deeply equal ' + safeStringify(b));
-                    }
-                };
-                assert.notDeepEqual = function (a, b, m) {
-                    if (safeStringify(a) === safeStringify(b)) {
-                        throw fail(m || 'Expected different deep values');
-                    }
-                };
-                assert.throws = function (fn, expected, m) {
                     try {
-                        fn();
-                    } catch (e) {
-                        if (expected instanceof RegExp) {
-                            if (!expected.test(e.message)) {
-                                throw fail(m || 'Expected error message to match ' +
-                                    expected + ', got: ' + e.message);
-                            }
-                        }
-                        return e;
+                        Thread.sleep(Math.min(waitMs, limitMs - elapsedMs));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("node_compat timer drain interrupted", e);
                     }
-                    throw fail(m || 'Expected the function to throw');
-                };
-                assert.doesNotThrow = function (fn, m) {
-                    try {
-                        fn();
-                    } catch (e) {
-                        throw fail(m || 'Expected the function not to throw, got: ' +
-                            e.message);
-                    }
-                };
-                assert.match = function (str, re, m) {
-                    if (!re.test(String(str))) {
-                        throw fail(m || 'Expected ' + safeStringify(String(str)) +
-                            ' to match ' + String(re));
-                    }
-                };
-                assert.fail = function (m) { throw fail(m || 'assert.fail()'); };
-                assert.strict = assert;
-                globalThis.assert = assert;
-
-                // ── util (subset) ──
-                function format() {
-                    var args = Array.prototype.slice.call(arguments);
-                    var out = String(args.shift() || '').replace(/%[sdjf%]/g, function (spec) {
-                        if (spec === '%%') return '%';
-                        if (!args.length) return spec;
-                        var v = args.shift();
-                        if (spec === '%s') return String(v);
-                        if (spec === '%d') return String(parseInt(v, 10));
-                        return safeStringify(v);
-                    });
-                    if (args.length) {
-                        out += ' ' + args.map(function (v) { return safeStringify(v); }).join(' ');
-                    }
-                    return out;
                 }
-                globalThis.util = {
-                    inspect: function (v) { return safeStringify(v); },
-                    format: format,
-                    types: {
-                        isPromise: function (v) { return v instanceof Promise; }
-                    }
-                };
+            }
+        }
 
-                // ── require: builtin compat modules + registry + fallback ──
-                var registry = {};
-                globalThis.__ncRegistry = registry;
-                var builtins = {
-                    path: function () { return path; },
-                    assert: function () { return assert; },
-                    util: function () { return globalThis.util; }
-                };
-                var baseRequire = typeof require === 'function' ? require : null;
-                function compatRequire(name) {
-                    if (Object.prototype.hasOwnProperty.call(registry, name)) {
-                        return registry[name](name);
+        private static final class DrainPass {
+            final int ran;
+            final int pending;
+            final Double nextDue;
+
+            DrainPass(int ran, int pending, Double nextDue) {
+                this.ran = ran;
+                this.pending = pending;
+                this.nextDue = nextDue;
+            }
+        }
+
+        private DrainPass drainPass() {
+            Value raw = context.eval("js", "JSON.stringify(globalThis.__ncTimerDrain())");
+            if (raw == null || !raw.isString()) {
+                throw new IllegalStateException("node_compat timer drain failed: no stats");
+            }
+            JSONObject st = new JSONObject(raw.asString());
+            if (st.optBoolean("capped", false)) {
+                throw new IllegalStateException(
+                        "node_compat timer drain exceeded maxTimerCallbacks ("
+                                + config.maxTimerCallbacks + ") — possible setInterval(fn, 0) storm");
+            }
+            return new DrainPass(st.optInt("ran", 0), st.optInt("pending", 0),
+                    st.isNull("nextDue") || st.opt("nextDue") == null
+                            ? null : st.optDouble("nextDue"));
+        }
+
+        private TimerDrainStats finish(int ran) {
+            Value pending = context.eval("js", "Number(globalThis.__ncTimerPendingCount())");
+            return new TimerDrainStats(ran,
+                    pending == null || !pending.isNumber() ? 0 : pending.asInt());
+        }
+    }
+
+    /**
+     * The default sync HTTP transport for {@code fetch} — plain JVM
+     * {@link HttpClient} ({@code requestJson → responseJson}, the same
+     * JSON contract the Dart {@code SyncHttpClient} hook speaks).
+     */
+    public static final class SyncHttp {
+
+        private static final HttpClient CLIENT = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+                .build();
+
+        private SyncHttp() {
+        }
+
+        /**
+         * Performs one sync HTTP request.
+         *
+         * @param requestJson {@code {"method","url","headers","body"}}
+         * @return {@code {"status","headers","body"}} or the transport-fail
+         *         shape ({@code {"status":0,"error":"..."}}) — never null
+         */
+        public static String fetch(String requestJson) {
+            try {
+                JSONObject request = new JSONObject(requestJson);
+                HttpRequest.Builder builder = HttpRequest.newBuilder()
+                        .uri(URI.create(request.getString("url")))
+                        .timeout(Duration.ofSeconds(30));
+                String method = request.optString("method", "GET").toUpperCase();
+                JSONObject headers = request.optJSONObject("headers");
+                if (headers != null) {
+                    for (String key : headers.keySet()) {
+                        builder.header(key, String.valueOf(headers.get(key)));
                     }
-                    if (Object.prototype.hasOwnProperty.call(builtins, name)) {
-                        return builtins[name](name);
-                    }
-                    if (baseRequire) return baseRequire(name);
-                    throw new Error("Cannot find module '" + name +
-                        "' (compat builtins: path, assert, util" +
-                        (Object.keys(registry).length
-                            ? '; consumer-registered: ' + Object.keys(registry).join(', ')
-                            : '') + ')');
                 }
-                globalThis.require = compatRequire;
-
-                // ── Tier 2: call-time stubs (typeof-safe) ──
-                globalThis.Buffer = unsupported('Buffer',
-                    'use TextEncoder / TextDecoder for bytes, atob / btoa for base64');
-                globalThis.fetch = unsupported('fetch',
-                    'this runtime is sync-call-style — use the host-provided sync tools ' +
-                    'or runAsync(fn, args) for parallel engines');
-                globalThis.AbortController = unsupported('AbortController',
-                    'no async operations in this runtime — nothing to abort');
-                globalThis.setTimeout = unsupported('setTimeout',
-                    'no event loop in v1 — run the work directly, or use runAsync ' +
-                    'for parallel engines');
-                globalThis.clearTimeout = function () {};
-                globalThis.setInterval = unsupported('setInterval',
-                    'no event loop in v1 — run the work directly');
-                globalThis.clearInterval = function () {};
-                globalThis.setImmediate = unsupported('setImmediate',
-                    'no event loop in v1 — run the work directly');
-            })();
-            """;
+                String body = request.optString("body", null);
+                if (body != null && !body.isEmpty()
+                        && (method.equals("POST") || method.equals("PUT")
+                        || method.equals("PATCH") || method.equals("DELETE"))) {
+                    builder.method(method, HttpRequest.BodyPublishers.ofString(
+                            body, StandardCharsets.UTF_8));
+                } else {
+                    builder.GET();
+                }
+                HttpResponse<String> response =
+                        CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+                JSONObject out = new JSONObject(new LinkedHashMap<>());
+                out.put("status", response.statusCode());
+                out.put("headers", new JSONObject(new LinkedHashMap<>()));
+                out.put("body", response.body());
+                return out.toString();
+            } catch (Exception e) {
+                return new JSONObject(new LinkedHashMap<>())
+                        .put("status", 0)
+                        .put("error", String.valueOf(e.getMessage())).toString();
+            }
+        }
+    }
 }

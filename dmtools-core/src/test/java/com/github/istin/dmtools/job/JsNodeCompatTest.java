@@ -8,6 +8,7 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import org.graalvm.polyglot.Context;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -160,7 +161,7 @@ class JsNodeCompatTest {
             JsNodeCompat.install(ctx, config);
             ctx.eval("js", "console.log('hello', 42, {a: 1}); console.warn('careful');");
             assertEquals(List.of(
-                    "log: hello 42 {\"a\":1}",
+                    "log: hello 42 { a: 1 }",
                     "warn: careful"
             ), logs);
         } finally {
@@ -256,7 +257,7 @@ class JsNodeCompatTest {
                 """;
         JSONObject decoded = runObject(js, params(true, 0));
         assertEquals("a=5 {\"b\":2}", decoded.getString("format"));
-        assertEquals("{\"k\":1}", decoded.getString("inspect"));
+        assertEquals("{ k: 1 }", decoded.getString("inspect"));
     }
 
     @Test
@@ -386,39 +387,86 @@ class JsNodeCompatTest {
     }
 
     @Test
-    void stubsAreTypeofSafeButThrowOnCall() throws Exception {
+    void stubsAreTypeofSafeButThrowOnCall() {
+        // Library-default config: no fetch transport, ready drain —
+        // fetch/AbortController stay typeof-safe stubs while Buffer and
+        // the timers are real.
+        Context ctx = Context.newBuilder("js").allowAllAccess(false).build();
+        try {
+            JsNodeCompat.install(ctx);
+            ctx.eval("js", """
+                    globalThis.__probe = {
+                        typeofs: [typeof fetch, typeof AbortController, typeof Buffer,
+                            typeof setTimeout, typeof setImmediate, typeof process.nextTick],
+                        fetchCall: (function () {
+                            try { fetch('http://x'); return 'no-error'; }
+                            catch (e) { return String(e); }
+                        })()
+                    };
+                    """);
+            JSONObject probe = new JSONObject(ctx.eval("js", "JSON.stringify(globalThis.__probe)").asString());
+            JSONArray typeofs = probe.getJSONArray("typeofs");
+            assertEquals("function", typeofs.getString(0));
+            assertEquals("function", typeofs.getString(1));
+            assertEquals("function", typeofs.getString(2));
+            assertEquals("function", typeofs.getString(3));
+            assertEquals("function", typeofs.getString(4));
+            assertEquals("function", typeofs.getString(5));
+            assertTrue(probe.getString("fetchCall").contains("quickjs_runtime"));
+        } finally {
+            ctx.close();
+        }
+    }
+
+    @Test
+    void bufferIsRealAndUrlAndOsAndEventsAreRequireables() throws Exception {
         String js = """
                 function action(params) {
-                    var expressions = [
-                        function () { Buffer(1); },
-                        function () { fetch('http://x'); },
-                        function () { new AbortController(); },
-                        function () { setTimeout(function () {}, 10); },
-                        function () { setInterval(function () {}, 10); },
-                        function () { setImmediate(function () {}); },
-                        function () { process.nextTick(function () {}); }
-                    ];
-                    var results = [];
-                    for (var i = 0; i < expressions.length; i++) {
-                        try {
-                            expressions[i]();
-                            results.push('no-error');
-                        } catch (e) {
-                            results.push(String(e));
-                        }
-                    }
-                    return { results: results };
+                    var B = require('buffer').Buffer;
+                    var b = B.from('hi', 'utf8');
+                    return {
+                        isU8: b instanceof Uint8Array,
+                        b64: b.toString('base64'),
+                        len: B.byteLength('привет'),
+                        canParse: URL.canParse('https://h/i'),
+                        eol: typeof require('os').EOL,
+                        emitter: typeof require('events').EventEmitter,
+                        isArray: util.isArray([]),
+                        inspect: util.inspect('hi')
+                    };
                 }
                 """;
-        var results = runObject(js, params(true, 0)).getJSONArray("results");
-        assertEquals(7, results.length());
-        for (int i = 0; i < results.length(); i++) {
-            String message = results.getString(i);
-            assertTrue(message.contains("quickjs_runtime"),
-                    "stub " + i + " must self-document, got: " + message);
+        JSONObject decoded = runObject(js, params(true, 0));
+        assertTrue(decoded.getBoolean("isU8"));
+        assertEquals("aGk=", decoded.getString("b64"));
+        assertEquals(12, decoded.getInt("len"));
+        assertTrue(decoded.getBoolean("canParse"));
+        assertEquals("string", decoded.getString("eol"));
+        assertEquals("function", decoded.getString("emitter"));
+        assertTrue(decoded.getBoolean("isArray"));
+        assertEquals("'hi'", decoded.getString("inspect"));
+    }
+
+    @Test
+    void timersRunThroughTheDrainHandle() {
+        Context ctx = Context.newBuilder("js").allowAllAccess(false).build();
+        try {
+            JsNodeCompat.Config config = new JsNodeCompat.Config();
+            config.clock = () -> 1000.0;
+            JsNodeCompat.Handle handle = JsNodeCompat.install(ctx, config);
+            ctx.eval("js", """
+                    globalThis.__out = [];
+                    setTimeout(function () { __out.push('t0'); }, 0);
+                    setImmediate(function () { __out.push('imm'); });
+                    var p = Promise.resolve(1).then(function (v) { __out.push('p' + v); });
+                    """);
+            // the microtask drained at eval end (GraalJS job queue)
+            handle.drainTimers();
+            String out = ctx.eval("js", "JSON.stringify(globalThis.__out)").asString();
+            assertEquals("[\"p1\",\"imm\",\"t0\"]", out);
+        } finally {
+            ctx.close();
         }
-        assertTrue(results.getString(0).contains("TextEncoder"));
-        assertTrue(results.getString(1).contains("runAsync"));
     }
 
     @Test

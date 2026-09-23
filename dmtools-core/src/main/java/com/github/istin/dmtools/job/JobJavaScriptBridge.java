@@ -68,6 +68,22 @@ public class JobJavaScriptBridge {
     private final Map<String, Object> clientInstances;
     private String currentScriptDirectory;
 
+    /**
+     * Alternate sync HTTP transport for the node/js compat layer
+     * ({@code requestJson → responseJson}); {@code null} = the default
+     * JVM transport. Test seam for canned conformance transports — the
+     * Dart mirror is {@code EngineSpec.httpFetch}.
+     */
+    private java.util.function.UnaryOperator<String> compatHttpTransport;
+
+    /**
+     * Overrides the node/js compat {@code fetch} transport (both the main
+     * engine and runAsync worker engines).
+     */
+    public void setCompatHttpTransport(java.util.function.UnaryOperator<String> transport) {
+        this.compatHttpTransport = transport;
+    }
+
     @Inject
     public JobJavaScriptBridge(TrackerClient<?> trackerClient, AI ai, Confluence confluence, SourceCode sourceCode, com.github.istin.dmtools.common.kb.tool.KBTools kbTools) {
         logger.info("🏗️  [PERFORMANCE] Creating JobJavaScriptBridge instance (lazy init mode)");
@@ -846,8 +862,16 @@ public class JobJavaScriptBridge {
 
             // Node/js compat layer — default-off, same knob contract as
             // parallelWorkers (params.jobParams.nodeCompat === true).
+            // CLI defaults: block-mode timer drain + the real JVM HTTP
+            // transport for fetch (dmtools-dart wireEngine parity).
+            JsNodeCompat.Handle compatHandle = null;
             if (JsNodeCompat.isEnabled(parameters)) {
-                JsNodeCompat.install(jsContext);
+                JsNodeCompat.Config compatConfig = JsNodeCompat.Config.cliDefaults();
+                compatConfig.httpFetch = compatHttpTransport != null
+                        ? compatHttpTransport : JsNodeCompat.SyncHttp::fetch;
+                compatConfig.scriptPath = currentScriptDirectory == null || currentScriptDirectory.isEmpty()
+                        ? null : currentScriptDirectory + "/__jsr_job__.js";
+                compatHandle = JsNodeCompat.install(jsContext, compatConfig);
             }
 
             // Evaluate the JavaScript code
@@ -868,7 +892,13 @@ public class JobJavaScriptBridge {
             
             // Execute the function with proper parameter passing
             Value result = actionFunction.execute(jsCompatibleParams);
-            
+
+            // Timers registered by the action run to completion before the
+            // result converts (dmtools-dart runScript parity).
+            if (compatHandle != null) {
+                compatHandle.drainTimers();
+            }
+
             // Convert result back to Java object
             // First check if it's a Polyglot array/list and convert directly
             Object javaResult = null;
@@ -1342,8 +1372,12 @@ public class JobJavaScriptBridge {
             ensureJavaScriptContext();
             setCurrentScriptDirectory(scriptDirectory == null || scriptDirectory.isEmpty()
                     ? "" : scriptDirectory + "/__jsr_job__.js");
+            JsNodeCompat.Handle workerCompat = null;
             if (JsNodeCompat.isEnabled(parameters)) {
-                JsNodeCompat.install(jsContext);
+                JsNodeCompat.Config compatConfig = JsNodeCompat.Config.cliDefaults();
+                compatConfig.httpFetch = compatHttpTransport != null
+                        ? compatHttpTransport : JsNodeCompat.SyncHttp::fetch;
+                workerCompat = JsNodeCompat.install(jsContext, compatConfig);
             }
             jsContext.eval("js", ASYNC_WORKER_BOOTSTRAP);
             if (parameters != null) {
@@ -1351,6 +1385,14 @@ public class JobJavaScriptBridge {
             }
             Value result = jsContext.eval("js", "__jsrCall(" + JSONObject.quote(fnSource)
                     + ", " + JSONObject.quote(argsJson) + ")");
+            if (workerCompat != null) {
+                try {
+                    workerCompat.drainTimers();
+                } catch (RuntimeException drainError) {
+                    // a timer drain failure must not mask the job's own result
+                    logger.warn("node_compat worker timer drain failed: {}", drainError.getMessage());
+                }
+            }
             return AsyncJobWorkerPool.AsyncJobResult.ok(convertPolyglotValueToJSON(result.as(Object.class)));
         } catch (Exception e) {
             return AsyncJobWorkerPool.AsyncJobResult.error(
