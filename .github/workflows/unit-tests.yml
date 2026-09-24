@@ -98,6 +98,9 @@ jobs:
           echo "Baseline: $BASELINE%"
           python3 -c "import sys; sys.exit(0 if float('$CURRENT') <= float('$BASELINE') else 1)"
 
+      - name: 'Quality gate: jsr prelude sync (vendored node_compat JS == IstiN/quickjs_runtime@JSR_PRELUDES_PIN)'
+        run: dmtools-core/tool/check_jsr_prelude_sync.sh
+
       - name: Set up Java 17
         uses: actions/setup-java@v6.0.1
         with:
