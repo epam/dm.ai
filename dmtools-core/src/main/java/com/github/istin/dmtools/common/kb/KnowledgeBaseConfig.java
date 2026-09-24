@@ -22,6 +22,7 @@ public class KnowledgeBaseConfig {
     public static final String PATH = "path";
     public static final String GRAPHQL = "graphql_path";
     public static final String WORKSPACE = "workspace";
+    public static final String API_VERSION = "api_version";
 
     public enum Type {
         CONFLUENCE
@@ -41,6 +42,14 @@ public class KnowledgeBaseConfig {
 
     @SerializedName(GRAPHQL)
     private String graphQLPath;
+
+    /**
+     * Confluence REST API version for content reads ("v1" default or "v2").
+     * Sourced from {@code CONFLUENCE_API_VERSION}; v2 is required when using
+     * Atlassian granular/scoped API tokens.
+     */
+    @SerializedName(API_VERSION)
+    private String apiVersion;
 
     public boolean isConfigured() {
         return path != null || auth != null || type != null ;

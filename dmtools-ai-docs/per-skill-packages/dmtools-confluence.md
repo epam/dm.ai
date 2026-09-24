@@ -24,7 +24,30 @@ bash skill-install.sh --skills confluence
 
 - Slash command entrypoint: `/dmtools-confluence`
 - Core configuration keys: `CONFLUENCE_BASE_PATH`, `CONFLUENCE_LOGIN_PASS_TOKEN`
-- Common optional keys: `CONFLUENCE_GRAPHQL_PATH`, `CONFLUENCE_DEFAULT_SPACE`
+- Common optional keys: `CONFLUENCE_GRAPHQL_PATH`, `CONFLUENCE_DEFAULT_SPACE`, `CONFLUENCE_API_VERSION`
+
+### Granular/scoped Atlassian API tokens (Confluence v2 API)
+
+Atlassian's newer **granular/scoped API tokens** (created via `id.atlassian.com` →
+"API tokens with scopes") do **not** authorize the legacy Confluence REST v1
+content endpoints (`/rest/api/content/...` return `401 scope does not match`).
+Set `CONFLUENCE_API_VERSION=v2` to route content reads through the v2 API
+(`{basePath}/wiki/api/v2/pages/...`), which those tokens do authorize:
+
+```env
+CONFLUENCE_API_VERSION=v2
+# Granular tokens use the Atlassian API gateway, not the direct site URL:
+CONFLUENCE_BASE_PATH=https://api.atlassian.com/ex/confluence/<your-cloud-id>
+CONFLUENCE_AUTH_TYPE=Bearer
+CONFLUENCE_LOGIN_PASS_TOKEN=<granular-token>
+```
+
+Under `v2`: `confluence_content_by_id` → `GET /wiki/api/v2/pages/{id}?body-format=storage`;
+`confluence_get_children_by_id` → `GET /wiki/api/v2/pages?parent-id={id}`; the
+`confluence_test` health check falls back to a space listing when `user/current`
+is unavailable. **Known limitation:** CQL free-text search
+(`confluence_search_content_by_text`) has no v2 equivalent in Atlassian's public
+API yet and may still 401 under granular tokens.
 
 ## Minimal usage example
 

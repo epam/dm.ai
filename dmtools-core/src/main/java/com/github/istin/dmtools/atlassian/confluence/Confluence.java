@@ -51,6 +51,17 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     private final Logger logger;  // Changed from static to instance member
     private String graphQLPath;
 
+    /**
+     * Confluence REST API version for content reads: "v1" (default, classic
+     * /rest/api/... endpoints) or "v2" (/wiki/api/v2/... endpoints, required when
+     * authenticating with Atlassian granular/scoped API tokens — the legacy v1
+     * content endpoints return 401 scope-mismatch under such tokens).
+     * Set via {@code CONFLUENCE_API_VERSION=v2}.
+     */
+    @Getter
+    @Setter
+    private String apiVersion = "v1";
+
     @Getter
     @Setter
     private String defaultSpace; // Added defaultSpace field
@@ -77,6 +88,22 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     @Override
     public String path(String path) {
         return getBasePath() + "/rest/api/" + path;
+    }
+
+    /**
+     * Builds a Confluence REST API v2 path: {@code {basePath}/wiki/api/v2/...}.
+     * Used when {@link #apiVersion} is "v2" (granular/scoped Atlassian API tokens).
+     */
+    public String pathV2(String path) {
+        return getBasePath() + "/wiki/api/v2/" + path;
+    }
+
+    /**
+     * True when the client is configured to use the Confluence v2 REST API
+     * ({@code CONFLUENCE_API_VERSION=v2}).
+     */
+    public boolean isApiV2() {
+        return "v2".equalsIgnoreCase(apiVersion);
     }
 
     @MCPTool(
@@ -259,8 +286,16 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
 ) throws IOException {
-        // Construct the path using the content ID and expand needed fields
-        GenericRequest content = new GenericRequest(this, path("content/" + contentId + "?expand=body.storage,body.export_view,ancestors,version"));
+        GenericRequest content;
+        if (isApiV2()) {
+            // Confluence v2 API: GET /wiki/api/v2/pages/{id}?body-format=storage.
+            // Response JSON is compatible with the Content model (id, title,
+            // body.storage.value all present). Required for granular/scoped tokens.
+            content = new GenericRequest(this, pathV2("pages/" + contentId + "?body-format=storage"));
+        } else {
+            // Construct the path using the content ID and expand needed fields
+            content = new GenericRequest(this, path("content/" + contentId + "?expand=body.storage,body.export_view,ancestors,version"));
+        }
 
         // Execute the request
         String response = execute(content);
@@ -332,11 +367,25 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
             result.put("message", "Confluence connection successful");
             result.put("user", json.optString("displayName", json.optString("username", "unknown")));
             result.put("email", json.optString("email", "unknown"));
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("message", "Confluence connection failed: " + e.getMessage());
-            result.put("error", e.getClass().getSimpleName());
-            logger.warn("Confluence connection test failed", e);
+        } catch (Exception profileError) {
+            // user/current is not part of the granular/scoped-token catalog and
+            // 401s under Atlassian API tokens with scopes (and when apiVersion=v2).
+            // Fall back to a space listing, which scoped tokens can authorize.
+            try {
+                GenericRequest spaces = new GenericRequest(this, path("space?limit=1"));
+                String spacesResponse = execute(spaces);
+                JSONObject json = new JSONObject(spacesResponse);
+                int size = json.optJSONArray("results") != null ? json.optJSONArray("results").length() : 0;
+                result.put("success", true);
+                result.put("message", "Confluence connection successful (via space listing; user/current unavailable with this token)");
+                result.put("user", "scoped-token");
+                result.put("spacesVisible", size);
+            } catch (Exception e) {
+                result.put("success", false);
+                result.put("message", "Confluence connection failed: " + e.getMessage());
+                result.put("error", e.getClass().getSimpleName());
+                logger.warn("Confluence connection test failed", e);
+            }
         }
         return result;
     }
@@ -793,7 +842,16 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
     ) throws IOException {
-        return applyFormat(new ContentResult(execute(new GenericRequest(this, path("content/" + contentId + "/child/page?limit=100&expand=body.storage,body.export_view,ancestors,version")))).getContents(), format);
+        GenericRequest request;
+        if (isApiV2()) {
+            // Confluence v2 API: GET /wiki/api/v2/pages?parent-id={id}. Returns
+            // {results: [...]} which ContentResult.getContents() already maps.
+            // Required for granular/scoped tokens.
+            request = new GenericRequest(this, pathV2("pages?parent-id=" + contentId + "&limit=100&body-format=storage"));
+        } else {
+            request = new GenericRequest(this, path("content/" + contentId + "/child/page?limit=100&expand=body.storage,body.export_view,ancestors,version"));
+        }
+        return applyFormat(new ContentResult(execute(request)).getContents(), format);
     }
 
     /**
