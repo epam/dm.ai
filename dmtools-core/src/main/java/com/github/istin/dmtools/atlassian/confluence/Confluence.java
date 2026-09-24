@@ -91,11 +91,19 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     }
 
     /**
-     * Builds a Confluence REST API v2 path: {@code {basePath}/wiki/api/v2/...}.
+     * Builds a Confluence REST API v2 path: {@code {siteRoot}/wiki/api/v2/...}.
      * Used when {@link #apiVersion} is "v2" (granular/scoped Atlassian API tokens).
+     * The base path may already end with {@code /wiki} (direct site URL, e.g.
+     * {@code https://org.atlassian.net/wiki}) or omit it (the granular-token
+     * gateway {@code https://api.atlassian.com/ex/confluence/{cloudId}}); normalize
+     * so the {@code /wiki} segment appears exactly once.
      */
     public String pathV2(String path) {
-        return getBasePath() + "/wiki/api/v2/" + path;
+        String basePath = getBasePath();
+        String root = basePath.endsWith("/wiki")
+                ? basePath.substring(0, basePath.length() - "/wiki".length())
+                : basePath;
+        return root + "/wiki/api/v2/" + path;
     }
 
     /**
