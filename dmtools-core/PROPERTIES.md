@@ -179,9 +179,12 @@ export AI_RETRY_DELAY_STEP="20000"
 ### Confluence Integration
 - `CONFLUENCE_LOGIN_PASS_TOKEN`: Confluence API Token
   - How to get: Atlassian Account Settings -> Security -> Create and manage API tokens
-- `CONFLUENCE_BASE_PATH`: Confluence instance URL
+- `CONFLUENCE_BASE_PATH`: Confluence instance URL. For Atlassian granular/scoped
+  tokens use the API gateway: `https://api.atlassian.com/ex/confluence/<cloud-id>`
 - `CONFLUENCE_GRAPHQL_PATH`: GraphQL API endpoint
 - `CONFLUENCE_DEFAULT_SPACE`: Default space key
+- `CONFLUENCE_API_VERSION`: `v1` (default) or `v2`. Use `v2` with Atlassian
+  granular/scoped API tokens — legacy v1 content endpoints return 401 under them
 
 ## AI Integration
 

@@ -173,6 +173,9 @@ FIGMA_FILE_KEY=ABC123XYZ
 CONFLUENCE_BASE_PATH=https://mycompany.atlassian.net/wiki
 CONFLUENCE_LOGIN_PASS_TOKEN=<your-base64-encoded-email:api-token>
 CONFLUENCE_SPACE_KEY=DOCS
+# Use v2 REST API (required for Atlassian granular/scoped API tokens; legacy v1
+# content endpoints 401 under them). Default: v1 (classic /rest/api/...).
+# CONFLUENCE_API_VERSION=v2
 
 # Performance Tuning
 PROMPT_CHUNK_TOKEN_LIMIT=4000

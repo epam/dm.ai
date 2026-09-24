@@ -702,6 +702,17 @@ public class PropertyReader {
     return getValue(CONFLUENCE_GRAPHQL_PATH);
   }
 
+  /**
+   * Confluence REST API version to use for content reads. "v1" (default) uses the
+   * classic {basePath}/rest/api/... endpoints; "v2" uses {basePath}/wiki/api/v2/...
+   * which is required when authenticating with Atlassian granular/scoped API tokens
+   * (the legacy v1 content endpoints return 401 scope-mismatch under such tokens).
+   */
+  public String getConfluenceApiVersion() {
+    String value = getValue(CONFLUENCE_API_VERSION);
+    return (value != null && !value.trim().isEmpty()) ? value.trim().toLowerCase() : "v1";
+  }
+
   public String getConfluenceDefaultSpace() {
     return getValue(CONFLUENCE_DEFAULT_SPACE);
   }
@@ -1129,6 +1140,7 @@ public class PropertyReader {
   public static final String CONFLUENCE_AUTH_TYPE = "CONFLUENCE_AUTH_TYPE";
   public static final String CONFLUENCE_GRAPHQL_PATH = "CONFLUENCE_GRAPHQL_PATH";
   public static final String CONFLUENCE_DEFAULT_SPACE = "CONFLUENCE_DEFAULT_SPACE";
+  public static final String CONFLUENCE_API_VERSION = "CONFLUENCE_API_VERSION";
 
   // Figma configuration
   public static final String FIGMA_BASE_PATH = "FIGMA_BASE_PATH";
