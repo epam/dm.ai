@@ -31,6 +31,7 @@ public class BasicConfluence extends Confluence {
         CONFIG.setType(KnowledgeBaseConfig.Type.CONFLUENCE);
         CONFIG.setWorkspace(propertyReader.getConfluenceDefaultSpace());
         CONFIG.setGraphQLPath(propertyReader.getConfluenceGraphQLPath());
+        CONFIG.setApiVersion(propertyReader.getConfluenceApiVersion());
     }
 
     private static BasicConfluence instance;
@@ -42,6 +43,9 @@ public class BasicConfluence extends Confluence {
             }
             instance = new BasicConfluence(CONFIG.getPath(), CONFIG.getAuth(), CONFIG.getWorkspace());
             instance.setGraphQLPath(CONFIG.getGraphQLPath());
+            if (CONFIG.getApiVersion() != null) {
+                instance.setApiVersion(CONFIG.getApiVersion());
+            }
         }
         return instance;
     }
