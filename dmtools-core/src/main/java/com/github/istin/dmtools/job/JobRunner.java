@@ -196,8 +196,13 @@ public class JobRunner {
                 launchInteractive();
                 return;
             }
+            if ("compile".equals(firstArg)) {
+                // Build a versioned agent pack (zip + manifest + sha256) — dm.ai #595.
+                new CompileCommand().run(java.util.Arrays.copyOfRange(args, 1, args.length));
+                return;
+            }
         }
-        
+
         if (args.length == 0) {
             if (System.console() != null) {
                 launchInteractive();
