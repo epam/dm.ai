@@ -74,6 +74,21 @@ public class ConfluenceApiV2Test {
     }
 
     @Test
+    public void testPathV2DoesNotDoubleWikiSegment() throws IOException {
+        // Site-URL convention: CONFLUENCE_BASE_PATH already ends with /wiki —
+        // the v2 path must not produce /wiki/wiki.
+        Confluence wikiBase = Mockito.spy(new Confluence("https://org.atlassian.net/wiki", "auth"));
+        assertEquals("https://org.atlassian.net/wiki/api/v2/pages/123", wikiBase.pathV2("pages/123"));
+    }
+
+    @Test
+    public void testPathV2GatewayBasePathGetsSingleWikiSegment() throws IOException {
+        // Granular-token gateway base path has no /wiki suffix — it is added once.
+        Confluence gateway = Mockito.spy(new Confluence("https://api.atlassian.com/ex/confluence/cloud-1", "auth"));
+        assertEquals("https://api.atlassian.com/ex/confluence/cloud-1/wiki/api/v2/pages/123", gateway.pathV2("pages/123"));
+    }
+
+    @Test
     public void testPathStillV1ByDefault() {
         assertEquals("http://example.com/rest/api/content/123", confluence.path("content/123"));
     }
