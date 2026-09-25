@@ -65,6 +65,8 @@ dependencies {
 
     // Apache Commons
     api 'commons-io:commons-io:2.22.0'
+    // Deterministic agent-pack zips with Unix permissions (0755 on *.sh) — dm.ai #595.
+    api 'org.apache.commons:commons-compress:1.27.1'
     //api 'commons-codec:commons-codec:1.17.1'
     api 'org.freemarker:freemarker:2.3.35'
     //api 'org.apache.commons:commons-collections4:4.4'
