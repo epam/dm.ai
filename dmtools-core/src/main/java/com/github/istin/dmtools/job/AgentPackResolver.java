@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.job;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.apache.logging.log4j.LogManager;
@@ -25,6 +26,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Resolves a versioned agent pack (a local {@code .zip} file or an HTTPS URL)
@@ -50,6 +53,19 @@ public class AgentPackResolver {
 
     /** Cache root for unpacked packs (overridable for tests). */
     private final Path packsRoot;
+
+    /**
+     * Base URL of the agent pack registry (env {@code DMTOOLS_PACK_REGISTRY}),
+     * used to resolve {@code <agent>@<version>} / {@code <agent>@latest} refs.
+     * Lazily read from configuration when not injected; may be {@code null}
+     * (registry refs are then not recognised and fall through to the file flow).
+     */
+    private String registryBaseUrl;
+    private boolean registryLookedUp = false;
+
+    /** Matches {@code <agent>@<version|latest>} (never a path, URL, or .json file). */
+    private static final Pattern REGISTRY_REF =
+            Pattern.compile("^([A-Za-z0-9_-]+)@(latest|[A-Za-z0-9][A-Za-z0-9._-]*)$");
 
     /** Per-file unpack size cap (64 MiB). */
     static final long MAX_FILE_BYTES = 64L * 1024 * 1024;
@@ -80,6 +96,43 @@ public class AgentPackResolver {
     /** Test seam: explicit packs root. */
     public AgentPackResolver(Path packsRoot) {
         this.packsRoot = packsRoot;
+    }
+
+    /** Test seam: explicit packs root and registry base URL. */
+    public AgentPackResolver(Path packsRoot, String registryBaseUrl) {
+        this.packsRoot = packsRoot;
+        this.registryBaseUrl = registryBaseUrl;
+        this.registryLookedUp = true;
+    }
+
+    /** Overrides the registry base URL (primarily for tests). */
+    public void setRegistryBaseUrl(String registryBaseUrl) {
+        this.registryBaseUrl = registryBaseUrl;
+        this.registryLookedUp = true;
+    }
+
+    /**
+     * The configured registry base URL with any trailing slash stripped, or
+     * {@code null} when no registry is configured. Read lazily from configuration
+     * on first use so a default-constructed resolver honours {@code DMTOOLS_PACK_REGISTRY}.
+     */
+    String registryBaseUrl() {
+        if (!registryLookedUp) {
+            registryLookedUp = true;
+            try {
+                registryBaseUrl = new PropertyReader().getPackRegistry();
+            } catch (Exception e) {
+                registryBaseUrl = null;
+            }
+        }
+        if (registryBaseUrl == null) {
+            return null;
+        }
+        String url = registryBaseUrl.trim();
+        if (url.isEmpty()) {
+            return null;
+        }
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
     static Path defaultPacksRoot() {
@@ -183,18 +236,31 @@ public class AgentPackResolver {
     }
 
     /**
-     * True when [runArg] names a pack: a {@code .zip} path that exists, or an
-     * {@code http(s)://…​.zip} URL, with an optional {@code #entry.json} suffix.
+     * True when [runArg] names a pack: a {@code .zip} path that exists, an
+     * {@code http(s)://…​.zip} URL, or a registry ref {@code <agent>@<version|latest>}
+     * (when a registry is configured), with an optional {@code #entry.json} suffix.
      */
     public boolean isPack(String runArg) {
         if (runArg == null) {
             return false;
         }
         String base = stripEntry(runArg);
+        if (isRegistryRef(base)) {
+            return true;
+        }
         if (base.startsWith("http://") || base.startsWith("https://")) {
             return base.toLowerCase().endsWith(".zip");
         }
         return base.toLowerCase().endsWith(".zip") && new File(base).isFile();
+    }
+
+    /**
+     * True when [base] (entry-stripped) is a registry ref {@code <agent>@<version|latest>}
+     * and a registry base URL is configured. The {@code @} form is required so that
+     * bare agent/job names and plain {@code .json} files are never mistaken for packs.
+     */
+    public boolean isRegistryRef(String base) {
+        return registryBaseUrl() != null && REGISTRY_REF.matcher(base).matches();
     }
 
     /**
@@ -211,6 +277,12 @@ public class AgentPackResolver {
     public ResolvedPack resolve(String runArg, String githubToken) throws IOException {
         String entryOverride = entryOverride(runArg);
         String base = stripEntry(runArg);
+
+        // Registry ref (<agent>@<version|latest>) → concrete zip URL via the registry.
+        if (isRegistryRef(base)) {
+            base = resolveRegistryZipUrl(base);
+            logger.info("Resolved registry ref '{}' -> {}", stripEntry(runArg), base);
+        }
 
         // 1. Obtain the zip bytes (download for URLs, read for local files).
         File zipFile = obtainZip(base, githubToken);
@@ -249,6 +321,59 @@ public class AgentPackResolver {
     static String entryOverride(String runArg) {
         int hash = runArg.indexOf('#');
         return hash >= 0 ? runArg.substring(hash + 1) : null;
+    }
+
+    // ------------------------------------------------------------------
+    // Registry refs: <agent>@<version|latest> (env DMTOOLS_PACK_REGISTRY)
+    // ------------------------------------------------------------------
+
+    /**
+     * Maps a registry ref to the concrete pack zip URL. For {@code @latest} the
+     * version is looked up in the registry's {@code catalog.json}; an explicit
+     * {@code @version} is used as-is. Layout: {@code <registry>/<agent>-<version>.zip}
+     * (with the sibling {@code .sha256} verified later by the normal download path).
+     */
+    private String resolveRegistryZipUrl(String ref) throws IOException {
+        Matcher m = REGISTRY_REF.matcher(ref);
+        if (!m.matches()) {
+            throw new IOException("Not a registry ref: " + ref);
+        }
+        String agent = m.group(1);
+        String versionToken = m.group(2);
+        String registry = registryBaseUrl();
+        String version = "latest".equals(versionToken) ? fetchLatestVersion(registry, agent) : versionToken;
+        return registry + "/" + agent + "-" + version + ".zip";
+    }
+
+    /**
+     * Reads the latest published version of [agent] from the registry's
+     * {@code catalog.json}. Accepts either a flat map {@code {"agent": "version"}}
+     * or a nested {@code {"agents": {"agent": "version"}}} shape.
+     */
+    private String fetchLatestVersion(String registry, String agent) throws IOException {
+        String catalogUrl = registry + "/catalog.json";
+        String body = httpGet(catalogUrl);
+        JSONObject catalog = new JSONObject(body);
+        String version = catalog.optString(agent, null);
+        if ((version == null || version.isEmpty()) && catalog.has("agents")) {
+            version = catalog.optJSONObject("agents") != null
+                    ? catalog.optJSONObject("agents").optString(agent, null) : null;
+        }
+        if (version == null || version.isEmpty()) {
+            throw new IOException("Agent '" + agent + "' not found in registry catalog " + catalogUrl);
+        }
+        return version;
+    }
+
+    /** Simple GET returning the body as UTF-8 text (registry metadata). */
+    private String httpGet(String urlString) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(urlString).openConnection();
+        conn.setInstanceFollowRedirects(true);
+        int status = conn.getResponseCode();
+        if (status != HttpURLConnection.HTTP_OK) {
+            throw new IOException("HTTP " + status + " for " + urlString);
+        }
+        return new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     }
 
     // ------------------------------------------------------------------
