@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.job;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -90,6 +91,22 @@ public class RunCommandProcessor {
 
         logger.info("Processing run command: file={}, hasEncodedConfig={}, cliOverrides={}", filePath, encodedConfig != null, cliOverrides.keySet());
 
+        // dm.ai #579: a versioned agent pack (local .zip or https URL) — resolve to the
+        // unpacked, verified cache and run the entry config from there.
+        Path packRoot = null;
+        AgentPackResolver packResolver = new AgentPackResolver();
+        if (packResolver.isPack(filePath)) {
+            try {
+                AgentPackResolver.ResolvedPack pack =
+                        packResolver.resolve(filePath, new PropertyReader().getGithubToken());
+                packRoot = pack.packRoot;
+                filePath = pack.entryFile.getAbsolutePath();
+                logger.info("Running from agent pack {}-{} (entry {})", pack.agent, pack.version, filePath);
+            } catch (IOException e) {
+                throw new IllegalArgumentException("Failed to resolve agent pack '" + filePath + "': " + e.getMessage(), e);
+            }
+        }
+
         if (filePath.endsWith(".js")) {
             logger.info("Detected JS file, building JSRunner config in memory");
             return buildJSRunnerJobParams(filePath, encodedConfig);
@@ -106,6 +123,12 @@ public class RunCommandProcessor {
 
             // Resolve parent config inheritance (parent.path → deep-merge + override/merge semantics)
             JSONObject resolvedConfig = parentConfigResolver.resolve(new JSONObject(fileJson), Paths.get(filePath));
+
+            // For a pack run, rewrite repo-relative paths to absolute paths inside the
+            // pack cache so JS/prompts/scripts resolve without the repo checkout (#579 §3).
+            if (packRoot != null) {
+                packResolver.rewritePathsToPackRoot(resolvedConfig, packRoot);
+            }
             fileJson = resolvedConfig.toString();
 
             return createJobParams(fileJson, encodedConfig, cliOverrides);
