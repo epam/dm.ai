@@ -3,12 +3,15 @@
 
 package com.github.istin.dmtools.job;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.teammate.CliPromptsConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -61,12 +64,25 @@ public class ParentConfigResolver {
 
     private final ConfigurationMerger configurationMerger;
 
+    /**
+     * Resolves {@code parent.path} values that reference a versioned agent pack
+     * (a {@code .zip} file, an {@code http(s)://…​.zip} URL, or a registry ref
+     * {@code <agent>@<version|latest>}). Plain relative/absolute filesystem paths
+     * keep the existing behaviour.
+     */
+    private AgentPackResolver packResolver = new AgentPackResolver();
+
     public ParentConfigResolver() {
         this.configurationMerger = new ConfigurationMerger();
     }
 
     ParentConfigResolver(ConfigurationMerger configurationMerger) {
         this.configurationMerger = configurationMerger;
+    }
+
+    /** Test seam / wiring: inject the pack resolver used for pack parents. */
+    public void setPackResolver(AgentPackResolver packResolver) {
+        this.packResolver = packResolver;
     }
 
     /**
@@ -92,25 +108,9 @@ public class ParentConfigResolver {
             return result;
         }
 
-        // Resolve parent path relative to child file's directory
-        Path childDir   = (childFilePath == null) ? Path.of("") : childFilePath.toAbsolutePath().getParent();
-        Path parentPath = (childDir == null ? Path.of("") : childDir).resolve(parentPathStr).normalize();
-
-        logger.info("Resolving parent config: {} → {}", parentPathStr, parentPath);
-
-        String parentJson;
-        try {
-            if (!Files.exists(parentPath)) {
-                throw new IllegalArgumentException("Parent config file does not exist: " + parentPath);
-            }
-            parentJson = Files.readString(parentPath);
-        } catch (java.io.IOException e) {
-            throw new IllegalArgumentException("Failed to read parent config file '" + parentPath + "': " + e.getMessage(), e);
-        }
-
-        // Parse and recursively resolve the parent's own inheritance
-        JSONObject parentConfig = new JSONObject(parentJson);
-        parentConfig = resolve(parentConfig, parentPath);
+        // Load the parent config (filesystem path or agent pack ref), recursively
+        // resolving the parent's own inheritance.
+        JSONObject parentConfig = loadParentConfig(parentPathStr, childFilePath);
 
         // Capture original child values BEFORE merge (needed for override/merge processing)
         JSONObject originalChild = new JSONObject(childConfig.toString());
@@ -149,6 +149,74 @@ public class ParentConfigResolver {
         }
 
         return merged;
+    }
+
+    /**
+     * Loads the parent config referenced by {@code parentPathStr} and recursively
+     * resolves its own inheritance. Two forms are supported:
+     * <ul>
+     *   <li><b>Filesystem path</b> (existing): resolved relative to the child file's
+     *       directory; the parent's own parent chain resolves from that directory.</li>
+     *   <li><b>Agent pack ref</b>: a {@code .zip} file, an {@code http(s)://…​.zip} URL,
+     *       or a registry ref {@code <agent>@<version|latest>}. The pack is resolved to
+     *       its unpacked cache via {@link AgentPackResolver}; the parent's entry config is
+     *       loaded from there, its own parent chain resolves inside the pack, and its
+     *       repo-relative paths are rewritten to absolute paths in the pack cache so they
+     *       survive the merge with the child (which may live in a different pack or repo).</li>
+     * </ul>
+     */
+    private JSONObject loadParentConfig(String parentPathStr, Path childFilePath) {
+        if (packResolver.isPack(parentPathStr)) {
+            return loadPackParent(parentPathStr);
+        }
+
+        // Filesystem flow (existing behaviour).
+        Path childDir   = (childFilePath == null) ? Path.of("") : childFilePath.toAbsolutePath().getParent();
+        Path parentPath = (childDir == null ? Path.of("") : childDir).resolve(parentPathStr).normalize();
+
+        logger.info("Resolving parent config: {} → {}", parentPathStr, parentPath);
+
+        String parentJson;
+        try {
+            if (!Files.exists(parentPath)) {
+                throw new IllegalArgumentException("Parent config file does not exist: " + parentPath);
+            }
+            parentJson = Files.readString(parentPath);
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Failed to read parent config file '" + parentPath + "': " + e.getMessage(), e);
+        }
+
+        JSONObject parentConfig = new JSONObject(parentJson);
+        return resolve(parentConfig, parentPath);
+    }
+
+    /**
+     * Resolves a pack-referenced parent to its fully-resolved entry config with
+     * pack-relative paths made absolute (into the parent pack's cache).
+     */
+    private JSONObject loadPackParent(String parentPathStr) {
+        AgentPackResolver.ResolvedPack pack;
+        try {
+            pack = packResolver.resolve(parentPathStr, new PropertyReader().getGithubToken());
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to resolve parent agent pack '" + parentPathStr + "': " + e.getMessage(), e);
+        }
+        logger.info("Resolving parent config from agent pack: {} → {}-{} (entry {})",
+                parentPathStr, pack.agent, pack.version, pack.entryFile);
+
+        String parentJson;
+        try {
+            parentJson = Files.readString(pack.entryFile.toPath(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read parent pack entry '" + pack.entryFile + "': " + e.getMessage(), e);
+        }
+
+        // Recurse: the parent's own parent chain resolves relative to the pack root.
+        JSONObject parentConfig = resolve(new JSONObject(parentJson), pack.entryFile.toPath());
+        // Make the parent's pack-relative paths absolute so they keep working after the
+        // merge, regardless of where the child lives.
+        packResolver.rewritePathsToPackRoot(parentConfig, pack.packRoot);
+        return parentConfig;
     }
 
     /**

@@ -530,4 +530,78 @@ class ParentConfigResolverTest {
         assertEquals(1, cliPrompts.length());
         assertEquals("only child", cliPrompts.getString(0));
     }
+
+    // -------------------------------------------------------------------------
+    // parent.path referencing an agent pack (local .zip)
+    // -------------------------------------------------------------------------
+
+    /**
+     * A {@code parent.path} that is a pack (here a local {@code .zip}) is resolved to
+     * the pack's unpacked cache, its entry config loaded from there, and its
+     * pack-relative paths rewritten to absolute paths in the pack cache so they keep
+     * working after the merge with a child that lives elsewhere.
+     */
+    @Test
+    void testResolve_ParentIsAgentPackZip_PathsRewrittenToPackCache() throws Exception {
+        Path packsRoot = tempDir.resolve("packs");
+        Files.createDirectories(packsRoot);
+
+        // Build a real parent pack whose entry references a pack-relative jsPath.
+        java.io.File agentRoot = tempDir.resolve("agents_src").toFile();
+        Files.createDirectories(agentRoot.toPath().resolve("js"));
+        Files.writeString(agentRoot.toPath().resolve("js/main.js"), "// main\n");
+        java.io.File entry = agentRoot.toPath().resolve("base.json").toFile();
+        Files.writeString(entry.toPath(),
+                "{\"name\":\"Base\",\"params\":{\"jsPath\":\"agents/js/main.js\",\"inputJql\":\"project=BASE\"}}");
+        java.io.File zip = new AgentPackCompiler(agentRoot)
+                .compile(entry, "1.0.0", "abc", tempDir.resolve("dist").toFile())
+                .zipFile;
+
+        ParentConfigResolver r = new ParentConfigResolver();
+        r.setPackResolver(new AgentPackResolver(packsRoot));
+
+        JSONObject child = new JSONObject(
+                "{\"parent\":{\"path\":\"" + zip.getAbsolutePath().replace("\\", "\\\\") + "\"}}");
+        JSONObject result = r.resolve(child, tempDir.resolve("child.json"));
+
+        assertFalse(result.has(ParentConfigResolver.PARENT));
+        JSONObject params = result.getJSONObject("params");
+        assertEquals("project=BASE", params.getString("inputJql"));
+
+        // The pack-relative jsPath was rewritten to an absolute path inside the pack cache.
+        String jsPath = params.getString("jsPath");
+        Path js = Path.of(jsPath);
+        assertTrue(js.isAbsolute(), "should be absolute: " + jsPath);
+        assertTrue(jsPath.startsWith(packsRoot.toString()), "should point into the pack cache: " + jsPath);
+        assertTrue(Files.exists(js), "rewritten path should exist: " + jsPath);
+    }
+
+    /**
+     * A {@code parent.path} pack ref supports a {@code #entry.json} override to select
+     * a non-default entry from the pack.
+     */
+    @Test
+    void testResolve_ParentIsAgentPackZipWithEntryOverride() throws Exception {
+        Path packsRoot = tempDir.resolve("packs2");
+        Files.createDirectories(packsRoot);
+
+        java.io.File agentRoot = tempDir.resolve("agents_src2").toFile();
+        Files.createDirectories(agentRoot.toPath());
+        Files.writeString(agentRoot.toPath().resolve("custom.json"), "{\"params\":{\"inputJql\":\"project=CUSTOM\"}}");
+        java.io.File entry = agentRoot.toPath().resolve("base.json").toFile();
+        Files.writeString(entry.toPath(),
+                "{\"name\":\"Base\",\"parent\":{\"path\":\"agents/custom.json\"},\"params\":{\"inputJql\":\"project=BASE\"}}");
+        java.io.File zip = new AgentPackCompiler(agentRoot)
+                .compile(entry, "1.0.0", "abc", tempDir.resolve("dist2").toFile())
+                .zipFile;
+
+        ParentConfigResolver r = new ParentConfigResolver();
+        r.setPackResolver(new AgentPackResolver(packsRoot));
+
+        JSONObject child = new JSONObject(
+                "{\"parent\":{\"path\":\"" + zip.getAbsolutePath().replace("\\", "\\\\") + "#custom.json\"}}");
+        JSONObject result = r.resolve(child, tempDir.resolve("child.json"));
+
+        assertEquals("project=CUSTOM", result.getJSONObject("params").getString("inputJql"));
+    }
 }

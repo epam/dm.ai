@@ -617,6 +617,18 @@ public class PropertyReader {
     return getValue(SOURCE_GITHUB_TOKEN);
   }
 
+  /**
+   * Base URL of the agent pack registry used to resolve {@code <agent>@<version>}
+   * and {@code <agent>@latest} references in {@code dmtools run} and in
+   * {@code parent.path} inheritance. The registry serves a flat layout:
+   * {@code catalog.json} (agent → latest version) and {@code <agent>-<version>.zip}
+   * (plus an optional {@code .zip.sha256} sibling). Configured via
+   * {@code DMTOOLS_PACK_REGISTRY}.
+   */
+  public String getPackRegistry() {
+    return getValue(DMTOOLS_PACK_REGISTRY);
+  }
+
   public String getGithubWorkspace() {
     return getValue(SOURCE_GITHUB_WORKSPACE);
   }
@@ -1144,6 +1156,7 @@ public class PropertyReader {
 
   // Figma configuration
   public static final String FIGMA_BASE_PATH = "FIGMA_BASE_PATH";
+
   public static final String FIGMA_TOKEN = "FIGMA_TOKEN";
   public static final String FIGMA_CLIENT_ID = "FIGMA_CLIENT_ID";
   public static final String FIGMA_CLIENT_SECRET = "FIGMA_CLIENT_SECRET";
@@ -1154,6 +1167,7 @@ public class PropertyReader {
 
   // GitHub configuration
   public static final String SOURCE_GITHUB_TOKEN = "SOURCE_GITHUB_TOKEN";
+  public static final String DMTOOLS_PACK_REGISTRY = "DMTOOLS_PACK_REGISTRY";
   public static final String SOURCE_GITHUB_WORKSPACE = "SOURCE_GITHUB_WORKSPACE";
   public static final String SOURCE_GITHUB_REPOSITORY = "SOURCE_GITHUB_REPOSITORY";
   public static final String SOURCE_GITHUB_BRANCH = "SOURCE_GITHUB_BRANCH";
