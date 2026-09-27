@@ -271,4 +271,134 @@ public class AgentPackResolverTest {
         assertEquals("https://github.com/u/r/blob/main/x.js", params.getString("postJSAction"));
         assertEquals("classpath:js/timer.js", params.getString("timerJSAction"));
     }
+
+    // ------------------------------------------------------------------
+    // Registry refs: <agent>@<version|latest> (env DMTOOLS_PACK_REGISTRY)
+    // ------------------------------------------------------------------
+
+    /** Serves a flat registry layout (catalog.json + zips + .sha256) over HTTP. */
+    private static final class RegistryServer {
+        private final com.sun.net.httpserver.HttpServer server;
+        private final Map<String, byte[]> files = new TreeMap<>();
+
+        RegistryServer() throws IOException {
+            server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(0), 0);
+            server.createContext("/", exchange -> {
+                byte[] body = files.get(exchange.getRequestURI().getPath());
+                if (body == null) {
+                    exchange.sendResponseHeaders(404, -1);
+                } else {
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                }
+                exchange.close();
+            });
+            server.start();
+        }
+
+        void serve(String path, byte[] bytes) {
+            files.put(path, bytes);
+        }
+
+        String baseUrl() {
+            return "http://localhost:" + server.getAddress().getPort();
+        }
+
+        void stop() {
+            server.stop(0);
+        }
+    }
+
+    private RegistryServer startRegistry(File zip, String agent, String version) throws IOException {
+        RegistryServer reg = new RegistryServer();
+        byte[] zipBytes = Files.readAllBytes(zip.toPath());
+        reg.serve("/" + agent + "-" + version + ".zip", zipBytes);
+        reg.serve("/" + agent + "-" + version + ".zip.sha256",
+                AgentPackResolver.sha256Hex(zipBytes).getBytes(StandardCharsets.UTF_8));
+        reg.serve("/catalog.json",
+                ("{\"" + agent + "\":\"" + version + "\"}").getBytes(StandardCharsets.UTF_8));
+        return reg;
+    }
+
+    @Test
+    public void testIsRegistryRefRequiresRegistryAndAtSign() {
+        // No registry configured → not a registry ref even for a well-formed ref.
+        AgentPackResolver noRegistry = new AgentPackResolver(packsRoot, (String) null);
+        assertFalse(noRegistry.isRegistryRef("my_agent@1.0.0"));
+        assertFalse(noRegistry.isPack("my_agent@1.0.0"));
+
+        AgentPackResolver withRegistry = new AgentPackResolver(packsRoot, "http://localhost:1");
+        assertTrue(withRegistry.isRegistryRef("my_agent@1.0.0"));
+        assertTrue(withRegistry.isRegistryRef("my_agent@latest"));
+        assertTrue(withRegistry.isPack("my_agent@latest"));
+        // The @ form is required: bare names, paths, and .json files are not registry refs.
+        assertFalse(withRegistry.isRegistryRef("my_agent"));
+        assertFalse(withRegistry.isRegistryRef("my_agent.json"));
+        assertFalse(withRegistry.isRegistryRef("./my_agent@1.0.0"));
+        assertFalse(withRegistry.isRegistryRef("agents/my_agent@1.0.0"));
+    }
+
+    @Test
+    public void testResolveRegistryExplicitVersion() throws IOException {
+        File zip = buildPack("my_agent", "1.2.0");
+        RegistryServer reg = startRegistry(zip, "my_agent", "1.2.0");
+        try {
+            AgentPackResolver r = new AgentPackResolver(packsRoot, reg.baseUrl());
+            AgentPackResolver.ResolvedPack pack = r.resolve("my_agent@1.2.0");
+            assertEquals("my_agent", pack.agent);
+            assertEquals("1.2.0", pack.version);
+            assertTrue(pack.packRoot.resolve("js/main.js").toFile().isFile());
+        } finally {
+            reg.stop();
+        }
+    }
+
+    @Test
+    public void testResolveRegistryLatestUsesCatalog() throws IOException {
+        File zip = buildPack("my_agent", "2.0.0");
+        RegistryServer reg = startRegistry(zip, "my_agent", "2.0.0");
+        try {
+            AgentPackResolver r = new AgentPackResolver(packsRoot, reg.baseUrl());
+            AgentPackResolver.ResolvedPack pack = r.resolve("my_agent@latest");
+            assertEquals("2.0.0", pack.version);
+        } finally {
+            reg.stop();
+        }
+    }
+
+    @Test
+    public void testResolveRegistryLatestUnknownAgentFails() throws IOException {
+        File zip = buildPack("my_agent", "2.0.0");
+        RegistryServer reg = startRegistry(zip, "my_agent", "2.0.0");
+        try {
+            AgentPackResolver r = new AgentPackResolver(packsRoot, reg.baseUrl());
+            r.resolve("other_agent@latest");
+            fail("expected failure for an agent absent from the catalog");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("other_agent"));
+        } finally {
+            reg.stop();
+        }
+    }
+
+    @Test
+    public void testResolveRegistryVerifiesSha256() throws IOException {
+        File zip = buildPack("my_agent", "1.2.0");
+        RegistryServer reg = new RegistryServer();
+        byte[] zipBytes = Files.readAllBytes(zip.toPath());
+        reg.serve("/my_agent-1.2.0.zip", zipBytes);
+        // Wrong checksum → download must be rejected.
+        reg.serve("/my_agent-1.2.0.zip.sha256",
+                "0000000000000000000000000000000000000000000000000000000000000000".getBytes(StandardCharsets.UTF_8));
+        try {
+            AgentPackResolver r = new AgentPackResolver(packsRoot, reg.baseUrl());
+            r.resolve("my_agent@1.2.0");
+            fail("expected a SHA-256 mismatch failure");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().toLowerCase().contains("sha-256") || e.getMessage().toLowerCase().contains("sha256"));
+        } finally {
+            reg.stop();
+        }
+        assertFalse(packsRoot.resolve("my_agent-1.2.0").toFile().exists());
+    }
 }
