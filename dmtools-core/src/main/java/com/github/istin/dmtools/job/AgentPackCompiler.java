@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.job;
 
+import com.github.istin.dmtools.pack.AgentPackException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -105,6 +106,29 @@ public class AgentPackCompiler {
      * @throws IOException if a referenced file is missing or writing fails
      */
     public PackResult compile(File entryJson, String version, String sourceCommit, File outDir) throws IOException {
+        return compile(entryJson, version, sourceCommit, outDir, List.of());
+    }
+
+    /**
+     * Compiles the pack for the given entry config.
+     *
+     * <p>{@code extraDirs} lists repo-relative directories to embed WHOLE (every file
+     * under them), on top of the computed closure — the zip-flow contract for files
+     * only the consuming child configs reference (e.g. the shared
+     * {@code instructions/}/{@code prompts/} subtrees of a dmtools-agents pack that
+     * runner children reach via {@code pack:} refs). A missing directory, one that
+     * escapes the agents root, or the root itself throws {@link AgentPackException}.</p>
+     *
+     * @param entryJson    the agent entry {@code *.json} inside {@code agentRoot}
+     * @param version      the pack version (semver string)
+     * @param sourceCommit the git commit of the source tree (may be {@code "unknown"})
+     * @param outDir       where to write the zip / manifest / sha256
+     * @param extraDirs    repo-relative directories to embed whole (may be empty)
+     * @return the produced artifacts
+     * @throws IOException if a referenced file is missing or writing fails
+     */
+    public PackResult compile(File entryJson, String version, String sourceCommit, File outDir,
+                              List<String> extraDirs) throws IOException {
         String agentName = stripJsonExtension(entryJson.getName());
         logger.info("Compiling agent pack: {} v{}", agentName, version);
 
@@ -114,6 +138,10 @@ public class AgentPackCompiler {
         Set<String> visitedJs = new LinkedHashSet<>();
 
         collectConfig(entryJson.toPath(), closure, visitedConfigs, visitedJs);
+
+        for (String dir : extraDirs) {
+            includeSubtree(closure, dir);
+        }
 
         // Always include top-level docs when present.
         includeIfExists(closure, "AGENTS.md");
@@ -332,6 +360,34 @@ public class AgentPackCompiler {
         File file = agentRoot.resolve(name).toFile();
         if (file.isFile()) {
             closure.put(name, file);
+        }
+    }
+
+    /**
+     * Embeds every file under the repo-relative {@code dir} into the closure
+     * (pack-relative paths keyed under {@code dir/…}); symlinks are skipped.
+     * A leading {@code agents/} is stripped per the path duality. Throws
+     * {@link AgentPackException} when the directory is missing, escapes the
+     * agents root, or is the agents root itself.
+     */
+    private void includeSubtree(Map<String, File> closure, String dir) throws IOException {
+        String normalized = dir.replace('\\', '/');
+        while (normalized.startsWith("./")) {
+            normalized = normalized.substring(2);
+        }
+        while (normalized.startsWith("agents/")) {
+            normalized = normalized.substring("agents/".length());
+        }
+        Path rootDir = agentRoot.resolve(normalized).normalize();
+        if (!rootDir.startsWith(agentRoot) || !Files.isDirectory(rootDir) || rootDir.equals(agentRoot)) {
+            throw new AgentPackException(
+                    "--include directory missing: " + normalized + " (under " + agentRoot + ")");
+        }
+        try (java.util.stream.Stream<Path> walk = Files.walk(rootDir)) {
+            walk.filter(p -> Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)).forEach(p -> {
+                String rel = agentRoot.relativize(p).toString().replace(File.separatorChar, '/');
+                closure.put(rel, p.toFile());
+            });
         }
     }
 

@@ -24,6 +24,7 @@ import java.nio.file.Path;
  *     [--versions-file versions.json]  # per-agent versions map (agents repo)
  *     [--out &lt;dir&gt;]                  # default: ./dist
  *     [--source-commit &lt;sha&gt;]        # default: git rev-parse HEAD of agent-root
+ *     [--include &lt;dir&gt;]              # repeatable: embed a whole repo-relative dir
  * </pre>
  */
 public class CompileCommand {
@@ -138,5 +139,7 @@ public class CompileCommand {
         System.out.println("  --versions-file versions.json  Per-agent versions map");
         System.out.println("  --out <dir>                  Output directory (default: ./dist)");
         System.out.println("  --source-commit <sha>        Source commit (default: git rev-parse HEAD)");
+        System.out.println("  --include <dir>              Embed a whole repo-relative dir (repeatable;"
+                + " for files only `pack:`-consuming children reference)");
     }
 }
