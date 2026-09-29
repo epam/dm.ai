@@ -1,6 +1,6 @@
 {
   "parent": {
-    "path": "../../factory-agents/pr_review.json"
+    "path": "pr_review@latest"
   },
   "merge": [
     "params.cliPrompts"
@@ -18,7 +18,7 @@
       "formalGithubReview": true
     },
     "cliPrompts": [
-      "./factory-agents/instructions/pr_review/review_verdict_rules.md"
+      "pack:instructions/pr_review/review_verdict_rules.md"
     ]
   }
 }

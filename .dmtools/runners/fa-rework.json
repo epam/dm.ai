@@ -1,6 +1,6 @@
 {
   "parent": {
-    "path": "../../factory-agents/pr_rework.json"
+    "path": "pr_rework@latest"
   },
   "params": {
     "envVariables": {
@@ -13,7 +13,7 @@
     "inputJql": "",
     "cliPromptsByTracker": {
       "github": [
-        "./factory-agents/instructions/common/github_comment_format.md"
+        "pack:instructions/common/github_comment_format.md"
       ]
     },
     "customParams": {

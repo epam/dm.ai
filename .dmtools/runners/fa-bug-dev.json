@@ -1,6 +1,6 @@
 {
   "parent": {
-    "path": "../../factory-agents/bug_development.json"
+    "path": "bug_development@latest"
   },
   "params": {
     "envVariables": {
@@ -13,7 +13,7 @@
     "inputJql": "",
     "cliPromptsByTracker": {
       "github": [
-        "./factory-agents/instructions/common/github_comment_format.md"
+        "pack:instructions/common/github_comment_format.md"
       ]
     },
     "customParams": {
