@@ -264,6 +264,22 @@ public class AgentPackResolver {
     }
 
     /**
+     * True when {@code runArg} matches the {@code <agent>@<version|latest>}
+     * registry-ref shape regardless of whether a registry is configured.
+     * Lets callers distinguish "no registry configured" from "not a pack
+     * ref at all".
+     */
+    public boolean isRegistryRefShaped(String runArg) {
+        return runArg != null
+                && REGISTRY_REF.matcher(stripEntry(runArg)).matches();
+    }
+
+    /** Whether a pack registry is configured (env {@code DMTOOLS_PACK_REGISTRY}). */
+    public boolean hasRegistry() {
+        return registryBaseUrl() != null;
+    }
+
+    /**
      * Resolves [runArg] to a cached, verified pack. Returns {@code null} when
      * [runArg] is not a pack (caller falls back to the filesystem flow).
      *

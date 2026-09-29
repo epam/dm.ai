@@ -186,6 +186,17 @@ public class ParentConfigResolver {
         if (packResolver.isPack(parentPathStr)) {
             return loadPackParent(parentPathStr);
         }
+        if (packResolver.isRegistryRefShaped(parentPathStr)
+                && !packResolver.hasRegistry()) {
+            // `<agent>@<version|latest>` shape with no registry configured: a
+            // bare "file not found" here would send every machine leg debugging
+            // the wrong layer — say what is actually missing.
+            throw new IllegalArgumentException(
+                "parent.path '" + parentPathStr + "' is an agent-pack registry ref "
+                + "(<agent>@<version|latest>) but no pack registry is configured — "
+                + "set the DMTOOLS_PACK_REGISTRY env var to the release-registry "
+                + "base URL");
+        }
 
         // Filesystem flow (existing behaviour).
         Path childDir   = (childFilePath == null) ? Path.of("") : childFilePath.toAbsolutePath().getParent();

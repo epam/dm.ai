@@ -142,6 +142,31 @@ class ParentConfigResolverPackRefsTest {
                 e.getMessage());
     }
 
+    @Test
+    void registryRefParentWithoutAConfiguredRegistryErrorsClearly() throws Exception {
+        // Hermetic: an empty-string registry disables the lookup, mirroring the
+        // Dart test's `registryBaseUrl: ''`.
+        ParentConfigResolver parentResolver = new ParentConfigResolver();
+        parentResolver.setPackResolver(
+                new AgentPackResolver(tempDir.resolve("packs"), ""));
+        RunCommandProcessor processor = new RunCommandProcessor(
+                new EncodingDetector(), new ConfigurationMerger(), parentResolver);
+
+        Path child = tempDir.resolve("child.json");
+        Files.writeString(child, """
+                {
+                  "name":"child",
+                  "parent":{"path":"pr_review@latest"},
+                  "params":{}
+                }
+                """);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> processor.processRunCommand(new String[]{"run", child.toString()}));
+        assertTrue(e.getMessage().contains("pr_review@latest"), e.getMessage());
+        assertTrue(e.getMessage().contains("DMTOOLS_PACK_REGISTRY"), e.getMessage());
+    }
+
     /**
      * Builds a real pack zip containing {@code instructions/review_rules.md} plus the
      * standard parent-pack fixture content. The entry references the instructions file
