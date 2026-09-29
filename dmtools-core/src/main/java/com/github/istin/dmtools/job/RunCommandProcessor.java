@@ -4,6 +4,9 @@
 package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.common.utils.PropertyReader;
+import com.github.istin.dmtools.pack.AgentPackException;
+import com.github.istin.dmtools.pack.AgentPackResolver;
+import com.github.istin.dmtools.pack.ResolvedPack;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -26,11 +29,13 @@ public class RunCommandProcessor {
     private final EncodingDetector encodingDetector;
     private final ConfigurationMerger configurationMerger;
     private final ParentConfigResolver parentConfigResolver;
+    private final AgentPackResolver packResolver;
     
     public RunCommandProcessor() {
         this.encodingDetector = new EncodingDetector();
         this.configurationMerger = new ConfigurationMerger();
         this.parentConfigResolver = new ParentConfigResolver();
+        this.packResolver = new AgentPackResolver();
     }
     
     // Constructor for testing with dependency injection
@@ -38,6 +43,7 @@ public class RunCommandProcessor {
         this.encodingDetector = encodingDetector;
         this.configurationMerger = configurationMerger;
         this.parentConfigResolver = new ParentConfigResolver(configurationMerger);
+        this.packResolver = new AgentPackResolver();
     }
 
     // Full DI constructor
@@ -45,6 +51,15 @@ public class RunCommandProcessor {
         this.encodingDetector = encodingDetector;
         this.configurationMerger = configurationMerger;
         this.parentConfigResolver = parentConfigResolver;
+        this.packResolver = new AgentPackResolver();
+    }
+
+    // Full DI constructor with the agent-pack resolver seam (dm.ai #579)
+    public RunCommandProcessor(EncodingDetector encodingDetector, ConfigurationMerger configurationMerger, ParentConfigResolver parentConfigResolver, AgentPackResolver packResolver) {
+        this.encodingDetector = encodingDetector;
+        this.configurationMerger = configurationMerger;
+        this.parentConfigResolver = parentConfigResolver;
+        this.packResolver = packResolver;
     }
     
     /**
@@ -91,17 +106,22 @@ public class RunCommandProcessor {
 
         logger.info("Processing run command: file={}, hasEncodedConfig={}, cliOverrides={}", filePath, encodedConfig != null, cliOverrides.keySet());
 
-        // dm.ai #579: a versioned agent pack (local .zip or https URL) — resolve to the
-        // unpacked, verified cache and run the entry config from there.
+        // dm.ai #579: a versioned agent pack (local .zip, https URL, or
+        // <agent>@<version|latest> registry ref) resolves to the unpacked,
+        // verified cache and runs the entry config from there. This gate sits
+        // ahead of the .js / known-job / .json handling, mirroring the Dart
+        // RunCommandProcessor in dmtools-dart.
         Path packRoot = null;
-        AgentPackResolver packResolver = new AgentPackResolver();
         if (packResolver.isPack(filePath)) {
             try {
-                AgentPackResolver.ResolvedPack pack =
-                        packResolver.resolve(filePath, new PropertyReader().getGithubToken());
-                packRoot = pack.packRoot;
-                filePath = pack.entryFile.getAbsolutePath();
-                logger.info("Running from agent pack {}-{} (entry {})", pack.agent, pack.version, filePath);
+                ResolvedPack pack = packResolver.resolve(filePath, new PropertyReader().getGithubToken());
+                packRoot = pack.getPackRoot();
+                filePath = pack.getEntryFile().toAbsolutePath().toString();
+                logger.info("Running from agent pack {}-{} (entry {})", pack.getAgent(), pack.getVersion(), filePath);
+            } catch (AgentPackException e) {
+                // Preserve the pack error taxonomy — do not wrap into a generic message.
+                logger.error("Agent pack resolution failed: {}", e.getMessage());
+                throw e;
             } catch (IOException e) {
                 throw new IllegalArgumentException("Failed to resolve agent pack '" + filePath + "': " + e.getMessage(), e);
             }
