@@ -3,7 +3,9 @@
 
 package com.github.istin.dmtools.atlassian.confluence;
 
+import com.github.istin.dmtools.atlassian.confluence.model.Attachment;
 import com.github.istin.dmtools.atlassian.confluence.model.Content;
+import com.github.istin.dmtools.atlassian.confluence.model.ContentResult;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.json.JSONObject;
@@ -21,9 +23,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -94,6 +99,44 @@ public class ConfluenceApiV2Test {
     }
 
     // ------------------------------------------------------------------
+    // spaceIdFromKey
+    // ------------------------------------------------------------------
+
+    private String buildSpacesJson(String id, String key) {
+        return new JSONObject()
+            .put("results", new org.json.JSONArray()
+                .put(new JSONObject().put("id", id).put("key", key)))
+            .toString();
+    }
+
+    @Test
+    public void testSpaceIdFromKeyV2_resolvesIdFromSpacesEndpoint() throws IOException {
+        confluence.setApiVersion("v2");
+        doReturn(buildSpacesJson("456", "PROJ")).when(confluence).execute(any(GenericRequest.class));
+
+        String spaceId = confluence.spaceIdFromKey("PROJ");
+
+        assertEquals("456", spaceId);
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(captor.capture());
+        assertEquals("http://example.com/wiki/api/v2/spaces?keys=PROJ", captor.getValue().url());
+    }
+
+    @Test
+    public void testSpaceIdFromKeyV2_unknownKeyThrowsNamingKey() throws IOException {
+        confluence.setApiVersion("v2");
+        doReturn(new JSONObject().put("results", new org.json.JSONArray()).toString())
+            .when(confluence).execute(any(GenericRequest.class));
+
+        try {
+            confluence.spaceIdFromKey("NOPE");
+            fail("expected IOException for unknown space key");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("NOPE"));
+        }
+    }
+
+    // ------------------------------------------------------------------
     // contentById
     // ------------------------------------------------------------------
 
@@ -137,6 +180,187 @@ public class ConfluenceApiV2Test {
     }
 
     // ------------------------------------------------------------------
+    // createPage
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testCreatePageV2_postsToV2PagesWithSpaceId() throws IOException {
+        confluence.setApiVersion("v2");
+        doReturn(buildSpacesJson("456", "PROJ")).when(confluence).execute(any(GenericRequest.class));
+        doReturn(buildPageJson("<p>Hi</p>")).when(confluence).post(any(GenericRequest.class));
+
+        Content result = confluence.createPage("New Page", "999", "<p>Hi</p>", "PROJ");
+
+        assertNotNull(result);
+        assertEquals("Test Page", result.getTitle());
+
+        // space key was resolved through the v2 spaces endpoint
+        ArgumentCaptor<GenericRequest> getCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(getCaptor.capture());
+        assertEquals("http://example.com/wiki/api/v2/spaces?keys=PROJ", getCaptor.getValue().url());
+
+        ArgumentCaptor<GenericRequest> postCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).post(postCaptor.capture());
+        GenericRequest post = postCaptor.getValue();
+        assertEquals("http://example.com/wiki/api/v2/pages", post.url());
+        JSONObject body = new JSONObject(post.getBody());
+        assertEquals("456", body.getString("spaceId"));
+        assertEquals("current", body.getString("status"));
+        assertEquals("New Page", body.getString("title"));
+        assertEquals("999", body.getString("parentId"));
+        assertEquals("storage", body.getJSONObject("body").getString("representation"));
+        assertEquals("<p>Hi</p>", body.getJSONObject("body").getString("value"));
+    }
+
+    @Test
+    public void testCreatePageV1_keepsLegacyContentPost() throws IOException {
+        doReturn(buildPageJson("<p>Hi</p>")).when(confluence).post(any(GenericRequest.class));
+
+        confluence.createPage("New Page", "999", "<p>Hi</p>", "PROJ");
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).post(captor.capture());
+        GenericRequest post = captor.getValue();
+        assertEquals("http://example.com/rest/api/content", post.url());
+        JSONObject body = new JSONObject(post.getBody());
+        assertEquals("page", body.getString("type"));
+        assertEquals("PROJ", body.getJSONObject("space").getString("key"));
+        // v1 must not hit the v2 spaces resolver
+        verify(confluence, never()).execute(any(GenericRequest.class));
+    }
+
+    // ------------------------------------------------------------------
+    // updatePage
+    // ------------------------------------------------------------------
+
+    private String buildVersionedPageJson(int versionNumber) {
+        return new JSONObject()
+            .put("id", "123")
+            .put("title", "Old Title")
+            .put("version", new JSONObject().put("number", versionNumber))
+            .toString();
+    }
+
+    @Test
+    public void testUpdatePageV2_readsVersionThenPutsIncremented() throws IOException {
+        confluence.setApiVersion("v2");
+        doReturn(buildVersionedPageJson(3)).when(confluence).execute(any(GenericRequest.class));
+        doReturn(buildPageJson("<p>updated</p>")).when(confluence).put(any(GenericRequest.class));
+
+        Content result = confluence.updatePage("123", "New Title", "999", "<p>updated</p>", "PROJ", "my comment");
+
+        assertNotNull(result);
+
+        // current version read via v2 pages endpoint
+        ArgumentCaptor<GenericRequest> getCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(getCaptor.capture());
+        assertEquals("http://example.com/wiki/api/v2/pages/123", getCaptor.getValue().url());
+
+        ArgumentCaptor<GenericRequest> putCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).put(putCaptor.capture());
+        GenericRequest put = putCaptor.getValue();
+        assertEquals("http://example.com/wiki/api/v2/pages/123", put.url());
+        JSONObject body = new JSONObject(put.getBody());
+        assertEquals("123", body.getString("id"));
+        assertEquals("current", body.getString("status"));
+        assertEquals("New Title", body.getString("title"));
+        assertEquals("storage", body.getJSONObject("body").getString("representation"));
+        assertTrue(body.getJSONObject("body").getString("value").contains("updated"));
+        assertEquals(4, body.getJSONObject("version").getInt("number"));
+        assertEquals("my comment", body.getJSONObject("version").getString("message"));
+    }
+
+    @Test
+    public void testUpdatePageV1_keepsLegacyContentPut() throws IOException {
+        doReturn(buildVersionedPageJson(3)).when(confluence).execute(any(GenericRequest.class));
+        doReturn(buildPageJson("<p>updated</p>")).when(confluence).put(any(GenericRequest.class));
+
+        confluence.updatePage("123", "New Title", "999", "<p>updated</p>", "PROJ", "my comment");
+
+        ArgumentCaptor<GenericRequest> getCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(getCaptor.capture());
+        assertTrue(getCaptor.getValue().url().contains("/rest/api/content/123?expand=version"));
+
+        ArgumentCaptor<GenericRequest> putCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).put(putCaptor.capture());
+        GenericRequest put = putCaptor.getValue();
+        assertEquals("http://example.com/rest/api/content/123", put.url());
+        JSONObject body = new JSONObject(put.getBody());
+        assertEquals("page", body.getString("type"));
+        assertEquals("PROJ", body.getJSONObject("space").getString("key"));
+        assertEquals(4, body.getJSONObject("version").getInt("number"));
+        assertEquals("my comment", body.getJSONObject("version").getString("message"));
+    }
+
+    // ------------------------------------------------------------------
+    // content(title, space, format) — title lookup
+    // ------------------------------------------------------------------
+
+    private String buildPagesResultJson() {
+        return new JSONObject()
+            .put("results", new org.json.JSONArray()
+                .put(new JSONObject(buildPageJson("<p>found</p>"))))
+            .toString();
+    }
+
+    @Test
+    public void testContentByTitleV2_usesTitleAndSpaceIdQuery() throws IOException {
+        confluence.setApiVersion("v2");
+        doAnswer(inv -> {
+            GenericRequest req = inv.getArgument(0);
+            if (req.url().contains("/spaces?")) {
+                return buildSpacesJson("456", "PROJ");
+            }
+            return buildPagesResultJson();
+        }).when(confluence).execute(any(GenericRequest.class));
+
+        ContentResult result = confluence.content("My Page", "PROJ", null);
+
+        assertEquals(1, result.getContents().size());
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(2)).execute(captor.capture());
+        List<GenericRequest> requests = captor.getAllValues();
+        assertEquals("http://example.com/wiki/api/v2/spaces?keys=PROJ", requests.get(0).url());
+        String url = requests.get(1).url();
+        assertTrue(url.startsWith("http://example.com/wiki/api/v2/pages?"));
+        assertTrue(url.contains("title=My+Page"));
+        assertTrue(url.contains("spaceId=456"));
+        assertTrue(url.contains("body-format=storage"));
+    }
+
+    @Test
+    public void testContentByTitleV2_withoutSpaceOmitsSpaceId() throws IOException {
+        confluence.setApiVersion("v2");
+        doReturn(buildPagesResultJson()).when(confluence).execute(any(GenericRequest.class));
+
+        ContentResult result = confluence.content("My Page", null, null);
+
+        assertEquals(1, result.getContents().size());
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(captor.capture());
+        String url = captor.getValue().url();
+        assertTrue(url.startsWith("http://example.com/wiki/api/v2/pages?"));
+        assertTrue(url.contains("title=My+Page"));
+        assertTrue(url.contains("body-format=storage"));
+        assertFalse(url.contains("spaceId="));
+    }
+
+    @Test
+    public void testContentByTitleV1_keepsLegacySpaceKeyQuery() throws IOException {
+        doReturn(buildPagesResultJson()).when(confluence).execute(any(GenericRequest.class));
+
+        confluence.content("My Page", "PROJ", null);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(captor.capture());
+        String url = captor.getValue().url();
+        assertTrue(url.startsWith("http://example.com/rest/api/content?"));
+        assertTrue(url.contains("title=My+Page"));
+        assertTrue(url.contains("spaceKey=PROJ"));
+    }
+
+    // ------------------------------------------------------------------
     // getChildrenOfContentById
     // ------------------------------------------------------------------
 
@@ -173,6 +397,44 @@ public class ConfluenceApiV2Test {
         ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
         verify(confluence, times(1)).execute(captor.capture());
         assertTrue(captor.getValue().url().contains("/rest/api/content/999/child/page"));
+    }
+
+    // ------------------------------------------------------------------
+    // getContentAttachments
+    // ------------------------------------------------------------------
+
+    private String buildAttachmentsJson() {
+        return new JSONObject()
+            .put("results", new org.json.JSONArray()
+                .put(new JSONObject().put("id", "att1").put("title", "file.png")))
+            .toString();
+    }
+
+    @Test
+    public void testGetContentAttachmentsV2_usesV2PagesAttachmentsEndpoint() throws IOException {
+        confluence.setApiVersion("v2");
+        doReturn(buildAttachmentsJson()).when(confluence).execute(any(GenericRequest.class));
+
+        List<Attachment> attachments = confluence.getContentAttachments("123");
+
+        assertEquals(1, attachments.size());
+        assertEquals("att1", attachments.get(0).getId());
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(captor.capture());
+        assertEquals("http://example.com/wiki/api/v2/pages/123/attachments", captor.getValue().url());
+    }
+
+    @Test
+    public void testGetContentAttachmentsV1_keepsLegacyChildAttachmentEndpoint() throws IOException {
+        doReturn(buildAttachmentsJson()).when(confluence).execute(any(GenericRequest.class));
+
+        List<Attachment> attachments = confluence.getContentAttachments("123");
+
+        assertEquals(1, attachments.size());
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence, times(1)).execute(captor.capture());
+        assertTrue(captor.getValue().url().contains("/rest/api/content/123/child/attachment"));
     }
 
     // ------------------------------------------------------------------
