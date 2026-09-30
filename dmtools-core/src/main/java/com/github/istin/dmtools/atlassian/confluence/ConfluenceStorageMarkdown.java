@@ -85,6 +85,19 @@ public final class ConfluenceStorageMarkdown {
         Pattern.DOTALL | Pattern.CASE_INSENSITIVE
     );
 
+    // ac:adf-node type="bodied-sync-block" (synced block) — carries real content
+    // inline in <ac:adf-content>; must be unwrapped, not dropped (dm.ai #596).
+    private static final Pattern AC_ADF_SYNC_BLOCK = Pattern.compile(
+        "<ac:adf-node\\b[^>]*type=\"bodied-sync-block\"[^>]*>(.*?)</ac:adf-node>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+
+    // inner payload of a synced block
+    private static final Pattern AC_ADF_CONTENT = Pattern.compile(
+        "<ac:adf-content[^>]*>(.*?)</ac:adf-content>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+
     // ac:structured-macro name="toc" (table of contents — auto-generated, noise)
     private static final Pattern AC_TOC = Pattern.compile(
         "<ac:structured-macro\\s+ac:name=\"toc\"[^>]*/?>",
@@ -335,6 +348,11 @@ public final class ConfluenceStorageMarkdown {
     static String preprocess(String html) {
         String result = html;
 
+        // 0. Unwrap synced blocks (ac:adf-node type="bodied-sync-block") so their
+        //    <ac:adf-content> payload flows through the normal pipeline, BEFORE the
+        //    generic adf-node→[Diagram] rule below can drop them (dm.ai #596).
+        result = unwrapSyncedBlocks(result);
+
         // 1. Remove table-of-contents macro (auto-generated, adds noise)
         result = AC_TOC.matcher(result).replaceAll("");
 
@@ -381,6 +399,29 @@ public final class ConfluenceStorageMarkdown {
             m.appendReplacement(sb, Matcher.quoteReplacement(
                 "<a href=\"" + pageTitle + "\">" + text + "</a>"
             ));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
+     * Unwraps synced blocks: replaces each
+     * {@code <ac:adf-node type="bodied-sync-block">…</ac:adf-node>} with the inner
+     * HTML of its {@code <ac:adf-content>} child, so the content is converted by the
+     * normal pipeline instead of being replaced by the {@code [Diagram]} placeholder
+     * (which is reserved for real extensions such as draw.io). Runs before the
+     * generic {@link #AC_ADF_NODE} rule.
+     */
+    private static String unwrapSyncedBlocks(String html) {
+        StringBuffer sb = new StringBuffer();
+        Matcher m = AC_ADF_SYNC_BLOCK.matcher(html);
+        while (m.find()) {
+            String node = m.group(1);
+            Matcher content = AC_ADF_CONTENT.matcher(node);
+            // Use the adf-content payload when present; otherwise fall back to the
+            // node's raw inner HTML (defensive — a synced block without adf-content).
+            String inner = content.find() ? content.group(1) : node;
+            m.appendReplacement(sb, Matcher.quoteReplacement(inner));
         }
         m.appendTail(sb);
         return sb.toString();
