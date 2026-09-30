@@ -153,6 +153,12 @@ public class RunCommandProcessor {
 
             return createJobParams(fileJson, encodedConfig, cliOverrides);
 
+        } catch (AgentPackException e) {
+            // Preserve the pack error taxonomy — do not wrap into a generic message
+            // (a child `pack:` reference escaping/missing inside the parent pack must
+            // surface as AgentPackException, mirroring dmtools-dart).
+            logger.error("Run command processing failed: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
             logger.error("Failed to process run command: {}", e.getMessage());
             throw new IllegalArgumentException("Run command processing failed: " + e.getMessage(), e);
