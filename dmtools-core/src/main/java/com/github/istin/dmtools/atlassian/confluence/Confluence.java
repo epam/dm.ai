@@ -114,6 +114,31 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         return "v2".equalsIgnoreCase(apiVersion);
     }
 
+    /**
+     * Resolves a Confluence space key (e.g. {@code PROJ}) to the numeric space id
+     * required by the v2 API via {@code GET /wiki/api/v2/spaces?keys=...}. v2 only;
+     * the v1 API addresses spaces by key directly.
+     *
+     * @throws IOException when no space with the given key exists
+     */
+    String spaceIdFromKey(String spaceKey) throws IOException {
+        GenericRequest request = new GenericRequest(this, pathV2("spaces?keys=" + urlEncode(spaceKey)));
+        String response = execute(request);
+        JSONArray results = new JSONObject(response).optJSONArray("results");
+        if (results == null || results.length() == 0) {
+            throw new IOException("Confluence space not found by key: " + spaceKey);
+        }
+        return results.getJSONObject(0).getString("id");
+    }
+
+    private static String urlEncode(String value) {
+        try {
+            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString());
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @MCPTool(
         name = "confluence_contents_by_urls",
         description = "Get Confluence content by multiple URLs. Returns a list of content objects for each valid URL. Use format=md to convert body.storage.value to Markdown.",
@@ -226,6 +251,13 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
     }
 
 
+    /**
+     * Searches Confluence content via CQL ({@code /rest/api/content/search}).
+     * Intentionally v1-only even when {@code CONFLUENCE_API_VERSION=v2}: the v2 API
+     * exposes no public CQL search endpoint usable with granular/scoped tokens (same
+     * for the user-profile endpoints), so search stays on the legacy path regardless
+     * of {@link #apiVersion}. Known limitation tracked under #592.
+     */
     @MCPTool(
         name = "confluence_search_content_by_text",
         description = "Search Confluence content by text query using CQL (Confluence Query Language). Returns search results with content excerpts. Default limit is 20 if not specified.",
@@ -339,10 +371,23 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
     ) throws IOException {
-        GenericRequest content = new GenericRequest(this, path("content?expand=body.storage,body.export_view,ancestors,version"));
-        content.param("title", title);
-        if (space != null && !space.isEmpty()) {
-            content.param("spaceKey", space);
+        GenericRequest content;
+        if (isApiV2()) {
+            // Confluence v2 API: GET /wiki/api/v2/pages?title=...&spaceId=...&body-format=storage.
+            // v2 filters by numeric space id (resolved from the key via the spaces
+            // endpoint); the {"results":[...]} envelope is ContentResult-compatible.
+            StringBuilder url = new StringBuilder(pathV2("pages?title=" + urlEncode(title)));
+            if (space != null && !space.isEmpty()) {
+                url.append("&spaceId=").append(spaceIdFromKey(space));
+            }
+            url.append("&body-format=storage");
+            content = new GenericRequest(this, url.toString());
+        } else {
+            content = new GenericRequest(this, path("content?expand=body.storage,body.export_view,ancestors,version"));
+            content.param("title", title);
+            if (space != null && !space.isEmpty()) {
+                content.param("spaceKey", space);
+            }
         }
         String response = execute(content);
         try {
@@ -433,7 +478,14 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "contentId", description = "The content ID to get attachments for", required = true, example = "123456")
         String contentId
     ) throws IOException {
-        GenericRequest content = new GenericRequest(this, path("content/" + contentId + "/child/attachment"));
+        GenericRequest content;
+        if (isApiV2()) {
+            // Confluence v2 API: GET /wiki/api/v2/pages/{id}/attachments. The
+            // {"results":[...]} envelope is ContentResult/Attachment-compatible.
+            content = new GenericRequest(this, pathV2("pages/" + contentId + "/attachments"));
+        } else {
+            content = new GenericRequest(this, path("content/" + contentId + "/child/attachment"));
+        }
 
         String response = execute(content);
         try {
@@ -563,6 +615,22 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "space", description = "The space key where to create the page", required = true, example = "PROJ")
         String space
     ) throws IOException {
+        if (isApiV2()) {
+            // Confluence v2 API: POST /wiki/api/v2/pages. Spaces are addressed by
+            // numeric id (resolved from the key via the spaces endpoint), status is
+            // explicit, and the storage representation lives under body.value.
+            // Required for granular/scoped tokens.
+            GenericRequest content = new GenericRequest(this, pathV2("pages"));
+            content.setBody(new JSONObject()
+                    .put("spaceId", spaceIdFromKey(space))
+                    .put("status", "current")
+                    .put("title", title)
+                    .put("parentId", parentId)
+                    .put("body", new JSONObject()
+                            .put("representation", "storage")
+                            .put("value", body)).toString());
+            return new Content(content.post());
+        }
         GenericRequest content = new GenericRequest(this, path("content"));
         content.setBody(new JSONObject()
                 .put("type", "page")
@@ -625,6 +693,31 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
             body = prepareStorageBodyForConfluence(body);
         } else {
             body = prepareBodyForConfluence(body);
+        }
+        if (isApiV2()) {
+            // Confluence v2 API: read the current version via GET /wiki/api/v2/pages/{id},
+            // then PUT /wiki/api/v2/pages/{id} with version.number incremented.
+            // v2 updates carry no ancestors/space in the payload and require an
+            // explicit status. Required for granular/scoped tokens.
+            logger.info("{} {} {} {} {} {}", contentId, title, parentId, body, space, historyComment);
+            Content oldContent = new Content(execute(new GenericRequest(this, pathV2("pages/" + contentId))));
+
+            GenericRequest content = new GenericRequest(this, pathV2("pages/" + contentId));
+            content.setBody(new JSONObject()
+                    .put("id", contentId)
+                    .put("status", "current")
+                    .put("title", title)
+                    .put("body", new JSONObject()
+                            .put("representation", "storage")
+                            .put("value", body))
+                    .put("version",
+                            new JSONObject()
+                                    .put("number", oldContent.getVersionNumber() + 1)
+                                    .put("message", historyComment)
+                    ).toString());
+            String putResponse = content.put();
+            logger.info(putResponse);
+            return new Content(putResponse);
         }
         logger.info("{} {} {} {} {} {}", contentId, title, parentId, body, space, historyComment);
         Content oldContent = new Content(new GenericRequest(this, path("content/" + contentId + "?expand=version")).execute());
