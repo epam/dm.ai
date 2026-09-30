@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.job;
 
 import com.github.istin.dmtools.common.utils.PropertyReader;
+import com.github.istin.dmtools.pack.AgentPackException;
 import com.github.istin.dmtools.teammate.CliPromptsConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 
 /**
  * Resolves {@code parent} config inheritance for job configuration files.
@@ -109,12 +111,23 @@ public class ParentConfigResolver {
         }
 
         // Load the parent config (filesystem path or agent pack ref), recursively
-        // resolving the parent's own inheritance.
-        JSONObject parentConfig = loadParentConfig(parentPathStr, childFilePath);
+        // resolving the parent's own inheritance. A pack parent additionally yields
+        // its unpacked root so the child's `pack:` references can resolve against it.
+        LoadedParent loaded = loadParentConfig(parentPathStr, childFilePath);
 
         // Capture original child values BEFORE merge (needed for override/merge processing)
         JSONObject originalChild = new JSONObject(childConfig.toString());
         originalChild.remove(PARENT);
+
+        if (loaded.packRoot != null) {
+            // The parent is an agent pack: the child's `pack:` references point
+            // inside it (zip flow — no agents checkout mounted, dmtools-dart parity).
+            rewritePackRefs(originalChild, loaded.packRoot);
+        } else if (containsPackRef(originalChild)) {
+            throw new IllegalArgumentException(
+                    "child config uses pack: references but its parent is not an agent pack");
+        }
+        JSONObject parentConfig = loaded.config;
 
         // Read override and merge path lists
         JSONArray overridePaths = parentBlock.optJSONArray(PARENT_OVERRIDE);
@@ -164,10 +177,25 @@ public class ParentConfigResolver {
      *       repo-relative paths are rewritten to absolute paths in the pack cache so they
      *       survive the merge with the child (which may live in a different pack or repo).</li>
      * </ul>
+     *
+     * <p>Returns the resolved config plus the pack root when the parent came from an
+     * agent pack ({@code null} for filesystem parents), so the caller can resolve the
+     * child's {@code pack:} references against it.
      */
-    private JSONObject loadParentConfig(String parentPathStr, Path childFilePath) {
+    private LoadedParent loadParentConfig(String parentPathStr, Path childFilePath) {
         if (packResolver.isPack(parentPathStr)) {
             return loadPackParent(parentPathStr);
+        }
+        if (packResolver.isRegistryRefShaped(parentPathStr)
+                && !packResolver.hasRegistry()) {
+            // `<agent>@<version|latest>` shape with no registry configured: a
+            // bare "file not found" here would send every machine leg debugging
+            // the wrong layer — say what is actually missing.
+            throw new IllegalArgumentException(
+                "parent.path '" + parentPathStr + "' is an agent-pack registry ref "
+                + "(<agent>@<version|latest>) but no pack registry is configured — "
+                + "set the DMTOOLS_PACK_REGISTRY env var to the release-registry "
+                + "base URL");
         }
 
         // Filesystem flow (existing behaviour).
@@ -187,14 +215,14 @@ public class ParentConfigResolver {
         }
 
         JSONObject parentConfig = new JSONObject(parentJson);
-        return resolve(parentConfig, parentPath);
+        return new LoadedParent(resolve(parentConfig, parentPath), null);
     }
 
     /**
      * Resolves a pack-referenced parent to its fully-resolved entry config with
      * pack-relative paths made absolute (into the parent pack's cache).
      */
-    private JSONObject loadPackParent(String parentPathStr) {
+    private LoadedParent loadPackParent(String parentPathStr) {
         AgentPackResolver.ResolvedPack pack;
         try {
             pack = packResolver.resolve(parentPathStr, new PropertyReader().getGithubToken());
@@ -216,7 +244,111 @@ public class ParentConfigResolver {
         // Make the parent's pack-relative paths absolute so they keep working after the
         // merge, regardless of where the child lives.
         packResolver.rewritePathsToPackRoot(parentConfig, pack.packRoot);
-        return parentConfig;
+        // `pack:` references inside the entry config resolve against this same pack.
+        rewritePackRefs(parentConfig, pack.packRoot);
+        return new LoadedParent(parentConfig, pack.packRoot);
+    }
+
+    /**
+     * The resolved parent config plus the pack root when the parent came from an
+     * agent pack ({@code null} for filesystem parents), so the caller can resolve
+     * the child's {@code pack:} references against it.
+     */
+    private static final class LoadedParent {
+        final JSONObject config;
+        final Path packRoot;
+
+        LoadedParent(JSONObject config, Path packRoot) {
+            this.config = config;
+            this.packRoot = packRoot;
+        }
+    }
+
+    /**
+     * Scheme prefix marking a config string as a reference into the resolved
+     * parent agent pack ({@code pack:instructions/foo.md}). Only meaningful when
+     * the config's parent is a pack.
+     */
+    private static final String PACK_SCHEME = "pack:";
+
+    /**
+     * Rewrites every {@code pack:} string under {@code node} to an absolute path inside
+     * {@code packRoot}; throws {@link AgentPackException} on root escapes or missing
+     * files. Non-string leaves and scheme-less strings pass through.
+     */
+    private void rewritePackRefs(Object node, Path packRoot) {
+        if (node instanceof JSONObject) {
+            JSONObject obj = (JSONObject) node;
+            for (String key : new ArrayList<>(obj.keySet())) {
+                Object value = obj.opt(key);
+                if (value instanceof String) {
+                    String resolved = resolvePackRef((String) value, packRoot);
+                    if (resolved != null) {
+                        obj.put(key, resolved);
+                    }
+                } else if (value instanceof JSONObject || value instanceof JSONArray) {
+                    rewritePackRefs(value, packRoot);
+                }
+            }
+        } else if (node instanceof JSONArray) {
+            JSONArray arr = (JSONArray) node;
+            for (int i = 0; i < arr.length(); i++) {
+                Object value = arr.get(i);
+                if (value instanceof String) {
+                    String resolved = resolvePackRef((String) value, packRoot);
+                    if (resolved != null) {
+                        arr.put(i, resolved);
+                    }
+                } else if (value instanceof JSONObject || value instanceof JSONArray) {
+                    rewritePackRefs(value, packRoot);
+                }
+            }
+        }
+    }
+
+    /** True when any string under {@code node} carries the {@code pack:} scheme. */
+    private boolean containsPackRef(Object node) {
+        if (node instanceof String) {
+            return ((String) node).trim().startsWith(PACK_SCHEME);
+        }
+        if (node instanceof JSONObject) {
+            JSONObject obj = (JSONObject) node;
+            for (String key : obj.keySet()) {
+                if (containsPackRef(obj.opt(key))) {
+                    return true;
+                }
+            }
+        }
+        if (node instanceof JSONArray) {
+            JSONArray arr = (JSONArray) node;
+            for (int i = 0; i < arr.length(); i++) {
+                if (containsPackRef(arr.get(i))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Maps a {@code pack:}-prefixed string to an existing absolute path inside
+     * {@code packRoot}; returns {@code null} for strings without the scheme.
+     */
+    private String resolvePackRef(String value, Path packRoot) {
+        String ref = value.trim();
+        if (!ref.startsWith(PACK_SCHEME)) {
+            return null;
+        }
+        ref = ref.substring(PACK_SCHEME.length());
+        while (ref.startsWith("/")) {
+            ref = ref.substring(1);
+        }
+        Path candidate = packRoot.resolve(ref).normalize();
+        if (!candidate.startsWith(packRoot) || !Files.exists(candidate)) {
+            throw new AgentPackException(
+                    "pack: reference '" + value + "' not found in pack '" + packRoot + "'");
+        }
+        return candidate.toString();
     }
 
     /**
