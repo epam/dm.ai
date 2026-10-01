@@ -125,6 +125,45 @@ class AbstractRestClientRetryTest {
     }
 
     @Test
+    @DisplayName("RetryPolicy should honor rate-limit Retry-After beyond 5 minutes")
+    void testRateLimitedRetryAfterBeyondMaxHonored() {
+        Response mockResponse = mock(Response.class);
+        when(mockResponse.code()).thenReturn(429);
+        when(mockResponse.header("Retry-After")).thenReturn("600");
+
+        long delay = assertDoesNotThrow(() -> retryPolicy.calculateDelayMs(1, mockResponse),
+            "Rate-limit Retry-After of 600s must be honored, not aborted");
+
+        // 600s with up to 10% jitter (jitterFactor 0.1 -> +/-5%)
+        assertTrue(delay >= 570000 && delay <= 630000, "Delay should be ~600s: " + delay);
+    }
+
+    @Test
+    @DisplayName("RetryPolicy should still abort non-rate-limit Retry-After beyond 5 minutes")
+    void testNonRateLimitedRetryAfterExceedsMaxThrows() {
+        Response mockResponse = mock(Response.class);
+        when(mockResponse.code()).thenReturn(503);
+        when(mockResponse.header("Retry-After")).thenReturn("390883");
+
+        assertThrows(IOException.class, () -> retryPolicy.calculateDelayMs(1, mockResponse),
+            "Non-rate-limit Retry-After beyond MAX_RETRY_AFTER_SECONDS should still abort");
+    }
+
+    @Test
+    @DisplayName("RetryPolicy should honor long X-RateLimit-Reset waits instead of capping at maxDelayMs")
+    void testRateLimitResetHonoredBeyondMaxDelay() throws Exception {
+        Response mockResponse = mock(Response.class);
+        long futureTime = (System.currentTimeMillis() / 1000L) + 600; // 10 minutes in future
+        when(mockResponse.header("X-RateLimit-Reset")).thenReturn(String.valueOf(futureTime));
+
+        long delay = retryPolicy.calculateDelayMs(1, mockResponse);
+
+        // maxDelayMs for this policy is 1000ms; the rate-limit wait must not be capped by it
+        assertTrue(delay >= 595000 && delay <= 602000,
+            "Delay should be ~600s + 1s buffer, was: " + delay);
+    }
+
+    @Test
     @DisplayName("RetryPolicy should return correct max retries")
     void testGetMaxRetries() {
         assertEquals(3, retryPolicy.getMaxRetries());
