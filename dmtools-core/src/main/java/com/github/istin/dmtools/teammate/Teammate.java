@@ -485,6 +485,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
                 .withJobContext(expertParams, ticket, null) // response is null in pre-action
                 .with(TrackerParams.INITIATOR, initiator)
+                .with(TrackerParams.METADATA, expertParams.getMetadata())
                 .execute();
 
             // Check return value to determine if processing should continue
@@ -595,6 +596,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             .mcp(trackerClient, ai, confluence, null)
                             .withJobContext(expertParams, ticket, null)
                             .with(TrackerParams.INITIATOR, initiator)
+                            .with(TrackerParams.METADATA, expertParams.getMetadata())
                             .with("systemRequest", systemRequestCommentAlias)
                             .with("currentCliOutput", liveCliOutput.get())
                             .with("currentCliHasFatalError", errorState.hasFatalError())
@@ -639,6 +641,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                                 .mcp(trackerClient, ai, confluence, null)
                                 .withJobContext(expertParams, ticket, null)
                                 .with(TrackerParams.INITIATOR, initiator)
+                                .with(TrackerParams.METADATA, expertParams.getMetadata())
                                 .with("inputFolderPath", inputContextPath.toAbsolutePath().toString())
                                 .execute();
                             logger.info("preCliJSAction executed for ticket: {}", ticket.getKey());
@@ -830,6 +833,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
                             .withJobContext(expertParams, ticket, response)
                             .with(TrackerParams.INITIATOR, initiator)
+                            .with(TrackerParams.METADATA, expertParams.getMetadata())
                             .with("systemRequest", systemRequestCommentAlias)
                             .with("currentCliHasFatalError", cliHasFatalError)
                             .with("currentCliErrorMessage", cliErrorMessage)
