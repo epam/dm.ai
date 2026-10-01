@@ -6,6 +6,7 @@ package com.github.istin.dmtools.teammate;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.ai.agent.GenericRequestAgent;
 import com.github.istin.dmtools.ai.agent.RequestDecompositionAgent;
+import com.github.istin.dmtools.ai.model.Metadata;
 import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.atlassian.jira.JiraClient;
 import com.github.istin.dmtools.atlassian.jira.model.Fields;
@@ -23,6 +24,7 @@ import com.github.istin.dmtools.index.mermaid.tool.MermaidIndexTools;
 import com.github.istin.dmtools.job.JavaScriptExecutor;
 import com.github.istin.dmtools.job.Params;
 import com.github.istin.dmtools.job.ResultItem;
+import com.github.istin.dmtools.job.TrackerParams;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -375,6 +377,57 @@ public class TeammateRunJobFlowCoverageTest {
         assertEquals("Skipped by pre-action", results.get(0).getResult());
         verify(genericRequestAgent, never()).run(any());
         verify(trackerClient, never()).updateTicket(anyString(), any());
+    }
+
+    // ---- metadata binding for JS hooks (issue #454) ----
+
+    @Test
+    void testMetadataIsBoundForPreAndPostJSActions() throws Exception {
+        JavaScriptExecutor preExecutor = mock(JavaScriptExecutor.class);
+        when(preExecutor.mcp(any(), any(), any(), any())).thenReturn(preExecutor);
+        when(preExecutor.withJobContext(any(), any(), any())).thenReturn(preExecutor);
+        when(preExecutor.with(anyString(), any())).thenReturn(preExecutor);
+        when(preExecutor.execute()).thenReturn(null);
+        teammate.scriptedExecutors.put("agents/js/pre.js", preExecutor);
+
+        JavaScriptExecutor postExecutor = mock(JavaScriptExecutor.class);
+        when(postExecutor.mcp(any(), any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.withJobContext(any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.with(anyString(), any())).thenReturn(postExecutor);
+        when(postExecutor.execute()).thenReturn(null);
+        teammate.scriptedExecutors.put("agents/js/post.js", postExecutor);
+
+        Metadata metadata = new Metadata();
+        metadata.setAgentId("agent-1");
+        metadata.setContextId("ctx-123");
+        params.setMetadata(metadata);
+        params.setPreJSAction("agents/js/pre.js");
+        params.setPostJSAction("agents/js/post.js");
+
+        teammate.runJobImpl(params);
+
+        // Both the preJSAction and the postJSAction must receive a top-level 'metadata'
+        // param so that JS hooks can read params.metadata.contextId (e.g. the WIP
+        // re-entrancy guard) — before the #454 fix the key was never bound.
+        for (JavaScriptExecutor executor : List.of(preExecutor, postExecutor)) {
+            ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<Object> valueCaptor = ArgumentCaptor.forClass(Object.class);
+            verify(executor, atLeastOnce()).with(keyCaptor.capture(), valueCaptor.capture());
+
+            Map<String, Object> capturedParams = new HashMap<>();
+            List<String> keys = keyCaptor.getAllValues();
+            List<Object> values = valueCaptor.getAllValues();
+            for (int i = 0; i < keys.size(); i++) {
+                capturedParams.put(keys.get(i), values.get(i));
+            }
+
+            Object bound = capturedParams.get(TrackerParams.METADATA);
+            assertNotNull(bound,
+                    "JS hook must receive a top-level '" + TrackerParams.METADATA +
+                    "' param with the job metadata so params.metadata.contextId works (issue #454)");
+            assertEquals("ctx-123", ((Metadata) bound).getContextId());
+            assertEquals("agent-1", ((Metadata) bound).getAgentId());
+        }
     }
 
     // ---- hooks as context ----
