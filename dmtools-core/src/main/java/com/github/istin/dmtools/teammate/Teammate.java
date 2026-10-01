@@ -811,40 +811,49 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 GenericRequestAgent.Params genericRequesAgentParams = new GenericRequestAgent.Params(inputParams, null, chunksContext, expertParams.getChunkProcessingTimeoutInMinutes() * 60 * 1000);
                 response = genericRequestAgent.run(genericRequesAgentParams);
             }
-            AtomicReference<Exception> postJsError = new AtomicReference<>();
-            AtomicReference<Object> postJsResult = new AtomicReference<>();
-            // cliResult is null when no cliCommands are configured; treat that as no fatal error.
-            boolean cliHasFatalError = cliResult != null && cliResult.hasFatalError();
-            String cliErrorMessage = cliResult != null ? cliResult.getLastErrorMessage() : null;
-            CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
-                try {
-                    Object result = js(expertParams.getPostJSAction())
-                        .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
-                        .withJobContext(expertParams, ticket, response)
-                        .with(TrackerParams.INITIATOR, initiator)
-                        .with("systemRequest", systemRequestCommentAlias)
-                        .with("currentCliHasFatalError", cliHasFatalError)
-                        .with("currentCliErrorMessage", cliErrorMessage)
-                        .execute();
-                    postJsResult.set(result);
-                } catch (Exception e) {
-                    postJsError.set(e);
+            if (skipFieldUpdate) {
+                // Strict-mode CLI failure (requireCliOutputFile=true, no response.md): never run
+                // postJSAction against a failed/missing CLI response — mirroring the preCliJSAction
+                // early return, which also skips postJSAction. The error-comment branch below
+                // handles the failure reporting instead.
+                logger.warn("Skipping postJSAction for ticket {} due to missing CLI output file (requireCliOutputFile=true)",
+                           ticket.getKey());
+            } else {
+                AtomicReference<Exception> postJsError = new AtomicReference<>();
+                AtomicReference<Object> postJsResult = new AtomicReference<>();
+                // cliResult is null when no cliCommands are configured; treat that as no fatal error.
+                boolean cliHasFatalError = cliResult != null && cliResult.hasFatalError();
+                String cliErrorMessage = cliResult != null ? cliResult.getLastErrorMessage() : null;
+                CliExecutionHelper.runWithTimer(timerRunnable, timerIntervalSeconds, () -> {
+                    try {
+                        Object result = js(expertParams.getPostJSAction())
+                            .mcp(trackerClient, ai, confluence, null) // sourceCode not available in Teammate context
+                            .withJobContext(expertParams, ticket, response)
+                            .with(TrackerParams.INITIATOR, initiator)
+                            .with("systemRequest", systemRequestCommentAlias)
+                            .with("currentCliHasFatalError", cliHasFatalError)
+                            .with("currentCliErrorMessage", cliErrorMessage)
+                            .execute();
+                        postJsResult.set(result);
+                    } catch (Exception e) {
+                        postJsError.set(e);
+                    }
+                });
+                if (postJsError.get() != null) {
+                    throw postJsError.get();
                 }
-            });
-            if (postJsError.get() != null) {
-                throw postJsError.get();
-            }
-            if (isUncaughtJSExecutionError(postJsResult.get())) {
-                String jsErrorDetail = null;
-                if (postJsResult.get() instanceof JSONObject) {
-                    jsErrorDetail = ((JSONObject) postJsResult.get()).optString("error", null);
-                } else if (postJsResult.get() instanceof Map) {
-                    Object e = ((Map<?, ?>) postJsResult.get()).get("error");
-                    jsErrorDetail = e != null ? e.toString() : null;
+                if (isUncaughtJSExecutionError(postJsResult.get())) {
+                    String jsErrorDetail = null;
+                    if (postJsResult.get() instanceof JSONObject) {
+                        jsErrorDetail = ((JSONObject) postJsResult.get()).optString("error", null);
+                    } else if (postJsResult.get() instanceof Map) {
+                        Object e = ((Map<?, ?>) postJsResult.get()).get("error");
+                        jsErrorDetail = e != null ? e.toString() : null;
+                    }
+                    throw new RuntimeException("postJSAction threw an uncaught exception for ticket "
+                        + ticket.getTicketKey()
+                        + (jsErrorDetail != null ? ": " + jsErrorDetail : " — see the error logged above for details"));
                 }
-                throw new RuntimeException("postJSAction threw an uncaught exception for ticket "
-                    + ticket.getTicketKey()
-                    + (jsErrorDetail != null ? ": " + jsErrorDetail : " — see the error logged above for details"));
             }
             if (expertParams.isAttachResponseAsFile()) {
                 attachResponse(genericRequestAgent, "_final_answer.txt", response, ticket.getKey(), "text/plain");
