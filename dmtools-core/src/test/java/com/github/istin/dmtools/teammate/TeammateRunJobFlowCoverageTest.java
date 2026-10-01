@@ -1181,6 +1181,104 @@ public class TeammateRunJobFlowCoverageTest {
         assertEquals("/tmp/x", fresh.getIndexes()[0].getStoragePath());
     }
 
+    // ---- postJSAction skipped on strict-mode CLI output failure (#409) ----
+
+    @Test
+    void testPostJSActionSkippedWhenStrictModeCliOutputMissing() throws Exception {
+        JavaScriptExecutor postExecutor = mock(JavaScriptExecutor.class);
+        when(postExecutor.mcp(any(), any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.withJobContext(any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.with(anyString(), any())).thenReturn(postExecutor);
+        when(postExecutor.execute()).thenReturn(null);
+        teammate.scriptedExecutors.put("agents/js/post.js", postExecutor);
+
+        params.setSkipAIProcessing(true);
+        // requireCliOutputFile defaults to true -> strict mode, CLI produces no output file
+        params.setOutputType(Params.OutputType.comment);
+        params.setInitiator("user-1");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setPostJSAction("agents/js/post.js");
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                        .thenReturn("command output\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                        .thenReturn(Map.of());
+
+                List<ResultItem> results = teammate.runJobImpl(params);
+
+                assertEquals(1, results.size());
+                assertTrue(results.get(0).getResult()
+                        .contains("CLI command executed but did not produce output file"));
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+
+        // #409: postJSAction must not run at all when skipFieldUpdate is true
+        verify(postExecutor, never()).execute();
+        assertFalse(teammate.jsCalls.contains("agents/js/post.js"),
+                "postJSAction executor must not even be requested when the CLI output file is missing in strict mode");
+
+        // the error comment must still be posted instead of the normal output processing
+        ArgumentCaptor<String> commentCaptor = ArgumentCaptor.forClass(String.class);
+        verify(trackerClient).postComment(eq("TEST-1"), commentCaptor.capture());
+        assertTrue(commentCaptor.getValue().contains("⚠️ CLI command execution issue"));
+        verify(trackerClient, never()).postCommentIfNotExists(anyString(), anyString());
+        verify(trackerClient, never()).updateTicket(anyString(), any());
+    }
+
+    @Test
+    void testPostJSActionRunsWhenStrictModeCliOutputPresent() throws Exception {
+        JavaScriptExecutor postExecutor = mock(JavaScriptExecutor.class);
+        when(postExecutor.mcp(any(), any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.withJobContext(any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.with(anyString(), any())).thenReturn(postExecutor);
+        when(postExecutor.execute()).thenReturn(null);
+        teammate.scriptedExecutors.put("agents/js/post.js", postExecutor);
+
+        params.setSkipAIProcessing(true);
+        // requireCliOutputFile defaults to true -> strict mode, and the CLI writes outputs/response.md
+        params.setOutputType(Params.OutputType.comment);
+        params.setInitiator("user-1");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setPostJSAction("agents/js/post.js");
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                        .thenAnswer(inv -> {
+                            Path outputs = tempDir.resolve("outputs");
+                            Files.createDirectories(outputs);
+                            Files.writeString(outputs.resolve("response.md"), "CLI generated answer");
+                            return "command output\nExit Code: 0";
+                        });
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                        .thenReturn(Map.of());
+
+                List<ResultItem> results = teammate.runJobImpl(params);
+
+                assertEquals(1, results.size());
+                assertEquals("CLI generated answer", results.get(0).getResult());
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+
+        // control: output file present -> skipFieldUpdate stays false -> postJSAction must run
+        verify(postExecutor).execute();
+        verify(trackerClient).postCommentIfNotExists(eq("TEST-1"),
+                argThat(comment -> comment != null && comment.contains("CLI generated answer")));
+        verify(trackerClient, never()).postComment(anyString(), contains("⚠️ CLI command execution issue"));
+    }
+
     @Test
     void testDefaultConstructor() {
         Teammate defaultTeammate = new Teammate();
