@@ -3,6 +3,7 @@
 
 package com.github.istin.dmtools.networking;
 
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import org.apache.logging.log4j.Logger;
 import okhttp3.Response;
 
@@ -26,11 +27,17 @@ public class RetryPolicy {
     // Maximum time we will ever wait for a Retry-After response (5 minutes)
     public static final long MAX_RETRY_AFTER_SECONDS = 300L;
 
+    // Property key (config.properties / dmtools.env / environment) for the rate-limit wait cap
+    public static final String RATE_LIMIT_MAX_WAIT_SECONDS_PROPERTY = "RATE_LIMIT_MAX_WAIT_SECONDS";
+    // Maximum time we will wait for a genuine rate limit to reset (default: 60 minutes)
+    public static final long DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS = 3600L;
+
     private final int maxRetries;
     private final long baseDelayMs;
     private final long maxDelayMs;
     private final double backoffMultiplier;
     private final double jitterFactor;
+    private final long rateLimitMaxWaitSeconds;
     private final Random random;
     private final Logger logger;
 
@@ -44,16 +51,51 @@ public class RetryPolicy {
 
     /**
      * Creates a retry policy with custom settings.
+     * The rate-limit wait cap is resolved from the RATE_LIMIT_MAX_WAIT_SECONDS property
+     * (default: 3600 seconds).
      */
     public RetryPolicy(int maxRetries, long baseDelayMs, long maxDelayMs,
                       double backoffMultiplier, double jitterFactor, Logger logger) {
+        this(maxRetries, baseDelayMs, maxDelayMs, backoffMultiplier, jitterFactor,
+             resolveRateLimitMaxWaitSeconds(logger), logger);
+    }
+
+    /**
+     * Creates a retry policy with custom settings including an explicit rate-limit wait cap.
+     */
+    public RetryPolicy(int maxRetries, long baseDelayMs, long maxDelayMs,
+                      double backoffMultiplier, double jitterFactor,
+                      long rateLimitMaxWaitSeconds, Logger logger) {
         this.maxRetries = maxRetries;
         this.baseDelayMs = baseDelayMs;
         this.maxDelayMs = maxDelayMs;
         this.backoffMultiplier = backoffMultiplier;
         this.jitterFactor = jitterFactor;
+        this.rateLimitMaxWaitSeconds = rateLimitMaxWaitSeconds;
         this.random = new Random();
         this.logger = logger;
+    }
+
+    /**
+     * Resolves the rate-limit wait cap (in seconds) from the RATE_LIMIT_MAX_WAIT_SECONDS
+     * property, falling back to DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS when unset or invalid.
+     */
+    private static long resolveRateLimitMaxWaitSeconds(Logger logger) {
+        String value = new PropertyReader().getValue(RATE_LIMIT_MAX_WAIT_SECONDS_PROPERTY,
+                String.valueOf(DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS));
+        try {
+            long parsed = Long.parseLong(value.trim());
+            if (parsed > 0) {
+                return parsed;
+            }
+        } catch (NumberFormatException e) {
+            // Fall through to default
+        }
+        if (logger != null) {
+            logger.warn("Invalid {} value '{}', falling back to {}s",
+                    RATE_LIMIT_MAX_WAIT_SECONDS_PROPERTY, value, DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS);
+        }
+        return DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS;
     }
 
     /**
@@ -99,7 +141,9 @@ public class RetryPolicy {
     /**
      * Calculates the delay before the next retry attempt.
      * Uses exponential backoff with jitter to avoid thundering herd.
-     * Throws IOException if the server-specified Retry-After exceeds MAX_RETRY_AFTER_SECONDS (5 minutes).
+     * Rate-limit responses (HTTP 429, or X-RateLimit-Reset) are honored up to
+     * rateLimitMaxWaitSeconds and capped (never aborted) beyond it.
+     * Throws IOException if a non-rate-limit Retry-After exceeds MAX_RETRY_AFTER_SECONDS (5 minutes).
      */
     public long calculateDelayMs(int attemptNumber, Response response) throws IOException {
         // First check if server provided Retry-After header
@@ -110,13 +154,25 @@ public class RetryPolicy {
                     // Retry-After can be in seconds or HTTP-date format
                     // For simplicity, assume it's in seconds
                     long retryAfterSeconds = Long.parseLong(retryAfter);
-                    if (retryAfterSeconds > MAX_RETRY_AFTER_SECONDS) {
+                    boolean rateLimited = response.code() == 429;
+                    if (!rateLimited && retryAfterSeconds > MAX_RETRY_AFTER_SECONDS) {
                         throw new IOException(
                             "Retry-After header value (" + retryAfterSeconds + "s) exceeds configured maximum of "
                             + MAX_RETRY_AFTER_SECONDS + "s. Aborting to avoid excessive wait."
                         );
                     }
                     long serverDelay = retryAfterSeconds * 1000L;
+                    if (rateLimited) {
+                        // A genuine rate limit may legitimately require a long wait (e.g. GitHub resets
+                        // hourly): honor it up to the configured rate-limit cap instead of aborting.
+                        long maxWaitMs = rateLimitMaxWaitSeconds * 1000L;
+                        if (serverDelay > maxWaitMs) {
+                            logger.warn("Rate-limit Retry-After of {}s exceeds {} ({}s), capping wait to {} ms",
+                                    retryAfterSeconds, RATE_LIMIT_MAX_WAIT_SECONDS_PROPERTY,
+                                    rateLimitMaxWaitSeconds, maxWaitMs);
+                            serverDelay = maxWaitMs;
+                        }
+                    }
                     logger.info("Server provided Retry-After header: {} seconds", retryAfter);
                     // Add small jitter even to server-provided delay
                     return addJitter(serverDelay);
@@ -133,8 +189,17 @@ public class RetryPolicy {
                     long currentTime = System.currentTimeMillis();
                     if (resetTime > currentTime) {
                         long delay = resetTime - currentTime;
-                        logger.info("Rate limit resets at: {}, waiting {} ms", resetTime, delay);
-                        return Math.min(delay + 1000L, maxDelayMs); // Add 1 second buffer
+                        // Honor the server's reset time (GitHub resets up to ~60 min out), capped by the
+                        // configurable rate-limit wait cap — never by maxDelayMs and never aborted.
+                        long maxWaitMs = rateLimitMaxWaitSeconds * 1000L;
+                        long waitMs = delay + 1000L; // Add 1 second buffer
+                        if (waitMs > maxWaitMs) {
+                            logger.warn("Rate limit reset wait {} ms exceeds {} ({}s), capping wait to {} ms",
+                                    waitMs, RATE_LIMIT_MAX_WAIT_SECONDS_PROPERTY, rateLimitMaxWaitSeconds, maxWaitMs);
+                            waitMs = maxWaitMs;
+                        }
+                        logger.info("Rate limit resets at: {}, waiting {} ms", resetTime, waitMs);
+                        return waitMs;
                     }
                 } catch (NumberFormatException e) {
                     logger.debug("Could not parse X-RateLimit-Reset header: {}", rateLimitReset);
@@ -211,4 +276,5 @@ public class RetryPolicy {
     public long getMaxDelayMs() { return maxDelayMs; }
     public double getBackoffMultiplier() { return backoffMultiplier; }
     public double getJitterFactor() { return jitterFactor; }
+    public long getRateLimitMaxWaitSeconds() { return rateLimitMaxWaitSeconds; }
 }
