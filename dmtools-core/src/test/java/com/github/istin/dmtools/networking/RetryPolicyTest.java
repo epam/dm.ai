@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.networking;
 
 import com.github.istin.dmtools.common.networking.RestClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import okhttp3.Headers;
 import okhttp3.Response;
 import org.apache.logging.log4j.LogManager;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -163,6 +165,118 @@ class RetryPolicyTest {
         assertEquals(120000, customPolicy.getMaxDelayMs());
         assertEquals(3.0, customPolicy.getBackoffMultiplier());
         assertEquals(0.5, customPolicy.getJitterFactor());
+    }
+
+    @Test
+    @DisplayName("Should honor X-RateLimit-Reset far in the future instead of capping at maxDelayMs")
+    void testRateLimitResetFarFutureNotCappedAtMaxDelay() throws Exception {
+        long futureTime = (System.currentTimeMillis() / 1000L) + 600; // 10 minutes in future
+        when(mockResponse.header("X-RateLimit-Reset")).thenReturn(String.valueOf(futureTime));
+
+        long delay = retryPolicy.calculateDelayMs(1, mockResponse);
+
+        // Must wait ~10 minutes (+1s buffer), NOT be capped at maxDelayMs (60s)
+        assertTrue(delay > RetryPolicy.DEFAULT_MAX_DELAY_MS,
+                "Rate-limit reset wait must not be capped at maxDelayMs (60s), was: " + delay);
+        assertTrue(delay >= 595000 && delay <= 602000,
+                "Delay should be ~600s + 1s buffer, was: " + delay);
+    }
+
+    @Test
+    @DisplayName("Should honor X-RateLimit-Reset a few seconds in the future")
+    void testRateLimitResetFewSecondsHonored() throws Exception {
+        long futureTime = (System.currentTimeMillis() / 1000L) + 5; // 5 seconds in future
+        when(mockResponse.header("X-RateLimit-Reset")).thenReturn(String.valueOf(futureTime));
+
+        long delay = retryPolicy.calculateDelayMs(1, mockResponse);
+
+        // ~5s + 1s buffer
+        assertTrue(delay >= 5000 && delay <= 7000,
+                "Delay should be ~5s + 1s buffer, was: " + delay);
+    }
+
+    @Test
+    @DisplayName("Should cap X-RateLimit-Reset wait at default rate-limit max wait (60 min), not throw")
+    void testRateLimitResetCappedAtDefaultRateLimitMaxWait() {
+        long futureTime = (System.currentTimeMillis() / 1000L) + 7200; // 2 hours in future
+        when(mockResponse.header("X-RateLimit-Reset")).thenReturn(String.valueOf(futureTime));
+
+        long delay = assertDoesNotThrow(() -> retryPolicy.calculateDelayMs(1, mockResponse),
+                "Long rate-limit reset wait must be capped, not aborted");
+
+        // Capped at the default RATE_LIMIT_MAX_WAIT_SECONDS (3600s)
+        assertEquals(RetryPolicy.DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS * 1000L, delay,
+                "Delay should be capped at the default 3600s rate-limit max wait");
+    }
+
+    @Test
+    @DisplayName("Should honor rate-limit Retry-After beyond 5 minutes")
+    void testRateLimitedRetryAfterBeyondFiveMinutesHonored() {
+        when(mockResponse.code()).thenReturn(429);
+        when(mockResponse.header("Retry-After")).thenReturn("600"); // 10 minutes
+
+        long delay = assertDoesNotThrow(() -> retryPolicy.calculateDelayMs(1, mockResponse),
+                "Rate-limit Retry-After of 600s must be honored, not aborted");
+
+        // 600s with up to 30% jitter, and definitely beyond the old 300s abort threshold
+        assertTrue(delay > RetryPolicy.MAX_RETRY_AFTER_SECONDS * 1000L,
+                "Delay should exceed the old 300s abort threshold, was: " + delay);
+        assertTrue(delay >= 510000 && delay <= 690000,
+                "Delay should be ~600s with jitter, was: " + delay);
+    }
+
+    @Test
+    @DisplayName("Should still abort non-rate-limit Retry-After beyond 5 minutes")
+    void testNonRateLimitedRetryAfterBeyondFiveMinutesAborts() {
+        when(mockResponse.code()).thenReturn(503);
+        when(mockResponse.header("Retry-After")).thenReturn("600");
+
+        assertThrows(IOException.class, () -> retryPolicy.calculateDelayMs(1, mockResponse),
+                "Non-rate-limit Retry-After beyond 300s should still abort");
+    }
+
+    @Test
+    @DisplayName("Should cap rate-limit Retry-After at the rate-limit max wait instead of throwing")
+    void testRateLimitedRetryAfterAboveCapIsCappedNotThrown() {
+        when(mockResponse.code()).thenReturn(429);
+        when(mockResponse.header("Retry-After")).thenReturn("7200"); // 2 hours, above default cap
+
+        long delay = assertDoesNotThrow(() -> retryPolicy.calculateDelayMs(1, mockResponse),
+                "Rate-limit Retry-After above the cap must be capped, not aborted");
+
+        // Capped at 3600s, then jittered by up to 15% (0.3 factor * +/-0.5)
+        long capMs = RetryPolicy.DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS * 1000L;
+        assertTrue(delay >= capMs * 0.84 && delay <= capMs * 1.16,
+                "Delay should be ~3600s cap with jitter, was: " + delay);
+    }
+
+    @Test
+    @DisplayName("Should respect configurable RATE_LIMIT_MAX_WAIT_SECONDS cap")
+    void testRateLimitMaxWaitSecondsConfigurable() throws Exception {
+        PropertyReader.setOverrides(Map.of("RATE_LIMIT_MAX_WAIT_SECONDS", "300"));
+        try {
+            RetryPolicy cappedPolicy = new RetryPolicy(logger);
+            assertEquals(300L, cappedPolicy.getRateLimitMaxWaitSeconds(),
+                    "Policy should pick up the configured RATE_LIMIT_MAX_WAIT_SECONDS");
+
+            long futureTime = (System.currentTimeMillis() / 1000L) + 3600; // 60 min in future
+            when(mockResponse.header("X-RateLimit-Reset")).thenReturn(String.valueOf(futureTime));
+
+            long delay = cappedPolicy.calculateDelayMs(1, mockResponse);
+
+            assertEquals(300_000L, delay,
+                    "Wait should be capped at the configured 300s, was: " + delay);
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    @DisplayName("Should default rate-limit max wait to 3600 seconds")
+    void testDefaultRateLimitMaxWaitSeconds() {
+        assertEquals(3600L, RetryPolicy.DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS);
+        assertEquals(RetryPolicy.DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS,
+                retryPolicy.getRateLimitMaxWaitSeconds());
     }
 
     @Test
