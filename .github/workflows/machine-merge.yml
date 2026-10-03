@@ -1,0 +1,48 @@
+# Machine merge bot stub — event-driven fast path (frozen machine loop).
+#
+# The SM cron tick is best-effort (GitHub silently drops scheduled runs);
+# this workflow reacts to EVENTS: CI conclusion, label changes, head
+# pushes, check-run completions — and runs the deterministic merge bot
+# (factory-merge.yml) so approved green PRs merge within seconds.
+# Idempotent against the SM: shared labels, first actor wins.
+name: 'Machine Merge Bot'
+
+on:
+  workflow_run:
+    workflows: ['Unit Tests']   # dm.ai's PR CI (unit-tests.yml)
+    types: [completed]
+  pull_request:
+    types: [labeled, synchronize, edited]
+  check_run:
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: machine-merge-bot
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    # Label events only matter for the machine latches; other PR events
+    # (synchronize/edited) always run — cheap and idempotent.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.action != 'labeled' ||
+      contains(github.event.label.name, 'ai_') ||
+      contains(github.event.label.name, 'pr_approved')
+    # Frozen machine loop (same freeze contract as machine-sm.yml: agents
+    # resolve from dmtools-agents RELEASES by vars.AGENTS_VERSION).
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge.yml@e611e5f4240e9c8a5cdbf10721562eb04513d006
+    with:
+      # Bitrise Build Hub pool — same pool dm.ai's Unit Tests CI runs on.
+      runner: bitrise-runner-dmtools-ci
+      # dm.ai's PR CI — the bot's workflow-run fallback reads its runs when
+      # a head carries no check runs.
+      ci_workflow: unit-tests.yml
+    secrets:
+      SOURCE_GITHUB_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
