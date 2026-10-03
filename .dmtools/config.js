@@ -8,6 +8,20 @@
  * See agents/README.md for full documentation of all configuration options.
  */
 module.exports = {
+    // #687: whose login is "the machine" — auto rework (prMachineAuthor)
+    // and pr_approved arming fire only on PRs authored by this login.
+    machineAuthor: 'ai-teammate',
+    // Machine-factory runner slots (dmtools-agents docs/machine-factory-integration.md §5a).
+    // Identical to dmtools-dart/.dmtools/runners — per-repo provider overrides go here.
+    sm: {
+        runners: {
+            bug:    '.dmtools/runners/fa-bug-dev.json',
+            story:  '.dmtools/runners/fa-story-dev.json',
+            review: '.dmtools/runners/fa-review.json',
+            rework: '.dmtools/runners/fa-rework.json'
+        }
+    },
+
     repository: {
         owner: 'epam',
         repo: 'dm.ai'
