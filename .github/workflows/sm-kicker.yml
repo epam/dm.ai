@@ -1,0 +1,49 @@
+# SM kicker — thin stub over the canonical watchdog in the factory home.
+# All logic (sm-liveness + head-completeness) lives in
+# IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm-kicker.yml.
+# Parity with dmtools-dart (sm-kicker.yml) and dmtools-agents
+# (factory-sm-kicker.yml).
+#
+# Why this repo needs it: GitHub silently drops schedule() crons on quiet
+# repos — the kicker re-dispatches machine-sm.yml on its OWN schedule +
+# every non-main push, so the state machine keeps moving even when the
+# machine-sm cron is dropped.
+#
+# Event-driven wake-up: validation verdicts arrive as Unit Tests
+# conclusions (dm.ai's PR CI, workflow `Unit Tests` / unit-tests.yml);
+# reacting to them closes the gap — latch/merge happens within seconds of
+# the CI finishing, cron or no cron (dart#338/fa#1203 lesson).
+name: SM kicker
+
+run-name: '🥁 kicker ${{ github.event_name }} ${{ github.ref_name }}'
+
+on:
+  push:
+    branches-ignore: [main]
+  schedule:
+    - cron: '13,43 * * * *'
+  workflow_run:
+    workflows: ['Unit Tests']   # dm.ai's real PR CI — check completions tick the SM
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: sm-kicker
+  cancel-in-progress: false
+
+jobs:
+  kicker:
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm-kicker.yml@e611e5f4240e9c8a5cdbf10721562eb04513d006
+    with:
+      sm_workflow: machine-sm.yml
+      ci_workflow: unit-tests.yml
+      ci_display_name: 'Unit Tests'
+      # The required protection context is the single `test` job named
+      # "Java unit tests" ("Protect main" ruleset — see unit-tests.yml).
+      required_contexts: 'Java unit tests'

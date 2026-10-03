@@ -1,0 +1,80 @@
+# Machine SM — thin stub over the FROZEN machine loop
+# (IstiN/dmtools-agentic-workflows, reusable).
+#
+# The whole reconcile tick (version resolution, dmtools install, pack run)
+# lives in IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm.yml.
+# This file carries only the triggers (cron + manual dry dispatch) and the
+# call. NO caller-side concurrency: the factory owns the `machine-sm` group
+# — a caller declaring the same group deadlocks the called workflow (it
+# waits forever on a group its own caller holds).
+#
+# Agent code and the dmtools CLI are NOT tied to the workflow pin: they
+# resolve from RELEASES at run time by repo variables (bump = repo-settings
+# edit, zero workflow changes):
+#   vars.AGENTS_VERSION  — dmtools-agents release tag ('latest' default)
+#   vars.DMTOOLS_VERSION — dmtools (Java) CLI release tag ('latest' default)
+name: 'Machine SM'
+
+run-name: >-
+  🧹 SM ${{
+    github.event_name == 'workflow_dispatch' && 'manual tick' ||
+    format('tick {0}', github.event.schedule || '') }}${{
+  github.event.inputs.dryRun == 'true' && ' (dry)' || '' }}
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # short ticks — the engine idles when busy
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Log the plan, perform no action'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write         # checkout + silent update-branch pushes
+  issues: write           # labels + close-issue safety net
+  pull-requests: write    # update-branch + merge
+  checks: write           # bridge-free validation stamps (factory #510)
+  actions: write          # workflow_dispatch on the teammate workflow
+
+jobs:
+  sm:
+    # Frozen machine loop — pinned to the immutable SHA of
+    # IstiN/dmtools-agentic-workflows main (same pin as ai-teammate.yml).
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm.yml@e611e5f4240e9c8a5cdbf10721562eb04513d006
+    with:
+      # Bitrise Build Hub pool — same pool dm.ai's Unit Tests CI runs on.
+      runner: bitrise-runner-dmtools-ci
+      # #687: whose login is "the machine" — pr_approved arming and the
+      # auto-rework rules fire only on PRs authored by this login
+      # (.dmtools/config.js machineAuthor carries the same value).
+      machine-author: 'ai-teammate'
+      # Bridge-free mode (factory #510): the tick stamps the required
+      # protection check itself. dm.ai's "Protect main" ruleset requires
+      # exactly one context: the `test` job named "Java unit tests"
+      # (unit-tests.yml — do not rename without updating the ruleset).
+      validation-checks: '["Java unit tests"]'
+      # sm_github.json validation rules dispatch THIS repo's PR CI
+      # (unit-tests.yml) on PR heads — without it the required context
+      # never appears and approved PRs stall BLOCKED.
+      ci-workflow: unit-tests.yml
+      # Factory-state snapshot → public prerelease asset (board: site/factory)
+      state-publish: '{"channel":"release","tag":"factory-state","asset":"dm-ai-state.json"}'
+      # Manual ticks default to dry; cron ticks run live.
+      dryRun: ${{ github.event.inputs.dryRun || 'false' }}
+      # #687: the workflow token — silent branch updates (pushes trigger
+      # no workflows). Input channel: secrets-block mapping of github.token
+      # arrives EMPTY through a reusable call (live-verified); it rides
+      # this INPUT instead.
+      silent-token: ${{ github.token }}
+    # Explicit mapping — the factory DECLARES SOURCE_GITHUB_TOKEN as a
+    # required named secret (plus optional SILENT_GH_TOKEN), and
+    # `secrets: inherit` does not satisfy required-secret validation at
+    # call time. EXACTLY the set factory-sm.yml declares.
+    secrets:
+      SOURCE_GITHUB_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+      # Optional repo secret; unset → empty → the factory falls back to
+      # the silent-token input above (github.token).
+      SILENT_GH_TOKEN: ${{ secrets.SILENT_GH_TOKEN }}
