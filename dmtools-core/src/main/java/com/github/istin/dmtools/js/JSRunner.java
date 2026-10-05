@@ -8,7 +8,9 @@ import com.github.istin.dmtools.atlassian.confluence.Confluence;
 import com.github.istin.dmtools.common.code.SourceCode;
 import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.tracker.NoOpTrackerClient;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import javax.inject.Provider;
 import com.github.istin.dmtools.di.DaggerJSRunnerComponent;
 import com.github.istin.dmtools.di.ServerManagedIntegrationsModule;
 import com.github.istin.dmtools.job.AbstractJob;
@@ -85,7 +87,7 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
     }
 
     @Inject
-    TrackerClient<? extends ITicket> trackerClient;
+    Provider<TrackerClient<? extends ITicket>> trackerClientProvider;
 
     @Inject
     Confluence confluence;
@@ -143,6 +145,20 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
                    (ai != null ? ai.getClass().getSimpleName() : "null"));
     }
 
+    /**
+     * Resolves the tracker lazily so tracker-less JS runs (e.g. the agents unit-test suite)
+     * work without any tracker configuration. Tools that actually need a tracker fail on use
+     * through {@link NoOpTrackerClient}.
+     */
+    private TrackerClient<? extends ITicket> resolveTrackerClient() {
+        try {
+            return trackerClientProvider.get();
+        } catch (RuntimeException e) {
+            logger.warn("No tracker configured, JS tools needing a tracker will fail on use: {}", e.getMessage());
+            return new NoOpTrackerClient();
+        }
+    }
+
     @Override
     protected void initializeServerManaged(JSONObject resolvedIntegrations) {
         throw new UnsupportedOperationException("Server-managed execution not yet implemented for JSRunner");
@@ -158,6 +174,7 @@ public class JSRunner extends AbstractJob<JSRunner.JSParams, Object> {
         logger.info("Executing JavaScript test with path: {}", jsPath);
         
         // Prepare JavaScript execution
+        TrackerClient<? extends ITicket> trackerClient = resolveTrackerClient();
         SourceCode primarySourceCode = sourceCodes != null && !sourceCodes.isEmpty() ? sourceCodes.get(0) : null;
         
         JavaScriptExecutor executor = js(jsPath)

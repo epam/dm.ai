@@ -106,6 +106,12 @@ public class RetryPolicy {
             return true;
         }
 
+        if (e instanceof com.github.istin.dmtools.common.networking.RestClient.RestClientException) {
+            // The message embeds the request URL (host:port, ids), so substring checks on it
+            // misfire (a port like 50312 contains "503"). Decide on the status code and body.
+            return isRetryableStatus((com.github.istin.dmtools.common.networking.RestClient.RestClientException) e);
+        }
+
         String message = e.getMessage();
         if (message == null) {
             return false;
@@ -121,6 +127,15 @@ public class RetryPolicy {
                lowerMessage.contains("gateway timeout") ||
                lowerMessage.contains("502") ||
                lowerMessage.contains("504");
+    }
+
+    private static boolean isRetryableStatus(com.github.istin.dmtools.common.networking.RestClient.RestClientException e) {
+        int code = e.getCode();
+        if (code == 429 || code == 502 || code == 503 || code == 504) {
+            return true;
+        }
+        String body = e.getBody() == null ? "" : e.getBody().toLowerCase();
+        return body.contains("rate limit") || body.contains("too many requests") || body.contains("throttl");
     }
 
     /**
