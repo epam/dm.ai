@@ -114,4 +114,31 @@ public class HtmlToMarkdownConverterTest {
         assertFalse(HtmlToMarkdownConverter.isMarkdownFormat(""));
         assertFalse(HtmlToMarkdownConverter.isMarkdownFormat("wiki"));
     }
+
+    @Test
+    public void convert_manyTablesKeepsEachTableInPlace() {
+        StringBuilder html = new StringBuilder();
+        for (int i = 0; i < 13; i++) {
+            html.append("<p>Section ").append(i).append("</p>")
+                .append("<table><tbody><tr><th>H</th></tr><tr><td>value-").append(i).append("</td></tr></tbody></table>");
+        }
+
+        String markdown = HtmlToMarkdownConverter.convert(html.toString());
+
+        for (int i = 0; i < 13; i++) {
+            assertEquals("value-" + i + " must appear once", 1, markdown.split("value-" + i + " \\|", -1).length - 1);
+        }
+        assertFalse(markdown.contains("DMTABLEIDX"));
+        assertFalse(markdown.matches("(?s).*\\|\\d\\n.*"));
+    }
+
+    @Test
+    public void convert_codeBlockInsideTableCellIsRestored() {
+        String html = "<table><tbody><tr><th>Formula</th></tr><tr><td><pre>a = b + c</pre></td></tr></tbody></table>";
+
+        String markdown = HtmlToMarkdownConverter.convert(html);
+
+        assertTrue(markdown.contains("a = b + c"));
+        assertFalse(markdown.contains("DMCODEIDX"));
+    }
 }

@@ -46,10 +46,12 @@ public class ConfluencePageDownloader {
 
     private final Confluence confluence;
     private final ConfluenceExcerptInliner excerptInliner;
+    private final ConfluenceMentionResolver mentionResolver;
 
     public ConfluencePageDownloader(Confluence confluence) {
         this.confluence = confluence;
         this.excerptInliner = new ConfluenceExcerptInliner(confluence);
+        this.mentionResolver = new ConfluenceMentionResolver(confluence);
     }
 
     /**
@@ -102,6 +104,7 @@ public class ConfluencePageDownloader {
 
         int written = 0;
         int index = 0;
+        List<AttachmentJob> attachmentJobs = new ArrayList<>();
         while (!queue.isEmpty()) {
             PageLevel current = queue.poll();
             Content page = current.page;
@@ -124,7 +127,7 @@ public class ConfluencePageDownloader {
                         ? page.getStorage().getValue().trim() : "";
                 if (!bodyText.isBlank()) {
                     String markdownText = ConfluenceStorageMarkdown.toMarkdown(
-                            excerptInliner.inline(bodyText, page.getSpaceKey()));
+                            mentionResolver.resolve(excerptInliner.inline(bodyText, page.getSpaceKey())));
                     Path mdFile = pageFolder.resolve(safeName + ".md");
                     Files.write(mdFile, markdownText.getBytes(StandardCharsets.UTF_8));
                     logger.info("Wrote Confluence page -> {} ({} chars, markdown)", mdFile, markdownText.length());
@@ -148,12 +151,19 @@ public class ConfluencePageDownloader {
 
                 // Download attachments
                 if (downloadAttachments && contentId != null && !contentId.isBlank()) {
-                    downloadPageAttachments(contentId, pageFolder.toFile());
+                    attachmentJobs.add(new AttachmentJob(contentId, pageFolder.toFile()));
                 }
             } catch (Exception e) {
                 logger.warn("Could not process Confluence page {} (skipping): {}", contentId, e.getMessage());
             }
         }
+
+        // Attachments are the slowest part; pages are independent, so a couple of them run side by side
+        // (each page additionally downloads its own attachments concurrently).
+        ConfluenceParallel.map(attachmentJobs, Math.max(1, ConfluenceParallel.parallelism() / 2), job -> {
+            downloadPageAttachments(job.contentId, job.folder);
+            return null;
+        });
 
         logger.info("Wrote {} Confluence page(s) to {}", written, outputDir.getAbsolutePath());
         return written;
@@ -183,17 +193,23 @@ public class ConfluencePageDownloader {
         try {
             Set<String> urls = confluence.parseUris(storageHtml);
             if (urls != null) {
+                List<String> newUrls = new ArrayList<>();
                 for (String url : urls) {
-                    if (!alreadyProcessedUrls.add(url)) {
-                        continue;
+                    if (alreadyProcessedUrls.add(url)) {
+                        newUrls.add(url);
                     }
+                }
+                List<Content> resolved = ConfluenceParallel.map(newUrls, ConfluenceParallel.parallelism(), url -> {
                     try {
-                        Content linked = confluence.contentByUrl(url);
-                        if (linked != null && linked.getId() != null && !alreadyQueuedIds.contains(linked.getId())) {
-                            related.add(linked);
-                        }
+                        return confluence.contentByUrl(url);
                     } catch (Exception e) {
                         logger.debug("Could not resolve linked Confluence URL {}: {}", url, e.getMessage());
+                        return null;
+                    }
+                });
+                for (Content linked : resolved) {
+                    if (linked != null && linked.getId() != null && !alreadyQueuedIds.contains(linked.getId())) {
+                        related.add(linked);
                     }
                 }
             }
@@ -221,7 +237,7 @@ public class ConfluencePageDownloader {
         // the page that contains it, so that space is tried before the default lookup.
         String pageSpaceKey = page.getSpaceKey();
         List<PageLink> internalLinks = extractInternalPageLinks(storageHtml);
-        for (PageLink link : internalLinks) {
+        List<Content> resolvedLinks = ConfluenceParallel.map(internalLinks, ConfluenceParallel.parallelism(), link -> {
             try {
                 Content linked = null;
                 if (link.spaceKey != null && !link.spaceKey.isBlank()) {
@@ -234,12 +250,18 @@ public class ConfluencePageDownloader {
                         linked = confluence.findContent(link.title);
                     }
                 }
-                if (linked != null && linked.getId() != null && !alreadyQueuedIds.contains(linked.getId())) {
-                    related.add(linked);
-                }
+                return linked;
             } catch (Exception e) {
                 logger.debug("Could not resolve internal Confluence link '{}' (space={}): {}",
                         link.title, link.spaceKey, e.getMessage());
+                return null;
+            }
+        });
+        Set<String> seenIds = new HashSet<>();
+        for (Content linked : resolvedLinks) {
+            if (linked != null && linked.getId() != null && !alreadyQueuedIds.contains(linked.getId())
+                    && seenIds.add(linked.getId())) {
+                related.add(linked);
             }
         }
 
@@ -392,6 +414,16 @@ public class ConfluencePageDownloader {
         PageLink(String title, String spaceKey) {
             this.title = title;
             this.spaceKey = spaceKey;
+        }
+    }
+
+    private static final class AttachmentJob {
+        final String contentId;
+        final File folder;
+
+        AttachmentJob(String contentId, File folder) {
+            this.contentId = contentId;
+            this.folder = folder;
         }
     }
 }
