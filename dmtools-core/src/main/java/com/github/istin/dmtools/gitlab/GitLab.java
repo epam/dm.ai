@@ -91,6 +91,17 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         return result;
     }
 
+    // GitLab only knows opened/closed/merged/all; map the provider-neutral PR states onto them
+    static String toGitLabMergeRequestState(String state) {
+        if (IPullRequest.PullRequestState.STATE_DECLINED.equalsIgnoreCase(state)) {
+            return "closed";
+        }
+        if (IPullRequest.PullRequestState.STATE_OPEN.equalsIgnoreCase(state)) {
+            return "opened";
+        }
+        return state;
+    }
+
     @Override
     public List<IPullRequest> pullRequests(String workspace, String repository, String state, boolean checkAllRequests, Calendar startDate) throws IOException {
         List<IPullRequest> allPullRequests = new ArrayList<>();
@@ -101,7 +112,7 @@ public abstract class GitLab extends AbstractRestClient implements SourceCode {
         // Sort ascending (oldest first) so early pages are stable between daily runs
         // and the HTTP cache only misses on the last page (newest MRs).
         String baseUrl = String.format("projects/%s/merge_requests?state=%s&per_page=%d&order_by=created_at&sort=asc",
-                getEncodedProject(workspace, repository), state, perPage);
+                getEncodedProject(workspace, repository), toGitLabMergeRequestState(state), perPage);
         if (startDate != null) {
             String createdAfter = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
                     .format(startDate.getTime());

@@ -145,7 +145,12 @@ public interface SourceCode {
     static void addGitlabSource(List<SourceCode> sourceCodes) throws IOException {
         SourceCode gitlabSourceCode = BasicGitLab.getInstance();
         if (gitlabSourceCode.isConfigured()) {
-            if (gitlabSourceCode.getDefaultRepository() == null) {
+            boolean noDefaultWorkspace = gitlabSourceCode.getDefaultWorkspace() == null
+                    || gitlabSourceCode.getDefaultWorkspace().isEmpty();
+            if (gitlabSourceCode.getDefaultRepository() == null && noDefaultWorkspace) {
+                // No default group to enumerate: callers pass workspace/repository explicitly
+                sourceCodes.add(gitlabSourceCode);
+            } else if (gitlabSourceCode.getDefaultRepository() == null) {
                 List<IRepository> repositories = gitlabSourceCode.getRepositories(gitlabSourceCode.getDefaultWorkspace());
                 for (IRepository repository : repositories) {
                     sourceCodes.add(new BasicGitLab() {
