@@ -86,4 +86,105 @@ public class ConfluencePageDownloaderTest {
         assertTrue(new File(outputDir, "Test_Page/Test_Page.md").exists());
         verify(confluence, never()).getPageInlineComments(anyString(), anyInt());
     }
+
+    @Test
+    public void internalLinksWithoutSpaceKeyAreResolvedInThePageSpaceFirst() throws Exception {
+        Confluence confluence = Mockito.spy(new Confluence("https://example.com/wiki", "auth"));
+
+        Storage storage = mock(Storage.class);
+        when(storage.getValue()).thenReturn(
+                "<p><ac:link><ri:page ri:content-title=\"Related\" /></ac:link></p>");
+        Content page = mock(Content.class);
+        when(page.getId()).thenReturn("1");
+        when(page.getTitle()).thenReturn("Main");
+        when(page.getStorage()).thenReturn(storage);
+        when(page.getSpaceKey()).thenReturn("DOCS");
+
+        Storage relatedStorage = mock(Storage.class);
+        when(relatedStorage.getValue()).thenReturn("<p>Related body</p>");
+        Content related = mock(Content.class);
+        when(related.getId()).thenReturn("2");
+        when(related.getTitle()).thenReturn("Related");
+        when(related.getStorage()).thenReturn(relatedStorage);
+
+        doReturn(page).when(confluence).contentByUrl(anyString());
+        doReturn(related).when(confluence).findContent("Related", "DOCS");
+        doReturn(Collections.emptyList()).when(confluence).downloadPageAttachments(anyString(), any(File.class));
+
+        File outputDir = tempFolder.newFolder();
+        int written = new ConfluencePageDownloader(confluence).downloadPages(
+                Collections.singletonList("https://example.com/wiki/spaces/DOCS/pages/1/Main"), outputDir, 1, false);
+
+        assertEquals(2, written);
+        assertTrue(new File(outputDir, "Related/Related.md").exists());
+        verify(confluence, never()).findContent("Related");
+    }
+
+    @Test
+    public void internalLinkFallsBackToDefaultLookupWhenNotFoundInPageSpace() throws Exception {
+        Confluence confluence = Mockito.spy(new Confluence("https://example.com/wiki", "auth"));
+
+        Storage storage = mock(Storage.class);
+        when(storage.getValue()).thenReturn(
+                "<p><ac:link><ri:page ri:content-title=\"Related\" /></ac:link></p>");
+        Content page = mock(Content.class);
+        when(page.getId()).thenReturn("1");
+        when(page.getTitle()).thenReturn("Main");
+        when(page.getStorage()).thenReturn(storage);
+        when(page.getSpaceKey()).thenReturn("DOCS");
+
+        Storage relatedStorage = mock(Storage.class);
+        when(relatedStorage.getValue()).thenReturn("<p>Related body</p>");
+        Content related = mock(Content.class);
+        when(related.getId()).thenReturn("2");
+        when(related.getTitle()).thenReturn("Related");
+        when(related.getStorage()).thenReturn(relatedStorage);
+
+        doReturn(page).when(confluence).contentByUrl(anyString());
+        doReturn(null).when(confluence).findContent("Related", "DOCS");
+        doReturn(related).when(confluence).findContent("Related");
+        doReturn(Collections.emptyList()).when(confluence).downloadPageAttachments(anyString(), any(File.class));
+
+        int written = new ConfluencePageDownloader(confluence).downloadPages(
+                Collections.singletonList("https://example.com/wiki/spaces/DOCS/pages/1/Main"),
+                tempFolder.newFolder(), 1, false);
+
+        assertEquals(2, written);
+    }
+
+    @Test
+    public void downloadedMarkdownContainsInlinedExcerptContent() throws Exception {
+        Confluence confluence = Mockito.spy(new Confluence("https://example.com/wiki", "auth"));
+
+        Storage storage = mock(Storage.class);
+        when(storage.getValue()).thenReturn(
+                "<p>Table from: Source</p><ac:structured-macro ac:name=\"table-excerpt-include\">"
+                        + "<ac:parameter ac:name=\"page\"><ac:link><ri:page ri:content-title=\"Source\" /></ac:link></ac:parameter>"
+                        + "<ac:parameter ac:name=\"name\">Rules</ac:parameter></ac:structured-macro>");
+        Content page = mock(Content.class);
+        when(page.getId()).thenReturn("1");
+        when(page.getTitle()).thenReturn("Main");
+        when(page.getStorage()).thenReturn(storage);
+        when(page.getSpaceKey()).thenReturn("DOCS");
+
+        Storage sourceStorage = mock(Storage.class);
+        when(sourceStorage.getValue()).thenReturn(
+                "<ac:structured-macro ac:name=\"table-excerpt\"><ac:parameter ac:name=\"name\">Rules</ac:parameter>"
+                        + "<ac:rich-text-body><table><tbody><tr><th>Key</th></tr><tr><td>included-value</td></tr></tbody></table>"
+                        + "</ac:rich-text-body></ac:structured-macro>");
+        Content source = mock(Content.class);
+        when(source.getId()).thenReturn("2");
+        when(source.getSpaceKey()).thenReturn("DOCS");
+        when(source.getStorage()).thenReturn(sourceStorage);
+
+        doReturn(page).when(confluence).contentByUrl(anyString());
+        doReturn(source).when(confluence).findContent("Source", "DOCS");
+
+        File outputDir = tempFolder.newFolder();
+        new ConfluencePageDownloader(confluence).downloadPages(
+                Collections.singletonList("https://example.com/wiki/spaces/DOCS/pages/1/Main"), outputDir, 0, false);
+
+        String markdown = FileUtils.readFileToString(new File(outputDir, "Main/Main.md"), StandardCharsets.UTF_8);
+        assertTrue(markdown.contains("included-value"));
+    }
 }

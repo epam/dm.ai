@@ -44,6 +44,33 @@ public class Content extends JSONModel implements Key, TicketLink, ToText {
         return getString(TITLE);
     }
 
+    /**
+     * Space key of the page, read from the expanded {@code space} object or, when only a
+     * link is available, from {@code _expandable.space}. Returns {@code null} when unknown.
+     */
+    public String getSpaceKey() {
+        JSONObject json = getJSONObject();
+        if (json == null) {
+            return null;
+        }
+        JSONObject space = json.optJSONObject("space");
+        if (space != null) {
+            String key = space.optString("key", "");
+            if (!key.isBlank()) {
+                return key;
+            }
+        }
+        JSONObject expandable = json.optJSONObject("_expandable");
+        if (expandable != null) {
+            String link = expandable.optString("space", "");
+            if (!link.isBlank()) {
+                String[] split = link.split("/");
+                return split[split.length - 1];
+            }
+        }
+        return null;
+    }
+
     public Storage getStorage() {
         JSONObject body = getJSONObject("body");
         if (body == null) {
