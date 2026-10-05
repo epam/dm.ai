@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   merge-trigger:
-    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge-trigger.yml@e611e5f4240e9c8a5cdbf10721562eb04513d006
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge-trigger.yml@main
     with:
       # Bitrise Build Hub pool — same pool dm.ai's Unit Tests CI runs on.
       runner: bitrise-runner-dmtools-ci
