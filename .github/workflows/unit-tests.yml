@@ -113,8 +113,12 @@ jobs:
           git config --global user.name "dm.ai"
           git config --global user.email "dm.ai@epam.com"
 
-      - name: Run unit tests
-        run: ./gradlew :dmtools-core:test --no-daemon -x integrationTest
+      # One Gradle invocation builds the tests AND the shadow JAR the agents JS suite runs on:
+      # a second invocation paid JVM start, configuration and compile again (~36 s on the
+      # runner). Test classes run in parallel forks (see maxParallelForks in
+      # dmtools-core/build.gradle).
+      - name: Run unit tests and build the shadow JAR
+        run: ./gradlew :dmtools-core:test :dmtools-core:shadowJar --no-daemon -x integrationTest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -127,11 +131,6 @@ jobs:
           path: '**/build/test-results/test/TEST-*.xml'
           reporter: java-junit
           fail-on-error: false
-
-      - name: Build DMTools shadow JAR (for agents JS tests)
-        run: ./gradlew :dmtools-core:shadowJar --no-daemon
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install DMTools CLI for agents tests
         run: |

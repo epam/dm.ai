@@ -92,9 +92,24 @@ public class IOUtils {
         if (path == null || !Files.exists(path)) {
             return;
         }
-        try (Stream<Path> paths = Files.walk(path)) {
-            for (Path current : paths.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(current);
+        // The tree may be mutated by another thread/process while it is walked (e.g. several
+        // test JVMs sharing a client cache folder): an entry that vanishes between the walk and
+        // the delete, or a directory that gained a file after its children were listed, is
+        // not an error — the goal is only "nothing left under path".
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try (Stream<Path> paths = Files.walk(path)) {
+                for (Path current : paths.sorted(Comparator.reverseOrder()).toList()) {
+                    try {
+                        Files.deleteIfExists(current);
+                    } catch (java.nio.file.DirectoryNotEmptyException e) {
+                        // a concurrent writer added an entry — the next attempt removes it
+                    }
+                }
+            } catch (java.io.UncheckedIOException | java.nio.file.NoSuchFileException e) {
+                // an entry disappeared while walking — retry against the current state
+            }
+            if (!Files.exists(path)) {
+                return;
             }
         }
     }
