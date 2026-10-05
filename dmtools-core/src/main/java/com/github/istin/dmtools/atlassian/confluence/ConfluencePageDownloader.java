@@ -45,9 +45,11 @@ public class ConfluencePageDownloader {
     private final Logger logger = LogManager.getLogger(ConfluencePageDownloader.class);
 
     private final Confluence confluence;
+    private final ConfluenceExcerptInliner excerptInliner;
 
     public ConfluencePageDownloader(Confluence confluence) {
         this.confluence = confluence;
+        this.excerptInliner = new ConfluenceExcerptInliner(confluence);
     }
 
     /**
@@ -121,7 +123,8 @@ public class ConfluencePageDownloader {
                 String bodyText = page.getStorage() != null && page.getStorage().getValue() != null
                         ? page.getStorage().getValue().trim() : "";
                 if (!bodyText.isBlank()) {
-                    String markdownText = ConfluenceStorageMarkdown.toMarkdown(bodyText);
+                    String markdownText = ConfluenceStorageMarkdown.toMarkdown(
+                            excerptInliner.inline(bodyText, page.getSpaceKey()));
                     Path mdFile = pageFolder.resolve(safeName + ".md");
                     Files.write(mdFile, markdownText.getBytes(StandardCharsets.UTF_8));
                     logger.info("Wrote Confluence page -> {} ({} chars, markdown)", mdFile, markdownText.length());
@@ -214,15 +217,22 @@ public class ConfluencePageDownloader {
             }
         }
 
-        // 3. Internal ac:link page references
+        // 3. Internal ac:link page references. A link without a space key points to the space of
+        // the page that contains it, so that space is tried before the default lookup.
+        String pageSpaceKey = page.getSpaceKey();
         List<PageLink> internalLinks = extractInternalPageLinks(storageHtml);
         for (PageLink link : internalLinks) {
             try {
-                Content linked;
+                Content linked = null;
                 if (link.spaceKey != null && !link.spaceKey.isBlank()) {
                     linked = confluence.findContent(link.title, link.spaceKey);
                 } else {
-                    linked = confluence.findContent(link.title);
+                    if (pageSpaceKey != null && !pageSpaceKey.isBlank()) {
+                        linked = confluence.findContent(link.title, pageSpaceKey);
+                    }
+                    if (linked == null) {
+                        linked = confluence.findContent(link.title);
+                    }
                 }
                 if (linked != null && linked.getId() != null && !alreadyQueuedIds.contains(linked.getId())) {
                     related.add(linked);
