@@ -50,7 +50,7 @@ class JSRunnerTest {
         jsRunner = new JSRunner();
         
         // Inject mocked dependencies
-        jsRunner.trackerClient = mockTrackerClient;
+        jsRunner.trackerClientProvider = () -> mockTrackerClient;
         jsRunner.ai = mockAI;
         jsRunner.confluence = mockConfluence;
         jsRunner.sourceCodes = List.of(mockSourceCode);
@@ -101,6 +101,24 @@ class JSRunnerTest {
         assertTrue(resultStr.contains("https://github.com/epam/dm.ai"), "Regex literal should match GitHub URL");
         assertTrue(resultStr.contains("https://a.com"), "Global regex literal should match first URL");
         assertTrue(resultStr.contains("https://b.com"), "Global regex literal should match second URL");
+    }
+
+    @Test
+    void testRunsWithoutTrackerConfiguration() throws Exception {
+        // Regression for epam/dm.ai#635: tracker-less JS runs (the agents unit-test suite)
+        // must not fail when no tracker is configured.
+        jsRunner.trackerClientProvider = () -> {
+            throw new RuntimeException("Failed to create TrackerClient instance.");
+        };
+        JSRunner.JSParams params = new JSRunner.JSParams();
+        params.setJsPath("function action(params) { return { success: true }; }");
+        params.setTicket(Map.of("key", "TEST-1"));
+        params.setResponse("");
+
+        Object result = jsRunner.runJobImpl(params);
+
+        assertNotNull(result);
+        assertTrue(result.toString().contains("true"));
     }
 
     @Test

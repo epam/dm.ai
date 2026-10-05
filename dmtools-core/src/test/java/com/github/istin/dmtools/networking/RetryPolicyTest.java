@@ -71,6 +71,26 @@ class RetryPolicyTest {
     }
 
     @Test
+    @DisplayName("Should not treat a port or id inside the URL as a retryable status code")
+    void testRestClientExceptionUrlDigitsAreNotStatusCodes() {
+        for (String port : new String[]{"50312", "42950", "15020", "45043"}) {
+            IOException e = new RestClient.RestClientException(
+                "printAndCreateException error: http://127.0.0.1:" + port + "/keyerror\nbad key\nBad Request\n400",
+                "The value 'TP-1' does not exist for field 'key'.", 400);
+            assertFalse(retryPolicy.isRetryable(e), "port " + port);
+        }
+    }
+
+    @Test
+    @DisplayName("Should retry RestClientException by status code or body")
+    void testRestClientExceptionRetryableByStatusOrBody() {
+        assertTrue(retryPolicy.isRetryable(new RestClient.RestClientException("m", "", 502)));
+        assertTrue(retryPolicy.isRetryable(new RestClient.RestClientException("m", "", 504)));
+        assertTrue(retryPolicy.isRetryable(new RestClient.RestClientException("m", "Too Many Requests", 400)));
+        assertFalse(retryPolicy.isRetryable(new RestClient.RestClientException("m", "nope", 404)));
+    }
+
+    @Test
     @DisplayName("Should calculate exponential backoff delay")
     void testCalculateDelayWithExponentialBackoff() throws Exception {
         // Test exponential backoff without server headers
