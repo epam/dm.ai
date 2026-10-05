@@ -1333,6 +1333,39 @@ public class TeammateRunJobFlowCoverageTest {
     }
 
     @Test
+    void testPostJSActionRunsWhenOutputTypeNoneAndNoResponseFile() throws Exception {
+        JavaScriptExecutor postExecutor = mock(JavaScriptExecutor.class);
+        when(postExecutor.mcp(any(), any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.withJobContext(any(), any(), any())).thenReturn(postExecutor);
+        when(postExecutor.with(anyString(), any())).thenReturn(postExecutor);
+        when(postExecutor.execute()).thenReturn(null);
+        teammate.scriptedExecutors.put("agents/js/post.js", postExecutor);
+
+        params.setSkipAIProcessing(true);
+        params.setOutputType(Params.OutputType.none);
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setPostJSAction("agents/js/post.js");
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                        .thenReturn("command output\nExit Code: 0");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile(anyString()))
+                        .thenReturn(Map.of());
+
+                teammate.runJobImpl(params);
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+
+        verify(postExecutor).execute();
+    }
+
+    @Test
     void testDefaultConstructor() {
         Teammate defaultTeammate = new Teammate();
         assertNotNull(defaultTeammate);
