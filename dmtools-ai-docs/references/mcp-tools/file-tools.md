@@ -1,6 +1,6 @@
 # FILE MCP Tools
 
-**Total Tools**: 5
+**Total Tools**: 7
 
 ## Quick Reference
 
@@ -26,6 +26,8 @@ const result = file_delete(...);
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
 | `file_delete` | Delete file or directory from working directory. Returns success message or null on failure. | `path` (string, **required**) |
+| `file_exists` | Check whether a file or directory exists in the working directory. Returns true or false (false for paths outside the sandbox). | `path` (string, **required**) |
+| `file_list` | List the entries of a directory in the working directory. Returns JSON {"entries": [absolute paths, sorted]} or null if the path is not a readable directory inside the sandbox. | `path` (string, **required**) |
 | `file_read` | Read file content from working directory (supports input/ and outputs/ folders). Returns file content as string or null if file doesn't exist or is inaccessible. All file formats supported as UTF-8 text. | `path` (string, **required**) |
 | `file_validate_json` | Validate JSON string and return detailed error information if invalid. Returns JSON string with validation result: {"valid": true} for valid JSON, or {"valid": false, "error": "error message", "line": line_number, "column": column_number, "position": character_position, "context": "context around error"} for invalid JSON. | `json` (string, **required**) |
 | `file_validate_json_file` | Validate JSON file and return detailed error information if invalid. Reads file from working directory and validates its JSON content. Returns JSON string with validation result including file path. | `path` (string, **required**) |
@@ -51,6 +53,50 @@ dmtools file_delete "value"
 ```javascript
 // In JavaScript agent
 const result = file_delete("path");
+```
+
+---
+
+### `file_exists`
+
+Check whether a file or directory exists in the working directory. Returns true or false (false for paths outside the sandbox).
+
+**Parameters:**
+
+- **`path`** (string) 🔴 Required
+  - File or directory path relative to working directory or absolute path within working directory
+  - Example: `outputs/response.md`
+
+**Example:**
+```bash
+dmtools file_exists "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = file_exists("path");
+```
+
+---
+
+### `file_list`
+
+List the entries of a directory in the working directory. Returns JSON {"entries": [absolute paths, sorted]} or null if the path is not a readable directory inside the sandbox.
+
+**Parameters:**
+
+- **`path`** (string) 🔴 Required
+  - Directory path relative to working directory or absolute path within working directory
+  - Example: `outputs`
+
+**Example:**
+```bash
+dmtools file_list "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = file_list("path");
 ```
 
 ---
