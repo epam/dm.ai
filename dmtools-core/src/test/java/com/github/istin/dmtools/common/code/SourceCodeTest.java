@@ -318,4 +318,21 @@ public class SourceCodeTest {
             assertEquals(2, result.size());
         }
     }
+
+    @Test
+    public void testGitlabSourceWithoutDefaultWorkspaceDoesNotEnumerateGroups() throws IOException {
+        try (MockedStatic<com.github.istin.dmtools.gitlab.BasicGitLab> gitlabStatic =
+                     Mockito.mockStatic(com.github.istin.dmtools.gitlab.BasicGitLab.class)) {
+            SourceCode gitlabMock = mock(SourceCode.class);
+            when(gitlabMock.isConfigured()).thenReturn(true);
+            when(gitlabMock.getDefaultRepository()).thenReturn(null);
+            when(gitlabMock.getDefaultWorkspace()).thenReturn(null);
+            gitlabStatic.when(com.github.istin.dmtools.gitlab.BasicGitLab::getInstance).thenReturn(gitlabMock);
+
+            List<SourceCode> result = SourceCode.Impl.getConfiguredSourceCodes(new JSONArray("[\"gitlab\"]"));
+
+            assertEquals(1, result.size());
+            verify(gitlabMock, never()).getRepositories(any());
+        }
+    }
 }
