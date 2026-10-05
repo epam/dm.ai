@@ -13,11 +13,11 @@ jobs:
   # "Protect main" branch ruleset — do not rename it without also updating
   # the ruleset.
   #
-  # Quality-gate and agents-JS-tests steps keep `continue-on-error: true` so
-  # a failure there is visible (annotated, non-zero step, workflow summary)
-  # but does NOT fail this job / block merge — preserving the exact
-  # pre-merge semantics these two checks had as independent, non-required
-  # jobs before this consolidation.
+  # Quality-gate steps keep `continue-on-error: true` so a failure there is
+  # visible (annotated, non-zero step, workflow summary) but does NOT fail
+  # this job / block merge. The agents JS suite is a REAL gate (dm.ai#635):
+  # green always, red blocks — it has no continue-on-error and its run step
+  # propagates the runner's exit code.
   test:
     name: Java unit tests
     # Runs on Bitrise Build Hub infrastructure (GitHub Actions stays the
@@ -142,15 +142,20 @@ jobs:
 
       - name: 'Agents JS tests: run'
         id: agents_tests
-        continue-on-error: true
         run: |
           cd agents
-          ../dmtools.sh run js/unit-tests/run_all.json > ../agents-test-output.json 2>&1 || true
+          set +e
+          ../dmtools.sh run js/unit-tests/run_all.json > ../agents-test-output.json 2>&1
+          RC=$?
+          set -e
           cat ../agents-test-output.json
+          if [ "$RC" -ne 0 ]; then
+            echo "::error::dmtools run js/unit-tests/run_all.json exited with $RC"
+            exit "$RC"
+          fi
 
       - name: 'Agents JS tests: validate results'
         id: agents_tests_validate
-        continue-on-error: true
         run: |
           PASSED=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
           FAILED=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
@@ -179,8 +184,6 @@ jobs:
           }
           check "Quality gate: file sizes" "${{ steps.quality_gate_file_sizes.outcome }}"
           check "Quality gate: duplication" "${{ steps.quality_gate_duplication.outcome }}"
-          check "Agents JS tests: run" "${{ steps.agents_tests.outcome }}"
-          check "Agents JS tests: validate" "${{ steps.agents_tests_validate.outcome }}"
           if [ "$fail" -ne 0 ]; then
             echo "::warning::One or more advisory checks failed — see step summary for details."
           fi
