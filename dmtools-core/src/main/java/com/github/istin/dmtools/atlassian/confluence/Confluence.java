@@ -1054,23 +1054,28 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         List<Attachment> attachments = getContentAttachments(contentId);
         if (attachments == null || attachments.isEmpty()) return downloaded;
         logger.info("Downloading {} attachment(s) for content {}", attachments.size(), contentId);
-        for (Attachment attachment : attachments) {
+        List<File> files = ConfluenceParallel.map(attachments, ConfluenceParallel.parallelism(), attachment -> {
             String title = attachment.getTitle();
             String link = attachment.getDownloadLink();
             if (link == null || link.isBlank()) {
                 logger.warn("Attachment '{}' has no download link, skipping", title);
-                continue;
+                return null;
             }
             try {
                 File file = downloadAttachment(attachment, targetDir);
                 if (file != null && file.exists()) {
-                    downloaded.add(file);
                     logger.info("Downloaded attachment '{}' → {} bytes", title, file.length());
-                } else {
-                    logger.warn("Download returned null/missing file for attachment '{}'", title);
+                    return file;
                 }
+                logger.warn("Download returned null/missing file for attachment '{}'", title);
             } catch (Exception e) {
                 logger.warn("Failed to download attachment '{}': {}", title, e.getMessage());
+            }
+            return null;
+        });
+        for (File file : files) {
+            if (file != null) {
+                downloaded.add(file);
             }
         }
         return downloaded;
