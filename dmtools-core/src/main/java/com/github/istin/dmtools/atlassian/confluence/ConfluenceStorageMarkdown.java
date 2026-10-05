@@ -564,6 +564,17 @@ public final class ConfluenceStorageMarkdown {
             macro.replaceWith(pre);
         } else if ("children".equals(macroName) || "childpages".equals(macroName)) {
             macro.replaceWith(doc.createElement("p").text("[Child pages]"));
+        } else if ("native-embed:whiteboard".equals(macroName)) {
+            // Whiteboard content is not exposed by the Confluence API; keep a marker with its location.
+            String url = "";
+            for (Element param : macro.getElementsByTag("ac:parameter")) {
+                if ("url".equals(param.attr("ac:name"))) {
+                    url = param.text();
+                    break;
+                }
+            }
+            macro.replaceWith(doc.createElement("p").text(
+                    "[Whiteboard (content not available via API)" + (url.isBlank() ? "" : ": " + url) + "]"));
         } else {
             Element richBody = macro.getElementsByTag("ac:rich-text-body").first();
             if (richBody != null) {

@@ -177,6 +177,18 @@ public class ConfluenceHtmlToMarkdownTest {
     }
 
     @Test
+    public void testToMarkdown_whiteboardKeepsPlaceholderWithUrl() {
+        String html = "<p>Before</p><ac:structured-macro ac:name=\"native-embed:whiteboard\">"
+                + "<ac:parameter ac:name=\"url\">https://example.com/wiki/spaces/SP/whiteboard/123</ac:parameter>"
+                + "<ac:parameter ac:name=\"height\">600</ac:parameter></ac:structured-macro>";
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue(markdown.contains("Whiteboard"));
+        assertTrue(markdown.contains("https://example.com/wiki/spaces/SP/whiteboard/123"));
+        assertFalse(markdown.contains("600"));
+    }
+
+    @Test
     public void testPreprocess_onlyTransformsConfluenceTags() {
         // Verify preprocess doesn't break standard HTML
         String input = "<h1>Title</h1><p>Text with <strong>bold</strong> and <a href=\"url\">link</a></p>";
