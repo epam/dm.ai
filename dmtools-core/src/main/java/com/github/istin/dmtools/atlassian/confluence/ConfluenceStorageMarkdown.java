@@ -79,6 +79,12 @@ public final class ConfluenceStorageMarkdown {
         Pattern.DOTALL | Pattern.CASE_INSENSITIVE
     );
 
+    // <time datetime="2024-01-31" /> date lozenge; the date lives only in the attribute
+    private static final Pattern TIME_TAG = Pattern.compile(
+        "<time\\b[^>]*?datetime=\"([^\"]*)\"[^>]*?(?:/>|>\\s*</time>)",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+
     // ac:adf-node (draw.io / ecosystem extensions)
     private static final Pattern AC_ADF_NODE = Pattern.compile(
         "<ac:adf-node[^>]*>.*?</ac:adf-node>",
@@ -352,6 +358,8 @@ public final class ConfluenceStorageMarkdown {
         //    <ac:adf-content> payload flows through the normal pipeline, BEFORE the
         //    generic adf-node→[Diagram] rule below can drop them (dm.ai #596).
         result = unwrapSyncedBlocks(result);
+
+        result = TIME_TAG.matcher(result).replaceAll(m -> Matcher.quoteReplacement(m.group(1)));
 
         // 1. Remove table-of-contents macro (auto-generated, adds noise)
         result = AC_TOC.matcher(result).replaceAll("");
