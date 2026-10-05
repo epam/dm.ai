@@ -189,6 +189,16 @@ public class ConfluenceHtmlToMarkdownTest {
     }
 
     @Test
+    public void testToMarkdown_timeElementsKeepTheirDate() {
+        String html = "<table><tbody><tr><th>Date</th><th>Note</th></tr>"
+                + "<tr><td><p><time datetime=\"2024-03-05\" local-id=\"a\" /> </p></td><td>after</td></tr></tbody></table>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue(markdown, markdown.contains("| 2024-03-05 | after |"));
+    }
+
+    @Test
     public void testPreprocess_onlyTransformsConfluenceTags() {
         // Verify preprocess doesn't break standard HTML
         String input = "<h1>Title</h1><p>Text with <strong>bold</strong> and <a href=\"url\">link</a></p>";
