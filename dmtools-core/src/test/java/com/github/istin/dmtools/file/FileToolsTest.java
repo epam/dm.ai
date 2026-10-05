@@ -1247,4 +1247,42 @@ class FileToolsTest {
         assertTrue(validationResult.getBoolean("valid"));
         assertEquals("utf8.json", validationResult.getString("file"));
     }
+
+    @Test
+    void fileExistsReportsFilesDirectoriesAndSandbox() throws Exception {
+        java.nio.file.Files.createDirectories(tempDir.resolve("dir"));
+        java.nio.file.Files.writeString(tempDir.resolve("dir/a.md"), "x");
+
+        assertTrue(new FileTools().fileExists("dir/a.md"));
+        assertTrue(new FileTools().fileExists("dir"));
+        assertFalse(new FileTools().fileExists("dir/missing.md"));
+        assertFalse(new FileTools().fileExists("../outside"));
+        assertFalse(new FileTools().fileExists(""));
+    }
+
+    @Test
+    void fileListReturnsSortedAbsoluteEntriesInsideSandbox() throws Exception {
+        java.nio.file.Files.createDirectories(tempDir.resolve("dir/sub"));
+        java.nio.file.Files.writeString(tempDir.resolve("dir/b.md"), "x");
+        java.nio.file.Files.writeString(tempDir.resolve("dir/a.md"), "x");
+
+        org.json.JSONObject out = new org.json.JSONObject(new FileTools().listFiles("dir"));
+        org.json.JSONArray entries = out.getJSONArray("entries");
+
+        assertEquals(3, entries.length());
+        assertTrue(entries.getString(0).endsWith("/dir/a.md"));
+        assertTrue(entries.getString(1).endsWith("/dir/b.md"));
+        assertTrue(entries.getString(2).endsWith("/dir/sub"));
+        assertTrue(java.nio.file.Paths.get(entries.getString(0)).isAbsolute());
+    }
+
+    @Test
+    void fileListRejectsFilesMissingAndOutsideSandbox() throws Exception {
+        java.nio.file.Files.writeString(tempDir.resolve("f.txt"), "x");
+
+        assertNull(new FileTools().listFiles("f.txt"));
+        assertNull(new FileTools().listFiles("nope"));
+        assertNull(new FileTools().listFiles("../"));
+        assertNull(new FileTools().listFiles(null));
+    }
 }
