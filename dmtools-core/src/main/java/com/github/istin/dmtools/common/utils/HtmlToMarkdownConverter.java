@@ -270,14 +270,16 @@ public final class HtmlToMarkdownConverter {
 
         String restore(String markdown) {
             String result = markdown;
-            for (int i = 0; i < codeBlocks.size(); i++) {
-                result = result.replace(CODE_PLACEHOLDER_PREFIX + i, codeBlocks.get(i).trim());
+            // Tables first: their cells may still contain code/task placeholders.
+            // Descending order keeps "PREFIX1" from matching inside "PREFIX10".
+            for (int i = tables.size() - 1; i >= 0; i--) {
+                result = result.replace(TABLE_PLACEHOLDER_PREFIX + i, tables.get(i).trim());
             }
-            for (int i = 0; i < taskLists.size(); i++) {
+            for (int i = taskLists.size() - 1; i >= 0; i--) {
                 result = result.replace(TASK_PLACEHOLDER_PREFIX + i, taskLists.get(i).trim());
             }
-            for (int i = 0; i < tables.size(); i++) {
-                result = result.replace(TABLE_PLACEHOLDER_PREFIX + i, tables.get(i).trim());
+            for (int i = codeBlocks.size() - 1; i >= 0; i--) {
+                result = result.replace(CODE_PLACEHOLDER_PREFIX + i, codeBlocks.get(i).trim());
             }
             return result;
         }
