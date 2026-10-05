@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -1031,8 +1032,46 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         // Create target file
         File targetFile = new File(targetDir, safeFileName);
         
-        // Download the file
-        return RestClient.Impl.downloadFile(this, new GenericRequest(this, fullUrl), targetFile);
+        // Download the file; transient failures (rate limit, 5xx, network) are retried with backoff
+        IOException last = null;
+        for (int attempt = 1; attempt <= ATTACHMENT_DOWNLOAD_ATTEMPTS; attempt++) {
+            try {
+                return RestClient.Impl.downloadFile(this, new GenericRequest(this, fullUrl), targetFile);
+            } catch (IOException e) {
+                last = e;
+                if (attempt == ATTACHMENT_DOWNLOAD_ATTEMPTS || !isTransientDownloadFailure(e)) {
+                    break;
+                }
+                long delayMs = ATTACHMENT_RETRY_BASE_DELAY_MS * (1L << (attempt - 1))
+                        + ThreadLocalRandom.current().nextLong(ATTACHMENT_RETRY_BASE_DELAY_MS / 2);
+                logger.warn("Attachment '{}' download failed (attempt {}/{}): {}. Retrying in {} ms",
+                        attachment.getTitle(), attempt, ATTACHMENT_DOWNLOAD_ATTEMPTS, e.getMessage(), delayMs);
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Attachment download interrupted", ie);
+                }
+            }
+        }
+        throw last;
+    }
+
+    private static final int ATTACHMENT_DOWNLOAD_ATTEMPTS = 4;
+    private static final long ATTACHMENT_RETRY_BASE_DELAY_MS = 1000L;
+
+    /** Client errors other than 429/408 will not succeed on retry; everything else (5xx, network) might. */
+    static boolean isTransientDownloadFailure(IOException e) {
+        String message = e.getMessage();
+        if (message != null && message.length() >= 3 && Character.isDigit(message.charAt(0))) {
+            try {
+                int code = Integer.parseInt(message.substring(0, 3));
+                return code == 429 || code == 408 || code >= 500;
+            } catch (NumberFormatException ignored) {
+                return true;
+            }
+        }
+        return true;
     }
 
     protected void setGraphQLPath(String graphQLPath) {

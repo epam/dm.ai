@@ -69,6 +69,12 @@ public interface RestClient {
                 } else {
                     throw new IOException(response.code() + " " + response.body());
                 }
+            } catch (IOException | RuntimeException e) {
+                // Do not leave a truncated file behind: the next call would treat it as already downloaded.
+                if (downloadedFile.exists() && !downloadedFile.delete()) {
+                    logger.warn("Could not delete partial download {}", downloadedFile.getAbsolutePath());
+                }
+                throw e;
             } finally {
                 client.connectionPool().evictAll();
             }
