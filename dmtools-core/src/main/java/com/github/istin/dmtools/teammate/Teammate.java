@@ -839,7 +839,11 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                 response = genericRequestAgent.run(genericRequesAgentParams);
             }
             String postJSAction = expertParams.getPostJSAction();
-            if (skipFieldUpdate) {
+            // With outputType=none nothing consumes response.md (the agent hands its result to postJSAction
+            // via other files), so a missing response.md only blocks postJSAction after a fatal CLI error.
+            boolean skipPostJSAction = skipFieldUpdate
+                    && (outputType != Params.OutputType.none || (cliResult != null && cliResult.hasFatalError()));
+            if (skipPostJSAction) {
                 // Strict-mode CLI failure (requireCliOutputFile=true, no response.md): never run
                 // postJSAction against a failed/missing CLI response — mirroring the preCliJSAction
                 // early return, which also skips postJSAction. The error-comment branch below
