@@ -46,10 +46,12 @@ public class ConfluencePageDownloader {
 
     private final Confluence confluence;
     private final ConfluenceExcerptInliner excerptInliner;
+    private final ConfluenceMentionResolver mentionResolver;
 
     public ConfluencePageDownloader(Confluence confluence) {
         this.confluence = confluence;
         this.excerptInliner = new ConfluenceExcerptInliner(confluence);
+        this.mentionResolver = new ConfluenceMentionResolver(confluence);
     }
 
     /**
@@ -124,7 +126,7 @@ public class ConfluencePageDownloader {
                         ? page.getStorage().getValue().trim() : "";
                 if (!bodyText.isBlank()) {
                     String markdownText = ConfluenceStorageMarkdown.toMarkdown(
-                            excerptInliner.inline(bodyText, page.getSpaceKey()));
+                            mentionResolver.resolve(excerptInliner.inline(bodyText, page.getSpaceKey())));
                     Path mdFile = pageFolder.resolve(safeName + ".md");
                     Files.write(mdFile, markdownText.getBytes(StandardCharsets.UTF_8));
                     logger.info("Wrote Confluence page -> {} ({} chars, markdown)", mdFile, markdownText.length());
