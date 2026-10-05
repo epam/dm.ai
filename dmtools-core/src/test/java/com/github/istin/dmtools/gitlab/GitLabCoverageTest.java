@@ -157,6 +157,19 @@ public class GitLabCoverageTest {
     }
 
     @Test
+    public void testPullRequestsMapsNeutralStatesToGitLabStates() throws IOException {
+        doReturn("[]").when(gitLab).execute(any(GenericRequest.class));
+
+        gitLab.pullRequests("workspace", "repo", IPullRequest.PullRequestState.STATE_DECLINED, false, null);
+        gitLab.pullRequests("workspace", "repo", IPullRequest.PullRequestState.STATE_OPEN, false, null);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitLab, times(2)).execute(captor.capture());
+        assertTrue(captor.getAllValues().get(0).url().contains("state=closed"));
+        assertTrue(captor.getAllValues().get(1).url().contains("state=opened"));
+    }
+
+    @Test
     public void testPullRequestsPaginatesWithStartDate() throws IOException {
         doReturn(jsonArrayOf(100).toString(), jsonArrayOf(1).toString())
                 .when(gitLab).execute(any(GenericRequest.class));
