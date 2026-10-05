@@ -135,6 +135,86 @@ public class FileTools {
     }
     
     /**
+     * Resolves a user supplied path against the working directory and applies the same
+     * sandbox rules as {@link #readFile(String)}. Returns null when the path is blank or
+     * outside the working directory (and not allowed by configuration).
+     */
+    private Path resolveSandboxedPath(String filePath) {
+        if (filePath == null || filePath.trim().isEmpty()) {
+            return null;
+        }
+        Path workingDir = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        Path requestedPath = Paths.get(filePath.trim());
+        Path resolvedPath = requestedPath.isAbsolute()
+                ? requestedPath.normalize()
+                : workingDir.resolve(requestedPath).normalize();
+        if (!resolvedPath.startsWith(workingDir) && !isAllowedByConfig(resolvedPath, workingDir)) {
+            logger.error("Security violation: Path traversal attempt blocked - requested: {}, resolved: {}, working dir: {}",
+                    filePath, resolvedPath, workingDir);
+            return null;
+        }
+        return resolvedPath;
+    }
+
+    /**
+     * Check whether a file or directory exists inside the sandboxed working directory.
+     */
+    @MCPTool(
+        name = "file_exists",
+        description = "Check whether a file or directory exists in the working directory. Returns true or false (false for paths outside the sandbox).",
+        integration = "file"
+    )
+    public Boolean fileExists(
+            @MCPParam(
+                name = "path",
+                description = "File or directory path relative to working directory or absolute path within working directory",
+                required = true,
+                example = "outputs/response.md"
+            ) String filePath
+    ) {
+        try {
+            Path resolved = resolveSandboxedPath(filePath);
+            return resolved != null && Files.exists(resolved);
+        } catch (Exception e) {
+            logger.error("Unexpected error checking file existence: {} - {}", filePath, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * List the direct children of a directory inside the sandboxed working directory.
+     */
+    @MCPTool(
+        name = "file_list",
+        description = "List the entries of a directory in the working directory. Returns JSON {\"entries\": [absolute paths, sorted]} or null if the path is not a readable directory inside the sandbox.",
+        integration = "file"
+    )
+    public String listFiles(
+            @MCPParam(
+                name = "path",
+                description = "Directory path relative to working directory or absolute path within working directory",
+                required = true,
+                example = "outputs"
+            ) String dirPath
+    ) {
+        try {
+            Path resolved = resolveSandboxedPath(dirPath);
+            if (resolved == null || !Files.isDirectory(resolved) || !Files.isReadable(resolved)) {
+                logger.warn("Directory not listable: {}", dirPath);
+                return null;
+            }
+            org.json.JSONArray entries = new org.json.JSONArray();
+            try (java.util.stream.Stream<Path> children = Files.list(resolved)) {
+                children.map(c -> c.toAbsolutePath().normalize().toString()).sorted().forEach(entries::put);
+            }
+            return new JSONObject().put("entries", entries).toString();
+        } catch (Exception e) {
+            logger.error("Failed to list directory: {} - {}", dirPath, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
      * Write content to file in working directory.
      * 
      * Creates parent directories automatically if they don't exist.
