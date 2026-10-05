@@ -53,7 +53,7 @@ class JSRunnerIntegrationTest {
         jsRunner = new JSRunner();
         
         // Inject mocked dependencies
-        jsRunner.trackerClient = mockTrackerClient;
+        jsRunner.trackerClientProvider = () -> mockTrackerClient;
         jsRunner.ai = mockAI;
         jsRunner.confluence = mockConfluence;
         jsRunner.sourceCodes = List.of(mockSourceCode);
