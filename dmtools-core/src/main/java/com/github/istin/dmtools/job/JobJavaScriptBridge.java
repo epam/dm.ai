@@ -451,8 +451,16 @@ public class JobJavaScriptBridge {
                 }
             }
             
-            // Execute using generated MCP infrastructure
-            Object result = MCPToolExecutor.executeTool(toolName, convertedArgsMap, clientInstances);
+            // Execute using generated MCP infrastructure. A vendor tool (jira_*) is bound to its own
+            // client type while the "jira" slot holds whatever tracker is active, so a Jira-only tool
+            // called on another tracker dies with a raw ClassCastException inside the generated
+            // executor — translate exactly that case into an actionable message.
+            Object result;
+            try {
+                result = MCPToolExecutor.executeTool(toolName, convertedArgsMap, clientInstances);
+            } catch (ClassCastException cce) {
+                throw vendorToolMismatch(toolName, cce);
+            }
             
             // Convert result to JavaScript-compatible format
             return convertToJSCompatible(result);
@@ -460,6 +468,34 @@ public class JobJavaScriptBridge {
             logger.error("Tool execution failed for {}: {}", toolName, e.getMessage(), e);
             throw new RuntimeException("Tool execution failed: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Translates the {@link ClassCastException} raised when a {@code jira_*} tool runs while another
+     * tracker (ADO, GitHub, ...) is the active one into an actionable error naming the tool, the
+     * active tracker and the vendor-agnostic replacement. Any other ClassCastException is rethrown
+     * unchanged.
+     */
+    private RuntimeException vendorToolMismatch(String toolName, ClassCastException cause) {
+        if (toolName == null || !toolName.startsWith("jira_") || trackerClient == null
+                || trackerClient instanceof com.github.istin.dmtools.atlassian.jira.JiraClient) {
+            return cause;
+        }
+        String active = trackerClient.getClass().getSimpleName();
+        com.github.istin.dmtools.mcp.MCPToolDefinition def = MCPToolRegistry.getTool(toolName);
+        String replacement = "";
+        if (def != null && def.getToolAliases() != null) {
+            for (String alias : def.getToolAliases()) {
+                if (alias.startsWith("tracker_")) {
+                    replacement = " Use the vendor-agnostic " + alias + " instead.";
+                    break;
+                }
+            }
+        }
+        return new IllegalStateException(toolName + " is a Jira-only tool but the active tracker is "
+                + active + "." + replacement
+                + " Agent scripts should call tickets through js/common/trackers.js (provider from config.tracker.provider / DEFAULT_TRACKER).",
+                cause);
     }
 
     /**
