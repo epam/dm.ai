@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -224,5 +225,45 @@ class ToolAliasResolverTest {
         defaultTracker("jira");
         assertEquals("jira_assign_ticket_to",
                 ToolAliasResolver.resolve("tracker_assign", null, new PropertyReader()));
+    }
+
+    // -----------------------------------------------------------------------
+    // Ticket-operation aliases that must exist on BOTH backends (epam/dm.ai#661)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("tracker_update_field / set_priority / get_field_code / attach_file / update_description route jira<->ado")
+    void testTicketOperationAliasesRouteOnBothBackends() {
+        String[][] expected = {
+                {"tracker_update_field", "jira_update_field", "ado_update_field"},
+                {"tracker_set_priority", "jira_set_priority", "ado_set_priority"},
+                {"tracker_get_field_code", "jira_get_field_custom_code", "ado_get_field_code"},
+                {"tracker_attach_file", "jira_attach_file_to_ticket", "ado_attach_file"},
+                {"tracker_update_description", "jira_update_description", "ado_update_description"},
+        };
+        for (String[] row : expected) {
+            defaultTracker("jira");
+            assertEquals(row[1], ToolAliasResolver.resolve(row[0], null, new PropertyReader()), row[0] + " on jira");
+            defaultTracker("ado");
+            assertEquals(row[2], ToolAliasResolver.resolve(row[0], null, new PropertyReader()), row[0] + " on ado");
+        }
+    }
+
+    @Test
+    @DisplayName("every ADO ticket operation agents use has a tracker_* alias")
+    void testAdoOperationsAreReachableThroughTrackerAliases() {
+        String[] adoTools = {"ado_update_field", "ado_set_priority", "ado_get_field_code", "ado_attach_file",
+                "ado_update_description", "ado_link_work_items", "ado_get_work_item", "ado_search_by_wiql",
+                "ado_add_work_item_comment", "ado_get_work_item_comments", "ado_move_to_state",
+                "ado_add_work_item_label", "ado_remove_work_item_label", "ado_assign_work_item", "ado_create_work_item"};
+        for (String tool : adoTools) {
+            com.github.istin.dmtools.mcp.MCPToolDefinition def = com.github.istin.dmtools.mcp.generated.MCPToolRegistry.getTool(tool);
+            assertNotNull(def, tool + " must be registered");
+            boolean hasTrackerAlias = false;
+            for (String alias : def.getToolAliases()) {
+                hasTrackerAlias |= alias.startsWith("tracker_");
+            }
+            assertTrue(hasTrackerAlias, tool + " needs a tracker_* alias");
+        }
     }
 }

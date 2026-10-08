@@ -1,6 +1,6 @@
 # ADO MCP Tools
 
-**Total Tools**: 40
+**Total Tools**: 44
 
 ## Quick Reference
 
@@ -32,10 +32,12 @@ const result = ado_get_work_item_comments(...);
 | `ado_add_work_item_comment` | Add a comment to an Azure DevOps work item | `id` (string, **required**)<br>`comment` (string, **required**) |
 | `ado_add_work_item_label` | Add a single label (tag) to a work item, keeping existing tags | `id` (string, **required**)<br>`label` (string, **required**) |
 | `ado_assign_work_item` | Assign a work item to a user | `id` (string, **required**)<br>`userEmail` (string, **required**) |
-| `ado_create_work_item` | Create a new work item in Azure DevOps | `project` (string, **required**)<br>`workItemType` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`fieldsJson` (object, optional) |
+| `ado_attach_file` | Attach a local file to a work item. Uploads the file and links it as an attachment; a file with the same name is not attached twice. | `id` (string, **required**)<br>`name` (string, **required**)<br>`contentType` (string, optional)<br>`filePath` (string, **required**) |
+| `ado_create_work_item` | Create a new work item in Azure DevOps | `project` (string, **required**)<br>`workItemType` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`fieldsJson` (object, optional)<br>`parentId` (string, optional) |
 | `ado_delete_pr_comment` | Delete a comment from a pull request thread. Requires both threadId and commentId. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`commentId` (string, **required**) |
 | `ado_download_attachment` | Download an ADO work item attachment by URL and save it as a file | `href` (string, **required**) |
 | `ado_get_changelog` | Get the complete history/changelog of a work item | `id` (string, **required**)<br>`ticket` (object, optional) |
+| `ado_get_field_code` | Resolve a human-readable field name to its reference name for the project (the analogue of jira_get_field_custom_code). Returns e.g. 'Custom.SolutionDesign' or 'System.Title'; returns null when no field with that name exists. | `project` (string, optional)<br>`fieldName` (string, **required**) |
 | `ado_get_my_profile` | Get the current user's profile information from Azure DevOps | None |
 | `ado_get_pipeline_logs` | Get combined logs for all tasks in a pipeline run (build ID). Equivalent to github_get_job_logs. | `buildId` (number, **required**)<br>`taskName` (string, optional)<br>`tailLines` (number, optional) |
 | `ado_get_pipeline_run` | Get details of a specific pipeline run including state and result. | `pipelineId` (number, **required**)<br>`runId` (number, **required**) |
@@ -59,9 +61,11 @@ const result = ado_get_work_item_comments(...);
 | `ado_resolve_pr_thread` | Resolve (close) a comment thread in an Azure DevOps pull request. Sets the thread status to 'fixed'. Other statuses: 'active', 'closed', 'byDesign', 'pending', 'wontFix'. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`status` (string, optional) |
 | `ado_search_by_wiql` | Search for work items using WIQL (Work Item Query Language) | `wiql` (string, **required**)<br>`fields` (array, optional) |
 | `ado_set_pr_vote` | Set the current user's vote on a pull request. Vote values: 10=approve, 5=approve with suggestions, 0=reset/no vote, -5=wait for author, -10=reject. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewerId` (string, **required**)<br>`vote` (string, **required**) |
+| `ado_set_priority` | Set the priority of a work item. Accepts the ADO numbers 1-4 or Jira-style names (Blocker/Highest/Critical=1, High/Major=2, Medium/Normal=3, Low/Minor/Lowest/Trivial=4). | `id` (string, **required**)<br>`priority` (string, **required**) |
 | `ado_test` | Test Azure DevOps connectivity by fetching the current user's profile | None |
 | `ado_trigger_pipeline` | Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow. | `pipelineId` (number, **required**)<br>`branch` (string, optional)<br>`variables` (string, optional) |
 | `ado_update_description` | Update the description of a work item | `id` (string, **required**)<br>`description` (string, **required**) |
+| `ado_update_field` | Update any field of a work item. The field may be a reference name (System.Title, Custom.SolutionDesign) or a common human name (summary, title, description, priority, tags, state, assignedTo, storyPoints), which is mapped to its reference name. Unknown names are passed through unchanged. | `id` (string, **required**)<br>`field` (string, **required**)<br>`value` (string, **required**) |
 | `ado_update_pr` | Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`title` (string, optional)<br>`description` (string, optional)<br>`status` (string, optional) |
 | `ado_update_pr_comment` | Update (edit) an existing comment in a pull request thread. Requires both threadId and commentId. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`commentId` (string, **required**)<br>`text` (string, **required**) |
 | `ado_update_tags` | Update the tags of a work item (semicolon-separated string) | `id` (string, **required**)<br>`tags` (string, **required**) |
@@ -281,6 +285,39 @@ const result = ado_assign_work_item("id", "userEmail");
 
 ---
 
+### `ado_attach_file`
+
+Attach a local file to a work item. Uploads the file and links it as an attachment; a file with the same name is not attached twice.
+
+**Parameters:**
+
+- **`id`** (string) 🔴 Required
+  - The work item ID
+
+- **`name`** (string) 🔴 Required
+  - The attachment file name
+  - Example: `report.png`
+
+- **`contentType`** (string) ⚪ Optional
+  - The content type (defaults to application/octet-stream)
+  - Example: `image/png`
+
+- **`filePath`** (string) 🔴 Required
+  - Absolute path to the file on disk
+  - Example: `/tmp/report.png`
+
+**Example:**
+```bash
+dmtools ado_attach_file "value" "value" "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_attach_file("id", "name", "contentType", "filePath");
+```
+
+---
+
 ### `ado_create_work_item`
 
 Create a new work item in Azure DevOps
@@ -301,6 +338,9 @@ Create a new work item in Azure DevOps
 
 - **`fieldsJson`** (object) ⚪ Optional
   - Additional fields as JSON object (e.g., {"Microsoft.VSTS.Common.Priority": 1})
+
+- **`parentId`** (string) ⚪ Optional
+  - Optional parent work item ID: the new item is created as its child (Hierarchy link)
 
 **Example:**
 ```bash
@@ -389,6 +429,31 @@ dmtools ado_get_changelog "value" "value"
 ```javascript
 // In JavaScript agent
 const result = ado_get_changelog("id", "ticket");
+```
+
+---
+
+### `ado_get_field_code`
+
+Resolve a human-readable field name to its reference name for the project (the analogue of jira_get_field_custom_code). Returns e.g. 'Custom.SolutionDesign' or 'System.Title'; returns null when no field with that name exists.
+
+**Parameters:**
+
+- **`project`** (string) ⚪ Optional
+  - The project name (defaults to the configured project)
+
+- **`fieldName`** (string) 🔴 Required
+  - The human-readable field name (e.g. 'Solution Design') or reference name
+  - Example: `Solution Design`
+
+**Example:**
+```bash
+dmtools ado_get_field_code "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_get_field_code("project", "fieldName");
 ```
 
 ---
@@ -1003,6 +1068,31 @@ const result = ado_set_pr_vote("repository", "pullRequestId");
 
 ---
 
+### `ado_set_priority`
+
+Set the priority of a work item. Accepts the ADO numbers 1-4 or Jira-style names (Blocker/Highest/Critical=1, High/Major=2, Medium/Normal=3, Low/Minor/Lowest/Trivial=4).
+
+**Parameters:**
+
+- **`id`** (string) 🔴 Required
+  - The work item ID
+
+- **`priority`** (string) 🔴 Required
+  - Priority number 1-4 or a priority name
+  - Example: `High`
+
+**Example:**
+```bash
+dmtools ado_set_priority "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_set_priority("id", "priority");
+```
+
+---
+
 ### `ado_test`
 
 Test Azure DevOps connectivity by fetching the current user's profile
@@ -1068,6 +1158,34 @@ dmtools ado_update_description "value" "value"
 ```javascript
 // In JavaScript agent
 const result = ado_update_description("id", "description");
+```
+
+---
+
+### `ado_update_field`
+
+Update any field of a work item. The field may be a reference name (System.Title, Custom.SolutionDesign) or a common human name (summary, title, description, priority, tags, state, assignedTo, storyPoints), which is mapped to its reference name. Unknown names are passed through unchanged.
+
+**Parameters:**
+
+- **`id`** (string) 🔴 Required
+  - The work item ID
+
+- **`field`** (string) 🔴 Required
+  - Field reference name or common name
+  - Example: `Custom.SolutionDesign`
+
+- **`value`** (string) 🔴 Required
+  - The new value
+
+**Example:**
+```bash
+dmtools ado_update_field "value" "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_update_field("id", "field", "value");
 ```
 
 ---
