@@ -66,7 +66,7 @@ file_write('output.txt', 'content');
 ### Issue Tracking
 
 - [JIRA](jira-tools.md) - 69 tools
-- [ADO](ado-tools.md) - 40 tools
+- [ADO](ado-tools.md) - 44 tools
 
 ### Communication
 
