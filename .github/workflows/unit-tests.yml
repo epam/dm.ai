@@ -20,13 +20,11 @@ jobs:
   # propagates the runner's exit code.
   test:
     name: Java unit tests
-    # Runs on Bitrise Build Hub infrastructure (GitHub Actions stays the
-    # orchestrator — only the runner changes). The label
-    # "bitrise-runner-dmtools-ci" targets the Build Hub machine pool named
-    # "dmtools-ci" (Bitrise auto-creates a "bitrise-runner-<pool>" label per
-    # pool). If the pool is ever renamed, update this label to match.
-    # Fallback: change back to "ubuntu-latest" to run on GitHub-hosted runners.
-    runs-on: bitrise-runner-dmtools-ci
+    # GitHub-hosted runner (owner decision 2026-10-08). The Bitrise Build Hub pool
+    # "dmtools-ci" (label "bitrise-runner-dmtools-ci") stopped picking up jobs: queued runs sat
+    # for 3+ hours with no runner assigned, which blocked every PR on this required check.
+    # To go back to Bitrise, set the label back once the pool is healthy.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       checks: write
