@@ -665,9 +665,10 @@ public class AzureDevOpsClientTest {
     }
 
     @Test
-    void testAttachFileToTicket_throwsUnsupportedOperationException() {
-        assertThrows(UnsupportedOperationException.class,
-                () -> client.attachFileToTicket("1", "f.txt", "text/plain", new File("f.txt")));
+    void testAttachFileToTicket_missingFile_throwsIOException() {
+        // attachFileToTicket is implemented now (see AzureDevOpsTrackerOpsTest); a missing file is an I/O error
+        assertThrows(IOException.class,
+                () -> client.attachFileToTicket("1", "f.txt", "text/plain", new File("does-not-exist-f.txt")));
     }
 
     // ========== getTestCases ==========
