@@ -1432,7 +1432,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             name = "jira_update_description",
             description = "Update the description of a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists",
             integration = "jira",
-            category = "ticket_management"
+            category = "ticket_management",
+            aliases = {"tracker_update_description"}
     )
     public String updateDescription(@MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key, 
                                   @MCPParam(name = "description", description = "The new description text (supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)", required = true) String description) throws IOException {
@@ -2382,7 +2383,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             name = "jira_update_field",
             description = "Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field.",
             integration = "jira",
-            category = "ticket_management"
+            category = "ticket_management",
+            aliases = {"tracker_update_field"}
     )
     public String updateField(@MCPParam(name = "key", description = "The Jira ticket key to update", required = true) String key,
                             @MCPParam(name = "field", description = "The field to update. Use field name (e.g., 'Dependencies') to update ALL fields with that name, or custom field ID (e.g., 'customfield_10091') to update specific field", required = true) String field,
@@ -2701,7 +2703,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             name = "jira_attach_file_to_ticket",
             description = "Attach a file to a Jira ticket from a local file path. The file will only be attached if a file with the same name doesn't already exist",
             integration = "jira",
-            category = "file_management"
+            category = "file_management",
+            aliases = {"tracker_attach_file"}
     )
     public JSONObject attachFileToTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to attach the file to", required = true, example = "PRJ-123") String ticketKey,
                                    @MCPParam(name = "name", description = "The name of the file to attach", required = true, example = "document.pdf") String name,
@@ -3209,7 +3212,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             name = "jira_set_priority",
             description = "Set the priority for a Jira ticket",
             integration = "jira",
-            category = "ticket_management"
+            category = "ticket_management",
+            aliases = {"tracker_set_priority"}
     )
     public String setTicketPriority(@MCPParam(name = "key", description = "The Jira ticket key to set priority for", required = true) String key,
                                   @MCPParam(name = "priority", description = "The priority name to set", required = true) String priority) throws IOException {
@@ -3609,7 +3613,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             name = "jira_get_field_custom_code",
             description = "Get the custom field code for a human friendly field name in a Jira project",
             integration = "jira",
-            category = "project_management"
+            category = "project_management",
+            aliases = {"tracker_get_field_code"}
     )
     public String getFieldCustomCode(@MCPParam(name = "project", description = "The Jira project key", required = true) String project,
                                    @MCPParam(name = "fieldName", description = "The human-readable field name", required = true) String fieldName) throws IOException {
