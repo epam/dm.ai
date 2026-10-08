@@ -443,10 +443,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             name = "ado_update_description",
             description = "Update the description of a work item",
             integration = "ado",
-            category = "work_item_management"
+            category = "work_item_management",
+            aliases = {"tracker_update_description"}
     )
     public String updateDescription(
-            @MCPParam(name = "id", description = "The work item ID", required = true)
+            @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
             String workItemId,
             @MCPParam(name = "description", description = "The new description (HTML format)", required = true)
             String description
@@ -471,6 +472,101 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         return updateWorkItem(workItemId, fields -> {
             fields.set("System.Tags", tags);
         });
+    }
+
+    @MCPTool(
+            name = "ado_update_field",
+            description = "Update any field of a work item. The field may be a reference name (System.Title, Custom.SolutionDesign) or a common human name (summary, title, description, priority, tags, state, assignedTo, storyPoints), which is mapped to its reference name. Unknown names are passed through unchanged.",
+            integration = "ado",
+            category = "work_item_management",
+            aliases = {"tracker_update_field"}
+    )
+    public String updateField(
+            @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
+            String workItemId,
+            @MCPParam(name = "field", description = "Field reference name or common name", required = true, example = "Custom.SolutionDesign")
+            String field,
+            @MCPParam(name = "value", description = "The new value", required = true)
+            String value
+    ) throws IOException {
+        String referenceName = resolveFieldName(field);
+        return updateWorkItem(workItemId, fields -> fields.set(referenceName, value));
+    }
+
+    @MCPTool(
+            name = "ado_set_priority",
+            description = "Set the priority of a work item. Accepts the ADO numbers 1-4 or Jira-style names (Blocker/Highest/Critical=1, High/Major=2, Medium/Normal=3, Low/Minor/Lowest/Trivial=4).",
+            integration = "ado",
+            category = "work_item_management",
+            aliases = {"tracker_set_priority"}
+    )
+    public String setPriority(
+            @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
+            String workItemId,
+            @MCPParam(name = "priority", description = "Priority number 1-4 or a priority name", required = true, example = "High")
+            String priority
+    ) throws IOException {
+        int number = mapPriority(priority);
+        return updateWorkItem(workItemId, fields -> fields.set("Microsoft.VSTS.Common.Priority", number));
+    }
+
+    /**
+     * Maps a Jira-style priority name (or an ADO number as text) to the ADO priority number 1-4.
+     */
+    static int mapPriority(String priority) {
+        if (priority == null || priority.trim().isEmpty()) {
+            throw new IllegalArgumentException("Priority must not be empty");
+        }
+        String p = priority.trim().toLowerCase();
+        if (p.matches("[1-4]")) {
+            return Integer.parseInt(p);
+        }
+        switch (p) {
+            case "blocker": case "highest": case "critical": return 1;
+            case "high": case "major": return 2;
+            case "medium": case "normal": return 3;
+            case "low": case "minor": case "lowest": case "trivial": return 4;
+            default:
+                throw new IllegalArgumentException("Unknown priority '" + priority
+                        + "'. Use 1-4 or one of: Blocker, Highest, Critical, High, Major, Medium, Normal, Low, Minor, Lowest, Trivial");
+        }
+    }
+
+    @MCPTool(
+            name = "ado_get_field_code",
+            description = "Resolve a human-readable field name to its reference name for the project (the analogue of jira_get_field_custom_code). Returns e.g. 'Custom.SolutionDesign' or 'System.Title'; returns null when no field with that name exists.",
+            integration = "ado",
+            category = "work_item_management",
+            aliases = {"tracker_get_field_code"}
+    )
+    public String getFieldCode(
+            @MCPParam(name = "project", description = "The project name (defaults to the configured project)", required = false)
+            String projectName,
+            @MCPParam(name = "fieldName", description = "The human-readable field name (e.g. 'Solution Design') or reference name", required = true, example = "Solution Design")
+            String fieldName
+    ) throws IOException {
+        if (fieldName == null || fieldName.trim().isEmpty()) {
+            return null;
+        }
+        String wanted = fieldName.trim();
+        String target = (projectName != null && !projectName.trim().isEmpty()) ? projectName.trim() : project;
+        String path = String.format("/%s/_apis/wit/fields", target);
+        GenericRequest request = new GenericRequest(this, path(path)).param("api-version", API_VERSION);
+        String response = execute(request);
+        if (response == null || response.isEmpty()) {
+            return null;
+        }
+        JSONArray fields = new JSONObject(response).optJSONArray("value");
+        if (fields == null) {
+            return null;
+        }
+        for (int i = 0; i < fields.length(); i++) {
+            JSONObject f = fields.getJSONObject(i);
+            if (wanted.equalsIgnoreCase(f.optString("name")) || wanted.equalsIgnoreCase(f.optString("referenceName"))) {
+                return f.optString("referenceName", null);
+            }
+        }
+        return null;
     }
 
     @Override
@@ -743,7 +839,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     public String createTicketInProject(String project, String issueType, String summary, String description, FieldsInitializer fieldsInitializer) throws IOException {
         // Delegate to the MCP tool method with fieldsJson=null
         // Map parameters: project -> projectName, issueType -> workItemType, summary -> title
-        return createWorkItemWithFieldsJson(project, issueType, summary, description, null, fieldsInitializer);
+        return createWorkItemWithFieldsJson(project, issueType, summary, description, (JSONObject) null, fieldsInitializer);
     }
 
     @MCPTool(
@@ -763,9 +859,26 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "description", description = "The work item description (HTML)", required = false)
             String description,
             @MCPParam(name = "fieldsJson", description = "Additional fields as JSON object (e.g., {\"Microsoft.VSTS.Common.Priority\": 1})", required = false)
-            JSONObject fieldsJson
+            JSONObject fieldsJson,
+            @MCPParam(name = "parentId", description = "Optional parent work item ID: the new item is created as its child (Hierarchy link)", required = false, aliases = {"parentKey"})
+            String parentId
     ) throws IOException {
-        return createWorkItemWithFieldsJson(projectName, workItemType, title, description, fieldsJson, null);
+        String response = createWorkItemWithFieldsJson(projectName, workItemType, title, description, fieldsJson, (FieldsInitializer) null);
+        if (parentId != null && !parentId.trim().isEmpty()) {
+            String createdId = new JSONObject(response).opt("id") == null ? null : String.valueOf(new JSONObject(response).get("id"));
+            if (createdId == null) {
+                throw new IOException("Work item was created but the response carries no id, cannot link parent " + parentId);
+            }
+            // source = parent, target = child  ->  "parent" relationship (Hierarchy-Reverse), see mapRelationshipType
+            linkIssueWithRelationship(parentId.trim(), createdId, "child");
+        }
+        return response;
+    }
+
+    /** Backward-compatible overload without a parent (the MCP tool above carries the optional parentId). */
+    public String createWorkItemWithFieldsJson(String projectName, String workItemType, String title,
+                                               String description, JSONObject fieldsJson) throws IOException {
+        return createWorkItemWithFieldsJson(projectName, workItemType, title, description, fieldsJson, (String) null);
     }
 
     /**
@@ -928,8 +1041,85 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
     @Override
     public void attachFileToTicket(String workItemId, String name, String contentType, File file) throws IOException {
-        // TODO: Implement file attachment
-        throw new UnsupportedOperationException("attachFileToTicket not yet implemented for ADO");
+        if (file == null || !file.exists()) {
+            throw new IOException("File does not exist: " + (file == null ? "null" : file.getPath()));
+        }
+        // Idempotent like the Jira implementation: an attachment with this name is not added twice.
+        WorkItem existing = performTicket(workItemId, new String[]{"System.Id"});
+        if (existing != null && existing.getAttachments() != null) {
+            for (com.github.istin.dmtools.common.model.IAttachment attachment : existing.getAttachments()) {
+                if (name.equalsIgnoreCase(attachment.getName())) {
+                    log("Attachment already present on " + workItemId + ": " + name);
+                    return;
+                }
+            }
+        }
+
+        // Step 1: upload the bytes -> returns {id, url}
+        MediaType mediaType = MediaType.parse(contentType != null && !contentType.isEmpty()
+                ? contentType : "application/octet-stream");
+        HttpUrl uploadUrl = HttpUrl.parse(path(String.format("/%s/_apis/wit/attachments", project)))
+                .newBuilder()
+                .addQueryParameter("fileName", name)
+                .addQueryParameter("api-version", API_VERSION)
+                .build();
+        Request uploadRequest = sign(new Request.Builder())
+                .url(uploadUrl)
+                .header("Content-Type", "application/octet-stream")
+                .post(RequestBody.create(file, MediaType.parse("application/octet-stream")))
+                .build();
+        String attachmentUrl;
+        try (okhttp3.Response response = getClient().newCall(uploadRequest).execute()) {
+            if (!response.isSuccessful()) {
+                throw AbstractRestClient.printAndCreateException(uploadRequest, response);
+            }
+            String responseBody = response.body() != null ? response.body().string() : "";
+            attachmentUrl = new JSONObject(responseBody).optString("url", null);
+        }
+        if (attachmentUrl == null || attachmentUrl.isEmpty()) {
+            throw new IOException("ADO attachment upload returned no url for " + name);
+        }
+
+        // Step 2: link the uploaded file to the work item as an AttachedFile relation
+        JSONArray patchOps = new JSONArray();
+        patchOps.put(new JSONObject()
+                .put("op", "add")
+                .put("path", "/relations/-")
+                .put("value", new JSONObject()
+                        .put("rel", "AttachedFile")
+                        .put("url", attachmentUrl)
+                        .put("attributes", new JSONObject().put("name", name))));
+        GenericRequest linkRequest = new GenericRequest(this, path(String.format("/%s/_apis/wit/workitems/%s", project, workItemId)))
+                .param("api-version", API_VERSION);
+        linkRequest.setBody(patchOps.toString());
+        linkRequest.header("Content-Type", "application/json-patch+json");
+        patch(linkRequest);
+        log("Attached " + name + " to work item " + workItemId);
+    }
+
+    @MCPTool(
+            name = "ado_attach_file",
+            description = "Attach a local file to a work item. Uploads the file and links it as an attachment; a file with the same name is not attached twice.",
+            integration = "ado",
+            category = "work_item_management",
+            aliases = {"tracker_attach_file"}
+    )
+    public JSONObject attachFile(
+            @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"ticketKey", "key"})
+            String workItemId,
+            @MCPParam(name = "name", description = "The attachment file name", required = true, example = "report.png")
+            String name,
+            @MCPParam(name = "contentType", description = "The content type (defaults to application/octet-stream)", required = false, example = "image/png")
+            String contentType,
+            @MCPParam(name = "filePath", description = "Absolute path to the file on disk", required = true, example = "/tmp/report.png")
+            String filePath
+    ) throws IOException {
+        File file = new File(filePath);
+        if (!file.exists()) {
+            throw new IOException("File does not exist: " + filePath);
+        }
+        attachFileToTicket(workItemId, name, contentType, file);
+        return new JSONObject().put("status", "success").put("id", workItemId).put("name", name);
     }
 
     // ========== Helper Methods ==========
