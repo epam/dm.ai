@@ -40,6 +40,7 @@ AVAILABLE_SKILLS=(
 )
 ALWAYS_ON_INTEGRATIONS=(ai cli file kb mermaid)
 INSTALLER_SKILLS_WAS_SET=false
+INSTALLER_NO_SKILL_FILES=false
 INSTALLER_SKILLS_ARG=""
 INSTALLER_ALL_SKILLS_WAS_SET=false
 INSTALLER_VERSION_ARG=""
@@ -336,6 +337,11 @@ parse_installer_args() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --no-skills)
+                # Skip placing skill files into agent directories (config is still written).
+                INSTALLER_NO_SKILL_FILES=true
+                shift
+                ;;
             --skill)
                 if [ $# -lt 2 ]; then
                     error "Missing value for --skill. Use --skill jira"
@@ -375,6 +381,7 @@ parse_installer_args() {
                 echo "  --skill <name>      Select a single skill. Repeat to add more skills."
                 echo "  --skills=<csv>      Allowed alias for comma-separated skill selection."
                 echo "  --all-skills        Install every supported skill."
+                echo "  --no-skills         Do not install skill files into agent directories (~/.claude, ...)"
                 echo "  --skip-unknown      Warn and continue when unknown skill names are supplied."
                 echo "  --strict            Legacy alias for strict invalid-skill handling."
                 echo "  version   Optional DMTools version (vX.Y.Z or X.Y.Z)."
@@ -1940,6 +1947,35 @@ verify_installation() {
 }
 
 # Print post-installation instructions
+# Installs/updates the agent skill files globally (~/.claude, ~/.copilot, ~/.agents) by running the
+# release's skill-install.sh for the SAME version (dm.ai#675). Never fatal: the CLI is already installed.
+install_agent_skills() {
+    local version="$1"
+    if [ "$INSTALLER_NO_SKILL_FILES" = true ] || [ "${DMTOOLS_INSTALLER_SKIP_SKILL_FILES:-false}" = "true" ]; then
+        info "Skipping skill files (--no-skills)."
+        return 0
+    fi
+    local base="${DMTOOLS_SKILL_INSTALL_BASE_URL:-https://github.com/${REPO}/releases/download/${version}}"
+    local script="$INSTALL_DIR/skill-install.sh"
+    info "Installing agent skills (${EFFECTIVE_SKILLS_CSV}) into user-level agent directories..."
+    if ! curl -fsSL -o "$script" "$base/skill-install.sh" 2>/dev/null; then
+        warn "Could not download skill-install.sh from $base — skills were not installed. Retry later with: curl -fsSL $base/skill-install.sh | bash -s -- --global --skills=${EFFECTIVE_SKILLS_CSV}"
+        return 0
+    fi
+    chmod +x "$script"
+    local args=(--global)
+    if [ "$INSTALL_ALL_SKILLS" = true ]; then
+        args+=(--all-skills)
+    else
+        args+=("--skills=${EFFECTIVE_SKILLS_CSV}")
+    fi
+    [ "$SKIP_UNKNOWN_SKILLS" = true ] && args+=(--skip-unknown)
+    if ! DMTOOLS_SKILL_RELEASE_BASE_URL="$base" bash "$script" "${args[@]}"; then
+        warn "Skill installation did not complete; the DMTools CLI itself is installed."
+    fi
+    return 0
+}
+
 print_instructions() {
     echo ""
     info "🎉 DMTools CLI installation completed!"
@@ -2062,6 +2098,9 @@ main() {
     
     # Verify installation
     verify_installation
+
+    # Install/update the agent skills globally (one installer for CLI + skills)
+    install_agent_skills "$version"
     
     # Print instructions
     print_instructions
