@@ -369,7 +369,6 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         return commentList;
     }
 
-    @Override
     @MCPTool(
             name = "ado_add_work_item_comment",
             description = "Add a comment to an Azure DevOps work item",
@@ -381,11 +380,16 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
             String workItemId,
             @MCPParam(name = "comment", description = "The comment text", required = true, aliases = {"text"})
-            String comment
+            String comment,
+            @MCPParam(name = "format", description = "Text format of the comment: 'html' (default, unchanged behaviour) or 'markdown' (Azure DevOps renders it as Markdown)", required = false, example = "markdown")
+            String format
     ) throws IOException {
         String path = String.format("/%s/_apis/wit/workItems/%s/comments", project, workItemId);
         GenericRequest request = new GenericRequest(this, path(path))
                 .param("api-version", API_VERSION + "-preview");
+        if (isMarkdown(format)) {
+            request.param("format", "markdown");
+        }
 
         JSONObject commentBody = new JSONObject();
         commentBody.put("text", comment);
@@ -393,6 +397,21 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
         request.post();
         log("Posted comment to work item: " + workItemId);
+    }
+
+    /** Backward-compatible overload: the comment keeps the default (HTML) format. */
+    @Override
+    public void postComment(String workItemId, String comment) throws IOException {
+        postComment(workItemId, comment, null);
+    }
+
+    /** True for the Markdown format flag (case-insensitive, 'md' accepted); anything else is HTML. */
+    static boolean isMarkdown(String format) {
+        if (format == null) {
+            return false;
+        }
+        String f = format.trim().toLowerCase();
+        return "markdown".equals(f) || "md".equals(f);
     }
 
     @Override
@@ -438,7 +457,6 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
     // ========== Update Operations ==========
 
-    @Override
     @MCPTool(
             name = "ado_update_description",
             description = "Update the description of a work item",
@@ -449,12 +467,32 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     public String updateDescription(
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
             String workItemId,
-            @MCPParam(name = "description", description = "The new description (HTML format)", required = true)
-            String description
+            @MCPParam(name = "description", description = "The new description (HTML by default; Markdown when format=markdown)", required = true)
+            String description,
+            @MCPParam(name = "format", description = "Text format of the description: 'html' (default, unchanged behaviour) or 'markdown' (sets multilineFieldsFormat so Azure DevOps renders Markdown; a field saved as Markdown cannot go back to HTML)", required = false, example = "markdown")
+            String format
     ) throws IOException {
-        return updateWorkItem(workItemId, fields -> {
-            fields.set("System.Description", description);
-        });
+        JSONArray ops = new JSONArray();
+        ops.put(fieldOp("System.Description", description));
+        if (isMarkdown(format)) {
+            ops.put(markdownFormatOp("System.Description"));
+        }
+        return patchWorkItem(workItemId, ops);
+    }
+
+    /** Backward-compatible overload: the description keeps the default (HTML) format. */
+    @Override
+    public String updateDescription(String workItemId, String description) throws IOException {
+        return updateDescription(workItemId, description, null);
+    }
+
+    private static JSONObject fieldOp(String field, Object value) {
+        return new JSONObject().put("op", "add").put("path", "/fields/" + field).put("value", value);
+    }
+
+    /** JSON Patch op that marks a large text field as Markdown (Azure DevOps multilineFieldsFormat). */
+    static JSONObject markdownFormatOp(String field) {
+        return new JSONObject().put("op", "add").put("path", "/multilineFieldsFormat/" + field).put("value", "Markdown");
     }
 
     @MCPTool(
@@ -487,10 +525,22 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "field", description = "Field reference name or common name", required = true, example = "Custom.SolutionDesign")
             String field,
             @MCPParam(name = "value", description = "The new value", required = true)
-            String value
+            String value,
+            @MCPParam(name = "format", description = "For large text fields (Description, Acceptance Criteria, Repro Steps, custom long text): 'markdown' stores the value as Markdown; default 'html' keeps the existing behaviour", required = false, example = "markdown")
+            String format
     ) throws IOException {
         String referenceName = resolveFieldName(field);
-        return updateWorkItem(workItemId, fields -> fields.set(referenceName, value));
+        JSONArray ops = new JSONArray();
+        ops.put(fieldOp(referenceName, value));
+        if (isMarkdown(format)) {
+            ops.put(markdownFormatOp(referenceName));
+        }
+        return patchWorkItem(workItemId, ops);
+    }
+
+    /** Backward-compatible overload: the value keeps the default (HTML) format. */
+    public String updateField(String workItemId, String field, String value) throws IOException {
+        return updateField(workItemId, field, value, null);
     }
 
     @MCPTool(
@@ -572,6 +622,18 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     @Override
     public String updateTicket(String workItemId, FieldsInitializer fieldsInitializer) throws IOException {
         return updateWorkItem(workItemId, fieldsInitializer);
+    }
+
+    /** PATCHes the given JSON Patch operations onto a work item. */
+    private String patchWorkItem(String workItemId, JSONArray patchOps) throws IOException {
+        String path = String.format("/%s/_apis/wit/workitems/%s", project, workItemId);
+        GenericRequest request = new GenericRequest(this, path(path))
+                .param("api-version", API_VERSION);
+        request.setBody(patchOps.toString());
+        request.header("Content-Type", "application/json-patch+json");
+        String response = patch(request);
+        log("Updated work item: " + workItemId);
+        return response;
     }
 
     /**
@@ -861,9 +923,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "fieldsJson", description = "Additional fields as JSON object (e.g., {\"Microsoft.VSTS.Common.Priority\": 1})", required = false)
             JSONObject fieldsJson,
             @MCPParam(name = "parentId", description = "Optional parent work item ID: the new item is created as its child (Hierarchy link)", required = false, aliases = {"parentKey"})
-            String parentId
+            String parentId,
+            @MCPParam(name = "format", description = "Text format of the description: 'html' (default, unchanged) or 'markdown' (sets multilineFieldsFormat so Azure DevOps renders Markdown)", required = false, example = "markdown")
+            String format
     ) throws IOException {
-        String response = createWorkItemWithFieldsJson(projectName, workItemType, title, description, fieldsJson, (FieldsInitializer) null);
+        String response = createWorkItem(projectName, workItemType, title, description, fieldsJson, null, isMarkdown(format));
         if (parentId != null && !parentId.trim().isEmpty()) {
             String createdId = new JSONObject(response).opt("id") == null ? null : String.valueOf(new JSONObject(response).get("id"));
             if (createdId == null) {
@@ -873,6 +937,13 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             linkIssueWithRelationship(parentId.trim(), createdId, "child");
         }
         return response;
+    }
+
+    /** Backward-compatible overload without parent/format (the MCP tool above carries both as optional). */
+    public String createWorkItemWithFieldsJson(String projectName, String workItemType, String title,
+                                               String description, JSONObject fieldsJson,
+                                               String parentId) throws IOException {
+        return createWorkItemWithFieldsJson(projectName, workItemType, title, description, fieldsJson, parentId, null);
     }
 
     /** Backward-compatible overload without a parent (the MCP tool above carries the optional parentId). */
@@ -892,6 +963,22 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             JSONObject fieldsJson,
             FieldsInitializer fieldsInitializer
     ) throws IOException {
+        return createWorkItem(projectName, workItemType, title, description, fieldsJson, fieldsInitializer, false);
+    }
+
+    /**
+     * Creates a work item. When {@code markdownDescription} is true the description is stored as
+     * Markdown (multilineFieldsFormat), otherwise as HTML like before.
+     */
+    private String createWorkItem(
+            String projectName,
+            String workItemType,
+            String title,
+            String description,
+            JSONObject fieldsJson,
+            FieldsInitializer fieldsInitializer,
+            boolean markdownDescription
+    ) throws IOException {
         // Build JSON Patch operations for creation
         JSONArray patchOps = new JSONArray();
 
@@ -909,6 +996,9 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             descOp.put("path", "/fields/System.Description");
             descOp.put("value", description);
             patchOps.put(descOp);
+            if (markdownDescription) {
+                patchOps.put(markdownFormatOp("System.Description"));
+            }
         }
 
         // Add custom fields from fieldsJson (for JavaScript compatibility)
