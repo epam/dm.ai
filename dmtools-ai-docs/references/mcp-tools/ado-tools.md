@@ -29,11 +29,11 @@ const result = ado_get_work_item_comments(...);
 | `ado_add_pr_comment` | Add a general comment to an Azure DevOps pull request (creates a new thread). For inline code comments, use ado_add_inline_comment instead. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`text` (string, **required**) |
 | `ado_add_pr_label` | Add a label (tag) to an Azure DevOps pull request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`label` (string, **required**) |
 | `ado_add_pr_reviewer` | Add a reviewer to an Azure DevOps pull request. Optionally set their initial vote. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`reviewerId` (string, **required**)<br>`vote` (string, optional) |
-| `ado_add_work_item_comment` | Add a comment to an Azure DevOps work item | `id` (string, **required**)<br>`comment` (string, **required**) |
+| `ado_add_work_item_comment` | Add a comment to an Azure DevOps work item | `id` (string, **required**)<br>`comment` (string, **required**)<br>`format` (string, optional) |
 | `ado_add_work_item_label` | Add a single label (tag) to a work item, keeping existing tags | `id` (string, **required**)<br>`label` (string, **required**) |
 | `ado_assign_work_item` | Assign a work item to a user | `id` (string, **required**)<br>`userEmail` (string, **required**) |
 | `ado_attach_file` | Attach a local file to a work item. Uploads the file and links it as an attachment; a file with the same name is not attached twice. | `id` (string, **required**)<br>`name` (string, **required**)<br>`contentType` (string, optional)<br>`filePath` (string, **required**) |
-| `ado_create_work_item` | Create a new work item in Azure DevOps | `project` (string, **required**)<br>`workItemType` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`fieldsJson` (object, optional)<br>`parentId` (string, optional) |
+| `ado_create_work_item` | Create a new work item in Azure DevOps | `project` (string, **required**)<br>`workItemType` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`fieldsJson` (object, optional)<br>`parentId` (string, optional)<br>`format` (string, optional) |
 | `ado_delete_pr_comment` | Delete a comment from a pull request thread. Requires both threadId and commentId. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`commentId` (string, **required**) |
 | `ado_download_attachment` | Download an ADO work item attachment by URL and save it as a file | `href` (string, **required**) |
 | `ado_get_changelog` | Get the complete history/changelog of a work item | `id` (string, **required**)<br>`ticket` (object, optional) |
@@ -64,8 +64,8 @@ const result = ado_get_work_item_comments(...);
 | `ado_set_priority` | Set the priority of a work item. Accepts the ADO numbers 1-4 or Jira-style names (Blocker/Highest/Critical=1, High/Major=2, Medium/Normal=3, Low/Minor/Lowest/Trivial=4). | `id` (string, **required**)<br>`priority` (string, **required**) |
 | `ado_test` | Test Azure DevOps connectivity by fetching the current user's profile | None |
 | `ado_trigger_pipeline` | Trigger a pipeline run in ADO. Equivalent to github_trigger_workflow. | `pipelineId` (number, **required**)<br>`branch` (string, optional)<br>`variables` (string, optional) |
-| `ado_update_description` | Update the description of a work item | `id` (string, **required**)<br>`description` (string, **required**) |
-| `ado_update_field` | Update any field of a work item. The field may be a reference name (System.Title, Custom.SolutionDesign) or a common human name (summary, title, description, priority, tags, state, assignedTo, storyPoints), which is mapped to its reference name. Unknown names are passed through unchanged. | `id` (string, **required**)<br>`field` (string, **required**)<br>`value` (string, **required**) |
+| `ado_update_description` | Update the description of a work item | `id` (string, **required**)<br>`description` (string, **required**)<br>`format` (string, optional) |
+| `ado_update_field` | Update any field of a work item. The field may be a reference name (System.Title, Custom.SolutionDesign) or a common human name (summary, title, description, priority, tags, state, assignedTo, storyPoints), which is mapped to its reference name. Unknown names are passed through unchanged. | `id` (string, **required**)<br>`field` (string, **required**)<br>`value` (string, **required**)<br>`format` (string, optional) |
 | `ado_update_pr` | Update pull request properties such as title, description, or status. Use status='abandoned' to abandon a PR, or 'active' to reactivate. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`title` (string, optional)<br>`description` (string, optional)<br>`status` (string, optional) |
 | `ado_update_pr_comment` | Update (edit) an existing comment in a pull request thread. Requires both threadId and commentId. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`threadId` (string, **required**)<br>`commentId` (string, **required**)<br>`text` (string, **required**) |
 | `ado_update_tags` | Update the tags of a work item (semicolon-separated string) | `id` (string, **required**)<br>`tags` (string, **required**) |
@@ -224,6 +224,10 @@ Add a comment to an Azure DevOps work item
 - **`comment`** (string) 🔴 Required
   - The comment text
 
+- **`format`** (string) ⚪ Optional
+  - Text format: `html` (default, unchanged behaviour) or `markdown` (Azure DevOps renders it as Markdown; for fields it sets `multilineFieldsFormat`, and a field saved as Markdown cannot go back to HTML)
+  - Example: `markdown`
+
 **Example:**
 ```bash
 dmtools ado_add_work_item_comment "value" "value"
@@ -341,6 +345,10 @@ Create a new work item in Azure DevOps
 
 - **`parentId`** (string) ⚪ Optional
   - Optional parent work item ID: the new item is created as its child (Hierarchy link)
+
+- **`format`** (string) ⚪ Optional
+  - Text format: `html` (default, unchanged behaviour) or `markdown` (Azure DevOps renders it as Markdown; for fields it sets `multilineFieldsFormat`, and a field saved as Markdown cannot go back to HTML)
+  - Example: `markdown`
 
 **Example:**
 ```bash
@@ -1150,6 +1158,10 @@ Update the description of a work item
 - **`description`** (string) 🔴 Required
   - The new description (HTML format)
 
+- **`format`** (string) ⚪ Optional
+  - Text format: `html` (default, unchanged behaviour) or `markdown` (Azure DevOps renders it as Markdown; for fields it sets `multilineFieldsFormat`, and a field saved as Markdown cannot go back to HTML)
+  - Example: `markdown`
+
 **Example:**
 ```bash
 dmtools ado_update_description "value" "value"
@@ -1177,6 +1189,10 @@ Update any field of a work item. The field may be a reference name (System.Title
 
 - **`value`** (string) 🔴 Required
   - The new value
+
+- **`format`** (string) ⚪ Optional
+  - Text format: `html` (default, unchanged behaviour) or `markdown` (Azure DevOps renders it as Markdown; for fields it sets `multilineFieldsFormat`, and a field saved as Markdown cannot go back to HTML)
+  - Example: `markdown`
 
 **Example:**
 ```bash
