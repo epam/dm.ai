@@ -399,11 +399,34 @@ public class MarkdownToJiraConverter {
             trimmed = trimmed.replaceAll("`\\s*([^`]+)\\s*`", "{{$1}}");
             trimmed = trimmed.replaceAll("\\*\\*([^*]+)\\*\\*", "*$1*");
             trimmed = trimmed.replaceAll("\\[([^\\]]+)\\]\\(([^)]+)\\)", "[$1|$2]");
+            trimmed = convertStrikethrough(trimmed);
 
             output.add(trimmed);
         }
 
         return String.join("\n", output);
+    }
+
+    // Markdown ~~text~~ -> Jira wiki -text- (dm.ai#676). Non-space at both ends and no word/tilde
+    // neighbours, so ranges and hyphenated words are never produced from stray tildes.
+    private static final Pattern STRIKE_PATTERN = Pattern.compile("(?<![\\w~])~~(?=\\S)([^~\\n]*?\\S)~~(?![\\w~])");
+    private static final Pattern WIKI_CODE_PATTERN = Pattern.compile("\\{\\{.*?\\}\\}|\\[[^\\]]*\\|[^\\]]*\\]");
+
+    /** Converts strikethrough outside inline code ({{...}}) and link targets ([text|url]). */
+    static String convertStrikethrough(String line) {
+        if (line == null || !line.contains("~~")) {
+            return line;
+        }
+        StringBuilder out = new StringBuilder();
+        Matcher protectedSpan = WIKI_CODE_PATTERN.matcher(line);
+        int last = 0;
+        while (protectedSpan.find()) {
+            out.append(STRIKE_PATTERN.matcher(line.substring(last, protectedSpan.start())).replaceAll("-$1-"));
+            out.append(protectedSpan.group());
+            last = protectedSpan.end();
+        }
+        out.append(STRIKE_PATTERN.matcher(line.substring(last)).replaceAll("-$1-"));
+        return out.toString();
     }
 
     private static boolean containsHtml(String s) {
