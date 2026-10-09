@@ -261,4 +261,84 @@ class AzureDevOpsTrackerOpsTest {
                 () -> client.createWorkItemWithFieldsJson("TestProject", "Task", "t", "d", null, "70"));
         assertTrue(e.getMessage().contains("70"));
     }
+
+    // ---- Markdown format (agents#805) ----
+
+    @Test
+    void updateDescription_defaultStaysHtml_noFormatOp() throws IOException {
+        respondWith("{}");
+        client.updateDescription("7", "<p>d</p>");
+        JSONArray ops = new JSONArray(bodyOf(sent.get(0)));
+        assertEquals(1, ops.length());
+        assertEquals("/fields/System.Description", ops.getJSONObject(0).getString("path"));
+    }
+
+    @Test
+    void updateDescription_markdown_addsMultilineFieldsFormatOp() throws IOException {
+        respondWith("{}");
+        client.updateDescription("7", "# Title\n- a", "markdown");
+        JSONArray ops = new JSONArray(bodyOf(sent.get(0)));
+        assertEquals(2, ops.length());
+        assertEquals("# Title\n- a", ops.getJSONObject(0).getString("value"));
+        assertEquals("/multilineFieldsFormat/System.Description", ops.getJSONObject(1).getString("path"));
+        assertEquals("Markdown", ops.getJSONObject(1).getString("value"));
+    }
+
+    @Test
+    void updateDescription_htmlAndUnknownFormatsStayHtml() throws IOException {
+        respondWith("{}");
+        client.updateDescription("7", "x", "html");
+        client.updateDescription("7", "x", "nonsense");
+        client.updateDescription("7", "x", "  ");
+        for (Request r : sent) {
+            assertEquals(1, new JSONArray(bodyOf(r)).length());
+        }
+        assertTrue(AzureDevOpsClient.isMarkdown("MarkDown"));
+        assertTrue(AzureDevOpsClient.isMarkdown(" md "));
+        assertFalse(AzureDevOpsClient.isMarkdown(null));
+    }
+
+    @Test
+    void updateField_markdown_marksTheCustomLargeTextFieldAsMarkdown() throws IOException {
+        respondWith("{}", "{}");
+        client.updateField("7", "Custom.SolutionDesign", "**x**", "markdown");
+        client.updateField("7", "Custom.SolutionDesign", "plain");
+        JSONArray md = new JSONArray(bodyOf(sent.get(0)));
+        assertEquals("/multilineFieldsFormat/Custom.SolutionDesign", md.getJSONObject(1).getString("path"));
+        assertEquals(1, new JSONArray(bodyOf(sent.get(1))).length(), "3-arg overload is unchanged");
+    }
+
+    @Test
+    void postComment_markdown_sendsFormatQueryParameter() throws IOException {
+        // postComment goes through the base client's post(), not getClient(): capture it there
+        List<GenericRequest> posted = new ArrayList<>();
+        AzureDevOpsClient poster = new AzureDevOpsClient("TestOrg", "TestProject", "fake-pat") {
+            @Override
+            public String post(GenericRequest request) {
+                posted.add(request);
+                return "{}";
+            }
+        };
+
+        poster.postComment("7", "**done**", "markdown");
+        poster.postComment("7", "<b>done</b>");
+        poster.postComment("7", "x", "html");
+
+        assertTrue(posted.get(0).url().contains("format=markdown"), posted.get(0).url());
+        assertFalse(posted.get(1).url().contains("format="), "2-arg overload keeps the old wire format: " + posted.get(1).url());
+        assertFalse(posted.get(2).url().contains("format="), "html keeps the old wire format");
+        assertEquals("**done**", new JSONObject(posted.get(0).getBody()).getString("text"));
+    }
+
+    @Test
+    void createWorkItem_markdownDescription_addsFormatOpOnlyWhenThereIsADescription() throws IOException {
+        respondWith("{\"id\":5}", "{\"id\":6}", "{\"id\":7}");
+        client.createWorkItemWithFieldsJson("TestProject", "Task", "t", "# d", null, null, "markdown");
+        client.createWorkItemWithFieldsJson("TestProject", "Task", "t", "", null, null, "markdown");
+        client.createWorkItemWithFieldsJson("TestProject", "Task", "t", "<p>d</p>", null);
+        JSONArray withMd = new JSONArray(bodyOf(sent.get(0)));
+        assertEquals("/multilineFieldsFormat/System.Description", withMd.getJSONObject(withMd.length() - 1).getString("path"));
+        assertEquals(1, new JSONArray(bodyOf(sent.get(1))).length(), "no description => title only");
+        assertEquals(2, new JSONArray(bodyOf(sent.get(2))).length(), "html default: title + description only");
+    }
 }
