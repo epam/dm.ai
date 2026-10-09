@@ -321,6 +321,30 @@ jobs:
           copy_skill_doc "references/test-generation/testrail-manual.md" "$DIST_DIR/staging/testrail"
           package_directory "$DIST_DIR/staging/testrail" "dmtools-testrail-skill"
 
+          # Focused packs for the remaining integrations the installer advertises (dm.ai#675).
+          # Docs: MCP tool reference (always) + configuration guide / manual (when it exists).
+          make_focused_pack() {
+            local key="$1" title="$2" description="$3"; shift 3
+            local name="dmtools-$key"
+            mkdir -p "$DIST_DIR/staging/$key"
+            create_skill_manifest "$DIST_DIR/staging/$key" "$name" "$title" "$description"
+            copy_skill_doc "references/installation/README.md" "$DIST_DIR/staging/$key"
+            local doc
+            for doc in "$@"; do
+              if [ -f "dmtools-ai-docs/$doc" ]; then
+                copy_skill_doc "$doc" "$DIST_DIR/staging/$key"
+                echo "- [$doc]($doc)" >> "$DIST_DIR/staging/$key/SKILL.md"
+              fi
+            done
+            package_directory "$DIST_DIR/staging/$key" "$name-skill"
+          }
+          make_focused_pack confluence "DMtools Confluence Skill" "Focused DMtools skill for Confluence page reading, Markdown conversion and publishing." references/configuration/integrations/confluence.md references/mcp-tools/confluence-tools.md
+          make_focused_pack gitlab "DMtools GitLab Skill" "Focused DMtools skill for GitLab merge-request review and repository tooling." references/configuration/integrations/gitlab.md references/mcp-tools/gitlab-tools.md
+          make_focused_pack figma "DMtools Figma Skill" "Focused DMtools skill for Figma design reading and asset export." references/configuration/integrations/figma.md references/mcp-tools/figma-tools.md
+          make_focused_pack teams "DMtools Teams Skill" "Focused DMtools skill for Microsoft Teams messages and transcripts." references/configuration/integrations/teams.md references/mcp-tools/teams-tools.md references/mcp-tools/teams_auth-tools.md
+          make_focused_pack sharepoint "DMtools SharePoint Skill" "Focused DMtools skill for SharePoint file access." references/configuration/integrations/sharepoint.md references/mcp-tools/sharepoint-tools.md references/mcp-tools/teams_auth-tools.md
+          make_focused_pack xray "DMtools Xray Skill" "Focused DMtools skill for Jira Xray test management." references/configuration/integrations/jira.md references/mcp-tools/jira_xray-tools.md references/test-generation/xray-manual.md
+
           # Copy install scripts (bash + PowerShell)
           cp dmtools-ai-docs/install.sh $DIST_DIR/skill-install.sh
           chmod +x $DIST_DIR/skill-install.sh
@@ -350,6 +374,18 @@ jobs:
             dist/dmtools-ado-skill*.tar.gz
             dist/dmtools-testrail-skill*.zip
             dist/dmtools-testrail-skill*.tar.gz
+            dist/dmtools-confluence-skill*.zip
+            dist/dmtools-confluence-skill*.tar.gz
+            dist/dmtools-gitlab-skill*.zip
+            dist/dmtools-gitlab-skill*.tar.gz
+            dist/dmtools-figma-skill*.zip
+            dist/dmtools-figma-skill*.tar.gz
+            dist/dmtools-teams-skill*.zip
+            dist/dmtools-teams-skill*.tar.gz
+            dist/dmtools-sharepoint-skill*.zip
+            dist/dmtools-sharepoint-skill*.tar.gz
+            dist/dmtools-xray-skill*.zip
+            dist/dmtools-xray-skill*.tar.gz
             dist/skill-install.sh
             dist/skill-install.ps1
             dist/skill-checksums.sha256
@@ -485,6 +521,12 @@ jobs:
           - \`dmtools-github-skill.zip\` → \`/dmtools-github\`
           - \`dmtools-ado-skill.zip\` → \`/dmtools-ado\`
           - \`dmtools-testrail-skill.zip\` → \`/dmtools-testrail\`
+          - \`dmtools-confluence-skill.zip\` → \`/dmtools-confluence\`
+          - \`dmtools-gitlab-skill.zip\` → \`/dmtools-gitlab\`
+          - \`dmtools-figma-skill.zip\` → \`/dmtools-figma\`
+          - \`dmtools-teams-skill.zip\` → \`/dmtools-teams\`
+          - \`dmtools-sharepoint-skill.zip\` → \`/dmtools-sharepoint\`
+          - \`dmtools-xray-skill.zip\` → \`/dmtools-xray\`
 
           **Manual Installation:**
           1. Download \`dmtools-skill.zip\` or a focused package such as \`dmtools-jira-skill.zip\`
@@ -598,6 +640,30 @@ jobs:
             skill/dmtools-testrail-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
             skill/dmtools-testrail-skill.zip
             skill/dmtools-testrail-skill.tar.gz
+            skill/dmtools-confluence-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-confluence-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-confluence-skill.zip
+            skill/dmtools-confluence-skill.tar.gz
+            skill/dmtools-gitlab-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-gitlab-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-gitlab-skill.zip
+            skill/dmtools-gitlab-skill.tar.gz
+            skill/dmtools-figma-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-figma-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-figma-skill.zip
+            skill/dmtools-figma-skill.tar.gz
+            skill/dmtools-teams-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-teams-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-teams-skill.zip
+            skill/dmtools-teams-skill.tar.gz
+            skill/dmtools-sharepoint-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-sharepoint-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-sharepoint-skill.zip
+            skill/dmtools-sharepoint-skill.tar.gz
+            skill/dmtools-xray-skill-v${{ needs.version-and-tag.outputs.version }}.zip
+            skill/dmtools-xray-skill-v${{ needs.version-and-tag.outputs.version }}.tar.gz
+            skill/dmtools-xray-skill.zip
+            skill/dmtools-xray-skill.tar.gz
             skill/skill-install.sh
             skill/skill-install.ps1
             skill/skill-checksums.sha256

@@ -27,11 +27,24 @@ SELECTED_SKILLS="${DMTOOLS_SKILLS:-}"
 SKILLS_SOURCE="default"
 INSTALL_ALL_SKILLS=false
 SKIP_UNKNOWN_SKILLS=false
+PRUNE_SKILLS=false
+GLOBAL_ONLY=false
 POSITIONAL_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --all|-a)
             INSTALL_ALL=true
+            shift
+            ;;
+        --global)
+            # Only the user-level agent directories (~/.claude, ~/.copilot, ~/.agents): used by the main
+            # installer so a `curl | bash` run never writes into whatever directory it was started in.
+            GLOBAL_ONLY=true
+            shift
+            ;;
+        --prune)
+            # Remove known skill packages that are NOT in the selection (old default behaviour).
+            PRUNE_SKILLS=true
             shift
             ;;
         --all-skills)
@@ -91,6 +104,8 @@ while [ $# -gt 0 ]; do
             echo "  --skill <name>    Select a single skill package"
             echo "  --skills=<csv>    Allowed alias for comma-separated packages"
             echo "  --all-skills      Select all supported skill packages"
+            echo "  --global          Install only to user-level agent dirs (~/.claude, ~/.copilot, ~/.agents)"
+            echo "  --prune           Also remove known skill packages that are not selected (default: keep them)"
             echo "  --skip-unknown    Warn and continue when unknown skill names are supplied"
             echo "  --help, -h        Show this help message"
             echo ""
@@ -171,58 +186,34 @@ print_info() {
     echo -e "${YELLOW}ℹ${NC} $1" >&2
 }
 
+# Single list of installable skill packages (dm.ai#675): every name the main installer accepts.
+# Keep in sync with AVAILABLE_SKILLS in install.sh (guarded by a unit test).
+ALL_SKILL_KEYS=(dmtools jira confluence github gitlab figma teams sharepoint ado testrail xray)
+
+is_known_skill_key() {
+    local k
+    for k in "${ALL_SKILL_KEYS[@]}"; do [ "$k" = "$1" ] && return 0; done
+    return 1
+}
+
 skill_asset_name() {
-    case "$1" in
-        dmtools) echo "dmtools-skill.zip" ;;
-        jira) echo "dmtools-jira-skill.zip" ;;
-        github) echo "dmtools-github-skill.zip" ;;
-        ado) echo "dmtools-ado-skill.zip" ;;
-        testrail) echo "dmtools-testrail-skill.zip" ;;
-        *)
-            print_error "Unsupported skill package: $1"
-            return 1
-            ;;
-    esac
+    is_known_skill_key "$1" || { print_error "Unsupported skill package: $1"; return 1; }
+    if [ "$1" = "dmtools" ]; then echo "dmtools-skill.zip"; else echo "dmtools-$1-skill.zip"; fi
 }
 
 skill_install_name() {
-    case "$1" in
-        dmtools) echo "dmtools" ;;
-        jira) echo "dmtools-jira" ;;
-        github) echo "dmtools-github" ;;
-        ado) echo "dmtools-ado" ;;
-        testrail) echo "dmtools-testrail" ;;
-        *)
-            print_error "Unsupported skill package: $1"
-            return 1
-            ;;
-    esac
+    is_known_skill_key "$1" || { print_error "Unsupported skill package: $1"; return 1; }
+    if [ "$1" = "dmtools" ]; then echo "dmtools"; else echo "dmtools-$1"; fi
 }
 
 skill_command_name() {
-    case "$1" in
-        dmtools) echo "/dmtools" ;;
-        jira) echo "/dmtools-jira" ;;
-        github) echo "/dmtools-github" ;;
-        ado) echo "/dmtools-ado" ;;
-        testrail) echo "/dmtools-testrail" ;;
-        *)
-            print_error "Unsupported skill package: $1"
-            return 1
-            ;;
-    esac
+    is_known_skill_key "$1" || { print_error "Unsupported skill package: $1"; return 1; }
+    if [ "$1" = "dmtools" ]; then echo "/dmtools"; else echo "/dmtools-$1"; fi
 }
 
 skill_endpoint_path() {
-    case "$1" in
-        dmtools|jira|github|ado|testrail)
-            echo "/dmtools/$1"
-            ;;
-        *)
-            print_error "Unsupported skill package: $1"
-            return 1
-            ;;
-    esac
+    is_known_skill_key "$1" || { print_error "Unsupported skill package: $1"; return 1; }
+    echo "/dmtools/$1"
 }
 
 normalize_skills() {
@@ -239,16 +230,20 @@ normalize_skills() {
             all)
                 include_all=true
                 ;;
-            dmtools|jira|github|ado|testrail)
-                normalized+=("$trimmed")
+            xray|jira_xray)
+                normalized+=("xray")
                 ;;
             *)
-                invalid+=("$trimmed")
+                if is_known_skill_key "$trimmed"; then
+                    normalized+=("$trimmed")
+                else
+                    invalid+=("$trimmed")
+                fi
                 ;;
         esac
     done
     if [ "$include_all" = true ] || [ "$INSTALL_ALL_SKILLS" = true ]; then
-        normalized=(dmtools jira github ado testrail)
+        normalized=("${ALL_SKILL_KEYS[@]}")
     fi
     if [ ${#invalid[@]} -gt 0 ]; then
         local invalid_csv
@@ -257,7 +252,7 @@ normalize_skills() {
             print_info "Warning: Skipping unknown skills: $invalid_csv"
         else
             if [ ${#normalized[@]} -eq 0 ]; then
-                print_error "No valid skills selected. Unknown skills: $invalid_csv. Allowed skills: dmtools,jira,github,ado,testrail"
+                print_error "No valid skills selected. Unknown skills: $invalid_csv. Allowed skills: $(IFS=,; echo "${ALL_SKILL_KEYS[*]}")"
             else
                 print_error "Unknown skills: $invalid_csv. Use --skip-unknown to continue."
             fi
@@ -320,7 +315,7 @@ remove_deselected_skills() {
     local selected_skills=("$@")
     local known_skill
 
-    for known_skill in dmtools jira github ado testrail; do
+    for known_skill in "${ALL_SKILL_KEYS[@]}"; do
         if array_contains "$known_skill" "${selected_skills[@]}"; then
             continue
         fi
@@ -444,25 +439,28 @@ resolve_metadata_version() {
 detect_skill_dirs() {
     local found_dirs=()
 
-    # Project-level: Cursor
-    if [ -d ".cursor/skills" ] || [ -d ".cursor" ]; then
-        found_dirs+=(".cursor/skills")
-    fi
-    # Project-level: Claude Code
-    if [ -d ".claude/skills" ] || [ -d ".claude" ]; then
-        found_dirs+=(".claude/skills")
-    fi
-    # Project-level: Codex
-    if [ -d ".codex/skills" ] || [ -d ".codex" ]; then
-        found_dirs+=(".codex/skills")
-    fi
-    # Project-level: GitHub Copilot CLI / Copilot coding agent
-    if [ -d ".github/skills" ] || [ -d ".github" ]; then
-        found_dirs+=(".github/skills")
-    fi
-    # Project-level: cross-agent (Copilot CLI, etc.)
-    if [ -d ".agents/skills" ] || [ -d ".agents" ]; then
-        found_dirs+=(".agents/skills")
+    if [ "$GLOBAL_ONLY" != true ]; then
+        # Project-level: Cursor
+        if [ -d ".cursor/skills" ] || [ -d ".cursor" ]; then
+            found_dirs+=(".cursor/skills")
+        fi
+        # Project-level: Claude Code
+        if [ -d ".claude/skills" ] || [ -d ".claude" ]; then
+            found_dirs+=(".claude/skills")
+        fi
+        # Project-level: Codex
+        if [ -d ".codex/skills" ] || [ -d ".codex" ]; then
+            found_dirs+=(".codex/skills")
+        fi
+        # Project-level: GitHub Copilot CLI / Copilot coding agent
+        if [ -d ".github/skills" ] || [ -d ".github" ]; then
+            found_dirs+=(".github/skills")
+        fi
+        # Project-level: cross-agent (Copilot CLI, etc.)
+        if [ -d ".agents/skills" ] || [ -d ".agents" ]; then
+            found_dirs+=(".agents/skills")
+        fi
+
     fi
 
     # Global: Claude Code (~/.claude/skills)
@@ -517,7 +515,8 @@ download_skill() {
 
     print_info "Downloading $(skill_install_name "$skill_key") package..."
 
-    local release_url="https://github.com/$GITHUB_REPO/releases/latest/download/$asset_name"
+    # The main installer pins the release it just installed (DMTOOLS_SKILL_RELEASE_BASE_URL); standalone runs use latest.
+    local release_url="${DMTOOLS_SKILL_RELEASE_BASE_URL:-https://github.com/$GITHUB_REPO/releases/latest/download}/$asset_name"
     if curl -L -f -o "$asset_path" "$release_url" 2>/dev/null; then
         print_success "Downloaded $asset_name"
     elif [ "$skill_key" = "dmtools" ]; then
@@ -705,9 +704,22 @@ main() {
     done
 
     for dir in "${target_dirs[@]}"; do
-        remove_deselected_skills "$dir" "${requested_skills[@]}"
-        write_installed_skills_metadata "$dir" "${requested_skills[@]}"
-        write_endpoints_metadata "$dir" "${requested_skills[@]}"
+        local recorded_skills=("${requested_skills[@]}")
+        if [ "$PRUNE_SKILLS" = true ]; then
+            remove_deselected_skills "$dir" "${requested_skills[@]}"
+        else
+            # Non-destructive default (dm.ai#675): the metadata lists every package that is really
+            # installed in this directory, not just the ones selected on this run.
+            recorded_skills=()
+            local known
+            for known in "${ALL_SKILL_KEYS[@]}"; do
+                if array_contains "$known" "${requested_skills[@]}" || [ -d "$dir/$(skill_install_name "$known")" ]; then
+                    recorded_skills+=("$known")
+                fi
+            done
+        fi
+        write_installed_skills_metadata "$dir" "${recorded_skills[@]}"
+        write_endpoints_metadata "$dir" "${recorded_skills[@]}"
     done
 
     rm -rf "$TEMP_DIR"
