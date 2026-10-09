@@ -50,6 +50,9 @@ public final class HtmlToMarkdownConverter {
     private static final String CODE_PLACEHOLDER_PREFIX = "DMCODEIDX";
     private static final String TASK_PLACEHOLDER_PREFIX = "DMTASKIDX";
     private static final String TABLE_PLACEHOLDER_PREFIX = "DMTABLEIDX";
+    // Strikethrough markers survive CopyDown as plain text and become ~~ in restore() (dm.ai#676).
+    private static final String STRIKE_OPEN = "DMSTRIKEOPEN";
+    private static final String STRIKE_CLOSE = "DMSTRIKECLOSE";
 
     private HtmlToMarkdownConverter() {}
 
@@ -81,6 +84,7 @@ public final class HtmlToMarkdownConverter {
             extraction.extractCodeBlocks();
             extraction.extractTaskLists();
             extraction.extractTables();
+            extraction.markStrikethrough();
 
             String markdown = new CopyDown().convert(extraction.htmlWithoutExtracted);
             markdown = extraction.restore(markdown);
@@ -268,8 +272,27 @@ public final class HtmlToMarkdownConverter {
             markdown.append("\n");
         }
 
+        /**
+         * Wraps the content of every {@code <s>}, {@code <del>}, {@code <strike>} and
+         * {@code line-through} span in text markers; CopyDown has no rule for them and would
+         * silently drop the strike. Table cells are handled by the table converter itself.
+         */
+        void markStrikethrough() {
+            Document doc = parseFragment(htmlWithoutExtracted);
+            Elements strikes = doc.select("s, del, strike, [style~=line-through]");
+            if (strikes.isEmpty()) {
+                return;
+            }
+            for (Element strike : strikes) {
+                strike.prepend(STRIKE_OPEN);
+                strike.append(STRIKE_CLOSE);
+                strike.unwrap();
+            }
+            htmlWithoutExtracted = bodyHtml(doc);
+        }
+
         String restore(String markdown) {
-            String result = markdown;
+            String result = markdown.replace(STRIKE_OPEN, "~~").replace(STRIKE_CLOSE, "~~");
             // Tables first: their cells may still contain code/task placeholders.
             // Descending order keeps "PREFIX1" from matching inside "PREFIX10".
             for (int i = tables.size() - 1; i >= 0; i--) {

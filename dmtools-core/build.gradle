@@ -86,6 +86,7 @@ dependencies {
     api "com.vladsch.flexmark:flexmark-ext-tables:${versions.flexmark}"
     api "com.vladsch.flexmark:flexmark-ext-gfm-tasklist:${versions.flexmark}"
     api "com.vladsch.flexmark:flexmark-ext-autolink:${versions.flexmark}"
+    api "com.vladsch.flexmark:flexmark-ext-gfm-strikethrough:${versions.flexmark}"
 
     // Guava and its dependencies
     api "com.google.guava:guava:${versions.guava}"
