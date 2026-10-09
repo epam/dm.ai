@@ -20,6 +20,7 @@ This script will:
 3. ✅ Install to `~/.dmtools/`
 4. ✅ Create the `dmtools` command alias
 5. ✅ Set up shell integration (bash/zsh)
+6. ✅ Install/update the agent skills globally (`~/.claude/skills`, `~/.copilot/skills`, `~/.agents/skills` — only directories that already exist). Skip with `--no-skills`; pick packages with `--skills=jira,gitlab,confluence`. Packages you already have are kept unless you pass `--prune` to `skill-install.sh`.
 
 **⚠️ IMPORTANT**: After installation, you **must** configure `dmtools.env` file. See [Configuration Setup](#-configuration-setup) below.
 
