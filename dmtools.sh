@@ -197,6 +197,8 @@ find_jar_file() {
 
 JAR_FILE=$(find_jar_file)
 
+# Prints the usage text. JobRunner MUST get an explicit --help: with no arguments and a TTY it
+# starts the interactive command picker instead (dm.ai#670: `dmtools --help` opened the picker).
 usage() {
     # Check if JAR file exists before calling JobRunner
     if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
@@ -208,7 +210,7 @@ Or if you're developing locally, build the project first:
 
 Note: Java 17+ is required for DMTools to run."
     fi
-    execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner
+    execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner --help
     exit 0
 }
 
