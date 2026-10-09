@@ -4,6 +4,7 @@
 package com.github.istin.dmtools.atlassian.confluence;
 
 import com.vladsch.flexmark.ext.autolink.AutolinkExtension;
+import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.ext.gfm.tasklist.TaskListExtension;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
@@ -66,6 +67,7 @@ public final class MarkdownToConfluenceStorage {
         options.set(Parser.EXTENSIONS, Arrays.asList(
                 TablesExtension.create(),
                 TaskListExtension.create(),
+                StrikethroughExtension.create(),
                 AutolinkExtension.create()
         ));
         // Standard GFM behaviour: soft line breaks become a single space.
