@@ -715,4 +715,33 @@ class McpCliHandlerTest {
                 "--md should be consumed as named arg. Error: " + message);
         }
     }
+
+    // ---- scm_* / ci_* availability (epam/dm.ai#630) ----
+
+    private static com.github.istin.dmtools.common.config.ApplicationConfiguration configWith(String scm, String ci) {
+        com.github.istin.dmtools.common.config.ApplicationConfiguration c =
+                org.mockito.Mockito.mock(com.github.istin.dmtools.common.config.ApplicationConfiguration.class);
+        org.mockito.Mockito.when(c.getValue("DEFAULT_SCM")).thenReturn(scm);
+        org.mockito.Mockito.when(c.getValue("DEFAULT_CI")).thenReturn(ci);
+        return c;
+    }
+
+    @Test
+    public void scmAndCiFamiliesAppearOnlyWhenTheirRoutingVariableIsSet() {
+        Set<String> none = McpCliHandler.resolveAvailableIntegrations(null, configWith(null, null));
+        assertFalse(none.contains("scm"));
+        assertFalse(none.contains("ci"));
+        Set<String> both = McpCliHandler.resolveAvailableIntegrations(null, configWith("github", "actions"));
+        assertTrue(both.contains("scm"));
+        assertTrue(both.contains("ci"));
+        Set<String> onlyCi = McpCliHandler.resolveAvailableIntegrations(null, configWith("nonsense", "gitlab-ci"));
+        assertFalse(onlyCi.contains("scm"), "an unknown provider value does not enable the family");
+        assertTrue(onlyCi.contains("ci"));
+    }
+
+    @Test
+    public void explicitDmtoolsIntegrationsStillWinsVerbatim() {
+        Set<String> explicit = McpCliHandler.resolveAvailableIntegrations("jira", configWith("github", "actions"));
+        assertEquals(Set.of("jira"), explicit);
+    }
 }
