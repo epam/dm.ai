@@ -742,6 +742,12 @@ public class McpCliHandler {
         }
 
         logger.info("Created {} client instances for MCP CLI", clients.size());
+        // Vendor-neutral scm_* / ci_* aliases (epam/dm.ai#630): one instance serves both families and
+        // calls the concrete github_*/gitlab_* tools through this same executor + client map.
+        clients.put("scm", new com.github.istin.dmtools.scm.ScmCiTools(
+                (tool, toolArgs) -> MCPToolExecutor.executeTool(tool, toolArgs, clients)));
+        clients.put("ci", clients.get("scm"));
+
         return clients;
     }
     
@@ -883,7 +889,7 @@ public class McpCliHandler {
         Set<String> nonAIIntegrations = Set.of(
             "jira", "confluence", "ado", "figma", "file", "cli",
             "teams", "sharepoint", "testrail", "kb", "mermaid", "github",
-            "gitlab", "bitrise", "source", "tracker"
+            "gitlab", "bitrise", "source", "tracker", "scm", "ci"
         );
         if (parts.length > 0 && nonAIIntegrations.contains(parts[0])) {
             return null;
@@ -941,6 +947,14 @@ public class McpCliHandler {
 
         // No explicit list: show what is actually configured (token presence only)
         integrations.addAll(ConfigDoctor.getConfiguredIntegrations(config));
+        // scm_* / ci_* exist only when their routing variable names a known provider (same rule as the
+        // tracker aliases: not configured = absent from the catalog).
+        if (com.github.istin.dmtools.scm.ScmCiTools.resolveScmProvider(config.getValue("DEFAULT_SCM")) != null) {
+            integrations.add("scm");
+        }
+        if (com.github.istin.dmtools.scm.ScmCiTools.resolveCiProvider(config.getValue("DEFAULT_CI")) != null) {
+            integrations.add("ci");
+        }
         logger.debug("Available integrations (config-detected): {}", integrations);
         return integrations;
     }
