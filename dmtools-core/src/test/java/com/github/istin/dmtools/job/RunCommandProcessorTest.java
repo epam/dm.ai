@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import org.json.JSONObject;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -513,5 +514,42 @@ class RunCommandProcessorTest {
 
         assertNotNull(result);
         assertEquals("[not json", result.getParams().getString("cliPrompt"));
+    }
+
+    // ---- --key value override parsing (epam/dm.ai#687) ----
+
+    private JSONObject paramsAfterOverride(String key, String value) throws IOException {
+        Path jsonFile = tempDir.resolve("override-" + Math.abs((key + value).hashCode()) + ".json");
+        Files.write(jsonFile, "{\"name\":\"expert\",\"params\":{\"question\":\"q\"}}".getBytes());
+        JobParams result = runCommandProcessor.processRunCommand(new String[]{"run", jsonFile.toString(), "--" + key, value});
+        return new JSONObject(result.getParams().toString());
+    }
+
+    @Test
+    void testOverride_wiqlWhereFragmentStartingWithBracketStaysAString() throws IOException {
+        JSONObject params = paramsAfterOverride("inputJql", "[System.Id] = 1839749");
+        assertEquals("[System.Id] = 1839749", params.get("inputJql"));
+    }
+
+    @Test
+    void testOverride_bracketPrefixWithTrailingTextStaysAString() throws IOException {
+        assertEquals("[\"a\"] trailing", paramsAfterOverride("inputJql", "[\"a\"] trailing").get("inputJql"));
+        assertEquals("{\"a\":1} and more", paramsAfterOverride("note", "{\"a\":1} and more").get("note"));
+    }
+
+    @Test
+    void testOverride_realJsonArrayAndObjectStillParsed() throws IOException {
+        JSONObject params = paramsAfterOverride("cliCommands", "[\"cursor-agent\", \"x\"]");
+        assertEquals(2, params.getJSONArray("cliCommands").length());
+        assertEquals("cursor-agent", params.getJSONArray("cliCommands").getString(0));
+        assertEquals(1, paramsAfterOverride("customParams", "{\"a\": 1}").getJSONObject("customParams").getInt("a"));
+        assertEquals(0, paramsAfterOverride("empty", "[]").getJSONArray("empty").length());
+    }
+
+    @Test
+    void testOverride_plainJqlAndFullWiqlUnchanged() throws IOException {
+        assertEquals("key = PS-12", paramsAfterOverride("inputJql", "key = PS-12").get("inputJql"));
+        String wiql = "SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 1";
+        assertEquals(wiql, paramsAfterOverride("inputJql", wiql).get("inputJql"));
     }
 }

@@ -283,19 +283,34 @@ public class RunCommandProcessor {
             return value;
         }
         String trimmed = value.trim();
+        // A value is structured JSON only when the WHOLE string is valid JSON. org.json's constructors
+        // accept a valid prefix and ignore the rest, so "[System.Id] = 1" used to become ["System.Id"]
+        // and then failed deserialization of a string field (epam/dm.ai#687).
         if (trimmed.startsWith("[")) {
             try {
-                return new org.json.JSONArray(trimmed);
+                org.json.JSONTokener tokener = new org.json.JSONTokener(trimmed);
+                org.json.JSONArray array = new org.json.JSONArray(tokener);
+                if (isFullyConsumed(tokener)) {
+                    return array;
+                }
             } catch (Exception e) {
                 // Not a valid JSON array — keep as string
             }
         } else if (trimmed.startsWith("{")) {
             try {
-                return new org.json.JSONObject(trimmed);
+                org.json.JSONTokener tokener = new org.json.JSONTokener(trimmed);
+                org.json.JSONObject object = new org.json.JSONObject(tokener);
+                if (isFullyConsumed(tokener)) {
+                    return object;
+                }
             } catch (Exception e) {
                 // Not a valid JSON object — keep as string
             }
         }
         return value;
+    }
+
+    private static boolean isFullyConsumed(org.json.JSONTokener tokener) {
+        return tokener.nextClean() == 0;
     }
 }
