@@ -258,8 +258,27 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         return results;
     }
 
+    /**
+     * Lets the ADO {@code inputJql} be only the WHERE part, as with Jira (epam/dm.ai#687):
+     * {@code [System.Id] = 123} becomes {@code SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 123}.
+     * A query that already starts with {@code SELECT} (any case, leading whitespace allowed) is returned
+     * unchanged, so every existing full-WIQL config keeps working byte for byte. Null / blank pass through.
+     */
+    public static String expandWiql(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return query;
+        }
+        String trimmed = query.trim();
+        if (trimmed.regionMatches(true, 0, "select", 0, 6)
+                && (trimmed.length() == 6 || !Character.isLetterOrDigit(trimmed.charAt(6)))) {
+            return query;
+        }
+        return "SELECT [System.Id] FROM WorkItems WHERE " + trimmed;
+    }
+
     @Override
     public void searchAndPerform(JiraClient.Performer<WorkItem> performer, String wiqlQuery, String[] fields) throws Exception {
+        wiqlQuery = expandWiql(wiqlQuery);
         // Execute WIQL query to get work item IDs
         String path = String.format("/%s/_apis/wit/wiql", project);
         GenericRequest wiqlRequest = new GenericRequest(this, path(path))
