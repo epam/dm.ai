@@ -868,6 +868,51 @@ public class AzureDevOpsClientTest {
         assertNotNull(result.get("error"));
     }
 
+    @Test
+    void testTestConnection_profile401ButWorkItemApiWorks_isSuccess() throws IOException {
+        // epam/dm.ai#686: the PAT has no Profile scope but works for every work-item call
+        mockOkHttp(buildOkResponse(401, "application/json", "unauthorized"));
+        client.setMockResponse("/_apis/wit/workitemtypes", "{\"count\":1,\"value\":[{\"name\":\"Bug\"}]}");
+
+        Map<String, Object> result = client.testConnection();
+
+        assertEquals(true, result.get("success"));
+        assertTrue(result.get("message").toString().contains("work item API verified"), String.valueOf(result.get("message")));
+        assertNull(result.get("error"));
+    }
+
+    @Test
+    void testTestConnection_profileFailsAndWorkItemApiFails_stillReportsTheProfileFailure() throws IOException {
+        mockOkHttp(buildOkResponse(401, "application/json", "unauthorized"));
+        // no workitemtypes mock configured: the fallback call fails too
+
+        Map<String, Object> result = client.testConnection();
+
+        assertEquals(false, result.get("success"));
+        assertTrue(result.get("message").toString().contains("Azure DevOps connection failed"));
+        assertNotNull(result.get("error"));
+    }
+
+    @Test
+    void testTestConnection_profileFailsAndWorkItemApiEmpty_isNotASuccess() throws IOException {
+        mockOkHttp(buildOkResponse(401, "application/json", "unauthorized"));
+        client.setMockResponse("/_apis/wit/workitemtypes", "   ");
+
+        assertEquals(false, client.testConnection().get("success"));
+    }
+
+    @Test
+    void testTestConnection_profileOk_doesNotTouchTheFallback() throws IOException {
+        mockOkHttp(buildOkResponse(200, "application/json", "{\"displayName\":\"Me\",\"emailAddress\":\"me@example.com\"}"));
+
+        Map<String, Object> result = client.testConnection();
+
+        assertEquals(true, result.get("success"));
+        assertEquals("Azure DevOps connection successful", result.get("message"));
+        assertTrue(client.getLastCalledUrl() == null || !client.getLastCalledUrl().contains("workitemtypes"),
+                "a healthy profile check must not trigger the fallback request");
+    }
+
     // ========== Text helpers / URLs / query fields ==========
 
     @Test
