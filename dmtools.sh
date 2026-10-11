@@ -58,6 +58,80 @@ find_java_command() {
     return 1
 }
 
+# ── upgrade / update (epam/dm.ai#684) ────────────────────────────────────────────────────────────────
+# `dmtools upgrade [version]` re-runs the release's install.sh, which downloads and replaces the jar and
+# the wrapper and keeps the existing configuration. It deliberately runs BEFORE the Java check: the
+# command is most needed exactly when the installed runtime is broken or missing.
+# Environment: DMTOOLS_INSTALL_SCRIPT_URL overrides the script location (mirrors / tests);
+#              DMTOOLS_UPGRADE_DRY_RUN=true prints what would happen and changes nothing.
+read_installed_dmtools_version() {
+    local dir meta v
+    while IFS= read -r dir; do
+        [ -n "$dir" ] || continue
+        meta="$dir/installed-skills.json"
+        if [ -f "$meta" ]; then
+            v=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$meta" | head -1)
+            if [ -n "$v" ]; then
+                echo "$v"
+                return 0
+            fi
+        fi
+    done < <(get_install_dir_candidates)
+    echo "unknown"
+}
+
+run_dmtools_upgrade() {
+    local requested="${1:-}"
+    local base="${DMTOOLS_INSTALL_SCRIPT_URL:-}"
+    local url
+    if [ -n "$base" ]; then
+        url="$base"
+    elif [ -n "$requested" ]; then
+        url="https://github.com/epam/dm.ai/releases/download/v${requested#v}/install.sh"
+    else
+        url="https://github.com/epam/dm.ai/releases/latest/download/install.sh"
+    fi
+    local before
+    before=$(read_installed_dmtools_version)
+    echo "DMTools upgrade: installed version ${before}; installer: ${url}" >&2
+    if [ "${DMTOOLS_UPGRADE_DRY_RUN:-false}" = "true" ]; then
+        echo "DMTools upgrade (dry run): would download and run the installer; nothing changed." >&2
+        return 0
+    fi
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "Error: curl is required for 'dmtools upgrade'." >&2
+        return 1
+    fi
+    local tmp
+    tmp=$(mktemp "${TMPDIR:-/tmp}/dmtools-upgrade.XXXXXX") || return 1
+    if ! curl -fsSL --connect-timeout 15 -o "$tmp" "$url"; then
+        rm -f "$tmp"
+        echo "Error: could not download the installer from $url" >&2
+        echo "Workaround: curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash" >&2
+        return 1
+    fi
+    local rc=0
+    if [ -n "$requested" ]; then
+        DMTOOLS_VERSION="v${requested#v}" bash "$tmp" || rc=$?
+    else
+        bash "$tmp" || rc=$?
+    fi
+    rm -f "$tmp"
+    if [ "$rc" -ne 0 ]; then
+        echo "Error: the installer failed (exit $rc); the previous installation was left as it was." >&2
+        return "$rc"
+    fi
+    echo "DMTools upgrade: ${before} -> $(read_installed_dmtools_version)" >&2
+    return 0
+}
+
+case "${1:-}" in
+    upgrade|update)
+        run_dmtools_upgrade "${2:-}"
+        exit $?
+        ;;
+esac
+
 # Get Java command or error
 JAVA_CMD=$(find_java_command 2>/dev/null) || {
     echo "Error: Java 17+ is required but not found." >&2

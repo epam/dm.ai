@@ -55,4 +55,56 @@ class DmtoolsShellWrapperTest {
         assertTrue(source.contains("if [ -t 0 ] && [ -t 1 ]; then"), "TTY check for the no-argument mode must stay");
         assertTrue(source.contains("JobRunner interactive"), "interactive picker launch must stay");
     }
+
+    // ---- dmtools upgrade / update (epam/dm.ai#684) ----
+
+    private static String upgradeBlock(String source) {
+        int start = source.indexOf("read_installed_dmtools_version()");
+        int end = source.indexOf("# Get Java command or error");
+        assertTrue(start > 0 && end > start, "upgrade block not found in dmtools.sh");
+        return source.substring(start, end);
+    }
+
+    @Test
+    void upgradeRunsBeforeTheJavaCheckSoItWorksOnABrokenInstall() throws IOException {
+        String source = wrapper();
+        int upgradeCase = source.indexOf("upgrade|update)");
+        int javaCheck = source.indexOf("JAVA_CMD=$(find_java_command");
+        assertTrue(upgradeCase > 0, "upgrade|update subcommand missing");
+        assertTrue(upgradeCase < javaCheck, "upgrade must be handled before the Java/JAR checks");
+    }
+
+    @Test
+    void upgradeUsesTheReleaseInstallerAndKeepsTheOldInstallOnFailure() throws IOException {
+        String block = upgradeBlock(wrapper());
+        assertTrue(block.contains("releases/latest/download/install.sh"));
+        assertTrue(block.contains("releases/download/v${requested#v}/install.sh"), "a specific version pins that release's installer");
+        assertTrue(block.contains("DMTOOLS_VERSION=\"v${requested#v}\""), "the requested version is passed to install.sh");
+        assertTrue(block.contains("DMTOOLS_UPGRADE_DRY_RUN"), "dry run switch");
+        assertTrue(block.contains("the previous installation was left as it was"), "a failed installer is reported, not swallowed");
+        assertTrue(block.contains("rm -f \"$tmp\""), "the downloaded installer is cleaned up");
+    }
+
+    @Test
+    void upgradeReportsOldAndNewVersion() throws IOException {
+        String block = upgradeBlock(wrapper());
+        assertTrue(block.contains("installed version ${before}"));
+        assertTrue(block.contains("${before} -> $(read_installed_dmtools_version)"));
+    }
+
+    @Test
+    void existingCommandsAreStillRoutedAfterTheNewCase() throws IOException {
+        String source = wrapper();
+        // the new case must not swallow anything else: it matches exactly upgrade|update
+        assertTrue(source.contains("case \"${1:-}\" in\n    upgrade|update)"));
+        assertTrue(source.contains("\"help\"|\"-h\"|\"--help\")"));
+        assertTrue(source.contains("\"interactive\"|\"i\")"));
+    }
+
+    @Test
+    void scriptStaysExecutableWithABashShebang() throws IOException {
+        Path script = Paths.get("").toAbsolutePath().getParent().resolve("dmtools.sh");
+        assertTrue(Files.isExecutable(script), "dmtools.sh must stay executable");
+        assertTrue(wrapper().startsWith("#!/bin/bash"));
+    }
 }

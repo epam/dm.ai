@@ -59,4 +59,9 @@ class JobRunnerHelpTest {
         assertEquals(OutputFormat.MINI, OutputFormat.fromString("mini"));
         assertEquals(OutputFormat.JSON, OutputFormat.fromString("json"));
     }
+
+    @Test
+    void helpMentionsTheUpgradeCommand() {
+        assertTrue(help().contains("dmtools upgrade"));
+    }
 }
