@@ -310,6 +310,7 @@ public class JobRunner {
         System.out.println("  dmtools run <json-file>                # Execute job with JSON config file");
         System.out.println("  dmtools run <job-name> [--key value]   # Execute a registered job without a config file");
         System.out.println("  dmtools run <json-file> <encoded>      # Execute job with file + encoded overrides");
+        System.out.println("  dmtools upgrade [version]              # Upgrade DMTools to the latest (or given) release");
         System.out.println("  dmtools <tool> [args...]              # Execute MCP tool with args");
         System.out.println("  dmtools <tool> --data '{\"json\"}'      # Execute with inline JSON");
         System.out.println("  dmtools <tool> --file params.json     # Execute with JSON file");

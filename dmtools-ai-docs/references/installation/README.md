@@ -24,6 +24,15 @@ This script will:
 
 **⚠️ IMPORTANT**: After installation, you **must** configure `dmtools.env` file. See [Configuration Setup](#-configuration-setup) below.
 
+### Upgrading
+
+```bash
+dmtools upgrade            # latest release
+dmtools upgrade 1.7.274    # a specific release (alias: dmtools update)
+```
+
+`dmtools upgrade` downloads the release's `install.sh` and runs it, so the jar, the wrapper and (unless you pass `--no-skills`) the agent skills are replaced exactly as a fresh install would, and your configuration files are kept. It prints the installed version before and after, works even when the installed runtime is broken (it runs before the Java check) and leaves the previous installation untouched if the download or the installer fails. `DMTOOLS_UPGRADE_DRY_RUN=true` shows what it would do without changing anything.
+
 ## 📦 Installation Methods
 
 ### Method 1: Automatic Installation (Recommended)
