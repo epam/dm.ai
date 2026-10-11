@@ -247,6 +247,56 @@ public class AzureDevOpsClientTest {
         assertEquals("System.Priority", client.resolveFieldName("123", "Priority"));
     }
 
+    // ========== expandWiql (epam/dm.ai#687) ==========
+
+    @Test
+    void testExpandWiql_whereFragmentGetsTheSelectPrefix() {
+        assertEquals("SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 1839749",
+                AzureDevOpsClient.expandWiql("[System.Id] = 1839749"));
+        assertEquals("SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active' ORDER BY [System.Id]",
+                AzureDevOpsClient.expandWiql("  [System.State] = 'Active' ORDER BY [System.Id]  "));
+    }
+
+    @Test
+    void testExpandWiql_fullQueriesAreReturnedUnchanged() {
+        String full = "SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 1";
+        assertSame(full, AzureDevOpsClient.expandWiql(full));
+        assertEquals("select [System.Id] from WorkItems", AzureDevOpsClient.expandWiql("select [System.Id] from WorkItems"));
+        assertEquals("  SELECT [System.Id] FROM WorkItems", AzureDevOpsClient.expandWiql("  SELECT [System.Id] FROM WorkItems"));
+        assertEquals("SELECT\n[System.Id] FROM WorkItems", AzureDevOpsClient.expandWiql("SELECT\n[System.Id] FROM WorkItems"));
+    }
+
+    @Test
+    void testExpandWiql_aFieldThatMerelyStartsWithSelectIsStillAWhereFragment() {
+        assertEquals("SELECT [System.Id] FROM WorkItems WHERE selection = 1", AzureDevOpsClient.expandWiql("selection = 1"));
+    }
+
+    @Test
+    void testExpandWiql_nullAndBlankPassThrough() {
+        assertNull(AzureDevOpsClient.expandWiql(null));
+        assertEquals("   ", AzureDevOpsClient.expandWiql("   "));
+        assertEquals("", AzureDevOpsClient.expandWiql(""));
+    }
+
+    @Test
+    void testSearchAndPerform_shortWhereFragmentIsSentAsFullWiql() throws Exception {
+        client.setMockPostResponse("/_apis/wit/wiql", "{\"workItems\":[]}");
+
+        client.searchAndPerform("[System.Id] = 1839749", null);
+
+        assertTrue(client.getLastPostedBody("/_apis/wit/wiql").contains("SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 1839749"));
+    }
+
+    @Test
+    void testSearchAndPerform_fullWiqlIsSentUnchanged() throws Exception {
+        client.setMockPostResponse("/_apis/wit/wiql", "{\"workItems\":[]}");
+        String full = "SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 7";
+
+        client.searchAndPerform(full, null);
+
+        assertEquals(new JSONObject().put("query", full).toString(), client.getLastPostedBody("/_apis/wit/wiql"));
+    }
+
     // ========== searchAndPerform ==========
 
     @Test
