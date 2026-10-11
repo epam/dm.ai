@@ -1485,12 +1485,34 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             result.put("user", profile.getFullName());
             result.put("email", profile.getEmailAddress());
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("message", "Azure DevOps connection failed: " + e.getMessage());
-            result.put("error", e.getClass().getSimpleName());
-            logger.warn("Azure DevOps connection test failed", e);
+            // The profile API needs its own PAT scope, so a token that works for every work-item call can
+            // still get 401 there (epam/dm.ai#686). Confirm with the work-item API the tools really use
+            // before reporting a failure; when that fails too, the original profile error is reported as before.
+            if (isWorkItemApiReachable()) {
+                result.put("success", true);
+                result.put("message", "Azure DevOps connection successful (work item API verified; the profile "
+                        + "endpoint is not available for this token: " + e.getMessage() + ")");
+                logger.debug("Azure DevOps profile check failed but the work item API answered", e);
+            } else {
+                result.put("success", false);
+                result.put("message", "Azure DevOps connection failed: " + e.getMessage());
+                result.put("error", e.getClass().getSimpleName());
+                logger.warn("Azure DevOps connection test failed", e);
+            }
         }
         return result;
+    }
+
+    /** Cheap read on the same API the work-item tools use; false on any failure. */
+    private boolean isWorkItemApiReachable() {
+        try {
+            GenericRequest request = new GenericRequest(this, path(String.format("/%s/_apis/wit/workitemtypes", project)))
+                    .param("api-version", API_VERSION);
+            String response = execute(request);
+            return response != null && !response.trim().isEmpty();
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     @MCPTool(
