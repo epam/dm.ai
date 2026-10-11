@@ -301,7 +301,7 @@ public class JobRunner {
         throw new IllegalArgumentException("Unknown job name: " + jobParams.getName());
     }
 
-    private static void printHelp() {
+    static void printHelp() {
         System.out.println("DMTools CLI Wrapper");
         System.out.println();
         System.out.println("Usage:");
@@ -335,8 +335,18 @@ public class JobRunner {
         System.out.println("  }");
         System.out.println("  EOF");
         System.out.println();
+        System.out.println("Output formats (MCP tools and `dmtools list`; epam/dm.ai#685):");
+        System.out.println("  --output <format>       json (default) | toon | mini | short | table | mermaid");
+        System.out.println("  --toon                  Shortcut for --output toon  (compact LLM-optimized text, fewest tokens)");
+        System.out.println("  --mini                  Shortcut for --output mini  (minified JSON, no whitespace)");
+        System.out.println("  Formats: json = pretty JSON; toon = LLM-optimized text; mini = compact JSON;");
+        System.out.println("           short = one human-readable line per item; table = Markdown table; mermaid = diagram");
+        System.out.println("  Default: set CLI_OUTPUT=<format> in the environment or dmtools.env (the flag wins over it).");
+        System.out.println("  Example: dmtools jira_get_ticket DMC-479 --output toon");
+        System.out.println();
         System.out.println("Environment Variables:");
         System.out.println("  DMTOOLS_INTEGRATIONS    Comma-separated list of integrations (jira,confluence,figma)");
+        System.out.println("  CLI_OUTPUT              Default output format (json|toon|mini|short|table|mermaid)");
         System.out.println();
         System.out.println("Environment Files:");
         System.out.println("  The script automatically loads environment variables from the following files (in order of precedence):");
