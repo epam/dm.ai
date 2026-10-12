@@ -695,6 +695,89 @@ public class GitHubCoverageTest {
         ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
         verify(gitHub).execute(captor.capture());
         assertTrue(captor.getValue().url().contains("/repos/testWorkspace/testRepo/commits/abc123/check-runs"));
+        assertTrue(captor.getValue().url(), captor.getValue().url().contains("per_page=100&page=1"));
+    }
+
+    // ---- pagination (dmtools-dart#387: a head with 355 check runs hid its in_progress ones past page 30) ----
+
+    private static String runs(int count, String status, int startId) {
+        JSONArray a = new JSONArray();
+        for (int i = 0; i < count; i++) {
+            a.put(new JSONObject().put("id", startId + i).put("status", status).put("conclusion", "completed".equals(status) ? "success" : JSONObject.NULL));
+        }
+        return a.toString();
+    }
+
+    private static String page(int total, String runsJson) {
+        return "{\"total_count\":" + total + ",\"check_runs\":" + runsJson + "}";
+    }
+
+    @Test
+    public void testGetCommitCheckRunsWalksEveryPageAndKeepsTotalCount() throws IOException {
+        doReturn(page(103, runs(100, "completed", 0)), page(103, runs(3, "in_progress", 100)))
+                .when(gitHub).execute(any(GenericRequest.class));
+
+        JSONObject result = new JSONObject(gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "pagedsha"));
+
+        assertEquals(103, result.getInt("total_count"));
+        JSONArray all = result.getJSONArray("check_runs");
+        assertEquals(103, all.length());
+        long inProgress = 0;
+        for (int i = 0; i < all.length(); i++) {
+            if ("in_progress".equals(all.getJSONObject(i).getString("status"))) inProgress++;
+        }
+        assertEquals("the in_progress runs past page 1 must be visible", 3L, inProgress);
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(gitHub, times(2)).execute(captor.capture());
+        assertTrue(captor.getAllValues().get(0).url().endsWith("per_page=100&page=1"));
+        assertTrue(captor.getAllValues().get(1).url().endsWith("per_page=100&page=2"));
+    }
+
+    @Test
+    public void testGetCommitCheckRunsStopsOnAFullFinalPageThenAnEmptyOne() throws IOException {
+        doReturn(page(200, runs(100, "completed", 0)), page(200, runs(100, "completed", 100)), page(200, "[]"))
+                .when(gitHub).execute(any(GenericRequest.class));
+
+        JSONObject result = new JSONObject(gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "sha"));
+
+        assertEquals(200, result.getJSONArray("check_runs").length());
+        verify(gitHub, times(3)).execute(any(GenericRequest.class));
+    }
+
+    @Test
+    public void testGetCommitCheckRunsShortFirstPageIsReturnedUntouchedWithOneRequest() throws IOException {
+        String body = page(2, runs(2, "completed", 0));
+        doReturn(body).when(gitHub).execute(any(GenericRequest.class));
+
+        assertEquals(body, gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "sha"));
+        verify(gitHub, times(1)).execute(any(GenericRequest.class));
+    }
+
+    @Test
+    public void testGetCommitCheckRunsNonPagedAndErrorShapesPassThrough() throws IOException {
+        doReturn("not json at all").when(gitHub).execute(any(GenericRequest.class));
+        assertEquals("not json at all", gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "sha"));
+
+        doReturn("{\"message\":\"Not Found\"}").when(gitHub).execute(any(GenericRequest.class));
+        assertEquals("{\"message\":\"Not Found\"}", gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "sha"));
+
+        doReturn("").when(gitHub).execute(any(GenericRequest.class));
+        assertEquals("", gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "sha"));
+
+        doReturn((String) null).when(gitHub).execute(any(GenericRequest.class));
+        assertNull(gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "sha"));
+    }
+
+    @Test
+    public void testGetCommitCheckRunsLaterPageFailureDegradesToTheCollectedPages() throws IOException {
+        when(gitHub.execute(any(GenericRequest.class)))
+                .thenReturn(page(150, runs(100, "completed", 0)))
+                .thenThrow(new IOException("page 2 exploded"));
+
+        JSONObject result = new JSONObject(gitHub.getCommitCheckRuns(WORKSPACE, REPOSITORY, "sha"));
+
+        assertEquals(100, result.getJSONArray("check_runs").length());
+        assertEquals(150, result.getInt("total_count"));
     }
 
     @Test
