@@ -147,11 +147,11 @@ public abstract class GitHubIssues extends GitHub {
             aliases = {"source_code_get_pr_comments", "tracker_get_comments"}
     )
     public List<IComment> getPrComments(
-            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = false, example = "IstiN")
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = false, example = "IstiN", aliases = {"owner"})
             String workspace,
-            @MCPParam(name = "repository", description = "The GitHub repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = false, example = "dmtools", aliases = {"repo"})
             String repository,
-            @MCPParam(name = "pullRequestId", description = "The pull request or issue number", required = false, example = "74", aliases = {"number"})
+            @MCPParam(name = "pullRequestId", description = "The pull request or issue number", required = false, example = "74", aliases = {"number", "issueNumber"})
             String pullRequestId,
             @MCPParam(name = "key", description = "Composite issue key 'owner/repo#123' (alternative to workspace/repository/pullRequestId)", required = false, example = "IstiN/dmtools#42")
             String key) throws IOException {
@@ -168,11 +168,11 @@ public abstract class GitHubIssues extends GitHub {
             aliases = {"source_code_get_issue", "tracker_get_ticket"}
     )
     public GitHubIssue issue(
-            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = false, example = "IstiN")
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = false, example = "IstiN", aliases = {"owner"})
             String workspace,
-            @MCPParam(name = "repository", description = "The GitHub repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = false, example = "dmtools", aliases = {"repo"})
             String repository,
-            @MCPParam(name = "issueNumber", description = "The issue number", required = false, example = "42", aliases = {"number"})
+            @MCPParam(name = "issueNumber", description = "The issue number", required = false, example = "42", aliases = {"number", "pullRequestId"})
             String issueNumber,
             @MCPParam(name = "key", description = "Composite issue key 'owner/repo#123' (alternative to workspace/repository/issueNumber)", required = false, example = "IstiN/dmtools#42")
             String key) throws IOException {
@@ -259,11 +259,11 @@ public abstract class GitHubIssues extends GitHub {
             category = "issues"
     )
     public String closeIssue(
-            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
+            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN", aliases = {"workspace"})
             String owner,
-            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools", aliases = {"repository"})
             String repo,
-            @MCPParam(name = "number", description = "The issue number", required = false, example = "42")
+            @MCPParam(name = "number", description = "The issue number", required = false, example = "42", aliases = {"issueNumber", "pullRequestId"})
             Integer number,
             @MCPParam(name = "key", description = "Composite issue key 'owner/repo#123' (alternative to owner/repo/number)", required = false, example = "IstiN/dmtools#42")
             String key) throws IOException {
@@ -315,11 +315,11 @@ public abstract class GitHubIssues extends GitHub {
     public String moveIssueToStatus(
             @MCPParam(name = "statusName", description = "The target status name", required = true, example = "Done", aliases = {"state", "status"})
             String statusName,
-            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
+            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN", aliases = {"workspace"})
             String owner,
-            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools", aliases = {"repository"})
             String repo,
-            @MCPParam(name = "number", description = "The issue number", required = false, example = "42")
+            @MCPParam(name = "number", description = "The issue number", required = false, example = "42", aliases = {"issueNumber", "pullRequestId"})
             Integer number,
             @MCPParam(name = "key", description = "Composite issue key 'owner/repo#123' (alternative to owner/repo/number)", required = false, example = "IstiN/dmtools#42")
             String key) throws IOException {
@@ -347,11 +347,11 @@ public abstract class GitHubIssues extends GitHub {
     public String assignIssue(
             @MCPParam(name = "user", description = "The assignee GitHub login", required = true, example = "octocat", aliases = {"accountId", "assignee", "userName"})
             String user,
-            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
+            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN", aliases = {"workspace"})
             String owner,
-            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools", aliases = {"repository"})
             String repo,
-            @MCPParam(name = "number", description = "The issue number", required = false, example = "42")
+            @MCPParam(name = "number", description = "The issue number", required = false, example = "42", aliases = {"issueNumber", "pullRequestId"})
             Integer number,
             @MCPParam(name = "key", description = "Composite issue key 'owner/repo#123' (alternative to owner/repo/number)", required = false, example = "IstiN/dmtools#42")
             String key) throws IOException {
@@ -374,11 +374,11 @@ public abstract class GitHubIssues extends GitHub {
             aliases = {"tracker_add_label"}
     )
     public String addLabels(
-            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
+            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN", aliases = {"workspace"})
             String owner,
-            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools", aliases = {"repository"})
             String repo,
-            @MCPParam(name = "number", description = "The issue number", required = false, example = "42")
+            @MCPParam(name = "number", description = "The issue number", required = false, example = "42", aliases = {"issueNumber", "pullRequestId"})
             Integer number,
             @MCPParam(name = "labels", description = "The label names to add", required = true, example = "[\"bug\",\"help wanted\"]")
             String[] labels,
@@ -407,11 +407,11 @@ public abstract class GitHubIssues extends GitHub {
             aliases = {"tracker_remove_label"}
     )
     public String removeLabel(
-            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN")
+            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = false, example = "IstiN", aliases = {"workspace"})
             String owner,
-            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repo", description = "The repository name", required = false, example = "dmtools", aliases = {"repository"})
             String repo,
-            @MCPParam(name = "number", description = "The issue number", required = false, example = "42")
+            @MCPParam(name = "number", description = "The issue number", required = false, example = "42", aliases = {"issueNumber", "pullRequestId"})
             Integer number,
             @MCPParam(name = "label", description = "The name of the label to remove", required = true, example = "bug")
             String label,
@@ -434,11 +434,11 @@ public abstract class GitHubIssues extends GitHub {
             aliases = {"tracker_post_comment"}
     )
     public String createComment(
-            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = false, example = "IstiN")
+            @MCPParam(name = "workspace", description = "The GitHub owner/organization name", required = false, example = "IstiN", aliases = {"owner"})
             String workspace,
-            @MCPParam(name = "repository", description = "The GitHub repository name", required = false, example = "dmtools")
+            @MCPParam(name = "repository", description = "The GitHub repository name", required = false, example = "dmtools", aliases = {"repo"})
             String repository,
-            @MCPParam(name = "pullRequestId", description = "The issue or pull request number", required = false, example = "74")
+            @MCPParam(name = "pullRequestId", description = "The issue or pull request number", required = false, example = "74", aliases = {"number", "issueNumber"})
             String pullRequestId,
             @MCPParam(name = "body", description = "The comment body text", required = true, example = "Looks good!", aliases = {"text", "comment"})
             String body,
