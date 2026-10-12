@@ -297,6 +297,53 @@ public class AzureDevOpsClientTest {
         assertEquals(new JSONObject().put("query", full).toString(), client.getLastPostedBody("/_apis/wit/wiql"));
     }
 
+    // ========== extractWorkItemIds / link queries (agents#871) ==========
+
+    @Test
+    void testExtractWorkItemIds_flatQueryKeepsOrder() {
+        JSONObject r = new JSONObject("{\"workItems\":[{\"id\":30},{\"id\":10},{\"id\":20}]}");
+        assertEquals(List.of(30, 10, 20), AzureDevOpsClient.extractWorkItemIds(r));
+    }
+
+    @Test
+    void testExtractWorkItemIds_linkQueryReturnsTheTargetsAndSkipsTheAnchor() {
+        // FROM WorkItemLinks answers with workItemRelations; the first entry is the anchoring parent (no rel)
+        JSONObject r = new JSONObject("{\"queryType\":\"oneHop\",\"workItemRelations\":["
+                + "{\"rel\":null,\"source\":null,\"target\":{\"id\":1839749}},"
+                + "{\"rel\":\"System.LinkTypes.Hierarchy-Forward\",\"source\":{\"id\":1839749},\"target\":{\"id\":2001}},"
+                + "{\"rel\":\"System.LinkTypes.Hierarchy-Forward\",\"source\":{\"id\":1839749},\"target\":{\"id\":2002}}]}");
+        assertEquals(List.of(2001, 2002), AzureDevOpsClient.extractWorkItemIds(r));
+    }
+
+    @Test
+    void testExtractWorkItemIds_duplicatesAreDroppedAndEmptyShapesAreEmpty() {
+        JSONObject dup = new JSONObject("{\"workItemRelations\":["
+                + "{\"rel\":\"r\",\"target\":{\"id\":5}},{\"rel\":\"r\",\"target\":{\"id\":5}},{\"rel\":\"r\",\"target\":{\"id\":6}}]}");
+        assertEquals(List.of(5, 6), AzureDevOpsClient.extractWorkItemIds(dup));
+        assertTrue(AzureDevOpsClient.extractWorkItemIds(new JSONObject("{}")).isEmpty());
+        assertTrue(AzureDevOpsClient.extractWorkItemIds(new JSONObject("{\"workItems\":[],\"workItemRelations\":[]}")).isEmpty());
+    }
+
+    @Test
+    void testExtractWorkItemIds_relationWithoutTargetIsIgnored() {
+        JSONObject r = new JSONObject("{\"workItemRelations\":[{\"rel\":\"r\"},{\"rel\":\"r\",\"target\":{}},{\"rel\":\"r\",\"target\":{\"id\":9}}]}");
+        assertEquals(List.of(9), AzureDevOpsClient.extractWorkItemIds(r));
+    }
+
+    @Test
+    void testSearchAndPerform_linkQueryFetchesTheTargetWorkItems() throws Exception {
+        client.setMockPostResponse("/_apis/wit/wiql", "{\"workItemRelations\":["
+                + "{\"rel\":null,\"target\":{\"id\":100}},"
+                + "{\"rel\":\"System.LinkTypes.Hierarchy-Forward\",\"source\":{\"id\":100},\"target\":{\"id\":201}}]}");
+        JSONArray value = new JSONArray().put(new JSONObject().put("id", 201).put("fields", new JSONObject().put("System.Title", "child")));
+        client.setMockResponse("/_apis/wit/workitems", new JSONObject().put("value", value).toString());
+
+        List<WorkItem> results = client.searchAndPerform("SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] = 100 MODE (MustContain)", null);
+
+        assertEquals(1, results.size(), "the child of the anchor is returned, the anchor itself is not");
+        assertTrue(client.getLastCalledUrl().contains("ids=201"), client.getLastCalledUrl());
+    }
+
     // ========== searchAndPerform ==========
 
     @Test

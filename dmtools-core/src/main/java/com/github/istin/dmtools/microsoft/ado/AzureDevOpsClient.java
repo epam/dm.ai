@@ -276,6 +276,35 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         return "SELECT [System.Id] FROM WorkItems WHERE " + trimmed;
     }
 
+    /**
+     * Ids of the work items a WIQL result refers to, in result order and without duplicates.
+     * A flat query answers with {@code workItems}; a link query (FROM WorkItemLinks — one-hop or tree) answers
+     * with {@code workItemRelations} instead, so a project's query such as "child Tasks of this story" used to
+     * come back empty (agents#871). For relations the TARGET of each link is what the query selects; the
+     * source (the parent that anchors the query, which has no {@code rel}) is skipped.
+     */
+    static List<Integer> extractWorkItemIds(JSONObject result) {
+        LinkedHashSet<Integer> ids = new LinkedHashSet<>();
+        JSONArray workItems = result.optJSONArray("workItems");
+        if (workItems != null) {
+            for (int i = 0; i < workItems.length(); i++) {
+                ids.add(workItems.getJSONObject(i).getInt("id"));
+            }
+        }
+        JSONArray relations = result.optJSONArray("workItemRelations");
+        if (relations != null) {
+            for (int i = 0; i < relations.length(); i++) {
+                JSONObject relation = relations.getJSONObject(i);
+                JSONObject target = relation.optJSONObject("target");
+                boolean anchorOnly = relation.isNull("rel") || relation.optString("rel", "").isEmpty();
+                if (target != null && !anchorOnly && target.has("id")) {
+                    ids.add(target.getInt("id"));
+                }
+            }
+        }
+        return new ArrayList<>(ids);
+    }
+
     @Override
     public void searchAndPerform(JiraClient.Performer<WorkItem> performer, String wiqlQuery, String[] fields) throws Exception {
         wiqlQuery = expandWiql(wiqlQuery);
@@ -290,18 +319,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
         String response = wiqlRequest.post();
         JSONObject result = new JSONObject(response);
-        JSONArray workItems = result.optJSONArray("workItems");
+        List<Integer> ids = extractWorkItemIds(result);
 
-        if (workItems == null || workItems.length() == 0) {
+        if (ids.isEmpty()) {
             log("No work items found for query: " + wiqlQuery);
             return;
-        }
-
-        // Get detailed work items
-        List<Integer> ids = new ArrayList<>();
-        for (int i = 0; i < workItems.length(); i++) {
-            JSONObject wi = workItems.getJSONObject(i);
-            ids.add(wi.getInt("id"));
         }
 
         // Batch fetch work items (ADO supports up to 200 IDs per request)
