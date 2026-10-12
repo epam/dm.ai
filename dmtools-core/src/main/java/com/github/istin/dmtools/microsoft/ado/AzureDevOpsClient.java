@@ -248,7 +248,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             aliases = {"tracker_search"}
     )
     public List<WorkItem> searchAndPerform(
-            @MCPParam(name = "wiql", description = "WIQL query string", required = true, example = "SELECT [System.Id] FROM WorkItems WHERE [System.WorkItemType] = 'Bug'", aliases = {"jql", "query"})
+            @MCPParam(name = "wiql", description = "WIQL query string", required = true, example = "SELECT [System.Id] FROM WorkItems WHERE [System.WorkItemType] = 'Bug'", aliases = {"jql", "query", "searchQueryJQL"})
             String wiqlQuery,
             @MCPParam(name = "fields", description = "Optional array of fields to include", required = false)
             String[] fields
@@ -398,7 +398,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     public void postComment(
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
             String workItemId,
-            @MCPParam(name = "comment", description = "The comment text", required = true, aliases = {"text"})
+            @MCPParam(name = "comment", description = "The comment text", required = true, aliases = {"text", "body"})
             String comment,
             @MCPParam(name = "format", description = "Text format of the comment: 'html' (default, unchanged behaviour) or 'markdown' (Azure DevOps renders it as Markdown)", required = false, example = "markdown")
             String format
@@ -720,7 +720,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     public String moveToStatus(
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
             String workItemId,
-            @MCPParam(name = "state", description = "The target state name", required = true, example = "Active", aliases = {"statusName"})
+            @MCPParam(name = "state", description = "The target state name", required = true, example = "Active", aliases = {"statusName", "status"})
             String stateName
     ) throws IOException {
         return updateWorkItem(workItemId, fields -> {
@@ -937,7 +937,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             String workItemType,
             @MCPParam(name = "title", description = "The work item title", required = true, aliases = {"summary"})
             String title,
-            @MCPParam(name = "description", description = "The work item description (HTML)", required = false)
+            @MCPParam(name = "description", description = "The work item description (HTML)", required = false, aliases = {"body"})
             String description,
             @MCPParam(name = "fieldsJson", description = "Additional fields as JSON object (e.g., {\"Microsoft.VSTS.Common.Priority\": 1})", required = false)
             JSONObject fieldsJson,
