@@ -21,6 +21,7 @@ import okhttp3.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -1132,9 +1133,65 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String repository,
             @MCPParam(name = "commitSha", description = "The commit SHA to get check runs for", required = true, example = "abc123...")
             String commitSha) throws IOException {
-        String path = path(String.format("repos/%s/%s/commits/%s/check-runs", workspace, repository, commitSha));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        return execute(getRequest);
+        return getAllCheckRuns(workspace, repository, commitSha);
+    }
+
+    private static final int CHECK_RUNS_PAGE_SIZE = 100;
+
+    /**
+     * Reads EVERY page of a commit's check runs (per_page=100). A head accumulates check runs across CI
+     * re-runs and bot stamps (a live head carried 355); the default page of 30 hid in_progress runs from every
+     * caller that rolls the head's state up (dmtools-dart#387). {@code total_count} is kept from page 1.
+     * Non-paged shapes (a body without a {@code check_runs} array, error bodies, stubs) are returned
+     * untouched; a failure on a later page degrades to the pages already collected.
+     */
+    String getAllCheckRuns(String workspace, String repository, String commitSha) throws IOException {
+        String base = String.format("repos/%s/%s/commits/%s/check-runs?per_page=%d",
+                workspace, repository, commitSha, CHECK_RUNS_PAGE_SIZE);
+        String first = execute(new GenericRequest(this, path(base + "&page=1")));
+        if (first == null || first.isEmpty()) {
+            return first;
+        }
+        JSONObject firstObject;
+        try {
+            firstObject = new JSONObject(first);
+        } catch (JSONException e) {
+            return first;
+        }
+        JSONArray firstPage = firstObject.optJSONArray("check_runs");
+        if (firstPage == null || firstPage.length() < CHECK_RUNS_PAGE_SIZE) {
+            return first;
+        }
+        JSONArray all = new JSONArray();
+        for (int i = 0; i < firstPage.length(); i++) {
+            all.put(firstPage.get(i));
+        }
+        for (int page = 2; ; page++) {
+            JSONArray items;
+            try {
+                String body = execute(new GenericRequest(this, path(base + "&page=" + page)));
+                items = new JSONObject(body).optJSONArray("check_runs");
+            } catch (Exception e) {
+                logger.warn("check-runs page {} of {}/{}@{} failed, returning the {} runs collected so far: {}",
+                        page, workspace, repository, commitSha, all.length(), e.getMessage());
+                break;
+            }
+            if (items == null) {
+                break;
+            }
+            for (int i = 0; i < items.length(); i++) {
+                all.put(items.get(i));
+            }
+            if (items.length() < CHECK_RUNS_PAGE_SIZE) {
+                break;
+            }
+        }
+        JSONObject merged = new JSONObject();
+        if (firstObject.has("total_count")) {
+            merged.put("total_count", firstObject.get("total_count"));
+        }
+        merged.put("check_runs", all);
+        return merged.toString();
     }
 
     @MCPTool(
