@@ -268,7 +268,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
     public String assignTo(
             @MCPParam(name = "key", description = "The Jira ticket key to assign", required = true, example = "PRJ-123")
             String ticketKey,
-            @MCPParam(name = "accountId", description = "The Jira account ID to assign to. If you know email use first jira_get_account_by_email tools to get account ID", required = true, example = "123457:2a123456-40e8-49d6-8ddc-6852e518451f")
+            @MCPParam(name = "accountId", description = "The Jira account ID to assign to. If you know email use first jira_get_account_by_email tools to get account ID", required = true, example = "123457:2a123456-40e8-49d6-8ddc-6852e518451f", aliases = {"userEmail", "assignee"})
             String accountId
     ) throws IOException {
         GenericRequest jiraRequest = new GenericRequest(this, path("issue/" + ticketKey + "/assignee"));
@@ -462,7 +462,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             aliases = {"tracker_search"}
     )
     public List<T> searchAndPerform(
-            @MCPParam(name = "jql", description = "JQL query string to search tickets", required = true, example = "project = DEMO AND status = Open", aliases = {"searchQueryJQL", "query"})
+            @MCPParam(name = "jql", description = "JQL query string to search tickets", required = true, example = "project = DEMO AND status = Open", aliases = {"searchQueryJQL", "query", "wiql"})
             String jql,
             @MCPParam(name = "fields", description = "Optional array of field names to include in response. When omitted, the project's extended default fields are used.", required = false, example = "[\"summary\", \"status\", \"assignee\"]")
             String[] fields
@@ -1033,7 +1033,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             aliases = {"tracker_post_comment"}
     )
     public void postComment(@MCPParam(name = "key", description = "The Jira ticket key to post comment to", required = true) String ticketKey, 
-                          @MCPParam(name = "comment", description = "The comment text to post (supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)", required = true) String comment) throws IOException {
+                          @MCPParam(name = "comment", description = "The comment text to post (supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)", required = true, aliases = {"text", "body"}) String comment) throws IOException {
         if (getTextType() == TrackerClient.TextType.MARKDOWN) {
             comment = StringUtils.convertToMarkdown(comment);
         }
@@ -1255,8 +1255,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             aliases = {"tracker_create_ticket"}
     )
     public String createTicketInProjectMcp(@MCPParam(name = "project", description = "The Jira project key to create the ticket in (e.g., PROJ)", required = true) String project,
-                                         @MCPParam(name = "issueType", description = "The type of issue to create (e.g., Bug, Story, Task)", required = true) String issueType,
-                                         @MCPParam(name = "summary", description = "The ticket summary/title (e.g., Fix login issue)", required = true) String summary,
+                                         @MCPParam(name = "issueType", description = "The type of issue to create (e.g., Bug, Story, Task)", required = true, aliases = {"workItemType"}) String issueType,
+                                         @MCPParam(name = "summary", description = "The ticket summary/title (e.g., Fix login issue)", required = true, aliases = {"title"}) String summary,
                                          @MCPParam(name = "description", description = "The ticket description. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists", required = true) String description) throws IOException {
         return createTicketInProject(project, issueType, summary, description, null);
     }
@@ -2706,7 +2706,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             category = "file_management",
             aliases = {"tracker_attach_file"}
     )
-    public JSONObject attachFileToTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to attach the file to", required = true, example = "PRJ-123") String ticketKey,
+    public JSONObject attachFileToTicket(@MCPParam(name = "ticketKey", description = "The Jira ticket key to attach the file to", required = true, example = "PRJ-123", aliases = {"key", "id"}) String ticketKey,
                                    @MCPParam(name = "name", description = "The name of the file to attach", required = true, example = "document.pdf") String name,
                                    @MCPParam(name = "contentType", description = "The content type of the file (e.g., 'application/pdf', 'image/png'). If not provided, defaults to 'image/*'", required = false, example = "application/pdf") String contentType,
                                    @MCPParam(name = "filePath", description = "Absolute path to the file on disk", required = true, example = "/tmp/document.pdf") String filePath) throws IOException {
@@ -3093,7 +3093,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             aliases = {"tracker_move_to_status"}
     )
     public String moveToStatus(@MCPParam(name = "key", description = "The Jira ticket key to move", required = true) String ticketKey, 
-                             @MCPParam(name = "statusName", description = "The target status name", required = true) String statusName) throws IOException {
+                             @MCPParam(name = "statusName", description = "The target status name", required = true, aliases = {"state", "status"}) String statusName) throws IOException {
         List<Transition> transitions = getTransitions(ticketKey);
         if (transitions != null) {
             for (Transition transition : transitions) {
@@ -3736,8 +3736,8 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
             category = "ticket_management",
             aliases = {"tracker_link_tickets"}
     )
-    public String linkIssueWithRelationship(@MCPParam(name = "sourceKey", description = "The source issue key", required = true) String sourceKey, 
-                                          @MCPParam(name = "anotherKey", description = "The target issue key", required = true) String anotherKey, 
+    public String linkIssueWithRelationship(@MCPParam(name = "sourceKey", description = "The source issue key", required = true, aliases = {"sourceId"}) String sourceKey, 
+                                          @MCPParam(name = "anotherKey", description = "The target issue key", required = true, aliases = {"targetId"}) String anotherKey, 
                                           @MCPParam(name = "relationship", description = "The relationship type name", required = true) String relationship) throws IOException {
         Pair<String, IssueType> relationshipByNameIssueType = getRelationshipByName(relationship);
         GenericRequest jiraRequest = new GenericRequest(this, path("issueLink"));
