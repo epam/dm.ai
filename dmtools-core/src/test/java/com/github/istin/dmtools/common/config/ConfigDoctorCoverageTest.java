@@ -157,6 +157,54 @@ public class ConfigDoctorCoverageTest {
     }
 
     @Test
+    public void testConfluenceReadyWithLoginPassTokenOnly() {
+        // epam/dm.ai#712: CONFLUENCE_LOGIN_PASS_TOKEN (+ AUTH_TYPE=Basic) is a complete, working setup
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getConfluenceBasePath()).thenReturn("https://conf.example.com");
+        when(config.getConfluenceLoginPassToken()).thenReturn("base64-email-colon-token");
+
+        assertReady(byName(ConfigDoctor.diagnose(config)), "confluence");
+    }
+
+    @Test
+    public void testConfluenceLoginPassTokenStillNeedsTheBasePath() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getConfluenceLoginPassToken()).thenReturn("token");
+
+        ConfigDoctor.CheckResult confluence = byName(ConfigDoctor.diagnose(config)).get("confluence");
+        assertEquals(List.of("CONFLUENCE_BASE_PATH"), confluence.getMissing());
+    }
+
+    @Test
+    public void testConfluenceEmailWithoutApiTokenAndNoLoginPassTokenStillReportsTheApiToken() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getConfluenceBasePath()).thenReturn("https://conf.example.com");
+        when(config.getConfluenceEmail()).thenReturn("user@example.com");
+
+        ConfigDoctor.CheckResult confluence = byName(ConfigDoctor.diagnose(config)).get("confluence");
+        assertEquals(List.of("CONFLUENCE_API_TOKEN"), confluence.getMissing());
+    }
+
+    @Test
+    public void testConfluenceBlankLoginPassTokenDoesNotCountAsConfigured() {
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getConfluenceBasePath()).thenReturn("https://conf.example.com");
+        when(config.getConfluenceLoginPassToken()).thenReturn("   ");
+
+        assertIncomplete(byName(ConfigDoctor.diagnose(config)), "confluence");
+    }
+
+    @Test
+    public void testConfluenceLoginPassTokenOnlyEnablesTheIntegrationInTheCatalog() {
+        // getConfiguredIntegrations derives from the same readiness check: a LOGIN_PASS_TOKEN-only setup must list tools
+        ApplicationConfiguration config = emptyConfig();
+        when(config.getConfluenceBasePath()).thenReturn("https://conf.example.com");
+        when(config.getConfluenceLoginPassToken()).thenReturn("token");
+
+        assertTrue(ConfigDoctor.getConfiguredIntegrations(config).contains("confluence"));
+    }
+
+    @Test
     public void testConfluenceReportsThreeMissingItemsWhenNothingSet() {
         ConfigDoctor.CheckResult confluence = byName(ConfigDoctor.diagnose(emptyConfig())).get("confluence");
         assertEquals(3, confluence.getMissing().size());
