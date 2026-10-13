@@ -13,6 +13,13 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
+    ignore:
+      # jtoon 2.0.6+ is compiled for Java 21 (class file major 65); the project and the JRE the installer bundles are
+      # Java 17, so Gradle refuses it ("only compatible with JVM runtime version 21 or newer") and the PR can never
+      # go green. Pinned at 2.0.5, the last Java 17 build. Upstream: https://github.com/toon-format/toon-java/issues/223
+      # Remove this entry once a Java 17-compatible artifact is published again (or the project moves to Java 21).
+      - dependency-name: "dev.toonformat:jtoon"
+        versions: [">= 2.0.6"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
