@@ -84,8 +84,15 @@ public class ConfigDoctor {
     private static CheckResult checkConfluence(ApplicationConfiguration config) {
         List<String> missing = new ArrayList<>();
         if (isBlank(config.getConfluenceBasePath())) missing.add(PropertyReader.CONFLUENCE_BASE_PATH);
-        if (isBlank(config.getConfluenceEmail())) missing.add(PropertyReader.CONFLUENCE_EMAIL);
-        if (isBlank(config.getConfluenceApiToken())) missing.add(PropertyReader.CONFLUENCE_API_TOKEN);
+        // The client accepts EITHER email + API token, OR a ready CONFLUENCE_LOGIN_PASS_TOKEN (base64 email:token for
+        // Basic, the token itself for Bearer), exactly like Jira (epam/dm.ai#712: doctor reported "missing
+        // CONFLUENCE_API_TOKEN" for a working LOGIN_PASS_TOKEN setup).
+        boolean hasEmailAndToken = !isBlank(config.getConfluenceEmail()) && !isBlank(config.getConfluenceApiToken());
+        boolean hasLoginPassToken = !isBlank(config.getConfluenceLoginPassToken());
+        if (!hasEmailAndToken && !hasLoginPassToken) {
+            if (isBlank(config.getConfluenceEmail())) missing.add(PropertyReader.CONFLUENCE_EMAIL);
+            if (isBlank(config.getConfluenceApiToken())) missing.add(PropertyReader.CONFLUENCE_API_TOKEN);
+        }
         return result("confluence", missing, "Confluence authentication");
     }
 
