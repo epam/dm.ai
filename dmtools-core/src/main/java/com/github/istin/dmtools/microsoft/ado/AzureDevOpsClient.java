@@ -233,6 +233,19 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             case "iterationpath": return "System.IterationPath";
             case "storypoints": return "Microsoft.VSTS.Scheduling.StoryPoints";
             case "effort": return "Microsoft.VSTS.Scheduling.Effort";
+            // Jira-style names the agents request (dmtools-agents#880): they used to reach ADO unchanged and
+            // fail with "TF51535: Cannot find field key". Only names that have no '.' get here, so custom
+            // fields (Custom.Foo) and full reference names are never touched.
+            case "key": return "System.Id";
+            case "status": return "System.State";
+            case "labels": return "System.Tags";
+            case "parent": return "System.Parent";
+            case "updated": return "System.ChangedDate";
+            case "created": return "System.CreatedDate";
+            case "issuetype": return "System.WorkItemType";
+            case "assignee": return "System.AssignedTo";
+            case "reporter": return "System.CreatedBy";
+            case "project": return "System.TeamProject";
             default: return fieldName; // Return as-is if not recognized
         }
     }
