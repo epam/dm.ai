@@ -135,5 +135,63 @@ class DmtoolsShellWrapperTest {
         assertFalse(wrapper().contains("AttachLibraryFailureAction=throw"));
         assertFalse(wrapper().contains("AttachLibraryFailureAction=diagnose"));
     }
+
+    // ---- install.sh: java version detection (colleague report: "Picked up _JAVA_OPTIONS" was read as the version) ----
+
+    private static String installer() throws IOException {
+        Path script = Paths.get("").toAbsolutePath().getParent().resolve("install.sh");
+        assertTrue(Files.exists(script), "install.sh not found at " + script);
+        return new String(Files.readAllBytes(script), StandardCharsets.UTF_8);
+    }
+
+    @Test
+    void installerReadsTheJavaVersionThroughOneHelperNotTheFirstLineOfJavaVersion() throws IOException {
+        String source = installer();
+        assertTrue(source.contains("java_version_of() {"), "version helper missing");
+        assertFalse(Pattern.compile("-version 2>&1 \\| head -n 1 \\| cut -d'\"' -f2").matcher(source).find(),
+                "the first-line parse returns 'Picked up _JAVA_OPTIONS...' when that variable is set; use java_version_of");
+        long uses = source.lines().filter(l -> l.contains("$(java_version_of \"$java_cmd\")")).count();
+        assertEquals(4, uses, "all four places that read the version must use the helper");
+    }
+
+    @Test
+    void javaVersionHelperSkipsPickedUpLinesAndHandlesRealOutputShapes() throws Exception {
+        String source = installer();
+        java.util.regex.Matcher m = Pattern.compile("(?s)\\njava_version_of\\(\\) \\{.*?\\n\\}\\n").matcher(source);
+        assertTrue(m.find(), "helper body not found");
+        Path dir = Files.createTempDirectory("jvo");
+        Path lib = dir.resolve("lib.sh");
+        Files.writeString(lib, m.group());
+        String[][] cases = {
+                {"Picked up _JAVA_OPTIONS: -Duser.language=en\nopenjdk version \"17.0.13\" 2024-10-15\nOpenJDK Runtime", "17.0.13"},
+                {"Picked up JAVA_TOOL_OPTIONS: -Dfoo=bar\nPicked up _JAVA_OPTIONS: -Dx=y\nopenjdk version \"21.0.2\" 2024-01-16\n", "21.0.2"},
+                {"openjdk version \"17.0.13\" 2024-10-15\nOpenJDK Runtime", "17.0.13"},
+                {"java version \"1.8.0_391\"\nJava(TM) SE", "1.8.0_391"},
+                {"java version \"11\"\n", "11"},
+                {"Picked up _JAVA_OPTIONS: -Dx=y\nno version here\n", ""},
+                {"", ""},
+        };
+        for (String[] c : cases) {
+            Path fake = dir.resolve("java");
+            StringBuilder sh = new StringBuilder("#!/bin/sh\n");
+            for (String line : c[0].split("\n", -1)) {
+                if (!line.isEmpty()) sh.append("echo '").append(line).append("' >&2\n");
+            }
+            Files.writeString(fake, sh.toString());
+            fake.toFile().setExecutable(true);
+            Process p = new ProcessBuilder("bash", "-c", ". " + lib + "; java_version_of " + fake).redirectErrorStream(true).start();
+            String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            assertEquals(0, p.waitFor());
+            assertEquals(c[1], out, "java -version output was: " + c[0].replace("\n", " | "));
+        }
+    }
+
+    @Test
+    void installerStillPassesBashSyntaxCheck() throws Exception {
+        Process p = new ProcessBuilder("bash", "-n", Paths.get("").toAbsolutePath().getParent().resolve("install.sh").toString())
+                .redirectErrorStream(true).start();
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, p.waitFor(), out);
+    }
 }
 
