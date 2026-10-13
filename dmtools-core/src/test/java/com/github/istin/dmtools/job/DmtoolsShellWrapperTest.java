@@ -107,4 +107,33 @@ class DmtoolsShellWrapperTest {
         assertTrue(Files.isExecutable(script), "dmtools.sh must stay executable");
         assertTrue(wrapper().startsWith("#!/bin/bash"));
     }
+
+    // ---- GraalVM TruffleAttach warning (epam/dm.ai#697) ----
+
+    @Test
+    void everyJavaInvocationSilencesTheHarmlessTruffleAttachWarning() throws IOException {
+        String source = wrapper();
+        long javaCalls = source.lines().filter(l -> l.contains("\"$JAVA_CMD\"") && l.contains("-Dlog4j2.configurationFile")).count();
+        long silenced = source.lines().filter(l -> l.contains("\"$JAVA_CMD\"") && l.contains("-Dpolyglotimpl.AttachLibraryFailureAction=ignore")).count();
+        assertTrue(javaCalls >= 8, "expected the wrapper's java invocations, saw " + javaCalls);
+        assertEquals(javaCalls, silenced, "every java invocation must carry the TruffleAttach flag");
+    }
+
+    @Test
+    void theTruffleFlagSitsNextToTheInterpreterOnlyFlagItComplements() throws IOException {
+        for (String line : wrapper().split("\n")) {
+            if (line.contains("-Dpolyglotimpl.AttachLibraryFailureAction=ignore")) {
+                assertTrue(line.contains("-Dpolyglot.engine.WarnInterpreterOnly=false"),
+                        "the two polyglot warning switches belong together: " + line);
+            }
+        }
+    }
+
+    @Test
+    void theFlagIsAnIgnoreNotAThrow() throws IOException {
+        // 'throw' would turn the harmless fallback into a crash; only 'ignore' is acceptable
+        assertFalse(wrapper().contains("AttachLibraryFailureAction=throw"));
+        assertFalse(wrapper().contains("AttachLibraryFailureAction=diagnose"));
+    }
 }
+
