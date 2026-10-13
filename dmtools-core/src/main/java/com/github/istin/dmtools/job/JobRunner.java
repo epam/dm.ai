@@ -172,6 +172,28 @@ public class JobRunner {
                 new DoctorCommand().run();
                 return;
             }
+            if (UpgradeCommand.handles(firstArg)) {
+                // An install made before v1.7.275 keeps an old wrapper that forwards 'upgrade' here as a tool
+                // name (epam/dm.ai#701); run the installer from the JAR so those machines can upgrade too.
+                int exit = new UpgradeCommand().run(args);
+                if (exit != 0) {
+                    System.exit(exit);
+                }
+                return;
+            }
+            if ("mcp".equals(firstArg) && args.length > 1 && UpgradeCommand.handles(args[1])) {
+                // An install made before v1.7.275 has a wrapper that forwards every unknown command as
+                // "JobRunner mcp <command>", so 'upgrade' arrives here as "mcp upgrade" and used to answer
+                // "Unknown tool: upgrade" (epam/dm.ai#701). Hand it to the upgrade command, minus the 'mcp'.
+                // The old wrapper discards stderr unless --debug, so progress goes to stdout here.
+                int exit = new UpgradeCommand(System.getenv(), System.out, UpgradeCommand::httpDownload,
+                        UpgradeCommand::runProcess, UpgradeCommand.defaultInstallDir(System.getenv()))
+                        .run(java.util.Arrays.copyOfRange(args, 1, args.length));
+                if (exit != 0) {
+                    System.exit(exit);
+                }
+                return;
+            }
             if ("mcp".equals(firstArg)) {
                 // Handle MCP CLI commands
                 McpCliHandler mcpHandler = new McpCliHandler();
