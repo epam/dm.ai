@@ -77,7 +77,8 @@ class DocsCountsConsistencyTest {
             Map.entry("Bitbucket", "bitbucket"),
             Map.entry("Rally", "rally"),
             Map.entry("SCM", "scm"),
-            Map.entry("CI", "ci")
+            Map.entry("CI", "ci"),
+            Map.entry("ENV", "env")
     );
 
     @Test

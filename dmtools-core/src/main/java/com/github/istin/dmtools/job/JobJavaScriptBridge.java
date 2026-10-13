@@ -103,7 +103,8 @@ public class JobJavaScriptBridge {
         }
         this.clientInstances.put("ai", ai);
         this.clientInstances.put("confluence", confluence);
-        this.clientInstances.put("file", new FileTools());  // File operations for reading files from working directory
+        this.clientInstances.put("file", new FileTools());
+        this.clientInstances.put("env", new com.github.istin.dmtools.env.EnvTools());  // non-secret config for JS (policy: JsEnvPolicy)  // File operations for reading files from working directory
         this.clientInstances.put("cli", new CliCommandExecutor());  // CLI command execution for automation workflows
         this.clientInstances.put("kb", kbTools);  // Knowledge Base tools for KB management
 
@@ -549,7 +550,7 @@ public class JobJavaScriptBridge {
      */
     private void exposeMCPToolsUsingGenerated() {
         // Get all available integrations dynamically based on what's actually configured
-        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "gitlab", "bitrise", "jenkins"));
+        Set<String> integrations = new java.util.HashSet<>(Set.of("jira", "ado", "ai", "confluence", "figma", "file", "cli", "env", "teams", "sharepoint", "kb", "mermaid", "testrail", "github", "gitlab", "bitrise", "jenkins"));
         // Add jira_xray if XrayClient is available
         if (trackerClient instanceof com.github.istin.dmtools.atlassian.jira.xray.XrayClient) {
             integrations.add("jira_xray");

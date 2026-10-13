@@ -228,7 +228,7 @@ public class ConfigDoctor {
      * agent), so they follow the "ai" readiness below.
      */
     private static final Set<String> ALWAYS_AVAILABLE_INTEGRATIONS =
-            new LinkedHashSet<>(Arrays.asList("cli", "file", "other", "teams_auth"));
+            new LinkedHashSet<>(Arrays.asList("cli", "file", "env", "other", "teams_auth"));
 
     /**
      * Returns the registry integration names whose credentials are present in the
