@@ -344,6 +344,54 @@ public class AzureDevOpsClientTest {
         assertTrue(client.getLastCalledUrl().contains("ids=201"), client.getLastCalledUrl());
     }
 
+    // ========== Jira-style field names (agents#880) ==========
+
+    @Test
+    void testResolveFieldName_jiraStyleNamesMapToAdoReferenceNames() {
+        assertEquals("System.Id", client.resolveFieldName("key"));
+        assertEquals("System.State", client.resolveFieldName("status"));
+        assertEquals("System.Tags", client.resolveFieldName("labels"));
+        assertEquals("System.Parent", client.resolveFieldName("parent"));
+        assertEquals("System.ChangedDate", client.resolveFieldName("updated"));
+        assertEquals("System.CreatedDate", client.resolveFieldName("created"));
+        assertEquals("System.WorkItemType", client.resolveFieldName("issuetype"));
+        assertEquals("System.AssignedTo", client.resolveFieldName("assignee"));
+        assertEquals("System.CreatedBy", client.resolveFieldName("reporter"));
+        assertEquals("System.TeamProject", client.resolveFieldName("project"));
+    }
+
+    @Test
+    void testResolveFieldName_isCaseInsensitiveForTheNewNames() {
+        assertEquals("System.Id", client.resolveFieldName("KEY"));
+        assertEquals("System.Tags", client.resolveFieldName("Labels"));
+        assertEquals("System.State", client.resolveFieldName("Status"));
+    }
+
+    @Test
+    void testResolveFieldName_existingMappingsAndPassThroughAreUnchanged() {
+        assertEquals("System.Title", client.resolveFieldName("summary"));
+        assertEquals("System.Title", client.resolveFieldName("title"));
+        assertEquals("Microsoft.VSTS.Common.Priority", client.resolveFieldName("priority"));
+        assertEquals("System.Description", client.resolveFieldName("description"));
+        // full reference names and custom fields are never rewritten
+        assertEquals("Custom.Status", client.resolveFieldName("Custom.Status"));
+        assertEquals("System.State", client.resolveFieldName("System.State"));
+        // an unknown plain name still passes through (ADO reports it, as before)
+        assertEquals("somethingelse", client.resolveFieldName("somethingelse"));
+    }
+
+    @Test
+    void testSearchAndPerform_jiraStyleFieldsAreSentAsAdoReferenceNames() throws Exception {
+        client.setMockPostResponse("/_apis/wit/wiql", "{\"workItems\":[{\"id\":2039670}]}");
+        client.setMockResponse("/_apis/wit/workitems?", "{\"value\":[" + workItemJson(2039670, "A", "New", "Task") + "]}");
+
+        client.searchAndPerform("[System.Id] = 2039670", new String[]{"key", "labels"});
+
+        String url = client.getLastCalledUrl();
+        assertTrue(url.contains("fields=System.Id%2CSystem.Tags"), url);
+        assertFalse(url.contains("fields=key"), url);
+    }
+
     // ========== searchAndPerform ==========
 
     @Test
