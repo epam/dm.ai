@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Guards epam/dm.ai#685: --help documents the output formats and stays a superset of the old text. */
@@ -64,4 +65,30 @@ class JobRunnerHelpTest {
     void helpMentionsTheUpgradeCommand() {
         assertTrue(help().contains("dmtools upgrade"));
     }
+
+    // ---- install link in --help (colleague report: a stale link led to the abandoned IstiN/dmtools repo) ----
+
+    @Test
+    void helpPointsToTheLiveInstallerAndNeverToTheOldRepository() {
+        String help = help();
+        assertTrue(help.contains("https://github.com/epam/dm.ai/releases/latest/download/install.sh"),
+                "help must point at the live installer");
+        assertFalse(help.contains("IstiN/dmtools"), "IstiN/dmtools is the old repository and its install link is a 404");
+        assertFalse(help.contains("raw.githubusercontent.com/IstiN"), "no raw links into the old repository");
+    }
+
+    @Test
+    void everyUrlInHelpPointsAtTheCurrentRepositoryOrAnExternalSite() {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(help());
+        int seen = 0;
+        while (m.find()) {
+            seen++;
+            String url = m.group();
+            if (url.contains("github.com") || url.contains("githubusercontent.com")) {
+                assertTrue(url.contains("epam/dm.ai"), "GitHub link outside epam/dm.ai: " + url);
+            }
+        }
+        assertTrue(seen >= 1, "expected at least the install link");
+    }
 }
+

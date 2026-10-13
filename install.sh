@@ -1440,6 +1440,16 @@ install_local_java() {
 }
 
 # Get Java command (bundled or system)
+# Prints the version string of a java binary ("17.0.13"), or nothing when it cannot be determined.
+# A JVM started with _JAVA_OPTIONS / JAVA_TOOL_OPTIONS / JDK_JAVA_OPTIONS prints a "Picked up ..." line FIRST, so
+# reading only the first line returned that text instead of the version and the installer concluded "version could
+# not be determined" (reinstalled the JRE and printed "Java Picked up _JAVA_OPTIONS detected"). The version is
+# taken from the first line that carries a quoted version, e.g.  openjdk version "17.0.13" 2024-10-15
+java_version_of() {
+    local java_cmd="$1"
+    "$java_cmd" -version 2>&1 | sed -n 's/^[^"]*version "\([^"]*\)".*/\1/p' | head -n 1
+}
+
 get_java_command() {
     # macOS has different JRE structure: Contents/Home/bin/java
     local bundled_java_macos="$INSTALL_DIR/jre/Contents/Home/bin/java"
@@ -1481,7 +1491,7 @@ check_java() {
     elif java_cmd=$(get_java_command 2>/dev/null); then
         # Java found, check version
         local java_version
-        java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+        java_version=$(java_version_of "$java_cmd")
 
         # Validate that we got a valid version string
         if [ -z "$java_version" ] || ! echo "$java_version" | grep -qE '^[0-9]+'; then
@@ -1514,7 +1524,7 @@ check_java() {
             # Verify the bundled Java
             java_cmd=$(get_java_command)
             local java_version
-            java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+            java_version=$(java_version_of "$java_cmd")
             info "Using bundled Java version: $java_version"
             return 0
         fi
@@ -1586,7 +1596,7 @@ steps:
     # Final verification after system installation
     if java_cmd=$(get_java_command 2>/dev/null); then
         local java_version
-        java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+        java_version=$(java_version_of "$java_cmd")
         local java_major_version
         java_major_version=$(echo "$java_version" | cut -d'.' -f1)
 
@@ -1995,7 +2005,7 @@ print_instructions() {
     echo ""
     echo "System Requirements:"
     if java_cmd=$(get_java_command 2>/dev/null); then
-        local java_version=$("$java_cmd" -version 2>&1 | head -n 1 | cut -d'"' -f2)
+        local java_version=$(java_version_of "$java_cmd")
         echo "  ✓ Java $java_version detected"
     else
         echo "  ⚠ Java not found (restart shell or source config file)"
