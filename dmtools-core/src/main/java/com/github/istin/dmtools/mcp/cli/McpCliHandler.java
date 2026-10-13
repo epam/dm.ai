@@ -684,6 +684,13 @@ public class McpCliHandler {
         }
 
         try {
+            // Read-only, secret-free configuration access (policy: env/JsEnvPolicy)
+            clients.put("env", new com.github.istin.dmtools.env.EnvTools());
+        } catch (Exception e) {
+            logger.warn("Failed to create EnvTools: {}", e.getMessage());
+        }
+
+        try {
             // Create File tools for reading files from working directory
             clients.put("file", new FileTools());
             logger.debug("Created FileTools instance");
@@ -887,7 +894,7 @@ public class McpCliHandler {
 
         // Non-AI tools don't need an AI client
         Set<String> nonAIIntegrations = Set.of(
-            "jira", "confluence", "ado", "figma", "file", "cli",
+            "jira", "confluence", "ado", "figma", "file", "cli", "env",
             "teams", "sharepoint", "testrail", "kb", "mermaid", "github",
             "gitlab", "bitrise", "source", "tracker", "scm", "ci"
         );
