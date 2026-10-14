@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-13T18:27:20.026585Z",
+  "generated_at": "2026-10-14T18:48:52.240773Z",
   "repository": "epam/dm.ai",
   "site_url": "https://dmtools.lab.epam.com",
   "latest": {
-    "version": "v1.7.279",
-    "tag": "v1.7.279",
-    "release_date": "2026-10-13",
-    "download_base": "https://github.com/epam/dm.ai/releases/download/v1.7.279",
+    "version": "v1.7.280",
+    "tag": "v1.7.280",
+    "release_date": "2026-10-14",
+    "download_base": "https://github.com/epam/dm.ai/releases/download/v1.7.280",
     "assets": {
-      "jar": "dmtools-v1.7.279-all.jar",
+      "jar": "dmtools-v1.7.280-all.jar",
       "install_sh": "install.sh",
       "install_bat": "install.bat",
       "install_ps1": "install.ps1",
@@ -17,16 +17,21 @@
       "checksums": "dmtools-checksums.sha256"
     },
     "checksums_sha256": {
-      "dmtools-v1.7.279-all.jar": "71c28cca1f5fb661ade60593f9aff7a91b3a04befc8b08aa9a925f261abdd4d1",
+      "dmtools-v1.7.280-all.jar": "83a018c7d6d095534c76afc51d08f910134154e25035d131267a416e62eda0cd",
       "install.sh": "9206a49102c2bcc8879eb0307458b2e176195bc8d1af3fdbaea2d64c17ffbcf4",
       "install.bat": "c3b8e597878211433773d22dcc3989a82571ab2c17cea5ebab4821d76ff00f0f",
       "install.ps1": "66191fef7c684fa902f8528e11ee9226347de394deeb3ec13817904e6932d5b0",
       "dmtools.sh": "e11d1c0a70329b4e9dc3bac572cc0660c2d1feaac20cb000f7e43868f5f4ae76"
     },
-    "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.279/",
-    "changelog_excerpt": "# 🚀 DMTools Release v1.7.279\n\n## 📝 What's Changed\n\nFull diff: [v1.7.278...v1.7.279](https://github.com/epam/dm.ai/compare/v1.7.278...v1.7.279)\n\n### 🛠 Maintenance\n- Bump agents (neutral verdict record note, #881) (#723) (c02e56f9)\n\n---\n\nThis release includes the **DMTools CLI** and **Agent Skill** for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows.\n\n## 📦 What's Included\n\n### 🖥️ DMTools CLI\n- **Command-line interface** for DMTools operations\n- **Java-based** automation and integration tools\n- **Cross-platform install scripts** for easy setup (`install`, `install.sh`, `install.bat`, `install.ps1`)\n- **Wrapper script** (`dmtools.sh`)\n\n### 🤖 DMTools Agent Skill\n- **AI assistant skill** for MCP, AI agents, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems\n- **Complete DMtools documentation** (67+ MCP tools, JavaScript agent development, and configuration guides)\n- **Cross-platform support** (works with all major AI coding assistants)\n\n## 🎯 Quick Start\n\n### Install DMTools CLI\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex\n```\n\n### Install DMTools Agent Skill\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.279/skill-install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/download/v1.7.279/skill-install.ps1 | iex\n```\n\n**Focused skill install:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.279/skill-install.sh | bash -s -- --skills jira,github\n```\n\n**Focused packages:**\n- `dmtools-jira-skill.zip` → `/dmtools-jira`\n- `dmtools-github-skill.zip` → `/dmtools-github`\n- `dmtools-ado-skill.zip` → `/dmtools-ado`\n- `dmtools-testrail-skill.zip` → `/dmtoo..."
+    "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.280/",
+    "changelog_excerpt": "# 🚀 DMTools Release v1.7.280\n\n## 📝 What's Changed\n\nFull diff: [v1.7.279...v1.7.280](https://github.com/epam/dm.ai/compare/v1.7.279...v1.7.280)\n\n### 🛠 Maintenance\n- Bump agents (#889 #890 #894 #895) (#725) (e91589ac)\n\n---\n\nThis release includes the **DMTools CLI** and **Agent Skill** for enterprise dark-factory orchestration across MCP tools, AI agents, and delivery workflows.\n\n## 📦 What's Included\n\n### 🖥️ DMTools CLI\n- **Command-line interface** for DMTools operations\n- **Java-based** automation and integration tools\n- **Cross-platform install scripts** for easy setup (`install`, `install.sh`, `install.bat`, `install.ps1`)\n- **Wrapper script** (`dmtools.sh`)\n\n### 🤖 DMTools Agent Skill\n- **AI assistant skill** for MCP, AI agents, and generative-ai-friendly DMTools workflows in Cursor, Claude, Codex, and other Agent Skills compatible systems\n- **Complete DMtools documentation** (67+ MCP tools, JavaScript agent development, and configuration guides)\n- **Cross-platform support** (works with all major AI coding assistants)\n\n## 🎯 Quick Start\n\n### Install DMTools CLI\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/latest/download/install.ps1 | iex\n```\n\n### Install DMTools Agent Skill\n\n**macOS / Linux / Git Bash:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.280/skill-install.sh | bash\n```\n\n**Windows (PowerShell):**\n```powershell\nirm https://github.com/epam/dm.ai/releases/download/v1.7.280/skill-install.ps1 | iex\n```\n\n**Focused skill install:**\n```bash\ncurl -fsSL https://github.com/epam/dm.ai/releases/download/v1.7.280/skill-install.sh | bash -s -- --skills jira,github\n```\n\n**Focused packages:**\n- `dmtools-jira-skill.zip` → `/dmtools-jira`\n- `dmtools-github-skill.zip` → `/dmtools-github`\n- `dmtools-ado-skill.zip` → `/dmtools-ado`\n- `dmtools-testrail-skill.zip` → `/dmtools-testrail`\n-..."
   },
   "releases": [
+    {
+      "version": "v1.7.280",
+      "date": "2026-10-14",
+      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.280/"
+    },
     {
       "version": "v1.7.279",
       "date": "2026-10-13",
@@ -271,11 +276,6 @@
       "version": "v1.7.227",
       "date": "2026-07-08",
       "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.227/"
-    },
-    {
-      "version": "v1.7.226",
-      "date": "2026-07-08",
-      "release_notes_url": "https://dmtools.lab.epam.com/releases/v1.7.226/"
     }
   ]
 }
