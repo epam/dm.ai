@@ -86,7 +86,7 @@ jobs:
     # concurrency group, both event=issues). The concurrency group only
     # SERIALIZES twins — this gate makes the younger run self-cancel when an
     # older live run of this workflow already anchors the same issue/pr.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     outputs:
       duplicate: ${{ steps.gate.outputs.duplicate }}
     steps:
