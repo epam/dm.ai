@@ -1,0 +1,28 @@
+---
+import Page from '../layouts/Page.astro';
+import FactorySetup from '../components/FactorySetup.tsx';
+import '../styles/factory.css';
+---
+
+<Page
+  title="Set up your AI factory — DMTools"
+  description="Connect a GitHub repository to the DMTools agent factory: enter your token and teammate account, and get a ready pull request."
+  canonicalPath="factory/"
+>
+  <section class="band factory-hero">
+    <div class="shell">
+      <p class="eyebrow">Factory setup</p>
+      <h1 class="display">Set up your <span class="accent">AI factory</span> in one PR.</h1>
+      <p class="lede" style="margin-top:1.5rem">
+        Enter your repository, the AI teammate account and your CI details. DMTools generates the
+        workflows and runner configs and opens the pull request for you — review it, add the
+        secrets, assign an issue.
+      </p>
+    </div>
+  </section>
+  <section class="band">
+    <div class="shell">
+      <FactorySetup client:load />
+    </div>
+  </section>
+</Page>

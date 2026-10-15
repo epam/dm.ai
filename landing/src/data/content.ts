@@ -132,6 +132,7 @@ export const navLinks: NavLink[] = [
   // The rendered docs, not the folder listing on GitHub.
   { label: 'Docs', href: `${basePath}docs/` },
   { label: 'Agents', href: `${basePath}agents/` },
+  { label: 'Factory', href: `${basePath}factory/` },
   { label: 'Releases', href: `${basePath}releases/` },
 ];
 
