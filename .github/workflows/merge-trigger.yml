@@ -21,11 +21,15 @@ permissions:
   actions: read
 
 jobs:
+  pick:
+    uses: ./.github/workflows/pick-runner.yml
+
   merge-trigger:
+    needs: pick
     uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge-trigger.yml@main
     with:
-      # Bitrise Build Hub pool (factory runners; dedupe is a light job on ubuntu-slim).
-      runner: bitrise-runner-dmtools-ci
+      # Bitrise pool when alive, else ubuntu-slim (pick-runner.yml).
+      runner: ${{ needs.pick.outputs.runner }}
       remove_pr_label: true
       map_pr_labels: true
       gh_branch_pattern: true

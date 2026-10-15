@@ -79,6 +79,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  pick:
+    uses: ./.github/workflows/pick-runner.yml
+
   dedupe:
     # First-wins: the `issues` trigger fires on assigned AND labeled, so one
     # manual launch can dispatch two dev legs minutes apart (live gh-305 twin,
@@ -118,7 +121,7 @@ jobs:
 
 
   teammate:
-    needs: dedupe
+    needs: [pick, dedupe]
     # Assignment gate: issues must be ASSIGNED to ai-teammate; the
     # pr_approved label re-entry (merge bot arming) and dispatch runs (SM /
     # manual leg override) reach the factory even with empty gate outputs.
@@ -143,8 +146,8 @@ jobs:
       # its own ref: github.workflow_ref in a called workflow is the
       # CALLER's). == `git ls-tree HEAD agents` on main at bring-up.
       factory_ref: 15641a1e7bdcf35383cb07dae41a50e0f78a4d90
-      # Bitrise Build Hub pool (factory runners; dedupe is a light job on ubuntu-slim).
-      runner: bitrise-runner-dmtools-ci
+      # Bitrise pool when alive, else ubuntu-slim (pick-runner.yml).
+      runner: ${{ needs.pick.outputs.runner }}
       issue: ${{ github.event.issue.number || github.event.inputs.issue }}
       leg: ${{ github.event.inputs.leg || '' }}
       reason: ${{ github.event.inputs.reason || github.event_name }}

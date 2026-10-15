@@ -5,6 +5,9 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
+  pick:
+    uses: ./.github/workflows/pick-runner.yml
+
   # Quality gate, Java unit tests, and the agents JS suite used to be three
   # separate jobs (= three concurrently-requested runners per PR push, all
   # competing for the org's shared runner pool). They're merged into one job
@@ -20,11 +23,9 @@ jobs:
   # propagates the runner's exit code.
   test:
     name: Java unit tests
-    # GitHub-hosted runner (owner decision 2026-10-08). The Bitrise Build Hub pool
-    # "dmtools-ci" (label "bitrise-runner-dmtools-ci") stopped picking up jobs: queued runs sat
-    # for 3+ hours with no runner assigned, which blocked every PR on this required check.
-    # To go back to Bitrise, set the label back once the pool is healthy.
-    runs-on: ubuntu-latest
+    # Bitrise pool when alive, ubuntu-slim otherwise (pick-runner.yml).
+    needs: pick
+    runs-on: ${{ needs.pick.outputs.runner }}
     permissions:
       contents: read
       checks: write

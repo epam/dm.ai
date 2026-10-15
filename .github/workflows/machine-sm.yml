@@ -40,13 +40,17 @@ permissions:
   actions: write          # workflow_dispatch on the teammate workflow
 
 jobs:
+  pick:
+    uses: ./.github/workflows/pick-runner.yml
+
   sm:
     # Frozen machine loop — pinned to the immutable SHA of
     # IstiN/dmtools-agentic-workflows main (same pin as ai-teammate.yml).
+    needs: pick
     uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm.yml@main
     with:
-      # Bitrise Build Hub pool (factory runners; dedupe is a light job on ubuntu-slim).
-      runner: bitrise-runner-dmtools-ci
+      # Bitrise pool when alive, else ubuntu-slim (pick-runner.yml).
+      runner: ${{ needs.pick.outputs.runner }}
       # #687: whose login is "the machine" — pr_approved arming and the
       # auto-rework rules fire only on PRs authored by this login
       # (.dmtools/config.js machineAuthor carries the same value).

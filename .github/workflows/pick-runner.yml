@@ -1,0 +1,57 @@
+name: Pick runner
+
+# Bitrise-first runner selection with ubuntu-slim fallback.
+# A job pinned to a dead self-hosted label queues forever, so the choice has
+# to be made BEFORE the real job: this light job (always ubuntu-slim) answers
+# "is the Bitrise pool alive?" and callers use `runs-on: ${{ needs.pick.outputs.runner }}`.
+#
+# Signals, in order:
+#   1. vars.RUNNER_OVERRIDE          — explicit label, wins always
+#   2. runners API (needs a token with runner read; skipped silently if 403)
+#   3. queue heuristic: a job with the Bitrise label that has been queued
+#      > STALE_MIN minutes without a runner => pool considered stalled
+on:
+  workflow_call:
+    inputs:
+      bitrise_label:
+        type: string
+        default: bitrise-runner-dmtools-ci
+      fallback_label:
+        type: string
+        default: ubuntu-slim
+      stale_min:
+        type: number
+        default: 5
+    outputs:
+      runner:
+        value: ${{ jobs.pick.outputs.runner }}
+
+jobs:
+  pick:
+    runs-on: ubuntu-slim
+    outputs:
+      runner: ${{ steps.p.outputs.runner }}
+    steps:
+      - id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BIT: ${{ inputs.bitrise_label }}
+          FB: ${{ inputs.fallback_label }}
+          STALE: ${{ inputs.stale_min }}
+          OVERRIDE: ${{ vars.RUNNER_OVERRIDE }}
+        run: |
+          pick() { echo "runner=$1" >> "$GITHUB_OUTPUT"; echo "::notice::runner=$1 ($2)"; exit 0; }
+          [ -n "$OVERRIDE" ] && pick "$OVERRIDE" "vars.RUNNER_OVERRIDE"
+          R=$(gh api "repos/$GITHUB_REPOSITORY/actions/runners" --jq \
+              "[.runners[]|select(.status==\"online\")|select([.labels[].name]|index(\"$BIT\"))]|length" 2>/dev/null || true)
+          if [ -n "$R" ]; then
+            [ "$R" -gt 0 ] && pick "$BIT" "runners API: $R online" || pick "$FB" "runners API: none online"
+          fi
+          NOW=$(date +%s)
+          STUCK=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=queued&per_page=30" --jq '.workflow_runs[].id' 2>/dev/null \
+            | while read -r id; do
+                gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq ".jobs[]|select(.status==\"queued\")|select(.labels|index(\"$BIT\"))|.created_at" 2>/dev/null
+              done \
+            | while read -r t; do [ $(( NOW - $(date -d "$t" +%s) )) -gt $(( STALE * 60 )) ] && echo stuck; done | wc -l)
+          [ "$STUCK" -gt 0 ] && pick "$FB" "$STUCK job(s) queued >${STALE}m on $BIT"
+          pick "$BIT" "no stall signal"

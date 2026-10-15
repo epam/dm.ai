@@ -27,6 +27,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  pick:
+    uses: ./.github/workflows/pick-runner.yml
+
   merge:
     # Label events only matter for the machine latches; other PR events
     # (synchronize/edited) always run — cheap and idempotent.
@@ -37,10 +40,11 @@ jobs:
       contains(github.event.label.name, 'pr_approved')
     # Frozen machine loop (same freeze contract as machine-sm.yml: agents
     # resolve from dmtools-agents RELEASES by vars.AGENTS_VERSION).
+    needs: pick
     uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge.yml@main
     with:
-      # Bitrise Build Hub pool (factory runners; dedupe is a light job on ubuntu-slim).
-      runner: bitrise-runner-dmtools-ci
+      # Bitrise pool when alive, else ubuntu-slim (pick-runner.yml).
+      runner: ${{ needs.pick.outputs.runner }}
       # dm.ai's PR CI — the bot's workflow-run fallback reads its runs when
       # a head carries no check runs.
       ci_workflow: unit-tests.yml
