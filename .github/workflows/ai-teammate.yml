@@ -143,8 +143,8 @@ jobs:
       # its own ref: github.workflow_ref in a called workflow is the
       # CALLER's). == `git ls-tree HEAD agents` on main at bring-up.
       factory_ref: 15641a1e7bdcf35383cb07dae41a50e0f78a4d90
-      # GitHub-hosted runner (same as unit-tests.yml; the Bitrise pool is parked).
-      runner: ubuntu-latest
+      # Bitrise Build Hub pool (factory runners; dedupe is a light job on ubuntu-slim).
+      runner: bitrise-runner-dmtools-ci
       issue: ${{ github.event.issue.number || github.event.inputs.issue }}
       leg: ${{ github.event.inputs.leg || '' }}
       reason: ${{ github.event.inputs.reason || github.event_name }}

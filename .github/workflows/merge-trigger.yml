@@ -24,8 +24,8 @@ jobs:
   merge-trigger:
     uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge-trigger.yml@main
     with:
-      # GitHub-hosted runner (same as unit-tests.yml; the Bitrise pool is parked).
-      runner: ubuntu-latest
+      # Bitrise Build Hub pool (factory runners; dedupe is a light job on ubuntu-slim).
+      runner: bitrise-runner-dmtools-ci
       remove_pr_label: true
       map_pr_labels: true
       gh_branch_pattern: true
