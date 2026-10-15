@@ -43,7 +43,7 @@ jobs:
   sm:
     # Frozen machine loop — pinned to the immutable SHA of
     # IstiN/dmtools-agentic-workflows main (same pin as ai-teammate.yml).
-    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm.yml@e611e5f4240e9c8a5cdbf10721562eb04513d006
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm.yml@main
     with:
       # Bitrise Build Hub pool — same pool dm.ai's Unit Tests CI runs on.
       runner: bitrise-runner-dmtools-ci

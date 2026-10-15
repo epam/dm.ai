@@ -36,7 +36,7 @@ on:
     # to the machine login); label events let the pr_approved re-entry and
     # manual agent:review/agent:rework overrides reach the guard. The awf
     # guard skips status-label echoes at evaluation.
-    types: [assigned, labeled]
+    types: [assigned]
   workflow_dispatch:
     inputs:
       issue:
@@ -97,12 +97,12 @@ jobs:
     #                 the submodule. A branch ref would execute an
     #                 unreviewed branch head at run start — keep both
     #                 immutable SHAs.
-    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-teammate.yml@e611e5f4240e9c8a5cdbf10721562eb04513d006
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-teammate.yml@main
     with:
       # The literal engine ref — the factory requires it (it cannot derive
       # its own ref: github.workflow_ref in a called workflow is the
       # CALLER's). == `git ls-tree HEAD agents` on main at bring-up.
-      factory_ref: ee67a5a12f9e3ee5b122089e44a7f0331e49dd67
+      factory_ref: 15641a1e7bdcf35383cb07dae41a50e0f78a4d90
       # Bitrise Build Hub pool (same pool dm.ai's Unit Tests CI runs on;
       # see unit-tests.yml).
       runner: bitrise-runner-dmtools-ci
