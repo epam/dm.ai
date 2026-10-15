@@ -45,8 +45,8 @@ jobs:
     # IstiN/dmtools-agentic-workflows main (same pin as ai-teammate.yml).
     uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm.yml@main
     with:
-      # Bitrise Build Hub pool — same pool dm.ai's Unit Tests CI runs on.
-      runner: bitrise-runner-dmtools-ci
+      # GitHub-hosted runner (same as unit-tests.yml; the Bitrise pool is parked).
+      runner: ubuntu-latest
       # #687: whose login is "the machine" — pr_approved arming and the
       # auto-rework rules fire only on PRs authored by this login
       # (.dmtools/config.js machineAuthor carries the same value).

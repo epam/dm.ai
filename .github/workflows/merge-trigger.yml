@@ -24,8 +24,8 @@ jobs:
   merge-trigger:
     uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge-trigger.yml@main
     with:
-      # Bitrise Build Hub pool — same pool dm.ai's Unit Tests CI runs on.
-      runner: bitrise-runner-dmtools-ci
+      # GitHub-hosted runner (same as unit-tests.yml; the Bitrise pool is parked).
+      runner: ubuntu-latest
       remove_pr_label: true
       map_pr_labels: true
       gh_branch_pattern: true

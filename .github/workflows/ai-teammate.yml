@@ -79,16 +79,56 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  dedupe:
+    # First-wins: the `issues` trigger fires on assigned AND labeled, so one
+    # manual launch can dispatch two dev legs minutes apart (live gh-305 twin,
+    # 2026-09-30: 36767724353 in_progress + 36767943650 pending behind the
+    # concurrency group, both event=issues). The concurrency group only
+    # SERIALIZES twins — this gate makes the younger run self-cancel when an
+    # older live run of this workflow already anchors the same issue/pr.
+    runs-on: ubuntu-latest
+    outputs:
+      duplicate: ${{ steps.gate.outputs.duplicate }}
+    steps:
+      - name: Self-cancel if an identical live leg already holds the anchor
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+          ANCHOR: ${{ github.event.issue.number || github.event.inputs.issue || format('pr-{0}', github.event.inputs.pr) }}
+        run: |
+          case "$ANCHOR" in
+            pr-*) T="$ANCHOR" ;;
+            *)    T="gh-$ANCHOR" ;;
+          esac
+          LIVE=$( { gh run list -R "$GITHUB_REPOSITORY" --workflow ai-teammate.yml --status in_progress --json databaseId,displayTitle --jq '.[]'
+                    gh run list -R "$GITHUB_REPOSITORY" --workflow ai-teammate.yml --status queued    --json databaseId,displayTitle --jq '.[]'
+                    gh run list -R "$GITHUB_REPOSITORY" --workflow ai-teammate.yml --status pending   --json databaseId,displayTitle --jq '.[]'
+                  } | jq -s --argjson self '${{ github.run_id }}' --arg t "$T" '
+                    [ .[]
+                      | select(.databaseId != $self)
+                      | select(.displayTitle | test("(^|[^0-9])" + $t + "([^0-9]|$)")) ]
+                    | length')
+          if [ "${LIVE:-0}" -gt 0 ]; then
+            echo "::notice::identical live leg holds $T — cancelling this duplicate ($LIVE holder(s) found)"
+            echo "duplicate=true" >> "$GITHUB_OUTPUT"
+            gh run cancel "${{ github.run_id }}" -R "$GITHUB_REPOSITORY" || true
+            exit 0
+          fi
+          echo "duplicate=false" >> "$GITHUB_OUTPUT"
+
+
   teammate:
+    needs: dedupe
     # Assignment gate: issues must be ASSIGNED to ai-teammate; the
     # pr_approved label re-entry (merge bot arming) and dispatch runs (SM /
     # manual leg override) reach the factory even with empty gate outputs.
     if: >-
-      (github.event_name == 'issues' &&
+      needs.dedupe.outputs.duplicate != 'true' &&
+      ((github.event_name == 'issues' &&
        contains(github.event.issue.assignees.*.login, 'ai-teammate')) ||
       (github.event_name == 'issues' &&
        github.event.label.name == 'pr_approved') ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch')
     # TWO PINS, never conflated (dmtools-dart contract):
     #   uses:        — the FACTORY HOME pin (dmtools-agentic-workflows).
     #                 Moves only when the factory home changes.
@@ -103,9 +143,8 @@ jobs:
       # its own ref: github.workflow_ref in a called workflow is the
       # CALLER's). == `git ls-tree HEAD agents` on main at bring-up.
       factory_ref: 15641a1e7bdcf35383cb07dae41a50e0f78a4d90
-      # Bitrise Build Hub pool (same pool dm.ai's Unit Tests CI runs on;
-      # see unit-tests.yml).
-      runner: bitrise-runner-dmtools-ci
+      # GitHub-hosted runner (same as unit-tests.yml; the Bitrise pool is parked).
+      runner: ubuntu-latest
       issue: ${{ github.event.issue.number || github.event.inputs.issue }}
       leg: ${{ github.event.inputs.leg || '' }}
       reason: ${{ github.event.inputs.reason || github.event_name }}
