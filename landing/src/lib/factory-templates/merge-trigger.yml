@@ -1,0 +1,35 @@
+# Merge Trigger — thin stub over the canonical pr_approved merge bot.
+# All logic lives in IstiN/dmtools-agentic-workflows/.github/workflows/
+# factory-merge-trigger.yml; the event triggers stay repo-side
+# (workflow_run on Unit Tests + issues:labeled re-entry — the label event
+# must not be swallowed when CI hasn't run yet).
+name: Merge Trigger
+
+run-name: 'Merge Trigger : Unit Tests passed → merge pr_approved issues'
+
+on:
+  workflow_run:
+    workflows: ['@@CI_NAME@@']
+    types: [completed]
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  merge-trigger:
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-merge-trigger.yml@main
+    with:
+      runner: @@RUNNER@@
+      remove_pr_label: true
+      map_pr_labels: true
+      gh_branch_pattern: true
+    # `secrets: inherit` is safe here — the factory-merge-trigger declares
+    # NO `secrets:` block under workflow_call, so required-secret
+    # validation cannot fail at startup; explicitly mapping an UNdeclared
+    # secret is rejected at call time.
+    secrets: inherit

@@ -1,0 +1,46 @@
+# SM kicker — thin stub over the canonical watchdog in the factory home.
+# All logic (sm-liveness + head-completeness) lives in
+# IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm-kicker.yml.
+# Why this repo needs it: GitHub silently drops schedule() crons on quiet
+# repos — the kicker re-dispatches machine-sm.yml on its OWN schedule +
+# every non-main push, so the state machine keeps moving even when the
+# machine-sm cron is dropped.
+#
+# Event-driven wake-up: validation verdicts arrive as CI
+# conclusions (your PR CI workflow);
+# reacting to them closes the gap — latch/merge happens within seconds of
+# the CI finishing, cron or no cron.
+name: SM kicker
+
+run-name: '🥁 kicker ${{ github.event_name }} ${{ github.ref_name }}'
+
+on:
+  push:
+    branches-ignore: [main]
+  schedule:
+    - cron: '13,43 * * * *'
+  workflow_run:
+    workflows: ['@@CI_NAME@@']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: sm-kicker
+  cancel-in-progress: false
+
+jobs:
+  kicker:
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm-kicker.yml@main
+    with:
+      sm_workflow: machine-sm.yml
+      ci_workflow: @@CI_FILE@@
+      ci_display_name: '@@CI_NAME@@'
+      # The required protection context is the single `test` job named
+      # "Java unit tests" ("Protect main" ruleset — see unit-tests.yml).
+      required_contexts: '@@CHECKS_CSV@@'
