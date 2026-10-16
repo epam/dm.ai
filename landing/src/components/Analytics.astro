@@ -9,14 +9,23 @@
  * been edited"). Unset, nothing below is rendered and the page ships no
  * tracking at all. A GA4 id is public once served, so it is a repository
  * variable rather than a secret.
+ *
+ * Two ids, because GA4 has two: the MEASUREMENT id of the data stream (G-…,
+ * what `config` sends hits to) and the Google TAG id (what gtag.js is loaded
+ * by). They are the same for a stream with its own tag, but when streams share
+ * one Google tag, Google serves gtag.js only for the tag id and answers 404 for
+ * a secondary stream's measurement id — the page then ships a dead tag and the
+ * property stays at zero. GA_TAG_ID (optional) names the loader id; it defaults
+ * to the measurement id.
  */
 const gaId = process.env.GA_MEASUREMENT_ID;
+const gaTagId = process.env.GA_TAG_ID || gaId;
 const consentMode = (process.env.GA_CONSENT_MODE || 'denied').toLowerCase();
 ---
 
 {gaId && (
   <>
-    <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>
+    <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${gaTagId}`}></script>
     {/* Written out rather than passed through define:vars, which would wrap
         the body in a function and leave gtag local — the snippet declares it
         globally, and a later gtag('event', …) needs it. */}

@@ -64,6 +64,8 @@ jobs:
         env:
           SITE_URL: ${{ steps.pages.outputs.base_url }}
           GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+          # Optional: the Google tag id gtag.js is loaded by, when it differs from the stream's measurement id.
+          GA_TAG_ID: ${{ vars.GA_TAG_ID }}
         run: |
           set -euo pipefail
 
