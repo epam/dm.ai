@@ -1,0 +1,53 @@
+name: GitHub Issue Teammate
+
+# Dispatches the AI Teammate workflow for a GitHub issue when the trigger label is added.
+# Only users with triage access can add labels, which is the authorization gate.
+run-name: "GitHub issue #${{ github.event.issue.number || inputs.issue_number }}"
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == (vars.GH_ISSUE_TRIGGER_LABEL || 'dmtools:develop')
+    steps:
+      - name: Dispatch AI Teammate
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          CONFIG_FILE: ${{ vars.GH_ISSUE_AGENT_CONFIG || 'agents/story_development.json' }}
+        run: |
+          if ! [[ "${ISSUE_NUMBER}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Issue number must be numeric"
+            exit 1
+          fi
+          ISSUE_KEY="${REPOSITORY}#${ISSUE_NUMBER}"
+          # The repository is passed as customParams.targetRepository so agents work on the
+          # repository that received the issue, not on the one hardcoded in the project's
+          # .dmtools/config.js (epam/dm.ai). The typed job params drop an unknown top-level
+          # "repository" key; customParams reach the agent scripts unchanged.
+          # branchNamingFnPath names the working branch ai/gh-<number>; the default would embed
+          # the composite key ("ai/owner/repo#12"), which the agents reject as an unsafe ref.
+          ENCODED_CONFIG=$(jq -cn --arg jql "${ISSUE_KEY}" --arg owner "${REPOSITORY%%/*}" --arg repo "${REPOSITORY#*/}" \
+            '{params: {inputJql: $jql, customParams: {targetRepository: {owner: $owner, repo: $repo}, branchNamingFnPath: ".dmtools/branchNaming.js"}}}')
+          echo "Dispatching ${CONFIG_FILE} for ${ISSUE_KEY}"
+          gh workflow run ai-teammate.yml \
+            --repo "${REPOSITORY}" \
+            -f config_file="${CONFIG_FILE}" \
+            -f encoded_config="${ENCODED_CONFIG}" \
+            -f concurrency_key="${ISSUE_KEY}" \
+            -f tracker=github

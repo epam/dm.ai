@@ -68,6 +68,33 @@ dmtools github_get_pr workspace=MyOrg repository=my-repo pullRequestId=42
 
 Full reference: [github-tools.md](../../mcp-tools/github-tools.md)
 
+## GitHub Issues as Tracker
+
+GitHub Issues can drive the Teammate job the same way Jira or Azure DevOps does.
+
+```bash
+DEFAULT_TRACKER=github
+SOURCE_GITHUB_TOKEN=ghp_your_token
+SOURCE_GITHUB_WORKSPACE=MyOrg
+SOURCE_GITHUB_REPOSITORY=my-repo
+```
+
+**Issue keys:** `MyOrg/my-repo#123`, `gh-123` (issue 123 in the default repository), or a bare number.
+
+**`inputJql` values:**
+
+| Value | Behavior |
+|-------|----------|
+| `MyOrg/my-repo#123` | Fetches that issue directly |
+| `MyOrg/my-repo#1, MyOrg/my-repo#2` | Fetches each listed issue |
+| `repo:MyOrg/my-repo is:issue is:open label:ai-ready` | Runs a GitHub issue search |
+
+**Agent scripts:** use the vendor-neutral `tracker_*` tools (for example `tracker_get_ticket`, `tracker_post_comment`) instead of `jira_*`; they are routed to GitHub by `DEFAULT_TRACKER` or by the key format.
+
+**Input folder:** the Teammate CLI input folder for `MyOrg/my-repo#123` is `input/MyOrg-my-repo-123/`.
+
+To trigger the pipeline from issue labels, see [github-actions-teammate.md](../../workflows/github-actions-teammate.md#triggering-from-github-issues).
+
 ## GitHub Enterprise
 
 For GitHub Enterprise, set a custom base path:

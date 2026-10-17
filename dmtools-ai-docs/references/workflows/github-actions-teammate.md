@@ -391,6 +391,24 @@ Trigger workflow from Jira using webhook + GitHub API:
 2. Set up middleware to call GitHub Actions API
 3. Pass ticket key in `encoded_config`
 
+## Triggering from GitHub Issues
+
+The `github-issue-teammate.yml` workflow starts the AI Teammate for a GitHub issue when a trigger label is added. Only users with triage access can add labels, so no extra authorization step is needed.
+
+| Repository variable | Default | Purpose |
+|---------------------|---------|---------|
+| `GH_ISSUE_TRIGGER_LABEL` | `dmtools:develop` | Label that starts the pipeline |
+| `GH_ISSUE_AGENT_CONFIG` | `agents/story_development.json` | Teammate config to run |
+| `DEFAULT_TRACKER` | `jira` | Tracker used when the dispatch does not pass `tracker` |
+
+Flow: label added to issue `OWNER/REPO#12` -> `github-issue-teammate.yml` dispatches `ai-teammate.yml` with `tracker=github` and `inputJql=OWNER/REPO#12` -> Teammate fetches the issue, runs the CLI agent and the post action.
+
+Requirements:
+- `PAT_TOKEN` secret with permission to dispatch workflows and open pull requests.
+- Agent configs and their JS actions must use `tracker_*` tools rather than `jira_*`, otherwise the pipeline fails on a GitHub tracker.
+
+Polling alternative: set `DEFAULT_TRACKER=github` and use a search query such as `repo:OWNER/REPO is:issue is:open label:ai-ready` as `inputJql` in a scheduled run.
+
 ## Troubleshooting
 
 ### DMtools Installation Fails

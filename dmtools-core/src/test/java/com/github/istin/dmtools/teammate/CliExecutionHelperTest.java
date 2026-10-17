@@ -1536,4 +1536,23 @@ public class CliExecutionHelperTest {
         Map<String, String> env = Map.of("KEY", "value");
         assertSame(env, CliExecutionHelper.filterEnvVariables(env, null, null));
     }
+
+    @Test
+    void testToInputFolderName_GitHubCompositeKeyBecomesRouterKey() {
+        assertEquals("gh-12", CliExecutionHelper.toInputFolderName("acme/widgets#12"));
+        assertEquals("gh-7", CliExecutionHelper.toInputFolderName("epam/dm.ai#7"));
+        assertEquals("gh-2", CliExecutionHelper.toInputFolderName("ba3a/dm.ai#2"));
+    }
+
+    @Test
+    void testToInputFolderName_OtherUnsafeKeysAreStillFlattened() {
+        assertEquals("a-b-c", CliExecutionHelper.toInputFolderName("a/b#c"));
+    }
+
+    @Test
+    void testToInputFolderName_JiraAndAdoKeysUnchanged() {
+        assertEquals("PROJ-123", CliExecutionHelper.toInputFolderName("PROJ-123"));
+        assertEquals("4567", CliExecutionHelper.toInputFolderName("4567"));
+        assertEquals("gh-9", CliExecutionHelper.toInputFolderName("gh-9"));
+    }
 }

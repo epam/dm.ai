@@ -260,6 +260,11 @@ public class JobJavaScriptBridge {
             // Expose set_env_variable for runtime property switching (alias name only, value stays in Java)
             jsContext.getBindings("js").putMember("set_env_variable", new SetEnvVariableProxy());
 
+            // Expose java.lang.System.getenv for non-secret selectors such as DEFAULT_TRACKER, so
+            // js/common/trackers.js picks the active tracker instead of falling back to Jira
+            jsContext.getBindings("js").putMember("java",
+                    JsEnvironmentShim.create(name -> new PropertyReader().getValue(name)));
+
             // Expose MCP tools using generated infrastructure
             exposeMCPToolsUsingGenerated();
 

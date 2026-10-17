@@ -97,11 +97,13 @@ public abstract class GitHubIssues extends GitHub {
     }
 
     /**
-     * 404-tolerant override: the {@code pulls/{id}/comments} endpoint 404s for
-     * plain issues (non-PRs), which the tracker-agnostic helpers rely on when
-     * GitHub is the tracker backend. Tolerate that 404 (treat as no inline
-     * review comments) while still surfacing the issue discussion comments and
-     * rethrowing any other error.
+     * 404/403-tolerant override: the {@code pulls/{id}/comments} endpoint 404s for
+     * plain issues (non-PRs), and answers a fine-grained personal access token
+     * with 403 "Resource not accessible by personal access token" for the same
+     * request. The tracker-agnostic helpers rely on this call when GitHub is the
+     * tracker backend, so tolerate both (treat as no inline review comments)
+     * while still surfacing the issue discussion comments and rethrowing any
+     * other error.
      */
     @Override
     public List<IComment> pullRequestComments(String workspace, String repository, String pullRequestId) throws IOException {
@@ -117,9 +119,11 @@ public abstract class GitHubIssues extends GitHub {
             try {
                 response = execute(getRequest);
             } catch (IOException e) {
-                if (e instanceof RestClient.RestClientException
-                        && ((RestClient.RestClientException) e).getCode() == 404) {
-                    break;
+                if (e instanceof RestClient.RestClientException) {
+                    int code = ((RestClient.RestClientException) e).getCode();
+                    if (code == 404 || code == 403) {
+                        break;
+                    }
                 }
                 throw e;
             }

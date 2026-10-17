@@ -24,6 +24,7 @@ import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.config.InMemoryConfiguration;
 
 import com.github.istin.dmtools.github.GitHubActions;
+import com.github.istin.dmtools.github.GitHubTrackerClient;
 
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -153,6 +154,8 @@ public class ServerManagedIntegrationsModule {
                     client = createAdoClient(resolvedIntegrations);
                 } else if ("rally".equalsIgnoreCase(defaultTracker)) {
                     client = createRallyClient(resolvedIntegrations);
+                } else if ("github".equalsIgnoreCase(defaultTracker)) {
+                    client = createGitHubTrackerClient(resolvedIntegrations);
                 }
                 
                 if (client != null) {
@@ -188,8 +191,14 @@ public class ServerManagedIntegrationsModule {
                 client = createRallyClient(resolvedIntegrations);
                 if (client != null) return client;
             }
+
+            // Create a GitHub Issues tracker client instance using resolved credentials
+            if (resolvedIntegrations.has("github")) {
+                client = createGitHubTrackerClient(resolvedIntegrations);
+                if (client != null) return client;
+            }
             
-            logger.error("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO or Rally) available - returning null TrackerClient");
+            logger.error("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO or Rally or GitHub) available - returning null TrackerClient");
             return null;
         } catch (Exception e) {
             logger.error("❌ [ServerManagedIntegrationsModule] Failed to create TrackerClient instance with resolved credentials: " + e.getMessage());
@@ -298,6 +307,26 @@ public class ServerManagedIntegrationsModule {
                     (organization.isEmpty() ? "empty" : organization) + ", ADO_PROJECT=" + 
                     (project.isEmpty() ? "empty" : project) + ", ADO_PAT_TOKEN=" + 
                     (patToken.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
+            }
+        }
+        return null;
+    }
+
+    private TrackerClient<? extends ITicket> createGitHubTrackerClient(JSONObject resolvedIntegrations) throws IOException {
+        if (resolvedIntegrations.has("github")) {
+            JSONObject githubConfig = resolvedIntegrations.getJSONObject("github");
+            String basePath = githubConfig.optString("SOURCE_GITHUB_BASE_PATH", "https://api.github.com");
+            String token = githubConfig.optString("SOURCE_GITHUB_TOKEN", "");
+            String workspace = githubConfig.optString("SOURCE_GITHUB_WORKSPACE", "");
+            String repository = githubConfig.optString("SOURCE_GITHUB_REPOSITORY", "");
+            String branch = githubConfig.optString("SOURCE_GITHUB_BRANCH", "main");
+
+            if (!token.isEmpty()) {
+                logger.debug("✅ [ServerManagedIntegrationsModule] Creating GitHubTrackerClient with resolved credentials");
+                return new GitHubTrackerClient(basePath, token, workspace, repository, branch);
+            } else {
+                System.err.println("❌ [ServerManagedIntegrationsModule] GitHub configuration missing required parameters (token=" +
+                        (token.isEmpty() ? "empty" : "[SENSITIVE]") + ")");
             }
         }
         return null;
