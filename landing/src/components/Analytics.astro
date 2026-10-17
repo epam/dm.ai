@@ -16,7 +16,10 @@
  * one Google tag, Google serves gtag.js only for the tag id and answers 404 for
  * a secondary stream's measurement id — the page then ships a dead tag and the
  * property stays at zero. GA_TAG_ID (optional) names the loader id; it defaults
- * to the measurement id.
+ * to the measurement id. `config` must name the loader (tag) id: configuring a
+ * secondary stream's id makes gtag fetch a loader for it, get a 404 and send no
+ * hits at all, whereas configuring the tag id delivers hits to every stream
+ * attached to that tag, the secondary one included.
  */
 const gaId = process.env.GA_MEASUREMENT_ID;
 const gaTagId = process.env.GA_TAG_ID || gaId;
@@ -38,7 +41,7 @@ const consentMode = (process.env.GA_CONSENT_MODE || 'denied').toLowerCase();
       ad_user_data: '${consentMode}',
       ad_personalization: '${consentMode}'
     });
-    gtag('config', ${JSON.stringify(gaId)}, {
+    gtag('config', ${JSON.stringify(gaTagId)}, {
       send_page_view: true,
       allow_google_signals: false,
       cookie_flags: 'SameSite=None;Secure',
