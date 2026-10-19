@@ -78,7 +78,7 @@ public abstract class GitHubRepository extends GitHubPullRequests {
 
     @MCPTool(
             name = "github_list_branches",
-            description = "List branches in a GitHub repository",
+            description = "List all branches in a GitHub repository (all pages are walked at per_page=100).",
             integration = "github",
             category = "branches"
     )
@@ -87,9 +87,7 @@ public abstract class GitHubRepository extends GitHubPullRequests {
             String owner,
             @MCPParam(name = "repo", description = "The repository name", required = true, example = "dmtools")
             String repo) throws IOException {
-        String path = path(String.format("repos/%s/%s/branches", owner, repo));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        return execute(getRequest);
+        return fetchAllPages(String.format("repos/%s/%s/branches", owner, repo), null);
     }
 
     @MCPTool(

@@ -248,7 +248,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     @MCPTool(
             name = "github_list_prs",
-            description = "List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests.",
+            description = "List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. For state 'open' ALL pages are walked (per_page=100) so the full open set is returned; for 'closed'/'merged' only the first page (up to 100 most recently updated) is returned because history can be huge — use github_list_prs_filtered for full closed/merged history.",
             integration = "github",
             category = "pull_requests",
             aliases = {"source_code_list_prs"}
@@ -265,6 +265,14 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             state = "open";
         } else if ("declined".equalsIgnoreCase(state)) {
             state = "closed";
+        }
+        if ("open".equalsIgnoreCase(state)) {
+            String body = fetchAllPages(String.format("repos/%s/%s/pulls?state=open&sort=updated&direction=desc",
+                    workspace, repository), null);
+            if (body == null || body.isEmpty()) {
+                return new ArrayList<>();
+            }
+            return new ArrayList<>(JSONModel.convertToModels(GitHubPullRequest.class, new JSONArray(body)));
         }
         return pullRequests(workspace, repository, state, false, null);
     }
@@ -1136,62 +1144,80 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
         return getAllCheckRuns(workspace, repository, commitSha);
     }
 
-    private static final int CHECK_RUNS_PAGE_SIZE = 100;
+    private static final int PAGE_SIZE = 100;
 
     /**
      * Reads EVERY page of a commit's check runs (per_page=100). A head accumulates check runs across CI
      * re-runs and bot stamps (a live head carried 355); the default page of 30 hid in_progress runs from every
      * caller that rolls the head's state up (dmtools-dart#387). {@code total_count} is kept from page 1.
-     * Non-paged shapes (a body without a {@code check_runs} array, error bodies, stubs) are returned
-     * untouched; a failure on a later page degrades to the pages already collected.
      */
     String getAllCheckRuns(String workspace, String repository, String commitSha) throws IOException {
-        String base = String.format("repos/%s/%s/commits/%s/check-runs?per_page=%d",
-                workspace, repository, commitSha, CHECK_RUNS_PAGE_SIZE);
-        String first = execute(new GenericRequest(this, path(base + "&page=1")));
-        if (first == null || first.isEmpty()) {
-            return first;
-        }
-        JSONObject firstObject;
-        try {
-            firstObject = new JSONObject(first);
-        } catch (JSONException e) {
-            return first;
-        }
-        JSONArray firstPage = firstObject.optJSONArray("check_runs");
-        if (firstPage == null || firstPage.length() < CHECK_RUNS_PAGE_SIZE) {
+        return fetchAllPages(String.format("repos/%s/%s/commits/%s/check-runs", workspace, repository, commitSha),
+                "check_runs");
+    }
+
+    /**
+     * Walks a GitHub list endpoint page by page (per_page=100, from page=1) until a page has fewer than 100
+     * items or is empty. {@code arrayKey} names the items array inside an object body
+     * ({@code {total_count, <arrayKey>:[...]}}, total_count kept from page 1); {@code null} means the body is
+     * a top-level JSON array. Null/empty/non-JSON/unexpected-shape first pages (error bodies, stubs) are
+     * returned untouched, as is a short first page (exactly one request). A failure on a later page degrades
+     * to the pages already collected.
+     */
+    String fetchAllPages(String resourcePath, String arrayKey) throws IOException {
+        String base = resourcePath + (resourcePath.contains("?") ? "&" : "?") + "per_page=" + PAGE_SIZE + "&page=";
+        String first = execute(new GenericRequest(this, path(base + 1)));
+        JSONObject firstObject = arrayKey == null ? null : parseObjectOrNull(first);
+        JSONArray firstPage = arrayKey == null ? parseArrayOrNull(first)
+                : firstObject == null ? null : firstObject.optJSONArray(arrayKey);
+        if (firstPage == null || firstPage.length() < PAGE_SIZE) {
             return first;
         }
         JSONArray all = new JSONArray();
-        for (int i = 0; i < firstPage.length(); i++) {
-            all.put(firstPage.get(i));
-        }
+        firstPage.forEach(all::put);
         for (int page = 2; ; page++) {
             JSONArray items;
             try {
-                String body = execute(new GenericRequest(this, path(base + "&page=" + page)));
-                items = new JSONObject(body).optJSONArray("check_runs");
+                String body = execute(new GenericRequest(this, path(base + page)));
+                items = arrayKey == null ? new JSONArray(body) : new JSONObject(body).optJSONArray(arrayKey);
             } catch (Exception e) {
-                logger.warn("check-runs page {} of {}/{}@{} failed, returning the {} runs collected so far: {}",
-                        page, workspace, repository, commitSha, all.length(), e.getMessage());
+                logger.warn("page {} of {} failed, returning the {} items collected so far: {}",
+                        page, resourcePath, all.length(), e.getMessage());
                 break;
             }
             if (items == null) {
                 break;
             }
-            for (int i = 0; i < items.length(); i++) {
-                all.put(items.get(i));
-            }
-            if (items.length() < CHECK_RUNS_PAGE_SIZE) {
+            items.forEach(all::put);
+            if (items.length() < PAGE_SIZE) {
                 break;
             }
+        }
+        if (arrayKey == null) {
+            return all.toString();
         }
         JSONObject merged = new JSONObject();
         if (firstObject.has("total_count")) {
             merged.put("total_count", firstObject.get("total_count"));
         }
-        merged.put("check_runs", all);
+        merged.put(arrayKey, all);
         return merged.toString();
+    }
+
+    private static JSONObject parseObjectOrNull(String body) {
+        try {
+            return body == null || body.isEmpty() ? null : new JSONObject(body);
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    private static JSONArray parseArrayOrNull(String body) {
+        try {
+            return body == null || body.isEmpty() ? null : new JSONArray(body);
+        } catch (JSONException e) {
+            return null;
+        }
     }
 
     @MCPTool(
@@ -1344,7 +1370,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     @MCPTool(
             name = "github_get_workflow_run_jobs",
-            description = "Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs.",
+            description = "Get all jobs for a specific GitHub Actions workflow run (all pages are walked at per_page=100; jobs arrays are merged and total_count is kept from page 1). Shows individual job statuses, steps, and logs URLs.",
             integration = "github",
             category = "pull_requests"
     )
@@ -1355,9 +1381,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String repository,
             @MCPParam(name = "runId", description = "The workflow run ID", required = true, example = "1234567890")
             String runId) throws IOException {
-        String path = path(String.format("repos/%s/%s/actions/runs/%s/jobs", workspace, repository, runId));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        return execute(getRequest);
+        return fetchAllPages(String.format("repos/%s/%s/actions/runs/%s/jobs", workspace, repository, runId), "jobs");
     }
 
     @MCPTool(
@@ -1569,7 +1593,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     @MCPTool(
             name = "github_list_pr_reviews",
-            description = "List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order.",
+            description = "List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order. All pages are walked (per_page=100).",
             integration = "github",
             category = "pull_requests"
     )
@@ -1580,9 +1604,7 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
             String repository,
             @MCPParam(name = "pullRequestId", description = "The pull request number", required = true, example = "74")
             String pullRequestId) throws IOException {
-        String path = path(String.format("repos/%s/%s/pulls/%s/reviews", workspace, repository, pullRequestId));
-        GenericRequest getRequest = new GenericRequest(this, path);
-        String response = execute(getRequest);
+        String response = fetchAllPages(String.format("repos/%s/%s/pulls/%s/reviews", workspace, repository, pullRequestId), null);
         return response != null ? response : "[]";
     }
 
@@ -1653,20 +1675,11 @@ public abstract class GitHub extends AbstractRestClient implements SourceCode, U
 
     @Override
     public List<ITag> getBranches(String workspace, String repository) throws IOException {
-        List<ITag> allBranches = new ArrayList<>();
-        int page = 1;
-        while (true) {
-            String path = path(String.format("repos/%s/%s/branches?per_page=100&page=%d", workspace, repository, page));
-            GenericRequest getRequest = new GenericRequest(this, path);
-            String response = execute(getRequest);
-            if (response == null) break;
-            List<GithubTag> page_branches = JSONModel.convertToModels(GithubTag.class, new JSONArray(response));
-            if (page_branches.isEmpty()) break;
-            allBranches.addAll(page_branches);
-            if (page_branches.size() < 100) break;
-            page++;
+        String body = fetchAllPages(String.format("repos/%s/%s/branches", workspace, repository), null);
+        if (body == null || body.isEmpty()) {
+            return new ArrayList<>();
         }
-        return allBranches;
+        return new ArrayList<>(JSONModel.convertToModels(GithubTag.class, new JSONArray(body)));
     }
 
     @Override

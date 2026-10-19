@@ -69,14 +69,14 @@ const result = github_list_prs_filtered(...);
 | `github_get_repo` | Get a GitHub repository by owner and name | `owner` (string, **required**)<br>`repo` (string, **required**) |
 | `github_get_tree` | Get a GitHub git tree recursively by ref | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`ref` (string, **required**) |
 | `github_get_workflow_run` | Get details of a specific GitHub Actions workflow run by ID. Returns status, conclusion, logs URL, and timing information. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`runId` (string, **required**) |
-| `github_get_workflow_run_jobs` | Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`runId` (string, **required**) |
+| `github_get_workflow_run_jobs` | Get all jobs for a specific GitHub Actions workflow run (all pages are walked at per_page=100; jobs arrays are merged and total_count is kept from page 1). Shows individual job statuses, steps, and logs URLs. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`runId` (string, **required**) |
 | `github_get_workflow_run_logs` | Download and extract complete logs for all jobs in a GitHub Actions workflow run. Returns full untruncated log content from the ZIP archive GitHub provides. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`runId` (string, **required**) |
 | `github_get_workflow_runs` | List GitHub Actions workflow runs for a repository | `owner` (string, **required**)<br>`repo` (string, **required**) |
 | `github_get_workflows` | List GitHub Actions workflows in a repository | `owner` (string, **required**)<br>`repo` (string, **required**) |
-| `github_list_branches` | List branches in a GitHub repository | `owner` (string, **required**)<br>`repo` (string, **required**) |
+| `github_list_branches` | List all branches in a GitHub repository (all pages are walked at per_page=100). | `owner` (string, **required**)<br>`repo` (string, **required**) |
 | `github_list_commits` | List commits in a GitHub repository | `owner` (string, **required**)<br>`repo` (string, **required**)<br>`sha` (string, optional) |
-| `github_list_pr_reviews` | List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
-| `github_list_prs` | List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`state` (string, **required**) |
+| `github_list_pr_reviews` | List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order. All pages are walked (per_page=100). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `github_list_prs` | List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. For state 'open' ALL pages are walked (per_page=100) so the full open set is returned; for 'closed'/'merged' only the first page (up to 100 most recently updated) is returned because history can be huge — use github_list_prs_filtered for full closed/merged history. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`state` (string, **required**) |
 | `github_list_prs_filtered` | List pull requests in a GitHub repository filtered by a regex pattern on the PR title. Fetches all PRs matching the given state and returns only those whose title matches the regex. Useful for large repos to narrow down results without loading entire history. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`state` (string, **required**)<br>`titleRegex` (string, **required**) |
 | `github_list_release_assets` | List all assets attached to a GitHub release. Returns a JSON array of asset objects including id, name, size, and browser_download_url. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`releaseId` (string, **required**) |
 | `github_list_releases` | List GitHub releases for a repository | `owner` (string, **required**)<br>`repo` (string, **required**) |
@@ -1599,7 +1599,7 @@ const result = github_get_workflow_run("workspace", "repository");
 
 ### `github_get_workflow_run_jobs`
 
-Get all jobs for a specific GitHub Actions workflow run. Shows individual job statuses, steps, and logs URLs.
+Get all jobs for a specific GitHub Actions workflow run (all pages are walked at per_page=100; jobs arrays are merged and total_count is kept from page 1). Shows individual job statuses, steps, and logs URLs.
 
 **Parameters:**
 
@@ -1711,7 +1711,7 @@ const result = github_get_workflows("owner", "repo");
 
 ### `github_list_branches`
 
-List branches in a GitHub repository
+List all branches in a GitHub repository (all pages are walked at per_page=100).
 
 **Parameters:**
 
@@ -1767,7 +1767,7 @@ const result = github_list_commits("owner", "repo");
 
 ### `github_list_pr_reviews`
 
-List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order.
+List all formal reviews (APPROVE/REQUEST_CHANGES/COMMENT decisions submitted via github_submit_pr_review or by human reviewers) for a GitHub pull request, in chronological order. All pages are walked (per_page=100).
 
 **Parameters:**
 
@@ -1797,7 +1797,7 @@ const result = github_list_pr_reviews("workspace", "repository");
 
 ### `github_list_prs`
 
-List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. Returns first page (up to 100) of pull requests.
+List pull requests in a GitHub repository by state. State can be 'open', 'closed', or 'merged'. For state 'open' ALL pages are walked (per_page=100) so the full open set is returned; for 'closed'/'merged' only the first page (up to 100 most recently updated) is returned because history can be huge — use github_list_prs_filtered for full closed/merged history.
 
 **Parameters:**
 

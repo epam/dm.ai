@@ -76,7 +76,7 @@ public class GitHubRepositoryTest {
         GitHubRepository spy = spy(gitHub);
         doReturn("[]").when(spy).execute(any(GenericRequest.class));
         spy.listBranches("acme", "widgets");
-        assertEquals("https://api.github.com/repos/acme/widgets/branches", verifyGet(spy).getValue().url());
+        assertEquals("https://api.github.com/repos/acme/widgets/branches?per_page=100&page=1", verifyGet(spy).getValue().url());
     }
 
     @Test
