@@ -141,7 +141,7 @@ jobs:
       - name: 'Agents JS tests: run'
         id: agents_tests
         env:
-          JAVA_TOOL_OPTIONS: '-Xmx4g'
+          JAVA_TOOL_OPTIONS: '-Xmx6g'
         run: |
           cd agents
           set +e
