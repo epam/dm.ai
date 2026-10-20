@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -131,6 +132,22 @@ public class CliExecutionHelper {
         return createInputContext(ticket, inputParams, trackerClient, baseDirectory, attachmentsOverride, false);
     }
 
+    private static final Pattern GITHUB_COMPOSITE_KEY = Pattern.compile("^[\\w.-]+/[\\w.-]+#(\\d+)$");
+
+    /**
+     * Name of the {@code input/} subfolder for a ticket. The agent scripts take the ticket key from
+     * this name, so it has to stay a key they can parse: a GitHub composite key
+     * ({@code owner/repo#12}) becomes the router key {@code gh-12}, which resolves against the
+     * configured repository, instead of a flattened {@code owner-repo-12} that no key shape matches.
+     */
+    public static String toInputFolderName(String ticketKey) {
+        Matcher github = GITHUB_COMPOSITE_KEY.matcher(ticketKey);
+        if (github.matches()) {
+            return "gh-" + github.group(1);
+        }
+        return ticketKey.replaceAll("[^A-Za-z0-9._-]", "-");
+    }
+
     Path createInputContext(ITicket ticket, String inputParams, TrackerClient<?> trackerClient,
                             Path baseDirectory, List<? extends IAttachment> attachmentsOverride,
                             boolean relationsAlreadyEnriched) throws IOException {
@@ -141,9 +158,10 @@ public class CliExecutionHelper {
         }
 
         // Create input folder structure: [baseDirectory/]input/[TICKET-KEY]/ or input/standalone/
+        String folderName = toInputFolderName(ticketKey);
         Path inputFolderPath = baseDirectory != null
-                ? baseDirectory.resolve(INPUT_FOLDER_PREFIX).resolve(ticketKey)
-                : Paths.get(INPUT_FOLDER_PREFIX, ticketKey);
+                ? baseDirectory.resolve(INPUT_FOLDER_PREFIX).resolve(folderName)
+                : Paths.get(INPUT_FOLDER_PREFIX, folderName);
         Files.createDirectories(inputFolderPath);
         logger.info("Created input folder: {}", inputFolderPath.toAbsolutePath());
 
