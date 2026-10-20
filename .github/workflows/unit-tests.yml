@@ -145,23 +145,37 @@ jobs:
         run: |
           cd agents
           set +e
-          ../dmtools.sh run js/unit-tests/run_all.json > ../agents-test-output.json 2>&1
-          RC=$?
-          set -e
-          cat ../agents-test-output.json
-          if [ "$RC" -ne 0 ]; then
-            echo "::error::dmtools run js/unit-tests/run_all.json exited with $RC"
-            exit "$RC"
-          fi
+          TOTAL_SHARDS=4
+          : > ../agents-test-output.json
+          for SHARD in $(seq 0 $((TOTAL_SHARDS - 1))); do
+            SHARD_CFG="/tmp/agents_run_shard_${SHARD}.json"
+            node -e "
+              const cfg = JSON.parse(require('fs').readFileSync('js/unit-tests/run_all.json', 'utf8'));
+              const files = cfg.params.jobParams.testFiles.filter((_, i) => i % ${TOTAL_SHARDS} === ${SHARD});
+              cfg.params.jobParams.testFiles = files;
+              require('fs').writeFileSync('${SHARD_CFG}', JSON.stringify(cfg, null, 2));
+              console.log('Shard ${SHARD}/${TOTAL_SHARDS}: ' + files.length + ' files');
+            "
+            ../dmtools.sh run "$SHARD_CFG" > "/tmp/agents-test-output-${SHARD}.json" 2>&1
+            RC=$?
+            cat "/tmp/agents-test-output-${SHARD}.json" | tee -a ../agents-test-output.json
+            if [ "$RC" -ne 0 ]; then
+              echo "::error::dmtools run shard $SHARD exited with $RC"
+              exit "$RC"
+            fi
+          done
 
       - name: 'Agents JS tests: validate results'
         id: agents_tests_validate
         run: |
-          PASSED=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
-          FAILED=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | tail -1 | grep -oE '[0-9]+')
-          echo "Agents JS tests: $PASSED passed, $FAILED failed"
-          if [ -z "$PASSED" ] || [ -z "$FAILED" ]; then
-            echo "Could not parse agents test results"
+          PASSED_LIST=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | grep -oE '[0-9]+' || true)
+          FAILED_LIST=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | grep -oE '[0-9]+' || true)
+          SHARDS_REPORTED=$(printf '%s\n' "$PASSED_LIST" | grep -cE '^[0-9]+$' || true)
+          PASSED=$(printf '%s\n' "$PASSED_LIST" | awk '{s+=$1} END{print s+0}')
+          FAILED=$(printf '%s\n' "$FAILED_LIST" | awk '{s+=$1} END{print s+0}')
+          echo "Agents JS tests ($SHARDS_REPORTED shards): $PASSED passed, $FAILED failed"
+          if [ "$SHARDS_REPORTED" -lt 4 ] || [ "$PASSED" -eq 0 ]; then
+            echo "Could not parse agents test results (expected 4 shards, got $SHARDS_REPORTED)"
             exit 1
           fi
           if [ "$FAILED" -ne 0 ]; then
