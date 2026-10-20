@@ -151,7 +151,10 @@ jobs:
             SHARD_CFG="/tmp/agents_run_shard_${SHARD}.json"
             node -e "
               const cfg = JSON.parse(require('fs').readFileSync('js/unit-tests/run_all.json', 'utf8'));
-              const files = cfg.params.jobParams.testFiles.filter((_, i) => i % ${TOTAL_SHARDS} === ${SHARD});
+              const all = cfg.params.jobParams.testFiles;
+              const files = ${SHARD} === 0
+                ? ['js/unit-tests/test_smAgent.js']
+                : all.filter(f => f !== 'js/unit-tests/test_smAgent.js').filter((_, i) => i % (${TOTAL_SHARDS} - 1) === (${SHARD} - 1));
               cfg.params.jobParams.testFiles = files;
               require('fs').writeFileSync('${SHARD_CFG}', JSON.stringify(cfg, null, 2));
               console.log('Shard ${SHARD}/${TOTAL_SHARDS}: ' + files.length + ' files');
@@ -168,8 +171,8 @@ jobs:
       - name: 'Agents JS tests: validate results'
         id: agents_tests_validate
         run: |
-          PASSED_LIST=$(grep -oE '"passed"\s*:\s*[0-9]+' agents-test-output.json | grep -oE '[0-9]+' || true)
-          FAILED_LIST=$(grep -oE '"failed"\s*:\s*[0-9]+' agents-test-output.json | grep -oE '[0-9]+' || true)
+          PASSED_LIST=$(grep -oE '"passed"[[:space:]]*:[[:space:]]*[0-9]+' agents-test-output.json | grep -oE '[0-9]+' || true)
+          FAILED_LIST=$(grep -oE '"failed"[[:space:]]*:[[:space:]]*[0-9]+' agents-test-output.json | grep -oE '[0-9]+' || true)
           SHARDS_REPORTED=$(printf '%s\n' "$PASSED_LIST" | grep -cE '^[0-9]+$' || true)
           PASSED=$(printf '%s\n' "$PASSED_LIST" | awk '{s+=$1} END{print s+0}')
           FAILED=$(printf '%s\n' "$FAILED_LIST" | awk '{s+=$1} END{print s+0}')
