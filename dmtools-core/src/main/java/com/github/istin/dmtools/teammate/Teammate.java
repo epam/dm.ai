@@ -598,6 +598,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
             CliExecutionHelper cliHelper = new CliExecutionHelper();
             CliExecutionHelper.CliExecutionResult cliResult = null;
             Path inputContextPath = null;
+            AtomicReference<String> inputFolderPathRef = new AtomicReference<>(null);
 
             // Build timer JS action runnable if configured. Declared here (outer scope) so the
             // SAME timer also wraps postJSAction below — a postJSAction can itself run a long
@@ -620,6 +621,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             .with(TrackerParams.INITIATOR, initiator)
                             .with(TrackerParams.METADATA, expertParams.getMetadata())
                             .with("systemRequest", systemRequestCommentAlias)
+                            .with("inputFolderPath", inputFolderPathRef.get())
                             .with("currentCliOutput", liveCliOutput.get())
                             .with("currentCliHasFatalError", errorState.hasFatalError())
                             .with("currentCliErrorMessage", errorState.getErrorMessage())
@@ -649,6 +651,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             trackerClient, confluence, null,
                             expertParams.isWriteAgentParamsToFiles() ? originalParams : inputParams);
                     inputContextPath = contextResult.getPath();
+                    inputFolderPathRef.set(inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null);
 
                     // Run preCliJSAction to allow extending input folder with extra content before CLI execution.
                     // If it throws, or reports failure (returns false / {success:false, ...}), treat this as a
@@ -864,6 +867,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             .with(TrackerParams.INITIATOR, initiator)
                             .with(TrackerParams.METADATA, expertParams.getMetadata())
                             .with("systemRequest", systemRequestCommentAlias)
+                            .with("inputFolderPath", inputFolderPathRef.get())
                             .with("currentCliHasFatalError", cliHasFatalError)
                             .with("currentCliErrorMessage", cliErrorMessage)
                             .execute();

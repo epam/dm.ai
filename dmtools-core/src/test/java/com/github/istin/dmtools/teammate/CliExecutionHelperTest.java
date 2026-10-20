@@ -1536,4 +1536,24 @@ public class CliExecutionHelperTest {
         Map<String, String> env = Map.of("KEY", "value");
         assertSame(env, CliExecutionHelper.filterEnvVariables(env, null, null));
     }
+
+    @Test
+    void testToInputFolderName_MapsGitHubCompositeKeyAndSanitizesOthers() {
+        assertEquals("gh-42", CliExecutionHelper.toInputFolderName("acme/widgets#42"));
+        assertEquals("gh-7", CliExecutionHelper.toInputFolderName("org.name-1/repo_2#7"));
+        assertEquals("PROJ-123", CliExecutionHelper.toInputFolderName("PROJ-123"));
+        assertEquals("standalone", CliExecutionHelper.toInputFolderName("standalone"));
+        assertEquals("foo-bar-baz", CliExecutionHelper.toInputFolderName("foo/bar:baz"));
+    }
+
+    @Test
+    void testCreateInputContext_GitHubCompositeKeyUsesGhFolder() throws IOException {
+        when(mockTicket.getTicketKey()).thenReturn("acme/widgets#42");
+        when(mockTicket.getAttachments()).thenReturn(Collections.emptyList());
+
+        Path created = cliHelper.createInputContext(mockTicket, "Issue body", mockTrackerClient, tempDir);
+
+        assertEquals(tempDir.resolve("input").resolve("gh-42"), created);
+        assertTrue(Files.exists(created.resolve("request.md")));
+    }
 }
