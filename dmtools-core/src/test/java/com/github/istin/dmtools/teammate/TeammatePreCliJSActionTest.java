@@ -527,6 +527,35 @@ public class TeammatePreCliJSActionTest {
             "plain Map with uncaughtException:true must also be recognized");
     }
 
+    @Test
+    void testPostJSActionReceivesInputFolderPathForGitHubCompositeKey() throws Exception {
+        when(ticket.getKey()).thenReturn("acme/widgets#42");
+        when(ticket.getTicketKey()).thenReturn("acme/widgets#42");
+        params.setCliCommands(new String[]{"echo ok"});
+        params.setPostJSAction("agents/js/postReworkAction.js");
+
+        JavaScriptExecutor postJsExecutor = buildMockExecutor();
+        TeammateWithJsSpy spy = buildSpy("agents/js/postReworkAction.js", postJsExecutor);
+
+        String originalUserDir = System.getProperty("user.dir");
+        try {
+            System.setProperty("user.dir", tempDir.toString());
+            try (MockedStatic<CommandLineUtils> mocked = mockStatic(CommandLineUtils.class)) {
+                mocked.when(() -> CommandLineUtils.runCommand(anyString(), any(), any(), any(), anyBoolean(), any(), anyInt()))
+                    .thenReturn("ok");
+                mocked.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                    .thenReturn(Map.of());
+
+                spy.runJobImpl(params);
+
+                verify(postJsExecutor).with(eq("inputFolderPath"),
+                    argThat((String p) -> p != null && p.endsWith("input" + java.io.File.separator + "gh-42")));
+            }
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
     // ---- helpers ----
 
     private JavaScriptExecutor buildMockExecutor() throws Exception {
