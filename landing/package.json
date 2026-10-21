@@ -7,7 +7,8 @@
     "dev": "astro dev",
     "build": "astro build && node scripts/check-links.mjs",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "test": "vitest run"
   },
   "dependencies": {
     "@astrojs/react": "^6.0.2",
@@ -25,7 +26,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "astro": "^7.2.8",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.5"
   },
   "overrides": {
     "sharp": "^0.35.5",

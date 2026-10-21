@@ -1,0 +1,121 @@
+---
+// Prototype: circuit-board hero wired to REAL factory states.
+// The three factories from Factory Board (flutter_agent_harness, dmtools-dart,
+// dmtools-agents) publish schema-2 snapshots to their factory-data branch.
+// Lanes fan out as circuit traces from the cube; clicking a lane opens its
+// real tickets; clicking a ticket opens the drawer (state history, tokens).
+import Layout from '../layouts/Layout.astro';
+import '../styles/proto.css';
+---
+
+<Layout>
+  <section class="board" id="board">
+    <div class="board__grid" aria-hidden="true"></div>
+    <div class="board__vignette" aria-hidden="true"></div>
+
+    <header class="board__hud">
+      <span class="board__hudLabel">DMTOOLS FACTORY — LIVE STATE</span>
+      <span class="board__hudRight">
+        <span class="board__hudRepo">REPOSITORIES</span>
+        <div class="board__select" id="factory-select">
+          <button class="board__selectBtn" id="factory-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="board__selectDot" id="factory-btn-dot"></span>
+            <span id="factory-btn-name">…</span>
+            <span class="board__selectCaret">▾</span>
+          </button>
+          <div class="board__selectMenu" id="factory-menu" hidden>
+            <input class="board__selectSearch" id="factory-search" type="text" placeholder="Search repositories…" autocomplete="off" spellcheck="false" />
+            <ul class="board__selectList" id="factory-list" role="listbox" aria-label="Repositories"></ul>
+          </div>
+        </div>
+        <span class="board__hudSeq board__hudTokens" id="token-totals" title="Token spend across all cards · read = prompt + cache, write = completion">TOKENS —</span>
+        <span class="board__hudSeq" id="tick-status">…</span>
+      </span>
+    </header>
+    <div class="board__ledger" id="factory-ledger" role="status">LEDGER …</div>
+
+    <div class="board__status" id="load-status" role="status">Loading factory states…</div>
+
+    <svg class="board__wires" id="wires" aria-hidden="true"></svg>
+
+    <div class="board__cube" id="cube">
+      <svg viewBox="0 0 200 200" width="210" height="210" role="img" aria-label="DMTools cube mark">
+        <defs>
+          <linearGradient id="cubeGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#00FFF0" />
+            <stop offset="0.5" stop-color="#00F6FF" />
+            <stop offset="1" stop-color="#B896FF" />
+          </linearGradient>
+          <filter id="cubeGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="4.5" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <g stroke="url(#cubeGrad)" stroke-width="2.6" fill="none" stroke-linejoin="round" filter="url(#cubeGlow)">
+          <path d="M100 18 L171 59 L171 141 L100 182 L29 141 L29 59 Z" fill="rgba(0,246,255,0.035)" />
+          <path d="M100 100 L100 18 M100 100 L171 59 M100 100 L29 59" />
+          <path d="M100 100 L100 182" opacity="0.55" />
+        </g>
+        <g stroke="url(#cubeGrad)" stroke-width="1.4" fill="none" opacity="0.38" stroke-linejoin="round">
+          <path d="M100 52 L137 73 L137 127 L100 148 L63 127 L63 73 Z" />
+          <path d="M100 100 L100 52 M100 100 L137 73 M100 100 L63 73 M100 100 L100 148" />
+        </g>
+      </svg>
+    </div>
+
+    <div class="board__caption">
+      <p class="board__wordmark">DM<span>Tools</span></p>
+      <p class="board__tagline">ONE CLI · EVERY INTEGRATION · NOTHING TO DEPLOY</p>
+    </div>
+
+    <ul class="board__mobileLanes" id="mobile-lanes"></ul>
+
+    <div class="phaseModal" id="phase-modal" role="dialog" aria-modal="true" aria-labelledby="lane-title" hidden>
+      <div class="phaseModal__backdrop" data-close></div>
+      <div class="phaseModal__panel">
+        <button class="phaseModal__close" type="button" data-close aria-label="Close">✕</button>
+
+        <div id="lane-view">
+          <p class="phaseModal__eyebrow" id="lane-eyebrow"></p>
+          <h2 class="phaseModal__title" id="lane-title"></h2>
+          <p class="phaseModal__summary" id="lane-summary"></p>
+          <div class="laneAvg" id="lane-avg" hidden></div>
+          <p class="phaseModal__sectionLabel">Tickets in this lane</p>
+          <div class="phaseModal__tickets" id="lane-tickets"></div>
+        </div>
+
+        <div id="ticket-view" hidden>
+          <button class="phaseModal__back" type="button" id="ticket-back">← Back to lane</button>
+          <p class="phaseModal__eyebrow" id="ticket-eyebrow"></p>
+          <h2 class="phaseModal__title" id="ticket-title"></h2>
+          <div class="phaseModal__chips" id="ticket-chips"></div>
+          <div class="tkGrid">
+            <div class="tkGrid__main">
+              <p class="phaseModal__sectionLabel">Flow · phases aggregated</p>
+              <div id="ticket-flow"></div>
+              <p class="phaseModal__sectionLabel">Timeline · to scale</p>
+              <div id="ticket-timeline"></div>
+              <details class="tkRaw" id="ticket-raw">
+                <summary>Raw history</summary>
+                <ul class="phaseModal__history" id="ticket-history"></ul>
+              </details>
+            </div>
+            <aside class="tkGrid__side">
+              <p class="phaseModal__sectionLabel">Value stream</p>
+              <dl class="phaseModal__stats" id="ticket-stats"></dl>
+              <p class="phaseModal__sectionLabel">Token spend</p>
+              <div id="ticket-tokens"></div>
+              <a class="phaseModal__gh" id="ticket-gh" target="_blank" rel="noopener">Open on GitHub ↗</a>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Client-side only: Astro bundles this module for the browser.
+    import '../scripts/proto-board';
+  </script>
+</Layout>
+
