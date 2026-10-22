@@ -13,6 +13,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PropertyReader {
 
@@ -25,6 +27,9 @@ public class PropertyReader {
   public static final String DEFAULT_JSAI_CLIENT_NAME = "JSAIClientFromProperties";
   private static final String DEFAULT_GEMINI_BASE_PATH = "https://generativelanguage.googleapis.com/v1beta/models";
 
+  private static final Pattern ENV_VAR_PLACEHOLDER_PATTERN =
+      Pattern.compile("\\$(?:\\{([A-Za-z_][A-Za-z0-9_]*)\\}|([A-Za-z_][A-Za-z0-9_]*))");
+
   /** Thread-local overrides applied by per-job envVariables params (highest priority). */
   private static final ThreadLocal<Map<String, String>> THREAD_LOCAL_OVERRIDES = new ThreadLocal<>();
 
@@ -33,7 +38,11 @@ public class PropertyReader {
    * These overrides take precedence over all other configuration sources.
    */
   public static void setOverrides(Map<String, String> overrides) {
-    THREAD_LOCAL_OVERRIDES.set(overrides);
+    if (overrides == null) {
+      THREAD_LOCAL_OVERRIDES.remove();
+    } else {
+      THREAD_LOCAL_OVERRIDES.set(resolveEnvVariables(overrides));
+    }
   }
 
   /**
@@ -52,6 +61,91 @@ public class PropertyReader {
   public static Map<String, String> getOverrides() {
     Map<String, String> overrides = THREAD_LOCAL_OVERRIDES.get();
     return overrides != null ? Collections.unmodifiableMap(overrides) : Collections.emptyMap();
+  }
+
+  /**
+   * Resolves {@code $VAR_NAME} and {@code ${VAR_NAME}} placeholders in the values of
+   * {@code rawOverrides} against other entries in {@code rawOverrides}, {@code config.properties},
+   * {@code dmtools.env}, and {@link System#getenv(String)}. Unset variables are preserved as-is.
+   */
+  public static Map<String, String> resolveEnvVariables(Map<String, String> rawOverrides) {
+    return resolveEnvVariables(rawOverrides, null);
+  }
+
+  /**
+   * Resolves {@code $VAR_NAME} and {@code ${VAR_NAME}} placeholders in the values of
+   * {@code rawOverrides}.
+   *
+   * <p>Resolution order for {@code VAR_NAME}:
+   * <ol>
+   *   <li>{@code extraEnv} (if provided and contains a non-null value for {@code VAR_NAME})</li>
+   *   <li>{@code rawOverrides} (if {@code VAR_NAME} is another key in {@code rawOverrides} != current key, non-recursively)</li>
+   *   <li>{@link PropertyReader#getValueIgnoringOverrides(String)} ({@code config.properties} &rarr; {@code dmtools.env} &rarr; {@code System.getenv})</li>
+   *   <li>If still {@code null}, the {@code $VAR_NAME} / {@code ${VAR_NAME}} token is preserved unchanged</li>
+   * </ol>
+   */
+  public static Map<String, String> resolveEnvVariables(
+      Map<String, String> rawOverrides,
+      Map<String, String> extraEnv) {
+    if (rawOverrides == null) {
+      return null;
+    }
+    if (rawOverrides.isEmpty()) {
+      return Collections.emptyMap();
+    }
+    PropertyReader baseReader = new PropertyReader();
+    Map<String, String> resolved = new LinkedHashMap<>(rawOverrides.size());
+    for (Map.Entry<String, String> entry : rawOverrides.entrySet()) {
+      String key = entry.getKey();
+      String value = entry.getValue();
+      resolved.put(key, interpolateValue(key, value, rawOverrides, extraEnv, baseReader));
+    }
+    return resolved;
+  }
+
+  private static String interpolateValue(
+      String currentKey,
+      String value,
+      Map<String, String> rawOverrides,
+      Map<String, String> extraEnv,
+      PropertyReader baseReader) {
+    if (value == null || !value.contains("$")) {
+      return value;
+    }
+    Matcher matcher = ENV_VAR_PLACEHOLDER_PATTERN.matcher(value);
+    StringBuilder sb = new StringBuilder();
+    while (matcher.find()) {
+      String varName = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+      String replacement = lookupPlaceholderValue(varName, currentKey, rawOverrides, extraEnv, baseReader);
+      if (replacement != null) {
+        matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+      } else {
+        matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0)));
+      }
+    }
+    matcher.appendTail(sb);
+    return sb.toString();
+  }
+
+  private static String lookupPlaceholderValue(
+      String varName,
+      String currentKey,
+      Map<String, String> rawOverrides,
+      Map<String, String> extraEnv,
+      PropertyReader baseReader) {
+    if (extraEnv != null) {
+      String fromExtra = extraEnv.get(varName);
+      if (fromExtra != null) {
+        return fromExtra;
+      }
+    }
+    if (rawOverrides != null && !varName.equals(currentKey)) {
+      String fromOverrides = rawOverrides.get(varName);
+      if (fromOverrides != null) {
+        return fromOverrides;
+      }
+    }
+    return baseReader.getValueIgnoringOverrides(varName);
   }
 
   /**
@@ -166,7 +260,10 @@ public class PropertyReader {
     if (overrides != null && overrides.containsKey(propertyKey)) {
       return overrides.get(propertyKey);
     }
+    return getValueIgnoringOverrides(propertyKey);
+  }
 
+  private String getValueIgnoringOverrides(String propertyKey) {
     if (prop == null) {
       synchronized (PropertyReader.class) {
         if (prop == null) {

@@ -585,4 +585,31 @@ public class CliCommandExecutorTest {
             assertNotNull("Result should not be null for iteration " + i, result);
         }
     }
+
+    @Test
+    public void testLoadEnvironmentVariables_InterpolatesOverridesFromWorkingDirDmtoolsEnv() throws Exception {
+        File tempDir = tempFolder.newFolder("workdir-with-env");
+        String reviewQueueJson = "[{\"provider_type\":\"anthropic_claude_code\",\"model\":\"claude-opus-4-7\"}]";
+        Files.writeString(
+                tempDir.toPath().resolve("dmtools.env"),
+                "ENV_VAR_REVIEW_QUEUE=" + reviewQueueJson + "\n"
+        );
+
+        PropertyReader.setOverrides(Map.of(
+                "DEFAULT_TRACKER", "github",
+                "AI_AGENT_PROVIDER", "fa",
+                "FA_PROVIDERS_QUEUE", "${ENV_VAR_REVIEW_QUEUE}"
+        ));
+        try {
+            java.lang.reflect.Method method = CliCommandExecutor.class.getDeclaredMethod("loadEnvironmentVariables", File.class);
+            method.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, String> envVars = (Map<String, String>) method.invoke(executor, tempDir);
+            assertEquals(reviewQueueJson, envVars.get("FA_PROVIDERS_QUEUE"));
+            assertEquals("github", envVars.get("DEFAULT_TRACKER"));
+            assertEquals("fa", envVars.get("AI_AGENT_PROVIDER"));
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
 }
