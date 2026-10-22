@@ -8,11 +8,9 @@ name: Merge Trigger
 run-name: 'Merge Trigger : Unit Tests passed → merge pr_approved issues'
 
 on:
-  workflow_run:
-    workflows: ['@@CI_NAME@@']
-    types: [completed]
-  issues:
+@@WORKFLOW_RUN@@  issues:
     types: [labeled]
+  workflow_dispatch: {}
 
 permissions:
   contents: write

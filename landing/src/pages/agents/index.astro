@@ -1,6 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import AgentDoc from '../../layouts/AgentDoc.astro';
+import { AGENTS_REPO } from '../../data/content';
 import { agentHrefOf, agentTitleOf, agentSummaryOf, groupAgents } from '../../lib/agentDocs';
 
 const agents = await getCollection('agentDocs');
@@ -23,7 +24,7 @@ const summaries = new Map(agents.map((doc) => [doc.id, agentSummaryOf(doc)]));
   </p>
   <p>
     Rendered from the
-    <a href="https://github.com/epam/dm.ai/tree/main/agents" target="_blank" rel="noopener">agents repository</a>:
+    <a href={AGENTS_REPO} target="_blank" rel="noopener">agents repository</a>:
     the human-written description and the auto-extracted reference stay in sync with the
     agent configs by a coverage test.
   </p>

@@ -19,12 +19,8 @@ on:
     branches-ignore: [main]
   schedule:
     - cron: '13,43 * * * *'
-  workflow_run:
-    workflows: ['@@CI_NAME@@']
-    types: [completed]
   workflow_dispatch:
-
-permissions:
+@@WORKFLOW_RUN@@permissions:
   actions: write
   contents: read
   pull-requests: read
@@ -38,8 +34,9 @@ jobs:
   kicker:
     uses: IstiN/dmtools-agentic-workflows/.github/workflows/factory-sm-kicker.yml@main
     with:
+      runner: @@RUNNER@@
       sm_workflow: machine-sm.yml
-      ci_workflow: @@CI_FILE@@
+      ci_workflow: '@@CI_FILE@@'
       ci_display_name: '@@CI_NAME@@'
       # The required protection context is the single `test` job named
       # "Java unit tests" ("Protect main" ruleset — see unit-tests.yml).
