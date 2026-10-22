@@ -403,6 +403,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     public List<? extends IComment> getComments(
             @MCPParam(name = "id", description = "The work item ID", required = true, aliases = {"key"})
             String workItemId,
+            @MCPParam(name = "ticket", description = "Optional ticket object (unused, kept for TrackerClient interface compatibility)", required = false)
             ITicket ticket
     ) throws IOException {
         String path = String.format("/%s/_apis/wit/workItems/%s/comments", project, workItemId);
