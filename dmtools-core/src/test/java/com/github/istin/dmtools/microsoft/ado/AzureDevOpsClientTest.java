@@ -471,6 +471,31 @@ public class AzureDevOpsClientTest {
     }
 
     @Test
+    void testGetComments_mcpToolExecutorAllowsJsonObjectTicketParameter() throws Exception {
+        client.setMockResponse("/comments", "{\"comments\":[{\"text\":\"from mcp with ticket json\"}]}");
+
+        Map<String, Object> clients = Map.of("ado", client);
+
+        // Empty JSONObject (e.g. JS `{ id: "123", ticket: {} }`, IstiN/dmtools-agents#1174)
+        Object emptyResult = com.github.istin.dmtools.mcp.generated.MCPToolExecutor.executeTool(
+                "ado_get_work_item_comments", Map.of("id", "123", "ticket", new JSONObject()), clients);
+        assertInstanceOf(List.class, emptyResult);
+        assertEquals(1, ((List<?>) emptyResult).size());
+
+        // Non-empty JSONObject
+        Object nonEmptyResult = com.github.istin.dmtools.mcp.generated.MCPToolExecutor.executeTool(
+                "ado_get_work_item_comments", Map.of("id", "123", "ticket", new JSONObject().put("key", "123")), clients);
+        assertInstanceOf(List.class, nonEmptyResult);
+        assertEquals(1, ((List<?>) nonEmptyResult).size());
+
+        // JSON String representation
+        Object stringResult = com.github.istin.dmtools.mcp.generated.MCPToolExecutor.executeTool(
+                "ado_get_work_item_comments", Map.of("id", "123", "ticket", "{}"), clients);
+        assertInstanceOf(List.class, stringResult);
+        assertEquals(1, ((List<?>) stringResult).size());
+    }
+
+    @Test
     void testPostComment_postsTextBody() throws IOException {
         client.setMockPostResponse("/comments", "{\"id\":1}");
 
