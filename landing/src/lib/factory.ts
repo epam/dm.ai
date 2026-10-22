@@ -9,9 +9,31 @@ import runnerStory from './factory-templates/runner-story.json?raw';
 import runnerRework from './factory-templates/runner-rework.json?raw';
 import runnerReview from './factory-templates/runner-review.json?raw';
 
+export type QualityPresetId = 'none' | 'crap4js' | 'crap4dart' | 'crap4java' | 'crap4py' | 'crap4go';
+
+export interface QualityPreset {
+  id: Exclude<QualityPresetId, 'none'>;
+  label: string;
+  repoUrl: string;
+  toolchain?: ToolchainId;
+  description: string;
+}
+
+export const QUALITY_PRESETS: QualityPreset[] = [
+  { id: 'crap4js', label: 'JavaScript / TypeScript (crap4js)', repoUrl: 'https://github.com/IstiN/crap4js', toolchain: 'node', description: 'Node.js test coverage (c8) + IstiN/crap4js CRAP score gate (≤ 8.0)' },
+  { id: 'crap4dart', label: 'Dart / Flutter (crap4dart)', repoUrl: 'https://github.com/IstiN/crap4dart', toolchain: 'flutter', description: 'dart format + analyze + test coverage + IstiN/crap4dart CRAP gate' },
+  { id: 'crap4java', label: 'Java (crap4java)', repoUrl: 'https://github.com/IstiN/crap4java', toolchain: 'java', description: 'JaCoCo coverage + IstiN/crap4java CRAP score gate (≤ 8.0)' },
+  { id: 'crap4py', label: 'Python (crap4py)', repoUrl: 'https://github.com/vabhzw17eg2qu4m9-bit/crap4py', toolchain: 'python', description: 'coverage.py + vabhzw17eg2qu4m9-bit/crap4py CRAP score gate (≤ 8.0)' },
+  { id: 'crap4go', label: 'Go (crap4go)', repoUrl: 'https://github.com/vabhzw17eg2qu4m9-bit/crap4go', toolchain: 'go', description: 'gofmt + go vet + go test coverprofile + vabhzw17eg2qu4m9-bit/crap4go CRAP gate' },
+];
+
 export interface FactoryConfig {
   repo: string; // owner/name
+  createRepo?: boolean; // Greenfield: create the repository before opening the factory PR
+  repoPrivate?: boolean; // Greenfield repository visibility (default true = private)
   machine: string; // GitHub login of the AI teammate
+  ciEnabled?: boolean; // default true; false skips CI / quality gate
+  qualityPreset?: QualityPresetId; // default 'none'; when set to crap4*, generates .github/workflows/quality.yml
   ciFile: string; // e.g. unit-tests.yml
   ciName: string; // workflow display name, e.g. "Unit Tests"
   checks: string[]; // contexts the SM waits for (validation-checks / required_contexts)
@@ -74,7 +96,7 @@ export function newEntry(presetId = 'copilot'): ProviderEntry {
   return { preset: p.id, model: p.models[0] ?? '', baseUrl: p.baseUrl, keyEnv: p.keyEnv };
 }
 
-export type ToolchainId = 'java' | 'node' | 'python' | 'flutter';
+export type ToolchainId = 'java' | 'node' | 'python' | 'flutter' | 'go';
 
 export interface Toolchain {
   id: ToolchainId;
@@ -89,6 +111,7 @@ export const TOOLCHAINS: Toolchain[] = [
   { id: 'node', label: 'Node.js', input: 'node-version', versions: ['24', '22', '20'], fallback: '22' },
   { id: 'python', label: 'Python', input: 'python-version', versions: ['3.13', '3.12', '3.11'], fallback: '3.12' },
   { id: 'flutter', label: 'Flutter', input: 'flutter-version', versions: ['stable', 'beta'], fallback: 'stable' },
+  { id: 'go', label: 'Go', input: 'go-version', versions: ['1.24', '1.23', '1.22'], fallback: '1.23' },
 ];
 
 export const RUNNERS = ['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04', 'ubuntu-slim', 'macos-latest', 'windows-latest'];
@@ -106,7 +129,11 @@ export interface FactoryFile {
 
 export const defaults: FactoryConfig = {
   repo: '',
+  createRepo: false,
+  repoPrivate: true,
   machine: 'ai-teammate',
+  ciEnabled: true,
+  qualityPreset: 'none',
   ciFile: 'ci.yml',
   ciName: 'CI',
   checks: ['test'],
@@ -120,18 +147,24 @@ export const defaults: FactoryConfig = {
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
+export function isCiEnabled(c: FactoryConfig): boolean {
+  return c.ciEnabled !== false;
+}
+
 export function validate(c: FactoryConfig): Record<string, string> {
   const e: Record<string, string> = {};
   if (!REPO.test(c.repo)) e.repo = 'Use owner/name';
   if (!LOGIN.test(c.machine)) e.machine = 'Not a valid GitHub login';
-  if (!/^[\w.-]+\.ya?ml$/.test(c.ciFile)) e.ciFile = 'Workflow file name, e.g. ci.yml';
-  if (!c.ciName.trim() || /['"\n]/.test(c.ciName)) e.ciName = 'Workflow display name (no quotes)';
-  if (!c.checks.length || c.checks.some((x) => !x.trim() || /['",\n]/.test(x))) e.checks = 'At least one check name (no quotes or commas)';
+  if (isCiEnabled(c)) {
+    if (!/^[\w.-]+\.ya?ml$/.test(c.ciFile)) e.ciFile = 'Workflow file name, e.g. ci.yml';
+    if (!c.ciName.trim() || /['"\n]/.test(c.ciName)) e.ciName = 'Workflow display name (no quotes)';
+    if (!c.checks.length || c.checks.some((x) => !x.trim() || /['",\n]/.test(x))) e.checks = 'At least one check name (no quotes or commas)';
+  }
   const entries = allEntries(c);
   if (!entries.length) e.providers = 'Add at least one provider';
   else if (entries.some((x) => !x.model.trim())) e.providers = 'Every provider needs a model';
   else if (entries.some((x) => !/^[A-Z][A-Z0-9_]*$/.test(x.keyEnv))) e.providers = 'Key name: UPPER_SNAKE_CASE';
-  else if (entries.some((x) => !/^https:\/\/\S+$/.test(x.baseUrl))) e.providers = 'Base URL must start with https://';
+  else if (entries.some((x) => !/^https?:\/\/\S+$/.test(x.baseUrl))) e.providers = 'Base URL must start with http:// or https://';
   else if (keySlots(c).length > 3) e.providers = 'At most 3 distinct API keys (factory key slots)';
   if (c.merge.mode === 'token' && !/^[A-Z][A-Z0-9_]*$/.test(c.merge.tokenSecret)) e.merge = 'Secret name: UPPER_SNAKE_CASE';
   if (!/^[\w./-]+$/.test(c.baseBranch) || c.baseBranch.includes('..')) e.baseBranch = 'Branch name, e.g. main';
@@ -179,31 +212,216 @@ const slotLines = (c: FactoryConfig) => {
   return { inputs, secrets };
 };
 
-const fill = (tpl: string, c: FactoryConfig) =>
-  tpl
+const fill = (tpl: string, c: FactoryConfig) => {
+  const ci = isCiEnabled(c);
+  const ciName = ci ? c.ciName : '';
+  const ciFile = ci ? c.ciFile : '';
+  const checks = ci ? c.checks : [];
+  const workflowRun = ci
+    ? `  workflow_run:\n    workflows: ['${ciName}']\n    types: [completed]\n`
+    : '';
+  return tpl
     .replaceAll('@@MACHINE@@', c.machine)
-    .replaceAll('@@CI_NAME@@', c.ciName)
-    .replaceAll('@@CI_FILE@@', c.ciFile)
-    .replaceAll('@@CHECKS_JSON@@', JSON.stringify(c.checks))
-    .replaceAll('@@CHECKS_CSV@@', c.checks.join(','))
+    .replaceAll('@@CI_NAME@@', ciName)
+    .replaceAll('@@CI_FILE@@', ciFile)
+    .replaceAll('@@CHECKS_JSON@@', JSON.stringify(checks))
+    .replaceAll('@@CHECKS_CSV@@', checks.join(','))
     .replaceAll('@@RUNNER@@', c.runner)
+    .replace(/^@@WORKFLOW_RUN@@/m, workflowRun)
     .replace(/^@@TOOLCHAINS@@\n/m, toolchainLines(c) + slotLines(c).inputs)
     .replace(/^@@PROVIDER_SECRETS@@\n/m, slotLines(c).secrets)
     .replaceAll('@@MERGE_TOKEN@@', c.merge.mode === 'token' ? c.merge.tokenSecret : 'SOURCE_GITHUB_TOKEN')
     .replace(/^@@MERGE_APP@@\n/m, c.merge.mode === 'app'
       ? '      MERGE_APP_ID: ${{ secrets.MERGE_APP_ID }}\n      MERGE_APP_PRIVATE_KEY: ${{ secrets.MERGE_APP_PRIVATE_KEY }}\n'
       : '');
+};
 
 function toolchainLines(c: FactoryConfig): string {
-  const picked = TOOLCHAINS.filter((t) => c.toolchains[t.id] !== undefined);
+  const picked = TOOLCHAINS.filter((t) => c.toolchains[t.id] !== undefined && t.id !== 'go');
   if (!picked.length) return '';
   const head = '      # Toolchains the agent legs install (cached). Unlisted = nothing installed.\n';
   return head + picked.map((t) => `      ${t.input}: '${c.toolchains[t.id] || t.fallback}'\n`).join('');
 }
 
+export function renderQualityWorkflow(c: FactoryConfig): string | null {
+  const preset = c.qualityPreset ?? 'none';
+  if (!isCiEnabled(c) || preset === 'none') return null;
+  const runner = c.runner;
+  switch (preset) {
+    case 'crap4js': {
+      const ver = c.toolchains.node || '22';
+      return `# Quality gate powered by IstiN/crap4js
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ${runner}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '${ver}'
+          cache: npm
+      - run: npm ci
+      - name: Test with coverage
+        run: npx c8 --reporter=json --reporter=text npm test
+      - name: CRAP analysis (IstiN/crap4js)
+        run: npx --yes github:IstiN/crap4js --coverage coverage/coverage-final.json
+`;
+    }
+    case 'crap4dart': {
+      return `# Quality gate powered by IstiN/crap4dart
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ${runner}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - run: dart pub get
+      - run: dart format --set-exit-if-changed .
+      - run: dart analyze
+      - run: dart test --coverage=coverage
+      - run: dart pub global activate coverage
+      - name: Format coverage
+        run: >-
+          dart pub global run coverage:format_coverage
+          --lcov --in coverage --out coverage/lcov.info --report-on lib
+      - name: Install crap4dart (IstiN/crap4dart)
+        run: dart pub global activate -sgit https://github.com/IstiN/crap4dart.git
+      - name: CRAP analysis
+        run: crap4dart analyze --lcov coverage/lcov.info
+`;
+    }
+    case 'crap4java': {
+      const ver = c.toolchains.java || '21';
+      return `# Quality gate powered by IstiN/crap4java
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ${runner}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '${ver}'
+      - name: Build and run CRAP analysis (IstiN/crap4java)
+        run: |
+          git clone --depth 1 https://github.com/IstiN/crap4java.git /tmp/crap4java
+          mvn -q -f /tmp/crap4java/pom.xml -DskipTests package
+          java -jar /tmp/crap4java/target/crap4java-*.jar
+`;
+    }
+    case 'crap4py': {
+      const ver = c.toolchains.python || '3.12';
+      return `# Quality gate powered by vabhzw17eg2qu4m9-bit/crap4py
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ${runner}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '${ver}'
+      - name: Install dependencies + crap4py
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install -e .; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install coverage pytest git+https://github.com/vabhzw17eg2qu4m9-bit/crap4py.git
+      - name: Test with coverage
+        run: |
+          coverage run -m pytest
+          coverage json -o coverage.json
+      - name: CRAP analysis (vabhzw17eg2qu4m9-bit/crap4py)
+        run: crap4py --coverage coverage.json
+`;
+    }
+    case 'crap4go': {
+      const ver = c.toolchains.go || '1.23';
+      return `# Quality gate powered by vabhzw17eg2qu4m9-bit/crap4go
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ${runner}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '${ver}'
+      - name: Format check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - name: Test with coverage
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: CRAP analysis (vabhzw17eg2qu4m9-bit/crap4go)
+        run: |
+          go install github.com/vabhzw17eg2qu4m9-bit/crap4go@latest
+          "$(go env GOPATH)/bin/crap4go" --coverage coverage.out
+`;
+    }
+  }
+}
+
 export function renderFiles(c: FactoryConfig): FactoryFile[] {
   const wf = (name: string, body: string) => ({ path: `.github/workflows/${name}`, content: fill(body, c) });
+  const quality = renderQualityWorkflow(c);
   return [
+    ...(quality ? [{ path: `.github/workflows/${c.ciFile || 'quality.yml'}`, content: quality }] : []),
     wf('ai-teammate.yml', aiTeammate),
     wf('machine-sm.yml', machineSm),
     wf('machine-merge.yml', machineMerge),
@@ -223,6 +441,14 @@ function mergeChecklist(c: FactoryConfig): string {
   return '';
 }
 
+function ciChecklist(c: FactoryConfig): string {
+  if (!isCiEnabled(c)) return '- [ ] No CI workflow configured (CI gate skipped — you can add a quality workflow later)\n';
+  if (c.qualityPreset && c.qualityPreset !== 'none') {
+    return `- [ ] Generated \`${c.ciFile}\` (${c.qualityPreset}) publishes: ${c.checks.map((x) => `\`${x}\``).join(', ')}\n`;
+  }
+  return `- [ ] \`${c.ciFile}\` has a \`workflow_dispatch\` trigger (the SM dispatches it on PR heads) and publishes: ${c.checks.map((x) => `\`${x}\``).join(', ')}\n`;
+}
+
 export function prBody(c: FactoryConfig): string {
   return `Sets up the DMTools agent factory for \`${c.repo}\`, generated by https://dmtools.lab.epam.com/factory/.
 
@@ -231,8 +457,7 @@ export function prBody(c: FactoryConfig): string {
 ${mergeChecklist(c)}${keySlots(c).map((k) => `- [ ] Secret \`${k}\` (AI provider key)`).join('\n')}
 - [ ] \`${c.machine}\` is a collaborator with write access
 - [ ] Labels: agent:dev, agent:review, agent:rework, agent:skip, ai_validating, ai_validated, ai_pr_reviewed, pr_approved, blocked
-- [ ] \`${c.ciFile}\` has a \`workflow_dispatch\` trigger (the SM dispatches it on PR heads) and publishes: ${c.checks.map((x) => `\`${x}\``).join(', ')}
-- [ ] Optional repo variables \`AGENTS_VERSION\` / \`DMTOOLS_VERSION\` (default \`latest\`) — pin agent packs / CLI to a release tag
+${ciChecklist(c)}- [ ] Optional repo variables \`AGENTS_VERSION\` / \`DMTOOLS_VERSION\` (default \`latest\`) — pin agent packs / CLI to a release tag
 
 Smoke test: assign an issue to \`${c.machine}\` or dispatch **AI Teammate** with leg=dev.`;
 }
@@ -256,6 +481,26 @@ async function gh<T>(token: string, path: string, init: RequestInit = {}): Promi
   return res.json() as Promise<T>;
 }
 
+
+/** Creates a new GitHub repository (Greenfield) with an initial commit on its default branch. */
+export async function createRepo(
+  token: string,
+  repo: string,
+  isPrivate = true,
+  userLogin?: string,
+  log: (m: string) => void = () => {},
+): Promise<{ full_name: string; default_branch: string }> {
+  const [owner, name] = repo.split('/');
+  if (!owner || !name) throw new Error('Repository must be owner/name');
+  const login = userLogin ?? (await gh<{ login: string }>(token, '/user')).login;
+  const path = owner.toLowerCase() === login.toLowerCase() ? '/user/repos' : `/orgs/${encodeURIComponent(owner)}/repos`;
+  const created = await gh<{ full_name: string; default_branch: string }>(token, path, {
+    method: 'POST',
+    body: JSON.stringify({ name, private: isPrivate, auto_init: true }),
+  });
+  log(`created ${created.full_name} (${isPrivate ? 'private' : 'public'}, branch ${created.default_branch})`);
+  return created;
+}
 
 export async function createFactoryPr(
   token: string,

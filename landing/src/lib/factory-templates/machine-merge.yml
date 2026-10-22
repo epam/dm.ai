@@ -8,10 +8,7 @@
 name: 'Machine Merge Bot'
 
 on:
-  workflow_run:
-    workflows: ['@@CI_NAME@@']
-    types: [completed]
-  pull_request:
+@@WORKFLOW_RUN@@  pull_request:
     types: [labeled, synchronize, edited]
   check_run:
     types: [completed]
@@ -42,7 +39,7 @@ jobs:
       runner: @@RUNNER@@
       # your PR CI — the bot's workflow-run fallback reads its runs when
       # a head carries no check runs.
-      ci_workflow: @@CI_FILE@@
+      ci_workflow: '@@CI_FILE@@'
     secrets:
       SOURCE_GITHUB_TOKEN: ${{ secrets.@@MERGE_TOKEN@@ }}
 @@MERGE_APP@@
