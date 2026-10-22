@@ -193,5 +193,62 @@ class DmtoolsShellWrapperTest {
         String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertEquals(0, p.waitFor(), out);
     }
+
+    // ---- dmtools.sh & install.sh launcher corruption prevention (epam/dm.ai#746) ----
+
+    @Test
+    void wrapperPassesBashSyntaxCheckAndEndsCleanly() throws Exception {
+        Path script = Paths.get("").toAbsolutePath().getParent().resolve("dmtools.sh");
+        Process p = new ProcessBuilder("bash", "-n", script.toString())
+                .redirectErrorStream(true).start();
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, p.waitFor(), out);
+
+        String trimmed = wrapper().stripTrailing();
+        assertTrue(trimmed.endsWith("\nfi"), "dmtools.sh must end after a single if/else/fi launch block");
+        assertFalse(trimmed.contains("\n.JobRunner"), "dmtools.sh must not contain stray .JobRunner fragments");
+    }
+
+    @Test
+    void legacyInstallScriptPassesBashSyntaxCheck() throws Exception {
+        Path script = Paths.get("").toAbsolutePath().getParent().resolve("install");
+        Process p = new ProcessBuilder("bash", "-n", script.toString())
+                .redirectErrorStream(true).start();
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, p.waitFor(), out);
+    }
+
+    @Test
+    void installerOverwritesShellScriptsInsteadOfResumingAndValidatesBashSyntax() throws Exception {
+        String source = installer();
+        assertTrue(source.contains("bash -n \"$file\""), "validate_not_html must validate shell script syntax with bash -n");
+        assertTrue(source.contains("bash -n \"$SCRIPT_PATH\""), "installer_managed_script_present must verify bash -n on SCRIPT_PATH");
+        assertTrue(source.contains("curl_resume_args=(-C -)"), "curl resume (-C -) must be restricted to JAR downloads");
+
+        // Simulate the exact #746 corruption scenario: an older 19747-byte script is on disk,
+        // and a 20188-byte script is downloaded over it via download_file.
+        Path dir = Files.createTempDirectory("installer-746");
+        Path oldScript = dir.resolve("dmtools");
+        Path remoteScript = Paths.get("").toAbsolutePath().getParent().resolve("dmtools.sh");
+        String validWrapper = wrapper();
+        // Pre-populate target with a shorter script that has a broken tail if appended to
+        String shorterOld = validWrapper.substring(0, validWrapper.length() - 441);
+        Files.writeString(oldScript, shorterOld);
+
+        Path testHarness = dir.resolve("run_test.sh");
+        Path installSh = Paths.get("").toAbsolutePath().getParent().resolve("install.sh");
+        Files.writeString(testHarness,
+                "#!/bin/bash\n" +
+                "set -e\n" +
+                "DMTOOLS_INSTALLER_TEST_MODE=true source \"" + installSh + "\"\n" +
+                "download_file \"file://" + remoteScript + "\" \"" + oldScript + "\" \"DMTools shell script\" \"true\"\n" +
+                "bash -n \"" + oldScript + "\"\n");
+        testHarness.toFile().setExecutable(true);
+        Process p = new ProcessBuilder("bash", testHarness.toString()).redirectErrorStream(true).start();
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, p.waitFor(), out);
+        assertEquals(validWrapper, Files.readString(oldScript),
+                "Downloaded dmtools script must match the remote dmtools.sh byte-for-byte without appended tail (#746)");
+    }
 }
 

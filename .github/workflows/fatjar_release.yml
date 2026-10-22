@@ -151,6 +151,9 @@ jobs:
           chmod +x build/libs/install.sh
           [ -f build/libs/install ] && chmod +x build/libs/install || true
           chmod +x build/libs/dmtools.sh
+          bash -n build/libs/dmtools.sh
+          bash -n build/libs/install.sh
+          [ -f build/libs/install ] && bash -n build/libs/install || true
           
           # List files to verify they exist
           echo "Release assets prepared:"
