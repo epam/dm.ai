@@ -228,6 +228,9 @@ jobs:
             exit 1
           fi
           cp dmtools.sh build-artifacts/
+          bash -n build-artifacts/dmtools.sh
+          bash -n build-artifacts/install.sh
+          [ -f build-artifacts/install ] && bash -n build-artifacts/install || true
           
           # List artifacts
           echo ""

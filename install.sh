@@ -579,7 +579,7 @@ installer_managed_jar_present() {
 }
 
 installer_managed_script_present() {
-    [ -s "$SCRIPT_PATH" ] && [ -x "$SCRIPT_PATH" ]
+    [ -s "$SCRIPT_PATH" ] && [ -x "$SCRIPT_PATH" ] && bash -n "$SCRIPT_PATH" >/dev/null 2>&1
 }
 
 read_installer_metadata_version() {
@@ -1059,6 +1059,9 @@ validate_not_html() {
                 return 1
             fi
         fi
+        if ! bash -n "$file" >/dev/null 2>&1; then
+            return 1
+        fi
     fi
     
     return 0
@@ -1140,7 +1143,13 @@ download_file() {
     local expected_checksum="${5:-}"
     local max_retries=3
     local retry_count=0
-    
+    local is_jar=false
+    if [[ "$desc" == *"JAR"* ]] || [[ "$output" == *.jar ]]; then
+        is_jar=true
+    fi
+    if [ "$is_jar" != true ]; then
+        rm -f "$output" 2>/dev/null
+    fi
     progress "Downloading $desc..."
     
     while [ $retry_count -lt $max_retries ]; do
@@ -1152,9 +1161,11 @@ download_file() {
             local curl_log
             curl_log=$(mktemp)
             local curl_exit_code=0
-            local is_jar=false
-            if [[ "$desc" == *"JAR"* ]] || [[ "$output" == *.jar ]]; then
-                is_jar=true
+            local curl_resume_args=()
+            if [ "$is_jar" = true ]; then
+                curl_resume_args=(-C -)
+            else
+                rm -f "$output" 2>/dev/null
             fi
 
             # Show the user what is being downloaded and from where.
@@ -1178,7 +1189,7 @@ download_file() {
                 # real error messages visible despite -s progress suppression.
                 local max_time=${DMTOOLS_DOWNLOAD_MAX_TIME:-3600}
                 curl -L --fail --connect-timeout 30 --max-time "$max_time" \
-                     -C - --speed-time 30 --speed-limit 1024 \
+                     "${curl_resume_args[@]}" --speed-time 30 --speed-limit 1024 \
                      -s -S "$url" -o "$output" >"$curl_log" 2>&1 || curl_exit_code=$?
 
                 if [ -s "$curl_log" ]; then
@@ -1221,7 +1232,13 @@ download_file() {
             info "Downloading $desc from $url (attempt $((retry_count + 1))/$max_retries) using wget..."
             local wget_progress="--progress=bar"
             [ -t 2 ] || wget_progress="--progress=dot:mega"
-            if wget -c $wget_progress --tries=1 --timeout=120 --read-timeout=30 "$url" -O "$output" 2>&1; then
+            local wget_resume_args=()
+            if [ "$is_jar" = true ]; then
+                wget_resume_args=(-c)
+            else
+                rm -f "$output" 2>/dev/null
+            fi
+            if wget "${wget_resume_args[@]}" $wget_progress --tries=1 --timeout=120 --read-timeout=30 "$url" -O "$output" 2>&1; then
                 info "Downloaded $desc ($(human_readable_size "$(stat_file_size "$output")"))"
                 download_success=true
             else
@@ -1811,8 +1828,10 @@ download_dmtools_shell_script() {
     local download_base
     download_base=$(get_release_download_base "$version")
     local script_url="${download_base}/dmtools.sh"
+    rm -f "$SCRIPT_PATH" 2>/dev/null
 
     # Download shell script - try multiple methods
+    # Method 1: Try redirect-based URL (standard GitHub release URL)
     # Method 1: Try redirect-based URL (standard GitHub release URL)
     if download_file "$script_url" "$SCRIPT_PATH" "DMTools shell script" "true"; then
         # Success with redirect URL

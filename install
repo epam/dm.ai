@@ -561,7 +561,7 @@ installer_managed_jar_present() {
 }
 
 installer_managed_script_present() {
-    [ -s "$SCRIPT_PATH" ] && [ -x "$SCRIPT_PATH" ]
+    [ -s "$SCRIPT_PATH" ] && [ -x "$SCRIPT_PATH" ] && bash -n "$SCRIPT_PATH" >/dev/null 2>&1
 }
 
 read_installer_metadata_version() {
@@ -953,6 +953,9 @@ validate_not_html() {
             if ! head -n 5 "$file" 2>/dev/null | grep -qE "^#!/|^#.*bash|^#.*sh|set -|function |\(\)"; then
                 return 1
             fi
+        fi
+        if ! bash -n "$file" >/dev/null 2>&1; then
+            return 1
         fi
     fi
     
@@ -1432,8 +1435,10 @@ download_dmtools_jar() {
 download_dmtools_shell_script() {
     local version="$1"
     local script_url="https://github.com/${REPO}/releases/download/${version}/dmtools.sh"
+    rm -f "$SCRIPT_PATH" 2>/dev/null
 
     # Download shell script - try multiple methods
+    # Method 1: Try redirect-based URL (standard GitHub release URL)
     # Method 1: Try redirect-based URL (standard GitHub release URL)
     if download_file "$script_url" "$SCRIPT_PATH" "DMTools shell script" "true"; then
         # Success with redirect URL

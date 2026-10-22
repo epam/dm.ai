@@ -48,6 +48,9 @@ jobs:
           chmod +x cli-release/install.sh
           [ -f cli-release/install ] && chmod +x cli-release/install || true
           chmod +x cli-release/dmtools.sh
+          bash -n cli-release/dmtools.sh
+          bash -n cli-release/install.sh
+          [ -f cli-release/install ] && bash -n cli-release/install || true
           
           # List prepared artifacts
           echo "CLI package prepared:"
