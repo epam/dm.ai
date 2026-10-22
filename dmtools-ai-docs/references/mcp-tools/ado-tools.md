@@ -48,7 +48,7 @@ const result = ado_get_work_item_comments(...);
 | `ado_get_pr_work_items` | Get work items linked to an Azure DevOps pull request. | `repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `ado_get_user_by_email` | Get user information by email address in Azure DevOps | `email` (string, **required**) |
 | `ado_get_work_item` | Get a specific Azure DevOps work item by ID with optional field filtering | `id` (string, **required**)<br>`fields` (array, optional) |
-| `ado_get_work_item_comments` | Get all comments for a work item | `id` (string, **required**)<br>`ticket` (object, **required**) |
+| `ado_get_work_item_comments` | Get all comments for a work item | `id` (string, **required**)<br>`ticket` (object, optional) |
 | `ado_link_work_items` | Link two work items with a relationship (e.g., Parent-Child, Related, Tested By) | `sourceId` (string, **required**)<br>`targetId` (string, **required**)<br>`relationship` (string, **required**) |
 | `ado_list_pipeline_runs` | List recent runs of a pipeline. Equivalent to github_list_workflow_runs. | `pipelineId` (number, **required**)<br>`top` (number, optional) |
 | `ado_list_pipelines` | List all pipelines defined in the ADO project. | None |
@@ -720,8 +720,8 @@ Get all comments for a work item
 - **`id`** (string) 🔴 Required
   - The work item ID
 
-- **`ticket`** (object) 🔴 Required
-  - Parameter ticket
+- **`ticket`** (object) ⚪ Optional
+  - Optional ticket object (unused, kept for TrackerClient interface compatibility)
 
 **Example:**
 ```bash
