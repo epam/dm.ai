@@ -57,7 +57,7 @@ jobs:
       # sm_github.json validation rules dispatch THIS repo's PR CI
       # (unit-tests.yml) on PR heads — without it the required context
       # never appears and approved PRs stall BLOCKED.
-      ci-workflow: @@CI_FILE@@
+      ci-workflow: '@@CI_FILE@@'
       # Factory-state snapshot → public prerelease asset (board: site/factory)
       # Manual ticks default to dry; cron ticks run live.
       dryRun: ${{ github.event.inputs.dryRun || 'false' }}

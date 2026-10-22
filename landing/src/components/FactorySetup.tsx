@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  PROVIDER_PRESETS, RUNNERS, SCM, TOOLCHAINS, keySlots, newEntry, createFactoryPr, defaults, detectCi, TOKEN_LINKS, checkToken, listBranches, listRepos, listSecretNames, putSecrets, requiredSecrets, renderFiles, validate,
-  type CiDetection, type TokenCheck, type CiWorkflow, type FactoryConfig, type ProviderEntry, type RepoSummary, type ToolchainId,
+  PROVIDER_PRESETS, QUALITY_PRESETS, RUNNERS, SCM, TOOLCHAINS, keySlots, newEntry, createFactoryPr, createRepo, defaults, detectCi, isCiEnabled, TOKEN_LINKS, checkToken, listBranches, listRepos, listSecretNames, putSecrets, requiredSecrets, renderFiles, validate,
+  type CiDetection, type TokenCheck, type CiWorkflow, type FactoryConfig, type ProviderEntry, type QualityPresetId, type RepoSummary, type ToolchainId,
 } from '../lib/factory';
 
 const CUSTOM = '__custom__';
@@ -30,7 +30,7 @@ function ProviderRow({ entry, onChange, onRemove }: { entry: ProviderEntry; onCh
       <input aria-label="API key secret name" title="Name of the repository secret that will hold this provider's API key" value={entry.keyEnv} placeholder="KEY_ENV_NAME"
         onChange={(e) => onChange({ ...entry, keyEnv: e.target.value.trim().toUpperCase() })} />
       {(['custom', 'dial', 'openrouter', 'codemie'].includes(entry.preset)) && (
-        <input aria-label="Base URL" className="factory__wide" value={entry.baseUrl} placeholder="https://…"
+        <input aria-label="Base URL" className="factory__wide" value={entry.baseUrl} placeholder="https://… or http://…"
           onChange={(e) => onChange({ ...entry, baseUrl: e.target.value.trim() })} />
       )}
       <p className="factory__keyhelp factory__wide">
@@ -101,13 +101,20 @@ export default function FactorySetup() {
     setTokenInfo(null); setTokenErr('');
     if (token.length < 20) return;
     const t = setTimeout(() => {
-      checkToken(token, errors.repo ? undefined : cfg.repo).then(setTokenInfo).catch((e) => setTokenErr((e as Error).message));
+      checkToken(token, errors.repo || cfg.createRepo ? undefined : cfg.repo).then(setTokenInfo).catch((e) => setTokenErr((e as Error).message));
     }, 400);
     return () => clearTimeout(t);
-  }, [token, cfg.repo]);
+  }, [token, cfg.repo, cfg.createRepo]);
 
   useEffect(() => {
-    if (!cfg.repo || errors.repo || token.length < 20) return;
+    if (!cfg.repo || errors.repo || token.length < 20 || cfg.createRepo) {
+      if (cfg.createRepo) {
+        setBranches([]);
+        setExisting([]);
+        setCi(null);
+      }
+      return;
+    }
     setBranches([]);
     setExisting([]);
     listSecretNames(token, cfg.repo).then(setExisting).catch(() => {});
@@ -117,10 +124,10 @@ export default function FactorySetup() {
     setCi(null);
     setGatesBusy(true);
     detectCi(token, cfg.repo)
-      .then((d) => { setCi(d); if (d.workflows[0]) applyWorkflow(d.workflows[0], d.required); })
+      .then((d) => { setCi(d); if (d.workflows[0] && isCiEnabled(cfg) && (!cfg.qualityPreset || cfg.qualityPreset === 'none')) applyWorkflow(d.workflows[0], d.required); })
       .catch(() => setCi({ required: [], workflows: [] }))
       .finally(() => setGatesBusy(false));
-  }, [cfg.repo, token]);
+  }, [cfg.repo, token, cfg.createRepo]);
 
   const filtered = useMemo(() => {
     const q = cfg.repo.toLowerCase();
@@ -133,7 +140,30 @@ export default function FactorySetup() {
     const req = required.filter((r) => w.jobs.some((j) => same(j, r)));
     // No protection rules: prefer jobs that look like aggregate gates, never matrix-expanded names.
     const gate = w.jobs.filter((j) => !j.includes('${{') && /gate|unit tests|^test$/i.test(j));
-    setCfg((c) => ({ ...c, ciFile: w.file, ciName: w.name, checks: req.length ? req : gate }));
+    setCfg((c) => ({ ...c, ciEnabled: true, qualityPreset: 'none', ciFile: w.file, ciName: w.name, checks: req.length ? req : gate }));
+  }
+
+  function selectQualityPreset(presetId: QualityPresetId) {
+    setCfg((c) => {
+      if (presetId === 'none') {
+        return { ...c, ciEnabled: true, qualityPreset: 'none' };
+      }
+      const preset = QUALITY_PRESETS.find((p) => p.id === presetId);
+      const nextTools = { ...c.toolchains };
+      if (preset?.toolchain && nextTools[preset.toolchain] === undefined) {
+        const tc = TOOLCHAINS.find((t) => t.id === preset.toolchain);
+        if (tc) nextTools[preset.toolchain] = tc.fallback;
+      }
+      return {
+        ...c,
+        ciEnabled: true,
+        qualityPreset: presetId,
+        ciFile: 'quality.yml',
+        ciName: 'Quality',
+        checks: ['quality'],
+        toolchains: nextTools,
+      };
+    });
   }
 
   function toggleCheck(name: string, on: boolean) {
@@ -162,18 +192,29 @@ export default function FactorySetup() {
     setBusy(true); setError(''); setLines([]);
     const log = (m: string) => setLines((l) => [...l, m]);
     try {
-      const wanted = Object.fromEntries(requiredSecrets(cfg).map((x) => [x.name, secretVals[x.name] ?? '']));
-      if (Object.values(wanted).some(Boolean) && tokenInfo?.admin === false) throw new Error(`Writing secrets needs admin rights on ${cfg.repo} — clear the secret fields or use an admin token.`);
-      await putSecrets(token, cfg.repo, wanted, log);
+      let targetCfg = cfg;
+      if (cfg.createRepo) {
+        const created = await createRepo(token, cfg.repo, cfg.repoPrivate !== false, tokenInfo?.login, log);
+        targetCfg = { ...cfg, repo: created.full_name, baseBranch: cfg.baseBranch || created.default_branch };
+      }
+      const wanted = Object.fromEntries(requiredSecrets(targetCfg).map((x) => [x.name, secretVals[x.name] ?? '']));
+      if (!cfg.createRepo && Object.values(wanted).some(Boolean) && tokenInfo?.admin === false) {
+        throw new Error(`Writing secrets needs admin rights on ${targetCfg.repo} — clear the secret fields or use an admin token.`);
+      }
+      await putSecrets(token, targetCfg.repo, wanted, log);
       setSecretVals({});
-      setPrUrl(await createFactoryPr(token, cfg, log));
+      setPrUrl(await createFactoryPr(token, targetCfg, log));
     }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
 
   const canSubmit = !busy && token.length > 20 && Object.keys(errors).length === 0
-    && !(tokenInfo?.missingScopes.length) && tokenInfo?.push !== false;
+    && !(tokenInfo?.missingScopes.length) && (cfg.createRepo || tokenInfo?.push !== false);
+
+  const ciMode: 'existing' | 'crap4' | 'none' = !isCiEnabled(cfg)
+    ? 'none'
+    : (cfg.qualityPreset && cfg.qualityPreset !== 'none' ? 'crap4' : 'existing');
 
   return (
     <div className="factory">
@@ -201,8 +242,8 @@ export default function FactorySetup() {
                 ? <li className="is-bad">Missing scopes: {tokenInfo.missingScopes.join(', ')} — regenerate with the button below</li>
                 : <li className="is-ok">Scopes: repo, workflow</li>)}
               {tokenInfo.kind === 'fine-grained' && <li className="is-warn">Fine-grained token: needs Contents, Pull requests, Workflows: write and Secrets: write on the repository — scopes cannot be verified, use a classic token if unsure</li>}
-              {tokenInfo.push === false && <li className="is-bad">No write access to {cfg.repo}</li>}
-              {tokenInfo.push && (tokenInfo.admin
+              {!cfg.createRepo && tokenInfo.push === false && <li className="is-bad">No write access to {cfg.repo}</li>}
+              {!cfg.createRepo && tokenInfo.push && (tokenInfo.admin
                 ? <li className="is-ok">Admin on {cfg.repo} — can create the PR and write secrets</li>
                 : <li className="is-warn">Write but not admin on {cfg.repo} — the PR works, secrets must be added by an admin</li>)}
             </ul>
@@ -213,21 +254,39 @@ export default function FactorySetup() {
 
         <div className="factory__field">
           <label htmlFor="f-repo">Repository</label>
+          <div className="factory__seg" role="radiogroup" aria-label="Repository mode">
+            {([
+              [false, 'Existing repository'],
+              [true, 'Create new (Greenfield)'],
+            ] as const).map(([isNew, label]) => (
+              <button key={String(isNew)} type="button" role="radio" aria-checked={Boolean(cfg.createRepo) === isNew}
+                className={Boolean(cfg.createRepo) === isNew ? 'is-on' : ''}
+                onClick={() => {
+                  setCfg((c) => ({
+                    ...c,
+                    createRepo: isNew,
+                    repo: isNew && !c.repo && tokenInfo?.login ? `${tokenInfo.login}/` : c.repo,
+                  }));
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="factory__combo">
-            <input id="f-repo" role="combobox" aria-expanded={comboOpen && filtered.length > 0} aria-controls="f-repo-list"
+            <input id="f-repo" role="combobox" aria-expanded={!cfg.createRepo && comboOpen && filtered.length > 0} aria-controls="f-repo-list"
               aria-autocomplete="list" autoComplete="off" value={cfg.repo} aria-invalid={!!show('repo')}
-              placeholder={repos.length ? 'Start typing to search your repositories…' : 'owner/name'}
+              placeholder={cfg.createRepo ? `${tokenInfo?.login || 'owner'}/new-repo-name` : (repos.length ? 'Start typing to search your repositories…' : 'owner/name')}
               onFocus={() => setComboOpen(true)}
               onBlur={() => { touch('repo'); setTimeout(() => setComboOpen(false), 120); }}
               onChange={(e) => { set('repo', e.target.value.trim()); setComboOpen(true); setActive(0); }}
               onKeyDown={(e) => {
-                if (!comboOpen || !filtered.length) return;
+                if (cfg.createRepo || !comboOpen || !filtered.length) return;
                 if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, filtered.length - 1)); }
                 else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
                 else if (e.key === 'Enter') { e.preventDefault(); chooseRepo(filtered[active].full_name); }
                 else if (e.key === 'Escape') setComboOpen(false);
               }} />
-            {comboOpen && filtered.length > 0 && (
+            {!cfg.createRepo && comboOpen && filtered.length > 0 && (
               <ul id="f-repo-list" role="listbox" className="factory__options">
                 {filtered.map((r, i) => (
                   <li key={r.full_name} role="option" aria-selected={i === active}
@@ -240,14 +299,30 @@ export default function FactorySetup() {
               </ul>
             )}
           </div>
+          {cfg.createRepo && (
+            <div className="factory__seg" role="radiogroup" aria-label="New repository visibility">
+              {([
+                [true, 'Private 🔒'],
+                [false, 'Public'],
+              ] as const).map(([priv, label]) => (
+                <button key={String(priv)} type="button" role="radio" aria-checked={(cfg.repoPrivate !== false) === priv}
+                  className={(cfg.repoPrivate !== false) === priv ? 'is-on' : ''}
+                  onClick={() => set('repoPrivate', priv)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <small className={show('repo') ? 'is-error' : ''}>
-            {show('repo') ?? (repos.length ? `${repos.length} repositories you can push to` : 'Enter a token to pick from your repositories, or type owner/name')}
+            {show('repo') ?? (cfg.createRepo
+              ? 'Creates the repository on GitHub (with an initial commit on main) under your account or organization before opening the factory PR'
+              : (repos.length ? `${repos.length} repositories you can push to` : 'Enter a token to pick from your repositories, or type owner/name'))}
           </small>
         </div>
 
         <div className="factory__field">
           <label htmlFor="f-base">Target branch</label>
-          {branches.length > 0 ? (
+          {branches.length > 0 && !cfg.createRepo ? (
             <select id="f-base" value={cfg.baseBranch} onChange={(e) => set('baseBranch', e.target.value)}>
               {branches.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
@@ -267,66 +342,135 @@ export default function FactorySetup() {
 
         <fieldset className="factory__group">
           <legend>CI &amp; quality checks</legend>
-          <small>
-            The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong> the CI workflow
-            on the PR head when validation is due and merges once the checks below are green — so the workflow needs a
-            <code> workflow_dispatch</code> trigger.
-          </small>
-          {gatesBusy && <small>Reading branch protection and workflows…</small>}
-          {ci && ci.workflows.length === 0 && <small>No CI workflow found in .github/workflows — fill in the fields manually.</small>}
-          {ci && ci.workflows.length > 0 && (
-            <div className="factory__gates" role="radiogroup" aria-label="CI workflow">
-              {ci.workflows.map((w) => {
-                const on = cfg.ciFile === w.file;
-                return (
-                  <button key={w.file} type="button" role="radio" aria-checked={on}
-                    className={`factory__gate ${on ? 'is-on' : ''}`} onClick={() => applyWorkflow(w, ci.required)}>
-                    <span className="factory__gateName">{w.name}<span className="factory__gateFile">{w.file}</span></span>
-                    <span className="factory__gateMeta">
-                      {w.dispatchable
-                        ? <em className="factory__badge">dispatchable</em>
-                        : <em className="factory__badge is-warn">add workflow_dispatch</em>}
-                      {w.onPullRequest && <span>also runs on pull_request — redundant under the factory</span>}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {ci && (() => {
-            const w = ci.workflows.find((x) => x.file === cfg.ciFile);
-            const names = uniqCi([...ci.required, ...cfg.checks, ...(w?.jobs ?? []).filter((j) => !j.includes('${{'))]);
-            return names.length > 0 && (
-              <div className="factory__tools">
-                <small>Checks the factory waits for before merging:</small>
-                {names.map((n) => (
-                  <label key={n} className="factory__check">
-                    <input type="checkbox" checked={cfg.checks.some((c) => same(c, n))} onChange={(e) => toggleCheck(n, e.target.checked)} />
-                    <code>{n}</code>
-                    {ci.required.some((r) => same(r, n)) && <em className="factory__badge">required</em>}
-                    {w && !w.jobs.some((j) => same(j, n)) && <span className="factory__gateMeta">not published by {cfg.ciFile}</span>}
-                  </label>
-                ))}
-              </div>
-            );
-          })()}
-          {([
-            ['ciFile', 'CI workflow file', 'Dispatched by the factory on PR heads'],
-            ['ciName', 'CI workflow name', 'The `name:` of that workflow — its completion wakes the factory'],
-          ] as const).map(([k, label, hint]) => (
-            <div className="factory__field" key={k}>
-              <label htmlFor={`f-${k}`}>{label}</label>
-              <input id={`f-${k}`} value={cfg[k]} aria-invalid={!!show(k)} onBlur={() => touch(k)}
-                onChange={(e) => set(k, e.target.value)} />
-              <small className={show(k) ? 'is-error' : ''}>{show(k) ?? hint}</small>
-            </div>
-          ))}
-          <div className="factory__field">
-            <label htmlFor="f-checks">Checks (comma-separated)</label>
-            <input id="f-checks" value={cfg.checks.join(', ')} aria-invalid={!!errors.checks}
-              onChange={(e) => set('checks', uniqCi(e.target.value.split(',').map((x) => x.trim()).filter(Boolean)))} />
-            <small className={errors.checks ? 'is-error' : ''}>{errors.checks ?? 'Must match the job names in branch protection'}</small>
+          <div className="factory__seg" role="radiogroup" aria-label="CI mode">
+            {([
+              ['existing', 'Existing CI'],
+              ['crap4', 'Generate crap4* quality gate'],
+              ['none', 'No CI workflow'],
+            ] as const).map(([m, label]) => (
+              <button key={m} type="button" role="radio" aria-checked={ciMode === m}
+                className={ciMode === m ? 'is-on' : ''}
+                onClick={() => {
+                  if (m === 'none') {
+                    setCfg((c) => ({ ...c, ciEnabled: false, qualityPreset: 'none' }));
+                  } else if (m === 'crap4') {
+                    selectQualityPreset(cfg.qualityPreset && cfg.qualityPreset !== 'none' ? cfg.qualityPreset : 'crap4js');
+                  } else {
+                    setCfg((c) => ({
+                      ...c,
+                      ciEnabled: true,
+                      qualityPreset: 'none',
+                      ciFile: c.ciFile || 'ci.yml',
+                      ciName: c.ciName || 'CI',
+                      checks: c.checks.length ? c.checks : ['test'],
+                    }));
+                  }
+                }}>
+                {label}
+              </button>
+            ))}
           </div>
+
+          {ciMode === 'none' && (
+            <small>
+              No CI gate: the factory will not dispatch or wait for a quality workflow before merging approved PRs. You can add a CI workflow later.
+            </small>
+          )}
+
+          {ciMode === 'crap4' && (
+            <>
+              <small>
+                Generates a ready-to-use <code>.github/workflows/quality.yml</code> powered by the <strong>crap4*</strong> CRAP metric (Change Risk Anti-Patterns = cyclomatic complexity + test coverage) for your tech stack.
+              </small>
+              <div className="factory__field">
+                <label htmlFor="f-quality-preset">Tech stack preset (crap4*)</label>
+                <select id="f-quality-preset" value={cfg.qualityPreset && cfg.qualityPreset !== 'none' ? cfg.qualityPreset : 'crap4js'}
+                  onChange={(e) => selectQualityPreset(e.target.value as QualityPresetId)}>
+                  {QUALITY_PRESETS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+                {(() => {
+                  const p = QUALITY_PRESETS.find((x) => x.id === cfg.qualityPreset);
+                  return p ? (
+                    <small>
+                      {p.description} — <a href={p.repoUrl} target="_blank" rel="noopener">{p.repoUrl.replace('https://github.com/', '')} ↗</a>
+                    </small>
+                  ) : null;
+                })()}
+              </div>
+            </>
+          )}
+
+          {ciMode === 'existing' && (
+            <>
+              <small>
+                The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong> the CI workflow
+                on the PR head when validation is due and merges once the checks below are green — so the workflow needs a
+                <code> workflow_dispatch</code> trigger.
+              </small>
+              {gatesBusy && <small>Reading branch protection and workflows…</small>}
+              {ci && ci.workflows.length === 0 && <small>No CI workflow found in .github/workflows — fill in the fields manually, generate a crap4* quality gate, or switch to “No CI workflow”.</small>}
+              {ci && ci.workflows.length > 0 && (
+                <div className="factory__gates" role="radiogroup" aria-label="CI workflow">
+                  {ci.workflows.map((w) => {
+                    const on = cfg.ciFile === w.file;
+                    return (
+                      <button key={w.file} type="button" role="radio" aria-checked={on}
+                        className={`factory__gate ${on ? 'is-on' : ''}`} onClick={() => applyWorkflow(w, ci.required)}>
+                        <span className="factory__gateName">{w.name}<span className="factory__gateFile">{w.file}</span></span>
+                        <span className="factory__gateMeta">
+                          {w.dispatchable
+                            ? <em className="factory__badge">dispatchable</em>
+                            : <em className="factory__badge is-warn">add workflow_dispatch</em>}
+                          {w.onPullRequest && <span>also runs on pull_request — redundant under the factory</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {ci && (() => {
+                const w = ci.workflows.find((x) => x.file === cfg.ciFile);
+                const names = uniqCi([...ci.required, ...cfg.checks, ...(w?.jobs ?? []).filter((j) => !j.includes('${{'))]);
+                return names.length > 0 && (
+                  <div className="factory__tools">
+                    <small>Checks the factory waits for before merging:</small>
+                    {names.map((n) => (
+                      <label key={n} className="factory__check">
+                        <input type="checkbox" checked={cfg.checks.some((c) => same(c, n))} onChange={(e) => toggleCheck(n, e.target.checked)} />
+                        <code>{n}</code>
+                        {ci.required.some((r) => same(r, n)) && <em className="factory__badge">required</em>}
+                        {w && !w.jobs.some((j) => same(j, n)) && <span className="factory__gateMeta">not published by {cfg.ciFile}</span>}
+                      </label>
+                    ))}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
+          {ciMode !== 'none' && (
+            <>
+              {([
+                ['ciFile', 'CI workflow file', 'Dispatched by the factory on PR heads'],
+                ['ciName', 'CI workflow name', 'The `name:` of that workflow — its completion wakes the factory'],
+              ] as const).map(([k, label, hint]) => (
+                <div className="factory__field" key={k}>
+                  <label htmlFor={`f-${k}`}>{label}</label>
+                  <input id={`f-${k}`} value={cfg[k]} aria-invalid={!!show(k)} onBlur={() => touch(k)}
+                    onChange={(e) => set(k, e.target.value)} />
+                  <small className={show(k) ? 'is-error' : ''}>{show(k) ?? hint}</small>
+                </div>
+              ))}
+              <div className="factory__field">
+                <label htmlFor="f-checks">Checks (comma-separated)</label>
+                <input id="f-checks" value={cfg.checks.join(', ')} aria-invalid={!!errors.checks}
+                  onChange={(e) => set('checks', uniqCi(e.target.value.split(',').map((x) => x.trim()).filter(Boolean)))} />
+                <small className={errors.checks ? 'is-error' : ''}>{errors.checks ?? 'Must match the job names in branch protection'}</small>
+              </div>
+            </>
+          )}
         </fieldset>
 
         <div className="factory__field">
@@ -457,7 +601,11 @@ export default function FactorySetup() {
         </fieldset>
 
         <button type="button" className="btn btn--solid" disabled={!canSubmit} onClick={submit}>
-          {busy ? 'Working…' : Object.values(secretVals).some(Boolean) ? 'Set secrets & create pull request' : 'Create pull request'}
+          {busy
+            ? 'Working…'
+            : cfg.createRepo
+              ? (Object.values(secretVals).some(Boolean) ? 'Create repository, set secrets & open PR' : 'Create repository & open pull request')
+              : (Object.values(secretVals).some(Boolean) ? 'Set secrets & create pull request' : 'Create pull request')}
         </button>
         {error && <p className="factory__error" role="alert">{error}</p>}
         {lines.length > 0 && <pre className="factory__log">{lines.join('\n')}</pre>}
