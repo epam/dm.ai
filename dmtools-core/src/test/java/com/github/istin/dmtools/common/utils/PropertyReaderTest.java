@@ -513,4 +513,116 @@ class PropertyReaderTest {
             PropertyReader.clearOverrides();
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Environment variable interpolation in overrides
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("resolveEnvVariables interpolates $ENV_VAR_DEV_QUEUE and ${ENV_VAR_REVIEW_QUEUE} from extraEnv / dmtools.env")
+    void testResolveEnvVariables_DevAndReviewQueueFromExtraEnv() {
+        String devQueueJson = "[{\"provider_type\":\"openai_codex\",\"model\":\"gpt-5.4\"}]";
+        String reviewQueueJson = "[{\"provider_type\":\"anthropic_claude_code\",\"model\":\"claude-opus-4-7\"}]";
+        Map<String, String> extraEnv = Map.of(
+                "ENV_VAR_DEV_QUEUE", devQueueJson,
+                "ENV_VAR_REVIEW_QUEUE", reviewQueueJson
+        );
+        Map<String, String> rawOverrides = new java.util.LinkedHashMap<>();
+        rawOverrides.put("DEFAULT_TRACKER", "github");
+        rawOverrides.put("AI_AGENT_PROVIDER", "fa");
+        rawOverrides.put("FA_PROVIDERS_QUEUE", "$ENV_VAR_DEV_QUEUE");
+        rawOverrides.put("FA_REVIEW_QUEUE", "${ENV_VAR_REVIEW_QUEUE}");
+
+        Map<String, String> resolved = PropertyReader.resolveEnvVariables(rawOverrides, extraEnv);
+
+        assertEquals("github", resolved.get("DEFAULT_TRACKER"));
+        assertEquals("fa", resolved.get("AI_AGENT_PROVIDER"));
+        assertEquals(devQueueJson, resolved.get("FA_PROVIDERS_QUEUE"));
+        assertEquals(reviewQueueJson, resolved.get("FA_REVIEW_QUEUE"));
+    }
+
+    @Test
+    @DisplayName("setOverrides interpolates $VAR and ${VAR} from dmtools.env properties and System.getenv")
+    void testSetOverrides_InterpolatesFromEnvFilePropsAndSystemEnv() throws Exception {
+        String devQueueJson = "[{\"provider_type\":\"google_gemini_cli\",\"api_key_env\":\"GEMINI_API_KEY\"}]";
+        java.util.Properties mockEnvProps = new java.util.Properties();
+        mockEnvProps.setProperty("ENV_VAR_DEV_QUEUE", devQueueJson);
+
+        java.lang.reflect.Field envFilePropsField = PropertyReader.class.getDeclaredField("envFileProps");
+        envFilePropsField.setAccessible(true);
+        envFilePropsField.set(null, mockEnvProps);
+
+        String systemPath = System.getenv("PATH");
+        Map<String, String> raw = new java.util.LinkedHashMap<>();
+        raw.put("FA_PROVIDERS_QUEUE", "$ENV_VAR_DEV_QUEUE");
+        if (systemPath != null) {
+            raw.put("COPIED_PATH", "${PATH}");
+        }
+
+        PropertyReader.setOverrides(raw);
+        try {
+            assertEquals(devQueueJson, new PropertyReader().getValue("FA_PROVIDERS_QUEUE"));
+            assertEquals(devQueueJson, PropertyReader.getOverrides().get("FA_PROVIDERS_QUEUE"));
+            if (systemPath != null) {
+                assertEquals(systemPath, new PropertyReader().getValue("COPIED_PATH"));
+            }
+        } finally {
+            PropertyReader.clearOverrides();
+        }
+    }
+
+    @Test
+    @DisplayName("resolveEnvVariables interpolates embedded $VAR and ${VAR} in a larger string")
+    void testResolveEnvVariables_EmbeddedVarInLargerString() {
+        Map<String, String> extraEnv = Map.of(
+                "HOST", "api.example.com",
+                "PORT", "8443"
+        );
+        Map<String, String> raw = Map.of(
+                "ENDPOINT", "https://${HOST}:$PORT/v1/chat"
+        );
+
+        Map<String, String> resolved = PropertyReader.resolveEnvVariables(raw, extraEnv);
+        assertEquals("https://api.example.com:8443/v1/chat", resolved.get("ENDPOINT"));
+    }
+
+    @Test
+    @DisplayName("resolveEnvVariables preserves unset $UNKNOWN_VAR and ${UNKNOWN_VAR}")
+    void testResolveEnvVariables_UnsetVarPreserved() {
+        Map<String, String> raw = Map.of(
+                "QUEUE_A", "$DEFINITELY_UNSET_VAR_XYZ_987654",
+                "QUEUE_B", "prefix-${DEFINITELY_UNSET_VAR_XYZ_987654}-suffix"
+        );
+
+        Map<String, String> resolved = PropertyReader.resolveEnvVariables(raw);
+        assertEquals("$DEFINITELY_UNSET_VAR_XYZ_987654", resolved.get("QUEUE_A"));
+        assertEquals("prefix-${DEFINITELY_UNSET_VAR_XYZ_987654}-suffix", resolved.get("QUEUE_B"));
+    }
+
+    @Test
+    @DisplayName("resolveEnvVariables leaves literal JSON strings without $ untouched")
+    void testResolveEnvVariables_LiteralJsonUntouched() {
+        String jsonQueue = "[{\"provider_type\":\"openai_codex\",\"model\":\"gpt-5.4\",\"api_key_env\":\"CODEX_API_KEY\"}]";
+        Map<String, String> raw = Map.of(
+                "FA_PROVIDERS_QUEUE", jsonQueue,
+                "DEFAULT_TRACKER", "github"
+        );
+
+        Map<String, String> resolved = PropertyReader.resolveEnvVariables(raw);
+        assertEquals(jsonQueue, resolved.get("FA_PROVIDERS_QUEUE"));
+        assertEquals("github", resolved.get("DEFAULT_TRACKER"));
+    }
+
+    @Test
+    @DisplayName("resolveEnvVariables handles self-reference FOO=$FOO without infinite loop and resolves sibling overrides")
+    void testResolveEnvVariables_SelfReferenceAndSiblingOverrides() {
+        Map<String, String> raw = new java.util.LinkedHashMap<>();
+        raw.put("FOO", "$FOO");
+        raw.put("BASE_MODEL", "gpt-5.4");
+        raw.put("DERIVED_MODEL", "${BASE_MODEL}-mini");
+
+        Map<String, String> resolved = PropertyReader.resolveEnvVariables(raw);
+        assertEquals("$FOO", resolved.get("FOO"));
+        assertEquals("gpt-5.4-mini", resolved.get("DERIVED_MODEL"));
+    }
 }
