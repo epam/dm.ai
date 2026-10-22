@@ -1556,4 +1556,44 @@ public class CliExecutionHelperTest {
         assertEquals(tempDir.resolve("input").resolve("gh-42"), created);
         assertTrue(Files.exists(created.resolve("request.md")));
     }
+
+    @Test
+    void testExecuteCliCommands_ResolvesEnvVariablesFromWorkingDirDmtoolsEnv() {
+        String queueJson = "[{\"provider_type\":\"openai_codex\",\"model\":\"gpt-5.4\"}]";
+        com.github.istin.dmtools.common.utils.PropertyReader.setOverrides(
+                Map.of(
+                        "DEFAULT_TRACKER", "github",
+                        "AI_AGENT_PROVIDER", "fa",
+                        "FA_PROVIDERS_QUEUE", "$ENV_VAR_DEV_QUEUE"
+                )
+        );
+        try {
+            String[] commands = {"echo test"};
+            try (MockedStatic<CommandLineUtils> mockedUtils = Mockito.mockStatic(CommandLineUtils.class)) {
+                mockedUtils.when(() -> CommandLineUtils.loadEnvironmentFromFile("dmtools.env"))
+                        .thenReturn(Map.of("ENV_VAR_DEV_QUEUE", queueJson));
+                mockedUtils.when(() -> CommandLineUtils.runCommand(
+                                anyString(), isNull(), any(Map.class), any(), anyBoolean(), any(), anyInt(), any(), any()))
+                        .thenReturn("test");
+
+                cliHelper.executeCliCommands(commands, null, "dmtools.env", null, false);
+
+                mockedUtils.verify(() -> CommandLineUtils.runCommand(
+                        anyString(),
+                        isNull(),
+                        argThat((Map<String, String> env) ->
+                                queueJson.equals(env.get("FA_PROVIDERS_QUEUE"))
+                                && "github".equals(env.get("DEFAULT_TRACKER"))
+                                && "fa".equals(env.get("AI_AGENT_PROVIDER"))
+                        ),
+                        any(),
+                        anyBoolean(),
+                        any(),
+                        anyInt()
+                ));
+            }
+        } finally {
+            com.github.istin.dmtools.common.utils.PropertyReader.clearOverrides();
+        }
+    }
 }

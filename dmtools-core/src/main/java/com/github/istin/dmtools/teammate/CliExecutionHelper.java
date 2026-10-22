@@ -603,9 +603,10 @@ public class CliExecutionHelper {
         // agent config actually reaches run-agent.sh.
         Map<String, String> jobOverrides = PropertyReader.getOverrides();
         if (!jobOverrides.isEmpty()) {
+            Map<String, String> resolvedOverrides = PropertyReader.resolveEnvVariables(jobOverrides, envVars);
             java.util.HashMap<String, String> merged = new java.util.HashMap<>(envVars);
             int skipped = 0;
-            for (Map.Entry<String, String> entry : jobOverrides.entrySet()) {
+            for (Map.Entry<String, String> entry : resolvedOverrides.entrySet()) {
                 String key = entry.getKey();
                 String value = entry.getValue();
                 if (key == null || key.isBlank() || value == null) {
@@ -616,7 +617,7 @@ public class CliExecutionHelper {
                 }
                 merged.put(key, value);
             }
-            int mergedCount = jobOverrides.size() - skipped;
+            int mergedCount = resolvedOverrides.size() - skipped;
             logger.info("Merging {} per-job envVariables override(s) into subprocess environment ({} skipped due to null/blank key or null value)",
                     mergedCount, skipped);
             envVars = merged;

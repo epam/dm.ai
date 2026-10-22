@@ -327,7 +327,7 @@ public class CliCommandExecutor {
         // main CLI agent subprocess (CliExecutionHelper already applies them there).
         Map<String, String> jobOverrides = PropertyReader.getOverrides();
         if (!jobOverrides.isEmpty()) {
-            envVars.putAll(jobOverrides);
+            envVars.putAll(PropertyReader.resolveEnvVariables(jobOverrides, envVars));
         }
 
         return envVars;
