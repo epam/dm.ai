@@ -4453,8 +4453,7 @@
       "category": "comment_management",
       "inputSchema": {
         "required": [
-          "id",
-          "ticket"
+          "id"
         ],
         "type": "object",
         "properties": {
@@ -4464,7 +4463,7 @@
           },
           "ticket": {
             "type": "object",
-            "description": "Parameter ticket"
+            "description": "Optional ticket object (unused, kept for TrackerClient interface compatibility)"
           }
         }
       },

@@ -110,6 +110,8 @@ class TrackerAliasParamContractTest {
         assertEquals(Set.of("id", "comment"), requiredNames("ado_add_work_item_comment"));
         assertEquals(Set.of("jql"), requiredNames("jira_search_by_jql"));
         assertEquals(Set.of("wiql"), requiredNames("ado_search_by_wiql"));
+        assertEquals(Set.of("key"), requiredNames("jira_get_comments"));
+        assertEquals(Set.of("id"), requiredNames("ado_get_work_item_comments"));
     }
 
     @Test

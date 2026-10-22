@@ -455,6 +455,22 @@ public class AzureDevOpsClientTest {
     }
 
     @Test
+    void testGetComments_mcpToolExecutorAllowsOmittedTicketParameter() throws Exception {
+        client.setMockResponse("/comments", "{\"comments\":[{\"text\":\"from mcp\"}]}");
+
+        Map<String, Object> args = Map.of("id", "123");
+        Map<String, Object> clients = Map.of("ado", client);
+
+        Object result = com.github.istin.dmtools.mcp.generated.MCPToolExecutor.executeTool(
+                "ado_get_work_item_comments", args, clients);
+
+        assertInstanceOf(List.class, result);
+        List<?> comments = (List<?>) result;
+        assertEquals(1, comments.size());
+        assertEquals("from mcp", ((IComment) comments.get(0)).getBody());
+    }
+
+    @Test
     void testPostComment_postsTextBody() throws IOException {
         client.setMockPostResponse("/comments", "{\"id\":1}");
 
