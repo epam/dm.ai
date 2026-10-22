@@ -951,7 +951,7 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     public GenericRequest comment(final String key, ITicket ticket) throws IOException {
         GenericRequest genericRequest = new GenericRequest(this, path("issue/" + key + "/comment"));
-        clearRequestIfExpired(genericRequest, ticket == null ? null : ticket.getFields().getUpdatedAsMillis());
+        clearRequestIfExpired(genericRequest, (ticket == null || ticket.getFields() == null) ? null : ticket.getFields().getUpdatedAsMillis());
         return genericRequest;
     }
 
