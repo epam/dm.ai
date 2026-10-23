@@ -568,6 +568,26 @@ class AgentPackResolverTest {
         assertEquals("literal role", params.getJSONArray("cliPrompts").getString(1));
     }
 
+    @Test
+    void rewritePaths_structuredCliPromptSectionPromptAndCondition() throws IOException {
+        publishPack(AGENT, VERSION, buildPack(Map.of(
+                "demo.json", "{}",
+                "js/conditions/cond.js", "function action() { return true; }\n",
+                "prompts/cg.md", "# cg\n"), AGENT, VERSION, "demo.json"));
+        ResolvedPack pack = resolver().resolve("demo@latest", null);
+
+        JSONObject config = new JSONObject("{\"params\":{" +
+                "\"cliPrompts\": [{\"id\": \"codegraph\", \"prompt\": \"./agents/prompts/cg.md\", \"condition\": \"agents/js/conditions/cond.js\"}]" +
+                "}}");
+        resolver().rewritePathsToPackRoot(config, pack.getPackRoot());
+
+        JSONObject section = config.getJSONObject("params").getJSONArray("cliPrompts").getJSONObject(0);
+        assertEquals(pack.getPackRoot().resolve("prompts/cg.md").toAbsolutePath().normalize().toString(),
+                section.getString("prompt"));
+        assertEquals(pack.getPackRoot().resolve("js/conditions/cond.js").toAbsolutePath().normalize().toString(),
+                section.getString("condition"));
+    }
+
     // ------------------------------------------------------------------
     // Raw-zip helpers
     // ------------------------------------------------------------------

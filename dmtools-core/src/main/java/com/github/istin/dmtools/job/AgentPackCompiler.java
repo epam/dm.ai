@@ -219,13 +219,32 @@ public class AgentPackCompiler {
         // Single-path keys can appear at top level or under params/metadata/customParams.
         collectSinglePathKeys(config, closure, visitedJs);
 
-        // cliPrompts: mixed array of literal role strings and file paths.
+        // cliPrompts: mixed array of literal role strings, file paths, and section objects.
         JSONArray cliPrompts = findArray(config, "cliPrompts");
         if (cliPrompts != null) {
             for (int i = 0; i < cliPrompts.length(); i++) {
                 Object item = cliPrompts.get(i);
                 if (item instanceof String) {
                     maybeAddPathReference((String) item, closure, visitedJs);
+                } else if (item instanceof JSONObject) {
+                    JSONObject section = (JSONObject) item;
+                    String singlePrompt = section.optString("prompt", null);
+                    if (singlePrompt != null && !singlePrompt.isEmpty()) {
+                        maybeAddPathReference(singlePrompt, closure, visitedJs);
+                    }
+                    JSONArray prompts = section.optJSONArray("prompts");
+                    if (prompts != null) {
+                        for (int j = 0; j < prompts.length(); j++) {
+                            Object p = prompts.get(j);
+                            if (p instanceof String) {
+                                maybeAddPathReference((String) p, closure, visitedJs);
+                            }
+                        }
+                    }
+                    String condition = section.optString("condition", null);
+                    if (condition != null && !condition.isEmpty()) {
+                        addPathReference(condition, closure, visitedJs);
+                    }
                 }
             }
         }

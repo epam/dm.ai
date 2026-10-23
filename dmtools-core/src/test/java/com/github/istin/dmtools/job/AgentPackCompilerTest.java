@@ -277,4 +277,29 @@ public class AgentPackCompilerTest {
         AgentPackCompiler.PackResult result = compiler.compile(entry, "1.0.0", "abc", outDir);
         assertNotNull(result.zipFile);
     }
+
+    @Test
+    public void testStructuredConditionalCliPromptsIncluded() throws IOException {
+        write("prompts/codegraph_tools.md", "# CodeGraph\n");
+        write("js/conditions/isCodeGraphAvailable.js", "function action() { return true; }\n");
+        File entry = write("with_conditional_prompt.json", "{\n" +
+                "  \"name\": \"Teammate\",\n" +
+                "  \"params\": {\n" +
+                "    \"cliPrompts\": [\n" +
+                "      \"Role\",\n" +
+                "      {\n" +
+                "        \"id\": \"codegraph\",\n" +
+                "        \"prompt\": \"./agents/prompts/codegraph_tools.md\",\n" +
+                "        \"condition\": \"agents/js/conditions/isCodeGraphAvailable.js\"\n" +
+                "      }\n" +
+                "    ]\n" +
+                "  }\n" +
+                "}");
+        AgentPackCompiler compiler = new AgentPackCompiler(agentRoot);
+        AgentPackCompiler.PackResult result = compiler.compile(entry, "1.0.0", "abc", outDir);
+
+        Map<String, byte[]> zip = readZip(result.zipFile);
+        assertTrue(zip.containsKey("prompts/codegraph_tools.md"));
+        assertTrue(zip.containsKey("js/conditions/isCodeGraphAvailable.js"));
+    }
 }
