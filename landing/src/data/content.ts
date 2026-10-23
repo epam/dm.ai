@@ -7,6 +7,8 @@
  * separately they drift, and nothing catches it.
  */
 
+import releases from './releases.json';
+
 const rawBase = import.meta.env.BASE_URL;
 
 /** The site's own root, base path included. Absolute URLs are built from it. */
@@ -25,7 +27,7 @@ const RELEASE = `${REPO}/releases/latest/download`;
  * Feeds sitemap.xml, `dateModified` in the structured data, and the footer line.
  * Bump it when the page's content changes.
  */
-export const lastModified = '2026-08-02';
+export const lastModified = releases[0]?.date ?? '2026-08-02';
 
 /**
  * The publisher as an entity: `sameAs` ties the page to the company an assistant
@@ -79,9 +81,9 @@ export const meta = {
   mark: 'assets/favicon.svg',
 } as const;
 
-/** softwareVersion tracks gradle.properties — the one field that goes stale silently. */
+/** softwareVersion tracks the latest entry in releases.json so it updates automatically on release. */
 export const software = {
-  version: '1.7.238',
+  version: (releases[0]?.version ?? 'v1.7.238').replace(/^v/, ''),
   description:
     'Enterprise AI-factory orchestrator for automating delivery workflows across trackers, source control, documentation, design systems, AI providers, and CI/CD.',
   requirements: 'Java 17 or newer',

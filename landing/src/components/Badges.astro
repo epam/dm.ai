@@ -1,8 +1,11 @@
 ---
+import releases from '../data/releases.json';
+
 const REPO = 'https://github.com/epam/dm.ai';
+const latestRelease = releases[0]?.version ?? 'latest';
 
 const badges = [
-  { label: 'release', value: 'v1.7.239', href: `${REPO}/releases/latest` },
+  { label: 'release', value: latestRelease, href: `${REPO}/releases/latest` },
   { label: 'coverage', value: '82%', href: `${REPO}/actions/workflows/coverage.yml` },
   { label: 'branches', value: '70%', href: `${REPO}/actions/workflows/coverage.yml` },
   { label: 'license', value: 'Apache 2.0', href: `${REPO}/blob/main/LICENSE` },
