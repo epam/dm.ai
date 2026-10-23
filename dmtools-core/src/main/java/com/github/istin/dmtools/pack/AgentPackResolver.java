@@ -104,6 +104,8 @@ public class AgentPackResolver {
         PATH_KEYS.add("preAction");
         PATH_KEYS.add("postAction");
         PATH_KEYS.add("descriptionPath");
+        PATH_KEYS.add("prompt");
+        PATH_KEYS.add("condition");
     }
 
     private final Path packsRoot;

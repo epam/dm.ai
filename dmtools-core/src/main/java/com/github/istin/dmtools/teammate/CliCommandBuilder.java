@@ -159,13 +159,34 @@ public class CliCommandBuilder {
     public String[] buildCommands(String[] cliCommands, String cliPrompt, CliPromptsConfig cliPrompts,
                                    Map<String, String[]> cliPromptsByTracker,
                                    Map<String, Object> customParams) throws IOException {
+        return buildCommands(cliCommands, cliPrompt, cliPrompts, cliPromptsByTracker, customParams, null);
+    }
+
+    /**
+     * Builds the final CLI commands for execution using the structured prompt config and an
+     * optional condition evaluator for conditional sections.
+     *
+     * @param cliCommands        base CLI commands from the job config
+     * @param cliPrompt          single base CLI prompt (may be null)
+     * @param cliPrompts         structured CLI prompts config (may be null)
+     * @param cliPromptsByTracker tracker-specific prompts (may be null)
+     * @param customParams       job custom params (may be null); used to detect
+     *                           {@code contentOutput.target = "confluence"} routing
+     * @param conditionEvaluator predicate invoked for each conditional section's script path;
+     *                           when null, all sections are included unconditionally
+     * @return commands with aggregated prompt appended, or original commands if no prompt provided
+     */
+    public String[] buildCommands(String[] cliCommands, String cliPrompt, CliPromptsConfig cliPrompts,
+                                   Map<String, String[]> cliPromptsByTracker,
+                                   Map<String, Object> customParams,
+                                   java.util.function.Predicate<String> conditionEvaluator) throws IOException {
         if (cliCommands == null || cliCommands.length == 0) {
             return cliCommands;
         }
 
         String trackerType = configuration != null ? configuration.getDefaultTracker() : null;
         trackerType = resolvePromptTrackerType(cliPromptsByTracker, trackerType, customParams);
-        String[] flatPrompts = cliPrompts != null ? cliPrompts.toStringArray() : null;
+        String[] flatPrompts = cliPrompts != null ? cliPrompts.toStringArray(conditionEvaluator) : null;
         String[] mergedCliPrompts = resolveCliPrompts(flatPrompts, cliPromptsByTracker, trackerType);
         if (mergedCliPrompts != flatPrompts) {
             logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
