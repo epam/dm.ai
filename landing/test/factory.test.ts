@@ -231,3 +231,45 @@ describe('Issue #747 (c) — Default crap4* quality workflows for specific tech 
     });
   }
 });
+describe('Issue #758 — Quality workflow in an empty repository', () => {
+  it('crap4py skips gracefully when no Python files or no tests are collected (pytest exit code 5) and when coverage.json is missing', () => {
+    const wf = renderQualityWorkflow(validConfig({ ciEnabled: true, qualityPreset: 'crap4py' }))!;
+    assert.match(wf, /No Python files found — skipping test and coverage execution\./);
+    assert.match(wf, /if \[ \$rc -eq 5 \]; then/);
+    assert.match(wf, /No tests collected \(pytest exit code 5\) — skipping coverage report and CRAP analysis\./);
+    assert.match(wf, /if \[ ! -f coverage\.json \]; then/);
+    assert.match(wf, /No coverage\.json found — skipping CRAP analysis\./);
+  });
+
+  it('crap4js avoids hard cache: npm failure and skips gracefully when package.json, tests, or coverage data are missing', () => {
+    const wf = renderQualityWorkflow(validConfig({ ciEnabled: true, qualityPreset: 'crap4js' }))!;
+    assert.doesNotMatch(wf, /cache:\s*npm/);
+    assert.match(wf, /No package\.json found — skipping dependency install\./);
+    assert.match(wf, /No tests configured or no package\.json found — skipping test and coverage execution\./);
+    assert.match(wf, /if \[ ! -f coverage\/coverage-final\.json \]; then/);
+    assert.match(wf, /No coverage data found — skipping CRAP analysis\./);
+  });
+
+  it('crap4dart skips gracefully when pubspec.yaml, test/*_test.dart, or coverage/lcov.info are missing', () => {
+    const wf = renderQualityWorkflow(validConfig({ ciEnabled: true, qualityPreset: 'crap4dart' }))!;
+    assert.match(wf, /if \[ ! -f pubspec\.yaml \]; then/);
+    assert.match(wf, /No pubspec\.yaml found — skipping Dart quality checks\./);
+    assert.match(wf, /No Dart tests found in test\/ — skipping test coverage and CRAP analysis\./);
+    assert.match(wf, /if \[ ! -f coverage\/lcov\.info \]; then/);
+    assert.match(wf, /No coverage\/lcov\.info found — skipping CRAP analysis\./);
+  });
+
+  it('crap4java skips gracefully when no Java build file or source files exist', () => {
+    const wf = renderQualityWorkflow(validConfig({ ciEnabled: true, qualityPreset: 'crap4java' }))!;
+    assert.match(wf, /No Java build file or source files found — skipping Java build and CRAP analysis\./);
+  });
+
+  it('crap4go skips gracefully when go.mod, Go sources, test files, or coverage.out are missing', () => {
+    const wf = renderQualityWorkflow(validConfig({ ciEnabled: true, qualityPreset: 'crap4go' }))!;
+    assert.match(wf, /No Go source files found — skipping format check\./);
+    assert.match(wf, /No go\.mod or Go source files found — skipping Go test coverage and CRAP analysis\./);
+    assert.match(wf, /No Go test files found — skipping coverage and CRAP analysis\./);
+    assert.match(wf, /if \[ ! -f coverage\.out \]; then/);
+    assert.match(wf, /No coverage\.out found — skipping CRAP analysis\./);
+  });
+});
