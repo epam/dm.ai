@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  PROVIDER_PRESETS, QUALITY_PRESETS, RUNNERS, SCM, TOOLCHAINS, keySlots, newEntry, createFactoryPr, createRepo, defaults, detectCi, isCiEnabled, TOKEN_LINKS, checkToken, listBranches, listRepos, listSecretNames, putSecrets, requiredSecrets, renderFiles, validate,
+  FACTORY_LABELS, PROVIDER_PRESETS, QUALITY_PRESETS, RUNNERS, SCM, TOOLCHAINS, keySlots, newEntry, createFactoryPr, createRepo, defaults, detectCi, ensureLabels, isCiEnabled, listLabels, TOKEN_LINKS, checkToken, listBranches, listRepos, listSecretNames, putSecrets, requiredSecrets, renderFiles, validate,
   type CiDetection, type TokenCheck, type CiWorkflow, type FactoryConfig, type ProviderEntry, type QualityPresetId, type RepoSummary, type ToolchainId,
 } from '../lib/factory';
 
@@ -72,6 +72,8 @@ export default function FactorySetup() {
   const [secretVals, setSecretVals] = useState<Record<string, string>>({});
   const [existing, setExisting] = useState<string[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
+  const [existingLabels, setExistingLabels] = useState<string[]>([]);
+  const [labelsBusy, setLabelsBusy] = useState(false);
   const [ci, setCi] = useState<CiDetection | null>(null);
   const [gatesBusy, setGatesBusy] = useState(false);
   const [runnerMode, setRunnerMode] = useState(defaults.runner);
@@ -112,12 +114,15 @@ export default function FactorySetup() {
         setBranches([]);
         setExisting([]);
         setCi(null);
+        setExistingLabels([]);
       }
       return;
     }
     setBranches([]);
     setExisting([]);
     listSecretNames(token, cfg.repo).then(setExisting).catch(() => {});
+    setExistingLabels([]);
+    listLabels(token, cfg.repo).then(setExistingLabels).catch(() => {});
     listBranches(token, cfg.repo)
       .then((b) => { setBranches(b.names); set('baseBranch', b.names.includes('main') ? 'main' : b.defaultBranch); })
       .catch(() => {});
@@ -203,6 +208,12 @@ export default function FactorySetup() {
       }
       await putSecrets(token, targetCfg.repo, wanted, log);
       setSecretVals({});
+      if (targetCfg.createLabels !== false) {
+        await ensureLabels(token, targetCfg.repo, log);
+        if (!cfg.createRepo) {
+          listLabels(token, targetCfg.repo).then(setExistingLabels).catch(() => {});
+        }
+      }
       setPrUrl(await createFactoryPr(token, targetCfg, log));
     }
     catch (e) { setError((e as Error).message); }
@@ -598,6 +609,48 @@ export default function FactorySetup() {
             </div>
           ))}
           <small>Writing secrets needs a token with admin access to the repository (classic <code>repo</code> scope, or the fine-grained “Secrets: write” permission).</small>
+        </fieldset>
+
+        <fieldset className="factory__group">
+          <legend>Repository labels</legend>
+          <small>Required state-machine and trigger labels used by the DMTools factory workflows.</small>
+          <div className="factory__tools">
+            {FACTORY_LABELS.map((l) => {
+              const has = existingLabels.some((x) => same(x, l.name));
+              return (
+                <span key={l.name} className="factory__check" title={l.description}>
+                  <code>{l.name}</code>
+                  {!cfg.createRepo && existingLabels.length > 0 && (
+                    has
+                      ? <em className="factory__badge">exists</em>
+                      : <em className="factory__badge is-warn">missing</em>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+          <label className="factory__check">
+            <input type="checkbox" checked={cfg.createLabels !== false}
+              onChange={(e) => set('createLabels', e.target.checked)} />
+            Create required labels automatically during setup
+          </label>
+          <button type="button" className="btn btn--ghost factory__mini"
+            disabled={Boolean(cfg.createRepo) || Boolean(errors.repo) || token.length <= 20 || tokenInfo?.push === false || labelsBusy}
+            onClick={async () => {
+              setLabelsBusy(true); setError('');
+              const log = (m: string) => setLines((l) => [...l, m]);
+              try {
+                await ensureLabels(token, cfg.repo, log);
+                const updated = await listLabels(token, cfg.repo);
+                setExistingLabels(updated);
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setLabelsBusy(false);
+              }
+            }}>
+            {labelsBusy ? 'Creating labels…' : 'Create missing labels now'}
+          </button>
         </fieldset>
 
         <button type="button" className="btn btn--solid" disabled={!canSubmit} onClick={submit}>

@@ -27,10 +27,32 @@ export const QUALITY_PRESETS: QualityPreset[] = [
   { id: 'crap4go', label: 'Go (crap4go)', repoUrl: 'https://github.com/vabhzw17eg2qu4m9-bit/crap4go', toolchain: 'go', description: 'gofmt + go vet + go test coverprofile + vabhzw17eg2qu4m9-bit/crap4go CRAP gate' },
 ];
 
+export interface FactoryLabel {
+  name: string;
+  color: string;
+  description: string;
+}
+
+export const FACTORY_LABELS: FactoryLabel[] = [
+  { name: 'agent:dev', color: '1d76db', description: 'Trigger AI Teammate development leg' },
+  { name: 'agent:review', color: '0e8a16', description: 'Trigger AI Teammate PR review leg' },
+  { name: 'agent:rework', color: 'd93f0b', description: 'Trigger AI Teammate rework leg' },
+  { name: 'agent:skip', color: 'e4e669', description: 'Skip AI Teammate processing' },
+  { name: 'ai_developed', color: '5319e7', description: 'Development leg completed and PR opened' },
+  { name: 'ai_validating', color: 'fbca04', description: 'Validation CI in progress on PR head' },
+  { name: 'ai_validated', color: '0e8a16', description: 'Validation CI passed on PR head' },
+  { name: 'ai_pr_reviewed', color: '0052cc', description: 'AI review completed on PR' },
+  { name: 'pr_approved', color: '2cbe4e', description: 'PR approved by review leg and armed for merge' },
+  { name: 'validation_failed', color: 'b60205', description: 'Validation CI failed on PR head' },
+  { name: 'blocked', color: 'd93f0b', description: 'Freeze switch — machine skips this item until removed' },
+  { name: 'needs-human', color: 'b60205', description: 'Escalated to human operator' },
+];
+
 export interface FactoryConfig {
   repo: string; // owner/name
   createRepo?: boolean; // Greenfield: create the repository before opening the factory PR
   repoPrivate?: boolean; // Greenfield repository visibility (default true = private)
+  createLabels?: boolean; // default true: automatically create required factory labels
   machine: string; // GitHub login of the AI teammate
   ciEnabled?: boolean; // default true; false skips CI / quality gate
   qualityPreset?: QualityPresetId; // default 'none'; when set to crap4*, generates .github/workflows/quality.yml
@@ -131,6 +153,7 @@ export const defaults: FactoryConfig = {
   repo: '',
   createRepo: false,
   repoPrivate: true,
+  createLabels: true,
   machine: 'ai-teammate',
   ciEnabled: true,
   qualityPreset: 'none',
@@ -456,7 +479,9 @@ export function prBody(c: FactoryConfig): string {
 - [ ] Secret \`SOURCE_GITHUB_TOKEN\` (PAT, repo scope)
 ${mergeChecklist(c)}${keySlots(c).map((k) => `- [ ] Secret \`${k}\` (AI provider key)`).join('\n')}
 - [ ] \`${c.machine}\` is a collaborator with write access
-- [ ] Labels: agent:dev, agent:review, agent:rework, agent:skip, ai_validating, ai_validated, ai_pr_reviewed, pr_approved, blocked
+${c.createLabels !== false
+  ? `- [x] Labels: ${FACTORY_LABELS.map((l) => l.name).join(', ')} (auto-created during setup)`
+  : `- [ ] Labels: ${FACTORY_LABELS.map((l) => l.name).join(', ')}`}
 ${ciChecklist(c)}- [ ] Optional repo variables \`AGENTS_VERSION\` / \`DMTOOLS_VERSION\` (default \`latest\`) — pin agent packs / CLI to a release tag
 
 Smoke test: assign an issue to \`${c.machine}\` or dispatch **AI Teammate** with leg=dev.`;
@@ -500,6 +525,46 @@ export async function createRepo(
   });
   log(`created ${created.full_name} (${isPrivate ? 'private' : 'public'}, branch ${created.default_branch})`);
   return created;
+}
+
+/** Fetches existing label names on a repository. */
+export async function listLabels(token: string, repo: string): Promise<string[]> {
+  const r = await gh<{ name: string }[]>(token, `/repos/${repo}/labels?per_page=100`);
+  return r.map((x) => x.name);
+}
+
+/** Ensures all required FACTORY_LABELS exist on the repository, creating any missing ones. */
+export async function ensureLabels(
+  token: string,
+  repo: string,
+  log: (m: string) => void = () => {},
+): Promise<{ created: string[]; existing: string[] }> {
+  const current = await listLabels(token, repo);
+  const currentLower = new Set(current.map((n) => n.toLowerCase()));
+  const created: string[] = [];
+  const existing: string[] = [];
+  for (const l of FACTORY_LABELS) {
+    if (currentLower.has(l.name.toLowerCase())) {
+      existing.push(l.name);
+      continue;
+    }
+    try {
+      await gh(token, `/repos/${repo}/labels`, {
+        method: 'POST',
+        body: JSON.stringify({ name: l.name, color: l.color, description: l.description }),
+      });
+      created.push(l.name);
+    } catch (e) {
+      const msg = (e as Error).message || '';
+      if (msg.includes('GitHub 422') || msg.includes('already_exists')) {
+        existing.push(l.name);
+      } else {
+        throw e;
+      }
+    }
+  }
+  log(created.length ? `labels created: ${created.join(', ')}` : 'labels: all required labels already exist');
+  return { created, existing };
 }
 
 export async function createFactoryPr(

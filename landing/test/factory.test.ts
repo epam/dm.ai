@@ -10,6 +10,9 @@ import {
   renderQualityWorkflow,
   prBody,
   createRepo,
+  ensureLabels,
+  listLabels,
+  FACTORY_LABELS,
   QUALITY_PRESETS,
   TOOLCHAINS,
   isCiEnabled,
@@ -230,4 +233,111 @@ describe('Issue #747 (c) — Default crap4* quality workflows for specific tech 
       assert.match(body, new RegExp(`Generated \`quality\\.yml\` \\(${preset.id}\\)`));
     });
   }
+});
+
+describe('Issue #757 — Create required labels automatically / on demand', () => {
+  const origFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  it('FACTORY_LABELS contains all required factory labels', () => {
+    const names = FACTORY_LABELS.map((l) => l.name);
+    assert.deepEqual(names, [
+      'agent:dev',
+      'agent:review',
+      'agent:rework',
+      'agent:skip',
+      'ai_developed',
+      'ai_validating',
+      'ai_validated',
+      'ai_pr_reviewed',
+      'pr_approved',
+      'validation_failed',
+      'blocked',
+      'needs-human',
+    ]);
+    for (const l of FACTORY_LABELS) {
+      assert.match(l.color, /^[0-9a-f]{6}$/i);
+      assert.ok(l.description.length > 0);
+    }
+  });
+
+  it('ensureLabels fetches existing labels and only POSTs missing labels (case-insensitive)', async () => {
+    const calls: { url: string; method: string; body?: unknown }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, method, body });
+      if (method === 'GET' && url === 'https://api.github.com/repos/acme/demo/labels?per_page=100') {
+        return new Response(
+          JSON.stringify([
+            { name: 'AGENT:DEV' },
+            { name: 'blocked' },
+            { name: 'bug' },
+          ]),
+          { status: 200 },
+        );
+      }
+      if (method === 'POST' && url === 'https://api.github.com/repos/acme/demo/labels') {
+        return new Response(JSON.stringify(body), { status: 201 });
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+
+    const logs: string[] = [];
+    const res = await ensureLabels('ghp_testtoken123456789012345', 'acme/demo', (m) => logs.push(m));
+
+    assert.deepEqual(res.existing, ['agent:dev', 'blocked']);
+    assert.equal(res.created.length, FACTORY_LABELS.length - 2);
+    assert.ok(!res.created.includes('agent:dev'));
+    assert.ok(!res.created.includes('blocked'));
+    assert.ok(res.created.includes('agent:review'));
+    assert.ok(res.created.includes('needs-human'));
+
+    const posts = calls.filter((c) => c.method === 'POST');
+    assert.equal(posts.length, FACTORY_LABELS.length - 2);
+    assert.ok(logs.some((l) => l.startsWith('labels created: ') && l.includes('agent:review')));
+  });
+
+  it('ensureLabels makes 0 POST requests when all required labels already exist', async () => {
+    const calls: { url: string; method: string }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      calls.push({ url, method });
+      return new Response(
+        JSON.stringify(FACTORY_LABELS.map((l) => ({ name: l.name }))),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    const logs: string[] = [];
+    const existingList = await listLabels('ghp_testtoken123456789012345', 'acme/demo');
+    assert.equal(existingList.length, FACTORY_LABELS.length);
+
+    calls.length = 0;
+    const res = await ensureLabels('ghp_testtoken123456789012345', 'acme/demo', (m) => logs.push(m));
+    assert.deepEqual(res.created, []);
+    assert.equal(res.existing.length, FACTORY_LABELS.length);
+    assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
+    assert.deepEqual(logs, ['labels: all required labels already exist']);
+  });
+
+  it('prBody reflects label creation status (createLabels: true vs false)', () => {
+    const bodyAuto = prBody(validConfig({ createLabels: true }));
+    assert.match(
+      bodyAuto,
+      /- \[x\] Labels: agent:dev, agent:review, agent:rework, agent:skip, ai_developed, ai_validating, ai_validated, ai_pr_reviewed, pr_approved, validation_failed, blocked, needs-human \(auto-created during setup\)/,
+    );
+
+    const bodyManual = prBody(validConfig({ createLabels: false }));
+    assert.match(
+      bodyManual,
+      /- \[ \] Labels: agent:dev, agent:review, agent:rework, agent:skip, ai_developed, ai_validating, ai_validated, ai_pr_reviewed, pr_approved, validation_failed, blocked, needs-human/,
+    );
+    assert.doesNotMatch(bodyManual, /auto-created during setup/);
+  });
 });
