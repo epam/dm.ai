@@ -338,4 +338,45 @@ class TeammateCliPromptsTest {
         CliPromptsConfig merged = base.getCliPromptsConfig().merge(override.getCliPromptsConfig());
         assertArrayEquals(new String[]{"a", "in1", "in2", "b", "c"}, merged.toStringArray());
     }
+
+    @Test
+    void testCliCommandBuilder_EvaluatesConditionalCliPromptSections() throws Exception {
+        CliPromptsConfig config = new Gson().fromJson(
+                "[\"base prompt\", " +
+                "{\"id\": \"codegraph\", \"prompt\": \"codegraph instructions\", \"condition\": \"isCodeGraph.js\"}, " +
+                "{\"id\": \"disabled\", \"prompt\": \"disabled instructions\", \"condition\": \"isDisabled.js\"}, " +
+                "\"tail prompt\"]",
+                CliPromptsConfig.class);
+
+        CliCommandBuilder builder = new CliCommandBuilder(processor, null);
+        String[] cmdsTrue = builder.buildCommands(
+                new String[]{"echo"},
+                null,
+                config,
+                null,
+                null,
+                cond -> "isCodeGraph.js".equals(cond));
+        assertEquals(1, cmdsTrue.length);
+        String promptFileTrue = cmdsTrue[0].substring(cmdsTrue[0].indexOf('"') + 1, cmdsTrue[0].lastIndexOf('"'));
+        String contentTrue = Files.readString(Path.of(promptFileTrue));
+        assertTrue(contentTrue.contains("base prompt"));
+        assertTrue(contentTrue.contains("codegraph instructions"));
+        assertFalse(contentTrue.contains("disabled instructions"));
+        assertTrue(contentTrue.contains("tail prompt"));
+
+        String[] cmdsFalse = builder.buildCommands(
+                new String[]{"echo"},
+                null,
+                config,
+                null,
+                null,
+                cond -> false);
+        assertEquals(1, cmdsFalse.length);
+        String promptFileFalse = cmdsFalse[0].substring(cmdsFalse[0].indexOf('"') + 1, cmdsFalse[0].lastIndexOf('"'));
+        String contentFalse = Files.readString(Path.of(promptFileFalse));
+        assertTrue(contentFalse.contains("base prompt"));
+        assertFalse(contentFalse.contains("codegraph instructions"));
+        assertFalse(contentFalse.contains("disabled instructions"));
+        assertTrue(contentFalse.contains("tail prompt"));
+    }
 }

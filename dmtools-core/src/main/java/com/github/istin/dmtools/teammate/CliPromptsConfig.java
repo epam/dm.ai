@@ -96,15 +96,95 @@ public class CliPromptsConfig {
      * in the section's position.
      */
     public String[] toStringArray() {
+        return toStringArray(null);
+    }
+
+    /**
+     * Flattens the config back into a plain string array, preserving the original order.
+     * When {@code conditionEvaluator} is provided, named sections that declare a non-empty
+     * {@code condition} are included only if the predicate returns {@code true} for the
+     * condition script path. When {@code conditionEvaluator} is {@code null}, all sections
+     * are included unconditionally.
+     */
+    public String[] toStringArray(java.util.function.Predicate<String> conditionEvaluator) {
         List<String> result = new ArrayList<>();
         for (Item item : items) {
             if (item.isUnnamed()) {
                 result.add(item.getPrompt());
             } else {
-                result.addAll(item.getSection().getPrompts());
+                Section section = item.getSection();
+                String condition = section.getCondition();
+                if (condition != null && !condition.trim().isEmpty() && conditionEvaluator != null) {
+                    if (!conditionEvaluator.test(condition.trim())) {
+                        continue;
+                    }
+                }
+                result.addAll(section.getPrompts());
             }
         }
         return result.toArray(new String[0]);
+    }
+
+    /**
+     * Returns a new {@link CliPromptsConfig} with conditional sections filtered out when
+     * {@code conditionEvaluator} returns {@code false}.
+     */
+    public CliPromptsConfig evaluateConditions(java.util.function.Predicate<String> conditionEvaluator) {
+        if (conditionEvaluator == null || items.isEmpty()) {
+            return this;
+        }
+        List<Item> filtered = new ArrayList<>();
+        for (Item item : items) {
+            if (item.isUnnamed()) {
+                filtered.add(item);
+            } else {
+                Section section = item.getSection();
+                String condition = section.getCondition();
+                if (condition != null && !condition.trim().isEmpty()) {
+                    if (!conditionEvaluator.test(condition.trim())) {
+                        continue;
+                    }
+                }
+                filtered.add(item);
+            }
+        }
+        return new CliPromptsConfig(filtered);
+    }
+
+    /**
+     * Parses a JavaScript condition return value into a boolean.
+     * Accepts {@code Boolean}, {@code "true"} (case-insensitive), or a JSON/Map object
+     * with a truthy {@code result} field.
+     */
+    public static boolean isConditionMet(Object result) {
+        if (result == null) {
+            return false;
+        }
+        if (result instanceof Boolean) {
+            return (Boolean) result;
+        }
+        if (result instanceof org.json.JSONObject) {
+            org.json.JSONObject json = (org.json.JSONObject) result;
+            if (json.optBoolean("uncaughtException", false)) {
+                return false;
+            }
+            if (json.has("result")) {
+                return isConditionMet(json.opt("result"));
+            }
+            return false;
+        }
+        if (result instanceof java.util.Map) {
+            java.util.Map<?, ?> map = (java.util.Map<?, ?>) result;
+            if (Boolean.TRUE.equals(map.get("uncaughtException"))) {
+                return false;
+            }
+            if (map.containsKey("result")) {
+                return isConditionMet(map.get("result"));
+            }
+            return false;
+        }
+        String str = String.valueOf(result).trim();
+        return "true".equalsIgnoreCase(str);
     }
 
     /**
@@ -208,7 +288,10 @@ public class CliPromptsConfig {
             }
             MergeStrategy strategy = MergeStrategy.fromString(over.getMergeStrategy());
             List<String> mergedPrompts = strategy.merge(base.getPrompts(), over.getPrompts());
-            return Item.named(new Section(base.getId(), mergedPrompts, base.getMergeStrategy()));
+            String mergedCondition = over.getCondition() != null && !over.getCondition().isBlank()
+                    ? over.getCondition()
+                    : base.getCondition();
+            return Item.named(new Section(base.getId(), mergedPrompts, base.getMergeStrategy(), mergedCondition));
         }
     }
 
@@ -222,11 +305,17 @@ public class CliPromptsConfig {
         private final String id;
         private final List<String> prompts;
         private final String mergeStrategy;
+        private final String condition;
 
         public Section(String id, List<String> prompts, String mergeStrategy) {
+            this(id, prompts, mergeStrategy, null);
+        }
+
+        public Section(String id, List<String> prompts, String mergeStrategy, String condition) {
             this.id = Objects.requireNonNull(id, "section id");
             this.prompts = prompts != null ? Collections.unmodifiableList(new ArrayList<>(prompts)) : Collections.emptyList();
             this.mergeStrategy = mergeStrategy != null ? mergeStrategy : MergeStrategy.APPEND.getValue();
+            this.condition = (condition != null && !condition.isBlank()) ? condition.trim() : null;
         }
     }
 
@@ -300,6 +389,9 @@ public class CliPromptsConfig {
                             && !MergeStrategy.APPEND.getValue().equals(item.getSection().getMergeStrategy())) {
                         obj.addProperty("mergeStrategy", item.getSection().getMergeStrategy());
                     }
+                    if (item.getSection().getCondition() != null && !item.getSection().getCondition().isBlank()) {
+                        obj.addProperty("condition", item.getSection().getCondition());
+                    }
                     array.add(obj);
                 }
             }
@@ -327,13 +419,22 @@ public class CliPromptsConfig {
                         throw new JsonParseException("cliPrompts section object must have a non-empty 'id' field");
                     }
                     List<String> prompts = new ArrayList<>();
+                    if (obj.has("prompt") && obj.get("prompt").isJsonPrimitive() && obj.get("prompt").getAsJsonPrimitive().isString()) {
+                        String singlePrompt = obj.get("prompt").getAsString();
+                        if (singlePrompt != null && !singlePrompt.isEmpty()) {
+                            prompts.add(singlePrompt);
+                        }
+                    }
                     if (obj.has("prompts") && obj.get("prompts").isJsonArray()) {
                         for (JsonElement p : obj.get("prompts").getAsJsonArray()) {
                             prompts.add(p.getAsString());
                         }
                     }
-                    String mergeStrategy = obj.has("mergeStrategy") ? obj.get("mergeStrategy").getAsString() : null;
-                    items.add(Item.named(new Section(id, prompts, mergeStrategy)));
+                    String mergeStrategy = obj.has("mergeStrategy") && !obj.get("mergeStrategy").isJsonNull()
+                            ? obj.get("mergeStrategy").getAsString() : null;
+                    String condition = obj.has("condition") && !obj.get("condition").isJsonNull()
+                            ? obj.get("condition").getAsString() : null;
+                    items.add(Item.named(new Section(id, prompts, mergeStrategy, condition)));
                 } else {
                     throw new JsonParseException(
                             "cliPrompts array elements must be strings or objects with 'id' and 'prompts'");

@@ -126,4 +126,59 @@ class CliPromptsConfigTest {
         assertEquals(0, gson.fromJson("[]", CliPromptsConfig.class).getItems().size());
         assertNull(gson.fromJson("null", CliPromptsConfig.class));
     }
+
+    @Test
+    void testDeserializesSinglePromptAndCondition() {
+        String json = "[\"base\", {\"id\": \"codegraph\", \"prompt\": \"./agents/prompts/codegraph_tools.md\", \"condition\": \"agents/js/conditions/isCodeGraphAvailable.js\"}, \"tail\"]";
+        CliPromptsConfig config = gson.fromJson(json, CliPromptsConfig.class);
+        assertArrayEquals(new String[]{"base", "./agents/prompts/codegraph_tools.md", "tail"}, config.toStringArray());
+        assertEquals("agents/js/conditions/isCodeGraphAvailable.js", config.getItems().get(1).getSection().getCondition());
+    }
+
+    @Test
+    void testToStringArrayWithConditionEvaluator() {
+        String json = "[\"base\", " +
+                "{\"id\": \"codegraph\", \"prompt\": \"cg.md\", \"condition\": \"cond_true.js\"}, " +
+                "{\"id\": \"optional\", \"prompts\": [\"opt1.md\", \"opt2.md\"], \"condition\": \"cond_false.js\"}, " +
+                "\"tail\"]";
+        CliPromptsConfig config = gson.fromJson(json, CliPromptsConfig.class);
+
+        assertArrayEquals(
+                new String[]{"base", "cg.md", "tail"},
+                config.toStringArray(cond -> "cond_true.js".equals(cond)));
+        assertArrayEquals(
+                new String[]{"base", "opt1.md", "opt2.md", "tail"},
+                config.toStringArray(cond -> "cond_false.js".equals(cond)));
+    }
+
+    @Test
+    void testMergePreservesOrOverridesCondition() {
+        CliPromptsConfig base = gson.fromJson(
+                "[{\"id\": \"codegraph\", \"prompt\": \"cg1.md\", \"condition\": \"base_cond.js\"}]",
+                CliPromptsConfig.class);
+        CliPromptsConfig overrideKeep = gson.fromJson(
+                "[{\"id\": \"codegraph\", \"prompt\": \"cg2.md\"}]",
+                CliPromptsConfig.class);
+        CliPromptsConfig mergedKeep = base.merge(overrideKeep);
+        assertEquals("base_cond.js", mergedKeep.getItems().get(0).getSection().getCondition());
+        assertArrayEquals(new String[]{"cg1.md", "cg2.md"}, mergedKeep.toStringArray());
+
+        CliPromptsConfig overrideReplace = gson.fromJson(
+                "[{\"id\": \"codegraph\", \"prompt\": \"cg2.md\", \"condition\": \"child_cond.js\"}]",
+                CliPromptsConfig.class);
+        CliPromptsConfig mergedReplace = base.merge(overrideReplace);
+        assertEquals("child_cond.js", mergedReplace.getItems().get(0).getSection().getCondition());
+    }
+
+    @Test
+    void testIsConditionMet() {
+        assertTrue(CliPromptsConfig.isConditionMet(Boolean.TRUE));
+        assertTrue(CliPromptsConfig.isConditionMet("true"));
+        assertTrue(CliPromptsConfig.isConditionMet(" TRUE "));
+        assertTrue(CliPromptsConfig.isConditionMet(new org.json.JSONObject().put("result", true)));
+        assertFalse(CliPromptsConfig.isConditionMet(Boolean.FALSE));
+        assertFalse(CliPromptsConfig.isConditionMet("false"));
+        assertFalse(CliPromptsConfig.isConditionMet(null));
+        assertFalse(CliPromptsConfig.isConditionMet(new org.json.JSONObject().put("result", true).put("uncaughtException", true)));
+    }
 }

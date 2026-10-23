@@ -181,18 +181,22 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null, ticket);
 
             // 5. Build and execute CLI commands with aggregated prompt
+            String inputFolderPath = inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null;
+            String workingDirPath = workingDirectory.toAbsolutePath().toString();
+            final ITicket resolvedTicket = ticket;
             CliCommandBuilder commandBuilder = new CliCommandBuilder(instructionProcessor, configuration);
             String[] finalCommands = commandBuilder.buildCommands(
                     params.getCliCommands(),
                     params.getCliPrompt(),
                     params.getCliPromptsConfig(),
                     params.getCliPromptsByTracker(),
-                    params.getCustomParams());
+                    params.getCustomParams(),
+                    conditionScript -> evaluateCliPromptCondition(
+                            conditionScript, params, inputFolderPath, workingDirPath, resolvedTicket));
 
             ensureOutputFolder(workingDirectory);
 
             AtomicReference<String> liveOutput = new AtomicReference<>("");
-            String inputFolderPath = inputContextPath != null ? inputContextPath.toAbsolutePath().toString() : null;
             Runnable timerRunnable = buildTimerRunnable(params, liveOutput, inputFolderPath);
             Consumer<Exception> errorHandler = buildErrorHandler(params, liveOutput, inputFolderPath);
             Predicate<String> lineStopPredicate = buildLineStopPredicate(params, liveOutput, inputFolderPath);
@@ -336,6 +340,31 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     ? ((CliCommandFailedException) e).getDiagnosticMessage()
                     : e.getMessage();
             logger.warn("{} hook failed, continuing: {}", hookName, msg, e);
+        }
+    }
+
+    private boolean evaluateCliPromptCondition(String conditionScript, CliAgentParams params,
+                                                String inputFolderPath, String workingDirPath, ITicket ticket) {
+        try {
+            Map<String, Object> extraBindings = new HashMap<>();
+            if (inputFolderPath != null) {
+                extraBindings.put("inputFolderPath", inputFolderPath);
+            }
+            if (workingDirPath != null) {
+                extraBindings.put("workingDirectory", workingDirPath);
+            }
+            if (ticket != null) {
+                extraBindings.put("ticket", ticket);
+            }
+            Object result = prepareJsExecutor(
+                    conditionScript, params, null, extraBindings.isEmpty() ? null : extraBindings, ticket)
+                    .execute();
+            boolean included = com.github.istin.dmtools.teammate.CliPromptsConfig.isConditionMet(result);
+            logger.info("Evaluated cliPrompts condition '{}' -> {}", conditionScript, included);
+            return included;
+        } catch (Exception e) {
+            logger.warn("cliPrompts condition '{}' failed (excluding section): {}", conditionScript, e.getMessage());
+            return false;
         }
     }
 
