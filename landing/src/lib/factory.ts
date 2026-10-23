@@ -292,12 +292,29 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '${ver}'
-          cache: npm
-      - run: npm ci
+      - name: Install dependencies
+        run: |
+          if [ ! -f package.json ]; then
+            echo "No package.json found — skipping dependency install."
+          elif [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Test with coverage
-        run: npx c8 --reporter=json --reporter=text npm test
+        run: |
+          if [ ! -f package.json ] || ! node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test && !p.scripts.test.includes('Error: no test specified') ? 0 : 1)"; then
+            echo "No tests configured or no package.json found — skipping test and coverage execution."
+            exit 0
+          fi
+          npx c8 --reporter=json --reporter=text npm test
       - name: CRAP analysis (IstiN/crap4js)
-        run: npx --yes github:IstiN/crap4js --coverage coverage/coverage-final.json
+        run: |
+          if [ ! -f coverage/coverage-final.json ]; then
+            echo "No coverage data found — skipping CRAP analysis."
+            exit 0
+          fi
+          npx --yes github:IstiN/crap4js --coverage coverage/coverage-final.json
 `;
     }
     case 'crap4dart': {
@@ -320,19 +337,30 @@ jobs:
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
-      - run: dart pub get
-      - run: dart format --set-exit-if-changed .
-      - run: dart analyze
-      - run: dart test --coverage=coverage
-      - run: dart pub global activate coverage
-      - name: Format coverage
-        run: >-
-          dart pub global run coverage:format_coverage
-          --lcov --in coverage --out coverage/lcov.info --report-on lib
-      - name: Install crap4dart (IstiN/crap4dart)
-        run: dart pub global activate -sgit https://github.com/IstiN/crap4dart.git
-      - name: CRAP analysis
-        run: crap4dart analyze --lcov coverage/lcov.info
+      - name: Run Dart checks and coverage
+        run: |
+          if [ ! -f pubspec.yaml ]; then
+            echo "No pubspec.yaml found — skipping Dart quality checks."
+            exit 0
+          fi
+          dart pub get
+          dart format --set-exit-if-changed .
+          dart analyze
+          if [ ! -d test ] || [ -z "$(find test -name '*_test.dart' -print -quit 2>/dev/null)" ]; then
+            echo "No Dart tests found in test/ — skipping test coverage and CRAP analysis."
+            exit 0
+          fi
+          dart test --coverage=coverage
+          dart pub global activate coverage
+          dart pub global run coverage:format_coverage --lcov --in coverage --out coverage/lcov.info --report-on lib
+      - name: CRAP analysis (IstiN/crap4dart)
+        run: |
+          if [ ! -f coverage/lcov.info ]; then
+            echo "No coverage/lcov.info found — skipping CRAP analysis."
+            exit 0
+          fi
+          dart pub global activate -sgit https://github.com/IstiN/crap4dart.git
+          crap4dart analyze --lcov coverage/lcov.info
 `;
     }
     case 'crap4java': {
@@ -359,6 +387,10 @@ jobs:
           java-version: '${ver}'
       - name: Build and run CRAP analysis (IstiN/crap4java)
         run: |
+          if ( [ ! -f pom.xml ] && [ ! -f build.gradle ] && [ ! -f build.gradle.kts ] ) || [ -z "$(find . -name '*.java' -not -path './.*' -print -quit)" ]; then
+            echo "No Java build file or source files found — skipping Java build and CRAP analysis."
+            exit 0
+          fi
           git clone --depth 1 https://github.com/IstiN/crap4java.git /tmp/crap4java
           mvn -q -f /tmp/crap4java/pom.xml -DskipTests package
           java -jar /tmp/crap4java/target/crap4java-*.jar
@@ -393,10 +425,28 @@ jobs:
           pip install coverage pytest git+https://github.com/vabhzw17eg2qu4m9-bit/crap4py.git
       - name: Test with coverage
         run: |
+          if [ -z "$(find . -name '*.py' -not -path './.*' -not -path './venv/*' -print -quit)" ]; then
+            echo "No Python files found — skipping test and coverage execution."
+            exit 0
+          fi
+          set +e
           coverage run -m pytest
+          rc=$?
+          set -e
+          if [ $rc -eq 5 ]; then
+            echo "No tests collected (pytest exit code 5) — skipping coverage report and CRAP analysis."
+            exit 0
+          elif [ $rc -ne 0 ]; then
+            exit $rc
+          fi
           coverage json -o coverage.json
       - name: CRAP analysis (vabhzw17eg2qu4m9-bit/crap4py)
-        run: crap4py --coverage coverage.json
+        run: |
+          if [ ! -f coverage.json ]; then
+            echo "No coverage.json found — skipping CRAP analysis."
+            exit 0
+          fi
+          crap4py --coverage coverage.json
 `;
     }
     case 'crap4go': {
@@ -422,17 +472,34 @@ jobs:
           go-version: '${ver}'
       - name: Format check
         run: |
+          if [ -z "$(find . -name '*.go' -not -path './.*' -print -quit)" ]; then
+            echo "No Go source files found — skipping format check."
+            exit 0
+          fi
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
             echo "::error::Files need gofmt:"
             echo "$unformatted"
             exit 1
           fi
-      - run: go vet ./...
-      - name: Test with coverage
-        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Vet and test with coverage
+        run: |
+          if [ ! -f go.mod ] || [ -z "$(find . -name '*.go' -not -path './.*' -print -quit)" ]; then
+            echo "No go.mod or Go source files found — skipping Go test coverage and CRAP analysis."
+            exit 0
+          fi
+          go vet ./...
+          if [ -z "$(find . -name '*_test.go' -not -path './.*' -print -quit)" ]; then
+            echo "No Go test files found — skipping coverage and CRAP analysis."
+            exit 0
+          fi
+          go test -race -coverprofile=coverage.out -covermode=atomic ./...
       - name: CRAP analysis (vabhzw17eg2qu4m9-bit/crap4go)
         run: |
+          if [ ! -f coverage.out ]; then
+            echo "No coverage.out found — skipping CRAP analysis."
+            exit 0
+          fi
           go install github.com/vabhzw17eg2qu4m9-bit/crap4go@latest
           "$(go env GOPATH)/bin/crap4go" --coverage coverage.out
 `;
