@@ -76,6 +76,41 @@ public class GitHubTrackerClientTest {
     }
 
     @Test
+    public void testSearchAndPerformWithSingleKeyFetchesIssueDirectly() throws Exception {
+        doReturn("{\"number\":12,\"title\":\"Feature\",\"state\":\"open\"}")
+                .when(client).execute(any(GenericRequest.class));
+
+        List<GitHubTicket> tickets = client.searchAndPerform("acme/widgets#12", null);
+
+        assertEquals(1, tickets.size());
+        assertEquals("acme/widgets#12", tickets.get(0).getCompositeKey());
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(client).execute(captor.capture());
+        assertEquals("https://api.github.com/repos/acme/widgets/issues/12", captor.getValue().url());
+    }
+
+    @Test
+    public void testSearchAndPerformWithMultipleKeysFetchesEachIssue() throws Exception {
+        doReturn("{\"number\":1,\"title\":\"A\",\"state\":\"open\"}",
+                "{\"number\":2,\"title\":\"B\",\"state\":\"open\"}")
+                .when(client).execute(any(GenericRequest.class));
+
+        List<GitHubTicket> tickets = client.searchAndPerform("acme/widgets#1, acme/widgets#2", null);
+
+        assertEquals(2, tickets.size());
+        verify(client, org.mockito.Mockito.times(2)).execute(any(GenericRequest.class));
+    }
+
+    @Test
+    public void testParseIssueKeysRejectsSearchQueries() {
+        assertTrue(GitHubTrackerClient.parseIssueKeys("is:issue is:open label:ai-ready").isEmpty());
+        assertTrue(GitHubTrackerClient.parseIssueKeys("acme/widgets#1 is:open").isEmpty());
+        assertTrue(GitHubTrackerClient.parseIssueKeys("").isEmpty());
+        assertTrue(GitHubTrackerClient.parseIssueKeys(null).isEmpty());
+        assertEquals(2, GitHubTrackerClient.parseIssueKeys("gh-5,acme/widgets#6").size());
+    }
+
+    @Test
     public void testPostCommentCreatesIssueComment() throws Exception {
         doReturn("{\"id\":1}").when(client).post(any(GenericRequest.class));
 
