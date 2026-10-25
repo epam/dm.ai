@@ -1,0 +1,70 @@
+# FA Universal Agent — thin stub over IstiN/dmtools-agentic-workflows.
+#
+# Triggers on `@fa` mentions in Issues or PR comments (and manual workflow_dispatch),
+# restores the conversation session from `fa-sess/<session_key>`, drains any newly
+# arrived `@fa` comments before exiting (single-queue per issue/PR), and commits
+# durable project memory under `.fah/memory` when enabled.
+name: 'FA Universal Agent'
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue or PR number'
+        required: false
+        type: string
+        default: ''
+      prompt:
+        description: 'Prompt or instruction for @fa'
+        required: false
+        type: string
+        default: ''
+      session_key:
+        description: 'Custom session key (defaults to gh-<owner>-<repo>-<issue>)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  fa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@fa')) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.sender.type != 'Bot' &&
+       contains(github.event.comment.body, '@fa')) ||
+      (github.event_name == 'pull_request_review_comment' &&
+       github.event.sender.type != 'Bot' &&
+       contains(github.event.comment.body, '@fa'))
+    uses: IstiN/dmtools-agentic-workflows/.github/workflows/fa-universal.yml@main
+    with:
+      target_repo: ${{ github.repository }}
+      issue_number: ${{ github.event.inputs.issue_number || github.event.issue.number || github.event.pull_request.number || '' }}
+      comment_id: ${{ github.event.comment.id || '' }}
+      session_key: ${{ github.event.inputs.session_key || '' }}
+      prompt: ${{ github.event.inputs.prompt || github.event.comment.body || github.event.issue.body || '' }}
+      runner: @@RUNNER@@
+      persist_memory: @@FA_MEMORY@@
+      fa_provider_type: '@@FA_PROVIDER_TYPE@@'
+      fa_provider_config: '@@FA_PROVIDER_CONFIG@@'
+      fa_providers_queue: '@@FA_PROVIDERS_QUEUE@@'
+@@FA_SLOT_INPUTS@@    secrets:
+      SOURCE_GITHUB_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+@@PROVIDER_SECRETS@@
+      FA_DAP_INVITE: ${{ secrets.FA_DAP_INVITE }}
+      DAP_HUB_URL: ${{ secrets.DAP_HUB_URL }}
+      DAP_CLIENT_SECRET: ${{ secrets.DAP_CLIENT_SECRET }}
+      FA_GITHUB_APP_ID: ${{ secrets.FA_GITHUB_APP_ID }}
+      FA_GITHUB_APP_PRIVATE_KEY: ${{ secrets.FA_GITHUB_APP_PRIVATE_KEY }}

@@ -3,6 +3,7 @@ import machineSm from './factory-templates/machine-sm.yml?raw';
 import machineMerge from './factory-templates/machine-merge.yml?raw';
 import mergeTrigger from './factory-templates/merge-trigger.yml?raw';
 import smKicker from './factory-templates/sm-kicker.yml?raw';
+import faUniversal from './factory-templates/fa-universal.yml?raw';
 import dmtoolsConfig from './factory-templates/config.js?raw';
 import runnerBug from './factory-templates/runner-bug.json?raw';
 import runnerStory from './factory-templates/runner-story.json?raw';
@@ -64,6 +65,8 @@ export interface FactoryConfig {
   toolchains: Partial<Record<ToolchainId, string>>; // selected toolchain -> version
   providers: ProvidersConfig;
   merge: MergeIdentity;
+  faUniversal?: boolean; // default true: generate .github/workflows/fa-universal.yml (@fa interactive agent)
+  faMemory?: boolean; // default true: generate .fah/config.yaml & persist repo memory under .fah/memory
 }
 
 /** Who merges machine PRs: the factory PAT, a separate PAT, or a GitHub App (job-scoped token). */
@@ -165,6 +168,8 @@ export const defaults: FactoryConfig = {
   toolchains: {},
   merge: { mode: 'factory', tokenSecret: 'MERGE_GITHUB_TOKEN' },
   providers: { mode: 'default', entries: [newEntry('copilot')], reviewSeparate: false, reviewEntries: [newEntry('copilot')] },
+  faUniversal: true,
+  faMemory: true,
 };
 
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -172,6 +177,14 @@ const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
 export function isCiEnabled(c: FactoryConfig): boolean {
   return c.ciEnabled !== false;
+}
+
+export function isFaUniversalEnabled(c: FactoryConfig): boolean {
+  return c.faUniversal !== false;
+}
+
+export function isFaMemoryEnabled(c: FactoryConfig): boolean {
+  return c.faMemory !== false;
 }
 
 export function validate(c: FactoryConfig): Record<string, string> {
@@ -243,6 +256,9 @@ const fill = (tpl: string, c: FactoryConfig) => {
   const workflowRun = ci
     ? `  workflow_run:\n    workflows: ['${ciName}']\n    types: [completed]\n`
     : '';
+  const pEnv = c.providers.entries.length
+    ? providerEnv(c.providers.entries, c.providers.mode)
+    : { FA_PROVIDER_TYPE: '', FA_PROVIDER_CONFIG: '' };
   return tpl
     .replaceAll('@@MACHINE@@', c.machine)
     .replaceAll('@@CI_NAME@@', ciName)
@@ -250,6 +266,11 @@ const fill = (tpl: string, c: FactoryConfig) => {
     .replaceAll('@@CHECKS_JSON@@', JSON.stringify(checks))
     .replaceAll('@@CHECKS_CSV@@', checks.join(','))
     .replaceAll('@@RUNNER@@', c.runner)
+    .replaceAll('@@FA_MEMORY@@', isFaMemoryEnabled(c) ? 'true' : 'false')
+    .replaceAll('@@FA_PROVIDER_TYPE@@', pEnv.FA_PROVIDER_TYPE ?? '')
+    .replaceAll('@@FA_PROVIDER_CONFIG@@', pEnv.FA_PROVIDER_CONFIG ?? '')
+    .replaceAll('@@FA_PROVIDERS_QUEUE@@', pEnv.FA_PROVIDERS_QUEUE ?? '')
+    .replace(/^@@FA_SLOT_INPUTS@@/m, slotLines(c).inputs)
     .replace(/^@@WORKFLOW_RUN@@/m, workflowRun)
     .replace(/^@@TOOLCHAINS@@\n/m, toolchainLines(c) + slotLines(c).inputs)
     .replace(/^@@PROVIDER_SECRETS@@\n/m, slotLines(c).secrets)
@@ -507,16 +528,24 @@ jobs:
   }
 }
 
+export function renderFahConfig(c: FactoryConfig): string | null {
+  if (!isFaMemoryEnabled(c)) return null;
+  return `memory:\n  projectPath: .fah/memory\n`;
+}
+
 export function renderFiles(c: FactoryConfig): FactoryFile[] {
   const wf = (name: string, body: string) => ({ path: `.github/workflows/${name}`, content: fill(body, c) });
   const quality = renderQualityWorkflow(c);
+  const fahConfig = renderFahConfig(c);
   return [
     ...(quality ? [{ path: `.github/workflows/${c.ciFile || 'quality.yml'}`, content: quality }] : []),
     wf('ai-teammate.yml', aiTeammate),
+    ...(isFaUniversalEnabled(c) ? [wf('fa-universal.yml', faUniversal)] : []),
     wf('machine-sm.yml', machineSm),
     wf('machine-merge.yml', machineMerge),
     wf('merge-trigger.yml', mergeTrigger),
     wf('sm-kicker.yml', smKicker),
+    ...(fahConfig ? [{ path: '.fah/config.yaml', content: fahConfig }] : []),
     { path: '.dmtools/config.js', content: fill(dmtoolsConfig, c) },
     { path: '.dmtools/runners/fa-bug-dev.json', content: runnerJson(runnerBug, c, false) },
     { path: '.dmtools/runners/fa-story-dev.json', content: runnerJson(runnerStory, c, false) },
@@ -549,9 +578,9 @@ ${mergeChecklist(c)}${keySlots(c).map((k) => `- [ ] Secret \`${k}\` (AI provider
 ${c.createLabels !== false
   ? `- [x] Labels: ${FACTORY_LABELS.map((l) => l.name).join(', ')} (auto-created during setup)`
   : `- [ ] Labels: ${FACTORY_LABELS.map((l) => l.name).join(', ')}`}
-${ciChecklist(c)}- [ ] Optional repo variables \`AGENTS_VERSION\` / \`DMTOOLS_VERSION\` (default \`latest\`) — pin agent packs / CLI to a release tag
+${ciChecklist(c)}${isFaUniversalEnabled(c) ? `- [x] **FA Universal Agent** (\`.github/workflows/fa-universal.yml\`): mention \`@fa\` in any Issue or PR comment to invoke the interactive agent (single-queue session on \`fa-sess/<session_key>\`)\n` : ''}${isFaMemoryEnabled(c) ? `- [x] **Project Memory** (\`.fah/config.yaml\` → \`.fah/memory\`): durable agent knowledge persisted in the repository\n` : ''}- [ ] Optional repo variables \`AGENTS_VERSION\` / \`DMTOOLS_VERSION\` (default \`latest\`) — pin agent packs / CLI to a release tag
 
-Smoke test: assign an issue to \`${c.machine}\` or dispatch **AI Teammate** with leg=dev.`;
+Smoke test: assign an issue to \`${c.machine}\`${isFaUniversalEnabled(c) ? `, mention \`@fa\` in any issue/PR comment,` : ''} or dispatch **AI Teammate** with leg=dev.`;
 }
 
 // ---- GitHub API (browser → api.github.com, the token never leaves the page) ----
