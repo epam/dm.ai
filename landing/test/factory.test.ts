@@ -16,6 +16,9 @@ import {
   QUALITY_PRESETS,
   TOOLCHAINS,
   isCiEnabled,
+  isFaUniversalEnabled,
+  isFaMemoryEnabled,
+  renderFahConfig,
   type FactoryConfig,
 } from '../src/lib/factory.ts';
 
@@ -382,5 +385,63 @@ describe('Issue #758 — Quality workflow in an empty repository', () => {
     assert.match(wf, /No Go test files found — skipping coverage and CRAP analysis\./);
     assert.match(wf, /if \[ ! -f coverage\.out \]; then/);
     assert.match(wf, /No coverage\.out found — skipping CRAP analysis\./);
+  });
+});
+
+describe('FA Universal Agent & Project Memory options', () => {
+  it('defaults faUniversal and faMemory to true and generates .github/workflows/fa-universal.yml and .fah/config.yaml', () => {
+    const cfg = validConfig();
+    assert.equal(cfg.faUniversal, true);
+    assert.equal(cfg.faMemory, true);
+    assert.equal(isFaUniversalEnabled(cfg), true);
+    assert.equal(isFaMemoryEnabled(cfg), true);
+
+    const files = renderFiles(cfg);
+    const byPath = Object.fromEntries(files.map((f) => [f.path, f.content]));
+
+    assert.ok(byPath['.github/workflows/fa-universal.yml'], 'should generate fa-universal.yml');
+    assert.match(byPath['.github/workflows/fa-universal.yml'], /uses:\s*IstiN\/dmtools-agentic-workflows\/\.github\/workflows\/fa-universal\.yml@main/);
+    assert.match(byPath['.github/workflows/fa-universal.yml'], /persist_memory:\s*true/);
+    assert.match(byPath['.github/workflows/fa-universal.yml'], /CUSTOM_PROVIDER_KEY1_NAME:\s*'COPILOT_GITHUB_TOKEN'/);
+    assert.match(byPath['.github/workflows/fa-universal.yml'], /CUSTOM_PROVIDER_KEY1:\s*\$\{\{\s*secrets\.COPILOT_GITHUB_TOKEN\s*\}\}/);
+
+    assert.ok(byPath['.fah/config.yaml'], 'should generate .fah/config.yaml');
+    assert.equal(byPath['.fah/config.yaml'], 'memory:\n  projectPath: .fah/memory\n');
+
+    const body = prBody(cfg);
+    assert.match(body, /FA Universal Agent/);
+    assert.match(body, /Project Memory/);
+  });
+
+  it('propagates custom runner label to fa-universal.yml', () => {
+    const cfg = validConfig({ runner: 'my-corp-self-hosted' });
+    const files = renderFiles(cfg);
+    const byPath = Object.fromEntries(files.map((f) => [f.path, f.content]));
+    assert.match(byPath['.github/workflows/fa-universal.yml'], /runner:\s*my-corp-self-hosted/);
+  });
+
+  it('omits fa-universal.yml when faUniversal is false and omits .fah/config.yaml when faMemory is false', () => {
+    const cfg = validConfig({ faUniversal: false, faMemory: false });
+    assert.equal(isFaUniversalEnabled(cfg), false);
+    assert.equal(isFaMemoryEnabled(cfg), false);
+    assert.equal(renderFahConfig(cfg), null);
+
+    const files = renderFiles(cfg);
+    const byPath = Object.fromEntries(files.map((f) => [f.path, f.content]));
+    assert.equal(byPath['.github/workflows/fa-universal.yml'], undefined);
+    assert.equal(byPath['.fah/config.yaml'], undefined);
+
+    const body = prBody(cfg);
+    assert.doesNotMatch(body, /FA Universal Agent/);
+    assert.doesNotMatch(body, /Project Memory/);
+  });
+
+  it('sets persist_memory: false in fa-universal.yml when faUniversal is true and faMemory is false', () => {
+    const cfg = validConfig({ faUniversal: true, faMemory: false });
+    const files = renderFiles(cfg);
+    const byPath = Object.fromEntries(files.map((f) => [f.path, f.content]));
+    assert.ok(byPath['.github/workflows/fa-universal.yml']);
+    assert.match(byPath['.github/workflows/fa-universal.yml'], /persist_memory:\s*false/);
+    assert.equal(byPath['.fah/config.yaml'], undefined);
   });
 });
