@@ -185,6 +185,7 @@ export default function FactorySetup() {
   const [open, setOpen] = useState(0);
   const [previewTab, setPreviewTab] = useState<'files' | 'guide' | 'checklist'>('files');
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [activeStep, setActiveStep] = useState<string>('step-repo');
 
   const errors = useMemo(() => validate(cfg), [cfg]);
   const files = useMemo(() => (Object.keys(errors).length ? [] : renderFiles(cfg)), [cfg, errors]);
@@ -192,6 +193,23 @@ export default function FactorySetup() {
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const show = (k: string) => (touched[k] ? errors[k] : undefined);
 
+  useEffect(() => {
+    const ids = ['step-repo', 'step-fa', 'step-providers', 'step-ci', 'step-runtime', 'step-secrets'];
+    const onScroll = () => {
+      const trigger = 220;
+      let current = ids[0];
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= trigger) {
+          current = id;
+        }
+      }
+      setActiveStep(current);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   useEffect(() => {
     setRepos([]);
     if (token.length < 20) return;
@@ -389,56 +407,76 @@ export default function FactorySetup() {
     <div className="factory">
       {/* Top Status & Quick Navigation Bar */}
       <nav className="factory__steps" aria-label="Setup sections">
-        <a href="#step-repo" className={`factory__stepPill ${stepRepoReady ? 'is-ready' : ''}`}>
-          <span className="factory__stepNum">1</span>
-          <span>
-            <strong>Repository &amp; Access</strong>
-            <small>{cfg.repo || 'Select owner/repo'}</small>
-          </span>
-        </a>
-        <a href="#step-fa" className="factory__stepPill is-ready">
-          <span className="factory__stepNum">2</span>
-          <span>
-            <strong>FA Agent &amp; Memory</strong>
-            <small>
-              {faEnabled ? '@fa enabled' : '@fa off'} · {memEnabled ? '.fah/memory on' : 'memory off'}
-            </small>
-          </span>
-        </a>
-        <a href="#step-providers" className={`factory__stepPill ${stepProvidersReady ? 'is-ready' : ''}`}>
-          <span className="factory__stepNum">3</span>
-          <span>
-            <strong>AI Providers</strong>
-            <small>
-              {cfg.providers.entries[0]?.preset ?? 'copilot'} ({cfg.providers.mode})
-            </small>
-          </span>
-        </a>
-        <a href="#step-ci" className={`factory__stepPill ${stepCiReady ? 'is-ready' : ''}`}>
-          <span className="factory__stepNum">4</span>
-          <span>
-            <strong>CI &amp; Quality Gate</strong>
-            <small>{ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}</small>
-          </span>
-        </a>
-        <a href="#step-runtime" className={`factory__stepPill ${stepRuntimeReady ? 'is-ready' : ''}`}>
-          <span className="factory__stepNum">5</span>
-          <span>
-            <strong>Runner &amp; Merge</strong>
-            <small>
-              {cfg.runner} · {cfg.merge.mode}
-            </small>
-          </span>
-        </a>
-        <a href="#step-secrets" className="factory__stepPill is-ready">
-          <span className="factory__stepNum">6</span>
-          <span>
-            <strong>Secrets &amp; Labels</strong>
-            <small>
-              {configuredSecretsCount}/{secretsList.length} secrets · {FACTORY_LABELS.length} labels
-            </small>
-          </span>
-        </a>
+        <div className="factory__stepsInner">
+          <a
+            href="#step-repo"
+            className={`factory__stepPill ${stepRepoReady ? 'is-ready' : ''} ${activeStep === 'step-repo' ? 'is-active' : ''}`}
+          >
+            <span className="factory__stepNum">1</span>
+            <span>
+              <strong>Repository &amp; Access</strong>
+              <small>{cfg.repo || 'Select owner/repo'}</small>
+            </span>
+          </a>
+          <a
+            href="#step-fa"
+            className={`factory__stepPill is-ready ${activeStep === 'step-fa' ? 'is-active' : ''}`}
+          >
+            <span className="factory__stepNum">2</span>
+            <span>
+              <strong>FA Agent &amp; Memory</strong>
+              <small>
+                {faEnabled ? '@fa enabled' : '@fa off'} · {memEnabled ? '.fah/memory on' : 'memory off'}
+              </small>
+            </span>
+          </a>
+          <a
+            href="#step-providers"
+            className={`factory__stepPill ${stepProvidersReady ? 'is-ready' : ''} ${activeStep === 'step-providers' ? 'is-active' : ''}`}
+          >
+            <span className="factory__stepNum">3</span>
+            <span>
+              <strong>AI Providers</strong>
+              <small>
+                {cfg.providers.entries[0]?.preset ?? 'copilot'} ({cfg.providers.mode})
+              </small>
+            </span>
+          </a>
+          <a
+            href="#step-ci"
+            className={`factory__stepPill ${stepCiReady ? 'is-ready' : ''} ${activeStep === 'step-ci' ? 'is-active' : ''}`}
+          >
+            <span className="factory__stepNum">4</span>
+            <span>
+              <strong>CI &amp; Quality Gate</strong>
+              <small>{ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}</small>
+            </span>
+          </a>
+          <a
+            href="#step-runtime"
+            className={`factory__stepPill ${stepRuntimeReady ? 'is-ready' : ''} ${activeStep === 'step-runtime' ? 'is-active' : ''}`}
+          >
+            <span className="factory__stepNum">5</span>
+            <span>
+              <strong>Runner &amp; Merge</strong>
+              <small>
+                {cfg.runner} · {cfg.merge.mode}
+              </small>
+            </span>
+          </a>
+          <a
+            href="#step-secrets"
+            className={`factory__stepPill is-ready ${activeStep === 'step-secrets' ? 'is-active' : ''}`}
+          >
+            <span className="factory__stepNum">6</span>
+            <span>
+              <strong>Secrets &amp; Labels</strong>
+              <small>
+                {configuredSecretsCount}/{secretsList.length} secrets · {FACTORY_LABELS.length} labels
+              </small>
+            </span>
+          </a>
+        </div>
       </nav>
 
       <div className="factory__form">
@@ -447,9 +485,10 @@ export default function FactorySetup() {
           <header className="factory__cardHead">
             <span className="factory__stepBadge">Step 1</span>
             <div>
-              <h2 className="factory__cardTitle">Repository &amp; GitHub Access</h2>
+              <h2 className="factory__cardTitle">Repository &amp; Access</h2>
               <p className="factory__cardSub">
-                Connect your GitHub repository (or create a new Greenfield repo) and specify the AI teammate login.
+                Connect your source control repository (or create a new Greenfield repo) and specify the AI teammate
+                account.
               </p>
             </div>
           </header>

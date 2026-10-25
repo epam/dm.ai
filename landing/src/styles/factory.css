@@ -1,7 +1,7 @@
 .factory {
   display: grid;
-  grid-template-columns: minmax(0, 6fr) minmax(0, 6fr);
-  gap: clamp(1.5rem, 3.5vw, 2.5rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(1.25rem, 2.5vw, 2rem);
   align-items: start;
 }
 @media (max-width: 960px) {
@@ -10,33 +10,60 @@
   }
 }
 
-/* Step Navigation Bar */
+/* Sticky Second Header — Step Navigation Bar */
 .factory__steps {
   grid-column: 1 / -1;
+  position: sticky;
+  top: 5.5rem;
+  z-index: 45;
+  margin: -0.5rem 0 0.25rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+[data-theme='snow'] .factory__steps {
+  box-shadow: 0 8px 24px rgba(6, 6, 6, 0.08);
+}
+@media (max-width: 960px) {
+  .factory__steps {
+    position: static;
+    margin: 0 0 0.5rem;
+  }
+}
+.factory__stepsInner {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin-bottom: 0.5rem;
+  gap: 0.5rem;
 }
 @media (max-width: 1100px) {
-  .factory__steps {
+  .factory__stepsInner {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .factory__preview {
+    top: 14rem;
+    max-height: calc(100vh - 15rem);
+  }
+  .factory__card {
+    scroll-margin-top: 14.5rem;
   }
 }
 @media (max-width: 640px) {
-  .factory__steps {
+  .factory__stepsInner {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .factory__stepPill {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.65rem 0.8rem;
+  gap: 0.55rem;
+  padding: 0.5rem 0.65rem;
   background: var(--surface);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
-  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+  transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease), transform 0.2s var(--ease);
   min-width: 0;
 }
 .factory__stepPill:hover {
@@ -46,19 +73,25 @@
 .factory__stepPill.is-ready {
   border-color: var(--hairline-strong);
 }
+.factory__stepPill.is-active {
+  border-color: var(--sea);
+  background: var(--surface-alt);
+  box-shadow: inset 0 0 0 1px var(--sea);
+}
 .factory__stepNum {
   flex: none;
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.55rem;
+  height: 1.55rem;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font: 700 0.78rem var(--mono);
+  font: 700 0.74rem var(--mono);
   background: var(--surface-alt);
   color: var(--muted);
   border: 1px solid var(--hairline-strong);
 }
-.factory__stepPill.is-ready .factory__stepNum {
+.factory__stepPill.is-ready .factory__stepNum,
+.factory__stepPill.is-active .factory__stepNum {
   background: var(--grad-btn);
   color: var(--btn-ink, #fff);
   border-color: transparent;
@@ -68,7 +101,7 @@
   min-width: 0;
 }
 .factory__stepPill strong {
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text);
   white-space: nowrap;
@@ -76,7 +109,7 @@
   text-overflow: ellipsis;
 }
 .factory__stepPill small {
-  font: 400 0.74rem var(--mono);
+  font: 400 0.7rem var(--mono);
   color: var(--faint);
   white-space: nowrap;
   overflow: hidden;
@@ -87,6 +120,7 @@
 .factory__form {
   display: grid;
   gap: 1.35rem;
+  min-width: 0;
 }
 .factory__card {
   background: var(--surface);
@@ -95,6 +129,8 @@
   padding: clamp(1.1rem, 2.2vw, 1.5rem);
   display: grid;
   gap: 1.1rem;
+  min-width: 0;
+  scroll-margin-top: 11rem;
 }
 .factory__card--accent {
   border-color: var(--sea);
@@ -138,7 +174,7 @@
 
 .factory__grid2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.85rem;
 }
 @media (max-width: 600px) {
@@ -158,7 +194,7 @@
 /* Feature Toggle Cards (FA Universal + Project Memory) */
 .factory__featureGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.85rem;
 }
 @media (max-width: 640px) {
@@ -245,6 +281,7 @@
 .factory__field {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
 }
 .factory__field label {
   font-weight: 600;
@@ -257,6 +294,9 @@
   border-radius: var(--radius-sm);
   padding: 0.65rem 0.85rem;
   font: 400 0.92rem var(--mono);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .factory__field input:focus-visible {
   outline: 2px solid var(--sea);
@@ -309,13 +349,14 @@
   display: grid;
   gap: 0.6rem;
   position: sticky;
-  top: 5.5rem;
-  max-height: calc(100vh - 7rem);
+  top: 10.6rem;
+  max-height: calc(100vh - 11.6rem);
   overflow: auto;
   background: var(--surface);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   padding: 1.15rem;
+  min-width: 0;
 }
 @media (max-width: 960px) {
   .factory__preview {
@@ -470,6 +511,9 @@
   border-radius: var(--radius-sm);
   padding: 0.62rem 0.85rem;
   font: 400 0.92rem var(--font);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .factory__field select[size] {
   padding: 0.3rem;
@@ -483,6 +527,7 @@
   display: grid;
   gap: 0.85rem;
   margin: 0;
+  min-width: 0;
 }
 .factory__group legend {
   padding: 0 0.45rem;
