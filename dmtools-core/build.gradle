@@ -20,7 +20,7 @@ def versions = [
         mockito     : '5.24.0',
         junit       : '6.1.3',
         jackson     : '2.22.4',
-        jackson3    : '3.2.3',
+        jackson3    : '3.2.4',
         poi         : '6.0.0',
         flexmark    : '0.64.8'
 ]
