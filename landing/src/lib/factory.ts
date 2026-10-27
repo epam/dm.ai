@@ -142,9 +142,10 @@ export const TOOLCHAINS: Toolchain[] = [
 export const RUNNERS = ['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04', 'ubuntu-slim', 'macos-latest', 'windows-latest'];
 
 export interface ScmOption { id: 'github' | 'gitlab'; label: string; available: boolean }
+export type ScmId = ScmOption['id'];
 export const SCM: ScmOption[] = [
   { id: 'github', label: 'GitHub', available: true },
-  { id: 'gitlab', label: 'GitLab (coming soon)', available: false },
+  { id: 'gitlab', label: 'GitLab', available: true },
 ];
 
 export interface FactoryFile {
@@ -173,7 +174,9 @@ export const defaults: FactoryConfig = {
 };
 
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const GITLAB_LOGIN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const GITLAB_REPO = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/;
 
 export function isCiEnabled(c: FactoryConfig): boolean {
   return c.ciEnabled !== false;
@@ -187,10 +190,14 @@ export function isFaMemoryEnabled(c: FactoryConfig): boolean {
   return c.faMemory !== false;
 }
 
-export function validate(c: FactoryConfig): Record<string, string> {
+export function validate(c: FactoryConfig, scm: ScmId = 'github'): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!REPO.test(c.repo)) e.repo = 'Use owner/name';
-  if (!LOGIN.test(c.machine)) e.machine = 'Not a valid GitHub login';
+  if (!(scm === 'gitlab' ? GITLAB_REPO : REPO).test(c.repo)) {
+    e.repo = scm === 'gitlab' ? 'Use group/project' : 'Use owner/name';
+  }
+  if (!(scm === 'gitlab' ? GITLAB_LOGIN : LOGIN).test(c.machine)) {
+    e.machine = scm === 'gitlab' ? 'Not a valid GitLab username' : 'Not a valid GitHub login';
+  }
   if (isCiEnabled(c)) {
     if (!/^[\w.-]+\.ya?ml$/.test(c.ciFile)) e.ciFile = 'Workflow file name, e.g. ci.yml';
     if (!c.ciName.trim() || /['"\n]/.test(c.ciName)) e.ciName = 'Workflow display name (no quotes)';
@@ -233,11 +240,18 @@ function providerEnv(list: ProviderEntry[], mode: 'default' | 'queue'): Record<s
   return env;
 }
 
-function runnerJson(tpl: string, c: FactoryConfig, review: boolean): string {
+function runnerJson(tpl: string, c: FactoryConfig, review: boolean, scm: ScmId = 'github'): string {
   const json = JSON.parse(tpl);
   const list = review && c.providers.reviewSeparate ? c.providers.reviewEntries : c.providers.entries;
   if (json.params.customParams?.targetRepository) json.params.customParams.targetRepository.baseBranch = c.baseBranch;
-  json.params.envVariables = { ...(json.params.envVariables.DEFAULT_TRACKER ? { DEFAULT_TRACKER: 'github' } : {}), ...providerEnv(list, c.providers.mode) };
+  json.params.envVariables = {
+    ...(scm === 'gitlab'
+      ? { DEFAULT_TRACKER: 'gitlab', DEFAULT_SCM: 'gitlab', DEFAULT_CI: 'gitlab-ci' }
+      : json.params.envVariables.DEFAULT_TRACKER
+        ? { DEFAULT_TRACKER: scm }
+        : {}),
+    ...providerEnv(list, c.providers.mode),
+  };
   return JSON.stringify(json, null, 2) + '\n';
 }
 
@@ -554,6 +568,60 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
   ];
 }
 
+/** GitLab projects use GitLab CI and manual ticket runs; GitHub Actions files are intentionally omitted. */
+export function renderGitlabFiles(c: FactoryConfig): FactoryFile[] {
+  const files = renderFiles(c).filter(
+    (file) => !file.path.startsWith('.github/') && file.path !== '.dmtools/config.js',
+  );
+  const runnerTemplates: Record<string, string> = {
+    '.dmtools/runners/fa-bug-dev.json': runnerBug,
+    '.dmtools/runners/fa-story-dev.json': runnerStory,
+    '.dmtools/runners/fa-rework.json': runnerRework,
+    '.dmtools/runners/fa-review.json': runnerReview,
+  };
+  return [
+    ...files.map((file) => {
+      const tpl = runnerTemplates[file.path];
+      return tpl ? { ...file, content: runnerJson(tpl, c, file.path.endsWith('fa-review.json'), 'gitlab') } : file;
+    }),
+    {
+      path: '.gitlab-ci.yml',
+      content: `stages:
+  - dmtools
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: never
+
+variables:
+  DEFAULT_TRACKER: gitlab
+  DEFAULT_SCM: gitlab
+  DEFAULT_CI: gitlab-ci
+  GITLAB_WORKSPACE: $CI_PROJECT_NAMESPACE
+  GITLAB_REPOSITORY: $CI_PROJECT_NAME
+  GITLAB_BRANCH: $CI_DEFAULT_BRANCH
+  DMTOOLS_AGENT_CONFIG: .dmtools/runners/fa-story-dev.json
+  DMTOOLS_TICKET_ID: ""
+
+run-dmtools-agent:
+  stage: dmtools
+  image: eclipse-temurin:21-jdk
+  script:
+    - |
+      if [ -z "$DMTOOLS_TICKET_ID" ]; then
+        echo "Set DMTOOLS_TICKET_ID when starting this pipeline."
+        exit 1
+      fi
+      apt-get update
+      apt-get install -y --no-install-recommends curl
+      curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+      dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"
+`,
+    },
+  ];
+}
+
 function mergeChecklist(c: FactoryConfig): string {
   if (c.merge.mode === 'token') return `- [ ] Secret \`${c.merge.tokenSecret}\` (PAT of the merge account; repo scope, allowed to merge into the protected branch)\n`;
   if (c.merge.mode === 'app') return '- [ ] GitHub App installed on this repository (Contents, Pull requests, Issues: read & write; Checks: read) and allowed to bypass/merge in the branch ruleset\n- [ ] Secrets `MERGE_APP_ID` and `MERGE_APP_PRIVATE_KEY` (App id + generated private key PEM)\n';
@@ -704,10 +772,42 @@ export async function createFactoryPr(
   return pr.html_url;
 }
 
-export interface RepoSummary { full_name: string; private: boolean; permissions?: { push?: boolean } }
+export interface RepoSummary {
+  full_name: string;
+  private: boolean;
+  default_branch?: string;
+  permissions?: { push?: boolean };
+}
+
+/** Validates a GitLab instance URL and returns its API root without a trailing slash. */
+export function normalizeGitlabBaseUrl(baseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(baseUrl.trim());
+  } catch {
+    throw new Error('Enter a valid GitLab instance URL, such as https://gitlab.com');
+  }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (
+    (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error('GitLab instance URL must use HTTPS (HTTP is allowed only on localhost) and cannot include credentials, a query, or a fragment');
+  }
+  const path = url.pathname.replace(/\/+$/, '').replace(/\/api\/v4$/i, '');
+  return `${url.origin}${path}`;
+}
 
 /** Repositories the token can push to, most recently pushed first (owner/org filter optional). */
-export async function listRepos(token: string): Promise<RepoSummary[]> {
+export async function listRepos(
+  token: string,
+  scm: ScmId = 'github',
+  gitlabBaseUrl = 'https://gitlab.com',
+): Promise<RepoSummary[]> {
+  if (scm === 'gitlab') return listGitlabRepos(token, gitlabBaseUrl);
   const out: RepoSummary[] = [];
   for (let page = 1; page <= 5; page++) {
     const r = await gh<RepoSummary[]>(token, `/user/repos?per_page=100&sort=pushed&page=${page}&affiliation=owner,collaborator,organization_member`);
@@ -715,6 +815,252 @@ export async function listRepos(token: string): Promise<RepoSummary[]> {
     if (r.length < 100) break;
   }
   return out;
+}
+
+async function listGitlabRepos(token: string, baseUrl: string): Promise<RepoSummary[]> {
+  const apiUrl = `${normalizeGitlabBaseUrl(baseUrl)}/api/v4`;
+  const out: RepoSummary[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const res = await fetch(
+      `${apiUrl}/projects?membership=true&min_access_level=30&order_by=last_activity_at&per_page=100&page=${page}`,
+      { headers: { 'PRIVATE-TOKEN': token, Accept: 'application/json' } },
+    );
+    if (!res.ok) {
+      throw new Error(`GitLab ${res.status} while listing projects: ${(await res.text()).slice(0, 200)}`);
+    }
+    const projects = (await res.json()) as {
+      path_with_namespace: string;
+      visibility: string;
+      default_branch?: string;
+    }[];
+    out.push(...projects.map((p) => ({
+      full_name: p.path_with_namespace,
+      private: p.visibility !== 'public',
+      ...(p.default_branch ? { default_branch: p.default_branch } : {}),
+    })));
+    if (projects.length < 100) break;
+  }
+  return out;
+}
+
+function gitlabProjectPath(repo: string): string {
+  if (!GITLAB_REPO.test(repo)) throw new Error('GitLab project must be group/project');
+  return encodeURIComponent(repo);
+}
+
+async function gitlabRequest<T>(
+  token: string,
+  baseUrl: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const res = await fetch(`${normalizeGitlabBaseUrl(baseUrl)}/api/v4${path}`, {
+    ...init,
+    headers: {
+      'PRIVATE-TOKEN': token,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`GitLab ${res.status} on ${path}: ${body.slice(0, 200)}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+/** Fetches all existing label names on a GitLab project. */
+export async function listGitlabLabels(token: string, repo: string, baseUrl: string): Promise<string[]> {
+  const project = gitlabProjectPath(repo);
+  const labels: { name: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ name: string }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/labels?per_page=100&page=${page}`,
+    );
+    labels.push(...current);
+    if (current.length < 100) break;
+  }
+  return labels.map((label) => label.name);
+}
+
+/** Ensures all required FACTORY_LABELS exist on a GitLab project. */
+export async function ensureGitlabLabels(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  log: (message: string) => void = () => {},
+): Promise<{ created: string[]; existing: string[] }> {
+  const project = gitlabProjectPath(repo);
+  const current = await listGitlabLabels(token, repo, baseUrl);
+  const currentLower = new Set(current.map((name) => name.toLowerCase()));
+  const created: string[] = [];
+  const existing: string[] = [];
+  for (const label of FACTORY_LABELS) {
+    if (currentLower.has(label.name.toLowerCase())) {
+      existing.push(label.name);
+      continue;
+    }
+    try {
+      await gitlabRequest(token, baseUrl, `/projects/${project}/labels`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: label.name,
+          color: `#${label.color}`,
+          description: label.description,
+        }),
+      });
+      created.push(label.name);
+    } catch (error) {
+      if ((error as Error).message.startsWith('GitLab 409 ')) {
+        const latest = await listGitlabLabels(token, repo, baseUrl);
+        if (latest.some((name) => name.toLowerCase() === label.name.toLowerCase())) {
+          existing.push(label.name);
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+  log(created.length ? `labels created: ${created.join(', ')}` : 'labels: all required labels already exist');
+  return { created, existing };
+}
+
+async function listGitlabVariables(
+  token: string,
+  repo: string,
+  baseUrl: string,
+): Promise<{ key: string; masked?: boolean; hidden?: boolean; masked_and_hidden?: boolean }[]> {
+  const project = gitlabProjectPath(repo);
+  const variables: { key: string; masked?: boolean; hidden?: boolean; masked_and_hidden?: boolean }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ key: string; masked?: boolean; hidden?: boolean; masked_and_hidden?: boolean }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/variables?per_page=100&page=${page}`,
+    );
+    variables.push(...current);
+    if (current.length < 100) break;
+  }
+  return variables;
+}
+
+export async function listGitlabVariableNames(token: string, repo: string, baseUrl: string): Promise<string[]> {
+  return (await listGitlabVariables(token, repo, baseUrl)).map((variable) => variable.key);
+}
+
+/** Creates secret variables as masked and hidden; values are sent only to the configured instance. */
+export async function putGitlabVariables(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  variables: Record<string, string>,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  const project = gitlabProjectPath(repo);
+  const entries = Object.entries(variables).filter(([, value]) => value);
+  if (!entries.length) return;
+  for (const [key, value] of entries) {
+    if (value.includes('\n')) {
+      throw new Error(`GitLab secret variable ${key} must be a single line to be masked and hidden.`);
+    }
+    if (value.length < 8 || /\s/.test(value) || !/^[A-Za-z0-9_+=/@:.~-]+$/.test(value)) {
+      throw new Error(`GitLab variable ${key} cannot be masked and hidden. Use a value of at least 8 characters with no whitespace or unsupported characters.`);
+    }
+  }
+  const versionInfo = await gitlabRequest<{ version: string }>(token, baseUrl, '/version');
+  const version = versionInfo.version.match(/^(\d+)\.(\d+)/);
+  if (!version || Number(version[1]) < 17 || (Number(version[1]) === 17 && Number(version[2]) < 4)) {
+    throw new Error('Masked and hidden GitLab variables require GitLab 17.4 or newer. No project variables were changed.');
+  }
+  const existing = await listGitlabVariables(token, repo, baseUrl);
+  for (const [key, value] of entries) {
+    const current = existing.find((variable) => variable.key === key);
+    const body = {
+      key,
+      value,
+      variable_type: 'env_var',
+      masked: true,
+      protected: false,
+      raw: true,
+    };
+    const path = current
+      ? `/projects/${project}/variables/${encodeURIComponent(key)}`
+      : `/projects/${project}/variables`;
+    if (current && !(current.hidden || current.masked_and_hidden)) {
+      await gitlabRequest<void>(token, baseUrl, path, { method: 'DELETE' });
+      await gitlabRequest(token, baseUrl, `/projects/${project}/variables`, {
+        method: 'POST',
+        body: JSON.stringify({ ...body, masked_and_hidden: true }),
+      });
+      log(`GitLab project variable ${key} recreated as masked and hidden`);
+      continue;
+    }
+    const method = current ? 'PUT' : 'POST';
+    await gitlabRequest(token, baseUrl, path, {
+      method,
+      body: JSON.stringify({ ...body, ...(!current ? { masked_and_hidden: true } : {}) }),
+    });
+    log(`GitLab project variable ${key} ${current ? 'updated' : 'created'} as masked and hidden`);
+  }
+}
+
+/** Creates a GitLab branch, commits generated GitLab setup files, and opens a merge request. */
+export async function createGitlabMergeRequest(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  c: FactoryConfig,
+  log: (message: string) => void = () => {},
+): Promise<string> {
+  const project = gitlabProjectPath(repo);
+  const projectInfo = await gitlabRequest<{ default_branch: string }>(token, baseUrl, `/projects/${project}`);
+  const base = c.baseBranch || projectInfo.default_branch;
+  const files = renderGitlabFiles(c);
+  const fileExists = async (path: string) => {
+    try {
+      await gitlabRequest(token, baseUrl, `/projects/${project}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(base)}`);
+      return true;
+    } catch (error) {
+      if ((error as Error).message.startsWith('GitLab 404 ')) return false;
+      throw error;
+    }
+  };
+  const existing = await Promise.all(files.map((file) => fileExists(file.path)));
+  const branch = `chore/dmtools-factory-${Date.now().toString(36)}`;
+  await gitlabRequest(token, baseUrl, `/projects/${project}/repository/branches`, {
+    method: 'POST',
+    body: JSON.stringify({ branch, ref: base }),
+  });
+  const actions = files.map((file, index) => ({
+    action: existing[index] ? 'update' : 'create',
+    file_path: file.path,
+    content: file.content,
+  }));
+  await gitlabRequest(token, baseUrl, `/projects/${project}/repository/commits`, {
+    method: 'POST',
+    body: JSON.stringify({
+      branch,
+      commit_message: 'chore: set up DMTools for GitLab',
+      actions,
+    }),
+  });
+  log(`committed ${files.length} GitLab setup files to ${branch}`);
+  const mr = await gitlabRequest<{ web_url: string }>(token, baseUrl, `/projects/${project}/merge_requests`, {
+    method: 'POST',
+    body: JSON.stringify({
+      source_branch: branch,
+      target_branch: base,
+      title: 'chore: set up DMTools for GitLab',
+      description: `Sets up DMTools for \`${repo}\` using GitLab CI and project variables.\n\nRun the **dmtools** pipeline manually and provide \`DMTOOLS_TICKET_ID\` to invoke the configured story agent. GitHub Actions state-machine, quality-gate and auto-merge workflows are not part of this GitLab setup.`,
+      remove_source_branch: true,
+    }),
+  });
+  log(`merge request created: ${mr.web_url}`);
+  return mr.web_url;
 }
 
 export interface CiWorkflow {
@@ -851,11 +1197,22 @@ export async function listSecretNames(token: string, repo: string): Promise<stri
 }
 
 /** Every secret the generated factory reads, with a human hint. */
-export function requiredSecrets(c: FactoryConfig): { name: string; hint: string; url?: string; multiline?: boolean }[] {
-  const out: { name: string; hint: string; url?: string; multiline?: boolean }[] = [
-    { name: 'SOURCE_GITHUB_TOKEN', hint: `Classic PAT created while logged in as ${c.machine || 'the AI teammate account'} — scopes repo + workflow (workflow lets agents edit .github/workflows). The account needs write access to the repository.`,
-      url: TOKEN_LINKS.agent },
-  ];
+export function requiredSecrets(
+  c: FactoryConfig,
+  scm: ScmId = 'github',
+  gitlabBaseUrl = 'https://gitlab.com',
+): { name: string; hint: string; url?: string; multiline?: boolean }[] {
+  const out: { name: string; hint: string; url?: string; multiline?: boolean }[] = scm === 'gitlab'
+    ? [{
+        name: 'GITLAB_TOKEN',
+        hint: `GitLab personal access token for ${c.machine || 'the AI teammate account'} with api and write_repository scopes.`,
+        url: TOKEN_LINKS.setupGitlab(gitlabBaseUrl),
+      }]
+    : [{
+        name: 'SOURCE_GITHUB_TOKEN',
+        hint: `Classic PAT created while logged in as ${c.machine || 'the AI teammate account'} — scopes repo + workflow (workflow lets agents edit .github/workflows). The account needs write access to the repository.`,
+        url: TOKEN_LINKS.agent,
+      }];
   const seen = new Set<string>();
   for (const e of allEntries(c)) {
     if (seen.has(e.keyEnv)) continue;
@@ -863,8 +1220,8 @@ export function requiredSecrets(c: FactoryConfig): { name: string; hint: string;
     const p = PROVIDER_PRESETS.find((x) => x.id === e.preset)!;
     out.push({ name: e.keyEnv, hint: `${p.label}: ${p.keyHelp}`, url: p.keyUrl });
   }
-  if (c.merge.mode === 'token') out.push({ name: c.merge.tokenSecret, hint: 'Classic PAT of the merge account — repo scope; the account must be allowed to merge into the target branch.', url: TOKEN_LINKS.merge });
-  if (c.merge.mode === 'app') {
+  if (scm === 'github' && c.merge.mode === 'token') out.push({ name: c.merge.tokenSecret, hint: 'Classic PAT of the merge account — repo scope; the account must be allowed to merge into the protected branch.', url: TOKEN_LINKS.merge });
+  if (scm === 'github' && c.merge.mode === 'app') {
     out.push({ name: 'MERGE_APP_ID', hint: 'GitHub App ID (numeric, App settings → General). Install the App on this repository first.', url: TOKEN_LINKS.app(c.repo) });
     out.push({ name: 'MERGE_APP_PRIVATE_KEY', hint: 'GitHub App private key — paste the whole .pem file.', multiline: true });
   }
@@ -892,6 +1249,8 @@ async function ghRaw(token: string, path: string, init: RequestInit): Promise<vo
 export const TOKEN_LINKS = {
   /** Setup token used by THIS page: commit + PR (repo), workflow files (workflow); secrets need repo-admin rights. */
   setup: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20setup',
+  setupGitlab: (baseUrl = 'https://gitlab.com') =>
+    `${normalizeGitlabBaseUrl(baseUrl)}/-/user_settings/personal_access_tokens`,
   /** SOURCE_GITHUB_TOKEN of the AI teammate: push branches incl. workflow edits, labels, PRs, issues, dispatch. */
   agent: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20agent',
   /** Separate merge PAT: merge PRs + labels. */
@@ -905,11 +1264,28 @@ export const TOKEN_LINKS = {
 
 export interface TokenCheck {
   login: string;
-  kind: 'classic' | 'fine-grained' | 'unknown';
+  kind: 'classic' | 'fine-grained' | 'personal access' | 'unknown';
   scopes: string[]; // classic only
   missingScopes: string[];
   admin: boolean | null; // on the selected repo
   push: boolean | null;
+}
+
+/** Validates a GitLab personal access token and returns the authenticated user. */
+export async function checkGitlabToken(token: string, baseUrl = 'https://gitlab.com'): Promise<TokenCheck> {
+  const apiUrl = `${normalizeGitlabBaseUrl(baseUrl)}/api/v4`;
+  const res = await fetch(`${apiUrl}/user`, {
+    headers: { 'PRIVATE-TOKEN': token, Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    throw new Error(
+      res.status === 401
+        ? 'GitLab token rejected (401) — expired, mistyped, or missing API access'
+        : `GitLab ${res.status} on /user`,
+    );
+  }
+  const user = (await res.json()) as { username: string };
+  return { login: user.username, kind: 'personal access', scopes: [], missingScopes: [], admin: null, push: null };
 }
 
 /** Inspects the token: classic scopes from X-OAuth-Scopes, and the user's permissions on the repo. */

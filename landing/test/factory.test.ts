@@ -11,10 +11,21 @@ import {
   prBody,
   createRepo,
   ensureLabels,
+  ensureGitlabLabels,
   listLabels,
+  listGitlabLabels,
   FACTORY_LABELS,
   QUALITY_PRESETS,
   TOOLCHAINS,
+  SCM,
+  listRepos,
+  checkGitlabToken,
+  normalizeGitlabBaseUrl,
+  TOKEN_LINKS,
+  renderGitlabFiles,
+  putGitlabVariables,
+  createGitlabMergeRequest,
+  requiredSecrets,
   isCiEnabled,
   isFaUniversalEnabled,
   isFaMemoryEnabled,
@@ -31,6 +42,230 @@ function validConfig(overrides: Partial<FactoryConfig> = {}): FactoryConfig {
     ...overrides,
   };
 }
+
+describe('Source control options', () => {
+  it('makes GitLab available in the factory selector', () => {
+    assert.deepEqual(SCM.find((option) => option.id === 'gitlab'), {
+      id: 'gitlab',
+      label: 'GitLab',
+      available: true,
+    });
+  });
+
+  it('accepts nested GitLab namespaces in repository paths', () => {
+    assert.equal(validate(validConfig({ repo: 'team/platform/service' }), 'gitlab').repo, undefined);
+    assert.equal(validate(validConfig({ repo: 'team' }), 'gitlab').repo, 'Use group/project');
+  });
+
+  it('normalizes GitLab instance URLs, including self-managed path prefixes', () => {
+    assert.equal(normalizeGitlabBaseUrl('https://gitlab.example.com/'), 'https://gitlab.example.com');
+    assert.equal(normalizeGitlabBaseUrl('https://git.example.com/gitlab/api/v4/'), 'https://git.example.com/gitlab');
+    assert.equal(normalizeGitlabBaseUrl('http://localhost:8080/gitlab'), 'http://localhost:8080/gitlab');
+    assert.throws(() => normalizeGitlabBaseUrl('ftp://gitlab.example.com'), /must use HTTPS/);
+    assert.throws(() => normalizeGitlabBaseUrl('http://gitlab.example.com'), /must use HTTPS/);
+    assert.throws(() => normalizeGitlabBaseUrl('https://user:pass@gitlab.example.com'), /cannot include credentials/);
+    assert.equal(
+      TOKEN_LINKS.setupGitlab('https://gitlab.example.com/gitlab'),
+      'https://gitlab.example.com/gitlab/-/user_settings/personal_access_tokens',
+    );
+  });
+
+  it('lists writable GitLab projects using a personal access token', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify([
+        { path_with_namespace: 'team/platform/service', visibility: 'private' },
+        { path_with_namespace: 'team/public-tool', visibility: 'public' },
+      ]), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const repos = await listRepos('glpat_test-token-123456789', 'gitlab', 'https://gitlab.example.com/gitlab');
+      assert.deepEqual(repos, [
+        { full_name: 'team/platform/service', private: true },
+        { full_name: 'team/public-tool', private: false },
+      ]);
+      assert.match(calls[0].url, /^https:\/\/gitlab\.example\.com\/gitlab\/api\/v4\/projects\?.*min_access_level=30/);
+      assert.equal(new Headers(calls[0].init?.headers).get('PRIVATE-TOKEN'), 'glpat_test-token-123456789');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('checks a GitLab personal access token against the authenticated user endpoint', async () => {
+    const origFetch = globalThis.fetch;
+    let request: { url: string; init?: RequestInit } | undefined;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      request = { url: String(input), init };
+      return new Response(JSON.stringify({ username: 'alice' }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const result = await checkGitlabToken('glpat_test-token-123456789', 'https://gitlab.example.com/gitlab/');
+      assert.equal(request?.url, 'https://gitlab.example.com/gitlab/api/v4/user');
+      assert.equal(new Headers(request?.init?.headers).get('PRIVATE-TOKEN'), 'glpat_test-token-123456789');
+      assert.equal(result.login, 'alice');
+      assert.equal(result.kind, 'personal access');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('uses a GitLab source token and emits GitLab-native setup files', () => {
+    const cfg = validConfig();
+    const files = renderGitlabFiles(cfg);
+    assert.ok(files.some((file) => file.path === '.gitlab-ci.yml'));
+    assert.ok(files.every((file) => !file.path.startsWith('.github/')));
+    assert.ok(files.every((file) => file.path !== '.dmtools/config.js'));
+    const story = files.find((file) => file.path === '.dmtools/runners/fa-story-dev.json');
+    assert.ok(story);
+    assert.match(story.content, /"DEFAULT_TRACKER": "gitlab"/);
+    assert.match(story.content, /"DEFAULT_SCM": "gitlab"/);
+    assert.equal(requiredSecrets(cfg, 'gitlab')[0].name, 'GITLAB_TOKEN');
+  });
+
+  it('recreates existing GitLab secrets as masked and hidden and creates new ones that way', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.endsWith('/version')) return new Response(JSON.stringify({ version: '17.5.0' }), { status: 200 });
+      if (url.includes('/variables?')) {
+        return new Response(JSON.stringify([{ key: 'EXISTING', masked: true, hidden: false }]), { status: 200 });
+      }
+      if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+      return new Response(JSON.stringify({ key: 'NEW_SECRET' }), { status: init?.method === 'PUT' ? 200 : 201 });
+    }) as typeof fetch;
+
+    try {
+      await putGitlabVariables(
+        'glpat_test-token-123456789',
+        'team/app',
+        'https://gitlab.example.com/prefix',
+        {
+          EXISTING: 'oldSecretValue123',
+          NEW_SECRET: 'newSecretValue456',
+        },
+      );
+      assert.equal(calls[2].init?.method, 'DELETE');
+      assert.equal(calls[3].init?.method, 'POST');
+      assert.equal(JSON.parse(String(calls[3].init?.body)).masked, true);
+      assert.equal(JSON.parse(String(calls[3].init?.body)).masked_and_hidden, true);
+      assert.equal(calls[4].init?.method, 'POST');
+      assert.equal(JSON.parse(String(calls[4].init?.body)).masked_and_hidden, true);
+      assert.equal(calls[5].init?.method, 'POST');
+      const basePathVariable = JSON.parse(String(calls[5].init?.body));
+      assert.equal(basePathVariable.masked, false);
+      assert.equal('masked_and_hidden' in basePathVariable, false);
+      assert.match(calls[5].url, /^https:\/\/gitlab\.example\.com\/prefix\/api\/v4\/projects\/team%2Fapp\/variables$/);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('updates already hidden GitLab secrets without trying to change their hidden setting', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.endsWith('/version')) return new Response(JSON.stringify({ version: '17.5.0' }), { status: 200 });
+      if (url.includes('/variables?')) {
+        return new Response(JSON.stringify([{ key: 'HIDDEN_SECRET', masked: true, hidden: true }]), { status: 200 });
+      }
+      return new Response(JSON.stringify({ key: 'HIDDEN_SECRET', masked: true, hidden: true }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      await putGitlabVariables(
+        'glpat_test-token-123456789',
+        'team/app',
+        'https://gitlab.example.com',
+        { HIDDEN_SECRET: 'updatedSecretValue123' },
+      );
+      assert.equal(calls[2].init?.method, 'PUT');
+      const update = JSON.parse(String(calls[2].init?.body));
+      assert.equal(update.masked, true);
+      assert.equal('masked_and_hidden' in update, false);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('rejects GitLab secret values that cannot be masked and hidden', async () => {
+    await assert.rejects(
+      putGitlabVariables(
+        'glpat_test-token-123456789',
+        'team/app',
+        'https://gitlab.example.com',
+        { MULTILINE_SECRET: 'line one\nline two' },
+      ),
+      /must be a single line to be masked and hidden/,
+    );
+  });
+
+  it('does not alter project variables when GitLab is older than 17.4', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      return new Response(JSON.stringify({ version: '17.3.8' }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      await assert.rejects(
+        putGitlabVariables(
+          'glpat_test-token-123456789',
+          'team/app',
+          'https://gitlab.example.com',
+          { GITLAB_TOKEN: 'glpat_secretvalue123' },
+        ),
+        /require GitLab 17\.4 or newer/,
+      );
+      assert.deepEqual(calls, ['https://gitlab.example.com/api/v4/version']);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('commits GitLab setup files and opens a merge request', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.endsWith('/projects/team%2Fapp')) {
+        return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
+      }
+      if (url.includes('/repository/tree?')) return new Response(JSON.stringify([]), { status: 200 });
+      if (url.endsWith('/merge_requests')) {
+        return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+      }
+      return new Response(JSON.stringify({ id: 1 }), { status: 201 });
+    }) as typeof fetch;
+
+    try {
+      const mrUrl = await createGitlabMergeRequest(
+        'glpat_test-token-123456789',
+        'team/app',
+        'https://gitlab.example.com',
+        validConfig({ repo: 'team/app', baseBranch: 'main' }),
+      );
+      assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
+      const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
+      const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string }[];
+      assert.ok(actions.some((file) => file.file_path === '.gitlab-ci.yml'));
+      assert.ok(actions.every((file) => !file.file_path.startsWith('.github/')));
+      assert.ok(calls.some((call) => call.url.endsWith('/merge_requests')));
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});
 
 describe('Issue #749 — agents repository link', () => {
   it('points /agents/ index page at AGENTS_REPO (IstiN/dmtools-agents) and not broken epam/dm.ai/tree/main/agents', () => {
@@ -327,6 +562,66 @@ describe('Issue #757 — Create required labels automatically / on demand', () =
     assert.equal(res.existing.length, FACTORY_LABELS.length);
     assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
     assert.deepEqual(logs, ['labels: all required labels already exist']);
+  });
+
+  it('ensureGitlabLabels creates missing project labels with GitLab colors and descriptions', async () => {
+    const calls: { url: string; method: string; body?: Record<string, string> }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, method, body });
+      if (method === 'GET') {
+        return new Response(JSON.stringify([{ name: 'AGENT:DEV' }, { name: 'bug' }]), { status: 200 });
+      }
+      if (method === 'POST') return new Response(JSON.stringify(body), { status: 201 });
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+
+    const logs: string[] = [];
+    const result = await ensureGitlabLabels(
+      'glpat_testtoken123456789012345',
+      'acme/demo',
+      'https://gitlab.example.com/group',
+      (message) => logs.push(message),
+    );
+
+    assert.deepEqual(result.existing, ['agent:dev']);
+    assert.equal(result.created.length, FACTORY_LABELS.length - 1);
+    const posts = calls.filter((call) => call.method === 'POST');
+    assert.equal(posts.length, FACTORY_LABELS.length - 1);
+    assert.deepEqual(posts[0].body, {
+      name: 'agent:review',
+      color: '#0e8a16',
+      description: 'Trigger AI Teammate PR review leg',
+    });
+    assert.ok(calls.every((call) => call.url.startsWith('https://gitlab.example.com/group/api/v4/')));
+    assert.ok(logs[0].startsWith('labels created: '));
+  });
+
+  it('listGitlabLabels paginates and ensureGitlabLabels skips existing labels', async () => {
+    const calls: { url: string; method: string }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      calls.push({ url, method });
+      if (url.includes('page=1')) {
+        return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({ name: `label-${index}` }))), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify(FACTORY_LABELS.map((label) => ({ name: label.name }))), { status: 200 });
+    }) as typeof fetch;
+
+    const labels = await listGitlabLabels('glpat_testtoken123456789012345', 'acme/demo', 'https://gitlab.com');
+    assert.equal(labels.length, 100 + FACTORY_LABELS.length);
+    assert.ok(calls.some((call) => call.url.includes('page=2')));
+
+    calls.length = 0;
+    const result = await ensureGitlabLabels('glpat_testtoken123456789012345', 'acme/demo', 'https://gitlab.com');
+    assert.deepEqual(result.created, []);
+    assert.equal(result.existing.length, FACTORY_LABELS.length);
+    assert.equal(calls.filter((call) => call.method === 'POST').length, 0);
   });
 
   it('prBody reflects label creation status (createLabels: true vs false)', () => {
