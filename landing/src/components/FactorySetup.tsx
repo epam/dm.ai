@@ -12,6 +12,7 @@ import {
   createRepo,
   defaults,
   detectCi,
+  ensureGitlabIssuePollingSchedule,
   ensureGitlabLabels,
   ensureLabels,
   isCiEnabled,
@@ -212,9 +213,9 @@ export default function FactorySetup() {
       Object.keys(errors).length
         ? []
         : scm === 'gitlab'
-          ? renderGitlabFiles(cfg)
+          ? renderGitlabFiles(cfg, normalizedGitlabBaseUrl)
           : renderFiles(cfg),
-    [cfg, errors, scm],
+    [cfg, errors, scm, normalizedGitlabBaseUrl],
   );
   const set = <K extends keyof FactoryConfig>(k: K, v: FactoryConfig[K]) => setCfg((c) => ({ ...c, [k]: v }));
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
@@ -451,6 +452,13 @@ export default function FactorySetup() {
         const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log);
         setSecretVals({});
         setPrUrl(mergeRequest);
+        await ensureGitlabIssuePollingSchedule(
+          token,
+          cfg.repo,
+          normalizedGitlabBaseUrl,
+          cfg.baseBranch,
+          log,
+        );
         listGitlabVariableNames(token, cfg.repo, normalizedGitlabBaseUrl)
           .then(setExisting)
           .catch((e) => setError((e as Error).message));
@@ -500,7 +508,7 @@ export default function FactorySetup() {
       ? 'crap4'
       : 'existing';
 
-  const faEnabled = isFaUniversalEnabled(cfg);
+  const faEnabled = scm === 'github' && isFaUniversalEnabled(cfg);
   const memEnabled = isFaMemoryEnabled(cfg);
 
   const stepRepoReady = Boolean(cfg.repo && !errors.repo && !errors.baseBranch && !errors.machine);
@@ -927,8 +935,14 @@ export default function FactorySetup() {
             <div>
               <h2 className="factory__cardTitle">FA Universal Agent &amp; Project Memory</h2>
               <p className="factory__cardSub">
-                Install the ultra-fast <code>@fa</code> conversational agent (~2s cold start) and repository-backed
-                durable memory alongside your DMTools factory. Both are optional and enabled by default.
+                {scm === 'gitlab'
+                  ? 'Project memory is supported in GitLab. The @fa conversational workflow currently depends on GitHub Actions and is not generated for GitLab.'
+                  : (
+                      <>
+                        Install the ultra-fast <code>@fa</code> conversational agent (~2s cold start) and repository-backed
+                        durable memory alongside your DMTools factory. Both are optional and enabled by default.
+                      </>
+                    )}
               </p>
             </div>
           </header>
@@ -939,18 +953,25 @@ export default function FactorySetup() {
                 <input
                   type="checkbox"
                   checked={faEnabled}
+                  disabled={scm === 'gitlab'}
                   onChange={(e) => set('faUniversal', e.target.checked)}
                 />
                 <span className="factory__featureTitle">
-                  FA Universal Agent (<code>@fa</code> mentions)
+                  FA Universal Agent {scm === 'gitlab' ? '(GitHub Actions only)' : <>(<code>@fa</code> mentions)</>}
                 </span>
-                <em className="factory__badge">Recommended</em>
+                {scm === 'github' && <em className="factory__badge">Recommended</em>}
               </div>
               <p className="factory__featureDesc">
-                Generates <code>.github/workflows/fa-universal.yml</code>. Mention <code>@fa</code> in any Issue body,
-                Issue comment, or PR review comment to trigger an interactive coding agent with full DMTools CLI access,
-                single-queue concurrency, and automatic session persistence on branch{' '}
-                <code>fa-sess/&lt;session_key&gt;</code>.
+                {scm === 'gitlab'
+                  ? 'This GitHub Actions conversation workflow is not part of the generated GitLab CI pipeline.'
+                  : (
+                      <>
+                        Generates <code>.github/workflows/fa-universal.yml</code>. Mention <code>@fa</code> in any Issue
+                        body, Issue comment, or PR review comment to trigger an interactive coding agent with full
+                        DMTools CLI access, single-queue concurrency, and automatic session persistence on branch{' '}
+                        <code>fa-sess/&lt;session_key&gt;</code>.
+                      </>
+                    )}
               </p>
             </label>
 
@@ -968,8 +989,8 @@ export default function FactorySetup() {
               </div>
               <p className="factory__featureDesc">
                 Generates <code>.fah/config.yaml</code> pointing project memory to <code>.fah/memory</code>. Architectural
-                decisions, conventions, and learned repo facts are committed to the repository so every future{' '}
-                <code>@fa</code> and teammate run starts with shared context.
+                decisions, conventions, and learned repo facts are committed to the repository so every future DMTools
+                agent run starts with shared context.
               </p>
             </label>
           </div>
@@ -1084,8 +1105,14 @@ export default function FactorySetup() {
             <div>
               <h2 className="factory__cardTitle">CI &amp; Quality Gate</h2>
               <p className="factory__cardSub">
-                Choose how the state machine validates PRs before merging: use your existing CI workflow, generate a
-                ready-made <code>crap4*</code> quality gate, or skip CI validation.
+                {scm === 'gitlab'
+                  ? 'GitLab CI runs native factory jobs for scheduled issue polling, manual runs, and merge requests. You can also generate a language-specific crap4* quality job.'
+                  : (
+                      <>
+                        Choose how the state machine validates PRs before merging: use your existing CI workflow,
+                        generate a ready-made <code>crap4*</code> quality gate, or skip CI validation.
+                      </>
+                    )}
               </p>
             </div>
           </header>
@@ -1140,7 +1167,8 @@ export default function FactorySetup() {
             {ciMode === 'crap4' && (
               <>
                 <small>
-                  Generates a ready-to-use <code>.github/workflows/quality.yml</code> powered by the{' '}
+                  Generates a ready-to-use{' '}
+                  <code>{scm === 'gitlab' ? '.gitlab-ci.yml' : '.github/workflows/quality.yml'}</code> powered by the{' '}
                   <strong>crap4*</strong> CRAP metric (Change Risk Anti-Patterns = cyclomatic complexity + test
                   coverage) for your tech stack.
                 </small>
@@ -1175,18 +1203,24 @@ export default function FactorySetup() {
             {ciMode === 'existing' && (
               <>
                 <small>
-                  The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong> the
-                  CI workflow on the PR head when validation is due and merges once the checks below are green — so the
-                  workflow needs a <code>workflow_dispatch</code> trigger.
+                  {scm === 'gitlab'
+                    ? 'The generated factory pipeline does not import or dispatch existing GitLab CI jobs. Choose a crap4* preset to add a generated quality job, or configure your existing checks in the project after merging.'
+                    : (
+                        <>
+                          The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong>{' '}
+                          the CI workflow on the PR head when validation is due and merges once the checks below are
+                          green — so the workflow needs a <code>workflow_dispatch</code> trigger.
+                        </>
+                      )}
                 </small>
                 {gatesBusy && <small>Reading branch protection and workflows…</small>}
-                {ci && ci.workflows.length === 0 && (
+                {scm === 'github' && ci && ci.workflows.length === 0 && (
                   <small>
                     No CI workflow found in .github/workflows — fill in the fields manually, generate a crap4* quality
                     gate, or switch to “No CI workflow”.
                   </small>
                 )}
-                {ci && ci.workflows.length > 0 && (
+                {scm === 'github' && ci && ci.workflows.length > 0 && (
                   <div className="factory__gates" role="radiogroup" aria-label="CI workflow">
                     {ci.workflows.map((w) => {
                       const on = cfg.ciFile === w.file;
@@ -1440,7 +1474,7 @@ export default function FactorySetup() {
               </h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'Set GitLab project variables and open a merge request with GitLab CI and DMTools runner configuration.'
+                  ? 'Create GitLab CI automation for scheduled issue processing, manual runs, merge-request review/rework, and approved merges.'
                   : 'Seal repository secrets in your browser (libsodium) and ensure the 12 factory state-machine labels exist.'}
               </p>
             </div>
@@ -1450,7 +1484,7 @@ export default function FactorySetup() {
             <legend>Repository secrets</legend>
             <small>
               {scm === 'gitlab'
-                ? 'Optional — supplied secret values are stored as GitLab project CI/CD variables with masked and hidden enabled before the merge request opens. GitLab requires version 17.4 or newer and single-line values that meet its masking rules; existing non-hidden secrets are deleted and recreated with hidden enabled.'
+                ? 'Optional — supplied secret values are stored as GitLab project CI/CD variables with masked and hidden enabled before the merge request opens. GitLab requires version 17.4 or newer and single-line values that meet its masking rules; existing non-hidden secrets are deleted and recreated with hidden enabled. After merging the setup request, a project schedule polls for assigned or labeled issues every 10 minutes.'
                 : 'Optional — fill a value and it is stored as an encrypted Actions secret before the PR opens. Values are sealed in this browser with the repository public key (libsodium), sent only to api.github.com and never readable afterwards. Leave a field empty to add it yourself later.'}
             </small>
             {secretsList.map((x) => (
@@ -1728,9 +1762,11 @@ export default function FactorySetup() {
         {previewTab === 'guide' && (
           <div className="factory__guide">
             <div className="factory__guideBlock">
-              <h3>1. Interactive @fa Universal Agent</h3>
+              <h3>{scm === 'gitlab' ? '1. GitLab CI Factory Jobs' : '1. Interactive @fa Universal Agent'}</h3>
               <p>
-                {faEnabled ? (
+                {scm === 'gitlab' ? (
+                  <>GitLab does not generate the GitHub Actions-only <code>@fa</code> conversational workflow.</>
+                ) : faEnabled ? (
                   <>
                     <code>.github/workflows/fa-universal.yml</code> is <strong>enabled</strong> in your setup.
                   </>
@@ -1740,56 +1776,79 @@ export default function FactorySetup() {
                   </>
                 )}
               </p>
-              <ul>
-                <li>
-                  <strong>Trigger in Issues &amp; PRs:</strong> Comment <code>@fa &lt;your instruction&gt;</code> on any
-                  Issue or Pull Request, or open a new Issue containing <code>@fa</code>.
-                </li>
-                <li>
-                  <strong>~2s Cold Start:</strong> The workflow downloads precompiled native binaries (<code>fa</code> +{' '}
-                  <code>dmtools-dart</code>), prefetches the Issue/PR thread in parallel, and launches immediately
-                  without checkout action overhead.
-                </li>
-                <li>
-                  <strong>Single-Queue Session Continuation:</strong> Conversation history is stored on orphan branch{' '}
-                  <code>fa-sess/gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code>. Follow-up <code>@fa</code> comments
-                  resume the exact same session and drain in order.
-                </li>
-                <li>
-                  <strong>Durable Project Memory:</strong>{' '}
-                  {memEnabled ? (
-                    <>
-                      With <code>.fah/config.yaml</code> enabled, durable facts are saved under{' '}
-                      <code>.fah/memory/</code> and committed back to your branch automatically.
-                    </>
-                  ) : (
-                    <>Enable Project Memory in Step 2 to persist learned conventions in .fah/memory/.</>
-                  )}
-                </li>
-                <li>
-                  <strong>Real-Time Mid-Turn Steering (DAP Hub):</strong> Each running agent registers on the DAP Hub as{' '}
-                  <code>DAP_AGENT_NAME=gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code> when secret{' '}
-                  <code>FA_DAP_INVITE</code> (or <code>DAP_HUB_URL</code> + <code>DAP_CLIENT_SECRET</code>) is set,
-                  allowing you or other agents to steer it live mid-turn via <code>agent_message</code>.
-                </li>
-              </ul>
+              {scm === 'gitlab' ? (
+                <ul>
+                  <li>The scheduled poller checks assigned or labeled issues every 10 minutes.</li>
+                  <li>Merge-request pipelines can run the review or rework runner based on labels.</li>
+                  <li>Approved merge requests by {cfg.machine || 'ai-teammate'} are queued to merge after pipeline success.</li>
+                  <li>Manual agent runs are available from GitLab Build → Pipelines using ticket and runner variables.</li>
+                </ul>
+              ) : (
+                <ul>
+                  <li>
+                    <strong>Trigger in Issues &amp; PRs:</strong> Comment <code>@fa &lt;your instruction&gt;</code> on any
+                    Issue or Pull Request, or open a new Issue containing <code>@fa</code>.
+                  </li>
+                  <li>
+                    <strong>~2s Cold Start:</strong> The workflow downloads precompiled native binaries (<code>fa</code> +{' '}
+                    <code>dmtools-dart</code>), prefetches the Issue/PR thread in parallel, and launches immediately
+                    without checkout action overhead.
+                  </li>
+                  <li>
+                    <strong>Single-Queue Session Continuation:</strong> Conversation history is stored on orphan branch{' '}
+                    <code>fa-sess/gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code>. Follow-up <code>@fa</code> comments
+                    resume the exact same session and drain in order.
+                  </li>
+                  <li>
+                    <strong>Durable Project Memory:</strong>{' '}
+                    {memEnabled ? (
+                      <>
+                        With <code>.fah/config.yaml</code> enabled, durable facts are saved under{' '}
+                        <code>.fah/memory/</code> and committed back to your branch automatically.
+                      </>
+                    ) : (
+                      <>Enable Project Memory in Step 2 to persist learned conventions in .fah/memory/.</>
+                    )}
+                  </li>
+                  <li>
+                    <strong>Real-Time Mid-Turn Steering (DAP Hub):</strong> Each running agent registers on the DAP Hub as{' '}
+                    <code>DAP_AGENT_NAME=gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code> when secret{' '}
+                    <code>FA_DAP_INVITE</code> (or <code>DAP_HUB_URL</code> + <code>DAP_CLIENT_SECRET</code>) is set,
+                    allowing you or other agents to steer it live mid-turn via <code>agent_message</code>.
+                  </li>
+                </ul>
+              )}
             </div>
 
             <div className="factory__guideBlock">
-              <h3>2. Autonomous Issue-to-PR Teammate</h3>
-              <ul>
-                <li>
-                  <strong>Assign to {cfg.machine || 'ai-teammate'}:</strong> Assign any GitHub Issue to{' '}
-                  <code>{cfg.machine || 'ai-teammate'}</code> (or add label <code>agent:dev</code>) to trigger the
-                  autonomous development leg.
-                </li>
-                <li>
-                  <strong>State Machine &amp; Quality Gate:</strong> Once a PR is opened (<code>ai_developed</code>),
-                  the state machine dispatches your quality gate (
-                  <code>{isCiEnabled(cfg) ? cfg.ciFile || 'quality.yml' : 'none'}</code>), runs AI code review (
-                  <code>agent:review</code>), and auto-merges when approved (<code>pr_approved</code>).
-                </li>
-              </ul>
+              <h3>2. {scm === 'gitlab' ? 'GitLab Issue-to-MR Teammate' : 'Autonomous Issue-to-PR Teammate'}</h3>
+              {scm === 'gitlab' ? (
+                <ul>
+                  <li>
+                    Assign an open issue to <code>{cfg.machine || 'ai-teammate'}</code> or add <code>agent:dev</code>,
+                    <code>agent:review</code>, or <code>agent:rework</code>; the poller selects a generated runner.
+                  </li>
+                  <li>
+                    Merge requests labeled <code>agent:review</code> or <code>agent:rework</code> are processed by their
+                    corresponding runner. A <code>pr_approved</code> label queues eligible machine-authored MRs to merge
+                    after pipeline success.
+                  </li>
+                </ul>
+              ) : (
+                <ul>
+                  <li>
+                    <strong>Assign to {cfg.machine || 'ai-teammate'}:</strong> Assign any GitHub Issue to{' '}
+                    <code>{cfg.machine || 'ai-teammate'}</code> (or add label <code>agent:dev</code>) to trigger the
+                    autonomous development leg.
+                  </li>
+                  <li>
+                    <strong>State Machine &amp; Quality Gate:</strong> Once a PR is opened (<code>ai_developed</code>),
+                    the state machine dispatches your quality gate (
+                    <code>{isCiEnabled(cfg) ? cfg.ciFile || 'quality.yml' : 'none'}</code>), runs AI code review (
+                    <code>agent:review</code>), and auto-merges when approved (<code>pr_approved</code>).
+                  </li>
+                </ul>
+              )}
             </div>
 
             <div className="factory__guideBlock">

@@ -240,13 +240,27 @@ function providerEnv(list: ProviderEntry[], mode: 'default' | 'queue'): Record<s
   return env;
 }
 
-function runnerJson(tpl: string, c: FactoryConfig, review: boolean, scm: ScmId = 'github'): string {
+function runnerJson(
+  tpl: string,
+  c: FactoryConfig,
+  review: boolean,
+  scm: ScmId = 'github',
+  gitlabBaseUrl = 'https://gitlab.com',
+): string {
   const json = JSON.parse(tpl);
   const list = review && c.providers.reviewSeparate ? c.providers.reviewEntries : c.providers.entries;
   if (json.params.customParams?.targetRepository) json.params.customParams.targetRepository.baseBranch = c.baseBranch;
   json.params.envVariables = {
     ...(scm === 'gitlab'
-      ? { DEFAULT_TRACKER: 'gitlab', DEFAULT_SCM: 'gitlab', DEFAULT_CI: 'gitlab-ci' }
+      ? {
+          DEFAULT_TRACKER: 'gitlab',
+          DEFAULT_SCM: 'gitlab',
+          DEFAULT_CI: 'gitlab-ci',
+          GITLAB_BASE_PATH: gitlabBaseUrl,
+          GITLAB_WORKSPACE: c.repo.split('/').slice(0, -1).join('/'),
+          GITLAB_REPOSITORY: c.repo.split('/').at(-1) ?? '',
+          GITLAB_BRANCH: c.baseBranch,
+        }
       : json.params.envVariables.DEFAULT_TRACKER
         ? { DEFAULT_TRACKER: scm }
         : {}),
@@ -568,11 +582,205 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
   ];
 }
 
-/** GitLab projects use GitLab CI and manual ticket runs; GitHub Actions files are intentionally omitted. */
-export function renderGitlabFiles(c: FactoryConfig): FactoryFile[] {
+function renderGitlabIssuePoller(c: FactoryConfig): string {
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+: "\${GITLAB_TOKEN:?Set the GITLAB_TOKEN project CI/CD variable}"
+: "\${CI_API_V4_URL:?This script must run in GitLab CI}"
+: "\${CI_PROJECT_ID:?This script must run in a project pipeline}"
+
+machine='${c.machine}'
+page=1
+while :; do
+  issues=$(curl --silent --show-error --fail \\
+    --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+    "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues?state=opened&per_page=100&page=$page")
+  count=$(printf '%s' "$issues" | jq 'length')
+  printf '%s' "$issues" | jq -r --arg machine "$machine" '
+    .[]
+    | select((.labels // []) | all(. != "ai_developed" and . != "ai_pr_reviewed"))
+    | select(
+        ((.assignees // []) | any(.username == $machine))
+        or ((.labels // []) | any(. == "agent:dev" or . == "agent:review" or . == "agent:rework"))
+      )
+    | [.iid, ((.labels // []) | join(","))] | @tsv
+  ' | while IFS="$(printf '\\t')" read -r iid labels; do
+    case ",$labels," in
+      *,agent:skip,*) continue ;;
+    esac
+    case ",$labels," in
+      *,agent:review,*) config='.dmtools/runners/fa-review.json'; trigger='agent:review' ;;
+      *,agent:rework,*) config='.dmtools/runners/fa-rework.json'; trigger='agent:rework' ;;
+      *)
+        case ",$labels," in
+          *,agent:dev,*) trigger='agent:dev' ;;
+          *) trigger='' ;;
+        esac
+        case ",$labels," in
+          *,bug,*) config='.dmtools/runners/fa-bug-dev.json' ;;
+          *) config='.dmtools/runners/fa-story-dev.json' ;;
+        esac
+        ;;
+    esac
+
+    echo "Running $config for GitLab issue #$iid"
+    dmtools run "$config" --inputTicketId "$iid"
+    result_label='ai_developed'
+    if [ "$trigger" = 'agent:review' ]; then
+      result_label='ai_pr_reviewed'
+    fi
+    args=(--request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=$result_label")
+    if [ -n "$trigger" ]; then
+      args+=(--form-string "remove_labels=$trigger")
+    fi
+    curl --silent --show-error --fail "\${args[@]}" \\
+      "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues/$iid" >/dev/null
+  done
+  [ "$count" -lt 100 ] && break
+  page=$((page + 1))
+done
+
+page=1
+while :; do
+  merge_requests=$(curl --silent --show-error --fail \\
+    --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+    "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests?state=opened&per_page=100&page=$page")
+  count=$(printf '%s' "$merge_requests" | jq 'length')
+  printf '%s' "$merge_requests" | jq -r --arg machine "$machine" '
+    .[]
+    | select(.author.username == $machine)
+    | select((.labels // []) | any(. == "agent:review" or . == "agent:rework" or . == "pr_approved"))
+    | [.iid, ((.labels // []) | join(",")), (.head_pipeline.status // "")] | @tsv
+  ' | while IFS="$(printf '\\t')" read -r iid labels pipeline_status; do
+    case ",$labels," in
+      *,agent:review,*)
+        if [[ ",$labels," == *,ai_pr_reviewed,* ]]; then continue; fi
+        config='.dmtools/runners/fa-review.json'
+        result_label='ai_pr_reviewed'
+        trigger='agent:review'
+        ;;
+      *,agent:rework,*)
+        config='.dmtools/runners/fa-rework.json'
+        result_label='ai_developed'
+        trigger='agent:rework'
+        ;;
+      *,pr_approved,*)
+        if [ "$pipeline_status" != 'success' ]; then continue; fi
+        curl --silent --show-error --fail --request PUT \\
+          --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+          --form-string "merge_when_pipeline_succeeds=true" \\
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$iid/merge" >/dev/null
+        continue
+        ;;
+      *) continue ;;
+    esac
+
+    echo "Running $config for GitLab merge request !$iid"
+    dmtools run "$config" --inputTicketId "$iid"
+    curl --silent --show-error --fail --request PUT \\
+      --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+      --form-string "add_labels=$result_label" \\
+      --form-string "remove_labels=$trigger" \\
+      "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$iid" >/dev/null
+  done
+  [ "$count" -lt 100 ] && break
+  page=$((page + 1))
+done
+`;
+}
+
+function renderGitlabQualityJob(c: FactoryConfig): string | null {
+  if (!isCiEnabled(c)) return null;
+  const preset = c.qualityPreset ?? 'none';
+  if (preset === 'none') return null;
+  let image: string;
+  let script: string;
+  switch (preset) {
+    case 'crap4js':
+      image = `node:${c.toolchains.node || '22'}`;
+      script = `if [ ! -f package.json ]; then echo "No package.json found — skipping quality checks."; exit 0; fi
+if [ -f package-lock.json ]; then npm ci; else npm install; fi
+if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test && !p.scripts.test.includes('Error: no test specified') ? 0 : 1)"; then
+  npx c8 --reporter=json --reporter=text npm test
+  if [ -f coverage/coverage-final.json ]; then npx --yes github:IstiN/crap4js --coverage coverage/coverage-final.json; fi
+else
+  echo "No tests configured — skipping coverage and CRAP analysis."
+fi`;
+      break;
+    case 'crap4dart':
+      image = `ghcr.io/cirruslabs/flutter:${c.toolchains.flutter || 'stable'}`;
+      script = `if [ ! -f pubspec.yaml ]; then echo "No pubspec.yaml found — skipping Dart quality checks."; exit 0; fi
+dart pub get
+dart format --set-exit-if-changed .
+dart analyze
+if [ ! -d test ] || [ -z "$(find test -name '*_test.dart' -print -quit 2>/dev/null)" ]; then echo "No Dart tests found — skipping coverage and CRAP analysis."; exit 0; fi
+dart test --coverage=coverage
+dart pub global activate coverage
+dart pub global run coverage:format_coverage --lcov --in coverage --out coverage/lcov.info --report-on lib
+if [ -f coverage/lcov.info ]; then dart pub global activate -sgit https://github.com/IstiN/crap4dart.git && crap4dart analyze --lcov coverage/lcov.info; fi`;
+      break;
+    case 'crap4java':
+      image = `eclipse-temurin:${c.toolchains.java || '21'}-jdk`;
+      script = `apt-get update && apt-get install -y --no-install-recommends git maven
+if { [ ! -f pom.xml ] && [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; } || [ -z "$(find . -name '*.java' -not -path './.*' -print -quit)" ]; then echo "No Java build file or source files found — skipping Java quality checks."; exit 0; fi
+git clone --depth 1 https://github.com/IstiN/crap4java.git /tmp/crap4java
+mvn -q -f /tmp/crap4java/pom.xml -DskipTests package
+java -jar /tmp/crap4java/target/crap4java-*.jar`;
+      break;
+    case 'crap4py':
+      image = `python:${c.toolchains.python || '3.12'}`;
+      script = `python -m pip install --upgrade pip
+if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install -e .; fi
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+pip install coverage pytest git+https://github.com/vabhzw17eg2qu4m9-bit/crap4py.git
+if [ -z "$(find . -name '*.py' -not -path './.*' -not -path './venv/*' -print -quit)" ]; then echo "No Python files found — skipping quality checks."; exit 0; fi
+set +e
+coverage run -m pytest
+test_status=$?
+set -e
+if [ "$test_status" -eq 5 ]; then echo "No tests collected — skipping coverage and CRAP analysis."; exit 0; elif [ "$test_status" -ne 0 ]; then exit "$test_status"; fi
+coverage json -o coverage.json
+crap4py --coverage coverage.json`;
+      break;
+    case 'crap4go':
+      image = `golang:${c.toolchains.go || '1.23'}`;
+      script = `if [ -z "$(find . -name '*.go' -not -path './.*' -print -quit)" ]; then echo "No Go source files found — skipping quality checks."; exit 0; fi
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then echo "Files need gofmt:"; echo "$unformatted"; exit 1; fi
+if [ ! -f go.mod ]; then echo "No go.mod found — skipping Go tests and CRAP analysis."; exit 0; fi
+go vet ./...
+if [ -z "$(find . -name '*_test.go' -not -path './.*' -print -quit)" ]; then echo "No Go tests found — skipping coverage and CRAP analysis."; exit 0; fi
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+go install github.com/vabhzw17eg2qu4m9-bit/crap4go@latest
+"$(go env GOPATH)/bin/crap4go" --coverage coverage.out`;
+      break;
+    default:
+      return null;
+  }
+  const indented = script.split('\n').map((line) => `      ${line}`).join('\n');
+  return `quality:
+  stage: quality
+  image: ${image}
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+${indented}
+`;
+}
+
+/** GitLab projects use native GitLab CI jobs; GitHub Actions files are intentionally omitted. */
+export function renderGitlabFiles(c: FactoryConfig, gitlabBaseUrl = 'https://gitlab.com'): FactoryFile[] {
   const files = renderFiles(c).filter(
-    (file) => !file.path.startsWith('.github/') && file.path !== '.dmtools/config.js',
+    (file) => !file.path.startsWith('.github/'),
   );
+  const qualityJob = renderGitlabQualityJob(c);
+  const stages = qualityJob
+    ? '  - quality\n  - agent\n  - merge\n'
+    : '  - agent\n  - merge\n';
   const runnerTemplates: Record<string, string> = {
     '.dmtools/runners/fa-bug-dev.json': runnerBug,
     '.dmtools/runners/fa-story-dev.json': runnerStory,
@@ -582,41 +790,99 @@ export function renderGitlabFiles(c: FactoryConfig): FactoryFile[] {
   return [
     ...files.map((file) => {
       const tpl = runnerTemplates[file.path];
-      return tpl ? { ...file, content: runnerJson(tpl, c, file.path.endsWith('fa-review.json'), 'gitlab') } : file;
+      return tpl
+        ? { ...file, content: runnerJson(tpl, c, file.path.endsWith('fa-review.json'), 'gitlab', gitlabBaseUrl) }
+        : file;
     }),
+    {
+      path: '.dmtools/scripts/gitlab-factory-poll-issues.sh',
+      content: renderGitlabIssuePoller(c),
+    },
     {
       path: '.gitlab-ci.yml',
       content: `stages:
-  - dmtools
+${stages}
 
 workflow:
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - when: never
 
-variables:
-  DEFAULT_TRACKER: gitlab
-  DEFAULT_SCM: gitlab
-  DEFAULT_CI: gitlab-ci
-  GITLAB_WORKSPACE: $CI_PROJECT_NAMESPACE
-  GITLAB_REPOSITORY: $CI_PROJECT_NAME
-  GITLAB_BRANCH: $CI_DEFAULT_BRANCH
-  DMTOOLS_AGENT_CONFIG: .dmtools/runners/fa-story-dev.json
-  DMTOOLS_TICKET_ID: ""
-
-run-dmtools-agent:
-  stage: dmtools
+default:
   image: eclipse-temurin:21-jdk
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends curl jq unzip
+    - curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+
+${qualityJob ?? ''}
+variables:
+  DMTOOLS_AGENT_CONFIG:
+    value: .dmtools/runners/fa-story-dev.json
+    description: Runner configuration for a manual factory run.
+
+poll-assigned-issues:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - bash .dmtools/scripts/gitlab-factory-poll-issues.sh
+
+ai-teammate:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_TICKET_ID'
   script:
     - |
-      if [ -z "$DMTOOLS_TICKET_ID" ]; then
-        echo "Set DMTOOLS_TICKET_ID when starting this pipeline."
+      if [ ! -f "$DMTOOLS_AGENT_CONFIG" ]; then
+        echo "DMTOOLS_AGENT_CONFIG must point to a generated runner JSON file."
         exit 1
       fi
-      apt-get update
-      apt-get install -y --no-install-recommends curl
-      curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
       dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"
+
+review-merge-request:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /agent:review/'
+  script:
+    - |
+      dmtools run .dmtools/runners/fa-review.json --inputTicketId "$CI_MERGE_REQUEST_IID"
+      curl --silent --show-error --fail --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=ai_pr_reviewed" --form-string "remove_labels=agent:review" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" >/dev/null
+
+rework-merge-request:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /agent:rework/'
+  script:
+    - |
+      dmtools run .dmtools/runners/fa-rework.json --inputTicketId "$CI_MERGE_REQUEST_IID"
+      curl --silent --show-error --fail --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=ai_developed" --form-string "remove_labels=agent:rework" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" >/dev/null
+
+merge-approved-merge-request:
+  stage: merge
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /pr_approved/'
+  script:
+    - |
+      author=$(curl --silent --show-error --fail \\
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" | jq -r '.author.username')
+      if [ "$author" != '${c.machine}' ]; then
+        echo "Skipping merge: merge request author $author is not ${c.machine}."
+        exit 0
+      fi
+      curl --silent --show-error --fail --request PUT \\
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+        --form-string "merge_when_pipeline_succeeds=true" \\
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/merge"
 `,
     },
   ];
@@ -952,6 +1218,43 @@ export async function listGitlabVariableNames(token: string, repo: string, baseU
   return (await listGitlabVariables(token, repo, baseUrl)).map((variable) => variable.key);
 }
 
+/** Creates or updates the scheduled GitLab issue poller for the generated factory pipeline. */
+export async function ensureGitlabIssuePollingSchedule(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  ref: string,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  const project = gitlabProjectPath(repo);
+  const description = 'DMTools factory issue poller';
+  const schedules: { id: number; description: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ id: number; description: string }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/pipeline_schedules?per_page=100&page=${page}`,
+    );
+    schedules.push(...current);
+    if (current.length < 100) break;
+  }
+  const current = schedules.find((schedule) => schedule.description === description);
+  const path = current
+    ? `/projects/${project}/pipeline_schedules/${current.id}`
+    : `/projects/${project}/pipeline_schedules`;
+  await gitlabRequest(token, baseUrl, path, {
+    method: current ? 'PUT' : 'POST',
+    body: JSON.stringify({
+      description,
+      ref,
+      cron: '*/10 * * * *',
+      cron_timezone: 'UTC',
+      active: true,
+    }),
+  });
+  log(`GitLab issue poller schedule ${current ? 'updated' : 'created'} for ${ref} (every 10 minutes)`);
+}
+
 /** Creates secret variables as masked and hidden; values are sent only to the configured instance. */
 export async function putGitlabVariables(
   token: string,
@@ -1019,7 +1322,7 @@ export async function createGitlabMergeRequest(
   const project = gitlabProjectPath(repo);
   const projectInfo = await gitlabRequest<{ default_branch: string }>(token, baseUrl, `/projects/${project}`);
   const base = c.baseBranch || projectInfo.default_branch;
-  const files = renderGitlabFiles(c);
+  const files = renderGitlabFiles(c, baseUrl);
   const fileExists = async (path: string) => {
     try {
       await gitlabRequest(token, baseUrl, `/projects/${project}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(base)}`);
@@ -1055,7 +1358,7 @@ export async function createGitlabMergeRequest(
       source_branch: branch,
       target_branch: base,
       title: 'chore: set up DMTools for GitLab',
-      description: `Sets up DMTools for \`${repo}\` using GitLab CI and project variables.\n\nRun the **dmtools** pipeline manually and provide \`DMTOOLS_TICKET_ID\` to invoke the configured story agent. GitHub Actions state-machine, quality-gate and auto-merge workflows are not part of this GitLab setup.`,
+      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nAfter merging this request, the setup-created 10-minute schedule polls for open issues assigned to the configured AI teammate or labeled with \`agent:dev\`, \`agent:review\`, or \`agent:rework\`. You can also run an agent manually from **Build > Pipelines** by setting \`DMTOOLS_TICKET_ID\` and \`DMTOOLS_AGENT_CONFIG\`. Merge-request pipelines can run the review or rework agent when the corresponding label is present, and approved merge requests by \`${c.machine}\` are merged after the pipeline succeeds.\n\nThe scheduled poller requires the \`GITLAB_TOKEN\` project CI/CD variable created by this setup.`,
       remove_source_branch: true,
     }),
   });

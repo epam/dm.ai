@@ -23,6 +23,7 @@ import {
   normalizeGitlabBaseUrl,
   TOKEN_LINKS,
   renderGitlabFiles,
+  ensureGitlabIssuePollingSchedule,
   putGitlabVariables,
   createGitlabMergeRequest,
   requiredSecrets,
@@ -113,17 +114,110 @@ describe('Source control options', () => {
     }
   });
 
-  it('uses a GitLab source token and emits GitLab-native setup files', () => {
+  it('renders GitLab-native factory jobs and configures GitLab runner settings', () => {
     const cfg = validConfig();
-    const files = renderGitlabFiles(cfg);
+    const files = renderGitlabFiles(cfg, 'https://gitlab.example.com/gitlab');
     assert.ok(files.some((file) => file.path === '.gitlab-ci.yml'));
     assert.ok(files.every((file) => !file.path.startsWith('.github/')));
-    assert.ok(files.every((file) => file.path !== '.dmtools/config.js'));
+    assert.ok(files.some((file) => file.path === '.dmtools/config.js'));
     const story = files.find((file) => file.path === '.dmtools/runners/fa-story-dev.json');
     assert.ok(story);
     assert.match(story.content, /"DEFAULT_TRACKER": "gitlab"/);
     assert.match(story.content, /"DEFAULT_SCM": "gitlab"/);
+    assert.match(story.content, /"GITLAB_BASE_PATH": "https:\/\/gitlab\.example\.com\/gitlab"/);
+    assert.match(story.content, /"GITLAB_WORKSPACE": "acme"/);
+    assert.match(story.content, /"GITLAB_REPOSITORY": "demo"/);
+    const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
+    assert.match(pipeline, /apt-get install -y --no-install-recommends curl jq unzip/);
+    assert.match(pipeline, /export PATH="\$HOME\/\.local\/bin:\$PATH"/);
+    for (const job of [
+      'poll-assigned-issues:',
+      'ai-teammate:',
+      'review-merge-request:',
+      'rework-merge-request:',
+      'merge-approved-merge-request:',
+    ]) {
+      assert.ok(pipeline.includes(job), `GitLab pipeline should include ${job}`);
+    }
+    assert.match(
+      pipeline,
+      /review-merge-request:[\s\S]*?script:\n    - \|\n      dmtools run \.dmtools\/runners\/fa-review\.json/,
+    );
+    assert.match(
+      pipeline,
+      /rework-merge-request:[\s\S]*?script:\n    - \|\n      dmtools run \.dmtools\/runners\/fa-rework\.json/,
+    );
+    assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/);
+    assert.match(pipeline, /CI_PIPELINE_SOURCE == "schedule"/);
+    const qualityFiles = renderGitlabFiles(validConfig({ qualityPreset: 'crap4js' }));
+    const qualityPipeline = qualityFiles.find((file) => file.path === '.gitlab-ci.yml')!.content;
+    assert.match(qualityPipeline, /  - quality/);
+    assert.match(qualityPipeline, /image: node:22/);
+    assert.match(qualityPipeline, /npx --yes github:IstiN\/crap4js/);
+    const poller = files.find((file) => file.path === '.dmtools/scripts/gitlab-factory-poll-issues.sh')!.content;
+    assert.match(poller, /assignees.*username == \$machine/);
+    assert.match(poller, /agent:dev/);
+    assert.match(poller, /agent:review/);
+    assert.match(poller, /agent:rework/);
     assert.equal(requiredSecrets(cfg, 'gitlab')[0].name, 'GITLAB_TOKEN');
+  });
+
+  it('creates and updates the GitLab issue polling schedule idempotently', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
+    let scheduleCreated = false;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, method, body });
+      if (url.includes('/pipeline_schedules?')) {
+        return new Response(
+          JSON.stringify(scheduleCreated ? [{ id: 8, description: 'DMTools factory issue poller' }] : []),
+          { status: 200 },
+        );
+      }
+      if (method === 'POST') {
+        scheduleCreated = true;
+        return new Response(JSON.stringify({ id: 8 }), { status: 201 });
+      }
+      if (method === 'PUT') return new Response(JSON.stringify({ id: 8 }), { status: 200 });
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const logs: string[] = [];
+      await ensureGitlabIssuePollingSchedule(
+        'glpat_test-token-123456789',
+        'team/app',
+        'https://gitlab.example.com/prefix',
+        'main',
+        (message) => logs.push(message),
+      );
+      await ensureGitlabIssuePollingSchedule(
+        'glpat_test-token-123456789',
+        'team/app',
+        'https://gitlab.example.com/prefix',
+        'main',
+        (message) => logs.push(message),
+      );
+      const created = calls.find((call) => call.method === 'POST');
+      const updated = calls.find((call) => call.method === 'PUT');
+      assert.ok(created?.url.endsWith('/projects/team%2Fapp/pipeline_schedules'));
+      assert.ok(updated?.url.endsWith('/projects/team%2Fapp/pipeline_schedules/8'));
+      assert.deepEqual(created?.body, {
+        description: 'DMTools factory issue poller',
+        ref: 'main',
+        cron: '*/10 * * * *',
+        cron_timezone: 'UTC',
+        active: true,
+      });
+      assert.deepEqual(updated?.body, created?.body);
+      assert.match(logs[0], /created for main \(every 10 minutes\)/);
+      assert.match(logs[1], /updated for main \(every 10 minutes\)/);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 
   it('recreates existing GitLab secrets as masked and hidden and creates new ones that way', async () => {
