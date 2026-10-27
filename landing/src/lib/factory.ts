@@ -592,8 +592,10 @@ set -euo pipefail
 : "\${GITLAB_TOKEN:?Set the GITLAB_TOKEN project CI/CD variable}"
 : "\${CI_API_V4_URL:?This script must run in GitLab CI}"
 : "\${CI_PROJECT_ID:?This script must run in a project pipeline}"
+: "\${CI_PIPELINE_ID:?GitLab pipeline ID is required to name the agent branch}"
 
 machine='${c.machine}'
+base_branch='${c.baseBranch}'
 
 run_agent() {
   local output
@@ -607,6 +609,55 @@ run_agent() {
     return 1
   fi
   return 0
+}
+
+publish_issue_changes() {
+  local iid="$1"
+  local base_sha="$2"
+  local branch="ai/issue-$iid-$CI_PIPELINE_ID"
+  local changes commit_count remote_url askpass mr_url
+  changes=$(git status --porcelain --untracked-files=all)
+  commit_count=$(git rev-list --count "$base_sha"..HEAD)
+  if [ -z "$changes" ] && [ "$commit_count" -eq 0 ]; then
+    echo "Agent completed without repository changes; no branch or MR will be created." >&2
+    return 1
+  fi
+
+  git switch -c "$branch"
+  git config user.name "DMTools Factory"
+  git config user.email "dmtools-factory@users.noreply.gitlab.com"
+  git add -A
+  if ! git diff --cached --quiet; then
+    git commit -m "AI: implement issue #$iid"
+  fi
+
+  remote_url=$(git remote get-url origin | sed -E 's#(https?://)[^/@]+(:[^/@]*)?@#\\1#')
+  askpass=$(mktemp)
+  cat >"$askpass" <<'ASKPASS'
+#!/bin/sh
+case "$1" in
+  *Username*|*username*) printf '%s\\n' oauth2 ;;
+  *Password*|*password*) printf '%s\\n' "$GITLAB_TOKEN" ;;
+  *) exit 1 ;;
+esac
+ASKPASS
+  chmod 700 "$askpass"
+  if ! GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 git -c credential.helper= push \\
+      "$remote_url" "HEAD:refs/heads/$branch"; then
+    rm -f "$askpass"
+    return 1
+  fi
+  rm -f "$askpass"
+
+  mr_url=$(curl --silent --show-error --fail --request POST \\
+    --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+    --form-string "source_branch=$branch" \\
+    --form-string "target_branch=$base_branch" \\
+    --form-string "title=AI: implement issue #$iid" \\
+    --form-string "description=Automated changes for issue #$iid. Closes #$iid." \\
+    "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests" | jq -er '.web_url')
+  echo "Created GitLab merge request: $mr_url"
+  git switch --detach "$base_sha"
 }
 
 page=1
@@ -643,7 +694,9 @@ while :; do
     esac
 
     echo "Running $config for GitLab issue #$iid"
+    base_sha=$(git rev-parse HEAD)
     run_agent "$config" --inputTicketId "$iid"
+    publish_issue_changes "$iid" "$base_sha"
     result_label='ai_developed'
     if [ "$trigger" = 'agent:review' ]; then
       result_label='ai_pr_reviewed'

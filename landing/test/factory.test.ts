@@ -181,6 +181,15 @@ describe('Source control options', () => {
     assert.match(poller, /run_agent "\$config" --inputTicketId "\$iid"/);
     assert.match(poller, /Agent completed with exit code: \[1-9\]/);
     assert.match(poller, /leaving issue\/MR labels unchanged/);
+    assert.match(poller, /git switch -c "\$branch"/);
+    assert.match(poller, /git push/);
+    assert.match(poller, /projects\/\$CI_PROJECT_ID\/merge_requests/);
+    assert.match(poller, /Created GitLab merge request:/);
+    assert.ok(
+      poller.indexOf('publish_issue_changes "$iid" "$base_sha"') <
+        poller.indexOf('add_labels=$result_label'),
+      'GitLab issues must only be marked developed after their changes are pushed and an MR is created',
+    );
     assert.equal(requiredSecrets(cfg, 'gitlab')[0].name, 'GITLAB_TOKEN');
   });
 
