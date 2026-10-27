@@ -591,6 +591,21 @@ set -euo pipefail
 : "\${CI_PROJECT_ID:?This script must run in a project pipeline}"
 
 machine='${c.machine}'
+
+run_agent() {
+  local output
+  if ! output=$(dmtools run "$@" 2>&1); then
+    printf '%s\\n' "$output"
+    return 1
+  fi
+  printf '%s\\n' "$output"
+  if grep -Eq 'Agent completed with exit code: [1-9][0-9]*|CLI command executed but did not produce output file:' <<<"$output"; then
+    echo "Agent execution failed; leaving issue/MR labels unchanged." >&2
+    return 1
+  fi
+  return 0
+}
+
 page=1
 while :; do
   issues=$(curl --silent --show-error --fail \\
@@ -625,7 +640,7 @@ while :; do
     esac
 
     echo "Running $config for GitLab issue #$iid"
-    dmtools run "$config" --inputTicketId "$iid"
+    run_agent "$config" --inputTicketId "$iid"
     result_label='ai_developed'
     if [ "$trigger" = 'agent:review' ]; then
       result_label='ai_pr_reviewed'
@@ -677,7 +692,7 @@ while :; do
     esac
 
     echo "Running $config for GitLab merge request !$iid"
-    dmtools run "$config" --inputTicketId "$iid"
+    run_agent "$config" --inputTicketId "$iid"
     curl --silent --show-error --fail --request PUT \\
       --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
       --form-string "add_labels=$result_label" \\
@@ -816,7 +831,12 @@ default:
     - apt-get update
     - apt-get install -y --no-install-recommends curl jq unzip
     - curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+    - mkdir -p /tmp/dmtools-fa-setup
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/_common.sh -o /tmp/dmtools-fa-setup/_common.sh
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/fa.sh -o /tmp/dmtools-fa-setup/fa.sh
+    - FA_INSTALL_DIR="$HOME/.local/bin" bash /tmp/dmtools-fa-setup/fa.sh
     - export PATH="$HOME/.local/bin:$PATH"
+    - fa --version
 
 ${qualityJob ?? ''}
 variables:

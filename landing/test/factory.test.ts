@@ -129,7 +129,11 @@ describe('Source control options', () => {
     assert.match(story.content, /"GITLAB_REPOSITORY": "demo"/);
     const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
     assert.match(pipeline, /apt-get install -y --no-install-recommends curl jq unzip/);
+    assert.match(pipeline, /setup\/_common\.sh/);
+    assert.match(pipeline, /setup\/fa\.sh/);
+    assert.match(pipeline, /FA_INSTALL_DIR="\$HOME\/\.local\/bin" bash/);
     assert.match(pipeline, /export PATH="\$HOME\/\.local\/bin:\$PATH"/);
+    assert.match(pipeline, /fa --version/);
     assert.match(
       pipeline,
       /DMTOOLS_PACK_REGISTRY:\n    value: https:\/\/github\.com\/IstiN\/dmtools-agents\/releases\/latest\/download/,
@@ -163,6 +167,9 @@ describe('Source control options', () => {
     assert.match(poller, /agent:dev/);
     assert.match(poller, /agent:review/);
     assert.match(poller, /agent:rework/);
+    assert.match(poller, /run_agent "\$config" --inputTicketId "\$iid"/);
+    assert.match(poller, /Agent completed with exit code: \[1-9\]/);
+    assert.match(poller, /leaving issue\/MR labels unchanged/);
     assert.equal(requiredSecrets(cfg, 'gitlab')[0].name, 'GITLAB_TOKEN');
   });
 
