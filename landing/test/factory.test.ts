@@ -130,6 +130,10 @@ describe('Source control options', () => {
     const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
     assert.match(pipeline, /apt-get install -y --no-install-recommends curl jq unzip/);
     assert.match(pipeline, /export PATH="\$HOME\/\.local\/bin:\$PATH"/);
+    assert.match(
+      pipeline,
+      /DMTOOLS_PACK_REGISTRY:\n    value: https:\/\/github\.com\/IstiN\/dmtools-agents\/releases\/latest\/download/,
+    );
     for (const job of [
       'poll-assigned-issues:',
       'ai-teammate:',

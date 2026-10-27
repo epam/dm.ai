@@ -820,6 +820,9 @@ default:
 
 ${qualityJob ?? ''}
 variables:
+  DMTOOLS_PACK_REGISTRY:
+    value: https://github.com/IstiN/dmtools-agents/releases/latest/download
+    description: Release registry URL used to resolve generated agent packs.
   DMTOOLS_AGENT_CONFIG:
     value: .dmtools/runners/fa-story-dev.json
     description: Runner configuration for a manual factory run.
