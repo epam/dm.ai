@@ -124,9 +124,20 @@ describe('Source control options', () => {
     assert.ok(story);
     assert.match(story.content, /"DEFAULT_TRACKER": "gitlab"/);
     assert.match(story.content, /"DEFAULT_SCM": "gitlab"/);
+    assert.equal(JSON.parse(story.content).params.customParams.scmProvider, 'gitlab');
     assert.match(story.content, /"GITLAB_BASE_PATH": "https:\/\/gitlab\.example\.com\/gitlab"/);
     assert.match(story.content, /"GITLAB_WORKSPACE": "acme"/);
     assert.match(story.content, /"GITLAB_REPOSITORY": "demo"/);
+    for (const path of [
+      '.dmtools/runners/fa-bug-dev.json',
+      '.dmtools/runners/fa-story-dev.json',
+      '.dmtools/runners/fa-rework.json',
+      '.dmtools/runners/fa-review.json',
+    ]) {
+      const runner = files.find((file) => file.path === path);
+      assert.ok(runner, `GitLab runner should include ${path}`);
+      assert.equal(JSON.parse(runner.content).params.customParams.scmProvider, 'gitlab');
+    }
     const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
     assert.match(pipeline, /apt-get install -y --no-install-recommends curl jq unzip/);
     assert.match(pipeline, /setup\/_common\.sh/);

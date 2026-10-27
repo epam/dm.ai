@@ -250,6 +250,9 @@ function runnerJson(
   const json = JSON.parse(tpl);
   const list = review && c.providers.reviewSeparate ? c.providers.reviewEntries : c.providers.entries;
   if (json.params.customParams?.targetRepository) json.params.customParams.targetRepository.baseBranch = c.baseBranch;
+  if (scm === 'gitlab' && json.params.customParams) {
+    json.params.customParams.scmProvider = 'gitlab';
+  }
   json.params.envVariables = {
     ...(scm === 'gitlab'
       ? {
