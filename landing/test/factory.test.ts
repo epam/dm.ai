@@ -137,7 +137,7 @@ describe('Source control options', () => {
       assert.ok(runner, `GitLab runner should include ${path}`);
     }
     const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
-    assert.match(pipeline, /apt-get install -y --no-install-recommends curl jq unzip/);
+    assert.match(pipeline, /apt-get install -y --no-install-recommends curl git jq unzip/);
     assert.match(pipeline, /setup\/_common\.sh/);
     assert.match(pipeline, /setup\/fa\.sh/);
     assert.match(pipeline, /FA_INSTALL_DIR="\$HOME\/\.local\/bin" bash/);
@@ -181,6 +181,22 @@ describe('Source control options', () => {
     assert.match(poller, /leaving issue\/MR labels unchanged/);
     assert.match(poller, /git switch -c "\$branch"/);
     assert.match(poller, /git push/);
+    assert.match(poller, /\[gitlab-api\] request method=\$method url=\$url/);
+    assert.match(poller, /\[gitlab-api\] response http_status=\$http_status/);
+    assert.match(poller, /error response \(max 2000 chars\)/);
+    assert.match(poller, /message\/\/"\$GITLAB_TOKEN"\/\[REDACTED\]/);
+    assert.match(poller, /GET "\$CI_API_V4_URL\/user"/);
+    assert.match(poller, /PRIVATE-TOKEN API identity username=\$identity_username id=\$identity_id/);
+    assert.match(poller, /\[git-push\] remote=\$remote_url branch=\$branch/);
+    assert.match(poller, /git_remote_url="https:\/\/\$git_username@\$\{remote_url#https:\/\/\}"/);
+    assert.match(poller, /Git HTTPS uses the same username/);
+    assert.match(poller, /Git credential helper/);
+    assert.match(poller, /printf 'username=%s\\\\npassword=%s\\\\n\\\\n'/);
+    assert.match(poller, /push --porcelain/);
+    assert.match(poller, /GIT_TRACE_CURL=1 GIT_TRACE_CURL_NO_DATA=1 GIT_TRACE=1/);
+    assert.match(poller, /log_git_trace/);
+    assert.match(poller, /authorization\|proxy-authorization\|cookie\|set-cookie/);
+    assert.match(poller, /\[poller-error\] line=%s exit=%s issue=%s pipeline=%s/);
     assert.match(poller, /write_repository scope/);
     assert.match(poller, /Developer or higher access/);
     assert.match(poller, /branch protection/);
