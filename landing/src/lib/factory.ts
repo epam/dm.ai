@@ -609,23 +609,12 @@ log_error_response() {
   printf '[gitlab-api] error response (max 2000 chars):\\n%s\\n' "$body" >&2
 }
 
-log_git_trace() {
-  local line
-  while IFS= read -r line; do
-    if printf '%s\\n' "$line" | grep -Eiq '(authorization|proxy-authorization|cookie|set-cookie|private-token|job-token|deploy-token|x-csrf-token):'; then
-      continue
-    fi
-    log_safe "$line"
-  done
-}
-
 gitlab_api() {
   local method="$1"
   local url="$2"
   local response body http_status curl_status
   shift 2
 
-  log_safe "[gitlab-api] request method=$method url=$url"
   if response=$(curl --silent --show-error --write-out $'\\n%{http_code}' \\
       --request "$method" "$@" "$url"); then
     curl_status=0
@@ -641,13 +630,13 @@ gitlab_api() {
     body="$response"
   fi
   if [ "$curl_status" -ne 0 ]; then
-    log_safe "[gitlab-api] transport failure curl_exit=$curl_status http_status=$http_status"
+    log_safe "[gitlab-api] request failed method=$method url=$url curl_exit=$curl_status http_status=$http_status"
     log_error_response "$body"
     return "$curl_status"
   fi
 
-  log_safe "[gitlab-api] response http_status=$http_status body_chars=\${#body}"
   if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    log_safe "[gitlab-api] request failed method=$method url=$url http_status=$http_status"
     log_error_response "$body"
     return 22
   fi
@@ -678,7 +667,6 @@ publish_issue_changes() {
   local changes commit_count remote_url git_remote_url credential_helper mr_url mr_response push_output push_status
   changes=$(git status --porcelain --untracked-files=all)
   commit_count=$(git rev-list --count "$base_sha"..HEAD)
-  log_safe "[git-push] preparing issue=$iid branch=$branch base_sha=$base_sha head_sha=$(git rev-parse HEAD) changed_paths=$(printf '%s\\n' "$changes" | awk 'NF { count++ } END { print count+0 }') commits=$commit_count"
   if [ -z "$changes" ] && [ "$commit_count" -eq 0 ]; then
     echo "Agent completed without repository changes; no branch or MR will be created." >&2
     return 1
@@ -693,11 +681,9 @@ publish_issue_changes() {
   fi
 
   remote_url=$(git remote get-url origin | sed -E 's#(https?://)[^/@]*@#\\1#')
-  log_safe "[git-push] remote=$remote_url branch=$branch auth=Git credential helper (token omitted)"
-  local identity identity_username identity_id git_username
+  local identity identity_username git_username
   identity=$(gitlab_api GET "$CI_API_V4_URL/user" --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
   identity_username=$(printf '%s' "$identity" | jq -er '.username')
-  identity_id=$(printf '%s' "$identity" | jq -er '.id')
   git_username="$identity_username"
   case "$remote_url" in
     https://*) git_remote_url="https://$git_username@\${remote_url#https://}" ;;
@@ -706,8 +692,6 @@ publish_issue_changes() {
       return 1
       ;;
   esac
-  log_safe "[git-auth] PRIVATE-TOKEN API identity username=$identity_username id=$identity_id; Git HTTPS uses the same username; token value omitted"
-  log_safe "[git-push] explicit_username_url=$git_remote_url (password supplied by Git credential helper; token omitted)"
   credential_helper=$(mktemp)
   cat >"$credential_helper" <<'CREDENTIAL_HELPER'
 #!/bin/sh
@@ -717,16 +701,13 @@ fi
 CREDENTIAL_HELPER
   chmod 700 "$credential_helper"
   if push_output=$(GIT_HTTPS_USERNAME="$git_username" GIT_TERMINAL_PROMPT=0 \\
-      GIT_TRACE_CURL=1 GIT_TRACE_CURL_NO_DATA=1 GIT_TRACE=1 \\
-      git -c credential.helper= -c credential.helper="!$credential_helper" push --verbose --porcelain \\
+      git -c credential.helper= -c credential.helper="!$credential_helper" push --porcelain \\
       "$git_remote_url" "HEAD:refs/heads/$branch" 2>&1); then
-    log_safe "[git-push] succeeded branch=$branch"
-    printf '%s\\n' "$push_output" | log_git_trace
+    echo "Pushed branch $branch to GitLab."
   else
     push_status=$?
     log_safe "[git-push] failed exit=$push_status branch=$branch remote=$remote_url"
-    printf '%s\\n' "$push_output" | log_git_trace
-    log_safe "[git-push] trace above has authorization, cookie, and token headers filtered"
+    log_safe "$push_output"
     echo "GitLab rejected the push. Check token permissions, project membership, Git-over-HTTPS authentication, and branch protection." >&2
     rm -f "$credential_helper"
     return "$push_status"
@@ -749,7 +730,6 @@ while :; do
   issues=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues?state=opened&per_page=100&page=$page" \\
     --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
   count=$(printf '%s' "$issues" | jq 'length')
-  log_safe "[poller] fetched open issues page=$page count=$count"
   printf '%s' "$issues" | jq -r --arg machine "$machine" '
     .[]
     | select((.labels // []) | all(. != "ai_developed" and . != "ai_pr_reviewed"))
@@ -802,7 +782,6 @@ while :; do
   merge_requests=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests?state=opened&per_page=100&page=$page" \\
     --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
   count=$(printf '%s' "$merge_requests" | jq 'length')
-  log_safe "[poller] fetched open merge requests page=$page count=$count"
   printf '%s' "$merge_requests" | jq -r --arg machine "$machine" '
     .[]
     | select(.author.username == $machine)
