@@ -250,9 +250,6 @@ function runnerJson(
   const json = JSON.parse(tpl);
   const list = review && c.providers.reviewSeparate ? c.providers.reviewEntries : c.providers.entries;
   if (json.params.customParams?.targetRepository) json.params.customParams.targetRepository.baseBranch = c.baseBranch;
-  if (scm === 'gitlab' && json.params.customParams) {
-    json.params.customParams.scmProvider = 'gitlab';
-  }
   json.params.envVariables = {
     ...(scm === 'gitlab'
       ? {
@@ -644,6 +641,7 @@ ASKPASS
   chmod 700 "$askpass"
   if ! GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 git -c credential.helper= push \\
       "$remote_url" "HEAD:refs/heads/$branch"; then
+    echo "GitLab rejected the push. Check that GITLAB_TOKEN has the write_repository scope, its user has Developer or higher access to this project, and the ai/issue-* branch is not blocked by branch protection." >&2
     rm -f "$askpass"
     return 1
   fi
@@ -1587,7 +1585,8 @@ export function requiredSecrets(
   const out: { name: string; hint: string; url?: string; multiline?: boolean }[] = scm === 'gitlab'
     ? [{
         name: 'GITLAB_TOKEN',
-        hint: `GitLab personal access token for ${c.machine || 'the AI teammate account'} with api and write_repository scopes.`,
+        hint: `GitLab personal access token for ${c.machine || 'the AI teammate account'} with api and write_repository scopes. ` +
+          `Its user must have Developer or higher access to ${c.repo}.`,
         url: TOKEN_LINKS.setupGitlab(gitlabBaseUrl),
       }]
     : [{

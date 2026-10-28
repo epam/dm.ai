@@ -124,7 +124,6 @@ describe('Source control options', () => {
     assert.ok(story);
     assert.match(story.content, /"DEFAULT_TRACKER": "gitlab"/);
     assert.match(story.content, /"DEFAULT_SCM": "gitlab"/);
-    assert.equal(JSON.parse(story.content).params.customParams.scmProvider, 'gitlab');
     assert.match(story.content, /"GITLAB_BASE_PATH": "https:\/\/gitlab\.example\.com\/gitlab"/);
     assert.match(story.content, /"GITLAB_WORKSPACE": "acme"/);
     assert.match(story.content, /"GITLAB_REPOSITORY": "demo"/);
@@ -136,7 +135,6 @@ describe('Source control options', () => {
     ]) {
       const runner = files.find((file) => file.path === path);
       assert.ok(runner, `GitLab runner should include ${path}`);
-      assert.equal(JSON.parse(runner.content).params.customParams.scmProvider, 'gitlab');
     }
     const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
     assert.match(pipeline, /apt-get install -y --no-install-recommends curl jq unzip/);
@@ -183,6 +181,9 @@ describe('Source control options', () => {
     assert.match(poller, /leaving issue\/MR labels unchanged/);
     assert.match(poller, /git switch -c "\$branch"/);
     assert.match(poller, /git push/);
+    assert.match(poller, /write_repository scope/);
+    assert.match(poller, /Developer or higher access/);
+    assert.match(poller, /branch protection/);
     assert.match(poller, /projects\/\$CI_PROJECT_ID\/merge_requests/);
     assert.match(poller, /Created GitLab merge request:/);
     assert.ok(
@@ -190,7 +191,10 @@ describe('Source control options', () => {
         poller.indexOf('add_labels=$result_label'),
       'GitLab issues must only be marked developed after their changes are pushed and an MR is created',
     );
-    assert.equal(requiredSecrets(cfg, 'gitlab')[0].name, 'GITLAB_TOKEN');
+    const gitlabToken = requiredSecrets(cfg, 'gitlab')[0];
+    assert.equal(gitlabToken.name, 'GITLAB_TOKEN');
+    assert.match(gitlabToken.hint, /api and write_repository scopes/);
+    assert.match(gitlabToken.hint, /Developer or higher access/);
   });
 
   it('creates and updates the GitLab issue polling schedule idempotently', async () => {

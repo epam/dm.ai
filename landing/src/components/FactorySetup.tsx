@@ -724,8 +724,8 @@ export default function FactorySetup() {
                 </li>
                 {scm === 'gitlab' ? (
                   <li className="is-warn">
-                    Use a GitLab personal access token with the <code>api</code> scope to list projects, set CI/CD
-                    variables, and create the merge request.
+                    Use a GitLab personal access token with the <code>api</code> and <code>write_repository</code>{' '}
+                    scopes. Its user needs Developer or higher access to push branches and create merge requests.
                   </li>
                 ) : tokenInfo.kind === 'classic' &&
                   (tokenInfo.missingScopes.length ? (
