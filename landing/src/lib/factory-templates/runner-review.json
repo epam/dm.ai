@@ -6,6 +6,8 @@
     "params.cliPrompts"
   ],
   "params": {
+    "requireCliOutputFile": false,
+    "cleanupOutputsFolder": false,
     "envVariables": {
       "AI_AGENT_PROVIDER": "fa",
       "FA_PROVIDER_TYPE": "openai-completions",

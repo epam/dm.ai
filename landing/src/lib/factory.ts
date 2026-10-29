@@ -142,9 +142,10 @@ export const TOOLCHAINS: Toolchain[] = [
 export const RUNNERS = ['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04', 'ubuntu-slim', 'macos-latest', 'windows-latest'];
 
 export interface ScmOption { id: 'github' | 'gitlab'; label: string; available: boolean }
+export type ScmId = ScmOption['id'];
 export const SCM: ScmOption[] = [
   { id: 'github', label: 'GitHub', available: true },
-  { id: 'gitlab', label: 'GitLab (coming soon)', available: false },
+  { id: 'gitlab', label: 'GitLab', available: true },
 ];
 
 export interface FactoryFile {
@@ -173,7 +174,9 @@ export const defaults: FactoryConfig = {
 };
 
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const GITLAB_LOGIN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const GITLAB_REPO = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/;
 
 export function isCiEnabled(c: FactoryConfig): boolean {
   return c.ciEnabled !== false;
@@ -187,10 +190,14 @@ export function isFaMemoryEnabled(c: FactoryConfig): boolean {
   return c.faMemory !== false;
 }
 
-export function validate(c: FactoryConfig): Record<string, string> {
+export function validate(c: FactoryConfig, scm: ScmId = 'github'): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!REPO.test(c.repo)) e.repo = 'Use owner/name';
-  if (!LOGIN.test(c.machine)) e.machine = 'Not a valid GitHub login';
+  if (!(scm === 'gitlab' ? GITLAB_REPO : REPO).test(c.repo)) {
+    e.repo = scm === 'gitlab' ? 'Use group/project' : 'Use owner/name';
+  }
+  if (!(scm === 'gitlab' ? GITLAB_LOGIN : LOGIN).test(c.machine)) {
+    e.machine = scm === 'gitlab' ? 'Not a valid GitLab username' : 'Not a valid GitHub login';
+  }
   if (isCiEnabled(c)) {
     if (!/^[\w.-]+\.ya?ml$/.test(c.ciFile)) e.ciFile = 'Workflow file name, e.g. ci.yml';
     if (!c.ciName.trim() || /['"\n]/.test(c.ciName)) e.ciName = 'Workflow display name (no quotes)';
@@ -233,11 +240,32 @@ function providerEnv(list: ProviderEntry[], mode: 'default' | 'queue'): Record<s
   return env;
 }
 
-function runnerJson(tpl: string, c: FactoryConfig, review: boolean): string {
+function runnerJson(
+  tpl: string,
+  c: FactoryConfig,
+  review: boolean,
+  scm: ScmId = 'github',
+  gitlabBaseUrl = 'https://gitlab.com',
+): string {
   const json = JSON.parse(tpl);
   const list = review && c.providers.reviewSeparate ? c.providers.reviewEntries : c.providers.entries;
   if (json.params.customParams?.targetRepository) json.params.customParams.targetRepository.baseBranch = c.baseBranch;
-  json.params.envVariables = { ...(json.params.envVariables.DEFAULT_TRACKER ? { DEFAULT_TRACKER: 'github' } : {}), ...providerEnv(list, c.providers.mode) };
+  json.params.envVariables = {
+    ...(scm === 'gitlab'
+      ? {
+          DEFAULT_TRACKER: 'gitlab',
+          DEFAULT_SCM: 'gitlab',
+          DEFAULT_CI: 'gitlab-ci',
+          GITLAB_BASE_PATH: gitlabBaseUrl,
+          GITLAB_WORKSPACE: c.repo.split('/').slice(0, -1).join('/'),
+          GITLAB_REPOSITORY: c.repo.split('/').at(-1) ?? '',
+          GITLAB_BRANCH: c.baseBranch,
+        }
+      : json.params.envVariables.DEFAULT_TRACKER
+        ? { DEFAULT_TRACKER: scm }
+        : {}),
+    ...providerEnv(list, c.providers.mode),
+  };
   return JSON.stringify(json, null, 2) + '\n';
 }
 
@@ -554,6 +582,670 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
   ];
 }
 
+function renderGitlabIssuePoller(c: FactoryConfig): string {
+  return `#!/usr/bin/env bash
+set -Eeuo pipefail
+
+: "\${GITLAB_TOKEN:?Set the GITLAB_TOKEN project CI/CD variable}"
+: "\${CI_API_V4_URL:?This script must run in GitLab CI}"
+: "\${CI_PROJECT_ID:?This script must run in a project pipeline}"
+: "\${CI_PIPELINE_ID:?GitLab pipeline ID is required to name the agent branch}"
+
+current_issue='n/a'
+trap 'status=$?; printf "[poller-error] line=%s exit=%s issue=%s pipeline=%s\\n" "$LINENO" "$status" "$current_issue" "$CI_PIPELINE_ID" >&2' ERR
+
+webhook_issue_iid=''
+if [[ "\${DMTOOLS_FACTORY_TRIGGER:-}" == 'issue_webhook' ]]; then
+  : "\${TRIGGER_PAYLOAD:?GitLab issue webhook payload is required}"
+  webhook_issue_iid=$(jq -er 'select(.object_kind == "issue") | .object_attributes.iid | numbers' "$TRIGGER_PAYLOAD")
+  if jq -e '
+    (.changes.labels? != null)
+    and (
+      ((.changes.labels.current // []) | map(.title // .name // tostring)) as $current
+      | ((.changes.labels.previous // []) | map(.title // .name // tostring)) as $previous
+      | [$current[] | select(. as $label | ($previous | index($label)) == null)] | length == 0
+    )
+  ' "$TRIGGER_PAYLOAD" >/dev/null; then
+    echo "Ignoring GitLab issue webhook: no labels were added to issue #$webhook_issue_iid"
+    exit 0
+  fi
+fi
+
+log_safe() {
+  local message="$1"
+  message="\${message//"$GITLAB_TOKEN"/[REDACTED]}"
+  printf '%s\\n' "$message" >&2
+}
+
+log_error_response() {
+  local body="$1"
+  body="\${body//"$GITLAB_TOKEN"/[REDACTED]}"
+  if [ "\${#body}" -gt 2000 ]; then
+    body="\${body:0:2000}...[truncated]"
+  fi
+  printf '[gitlab-api] error response (max 2000 chars):\\n%s\\n' "$body" >&2
+}
+
+gitlab_api() {
+  local method="$1"
+  local url="$2"
+  local response body http_status curl_status
+  shift 2
+
+  if response=$(curl --silent --show-error --write-out $'\\n%{http_code}' \\
+      --request "$method" "$@" "$url"); then
+    curl_status=0
+  else
+    curl_status=$?
+  fi
+
+  if [[ "$response" == *$'\\n'* ]]; then
+    http_status="\${response##*$'\\n'}"
+    body="\${response%$'\\n'*}"
+  else
+    http_status='000'
+    body="$response"
+  fi
+  if [ "$curl_status" -ne 0 ]; then
+    log_safe "[gitlab-api] request failed method=$method url=$url curl_exit=$curl_status http_status=$http_status"
+    log_error_response "$body"
+    return "$curl_status"
+  fi
+
+  if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    log_safe "[gitlab-api] request failed method=$method url=$url http_status=$http_status"
+    log_error_response "$body"
+    return 22
+  fi
+  printf '%s' "$body"
+}
+
+machine='${c.machine}'
+base_branch='${c.baseBranch}'
+
+run_agent() {
+  local output_file status
+  local -a pipeline_status
+  output_file=$(mktemp)
+  if dmtools run "$@" 2>&1 | tee "$output_file"; then
+    status=0
+  else
+    pipeline_status=("\${PIPESTATUS[@]}")
+    status="\${pipeline_status[0]}"
+    if [ "$status" -eq 0 ]; then
+      status="\${pipeline_status[1]}"
+    fi
+  fi
+  if [ "$status" -ne 0 ]; then
+    rm -f "$output_file"
+    return "$status"
+  fi
+  if grep -Eq 'Agent completed with exit code: [1-9][0-9]*|CLI command executed but did not produce output file:' "$output_file"; then
+    rm -f "$output_file"
+    echo "Agent execution failed; leaving issue/MR labels unchanged." >&2
+    return 1
+  fi
+  rm -f "$output_file"
+  return 0
+}
+
+clear_review_outputs() {
+  mkdir -p outputs/pr_review_comments
+  rm -f outputs/pr_review.json outputs/pr_review_general.md outputs/pr_review_comments/*.md
+}
+
+publish_issue_changes() {
+  local iid="$1"
+  local base_sha="$2"
+  local branch="ai/issue-$iid-$CI_PIPELINE_ID"
+  local changes commit_count remote_url git_remote_url credential_helper mr_url mr_response push_output push_status
+  changes=$(git status --porcelain --untracked-files=all)
+  commit_count=$(git rev-list --count "$base_sha"..HEAD)
+  if [ -z "$changes" ] && [ "$commit_count" -eq 0 ]; then
+    echo "Agent completed without repository changes; no branch or MR will be created." >&2
+    return 1
+  fi
+
+  git switch -c "$branch"
+  git config user.name "DMTools Factory"
+  git config user.email "dmtools-factory@users.noreply.gitlab.com"
+  git add -A
+  if ! git diff --cached --quiet; then
+    git commit -m "AI: implement issue #$iid"
+  fi
+
+  remote_url=$(git remote get-url origin | sed -E 's#(https?://)[^/@]*@#\\1#')
+  local identity identity_username git_username
+  identity=$(gitlab_api GET "$CI_API_V4_URL/user" --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
+  identity_username=$(printf '%s' "$identity" | jq -er '.username')
+  git_username="$identity_username"
+  case "$remote_url" in
+    https://*) git_remote_url="https://$git_username@\${remote_url#https://}" ;;
+    *)
+      echo "GitLab push requires an HTTPS origin remote; refusing to send the token to a non-HTTPS URL." >&2
+      return 1
+      ;;
+  esac
+  credential_helper=$(mktemp)
+  cat >"$credential_helper" <<'CREDENTIAL_HELPER'
+#!/bin/sh
+if [ "$1" = get ]; then
+  printf 'username=%s\\npassword=%s\\n\\n' "$GIT_HTTPS_USERNAME" "$GITLAB_TOKEN"
+fi
+CREDENTIAL_HELPER
+  chmod 700 "$credential_helper"
+  if push_output=$(GIT_HTTPS_USERNAME="$git_username" GIT_TERMINAL_PROMPT=0 \\
+      git -c credential.helper= -c credential.helper="!$credential_helper" push --porcelain \\
+      "$git_remote_url" "HEAD:refs/heads/$branch" 2>&1); then
+    echo "Pushed branch $branch to GitLab."
+  else
+    push_status=$?
+    log_safe "[git-push] failed exit=$push_status branch=$branch remote=$remote_url"
+    log_safe "$push_output"
+    echo "GitLab rejected the push. Check token permissions, project membership, Git-over-HTTPS authentication, and branch protection." >&2
+    rm -f "$credential_helper"
+    return "$push_status"
+  fi
+  rm -f "$credential_helper"
+
+  mr_response=$(gitlab_api POST "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests" \\
+    --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+    --form-string "source_branch=$branch" \\
+    --form-string "target_branch=$base_branch" \\
+    --form-string "title=AI: implement issue #$iid" \\
+    --form-string "description=Automated changes for issue #$iid. Closes #$iid.")
+  mr_url=$(printf '%s' "$mr_response" | jq -er '.web_url')
+  echo "Created GitLab merge request: $mr_url"
+  git switch --detach "$base_sha"
+}
+
+page=1
+while :; do
+  issues=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues?state=opened&per_page=100&page=$page" \\
+    --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
+  count=$(printf '%s' "$issues" | jq 'length')
+  printf '%s' "$issues" | jq -r --arg machine "$machine" --argjson webhook_issue_iid "\${webhook_issue_iid:-null}" '
+    .[]
+    | select($webhook_issue_iid == null or .iid == $webhook_issue_iid)
+    | select((.labels // []) | all(. != "agent:skip" and . != "blocked"))
+    | select(
+        ((.labels // []) | any(. == "agent:review"))
+        or (
+          ((.labels // []) | any(. == "agent:rework"))
+          and ((.labels // []) | all(. != "status:In Rework"))
+        )
+        or (
+          ((.labels // []) | all(. as $label | ["status:In Development", "status:In Review", "status:In Rework", "ai_developed", "ai_pr_reviewed"] | index($label) == null))
+          and ((.labels // []) | all(test("in progress|_wip|rework-round-") | not))
+          and (
+            ((.assignees // []) | any(.username == $machine))
+            or ((.labels // []) | any(. == "agent:dev"))
+          )
+        )
+      )
+    | [.iid, ((.labels // []) | join(","))] | @tsv
+  ' | while IFS="$(printf '\\t')" read -r iid labels; do
+    case ",$labels," in
+      *,agent:skip,*) continue ;;
+    esac
+    case ",$labels," in
+      *,agent:review,*) config='.dmtools/runners/fa-review.json'; trigger='agent:review' ;;
+      *,agent:rework,*)
+        case ",$labels," in
+          *,status:In\\ Rework,*) continue ;;
+        esac
+        config='.dmtools/runners/fa-rework.json'
+        trigger='agent:rework'
+        ;;
+      *)
+        case ",$labels," in
+          *,status:In\\ Development,*|*,status:In\\ Review,*|*,status:In\\ Rework,*|*,in\\ progress,*|*,ai_developed,*|*,ai_pr_reviewed,*|*,*_wip,*|*,*rework-round-*)
+            continue
+            ;;
+        esac
+        case ",$labels," in
+          *,agent:dev,*) trigger='agent:dev' ;;
+          *) trigger='' ;;
+        esac
+        case ",$labels," in
+          *,bug,*) config='.dmtools/runners/fa-bug-dev.json' ;;
+          *) config='.dmtools/runners/fa-story-dev.json' ;;
+        esac
+        ;;
+    esac
+
+    echo "Running $config for GitLab issue #$iid"
+    current_issue="$iid"
+    if [ "$trigger" != 'agent:review' ]; then
+      base_sha=$(git rev-parse HEAD)
+    fi
+    if [ "$trigger" = 'agent:review' ]; then
+      clear_review_outputs
+    fi
+    run_agent "$config" --inputTicketId "$iid"
+    if [ "$trigger" != 'agent:review' ]; then
+      publish_issue_changes "$iid" "$base_sha"
+    else
+      related_merge_requests=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues/$iid/related_merge_requests" \\
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
+      mr_iid=$(printf '%s' "$related_merge_requests" | jq -er '
+        [.[] | select(.state == "opened")]
+        | if length == 1 then .[0].iid
+          elif length == 0 then error("no open merge request is linked to the issue")
+          else error("multiple open merge requests are linked to the issue; cannot choose review target safely")
+          end
+      ')
+      bash .dmtools/scripts/gitlab-factory-publish-review.sh "$mr_iid"
+    fi
+    result_label='ai_developed'
+    if [ "$trigger" = 'agent:review' ]; then
+      result_label='ai_pr_reviewed'
+    fi
+    args=(--header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=$result_label")
+    if [ -n "$trigger" ]; then
+      args+=(--form-string "remove_labels=$trigger")
+    fi
+    gitlab_api PUT "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues/$iid" "\${args[@]}" >/dev/null
+    current_issue='n/a'
+  done
+  [ "$count" -lt 100 ] && break
+  page=$((page + 1))
+done
+
+if [[ -n "$webhook_issue_iid" ]]; then
+  exit 0
+fi
+
+page=1
+while :; do
+  merge_requests=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests?state=opened&per_page=100&page=$page" \\
+    --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
+  count=$(printf '%s' "$merge_requests" | jq 'length')
+  printf '%s' "$merge_requests" | jq -r --arg machine "$machine" '
+    .[]
+    | select((.labels // []) | all(. != "blocked"))
+    | select(
+        ((.labels // []) | any(. == "agent:review" or . == "agent:rework"))
+        or (
+          .author.username == $machine
+          and ((.labels // []) | any(. == "pr_approved"))
+        )
+      )
+    | [.iid, ((.labels // []) | join(",")), (.head_pipeline.status // "")] | @tsv
+  ' | while IFS="$(printf '\\t')" read -r iid labels pipeline_status; do
+    case ",$labels," in
+      *,agent:review,*)
+        config='.dmtools/runners/fa-review.json'
+        result_label='ai_pr_reviewed'
+        trigger='agent:review'
+        ;;
+      *,agent:rework,*)
+        config='.dmtools/runners/fa-rework.json'
+        result_label='ai_developed'
+        trigger='agent:rework'
+        ;;
+      *,pr_approved,*)
+        if [ "$pipeline_status" != 'success' ]; then continue; fi
+        current_issue="!$iid"
+        gitlab_api PUT "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$iid/merge" \\
+          --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+          --form-string "merge_when_pipeline_succeeds=true" >/dev/null
+        current_issue='n/a'
+        continue
+        ;;
+      *) continue ;;
+    esac
+
+    echo "Running $config for GitLab merge request !$iid"
+    current_issue="!$iid"
+    run_agent "$config" --inputTicketId "$iid"
+    gitlab_api PUT "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$iid" \\
+      --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+      --form-string "add_labels=$result_label" \\
+      --form-string "remove_labels=$trigger" >/dev/null
+    current_issue='n/a'
+  done
+  [ "$count" -lt 100 ] && break
+  page=$((page + 1))
+done
+`;
+}
+
+function renderGitlabReviewPublisher(): string {
+  return `#!/usr/bin/env bash
+set -Eeuo pipefail
+
+: "\${GITLAB_TOKEN:?Set the GITLAB_TOKEN project CI/CD variable}"
+: "\${CI_API_V4_URL:?This script must run in GitLab CI}"
+: "\${CI_PROJECT_ID:?This script must run in a project pipeline}"
+: "\${CI_PIPELINE_ID:?GitLab pipeline ID is required to identify the review}"
+
+mr_iid="\${1:?Usage: gitlab-factory-publish-review.sh <merge-request-iid>}"
+if [[ ! "$mr_iid" =~ ^[0-9]+$ ]]; then
+  echo "Invalid merge request IID: expected a number." >&2
+  exit 2
+fi
+
+review_json='outputs/pr_review.json'
+general_comment='outputs/pr_review_general.md'
+if [ ! -s "$review_json" ] || [ ! -s "$general_comment" ]; then
+  echo "Review outputs are missing; expected outputs/pr_review.json and outputs/pr_review_general.md." >&2
+  exit 1
+fi
+if ! jq -e '(.generalComment == "outputs/pr_review_general.md") and ((.inlineComments // []) | type == "array")' "$review_json" >/dev/null; then
+  echo "Review JSON has an unexpected format; refusing to publish incomplete findings." >&2
+  exit 1
+fi
+
+log_error_response() {
+  local body="$1"
+  body="\${body//"$GITLAB_TOKEN"/[REDACTED]}"
+  if [ "\${#body}" -gt 2000 ]; then
+    body="\${body:0:2000}...[truncated]"
+  fi
+  printf '[gitlab-review] error response (max 2000 chars):\\n%s\\n' "$body" >&2
+}
+
+gitlab_api() {
+  local method="$1"
+  local url="$2"
+  local response body http_status curl_status failure_status
+  shift 2
+
+  if response=$(curl --silent --show-error --write-out $'\\n%{http_code}' \\
+      --request "$method" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$@" "$url"); then
+    curl_status=0
+  else
+    curl_status=$?
+  fi
+  if [[ "$response" == *$'\\n'* ]]; then
+    http_status="\${response##*$'\\n'}"
+    body="\${response%$'\\n'*}"
+  else
+    http_status='000'
+    body="$response"
+  fi
+  if [ "$curl_status" -ne 0 ] || [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    printf '[gitlab-review] request failed method=%s url=%s curl_exit=%s http_status=%s\\n' \\
+      "$method" "$url" "$curl_status" "$http_status" >&2
+    log_error_response "$body"
+    failure_status=22
+    if [ "$curl_status" -ne 0 ]; then
+      failure_status="$curl_status"
+    fi
+    return "$failure_status"
+  fi
+  printf '%s' "$body"
+}
+
+mr=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid")
+diff_refs=$(printf '%s' "$mr" | jq -ce '.diff_refs | select(.base_sha and .head_sha and .start_sha)')
+base_sha=$(printf '%s' "$diff_refs" | jq -er '.base_sha')
+head_sha=$(printf '%s' "$diff_refs" | jq -er '.head_sha')
+start_sha=$(printf '%s' "$diff_refs" | jq -er '.start_sha')
+
+general_body=$(cat "$general_comment")
+gitlab_api POST "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid/notes" \\
+  --header 'Content-Type: application/json' \\
+  --data "$(jq -cn --arg body "$general_body" '{body: $body}')" >/dev/null
+printf 'Posted general FA review to GitLab merge request !%s.\\n' "$mr_iid"
+
+while IFS= read -r inline_comment; do
+  file_path=$(printf '%s' "$inline_comment" | jq -er '.path | strings')
+  line=$(printf '%s' "$inline_comment" | jq -er '.line | numbers | select(. > 0 and floor == .)')
+  side=$(printf '%s' "$inline_comment" | jq -r '.side // "RIGHT"')
+  comment_file=$(printf '%s' "$inline_comment" | jq -er '.comment | strings')
+  case "$comment_file" in
+    outputs/pr_review_comments/*.md) ;;
+    *)
+      echo "Invalid inline review comment path; expected a markdown file under outputs/pr_review_comments/." >&2
+      exit 1
+      ;;
+  esac
+  comment_name="\${comment_file##*/}"
+  if [ "$comment_file" != "outputs/pr_review_comments/$comment_name" ]; then
+    echo "Invalid inline review comment path; nested or parent paths are not allowed." >&2
+    exit 1
+  fi
+  if [ ! -s "$comment_file" ]; then
+    echo "Inline review comment file is missing or empty: $comment_file" >&2
+    exit 1
+  fi
+  if [ "$side" != 'LEFT' ] && [ "$side" != 'RIGHT' ]; then
+    echo "Invalid inline review side '$side'; expected LEFT or RIGHT." >&2
+    exit 1
+  fi
+  comment_body=$(cat "$comment_file")
+  position=$(jq -cn \\
+    --arg base_sha "$base_sha" \\
+    --arg head_sha "$head_sha" \\
+    --arg start_sha "$start_sha" \\
+    --arg path "$file_path" \\
+    --arg side "$side" \\
+    --argjson line "$line" \\
+    '{position: ({position_type: "text", base_sha: $base_sha, head_sha: $head_sha, start_sha: $start_sha, old_path: $path, new_path: $path} + (if $side == "LEFT" then {old_line: $line} else {new_line: $line} end))}')
+  payload=$(jq -cn --arg body "$comment_body" --argjson position "$position" '{body: $body} + $position')
+  gitlab_api POST "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid/discussions" \\
+    --header 'Content-Type: application/json' \\
+    --data "$payload" >/dev/null
+  printf 'Posted FA review comment on %s:%s to GitLab merge request !%s.\\n' "$file_path" "$line" "$mr_iid"
+done < <(jq -c '.inlineComments[]?' "$review_json")
+`;
+}
+
+function renderGitlabQualityJob(c: FactoryConfig): string | null {
+  if (!isCiEnabled(c)) return null;
+  const preset = c.qualityPreset ?? 'none';
+  if (preset === 'none') return null;
+  let image: string;
+  let script: string;
+  switch (preset) {
+    case 'crap4js':
+      image = `node:${c.toolchains.node || '22'}`;
+      script = `if [ ! -f package.json ]; then echo "No package.json found — skipping quality checks."; exit 0; fi
+if [ -f package-lock.json ]; then npm ci; else npm install; fi
+if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test && !p.scripts.test.includes('Error: no test specified') ? 0 : 1)"; then
+  npx c8 --reporter=json --reporter=text npm test
+  if [ -f coverage/coverage-final.json ]; then npx --yes github:IstiN/crap4js --coverage coverage/coverage-final.json; fi
+else
+  echo "No tests configured — skipping coverage and CRAP analysis."
+fi`;
+      break;
+    case 'crap4dart':
+      image = `ghcr.io/cirruslabs/flutter:${c.toolchains.flutter || 'stable'}`;
+      script = `if [ ! -f pubspec.yaml ]; then echo "No pubspec.yaml found — skipping Dart quality checks."; exit 0; fi
+dart pub get
+dart format --set-exit-if-changed .
+dart analyze
+if [ ! -d test ] || [ -z "$(find test -name '*_test.dart' -print -quit 2>/dev/null)" ]; then echo "No Dart tests found — skipping coverage and CRAP analysis."; exit 0; fi
+dart test --coverage=coverage
+dart pub global activate coverage
+dart pub global run coverage:format_coverage --lcov --in coverage --out coverage/lcov.info --report-on lib
+if [ -f coverage/lcov.info ]; then dart pub global activate -sgit https://github.com/IstiN/crap4dart.git && crap4dart analyze --lcov coverage/lcov.info; fi`;
+      break;
+    case 'crap4java':
+      image = `eclipse-temurin:${c.toolchains.java || '21'}-jdk`;
+      script = `apt-get update && apt-get install -y --no-install-recommends git maven
+if { [ ! -f pom.xml ] && [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; } || [ -z "$(find . -name '*.java' -not -path './.*' -print -quit)" ]; then echo "No Java build file or source files found — skipping Java quality checks."; exit 0; fi
+git clone --depth 1 https://github.com/IstiN/crap4java.git /tmp/crap4java
+mvn -q -f /tmp/crap4java/pom.xml -DskipTests package
+java -jar /tmp/crap4java/target/crap4java-*.jar`;
+      break;
+    case 'crap4py':
+      image = `python:${c.toolchains.python || '3.12'}`;
+      script = `python -m pip install --upgrade pip
+if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install -e .; fi
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+pip install coverage pytest git+https://github.com/vabhzw17eg2qu4m9-bit/crap4py.git
+if [ -z "$(find . -name '*.py' -not -path './.*' -not -path './venv/*' -print -quit)" ]; then echo "No Python files found — skipping quality checks."; exit 0; fi
+set +e
+coverage run -m pytest
+test_status=$?
+set -e
+if [ "$test_status" -eq 5 ]; then echo "No tests collected — skipping coverage and CRAP analysis."; exit 0; elif [ "$test_status" -ne 0 ]; then exit "$test_status"; fi
+coverage json -o coverage.json
+crap4py --coverage coverage.json`;
+      break;
+    case 'crap4go':
+      image = `golang:${c.toolchains.go || '1.23'}`;
+      script = `if [ -z "$(find . -name '*.go' -not -path './.*' -print -quit)" ]; then echo "No Go source files found — skipping quality checks."; exit 0; fi
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then echo "Files need gofmt:"; echo "$unformatted"; exit 1; fi
+if [ ! -f go.mod ]; then echo "No go.mod found — skipping Go tests and CRAP analysis."; exit 0; fi
+go vet ./...
+if [ -z "$(find . -name '*_test.go' -not -path './.*' -print -quit)" ]; then echo "No Go tests found — skipping coverage and CRAP analysis."; exit 0; fi
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+go install github.com/vabhzw17eg2qu4m9-bit/crap4go@latest
+"$(go env GOPATH)/bin/crap4go" --coverage coverage.out`;
+      break;
+    default:
+      return null;
+  }
+  const indented = script.split('\n').map((line) => `      ${line}`).join('\n');
+  return `quality:
+  stage: quality
+  image: ${image}
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+${indented}
+`;
+}
+
+/** GitLab projects use native GitLab CI jobs; GitHub Actions files are intentionally omitted. */
+export function renderGitlabFiles(c: FactoryConfig, gitlabBaseUrl = 'https://gitlab.com'): FactoryFile[] {
+  const files = renderFiles(c).filter(
+    (file) => !file.path.startsWith('.github/'),
+  );
+  const qualityJob = renderGitlabQualityJob(c);
+  const stages = qualityJob
+    ? '  - quality\n  - agent\n  - merge\n'
+    : '  - agent\n  - merge\n';
+  const runnerTemplates: Record<string, string> = {
+    '.dmtools/runners/fa-bug-dev.json': runnerBug,
+    '.dmtools/runners/fa-story-dev.json': runnerStory,
+    '.dmtools/runners/fa-rework.json': runnerRework,
+    '.dmtools/runners/fa-review.json': runnerReview,
+  };
+  return [
+    ...files.map((file) => {
+      const tpl = runnerTemplates[file.path];
+      return tpl
+        ? { ...file, content: runnerJson(tpl, c, file.path.endsWith('fa-review.json'), 'gitlab', gitlabBaseUrl) }
+        : file;
+    }),
+    {
+      path: '.dmtools/scripts/gitlab-factory-poll-issues.sh',
+      content: renderGitlabIssuePoller(c),
+    },
+    {
+      path: '.dmtools/scripts/gitlab-factory-publish-review.sh',
+      content: renderGitlabReviewPublisher(),
+    },
+    {
+      path: '.gitlab-ci.yml',
+      content: `stages:
+${stages}
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $DMTOOLS_FACTORY_TRIGGER == "issue_webhook"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: never
+
+default:
+  image: eclipse-temurin:21-jdk
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends curl git jq unzip
+    - curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+    - mkdir -p /tmp/dmtools-fa-setup
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/_common.sh -o /tmp/dmtools-fa-setup/_common.sh
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/fa.sh -o /tmp/dmtools-fa-setup/fa.sh
+    - FA_INSTALL_DIR="$HOME/.local/bin" bash /tmp/dmtools-fa-setup/fa.sh
+    - export PATH="$HOME/.local/bin:$PATH"
+    - fa --version
+
+${qualityJob ?? ''}
+variables:
+  DMTOOLS_PACK_REGISTRY:
+    value: https://github.com/IstiN/dmtools-agents/releases/latest/download
+    description: Release registry URL used to resolve generated agent packs.
+  DMTOOLS_AGENT_CONFIG:
+    value: .dmtools/runners/fa-story-dev.json
+    description: Runner configuration for a manual factory run.
+
+poll-assigned-issues:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $DMTOOLS_FACTORY_TRIGGER == "issue_webhook"'
+  script:
+    - bash .dmtools/scripts/gitlab-factory-poll-issues.sh
+
+ai-teammate:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_TICKET_ID'
+  script:
+    - |
+      if [ ! -f "$DMTOOLS_AGENT_CONFIG" ]; then
+        echo "DMTOOLS_AGENT_CONFIG must point to a generated runner JSON file."
+        exit 1
+      fi
+      dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"
+
+review-merge-request:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /agent:review/'
+  script:
+    - |
+      mkdir -p outputs/pr_review_comments
+      rm -f outputs/pr_review.json outputs/pr_review_general.md outputs/pr_review_comments/*.md
+      dmtools run .dmtools/runners/fa-review.json --inputTicketId "$CI_MERGE_REQUEST_IID"
+      bash .dmtools/scripts/gitlab-factory-publish-review.sh "$CI_MERGE_REQUEST_IID"
+      curl --silent --show-error --fail --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=ai_pr_reviewed" --form-string "remove_labels=agent:review" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" >/dev/null
+
+rework-merge-request:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /agent:rework/'
+  script:
+    - |
+      dmtools run .dmtools/runners/fa-rework.json --inputTicketId "$CI_MERGE_REQUEST_IID"
+      curl --silent --show-error --fail --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=ai_developed" --form-string "remove_labels=agent:rework" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" >/dev/null
+
+merge-approved-merge-request:
+  stage: merge
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /pr_approved/'
+  script:
+    - |
+      author=$(curl --silent --show-error --fail \\
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" | jq -r '.author.username')
+      if [ "$author" != '${c.machine}' ]; then
+        echo "Skipping merge: merge request author $author is not ${c.machine}."
+        exit 0
+      fi
+      curl --silent --show-error --fail --request PUT \\
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \\
+        --form-string "merge_when_pipeline_succeeds=true" \\
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/merge"
+`,
+    },
+  ];
+}
+
 function mergeChecklist(c: FactoryConfig): string {
   if (c.merge.mode === 'token') return `- [ ] Secret \`${c.merge.tokenSecret}\` (PAT of the merge account; repo scope, allowed to merge into the protected branch)\n`;
   if (c.merge.mode === 'app') return '- [ ] GitHub App installed on this repository (Contents, Pull requests, Issues: read & write; Checks: read) and allowed to bypass/merge in the branch ruleset\n- [ ] Secrets `MERGE_APP_ID` and `MERGE_APP_PRIVATE_KEY` (App id + generated private key PEM)\n';
@@ -704,10 +1396,42 @@ export async function createFactoryPr(
   return pr.html_url;
 }
 
-export interface RepoSummary { full_name: string; private: boolean; permissions?: { push?: boolean } }
+export interface RepoSummary {
+  full_name: string;
+  private: boolean;
+  default_branch?: string;
+  permissions?: { push?: boolean };
+}
+
+/** Validates a GitLab instance URL and returns its API root without a trailing slash. */
+export function normalizeGitlabBaseUrl(baseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(baseUrl.trim());
+  } catch {
+    throw new Error('Enter a valid GitLab instance URL, such as https://gitlab.com');
+  }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (
+    (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error('GitLab instance URL must use HTTPS (HTTP is allowed only on localhost) and cannot include credentials, a query, or a fragment');
+  }
+  const path = url.pathname.replace(/\/+$/, '').replace(/\/api\/v4$/i, '');
+  return `${url.origin}${path}`;
+}
 
 /** Repositories the token can push to, most recently pushed first (owner/org filter optional). */
-export async function listRepos(token: string): Promise<RepoSummary[]> {
+export async function listRepos(
+  token: string,
+  scm: ScmId = 'github',
+  gitlabBaseUrl = 'https://gitlab.com',
+): Promise<RepoSummary[]> {
+  if (scm === 'gitlab') return listGitlabRepos(token, gitlabBaseUrl);
   const out: RepoSummary[] = [];
   for (let page = 1; page <= 5; page++) {
     const r = await gh<RepoSummary[]>(token, `/user/repos?per_page=100&sort=pushed&page=${page}&affiliation=owner,collaborator,organization_member`);
@@ -715,6 +1439,389 @@ export async function listRepos(token: string): Promise<RepoSummary[]> {
     if (r.length < 100) break;
   }
   return out;
+}
+
+async function listGitlabRepos(token: string, baseUrl: string): Promise<RepoSummary[]> {
+  const apiUrl = `${normalizeGitlabBaseUrl(baseUrl)}/api/v4`;
+  const out: RepoSummary[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const res = await fetch(
+      `${apiUrl}/projects?membership=true&min_access_level=30&order_by=last_activity_at&per_page=100&page=${page}`,
+      { headers: { 'PRIVATE-TOKEN': token, Accept: 'application/json' } },
+    );
+    if (!res.ok) {
+      throw new Error(`GitLab ${res.status} while listing projects: ${(await res.text()).slice(0, 200)}`);
+    }
+    const projects = (await res.json()) as {
+      path_with_namespace: string;
+      visibility: string;
+      default_branch?: string;
+    }[];
+    out.push(...projects.map((p) => ({
+      full_name: p.path_with_namespace,
+      private: p.visibility !== 'public',
+      ...(p.default_branch ? { default_branch: p.default_branch } : {}),
+    })));
+    if (projects.length < 100) break;
+  }
+  return out;
+}
+
+function gitlabProjectPath(repo: string): string {
+  if (!GITLAB_REPO.test(repo)) throw new Error('GitLab project must be group/project');
+  return encodeURIComponent(repo);
+}
+
+async function gitlabRequest<T>(
+  token: string,
+  baseUrl: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const res = await fetch(`${normalizeGitlabBaseUrl(baseUrl)}/api/v4${path}`, {
+    ...init,
+    headers: {
+      'PRIVATE-TOKEN': token,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`GitLab ${res.status} on ${path}: ${body.slice(0, 200)}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+/** Fetches all existing label names on a GitLab project. */
+export async function listGitlabLabels(token: string, repo: string, baseUrl: string): Promise<string[]> {
+  const project = gitlabProjectPath(repo);
+  const labels: { name: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ name: string }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/labels?per_page=100&page=${page}`,
+    );
+    labels.push(...current);
+    if (current.length < 100) break;
+  }
+  return labels.map((label) => label.name);
+}
+
+/** Ensures all required FACTORY_LABELS exist on a GitLab project. */
+export async function ensureGitlabLabels(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  log: (message: string) => void = () => {},
+): Promise<{ created: string[]; existing: string[] }> {
+  const project = gitlabProjectPath(repo);
+  const current = await listGitlabLabels(token, repo, baseUrl);
+  const currentLower = new Set(current.map((name) => name.toLowerCase()));
+  const created: string[] = [];
+  const existing: string[] = [];
+  for (const label of FACTORY_LABELS) {
+    if (currentLower.has(label.name.toLowerCase())) {
+      existing.push(label.name);
+      continue;
+    }
+    try {
+      await gitlabRequest(token, baseUrl, `/projects/${project}/labels`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: label.name,
+          color: `#${label.color}`,
+          description: label.description,
+        }),
+      });
+      created.push(label.name);
+    } catch (error) {
+      if ((error as Error).message.startsWith('GitLab 409 ')) {
+        const latest = await listGitlabLabels(token, repo, baseUrl);
+        if (latest.some((name) => name.toLowerCase() === label.name.toLowerCase())) {
+          existing.push(label.name);
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+  log(created.length ? `labels created: ${created.join(', ')}` : 'labels: all required labels already exist');
+  return { created, existing };
+}
+
+async function listGitlabVariables(
+  token: string,
+  repo: string,
+  baseUrl: string,
+): Promise<{ key: string; masked?: boolean; hidden?: boolean; masked_and_hidden?: boolean }[]> {
+  const project = gitlabProjectPath(repo);
+  const variables: { key: string; masked?: boolean; hidden?: boolean; masked_and_hidden?: boolean }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ key: string; masked?: boolean; hidden?: boolean; masked_and_hidden?: boolean }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/variables?per_page=100&page=${page}`,
+    );
+    variables.push(...current);
+    if (current.length < 100) break;
+  }
+  return variables;
+}
+
+export async function listGitlabVariableNames(token: string, repo: string, baseUrl: string): Promise<string[]> {
+  return (await listGitlabVariables(token, repo, baseUrl)).map((variable) => variable.key);
+}
+
+const GITLAB_ISSUE_WEBHOOK_TRIGGER_DESCRIPTION = 'DMTools factory issue webhook';
+const GITLAB_ISSUE_WEBHOOK_MARKER = 'issue_webhook';
+
+async function listGitlabIssueWebhooks(token: string, project: string, baseUrl: string) {
+  const hooks: { id: number; url: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ id: number; url: string }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/hooks?per_page=100&page=${page}`,
+    );
+    hooks.push(...current);
+    if (current.length < 100) break;
+  }
+  return hooks.filter((hook) => {
+    try {
+      return new URL(hook.url).searchParams.get('variables[DMTOOLS_FACTORY_TRIGGER]') === GITLAB_ISSUE_WEBHOOK_MARKER;
+    } catch {
+      return false;
+    }
+  });
+}
+
+async function deleteGitlabIssueWebhook(
+  token: string,
+  project: string,
+  baseUrl: string,
+  hook: { id: number; url: string },
+): Promise<void> {
+  const triggerToken = new URL(hook.url).searchParams.get('token');
+  try {
+    await gitlabRequest(token, baseUrl, `/projects/${project}/hooks/${hook.id}`, { method: 'DELETE' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(triggerToken ? message.replaceAll(triggerToken, '[REDACTED]') : message);
+  }
+}
+
+async function listGitlabIssueWebhookTriggers(token: string, project: string, baseUrl: string) {
+  const triggers: { id: number; token?: string; description: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ id: number; token?: string; description: string }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/triggers?per_page=100&page=${page}`,
+    );
+    triggers.push(...current);
+    if (current.length < 100) break;
+  }
+  return triggers.filter((trigger) => trigger.description === GITLAB_ISSUE_WEBHOOK_TRIGGER_DESCRIPTION);
+}
+
+/** Creates or updates the managed GitLab Issue-event webhook and its pipeline trigger token. */
+export async function ensureGitlabIssueEventWebhook(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  ref: string,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  const project = gitlabProjectPath(repo);
+  const existingTriggers = await listGitlabIssueWebhookTriggers(token, project, baseUrl);
+  const reusableTrigger = existingTriggers.find((trigger) => trigger.token);
+  const trigger = reusableTrigger?.token
+    ? reusableTrigger
+    : await gitlabRequest<{ id: number; token: string; description: string }>(
+        token,
+        baseUrl,
+        `/projects/${project}/triggers`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ description: GITLAB_ISSUE_WEBHOOK_TRIGGER_DESCRIPTION }),
+        },
+      );
+  if (!trigger.token) {
+    throw new Error('GitLab did not return the factory webhook trigger token. Try setup again.');
+  }
+
+  const triggerUrl = new URL(
+    `${normalizeGitlabBaseUrl(baseUrl)}/api/v4/projects/${project}/trigger/pipeline`,
+  );
+  triggerUrl.search = new URLSearchParams({
+    token: trigger.token,
+    ref,
+    'variables[DMTOOLS_FACTORY_TRIGGER]': GITLAB_ISSUE_WEBHOOK_MARKER,
+  }).toString();
+  const hooks = await listGitlabIssueWebhooks(token, project, baseUrl);
+  const currentHook = hooks[0];
+  const hookPath = currentHook
+    ? `/projects/${project}/hooks/${currentHook.id}`
+    : `/projects/${project}/hooks`;
+  try {
+    await gitlabRequest(token, baseUrl, hookPath, {
+      method: currentHook ? 'PUT' : 'POST',
+      body: JSON.stringify({
+        url: triggerUrl.toString(),
+        issues_events: true,
+        push_events: false,
+        enable_ssl_verification: true,
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(message.replaceAll(trigger.token, '[REDACTED]'));
+  }
+
+  for (const duplicateHook of hooks.slice(1)) {
+    await deleteGitlabIssueWebhook(token, project, baseUrl, duplicateHook);
+  }
+  for (const duplicateTrigger of existingTriggers) {
+    if (duplicateTrigger.id !== trigger.id) {
+      await gitlabRequest(token, baseUrl, `/projects/${project}/triggers/${duplicateTrigger.id}`, { method: 'DELETE' });
+    }
+  }
+  log(`GitLab Issue-event webhook ${currentHook ? 'updated' : 'created'} for ${ref}`);
+}
+
+/** Removes the factory-managed GitLab Issue-event webhook and its trigger token. */
+export async function removeGitlabIssueEventWebhook(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  const project = gitlabProjectPath(repo);
+  const hooks = await listGitlabIssueWebhooks(token, project, baseUrl);
+  for (const hook of hooks) {
+    await deleteGitlabIssueWebhook(token, project, baseUrl, hook);
+  }
+  const triggers = await listGitlabIssueWebhookTriggers(token, project, baseUrl);
+  for (const trigger of triggers) {
+    await gitlabRequest(token, baseUrl, `/projects/${project}/triggers/${trigger.id}`, { method: 'DELETE' });
+  }
+  if (hooks.length || triggers.length) log('Removed the DMTools factory Issue-event webhook');
+}
+
+/** Creates secret variables as masked and hidden; values are sent only to the configured instance. */
+export async function putGitlabVariables(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  variables: Record<string, string>,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  const project = gitlabProjectPath(repo);
+  const entries = Object.entries(variables).filter(([, value]) => value);
+  if (!entries.length) return;
+  for (const [key, value] of entries) {
+    if (value.includes('\n')) {
+      throw new Error(`GitLab secret variable ${key} must be a single line to be masked and hidden.`);
+    }
+    if (value.length < 8 || /\s/.test(value) || !/^[A-Za-z0-9_+=/@:.~-]+$/.test(value)) {
+      throw new Error(`GitLab variable ${key} cannot be masked and hidden. Use a value of at least 8 characters with no whitespace or unsupported characters.`);
+    }
+  }
+  const versionInfo = await gitlabRequest<{ version: string }>(token, baseUrl, '/version');
+  const version = versionInfo.version.match(/^(\d+)\.(\d+)/);
+  if (!version || Number(version[1]) < 17 || (Number(version[1]) === 17 && Number(version[2]) < 4)) {
+    throw new Error('Masked and hidden GitLab variables require GitLab 17.4 or newer. No project variables were changed.');
+  }
+  const existing = await listGitlabVariables(token, repo, baseUrl);
+  for (const [key, value] of entries) {
+    const current = existing.find((variable) => variable.key === key);
+    const body = {
+      key,
+      value,
+      variable_type: 'env_var',
+      masked: true,
+      protected: false,
+      raw: true,
+    };
+    const path = current
+      ? `/projects/${project}/variables/${encodeURIComponent(key)}`
+      : `/projects/${project}/variables`;
+    if (current && !(current.hidden || current.masked_and_hidden)) {
+      await gitlabRequest<void>(token, baseUrl, path, { method: 'DELETE' });
+      await gitlabRequest(token, baseUrl, `/projects/${project}/variables`, {
+        method: 'POST',
+        body: JSON.stringify({ ...body, masked_and_hidden: true }),
+      });
+      log(`GitLab project variable ${key} recreated as masked and hidden`);
+      continue;
+    }
+    const method = current ? 'PUT' : 'POST';
+    await gitlabRequest(token, baseUrl, path, {
+      method,
+      body: JSON.stringify({ ...body, ...(!current ? { masked_and_hidden: true } : {}) }),
+    });
+    log(`GitLab project variable ${key} ${current ? 'updated' : 'created'} as masked and hidden`);
+  }
+}
+
+/** Creates a GitLab branch, commits generated GitLab setup files, and opens a merge request. */
+export async function createGitlabMergeRequest(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  c: FactoryConfig,
+  log: (message: string) => void = () => {},
+): Promise<string> {
+  const project = gitlabProjectPath(repo);
+  const projectInfo = await gitlabRequest<{ default_branch: string }>(token, baseUrl, `/projects/${project}`);
+  const base = c.baseBranch || projectInfo.default_branch;
+  const files = renderGitlabFiles(c, baseUrl);
+  const fileExists = async (path: string) => {
+    try {
+      await gitlabRequest(token, baseUrl, `/projects/${project}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(base)}`);
+      return true;
+    } catch (error) {
+      if ((error as Error).message.startsWith('GitLab 404 ')) return false;
+      throw error;
+    }
+  };
+  const existing = await Promise.all(files.map((file) => fileExists(file.path)));
+  const branch = `chore/dmtools-factory-${Date.now().toString(36)}`;
+  await gitlabRequest(token, baseUrl, `/projects/${project}/repository/branches`, {
+    method: 'POST',
+    body: JSON.stringify({ branch, ref: base }),
+  });
+  const actions = files.map((file, index) => ({
+    action: existing[index] ? 'update' : 'create',
+    file_path: file.path,
+    content: file.content,
+  }));
+  await gitlabRequest(token, baseUrl, `/projects/${project}/repository/commits`, {
+    method: 'POST',
+    body: JSON.stringify({
+      branch,
+      commit_message: 'chore: set up DMTools for GitLab',
+      actions,
+    }),
+  });
+  log(`committed ${files.length} GitLab setup files to ${branch}`);
+  const mr = await gitlabRequest<{ web_url: string }>(token, baseUrl, `/projects/${project}/merge_requests`, {
+    method: 'POST',
+    body: JSON.stringify({
+      source_branch: branch,
+      target_branch: base,
+      title: 'chore: set up DMTools for GitLab',
+      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nAfter merging this request, a GitLab Issue-event webhook triggers the poller pipeline for Issue events. The poller filters for open issues assigned to the configured AI teammate or labeled with \`agent:dev\`, \`agent:review\`, or \`agent:rework\`. You can also run an agent manually from **Build > Pipelines** by setting \`DMTOOLS_TICKET_ID\` and \`DMTOOLS_AGENT_CONFIG\`. Merge-request pipelines can run the review or rework agent when the corresponding label is present, and approved merge requests by \`${c.machine}\` are merged after the pipeline succeeds.\n\nThe poller requires the \`GITLAB_TOKEN\` project CI/CD variable created by this setup.`,
+      remove_source_branch: true,
+    }),
+  });
+  log(`merge request created: ${mr.web_url}`);
+  return mr.web_url;
 }
 
 export interface CiWorkflow {
@@ -851,11 +1958,23 @@ export async function listSecretNames(token: string, repo: string): Promise<stri
 }
 
 /** Every secret the generated factory reads, with a human hint. */
-export function requiredSecrets(c: FactoryConfig): { name: string; hint: string; url?: string; multiline?: boolean }[] {
-  const out: { name: string; hint: string; url?: string; multiline?: boolean }[] = [
-    { name: 'SOURCE_GITHUB_TOKEN', hint: `Classic PAT created while logged in as ${c.machine || 'the AI teammate account'} — scopes repo + workflow (workflow lets agents edit .github/workflows). The account needs write access to the repository.`,
-      url: TOKEN_LINKS.agent },
-  ];
+export function requiredSecrets(
+  c: FactoryConfig,
+  scm: ScmId = 'github',
+  gitlabBaseUrl = 'https://gitlab.com',
+): { name: string; hint: string; url?: string; multiline?: boolean }[] {
+  const out: { name: string; hint: string; url?: string; multiline?: boolean }[] = scm === 'gitlab'
+    ? [{
+        name: 'GITLAB_TOKEN',
+        hint: `GitLab personal access token for ${c.machine || 'the AI teammate account'} with api and write_repository scopes. ` +
+          `Its user must have Developer or higher access to ${c.repo}.`,
+        url: TOKEN_LINKS.setupGitlab(gitlabBaseUrl),
+      }]
+    : [{
+        name: 'SOURCE_GITHUB_TOKEN',
+        hint: `Classic PAT created while logged in as ${c.machine || 'the AI teammate account'} — scopes repo + workflow (workflow lets agents edit .github/workflows). The account needs write access to the repository.`,
+        url: TOKEN_LINKS.agent,
+      }];
   const seen = new Set<string>();
   for (const e of allEntries(c)) {
     if (seen.has(e.keyEnv)) continue;
@@ -863,8 +1982,8 @@ export function requiredSecrets(c: FactoryConfig): { name: string; hint: string;
     const p = PROVIDER_PRESETS.find((x) => x.id === e.preset)!;
     out.push({ name: e.keyEnv, hint: `${p.label}: ${p.keyHelp}`, url: p.keyUrl });
   }
-  if (c.merge.mode === 'token') out.push({ name: c.merge.tokenSecret, hint: 'Classic PAT of the merge account — repo scope; the account must be allowed to merge into the target branch.', url: TOKEN_LINKS.merge });
-  if (c.merge.mode === 'app') {
+  if (scm === 'github' && c.merge.mode === 'token') out.push({ name: c.merge.tokenSecret, hint: 'Classic PAT of the merge account — repo scope; the account must be allowed to merge into the protected branch.', url: TOKEN_LINKS.merge });
+  if (scm === 'github' && c.merge.mode === 'app') {
     out.push({ name: 'MERGE_APP_ID', hint: 'GitHub App ID (numeric, App settings → General). Install the App on this repository first.', url: TOKEN_LINKS.app(c.repo) });
     out.push({ name: 'MERGE_APP_PRIVATE_KEY', hint: 'GitHub App private key — paste the whole .pem file.', multiline: true });
   }
@@ -892,6 +2011,8 @@ async function ghRaw(token: string, path: string, init: RequestInit): Promise<vo
 export const TOKEN_LINKS = {
   /** Setup token used by THIS page: commit + PR (repo), workflow files (workflow); secrets need repo-admin rights. */
   setup: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20setup',
+  setupGitlab: (baseUrl = 'https://gitlab.com') =>
+    `${normalizeGitlabBaseUrl(baseUrl)}/-/user_settings/personal_access_tokens`,
   /** SOURCE_GITHUB_TOKEN of the AI teammate: push branches incl. workflow edits, labels, PRs, issues, dispatch. */
   agent: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20agent',
   /** Separate merge PAT: merge PRs + labels. */
@@ -905,11 +2026,28 @@ export const TOKEN_LINKS = {
 
 export interface TokenCheck {
   login: string;
-  kind: 'classic' | 'fine-grained' | 'unknown';
+  kind: 'classic' | 'fine-grained' | 'personal access' | 'unknown';
   scopes: string[]; // classic only
   missingScopes: string[];
   admin: boolean | null; // on the selected repo
   push: boolean | null;
+}
+
+/** Validates a GitLab personal access token and returns the authenticated user. */
+export async function checkGitlabToken(token: string, baseUrl = 'https://gitlab.com'): Promise<TokenCheck> {
+  const apiUrl = `${normalizeGitlabBaseUrl(baseUrl)}/api/v4`;
+  const res = await fetch(`${apiUrl}/user`, {
+    headers: { 'PRIVATE-TOKEN': token, Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    throw new Error(
+      res.status === 401
+        ? 'GitLab token rejected (401) — expired, mistyped, or missing API access'
+        : `GitLab ${res.status} on /user`,
+    );
+  }
+  const user = (await res.json()) as { username: string };
+  return { login: user.username, kind: 'personal access', scopes: [], missingScopes: [], admin: null, push: null };
 }
 
 /** Inspects the token: classic scopes from X-OAuth-Scopes, and the user's permissions on the repo. */
