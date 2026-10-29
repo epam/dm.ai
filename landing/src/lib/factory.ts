@@ -594,6 +594,23 @@ set -Eeuo pipefail
 current_issue='n/a'
 trap 'status=$?; printf "[poller-error] line=%s exit=%s issue=%s pipeline=%s\\n" "$LINENO" "$status" "$current_issue" "$CI_PIPELINE_ID" >&2' ERR
 
+webhook_issue_iid=''
+if [[ "\${DMTOOLS_FACTORY_TRIGGER:-}" == 'issue_webhook' ]]; then
+  : "\${TRIGGER_PAYLOAD:?GitLab issue webhook payload is required}"
+  webhook_issue_iid=$(jq -er 'select(.object_kind == "issue") | .object_attributes.iid | numbers' "$TRIGGER_PAYLOAD")
+  if jq -e '
+    (.changes.labels? != null)
+    and (
+      ((.changes.labels.current // []) | map(.title // .name // tostring)) as $current
+      | ((.changes.labels.previous // []) | map(.title // .name // tostring)) as $previous
+      | [$current[] | select(. as $label | ($previous | index($label)) == null)] | length == 0
+    )
+  ' "$TRIGGER_PAYLOAD" >/dev/null; then
+    echo "Ignoring GitLab issue webhook: no labels were added to issue #$webhook_issue_iid"
+    exit 0
+  fi
+fi
+
 log_safe() {
   local message="$1"
   message="\${message//"$GITLAB_TOKEN"/[REDACTED]}"
@@ -647,16 +664,28 @@ machine='${c.machine}'
 base_branch='${c.baseBranch}'
 
 run_agent() {
-  local output
-  if ! output=$(dmtools run "$@" 2>&1); then
-    printf '%s\\n' "$output"
-    return 1
+  local output_file status
+  local -a pipeline_status
+  output_file=$(mktemp)
+  if dmtools run "$@" 2>&1 | tee "$output_file"; then
+    status=0
+  else
+    pipeline_status=("\${PIPESTATUS[@]}")
+    status="\${pipeline_status[0]}"
+    if [ "$status" -eq 0 ]; then
+      status="\${pipeline_status[1]}"
+    fi
   fi
-  printf '%s\\n' "$output"
-  if grep -Eq 'Agent completed with exit code: [1-9][0-9]*|CLI command executed but did not produce output file:' <<<"$output"; then
+  if [ "$status" -ne 0 ]; then
+    rm -f "$output_file"
+    return "$status"
+  fi
+  if grep -Eq 'Agent completed with exit code: [1-9][0-9]*|CLI command executed but did not produce output file:' "$output_file"; then
+    rm -f "$output_file"
     echo "Agent execution failed; leaving issue/MR labels unchanged." >&2
     return 1
   fi
+  rm -f "$output_file"
   return 0
 }
 
@@ -730,12 +759,24 @@ while :; do
   issues=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues?state=opened&per_page=100&page=$page" \\
     --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
   count=$(printf '%s' "$issues" | jq 'length')
-  printf '%s' "$issues" | jq -r --arg machine "$machine" '
+  printf '%s' "$issues" | jq -r --arg machine "$machine" --argjson webhook_issue_iid "\${webhook_issue_iid:-null}" '
     .[]
-    | select((.labels // []) | all(. != "ai_developed" and . != "ai_pr_reviewed"))
+    | select($webhook_issue_iid == null or .iid == $webhook_issue_iid)
+    | select((.labels // []) | all(. != "agent:skip" and . != "blocked"))
     | select(
-        ((.assignees // []) | any(.username == $machine))
-        or ((.labels // []) | any(. == "agent:dev" or . == "agent:review" or . == "agent:rework"))
+        ((.labels // []) | any(. == "agent:review"))
+        or (
+          ((.labels // []) | any(. == "agent:rework"))
+          and ((.labels // []) | all(. != "status:In Rework"))
+        )
+        or (
+          ((.labels // []) | all(. as $label | ["status:In Development", "status:In Review", "status:In Rework", "ai_developed", "ai_pr_reviewed"] | index($label) == null))
+          and ((.labels // []) | all(test("in progress|_wip|rework-round-") | not))
+          and (
+            ((.assignees // []) | any(.username == $machine))
+            or ((.labels // []) | any(. == "agent:dev"))
+          )
+        )
       )
     | [.iid, ((.labels // []) | join(","))] | @tsv
   ' | while IFS="$(printf '\\t')" read -r iid labels; do
@@ -744,8 +785,19 @@ while :; do
     esac
     case ",$labels," in
       *,agent:review,*) config='.dmtools/runners/fa-review.json'; trigger='agent:review' ;;
-      *,agent:rework,*) config='.dmtools/runners/fa-rework.json'; trigger='agent:rework' ;;
+      *,agent:rework,*)
+        case ",$labels," in
+          *,status:In\\ Rework,*) continue ;;
+        esac
+        config='.dmtools/runners/fa-rework.json'
+        trigger='agent:rework'
+        ;;
       *)
+        case ",$labels," in
+          *,status:In\\ Development,*|*,status:In\\ Review,*|*,status:In\\ Rework,*|*,in\\ progress,*|*,ai_developed,*|*,ai_pr_reviewed,*|*,*_wip,*|*,*rework-round-*)
+            continue
+            ;;
+        esac
         case ",$labels," in
           *,agent:dev,*) trigger='agent:dev' ;;
           *) trigger='' ;;
@@ -759,9 +811,13 @@ while :; do
 
     echo "Running $config for GitLab issue #$iid"
     current_issue="$iid"
-    base_sha=$(git rev-parse HEAD)
+    if [ "$trigger" != 'agent:review' ]; then
+      base_sha=$(git rev-parse HEAD)
+    fi
     run_agent "$config" --inputTicketId "$iid"
-    publish_issue_changes "$iid" "$base_sha"
+    if [ "$trigger" != 'agent:review' ]; then
+      publish_issue_changes "$iid" "$base_sha"
+    fi
     result_label='ai_developed'
     if [ "$trigger" = 'agent:review' ]; then
       result_label='ai_pr_reviewed'
@@ -777,6 +833,10 @@ while :; do
   page=$((page + 1))
 done
 
+if [[ -n "$webhook_issue_iid" ]]; then
+  exit 0
+fi
+
 page=1
 while :; do
   merge_requests=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests?state=opened&per_page=100&page=$page" \\
@@ -784,13 +844,18 @@ while :; do
   count=$(printf '%s' "$merge_requests" | jq 'length')
   printf '%s' "$merge_requests" | jq -r --arg machine "$machine" '
     .[]
-    | select(.author.username == $machine)
-    | select((.labels // []) | any(. == "agent:review" or . == "agent:rework" or . == "pr_approved"))
+    | select((.labels // []) | all(. != "blocked"))
+    | select(
+        ((.labels // []) | any(. == "agent:review" or . == "agent:rework"))
+        or (
+          .author.username == $machine
+          and ((.labels // []) | any(. == "pr_approved"))
+        )
+      )
     | [.iid, ((.labels // []) | join(",")), (.head_pipeline.status // "")] | @tsv
   ' | while IFS="$(printf '\\t')" read -r iid labels pipeline_status; do
     case ",$labels," in
       *,agent:review,*)
-        if [[ ",$labels," == *,ai_pr_reviewed,* ]]; then continue; fi
         config='.dmtools/runners/fa-review.json'
         result_label='ai_pr_reviewed'
         trigger='agent:review'
@@ -943,7 +1008,7 @@ ${stages}
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $DMTOOLS_FACTORY_TRIGGER == "issue_webhook"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - when: never
 
@@ -973,7 +1038,7 @@ poll-assigned-issues:
   stage: agent
   resource_group: dmtools-agent-factory
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $DMTOOLS_FACTORY_TRIGGER == "issue_webhook"'
   script:
     - bash .dmtools/scripts/gitlab-factory-poll-issues.sh
 
@@ -1363,8 +1428,60 @@ export async function listGitlabVariableNames(token: string, repo: string, baseU
   return (await listGitlabVariables(token, repo, baseUrl)).map((variable) => variable.key);
 }
 
-/** Creates or updates the scheduled GitLab issue poller for the generated factory pipeline. */
-export async function ensureGitlabIssuePollingSchedule(
+const GITLAB_ISSUE_WEBHOOK_TRIGGER_DESCRIPTION = 'DMTools factory issue webhook';
+const GITLAB_ISSUE_WEBHOOK_MARKER = 'issue_webhook';
+
+async function listGitlabIssueWebhooks(token: string, project: string, baseUrl: string) {
+  const hooks: { id: number; url: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ id: number; url: string }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/hooks?per_page=100&page=${page}`,
+    );
+    hooks.push(...current);
+    if (current.length < 100) break;
+  }
+  return hooks.filter((hook) => {
+    try {
+      return new URL(hook.url).searchParams.get('variables[DMTOOLS_FACTORY_TRIGGER]') === GITLAB_ISSUE_WEBHOOK_MARKER;
+    } catch {
+      return false;
+    }
+  });
+}
+
+async function deleteGitlabIssueWebhook(
+  token: string,
+  project: string,
+  baseUrl: string,
+  hook: { id: number; url: string },
+): Promise<void> {
+  const triggerToken = new URL(hook.url).searchParams.get('token');
+  try {
+    await gitlabRequest(token, baseUrl, `/projects/${project}/hooks/${hook.id}`, { method: 'DELETE' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(triggerToken ? message.replaceAll(triggerToken, '[REDACTED]') : message);
+  }
+}
+
+async function listGitlabIssueWebhookTriggers(token: string, project: string, baseUrl: string) {
+  const triggers: { id: number; token?: string; description: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const current = await gitlabRequest<{ id: number; token?: string; description: string }[]>(
+      token,
+      baseUrl,
+      `/projects/${project}/triggers?per_page=100&page=${page}`,
+    );
+    triggers.push(...current);
+    if (current.length < 100) break;
+  }
+  return triggers.filter((trigger) => trigger.description === GITLAB_ISSUE_WEBHOOK_TRIGGER_DESCRIPTION);
+}
+
+/** Creates or updates the managed GitLab Issue-event webhook and its pipeline trigger token. */
+export async function ensureGitlabIssueEventWebhook(
   token: string,
   repo: string,
   baseUrl: string,
@@ -1372,32 +1489,80 @@ export async function ensureGitlabIssuePollingSchedule(
   log: (message: string) => void = () => {},
 ): Promise<void> {
   const project = gitlabProjectPath(repo);
-  const description = 'DMTools factory issue poller';
-  const schedules: { id: number; description: string }[] = [];
-  for (let page = 1; page <= 10; page++) {
-    const current = await gitlabRequest<{ id: number; description: string }[]>(
-      token,
-      baseUrl,
-      `/projects/${project}/pipeline_schedules?per_page=100&page=${page}`,
-    );
-    schedules.push(...current);
-    if (current.length < 100) break;
+  const existingTriggers = await listGitlabIssueWebhookTriggers(token, project, baseUrl);
+  const reusableTrigger = existingTriggers.find((trigger) => trigger.token);
+  const trigger = reusableTrigger?.token
+    ? reusableTrigger
+    : await gitlabRequest<{ id: number; token: string; description: string }>(
+        token,
+        baseUrl,
+        `/projects/${project}/triggers`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ description: GITLAB_ISSUE_WEBHOOK_TRIGGER_DESCRIPTION }),
+        },
+      );
+  if (!trigger.token) {
+    throw new Error('GitLab did not return the factory webhook trigger token. Try setup again.');
   }
-  const current = schedules.find((schedule) => schedule.description === description);
-  const path = current
-    ? `/projects/${project}/pipeline_schedules/${current.id}`
-    : `/projects/${project}/pipeline_schedules`;
-  await gitlabRequest(token, baseUrl, path, {
-    method: current ? 'PUT' : 'POST',
-    body: JSON.stringify({
-      description,
-      ref,
-      cron: '*/10 * * * *',
-      cron_timezone: 'UTC',
-      active: true,
-    }),
-  });
-  log(`GitLab issue poller schedule ${current ? 'updated' : 'created'} for ${ref} (every 10 minutes)`);
+
+  const triggerUrl = new URL(
+    `${normalizeGitlabBaseUrl(baseUrl)}/api/v4/projects/${project}/trigger/pipeline`,
+  );
+  triggerUrl.search = new URLSearchParams({
+    token: trigger.token,
+    ref,
+    'variables[DMTOOLS_FACTORY_TRIGGER]': GITLAB_ISSUE_WEBHOOK_MARKER,
+  }).toString();
+  const hooks = await listGitlabIssueWebhooks(token, project, baseUrl);
+  const currentHook = hooks[0];
+  const hookPath = currentHook
+    ? `/projects/${project}/hooks/${currentHook.id}`
+    : `/projects/${project}/hooks`;
+  try {
+    await gitlabRequest(token, baseUrl, hookPath, {
+      method: currentHook ? 'PUT' : 'POST',
+      body: JSON.stringify({
+        url: triggerUrl.toString(),
+        issues_events: true,
+        push_events: false,
+        enable_ssl_verification: true,
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(message.replaceAll(trigger.token, '[REDACTED]'));
+  }
+
+  for (const duplicateHook of hooks.slice(1)) {
+    await deleteGitlabIssueWebhook(token, project, baseUrl, duplicateHook);
+  }
+  for (const duplicateTrigger of existingTriggers) {
+    if (duplicateTrigger.id !== trigger.id) {
+      await gitlabRequest(token, baseUrl, `/projects/${project}/triggers/${duplicateTrigger.id}`, { method: 'DELETE' });
+    }
+  }
+  log(`GitLab Issue-event webhook ${currentHook ? 'updated' : 'created'} for ${ref}`);
+}
+
+/** Removes the factory-managed GitLab Issue-event webhook and its trigger token. */
+export async function removeGitlabIssueEventWebhook(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  const project = gitlabProjectPath(repo);
+  const hooks = await listGitlabIssueWebhooks(token, project, baseUrl);
+  for (const hook of hooks) {
+    await deleteGitlabIssueWebhook(token, project, baseUrl, hook);
+  }
+  const triggers = await listGitlabIssueWebhookTriggers(token, project, baseUrl);
+  for (const trigger of triggers) {
+    await gitlabRequest(token, baseUrl, `/projects/${project}/triggers/${trigger.id}`, { method: 'DELETE' });
+  }
+  if (hooks.length || triggers.length) log('Removed the DMTools factory Issue-event webhook');
 }
 
 /** Creates secret variables as masked and hidden; values are sent only to the configured instance. */
@@ -1503,7 +1668,7 @@ export async function createGitlabMergeRequest(
       source_branch: branch,
       target_branch: base,
       title: 'chore: set up DMTools for GitLab',
-      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nAfter merging this request, the setup-created 10-minute schedule polls for open issues assigned to the configured AI teammate or labeled with \`agent:dev\`, \`agent:review\`, or \`agent:rework\`. You can also run an agent manually from **Build > Pipelines** by setting \`DMTOOLS_TICKET_ID\` and \`DMTOOLS_AGENT_CONFIG\`. Merge-request pipelines can run the review or rework agent when the corresponding label is present, and approved merge requests by \`${c.machine}\` are merged after the pipeline succeeds.\n\nThe scheduled poller requires the \`GITLAB_TOKEN\` project CI/CD variable created by this setup.`,
+      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nAfter merging this request, a GitLab Issue-event webhook triggers the poller pipeline for Issue events. The poller filters for open issues assigned to the configured AI teammate or labeled with \`agent:dev\`, \`agent:review\`, or \`agent:rework\`. You can also run an agent manually from **Build > Pipelines** by setting \`DMTOOLS_TICKET_ID\` and \`DMTOOLS_AGENT_CONFIG\`. Merge-request pipelines can run the review or rework agent when the corresponding label is present, and approved merge requests by \`${c.machine}\` are merged after the pipeline succeeds.\n\nThe poller requires the \`GITLAB_TOKEN\` project CI/CD variable created by this setup.`,
       remove_source_branch: true,
     }),
   });

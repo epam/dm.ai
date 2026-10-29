@@ -23,7 +23,8 @@ import {
   normalizeGitlabBaseUrl,
   TOKEN_LINKS,
   renderGitlabFiles,
-  ensureGitlabIssuePollingSchedule,
+  ensureGitlabIssueEventWebhook,
+  removeGitlabIssueEventWebhook,
   putGitlabVariables,
   createGitlabMergeRequest,
   requiredSecrets,
@@ -127,6 +128,9 @@ describe('Source control options', () => {
     assert.match(story.content, /"GITLAB_BASE_PATH": "https:\/\/gitlab\.example\.com\/gitlab"/);
     assert.match(story.content, /"GITLAB_WORKSPACE": "acme"/);
     assert.match(story.content, /"GITLAB_REPOSITORY": "demo"/);
+    const review = files.find((file) => file.path === '.dmtools/runners/fa-review.json');
+    assert.ok(review);
+    assert.equal(JSON.parse(review.content).params.requireCliOutputFile, false);
     for (const path of [
       '.dmtools/runners/fa-bug-dev.json',
       '.dmtools/runners/fa-story-dev.json',
@@ -165,7 +169,9 @@ describe('Source control options', () => {
       /rework-merge-request:[\s\S]*?script:\n    - \|\n      dmtools run \.dmtools\/runners\/fa-rework\.json/,
     );
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/);
-    assert.match(pipeline, /CI_PIPELINE_SOURCE == "schedule"/);
+    assert.match(pipeline, /CI_PIPELINE_SOURCE == "trigger" && \$DMTOOLS_FACTORY_TRIGGER == "issue_webhook"/);
+    assert.match(pipeline, /poll-assigned-issues:[\s\S]*?rules:\n    - if: '\$CI_PIPELINE_SOURCE == "trigger"/);
+    assert.doesNotMatch(pipeline, /CI_PIPELINE_SOURCE == "schedule"/);
     const qualityFiles = renderGitlabFiles(validConfig({ qualityPreset: 'crap4js' }));
     const qualityPipeline = qualityFiles.find((file) => file.path === '.gitlab-ci.yml')!.content;
     assert.match(qualityPipeline, /  - quality/);
@@ -176,8 +182,38 @@ describe('Source control options', () => {
     assert.match(poller, /agent:dev/);
     assert.match(poller, /agent:review/);
     assert.match(poller, /agent:rework/);
+    assert.match(poller, /all\(\. != "agent:skip" and \. != "blocked"\)/);
+    assert.match(poller, /"status:In Development", "status:In Review", "status:In Rework", "ai_developed", "ai_pr_reviewed"/);
+    assert.match(poller, /in progress\|_wip\|rework-round-/);
+    assert.match(poller, /status:In\\ Development/);
+    assert.match(poller, /status:In\\ Review/);
+    assert.match(poller, /status:In\\ Rework/);
+    assert.match(poller, /in\\ progress/);
+    assert.match(poller, /TRIGGER_PAYLOAD:\?GitLab issue webhook payload is required/);
+    assert.match(poller, /changes\.labels\.current/);
+    assert.match(poller, /changes\.labels\.previous/);
+    assert.match(poller, /\$previous \| index\(\$label\)\) == null/);
+    assert.match(poller, /no labels were added to issue/);
+    assert.match(poller, /--argjson webhook_issue_iid/);
+    assert.match(poller, /if \[\[ -n "\$webhook_issue_iid" \]\]; then\s+exit 0\s+fi/);
+    assert.match(
+      poller,
+      /any\(\. == "agent:review"\)[\s\S]*?any\(\. == "agent:rework"\)[\s\S]*?all\(\. != "status:In Rework"\)/,
+      'explicit review and rework labels should bypass development status filters',
+    );
+    assert.match(poller, /agent:review,\*\) config='.dmtools\/runners\/fa-review\.json'; trigger='agent:review'/);
+    assert.match(poller, /author\.username == \$machine\s+and \(\(\.labels \/\/ \[\]\) \| any\(\. == "pr_approved"\)\)/);
+    assert.match(poller, /\(\.labels \/\/ \[\]\) \| all\(\. != "blocked"\)/);
     assert.match(poller, /run_agent "\$config" --inputTicketId "\$iid"/);
+    assert.match(poller, /dmtools run "\$@" 2>&1 \| tee "\$output_file"/);
+    assert.match(poller, /PIPESTATUS\[@\]/);
     assert.match(poller, /Agent completed with exit code: \[1-9\]/);
+    assert.match(
+      poller,
+      /if \[ "\$trigger" != 'agent:review' \]; then\s+base_sha=\$\(git rev-parse HEAD\)\s+fi\s+run_agent "\$config" --inputTicketId "\$iid"\s+if \[ "\$trigger" != 'agent:review' \]; then\s+publish_issue_changes "\$iid" "\$base_sha"\s+fi/,
+      'issue review runs should not require code changes or create a branch/MR',
+    );
+    assert.match(poller, /if \[ "\$trigger" = 'agent:review' \]; then\s+result_label='ai_pr_reviewed'/);
     assert.match(poller, /leaving issue\/MR labels unchanged/);
     assert.match(poller, /git switch -c "\$branch"/);
     assert.match(poller, /git push/);
@@ -209,59 +245,144 @@ describe('Source control options', () => {
     assert.match(gitlabToken.hint, /Developer or higher access/);
   });
 
-  it('creates and updates the GitLab issue polling schedule idempotently', async () => {
+  it('creates and updates a managed GitLab issue-event webhook idempotently', async () => {
     const origFetch = globalThis.fetch;
     const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
-    let scheduleCreated = false;
+    let triggerCreated = false;
+    let hookCreated = false;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
-      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      const body = init?.body
+        ? init.body instanceof URLSearchParams
+          ? Object.fromEntries(init.body)
+          : JSON.parse(String(init.body))
+        : undefined;
       calls.push({ url, method, body });
-      if (url.includes('/pipeline_schedules?')) {
+      if (url.includes('/triggers?')) {
         return new Response(
-          JSON.stringify(scheduleCreated ? [{ id: 8, description: 'DMTools factory issue poller' }] : []),
+          JSON.stringify(
+            triggerCreated
+              ? [{ id: 21, token: 'trigger-secret', description: 'DMTools factory issue webhook' }]
+              : [],
+          ),
           { status: 200 },
         );
       }
-      if (method === 'POST') {
-        scheduleCreated = true;
-        return new Response(JSON.stringify({ id: 8 }), { status: 201 });
+      if (url.endsWith('/triggers') && method === 'POST') {
+        triggerCreated = true;
+        return new Response(
+          JSON.stringify({ id: 21, token: 'trigger-secret', description: 'DMTools factory issue webhook' }),
+          { status: 201 },
+        );
       }
-      if (method === 'PUT') return new Response(JSON.stringify({ id: 8 }), { status: 200 });
-      return new Response('not found', { status: 404 });
+      if (url.includes('/hooks?')) {
+        const hooks = hookCreated
+          ? [{ id: 34, url: 'https://gitlab.example.com/api/v4/projects/1/trigger/pipeline?variables%5BDMTOOLS_FACTORY_TRIGGER%5D=issue_webhook' }]
+          : [];
+        return new Response(JSON.stringify(hooks), { status: 200 });
+      }
+      if (url.endsWith('/hooks') && method === 'POST') {
+        hookCreated = true;
+        return new Response(JSON.stringify({ id: 34 }), { status: 201 });
+      }
+      if (url.endsWith('/hooks/34') && method === 'PUT') {
+        return new Response(JSON.stringify({ id: 34 }), { status: 200 });
+      }
+      return new Response('unexpected request', { status: 500 });
     }) as typeof fetch;
 
     try {
       const logs: string[] = [];
-      await ensureGitlabIssuePollingSchedule(
+      await ensureGitlabIssueEventWebhook(
         'glpat_test-token-123456789',
         'team/app',
-        'https://gitlab.example.com/prefix',
+        'https://gitlab.example.com',
         'main',
         (message) => logs.push(message),
       );
-      await ensureGitlabIssuePollingSchedule(
+      await ensureGitlabIssueEventWebhook(
         'glpat_test-token-123456789',
         'team/app',
-        'https://gitlab.example.com/prefix',
+        'https://gitlab.example.com',
         'main',
         (message) => logs.push(message),
       );
-      const created = calls.find((call) => call.method === 'POST');
-      const updated = calls.find((call) => call.method === 'PUT');
-      assert.ok(created?.url.endsWith('/projects/team%2Fapp/pipeline_schedules'));
-      assert.ok(updated?.url.endsWith('/projects/team%2Fapp/pipeline_schedules/8'));
-      assert.deepEqual(created?.body, {
-        description: 'DMTools factory issue poller',
-        ref: 'main',
-        cron: '*/10 * * * *',
-        cron_timezone: 'UTC',
-        active: true,
-      });
+      const created = calls.find((call) => call.url.endsWith('/hooks') && call.method === 'POST');
+      const updated = calls.find((call) => call.url.endsWith('/hooks/34') && call.method === 'PUT');
+      assert.equal(calls.filter((call) => call.url.endsWith('/triggers') && call.method === 'POST').length, 1);
+      assert.equal(
+        calls.find((call) => call.url.endsWith('/triggers') && call.method === 'POST')?.body?.description,
+        'DMTools factory issue webhook',
+      );
+      assert.equal(new URL(String(created?.body?.url)).searchParams.get('token'), 'trigger-secret');
+      assert.equal(new URL(String(created?.body?.url)).searchParams.get('ref'), 'main');
+      assert.equal(
+        new URL(String(created?.body?.url)).searchParams.get('variables[DMTOOLS_FACTORY_TRIGGER]'),
+        'issue_webhook',
+      );
+      assert.equal(created?.body?.issues_events, true);
+      assert.equal(created?.body?.push_events, false);
+      assert.equal(created?.body?.enable_ssl_verification, true);
       assert.deepEqual(updated?.body, created?.body);
-      assert.match(logs[0], /created for main \(every 10 minutes\)/);
-      assert.match(logs[1], /updated for main \(every 10 minutes\)/);
+      assert.doesNotMatch(logs.join('\n'), /trigger-secret/);
+      assert.deepEqual(logs, [
+        'GitLab Issue-event webhook created for main',
+        'GitLab Issue-event webhook updated for main',
+      ]);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('removes only factory-managed GitLab webhook resources', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; method: string }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      calls.push({ url, method });
+      if (url.includes('/hooks?')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 34,
+              url: 'https://gitlab.example.com/api/v4/projects/1/trigger/pipeline?variables%5BDMTOOLS_FACTORY_TRIGGER%5D=issue_webhook',
+            },
+            { id: 35, url: 'https://example.com/other-hook' },
+          ]),
+          { status: 200 },
+        );
+      }
+      if (url.includes('/triggers?')) {
+        return new Response(
+          JSON.stringify([
+            { id: 21, token: 'trigger-secret', description: 'DMTools factory issue webhook' },
+            { id: 22, token: 'other-secret', description: 'Other trigger' },
+          ]),
+          { status: 200 },
+        );
+      }
+      if (method === 'DELETE') return new Response(null, { status: 204 });
+      return new Response('unexpected request', { status: 500 });
+    }) as typeof fetch;
+
+    try {
+      const logs: string[] = [];
+      await removeGitlabIssueEventWebhook(
+        'glpat_test-token-123456789',
+        'team/app',
+        'https://gitlab.example.com',
+        (message) => logs.push(message),
+      );
+      assert.deepEqual(
+        calls.filter((call) => call.method === 'DELETE').map((call) => call.url),
+        [
+          'https://gitlab.example.com/api/v4/projects/team%2Fapp/hooks/34',
+          'https://gitlab.example.com/api/v4/projects/team%2Fapp/triggers/21',
+        ],
+      );
+      assert.equal(logs.length, 1);
     } finally {
       globalThis.fetch = origFetch;
     }
