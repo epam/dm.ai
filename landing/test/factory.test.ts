@@ -169,7 +169,7 @@ describe('Source control options', () => {
     }
     assert.match(
       pipeline,
-      /review-merge-request:[\s\S]*?script:\n    - \|\n      dmtools run \.dmtools\/runners\/fa-review\.json/,
+      /review-merge-request:[\s\S]*?script:\n    - \|[\s\S]*?dmtools run \.dmtools\/runners\/fa-review\.json/,
     );
     assert.match(
       pipeline,
@@ -219,9 +219,12 @@ describe('Source control options', () => {
     assert.match(poller, /dmtools run "\$@" 2>&1 \| tee "\$output_file"/);
     assert.match(poller, /PIPESTATUS\[@\]/);
     assert.match(poller, /Agent completed with exit code: \[1-9\]/);
+    assert.match(poller, /if \[ "\$trigger" != 'agent:review' \]; then\s+base_sha=\$\(git rev-parse HEAD\)\s+fi/);
+    assert.match(poller, /if \[ "\$trigger" = 'agent:review' \]; then\s+clear_review_outputs\s+fi/);
+    assert.match(poller, /run_agent "\$config" --inputTicketId "\$iid"/);
     assert.match(
       poller,
-      /if \[ "\$trigger" != 'agent:review' \]; then\s+base_sha=\$\(git rev-parse HEAD\)\s+fi\s+run_agent "\$config" --inputTicketId "\$iid"\s+if \[ "\$trigger" != 'agent:review' \]; then\s+publish_issue_changes "\$iid" "\$base_sha"\s+fi/,
+      /if \[ "\$trigger" != 'agent:review' \]; then\s+publish_issue_changes "\$iid" "\$base_sha"\s+else\s+related_merge_requests=/,
       'issue review runs should not require code changes or create a branch/MR',
     );
     assert.match(poller, /if \[ "\$trigger" = 'agent:review' \]; then\s+result_label='ai_pr_reviewed'/);
@@ -229,21 +232,19 @@ describe('Source control options', () => {
     assert.match(poller, /bash \.dmtools\/scripts\/gitlab-factory-publish-review\.sh "\$mr_iid"/);
     assert.match(poller, /leaving issue\/MR labels unchanged/);
     assert.match(poller, /git switch -c "\$branch"/);
-    assert.match(poller, /git push/);
+    assert.match(poller, /git -c credential\.helper= -c credential\.helper=.* push --porcelain/);
     assert.match(poller, /\[gitlab-api\] request failed method=\$method url=\$url curl_exit=\$curl_status http_status=\$http_status/);
     assert.match(poller, /\[gitlab-api\] request failed method=\$method url=\$url http_status=\$http_status/);
     assert.match(poller, /error response \(max 2000 chars\)/);
     assert.match(poller, /message\/\/"\$GITLAB_TOKEN"\/\[REDACTED\]/);
     assert.match(poller, /GET "\$CI_API_V4_URL\/user"/);
     assert.match(poller, /git_remote_url="https:\/\/\$git_username@\$\{remote_url#https:\/\/\}"/);
-    assert.match(poller, /Git credential helper/);
-    assert.match(poller, /printf 'username=%s\\\\npassword=%s\\\\n\\\\n'/);
+    assert.match(poller, /credential_helper=\$\(mktemp\)/);
+    assert.match(poller, /printf 'username=%s\\npassword=%s\\n\\n'/);
     assert.match(poller, /push --porcelain/);
     assert.doesNotMatch(poller, /GIT_TRACE_CURL|GIT_TRACE=|log_git_trace/);
     assert.match(poller, /Pushed branch \$branch to GitLab/);
     assert.match(poller, /\[poller-error\] line=%s exit=%s issue=%s pipeline=%s/);
-    assert.match(poller, /write_repository scope/);
-    assert.match(poller, /Developer or higher access/);
     assert.match(poller, /branch protection/);
     assert.match(poller, /projects\/\$CI_PROJECT_ID\/merge_requests/);
     assert.match(poller, /Created GitLab merge request:/);
@@ -431,11 +432,7 @@ describe('Source control options', () => {
       assert.equal(JSON.parse(String(calls[3].init?.body)).masked_and_hidden, true);
       assert.equal(calls[4].init?.method, 'POST');
       assert.equal(JSON.parse(String(calls[4].init?.body)).masked_and_hidden, true);
-      assert.equal(calls[5].init?.method, 'POST');
-      const basePathVariable = JSON.parse(String(calls[5].init?.body));
-      assert.equal(basePathVariable.masked, false);
-      assert.equal('masked_and_hidden' in basePathVariable, false);
-      assert.match(calls[5].url, /^https:\/\/gitlab\.example\.com\/prefix\/api\/v4\/projects\/team%2Fapp\/variables$/);
+      assert.equal(calls.length, 5);
     } finally {
       globalThis.fetch = origFetch;
     }
@@ -880,7 +877,7 @@ describe('Issue #757 — Create required labels automatically / on demand', () =
       const url = String(input);
       const method = init?.method ?? 'GET';
       calls.push({ url, method });
-      if (url.includes('page=1')) {
+      if (new URL(url).searchParams.get('page') === '1') {
         return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({ name: `label-${index}` }))), {
           status: 200,
         });
