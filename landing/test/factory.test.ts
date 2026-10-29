@@ -131,6 +131,13 @@ describe('Source control options', () => {
     const review = files.find((file) => file.path === '.dmtools/runners/fa-review.json');
     assert.ok(review);
     assert.equal(JSON.parse(review.content).params.requireCliOutputFile, false);
+    assert.equal(JSON.parse(review.content).params.cleanupOutputsFolder, false);
+    const publisher = files.find((file) => file.path === '.dmtools/scripts/gitlab-factory-publish-review.sh');
+    assert.ok(publisher, 'GitLab setup should generate the review publisher');
+    assert.match(publisher.content, /merge_requests\/\$mr_iid\/notes/);
+    assert.match(publisher.content, /merge_requests\/\$mr_iid\/discussions/);
+    assert.match(publisher.content, /diff_refs/);
+    assert.match(publisher.content, /inlineComments/);
     for (const path of [
       '.dmtools/runners/fa-bug-dev.json',
       '.dmtools/runners/fa-story-dev.json',
@@ -163,6 +170,10 @@ describe('Source control options', () => {
     assert.match(
       pipeline,
       /review-merge-request:[\s\S]*?script:\n    - \|\n      dmtools run \.dmtools\/runners\/fa-review\.json/,
+    );
+    assert.match(
+      pipeline,
+      /dmtools run \.dmtools\/runners\/fa-review\.json --inputTicketId "\$CI_MERGE_REQUEST_IID"\s+bash \.dmtools\/scripts\/gitlab-factory-publish-review\.sh "\$CI_MERGE_REQUEST_IID"/,
     );
     assert.match(
       pipeline,
@@ -214,6 +225,8 @@ describe('Source control options', () => {
       'issue review runs should not require code changes or create a branch/MR',
     );
     assert.match(poller, /if \[ "\$trigger" = 'agent:review' \]; then\s+result_label='ai_pr_reviewed'/);
+    assert.match(poller, /issues\/\$iid\/related_merge_requests/);
+    assert.match(poller, /bash \.dmtools\/scripts\/gitlab-factory-publish-review\.sh "\$mr_iid"/);
     assert.match(poller, /leaving issue\/MR labels unchanged/);
     assert.match(poller, /git switch -c "\$branch"/);
     assert.match(poller, /git push/);
