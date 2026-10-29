@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   FACTORY_LABELS,
   PROVIDER_PRESETS,
-  QUALITY_PRESETS,
   RUNNERS,
   SCM,
   TOOLCHAINS,
@@ -12,28 +11,36 @@ import {
   createRepo,
   defaults,
   detectCi,
+  ensureGitlabIssueEventWebhook,
+  ensureGitlabLabels,
   ensureLabels,
   isCiEnabled,
   isFaMemoryEnabled,
   isFaUniversalEnabled,
   listLabels,
+  listGitlabLabels,
   TOKEN_LINKS,
   checkToken,
+  checkGitlabToken,
+  normalizeGitlabBaseUrl,
   listBranches,
   listRepos,
   listSecretNames,
+  listGitlabVariableNames,
   putSecrets,
+  putGitlabVariables,
+  createGitlabMergeRequest,
   requiredSecrets,
   renderFiles,
+  renderGitlabFiles,
   validate,
   prBody,
-  type CiDetection,
   type TokenCheck,
   type CiWorkflow,
   type FactoryConfig,
   type ProviderEntry,
-  type QualityPresetId,
   type RepoSummary,
+  type ScmId,
   type ToolchainId,
 } from '../lib/factory';
 
@@ -53,7 +60,6 @@ const LABELS: Record<string, string> = {
 
 /** GitHub matches check contexts case-insensitively. */
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-const uniqCi = (xs: string[]) => xs.filter((x, i) => xs.findIndex((y) => same(x, y)) === i);
 
 function ProviderRow({
   entry,
@@ -163,8 +169,11 @@ function ProviderList({
 
 export default function FactorySetup() {
   const [cfg, setCfg] = useState<FactoryConfig>(defaults);
+  const [scm, setScm] = useState<ScmId>('github');
+  const [gitlabBaseUrl, setGitlabBaseUrl] = useState('https://gitlab.com');
   const [token, setToken] = useState('');
   const [repos, setRepos] = useState<RepoSummary[]>([]);
+  const [repoLoadError, setRepoLoadError] = useState('');
   const [comboOpen, setComboOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [tokenInfo, setTokenInfo] = useState<TokenCheck | null>(null);
@@ -174,8 +183,6 @@ export default function FactorySetup() {
   const [branches, setBranches] = useState<string[]>([]);
   const [existingLabels, setExistingLabels] = useState<string[]>([]);
   const [labelsBusy, setLabelsBusy] = useState(false);
-  const [ci, setCi] = useState<CiDetection | null>(null);
-  const [gatesBusy, setGatesBusy] = useState(false);
   const [runnerMode, setRunnerMode] = useState(defaults.runner);
   const [busy, setBusy] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
@@ -187,14 +194,29 @@ export default function FactorySetup() {
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState<string>('step-repo');
 
-  const errors = useMemo(() => validate(cfg), [cfg]);
-  const files = useMemo(() => (Object.keys(errors).length ? [] : renderFiles(cfg)), [cfg, errors]);
+  const errors = useMemo(() => validate(cfg, scm), [cfg, scm]);
+  const normalizedGitlabBaseUrl = useMemo(() => {
+    try {
+      return normalizeGitlabBaseUrl(gitlabBaseUrl);
+    } catch {
+      return '';
+    }
+  }, [gitlabBaseUrl]);
+  const files = useMemo(
+    () =>
+      Object.keys(errors).length
+        ? []
+        : scm === 'gitlab'
+          ? renderGitlabFiles(cfg, normalizedGitlabBaseUrl)
+          : renderFiles(cfg),
+    [cfg, errors, scm, normalizedGitlabBaseUrl],
+  );
   const set = <K extends keyof FactoryConfig>(k: K, v: FactoryConfig[K]) => setCfg((c) => ({ ...c, [k]: v }));
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const show = (k: string) => (touched[k] ? errors[k] : undefined);
 
   useEffect(() => {
-    const ids = ['step-repo', 'step-fa', 'step-providers', 'step-ci', 'step-runtime', 'step-secrets'];
+    const ids = ['step-repo', 'step-fa', 'step-providers', 'step-runtime', 'step-secrets'];
     const onScroll = () => {
       const trigger = 220;
       let current = ids[0];
@@ -212,33 +234,84 @@ export default function FactorySetup() {
   }, []);
   useEffect(() => {
     setRepos([]);
+    setRepoLoadError('');
     if (token.length < 20) return;
+    if (scm === 'gitlab' && !normalizedGitlabBaseUrl) {
+      setRepoLoadError('Enter a valid GitLab instance URL before listing repositories.');
+      return;
+    }
+    let cancelled = false;
     const t = setTimeout(() => {
-      listRepos(token)
-        .then(setRepos)
-        .catch((e) => setError((e as Error).message));
+      listRepos(token, scm, normalizedGitlabBaseUrl)
+        .then((result) => {
+          if (!cancelled) setRepos(result);
+        })
+        .catch((e) => {
+          if (!cancelled) setRepoLoadError((e as Error).message);
+        });
     }, 500);
-    return () => clearTimeout(t);
-  }, [token]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [token, scm, normalizedGitlabBaseUrl]);
 
   useEffect(() => {
     setTokenInfo(null);
     setTokenErr('');
     if (token.length < 20) return;
+    if (scm === 'gitlab' && !normalizedGitlabBaseUrl) {
+      setTokenErr('Enter a valid GitLab instance URL to validate this token.');
+      return;
+    }
+    let cancelled = false;
     const t = setTimeout(() => {
-      checkToken(token, errors.repo || cfg.createRepo ? undefined : cfg.repo)
-        .then(setTokenInfo)
-        .catch((e) => setTokenErr((e as Error).message));
+      const check = scm === 'gitlab'
+        ? checkGitlabToken(token, normalizedGitlabBaseUrl)
+        : checkToken(token, errors.repo || cfg.createRepo ? undefined : cfg.repo);
+      check
+        .then((result) => {
+          if (!cancelled) setTokenInfo(result);
+        })
+        .catch((e) => {
+          if (!cancelled) setTokenErr((e as Error).message);
+        });
     }, 400);
-    return () => clearTimeout(t);
-  }, [token, cfg.repo, cfg.createRepo]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [token, cfg.repo, cfg.createRepo, scm, normalizedGitlabBaseUrl]);
 
   useEffect(() => {
+    if (scm !== 'github') {
+      setBranches([]);
+      setExisting([]);
+      setExistingLabels([]);
+      if (scm === 'gitlab' && cfg.repo && !errors.repo && token.length > 20 && normalizedGitlabBaseUrl) {
+        let cancelled = false;
+        listGitlabVariableNames(token, cfg.repo, normalizedGitlabBaseUrl)
+          .then((names) => {
+            if (!cancelled) setExisting(names);
+          })
+          .catch((e) => {
+            if (!cancelled) setRepoLoadError((e as Error).message);
+          });
+        listGitlabLabels(token, cfg.repo, normalizedGitlabBaseUrl)
+          .then((labels) => {
+            if (!cancelled) setExistingLabels(labels);
+          })
+          .catch(() => {});
+        return () => {
+          cancelled = true;
+        };
+      }
+      return;
+    }
     if (!cfg.repo || errors.repo || token.length < 20 || cfg.createRepo) {
       if (cfg.createRepo) {
         setBranches([]);
         setExisting([]);
-        setCi(null);
         setExistingLabels([]);
       }
       return;
@@ -258,18 +331,14 @@ export default function FactorySetup() {
         set('baseBranch', b.names.includes('main') ? 'main' : b.defaultBranch);
       })
       .catch(() => {});
-    setCi(null);
-    setGatesBusy(true);
     detectCi(token, cfg.repo)
       .then((d) => {
-        setCi(d);
         if (d.workflows[0] && isCiEnabled(cfg) && (!cfg.qualityPreset || cfg.qualityPreset === 'none')) {
           applyWorkflow(d.workflows[0], d.required);
         }
       })
-      .catch(() => setCi({ required: [], workflows: [] }))
-      .finally(() => setGatesBusy(false));
-  }, [cfg.repo, token, cfg.createRepo]);
+      .catch(() => {});
+  }, [cfg.repo, token, cfg.createRepo, scm, normalizedGitlabBaseUrl]);
 
   const filtered = useMemo(() => {
     const q = cfg.repo.toLowerCase();
@@ -290,38 +359,12 @@ export default function FactorySetup() {
     }));
   }
 
-  function selectQualityPreset(presetId: QualityPresetId) {
-    setCfg((c) => {
-      if (presetId === 'none') {
-        return { ...c, ciEnabled: true, qualityPreset: 'none' };
-      }
-      const preset = QUALITY_PRESETS.find((p) => p.id === presetId);
-      const nextTools = { ...c.toolchains };
-      if (preset?.toolchain && nextTools[preset.toolchain] === undefined) {
-        const tc = TOOLCHAINS.find((t) => t.id === preset.toolchain);
-        if (tc) nextTools[preset.toolchain] = tc.fallback;
-      }
-      return {
-        ...c,
-        ciEnabled: true,
-        qualityPreset: presetId,
-        ciFile: 'quality.yml',
-        ciName: 'Quality',
-        checks: ['quality'],
-        toolchains: nextTools,
-      };
-    });
-  }
-
-  function toggleCheck(name: string, on: boolean) {
-    setCfg((c) => {
-      const rest = c.checks.filter((x) => !same(x, name));
-      return { ...c, checks: on ? [...rest, name] : rest };
-    });
-  }
-
   function chooseRepo(name: string) {
     set('repo', name);
+    if (scm === 'gitlab') {
+      const selected = repos.find((repo) => repo.full_name === name);
+      if (selected?.default_branch) set('baseBranch', selected.default_branch);
+    }
     setComboOpen(false);
     touch('repo');
   }
@@ -349,8 +392,29 @@ export default function FactorySetup() {
     setBusy(true);
     setError('');
     setLines([]);
+    setPrUrl('');
     const log = (m: string) => setLines((l) => [...l, m]);
     try {
+      if (scm === 'gitlab') {
+        const wanted = Object.fromEntries(
+          requiredSecrets(cfg, scm, normalizedGitlabBaseUrl).map((x) => [x.name, secretVals[x.name] ?? '']),
+        );
+        await putGitlabVariables(token, cfg.repo, normalizedGitlabBaseUrl, wanted, log);
+        if (cfg.createLabels !== false) {
+          await ensureGitlabLabels(token, cfg.repo, normalizedGitlabBaseUrl, log);
+          listGitlabLabels(token, cfg.repo, normalizedGitlabBaseUrl)
+            .then(setExistingLabels)
+            .catch(() => {});
+        }
+        const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log);
+        setSecretVals({});
+        setPrUrl(mergeRequest);
+        await ensureGitlabIssueEventWebhook(token, cfg.repo, normalizedGitlabBaseUrl, cfg.baseBranch, log);
+        listGitlabVariableNames(token, cfg.repo, normalizedGitlabBaseUrl)
+          .then(setExisting)
+          .catch((e) => setError((e as Error).message));
+        return;
+      }
       let targetCfg = cfg;
       if (cfg.createRepo) {
         const created = await createRepo(token, cfg.repo, cfg.repoPrivate !== false, tokenInfo?.login, log);
@@ -383,24 +447,19 @@ export default function FactorySetup() {
   const canSubmit =
     !busy &&
     token.length > 20 &&
+    Boolean(tokenInfo) &&
     Object.keys(errors).length === 0 &&
     !tokenInfo?.missingScopes.length &&
-    (cfg.createRepo || tokenInfo?.push !== false);
+    (scm === 'gitlab' || cfg.createRepo || tokenInfo?.push !== false) &&
+    (scm !== 'gitlab' || Boolean(normalizedGitlabBaseUrl));
 
-  const ciMode: 'existing' | 'crap4' | 'none' = !isCiEnabled(cfg)
-    ? 'none'
-    : cfg.qualityPreset && cfg.qualityPreset !== 'none'
-      ? 'crap4'
-      : 'existing';
-
-  const faEnabled = isFaUniversalEnabled(cfg);
+  const faEnabled = scm === 'github' && isFaUniversalEnabled(cfg);
   const memEnabled = isFaMemoryEnabled(cfg);
 
   const stepRepoReady = Boolean(cfg.repo && !errors.repo && !errors.baseBranch && !errors.machine);
   const stepProvidersReady = Boolean(!errors.providers);
-  const stepCiReady = Boolean(!errors.ciFile && !errors.ciName && !errors.checks);
   const stepRuntimeReady = Boolean(!errors.runner && !errors.merge);
-  const secretsList = requiredSecrets(cfg);
+  const secretsList = requiredSecrets(cfg, scm, normalizedGitlabBaseUrl || gitlabBaseUrl);
   const configuredSecretsCount = secretsList.filter((s) => existing.includes(s.name) || Boolean(secretVals[s.name])).length;
 
   return (
@@ -443,20 +502,10 @@ export default function FactorySetup() {
             </span>
           </a>
           <a
-            href="#step-ci"
-            className={`factory__stepPill ${stepCiReady ? 'is-ready' : ''} ${activeStep === 'step-ci' ? 'is-active' : ''}`}
-          >
-            <span className="factory__stepNum">4</span>
-            <span>
-              <strong>CI &amp; Quality Gate</strong>
-              <small>{ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}</small>
-            </span>
-          </a>
-          <a
             href="#step-runtime"
             className={`factory__stepPill ${stepRuntimeReady ? 'is-ready' : ''} ${activeStep === 'step-runtime' ? 'is-active' : ''}`}
           >
-            <span className="factory__stepNum">5</span>
+            <span className="factory__stepNum">4</span>
             <span>
               <strong>Runner &amp; Merge</strong>
               <small>
@@ -468,9 +517,9 @@ export default function FactorySetup() {
             href="#step-secrets"
             className={`factory__stepPill is-ready ${activeStep === 'step-secrets' ? 'is-active' : ''}`}
           >
-            <span className="factory__stepNum">6</span>
+            <span className="factory__stepNum">5</span>
             <span>
-              <strong>Secrets &amp; Labels</strong>
+              <strong>{scm === 'gitlab' ? 'Variables & Setup' : 'Secrets & Labels'}</strong>
               <small>
                 {configuredSecretsCount}/{secretsList.length} secrets · {FACTORY_LABELS.length} labels
               </small>
@@ -487,8 +536,8 @@ export default function FactorySetup() {
             <div>
               <h2 className="factory__cardTitle">Repository &amp; Access</h2>
               <p className="factory__cardSub">
-                Connect your source control repository (or create a new Greenfield repo) and specify the AI teammate
-                account.
+                Connect your source control repository{scm === 'github' ? ' (or create a new Greenfield repo)' : ''} and
+                specify the AI teammate account.
               </p>
             </div>
           </header>
@@ -496,7 +545,22 @@ export default function FactorySetup() {
           <div className="factory__grid2">
             <div className="factory__field">
               <label htmlFor="f-scm">Source control</label>
-              <select id="f-scm" defaultValue="github">
+              <select
+                id="f-scm"
+                value={scm}
+                disabled={busy}
+                onChange={(e) => {
+                  const nextScm = e.target.value as ScmId;
+                  setScm(nextScm);
+                  setCfg((c) => ({ ...c, repo: '', createRepo: false }));
+                  setTokenInfo(null);
+                  setBranches([]);
+                  setExisting([]);
+                  setError('');
+                  setPrUrl('');
+                  setComboOpen(false);
+                }}
+              >
                 {SCM.map((s) => (
                   <option key={s.id} value={s.id} disabled={!s.available}>
                     {s.label}
@@ -504,6 +568,37 @@ export default function FactorySetup() {
                 ))}
               </select>
             </div>
+
+            {scm === 'gitlab' && (
+              <div className="factory__field factory__field--full">
+                <label htmlFor="f-gitlab-url">GitLab instance URL</label>
+                <input
+                  id="f-gitlab-url"
+                  type="url"
+                  autoComplete="url"
+                  value={gitlabBaseUrl}
+                  aria-invalid={!normalizedGitlabBaseUrl}
+                  placeholder="https://gitlab.example.com"
+                  onChange={(e) => {
+                    setGitlabBaseUrl(e.target.value.trim());
+                    setCfg((c) => ({ ...c, repo: '' }));
+                    setRepos([]);
+                    setRepoLoadError('');
+                    setComboOpen(false);
+                  }}
+                />
+                {!normalizedGitlabBaseUrl && (
+                  <small className="is-error" role="alert">
+                    Use HTTPS for your GitLab instance (HTTP is allowed only on localhost); do not include credentials,
+                    query parameters, or a fragment.
+                  </small>
+                )}
+                <small>
+                  Include the instance base URL (and any path prefix), but not <code>/api/v4</code>. Your PAT is sent
+                  directly to this host over HTTPS.
+                </small>
+              </div>
+            )}
 
             <div className="factory__field">
               <label htmlFor="f-machine">AI teammate account</label>
@@ -515,16 +610,27 @@ export default function FactorySetup() {
                 onChange={(e) => set('machine', e.target.value.trim())}
               />
               <small className={show('machine') ? 'is-error' : ''}>
-                {show('machine') ?? 'GitHub login that issues are assigned to'}
+                {show('machine') ?? `${scm === 'gitlab' ? 'GitLab' : 'GitHub'} username that issues are assigned to`}
               </small>
             </div>
           </div>
 
           <div className="factory__field">
             <div className="factory__labelRow">
-              <label htmlFor="f-token">GitHub setup token</label>
-              <a className="btn btn--ghost factory__mini" target="_blank" rel="noopener" href={TOKEN_LINKS.setup}>
-                Create token on GitHub ↗
+              <label htmlFor="f-token">{scm === 'gitlab' ? 'GitLab setup token' : 'GitHub setup token'}</label>
+              <a
+                className="btn btn--ghost factory__mini"
+                target="_blank"
+                rel="noopener"
+                href={
+                  scm === 'gitlab'
+                    ? normalizedGitlabBaseUrl
+                      ? TOKEN_LINKS.setupGitlab(normalizedGitlabBaseUrl)
+                      : undefined
+                    : TOKEN_LINKS.setup
+                }
+              >
+                Create token on {scm === 'gitlab' ? 'GitLab' : 'GitHub'} ↗
               </a>
             </div>
             <input
@@ -533,16 +639,33 @@ export default function FactorySetup() {
               autoComplete="off"
               spellCheck={false}
               value={token}
-              onChange={(e) => setToken(e.target.value.trim())}
-              placeholder="ghp_… or github_pat_…"
+              onChange={(e) => {
+                const value = e.target.value.trim();
+                setToken(value);
+                if (scm === 'gitlab') {
+                  setSecretVals((secrets) => ({ ...secrets, GITLAB_TOKEN: value }));
+                }
+              }}
+              placeholder={scm === 'gitlab' ? 'glpat-…' : 'ghp_… or github_pat_…'}
             />
             {tokenErr && <small className="is-error">{tokenErr}</small>}
+            {repoLoadError && <small className="is-error">{repoLoadError}</small>}
             {tokenInfo && (
               <ul className="factory__tokencheck">
                 <li className="is-ok">
                   Signed in as <strong>{tokenInfo.login}</strong> ({tokenInfo.kind} token)
                 </li>
-                {tokenInfo.kind === 'classic' &&
+                {scm === 'gitlab' ? (
+                  <>
+                    <li className="is-warn">
+                      Use a GitLab personal access token with the <code>api</code> and <code>write_repository</code>{' '}
+                      scopes. Its user needs Developer or higher access to push branches and create merge requests.
+                    </li>
+                    <li className="is-warn">
+                      This setup also needs Maintainer access to manage project webhooks and trigger tokens.
+                    </li>
+                  </>
+                ) : tokenInfo.kind === 'classic' &&
                   (tokenInfo.missingScopes.length ? (
                     <li className="is-bad">
                       Missing scopes: {tokenInfo.missingScopes.join(', ')} — regenerate with the button above
@@ -571,38 +694,49 @@ export default function FactorySetup() {
               </ul>
             )}
             <small>
-              Opens GitHub with <code>repo</code> + <code>workflow</code> pre-selected. Your token stays in this browser
-              tab and talks directly to <code>api.github.com</code> — never stored on any server.
+              {scm === 'gitlab' ? (
+                <>
+                  Your token stays in this browser tab and talks directly to the configured GitLab instance — never
+                  stored on any server.
+                </>
+              ) : (
+                <>
+                  Opens GitHub with <code>repo</code> + <code>workflow</code> pre-selected. Your token stays in this
+                  browser tab and talks directly to <code>api.github.com</code> — never stored on any server.
+                </>
+              )}
             </small>
           </div>
 
           <div className="factory__field">
             <label htmlFor="f-repo">Repository</label>
-            <div className="factory__seg" role="radiogroup" aria-label="Repository mode">
-              {(
-                [
-                  [false, 'Existing repository'],
-                  [true, 'Create new (Greenfield)'],
-                ] as const
-              ).map(([isNew, label]) => (
-                <button
-                  key={String(isNew)}
-                  type="button"
-                  role="radio"
-                  aria-checked={Boolean(cfg.createRepo) === isNew}
-                  className={Boolean(cfg.createRepo) === isNew ? 'is-on' : ''}
-                  onClick={() => {
-                    setCfg((c) => ({
-                      ...c,
-                      createRepo: isNew,
-                      repo: isNew && !c.repo && tokenInfo?.login ? `${tokenInfo.login}/` : c.repo,
-                    }));
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            {scm === 'github' && (
+              <div className="factory__seg" role="radiogroup" aria-label="Repository mode">
+                {(
+                  [
+                    [false, 'Existing repository'],
+                    [true, 'Create new (Greenfield)'],
+                  ] as const
+                ).map(([isNew, label]) => (
+                  <button
+                    key={String(isNew)}
+                    type="button"
+                    role="radio"
+                    aria-checked={Boolean(cfg.createRepo) === isNew}
+                    className={Boolean(cfg.createRepo) === isNew ? 'is-on' : ''}
+                    onClick={() => {
+                      setCfg((c) => ({
+                        ...c,
+                        createRepo: isNew,
+                        repo: isNew && !c.repo && tokenInfo?.login ? `${tokenInfo.login}/` : c.repo,
+                      }));
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="factory__combo">
               <input
                 id="f-repo"
@@ -618,7 +752,9 @@ export default function FactorySetup() {
                     ? `${tokenInfo?.login || 'owner'}/new-repo-name`
                     : repos.length
                       ? 'Start typing to search your repositories…'
-                      : 'owner/name'
+                      : scm === 'gitlab'
+                        ? 'group/project'
+                        : 'owner/name'
                 }
                 onFocus={() => setComboOpen(true)}
                 onBlur={() => {
@@ -665,7 +801,7 @@ export default function FactorySetup() {
                 </ul>
               )}
             </div>
-            {cfg.createRepo && (
+            {scm === 'github' && cfg.createRepo && (
               <div className="factory__seg" role="radiogroup" aria-label="New repository visibility">
                 {(
                   [
@@ -688,12 +824,22 @@ export default function FactorySetup() {
             )}
             <small className={show('repo') ? 'is-error' : ''}>
               {show('repo') ??
-                (cfg.createRepo
-                  ? 'Creates the repository on GitHub (with an initial commit on main) under your account or organization before opening the factory PR'
-                  : repos.length
-                    ? `${repos.length} repositories you can push to`
-                    : 'Enter a token to pick from your repositories, or type owner/name')}
+                (scm === 'gitlab'
+                  ? repos.length
+                    ? `${repos.length} GitLab projects you can push to`
+                    : 'Enter a GitLab personal access token with api scope to pick from your projects'
+                  : cfg.createRepo
+                    ? 'Creates the repository on GitHub (with an initial commit on main) under your account or organization before opening the factory PR'
+                    : repos.length
+                      ? `${repos.length} repositories you can push to`
+                      : 'Enter a token to pick from your repositories, or type owner/name')}
             </small>
+            {scm === 'gitlab' && (
+              <small className="is-warn">
+                GitLab setup opens a merge request with a manual DMTools pipeline. The GitHub event-driven factory
+                state machine, automatic quality workflows, and auto-merge are not generated for GitLab.
+              </small>
+            )}
           </div>
 
           <div className="factory__field">
@@ -727,8 +873,14 @@ export default function FactorySetup() {
             <div>
               <h2 className="factory__cardTitle">FA Universal Agent &amp; Project Memory</h2>
               <p className="factory__cardSub">
-                Install the ultra-fast <code>@fa</code> conversational agent (~2s cold start) and repository-backed
-                durable memory alongside your DMTools factory. Both are optional and enabled by default.
+                {scm === 'gitlab'
+                  ? 'Project memory is supported in GitLab. The @fa conversational workflow currently depends on GitHub Actions and is not generated for GitLab.'
+                  : (
+                      <>
+                        Install the ultra-fast <code>@fa</code> conversational agent (~2s cold start) and repository-backed
+                        durable memory alongside your DMTools factory. Both are optional and enabled by default.
+                      </>
+                    )}
               </p>
             </div>
           </header>
@@ -739,18 +891,25 @@ export default function FactorySetup() {
                 <input
                   type="checkbox"
                   checked={faEnabled}
+                  disabled={scm === 'gitlab'}
                   onChange={(e) => set('faUniversal', e.target.checked)}
                 />
                 <span className="factory__featureTitle">
-                  FA Universal Agent (<code>@fa</code> mentions)
+                  FA Universal Agent {scm === 'gitlab' ? '(GitHub Actions only)' : <>(<code>@fa</code> mentions)</>}
                 </span>
-                <em className="factory__badge">Recommended</em>
+                {scm === 'github' && <em className="factory__badge">Recommended</em>}
               </div>
               <p className="factory__featureDesc">
-                Generates <code>.github/workflows/fa-universal.yml</code>. Mention <code>@fa</code> in any Issue body,
-                Issue comment, or PR review comment to trigger an interactive coding agent with full DMTools CLI access,
-                single-queue concurrency, and automatic session persistence on branch{' '}
-                <code>fa-sess/&lt;session_key&gt;</code>.
+                {scm === 'gitlab'
+                  ? 'This GitHub Actions conversation workflow is not part of the generated GitLab CI pipeline.'
+                  : (
+                      <>
+                        Generates <code>.github/workflows/fa-universal.yml</code>. Mention <code>@fa</code> in any Issue
+                        body, Issue comment, or PR review comment to trigger an interactive coding agent with full
+                        DMTools CLI access, single-queue concurrency, and automatic session persistence on branch{' '}
+                        <code>fa-sess/&lt;session_key&gt;</code>.
+                      </>
+                    )}
               </p>
             </label>
 
@@ -768,8 +927,8 @@ export default function FactorySetup() {
               </div>
               <p className="factory__featureDesc">
                 Generates <code>.fah/config.yaml</code> pointing project memory to <code>.fah/memory</code>. Architectural
-                decisions, conventions, and learned repo facts are committed to the repository so every future{' '}
-                <code>@fa</code> and teammate run starts with shared context.
+                decisions, conventions, and learned repo facts are committed to the repository so every future DMTools
+                agent run starts with shared context.
               </p>
             </label>
           </div>
@@ -877,223 +1036,10 @@ export default function FactorySetup() {
           </fieldset>
         </section>
 
-        {/* STEP 4: CI & Quality Gate */}
-        <section id="step-ci" className="factory__card">
-          <header className="factory__cardHead">
-            <span className="factory__stepBadge">Step 4</span>
-            <div>
-              <h2 className="factory__cardTitle">CI &amp; Quality Gate</h2>
-              <p className="factory__cardSub">
-                Choose how the state machine validates PRs before merging: use your existing CI workflow, generate a
-                ready-made <code>crap4*</code> quality gate, or skip CI validation.
-              </p>
-            </div>
-          </header>
-
-          <fieldset className="factory__group">
-            <legend>CI &amp; quality checks</legend>
-            <div className="factory__seg" role="radiogroup" aria-label="CI mode">
-              {(
-                [
-                  ['existing', 'Existing CI'],
-                  ['crap4', 'Generate crap4* quality gate'],
-                  ['none', 'No CI workflow'],
-                ] as const
-              ).map(([m, label]) => (
-                <button
-                  key={m}
-                  type="button"
-                  role="radio"
-                  aria-checked={ciMode === m}
-                  className={ciMode === m ? 'is-on' : ''}
-                  onClick={() => {
-                    if (m === 'none') {
-                      setCfg((c) => ({ ...c, ciEnabled: false, qualityPreset: 'none' }));
-                    } else if (m === 'crap4') {
-                      selectQualityPreset(
-                        cfg.qualityPreset && cfg.qualityPreset !== 'none' ? cfg.qualityPreset : 'crap4js',
-                      );
-                    } else {
-                      setCfg((c) => ({
-                        ...c,
-                        ciEnabled: true,
-                        qualityPreset: 'none',
-                        ciFile: c.ciFile || 'ci.yml',
-                        ciName: c.ciName || 'CI',
-                        checks: c.checks.length ? c.checks : ['test'],
-                      }));
-                    }
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {ciMode === 'none' && (
-              <small>
-                No CI gate: the factory will not dispatch or wait for a quality workflow before merging approved PRs.
-                You can add a CI workflow later.
-              </small>
-            )}
-
-            {ciMode === 'crap4' && (
-              <>
-                <small>
-                  Generates a ready-to-use <code>.github/workflows/quality.yml</code> powered by the{' '}
-                  <strong>crap4*</strong> CRAP metric (Change Risk Anti-Patterns = cyclomatic complexity + test
-                  coverage) for your tech stack.
-                </small>
-                <div className="factory__field">
-                  <label htmlFor="f-quality-preset">Tech stack preset (crap4*)</label>
-                  <select
-                    id="f-quality-preset"
-                    value={cfg.qualityPreset && cfg.qualityPreset !== 'none' ? cfg.qualityPreset : 'crap4js'}
-                    onChange={(e) => selectQualityPreset(e.target.value as QualityPresetId)}
-                  >
-                    {QUALITY_PRESETS.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                  {(() => {
-                    const p = QUALITY_PRESETS.find((x) => x.id === cfg.qualityPreset);
-                    return p ? (
-                      <small>
-                        {p.description} —{' '}
-                        <a href={p.repoUrl} target="_blank" rel="noopener">
-                          {p.repoUrl.replace('https://github.com/', '')} ↗
-                        </a>
-                      </small>
-                    ) : null;
-                  })()}
-                </div>
-              </>
-            )}
-
-            {ciMode === 'existing' && (
-              <>
-                <small>
-                  The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong> the
-                  CI workflow on the PR head when validation is due and merges once the checks below are green — so the
-                  workflow needs a <code>workflow_dispatch</code> trigger.
-                </small>
-                {gatesBusy && <small>Reading branch protection and workflows…</small>}
-                {ci && ci.workflows.length === 0 && (
-                  <small>
-                    No CI workflow found in .github/workflows — fill in the fields manually, generate a crap4* quality
-                    gate, or switch to “No CI workflow”.
-                  </small>
-                )}
-                {ci && ci.workflows.length > 0 && (
-                  <div className="factory__gates" role="radiogroup" aria-label="CI workflow">
-                    {ci.workflows.map((w) => {
-                      const on = cfg.ciFile === w.file;
-                      return (
-                        <button
-                          key={w.file}
-                          type="button"
-                          role="radio"
-                          aria-checked={on}
-                          className={`factory__gate ${on ? 'is-on' : ''}`}
-                          onClick={() => applyWorkflow(w, ci.required)}
-                        >
-                          <span className="factory__gateName">
-                            {w.name}
-                            <span className="factory__gateFile">{w.file}</span>
-                          </span>
-                          <span className="factory__gateMeta">
-                            {w.dispatchable ? (
-                              <em className="factory__badge">dispatchable</em>
-                            ) : (
-                              <em className="factory__badge is-warn">add workflow_dispatch</em>
-                            )}
-                            {w.onPullRequest && <span>also runs on pull_request — redundant under the factory</span>}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {ci &&
-                  (() => {
-                    const w = ci.workflows.find((x) => x.file === cfg.ciFile);
-                    const names = uniqCi([
-                      ...ci.required,
-                      ...cfg.checks,
-                      ...(w?.jobs ?? []).filter((j) => !j.includes('${{')),
-                    ]);
-                    return (
-                      names.length > 0 && (
-                        <div className="factory__tools">
-                          <small>Checks the factory waits for before merging:</small>
-                          {names.map((n) => (
-                            <label key={n} className="factory__check">
-                              <input
-                                type="checkbox"
-                                checked={cfg.checks.some((c) => same(c, n))}
-                                onChange={(e) => toggleCheck(n, e.target.checked)}
-                              />
-                              <code>{n}</code>
-                              {ci.required.some((r) => same(r, n)) && <em className="factory__badge">required</em>}
-                              {w && !w.jobs.some((j) => same(j, n)) && (
-                                <span className="factory__gateMeta">not published by {cfg.ciFile}</span>
-                              )}
-                            </label>
-                          ))}
-                        </div>
-                      )
-                    );
-                  })()}
-              </>
-            )}
-
-            {ciMode !== 'none' && (
-              <>
-                <div className="factory__grid2">
-                  {(
-                    [
-                      ['ciFile', 'CI workflow file', 'Dispatched by the factory on PR heads'],
-                      ['ciName', 'CI workflow name', 'The `name:` of that workflow — its completion wakes the factory'],
-                    ] as const
-                  ).map(([k, label, hint]) => (
-                    <div className="factory__field" key={k}>
-                      <label htmlFor={`f-${k}`}>{label}</label>
-                      <input
-                        id={`f-${k}`}
-                        value={cfg[k]}
-                        aria-invalid={!!show(k)}
-                        onBlur={() => touch(k)}
-                        onChange={(e) => set(k, e.target.value)}
-                      />
-                      <small className={show(k) ? 'is-error' : ''}>{show(k) ?? hint}</small>
-                    </div>
-                  ))}
-                </div>
-                <div className="factory__field">
-                  <label htmlFor="f-checks">Checks (comma-separated)</label>
-                  <input
-                    id="f-checks"
-                    value={cfg.checks.join(', ')}
-                    aria-invalid={!!errors.checks}
-                    onChange={(e) =>
-                      set('checks', uniqCi(e.target.value.split(',').map((x) => x.trim()).filter(Boolean)))
-                    }
-                  />
-                  <small className={errors.checks ? 'is-error' : ''}>
-                    {errors.checks ?? 'Must match the job names in branch protection'}
-                  </small>
-                </div>
-              </>
-            )}
-          </fieldset>
-        </section>
-
-        {/* STEP 5: Runtime, Toolchains & Merge Identity */}
+        {/* STEP 4: Runtime, Toolchains & Merge Identity */}
         <section id="step-runtime" className="factory__card">
           <header className="factory__cardHead">
-            <span className="factory__stepBadge">Step 5</span>
+            <span className="factory__stepBadge">Step 4</span>
             <div>
               <h2 className="factory__cardTitle">Runner, Toolchains &amp; Merge Identity</h2>
               <p className="factory__cardSub">
@@ -1230,15 +1176,18 @@ export default function FactorySetup() {
           </fieldset>
         </section>
 
-        {/* STEP 6: Repository Secrets & Labels */}
+        {/* STEP 5: Repository Secrets & Labels */}
         <section id="step-secrets" className="factory__card">
           <header className="factory__cardHead">
-            <span className="factory__stepBadge">Step 6</span>
+            <span className="factory__stepBadge">Step 5</span>
             <div>
-              <h2 className="factory__cardTitle">Repository Secrets &amp; State Labels</h2>
+              <h2 className="factory__cardTitle">
+                {scm === 'gitlab' ? 'CI/CD Variables & Setup' : 'Repository Secrets & State Labels'}
+              </h2>
               <p className="factory__cardSub">
-                Seal repository secrets in your browser (libsodium) and ensure the 12 factory state-machine labels
-                exist.
+                {scm === 'gitlab'
+                  ? 'Create GitLab CI automation for Issue-event webhook processing, manual runs, merge-request review/rework, and approved merges.'
+                  : 'Seal repository secrets in your browser (libsodium) and ensure the 12 factory state-machine labels exist.'}
               </p>
             </div>
           </header>
@@ -1246,9 +1195,9 @@ export default function FactorySetup() {
           <fieldset className="factory__group">
             <legend>Repository secrets</legend>
             <small>
-              Optional — fill a value and it is stored as an encrypted Actions secret before the PR opens. Values are
-              sealed in this browser with the repository public key (libsodium), sent only to api.github.com and never
-              readable afterwards. Leave a field empty to add it yourself later.
+              {scm === 'gitlab'
+                ? 'Optional — supplied secret values are stored as GitLab project CI/CD variables with masked and hidden enabled before the merge request opens. GitLab requires version 17.4 or newer and single-line values that meet its masking rules; existing non-hidden secrets are deleted and recreated with hidden enabled. After merging the setup request, a project webhook starts the poller on every Issue event.'
+                : 'Optional — fill a value and it is stored as an encrypted Actions secret before the PR opens. Values are sealed in this browser with the repository public key (libsodium), sent only to api.github.com and never readable afterwards. Leave a field empty to add it yourself later.'}
             </small>
             {secretsList.map((x) => (
               <div className="factory__field" key={x.name}>
@@ -1296,90 +1245,124 @@ export default function FactorySetup() {
               </div>
             ))}
             <small>
-              Writing secrets needs a token with admin access to the repository (classic <code>repo</code> scope, or the
-              fine-grained “Secrets: write” permission).
+              {scm === 'gitlab'
+                ? 'Creating or updating project variables requires a GitLab token with API access and sufficient project permissions (typically Maintainer).'
+                : (
+                    <>
+                      Writing secrets needs a token with admin access to the repository (classic <code>repo</code>{' '}
+                      scope, or the fine-grained “Secrets: write” permission).
+                    </>
+                  )}
             </small>
           </fieldset>
 
           <fieldset className="factory__group">
-            <legend>Repository labels</legend>
-            <small>Required state-machine and trigger labels used by the DMTools factory workflows.</small>
-            <div className="factory__labelGrid">
-              {FACTORY_LABELS.map((l) => {
-                const has = existingLabels.some((x) => same(x, l.name));
-                return (
-                  <span key={l.name} className="factory__labelChip" title={l.description}>
-                    <span className="factory__labelDot" style={{ background: `#${l.color}` }} />
-                    <code>{l.name}</code>
-                    {!cfg.createRepo &&
-                      existingLabels.length > 0 &&
-                      (has ? (
-                        <em className="factory__badge">exists</em>
-                      ) : (
-                        <em className="factory__badge is-warn">missing</em>
-                      ))}
-                  </span>
-                );
-              })}
-            </div>
-            <label className="factory__check">
-              <input
-                type="checkbox"
-                checked={cfg.createLabels !== false}
-                onChange={(e) => set('createLabels', e.target.checked)}
-              />
-              Create required labels automatically during setup
-            </label>
-            <button
-              type="button"
-              className="btn btn--ghost factory__mini"
-              disabled={
-                Boolean(cfg.createRepo) ||
-                Boolean(errors.repo) ||
-                token.length <= 20 ||
-                tokenInfo?.push === false ||
-                labelsBusy
-              }
-              onClick={async () => {
-                setLabelsBusy(true);
-                setError('');
-                const log = (m: string) => setLines((l) => [...l, m]);
-                try {
-                  await ensureLabels(token, cfg.repo, log);
-                  const updated = await listLabels(token, cfg.repo);
-                  setExistingLabels(updated);
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setLabelsBusy(false);
-                }
-              }}
-            >
-              {labelsBusy ? 'Creating labels…' : 'Create missing labels now'}
-            </button>
+            <legend>{scm === 'gitlab' ? 'GitLab labels' : 'Repository labels'}</legend>
+            <small>
+              {scm === 'gitlab'
+                ? 'Required project labels used to organize DMTools issues and merge requests.'
+                : 'Required state-machine and trigger labels used by the DMTools factory workflows.'}
+            </small>
+            {(
+              <>
+                <div className="factory__labelGrid">
+                  {FACTORY_LABELS.map((l) => {
+                    const has = existingLabels.some((x) => same(x, l.name));
+                    return (
+                      <span key={l.name} className="factory__labelChip" title={l.description}>
+                        <span className="factory__labelDot" style={{ background: `#${l.color}` }} />
+                        <code>{l.name}</code>
+                        {!cfg.createRepo &&
+                          existingLabels.length > 0 &&
+                          (has ? (
+                            <em className="factory__badge">exists</em>
+                          ) : (
+                            <em className="factory__badge is-warn">missing</em>
+                          ))}
+                      </span>
+                    );
+                  })}
+                </div>
+                <label className="factory__check">
+                  <input
+                    type="checkbox"
+                    checked={cfg.createLabels !== false}
+                    onChange={(e) => set('createLabels', e.target.checked)}
+                  />
+                  Create required labels automatically during setup
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--ghost factory__mini"
+                  disabled={
+                    Boolean(cfg.createRepo) ||
+                    Boolean(errors.repo) ||
+                    (scm === 'gitlab' && !normalizedGitlabBaseUrl) ||
+                    token.length <= 20 ||
+                    tokenInfo?.push === false ||
+                    labelsBusy
+                  }
+                  onClick={async () => {
+                    setLabelsBusy(true);
+                    setError('');
+                    const log = (m: string) => setLines((l) => [...l, m]);
+                    try {
+                      if (scm === 'gitlab') {
+                        await ensureGitlabLabels(token, cfg.repo, normalizedGitlabBaseUrl, log);
+                      } else {
+                        await ensureLabels(token, cfg.repo, log);
+                      }
+                      const updated =
+                        scm === 'gitlab'
+                          ? await listGitlabLabels(token, cfg.repo, normalizedGitlabBaseUrl)
+                          : await listLabels(token, cfg.repo);
+                      setExistingLabels(updated);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    } finally {
+                      setLabelsBusy(false);
+                    }
+                  }}
+                >
+                  {labelsBusy ? 'Creating labels…' : 'Create missing labels now'}
+                </button>
+              </>
+            )}
           </fieldset>
 
           <div className="factory__submitBar">
             <button type="button" className="btn btn--solid factory__submitBtn" disabled={!canSubmit} onClick={submit}>
               {busy
                 ? 'Working…'
-                : cfg.createRepo
-                  ? Object.values(secretVals).some(Boolean)
-                    ? 'Create repository, set secrets & open PR'
-                    : 'Create repository & open pull request'
-                  : Object.values(secretVals).some(Boolean)
-                    ? 'Set secrets & create pull request'
-                    : 'Create pull request'}
+                : scm === 'gitlab'
+                  ? 'Set variables & create merge request'
+                  : cfg.createRepo
+                    ? Object.values(secretVals).some(Boolean)
+                      ? 'Create repository, set secrets & open PR'
+                      : 'Create repository & open pull request'
+                    : Object.values(secretVals).some(Boolean)
+                      ? 'Set secrets & create pull request'
+                      : 'Create pull request'}
             </button>
             {!canSubmit && !busy && (
               <small className="factory__submitHint">
-                {token.length <= 20
-                  ? 'Enter your GitHub setup token in Step 1 to enable PR creation.'
-                  : Object.keys(errors).length > 0
-                    ? `Complete required fields (${Object.keys(errors)
-                        .map((k) => LABELS[k] ?? k)
-                        .join(', ')}) to open the pull request.`
-                    : 'Verify token permissions in Step 1.'}
+                {scm === 'gitlab'
+                  ? !normalizedGitlabBaseUrl
+                    ? 'Enter a valid GitLab instance URL.'
+                    : token.length <= 20
+                      ? 'Enter a GitLab personal access token in Step 1.'
+                      : !tokenInfo
+                        ? 'Wait for GitLab to validate the token.'
+                        : Object.keys(errors).length > 0
+                          ? `Complete required fields (${Object.keys(errors).map((k) => LABELS[k] ?? k).join(', ')}).`
+                          : 'Verify GitLab project permissions and try again.'
+                  : token.length <= 20
+                    ? 'Enter your GitHub setup token in Step 1 to enable PR creation.'
+                    : Object.keys(errors).length > 0
+                      ? `Complete required fields (${Object.keys(errors)
+                          .map((k) => LABELS[k] ?? k)
+                          .join(', ')}) to open the pull request.`
+                      : 'Verify token permissions in Step 1.'}
               </small>
             )}
           </div>
@@ -1391,7 +1374,7 @@ export default function FactorySetup() {
           {lines.length > 0 && <pre className="factory__log">{lines.join('\n')}</pre>}
           {prUrl && (
             <p className="factory__done">
-              Pull request created:{' '}
+              {scm === 'gitlab' ? 'Merge request created: ' : 'Pull request created: '}
               <a href={prUrl} target="_blank" rel="noopener">
                 {prUrl}
               </a>
@@ -1441,14 +1424,20 @@ export default function FactorySetup() {
           <>
             {files.length === 0 && (
               <div className="factory__empty">
-                <p>The preview appears once these are set:</p>
-                <ul>
-                  {Object.entries(errors).map(([k, v]) => (
-                    <li key={k}>
-                      <strong>{LABELS[k] ?? k}</strong> — {v}
-                    </li>
-                  ))}
-                </ul>
+                {scm === 'gitlab' ? (
+                  <p>Workflow generation is currently available for GitHub repositories only.</p>
+                ) : (
+                  <>
+                    <p>The preview appears once these are set:</p>
+                    <ul>
+                      {Object.entries(errors).map(([k, v]) => (
+                        <li key={k}>
+                          <strong>{LABELS[k] ?? k}</strong> — {v}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
             )}
             {files.map((f, i) => (
@@ -1485,9 +1474,11 @@ export default function FactorySetup() {
         {previewTab === 'guide' && (
           <div className="factory__guide">
             <div className="factory__guideBlock">
-              <h3>1. Interactive @fa Universal Agent</h3>
+              <h3>{scm === 'gitlab' ? '1. GitLab CI Factory Jobs' : '1. Interactive @fa Universal Agent'}</h3>
               <p>
-                {faEnabled ? (
+                {scm === 'gitlab' ? (
+                  <>GitLab does not generate the GitHub Actions-only <code>@fa</code> conversational workflow.</>
+                ) : faEnabled ? (
                   <>
                     <code>.github/workflows/fa-universal.yml</code> is <strong>enabled</strong> in your setup.
                   </>
@@ -1497,56 +1488,82 @@ export default function FactorySetup() {
                   </>
                 )}
               </p>
-              <ul>
-                <li>
-                  <strong>Trigger in Issues &amp; PRs:</strong> Comment <code>@fa &lt;your instruction&gt;</code> on any
-                  Issue or Pull Request, or open a new Issue containing <code>@fa</code>.
-                </li>
-                <li>
-                  <strong>~2s Cold Start:</strong> The workflow downloads precompiled native binaries (<code>fa</code> +{' '}
-                  <code>dmtools-dart</code>), prefetches the Issue/PR thread in parallel, and launches immediately
-                  without checkout action overhead.
-                </li>
-                <li>
-                  <strong>Single-Queue Session Continuation:</strong> Conversation history is stored on orphan branch{' '}
-                  <code>fa-sess/gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code>. Follow-up <code>@fa</code> comments
-                  resume the exact same session and drain in order.
-                </li>
-                <li>
-                  <strong>Durable Project Memory:</strong>{' '}
-                  {memEnabled ? (
-                    <>
-                      With <code>.fah/config.yaml</code> enabled, durable facts are saved under{' '}
-                      <code>.fah/memory/</code> and committed back to your branch automatically.
-                    </>
-                  ) : (
-                    <>Enable Project Memory in Step 2 to persist learned conventions in .fah/memory/.</>
-                  )}
-                </li>
-                <li>
-                  <strong>Real-Time Mid-Turn Steering (DAP Hub):</strong> Each running agent registers on the DAP Hub as{' '}
-                  <code>DAP_AGENT_NAME=gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code> when secret{' '}
-                  <code>FA_DAP_INVITE</code> (or <code>DAP_HUB_URL</code> + <code>DAP_CLIENT_SECRET</code>) is set,
-                  allowing you or other agents to steer it live mid-turn via <code>agent_message</code>.
-                </li>
-              </ul>
+              {scm === 'gitlab' ? (
+                <ul>
+                  <li>
+                    The GitLab Issue-event webhook starts the poller for any issue event; the poller filters for assigned
+                    or labeled work.
+                  </li>
+                  <li>Merge-request pipelines can run the review or rework runner based on labels.</li>
+                  <li>Approved merge requests by {cfg.machine || 'ai-teammate'} are queued to merge after pipeline success.</li>
+                  <li>Manual agent runs are available from GitLab Build → Pipelines using ticket and runner variables.</li>
+                </ul>
+              ) : (
+                <ul>
+                  <li>
+                    <strong>Trigger in Issues &amp; PRs:</strong> Comment <code>@fa &lt;your instruction&gt;</code> on any
+                    Issue or Pull Request, or open a new Issue containing <code>@fa</code>.
+                  </li>
+                  <li>
+                    <strong>~2s Cold Start:</strong> The workflow downloads precompiled native binaries (<code>fa</code> +{' '}
+                    <code>dmtools-dart</code>), prefetches the Issue/PR thread in parallel, and launches immediately
+                    without checkout action overhead.
+                  </li>
+                  <li>
+                    <strong>Single-Queue Session Continuation:</strong> Conversation history is stored on orphan branch{' '}
+                    <code>fa-sess/gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code>. Follow-up <code>@fa</code> comments
+                    resume the exact same session and drain in order.
+                  </li>
+                  <li>
+                    <strong>Durable Project Memory:</strong>{' '}
+                    {memEnabled ? (
+                      <>
+                        With <code>.fah/config.yaml</code> enabled, durable facts are saved under{' '}
+                        <code>.fah/memory/</code> and committed back to your branch automatically.
+                      </>
+                    ) : (
+                      <>Enable Project Memory in Step 2 to persist learned conventions in .fah/memory/.</>
+                    )}
+                  </li>
+                  <li>
+                    <strong>Real-Time Mid-Turn Steering (DAP Hub):</strong> Each running agent registers on the DAP Hub as{' '}
+                    <code>DAP_AGENT_NAME=gh-&lt;owner&gt;-&lt;repo&gt;-&lt;issue&gt;</code> when secret{' '}
+                    <code>FA_DAP_INVITE</code> (or <code>DAP_HUB_URL</code> + <code>DAP_CLIENT_SECRET</code>) is set,
+                    allowing you or other agents to steer it live mid-turn via <code>agent_message</code>.
+                  </li>
+                </ul>
+              )}
             </div>
 
             <div className="factory__guideBlock">
-              <h3>2. Autonomous Issue-to-PR Teammate</h3>
-              <ul>
-                <li>
-                  <strong>Assign to {cfg.machine || 'ai-teammate'}:</strong> Assign any GitHub Issue to{' '}
-                  <code>{cfg.machine || 'ai-teammate'}</code> (or add label <code>agent:dev</code>) to trigger the
-                  autonomous development leg.
-                </li>
-                <li>
-                  <strong>State Machine &amp; Quality Gate:</strong> Once a PR is opened (<code>ai_developed</code>),
-                  the state machine dispatches your quality gate (
-                  <code>{isCiEnabled(cfg) ? cfg.ciFile || 'quality.yml' : 'none'}</code>), runs AI code review (
-                  <code>agent:review</code>), and auto-merges when approved (<code>pr_approved</code>).
-                </li>
-              </ul>
+              <h3>2. {scm === 'gitlab' ? 'GitLab Issue-to-MR Teammate' : 'Autonomous Issue-to-PR Teammate'}</h3>
+              {scm === 'gitlab' ? (
+                <ul>
+                  <li>
+                    Assign an open issue to <code>{cfg.machine || 'ai-teammate'}</code> or add <code>agent:dev</code>,
+                    <code>agent:review</code>, or <code>agent:rework</code>; the poller selects a generated runner.
+                  </li>
+                  <li>
+                    Merge requests labeled <code>agent:review</code> or <code>agent:rework</code> are processed by their
+                    corresponding runner. A <code>pr_approved</code> label queues eligible machine-authored MRs to merge
+                    after pipeline success.
+                  </li>
+                </ul>
+              ) : (
+                <ul>
+                  <li>
+                    <strong>Assign to {cfg.machine || 'ai-teammate'}:</strong> Assign any GitHub Issue to{' '}
+                    <code>{cfg.machine || 'ai-teammate'}</code> (or add label <code>agent:dev</code>) to trigger the
+                    autonomous development leg.
+                  </li>
+                  <li>
+                    <strong>State Machine &amp; Quality Gate:</strong> Once a PR is opened (<code>ai_developed</code>),
+                    the state machine dispatches your quality gate (
+                    <code>{isCiEnabled(cfg) ? cfg.ciFile || 'quality.yml' : 'none'}</code>), runs AI code review (
+                    <code>agent:review</code>), and auto-merges when approved (<code>pr_approved</code>).
+                  </li>
+                </ul>
+              )}
             </div>
 
             <div className="factory__guideBlock">

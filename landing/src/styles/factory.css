@@ -177,6 +177,9 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.85rem;
 }
+.factory__field--full {
+  grid-column: 1 / -1;
+}
 @media (max-width: 600px) {
   .factory__grid2 {
     grid-template-columns: 1fr;
