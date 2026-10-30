@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   FACTORY_LABELS,
   PROVIDER_PRESETS,
+  QUALITY_PRESETS,
   RUNNERS,
   SCM,
   TOOLCHAINS,
@@ -37,11 +38,13 @@ import {
   GITLAB_WORKFLOW_SOURCE,
   validate,
   prBody,
+  type CiDetection,
   type TokenCheck,
   type CiWorkflow,
   type FactoryConfig,
   type GitlabTemplates,
   type ProviderEntry,
+  type QualityPresetId,
   type RepoSummary,
   type ScmId,
   type ToolchainId,
@@ -63,6 +66,7 @@ const LABELS: Record<string, string> = {
 
 /** GitHub matches check contexts case-insensitively. */
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+const uniqCi = (xs: string[]) => xs.filter((x, i) => xs.findIndex((y) => same(x, y)) === i);
 
 function ProviderRow({
   entry,
@@ -189,6 +193,8 @@ export default function FactorySetup() {
   const [branches, setBranches] = useState<string[]>([]);
   const [existingLabels, setExistingLabels] = useState<string[]>([]);
   const [labelsBusy, setLabelsBusy] = useState(false);
+  const [ci, setCi] = useState<CiDetection | null>(null);
+  const [gatesBusy, setGatesBusy] = useState(false);
   const [runnerMode, setRunnerMode] = useState(defaults.runner);
   const [busy, setBusy] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
@@ -244,7 +250,7 @@ export default function FactorySetup() {
   }, [scm, gitlabTemplateAttempt]);
 
   useEffect(() => {
-    const ids = ['step-repo', 'step-fa', 'step-providers', 'step-runtime', 'step-secrets'];
+    const ids = ['step-repo', 'step-fa', 'step-providers', 'step-ci', 'step-runtime', 'step-secrets'];
     const onScroll = () => {
       const trigger = 220;
       let current = ids[0];
@@ -341,6 +347,7 @@ export default function FactorySetup() {
         setBranches([]);
         setExisting([]);
         setExistingLabels([]);
+        setCi(null);
       }
       return;
     }
@@ -359,13 +366,17 @@ export default function FactorySetup() {
         set('baseBranch', b.names.includes('main') ? 'main' : b.defaultBranch);
       })
       .catch(() => {});
+    setCi(null);
+    setGatesBusy(true);
     detectCi(token, cfg.repo)
       .then((d) => {
+        setCi(d);
         if (d.workflows[0] && isCiEnabled(cfg) && (!cfg.qualityPreset || cfg.qualityPreset === 'none')) {
           applyWorkflow(d.workflows[0], d.required);
         }
       })
-      .catch(() => {});
+      .catch(() => setCi({ required: [], workflows: [] }))
+      .finally(() => setGatesBusy(false));
   }, [cfg.repo, token, cfg.createRepo, scm, normalizedGitlabBaseUrl]);
 
   const filtered = useMemo(() => {
@@ -385,6 +396,36 @@ export default function FactorySetup() {
       ciName: w.name,
       checks: req.length ? req : gate,
     }));
+  }
+
+  function selectQualityPreset(presetId: QualityPresetId) {
+    setCfg((c) => {
+      if (presetId === 'none') {
+        return { ...c, ciEnabled: true, qualityPreset: 'none' };
+      }
+      const preset = QUALITY_PRESETS.find((p) => p.id === presetId);
+      const nextTools = { ...c.toolchains };
+      if (preset?.toolchain && nextTools[preset.toolchain] === undefined) {
+        const tc = TOOLCHAINS.find((t) => t.id === preset.toolchain);
+        if (tc) nextTools[preset.toolchain] = tc.fallback;
+      }
+      return {
+        ...c,
+        ciEnabled: true,
+        qualityPreset: presetId,
+        ciFile: 'quality.yml',
+        ciName: 'Quality',
+        checks: ['quality'],
+        toolchains: nextTools,
+      };
+    });
+  }
+
+  function toggleCheck(name: string, on: boolean) {
+    setCfg((c) => {
+      const rest = c.checks.filter((x) => !same(x, name));
+      return { ...c, checks: on ? [...rest, name] : rest };
+    });
   }
 
   function chooseRepo(name: string) {
@@ -485,11 +526,18 @@ export default function FactorySetup() {
     !generation.error &&
     (scm !== 'gitlab' || (Boolean(normalizedGitlabBaseUrl) && Boolean(gitlabTemplates) && !templateError));
 
+  const ciMode: 'existing' | 'crap4' | 'none' = !isCiEnabled(cfg)
+    ? 'none'
+    : cfg.qualityPreset && cfg.qualityPreset !== 'none'
+      ? 'crap4'
+      : 'existing';
+
   const faEnabled = scm === 'github' && isFaUniversalEnabled(cfg);
   const memEnabled = isFaMemoryEnabled(cfg);
 
   const stepRepoReady = Boolean(cfg.repo && !errors.repo && !errors.baseBranch && !errors.machine);
   const stepProvidersReady = Boolean(!errors.providers);
+  const stepCiReady = Boolean(!errors.ciFile && !errors.ciName && !errors.checks);
   const stepRuntimeReady = Boolean(!errors.runner && !errors.merge);
   const secretsList = requiredSecrets(cfg, scm, normalizedGitlabBaseUrl || gitlabBaseUrl);
   const configuredSecretsCount = secretsList.filter((s) => existing.includes(s.name) || Boolean(secretVals[s.name])).length;
@@ -534,10 +582,20 @@ export default function FactorySetup() {
             </span>
           </a>
           <a
+            href="#step-ci"
+            className={`factory__stepPill ${stepCiReady ? 'is-ready' : ''} ${activeStep === 'step-ci' ? 'is-active' : ''}`}
+          >
+            <span className="factory__stepNum">4</span>
+            <span>
+              <strong>CI &amp; Quality Gate</strong>
+              <small>{ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}</small>
+            </span>
+          </a>
+          <a
             href="#step-runtime"
             className={`factory__stepPill ${stepRuntimeReady ? 'is-ready' : ''} ${activeStep === 'step-runtime' ? 'is-active' : ''}`}
           >
-            <span className="factory__stepNum">4</span>
+            <span className="factory__stepNum">5</span>
             <span>
               <strong>Runner &amp; Merge</strong>
               <small>
@@ -549,7 +607,7 @@ export default function FactorySetup() {
             href="#step-secrets"
             className={`factory__stepPill is-ready ${activeStep === 'step-secrets' ? 'is-active' : ''}`}
           >
-            <span className="factory__stepNum">5</span>
+            <span className="factory__stepNum">6</span>
             <span>
               <strong>{scm === 'gitlab' ? 'Variables & Setup' : 'Secrets & Labels'}</strong>
               <small>
@@ -1068,10 +1126,236 @@ export default function FactorySetup() {
           </fieldset>
         </section>
 
-        {/* STEP 4: Runtime, Toolchains & Merge Identity */}
-        <section id="step-runtime" className="factory__card">
+        {/* STEP 4: CI & Quality Gate */}
+        <section id="step-ci" className="factory__card">
           <header className="factory__cardHead">
             <span className="factory__stepBadge">Step 4</span>
+            <div>
+              <h2 className="factory__cardTitle">CI &amp; Quality Gate</h2>
+              <p className="factory__cardSub">
+                {scm === 'gitlab'
+                  ? 'GitLab CI runs native factory jobs for Issue-event webhook processing, manual runs, and merge requests. You can also generate a language-specific crap4* quality job.'
+                  : (
+                      <>
+                        Choose how the state machine validates PRs before merging: use your existing CI workflow,
+                        generate a ready-made <code>crap4*</code> quality gate, or skip CI validation.
+                      </>
+                    )}
+              </p>
+            </div>
+          </header>
+
+          <fieldset className="factory__group">
+            <legend>CI &amp; quality checks</legend>
+            <div className="factory__seg" role="radiogroup" aria-label="CI mode">
+              {(
+                [
+                  ['existing', 'Existing CI'],
+                  ['crap4', 'Generate crap4* quality gate'],
+                  ['none', 'No CI workflow'],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={ciMode === m}
+                  className={ciMode === m ? 'is-on' : ''}
+                  onClick={() => {
+                    if (m === 'none') {
+                      setCfg((c) => ({ ...c, ciEnabled: false, qualityPreset: 'none' }));
+                    } else if (m === 'crap4') {
+                      selectQualityPreset(
+                        cfg.qualityPreset && cfg.qualityPreset !== 'none' ? cfg.qualityPreset : 'crap4js',
+                      );
+                    } else {
+                      setCfg((c) => ({
+                        ...c,
+                        ciEnabled: true,
+                        qualityPreset: 'none',
+                        ciFile: c.ciFile || 'ci.yml',
+                        ciName: c.ciName || 'CI',
+                        checks: c.checks.length ? c.checks : ['test'],
+                      }));
+                    }
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {ciMode === 'none' && (
+              <small>
+                No CI gate: the factory will not dispatch or wait for a quality workflow before merging approved PRs.
+                You can add a CI workflow later.
+              </small>
+            )}
+
+            {ciMode === 'crap4' && (
+              <>
+                <small>
+                  Generates a ready-to-use{' '}
+                  <code>{scm === 'gitlab' ? '.gitlab-ci.yml' : '.github/workflows/quality.yml'}</code> powered by the{' '}
+                  <strong>crap4*</strong> CRAP metric (Change Risk Anti-Patterns = cyclomatic complexity + test
+                  coverage) for your tech stack.
+                </small>
+                <div className="factory__field">
+                  <label htmlFor="f-quality-preset">Tech stack preset (crap4*)</label>
+                  <select
+                    id="f-quality-preset"
+                    value={cfg.qualityPreset && cfg.qualityPreset !== 'none' ? cfg.qualityPreset : 'crap4js'}
+                    onChange={(e) => selectQualityPreset(e.target.value as QualityPresetId)}
+                  >
+                    {QUALITY_PRESETS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const p = QUALITY_PRESETS.find((x) => x.id === cfg.qualityPreset);
+                    return p ? (
+                      <small>
+                        {p.description} —{' '}
+                        <a href={p.repoUrl} target="_blank" rel="noopener">
+                          {p.repoUrl.replace('https://github.com/', '')} ↗
+                        </a>
+                      </small>
+                    ) : null;
+                  })()}
+                </div>
+              </>
+            )}
+
+            {ciMode === 'existing' && (
+              <>
+                <small>
+                  {scm === 'gitlab'
+                    ? 'The generated factory pipeline does not import or dispatch existing GitLab CI jobs. Choose a crap4* preset to add a generated quality job, or configure your existing checks in the project after merging.'
+                    : (
+                        <>
+                          The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong>{' '}
+                          the CI workflow on the PR head when validation is due and merges once the checks below are
+                          green — so the workflow needs a <code>workflow_dispatch</code> trigger.
+                        </>
+                      )}
+                </small>
+                {gatesBusy && <small>Reading branch protection and workflows…</small>}
+                {scm === 'github' && ci && ci.workflows.length === 0 && (
+                  <small>
+                    No CI workflow found in .github/workflows — fill in the fields manually, generate a crap4* quality
+                    gate, or switch to “No CI workflow”.
+                  </small>
+                )}
+                {scm === 'github' && ci && ci.workflows.length > 0 && (
+                  <div className="factory__gates" role="radiogroup" aria-label="CI workflow">
+                    {ci.workflows.map((w) => {
+                      const on = cfg.ciFile === w.file;
+                      return (
+                        <button
+                          key={w.file}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          className={`factory__gate ${on ? 'is-on' : ''}`}
+                          onClick={() => applyWorkflow(w, ci.required)}
+                        >
+                          <span className="factory__gateName">
+                            {w.name}
+                            <span className="factory__gateFile">{w.file}</span>
+                          </span>
+                          <span className="factory__gateMeta">
+                            {w.dispatchable ? (
+                              <em className="factory__badge">dispatchable</em>
+                            ) : (
+                              <em className="factory__badge is-warn">add workflow_dispatch</em>
+                            )}
+                            {w.onPullRequest && <span>also runs on pull_request — redundant under the factory</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {ci &&
+                  (() => {
+                    const w = ci.workflows.find((x) => x.file === cfg.ciFile);
+                    const names = uniqCi([
+                      ...ci.required,
+                      ...cfg.checks,
+                      ...(w?.jobs ?? []).filter((j) => !j.includes('${{')),
+                    ]);
+                    return (
+                      names.length > 0 && (
+                        <div className="factory__tools">
+                          <small>Checks the factory waits for before merging:</small>
+                          {names.map((n) => (
+                            <label key={n} className="factory__check">
+                              <input
+                                type="checkbox"
+                                checked={cfg.checks.some((c) => same(c, n))}
+                                onChange={(e) => toggleCheck(n, e.target.checked)}
+                              />
+                              <code>{n}</code>
+                              {ci.required.some((r) => same(r, n)) && <em className="factory__badge">required</em>}
+                              {w && !w.jobs.some((j) => same(j, n)) && (
+                                <span className="factory__gateMeta">not published by {cfg.ciFile}</span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      )
+                    );
+                  })()}
+              </>
+            )}
+
+            {ciMode !== 'none' && (
+              <>
+                <div className="factory__grid2">
+                  {(
+                    [
+                      ['ciFile', 'CI workflow file', 'Dispatched by the factory on PR heads'],
+                      ['ciName', 'CI workflow name', 'The `name:` of that workflow — its completion wakes the factory'],
+                    ] as const
+                  ).map(([k, label, hint]) => (
+                    <div className="factory__field" key={k}>
+                      <label htmlFor={`f-${k}`}>{label}</label>
+                      <input
+                        id={`f-${k}`}
+                        value={cfg[k]}
+                        aria-invalid={!!show(k)}
+                        onBlur={() => touch(k)}
+                        onChange={(e) => set(k, e.target.value)}
+                      />
+                      <small className={show(k) ? 'is-error' : ''}>{show(k) ?? hint}</small>
+                    </div>
+                  ))}
+                </div>
+                <div className="factory__field">
+                  <label htmlFor="f-checks">Checks (comma-separated)</label>
+                  <input
+                    id="f-checks"
+                    value={cfg.checks.join(', ')}
+                    aria-invalid={!!errors.checks}
+                    onChange={(e) =>
+                      set('checks', uniqCi(e.target.value.split(',').map((x) => x.trim()).filter(Boolean)))
+                    }
+                  />
+                  <small className={errors.checks ? 'is-error' : ''}>
+                    {errors.checks ?? 'Must match the job names in branch protection'}
+                  </small>
+                </div>
+              </>
+            )}
+          </fieldset>
+        </section>
+
+        {/* STEP 5: Runtime, Toolchains & Merge Identity */}
+        <section id="step-runtime" className="factory__card">
+          <header className="factory__cardHead">
+            <span className="factory__stepBadge">Step 5</span>
             <div>
               <h2 className="factory__cardTitle">Runner, Toolchains &amp; Merge Identity</h2>
               <p className="factory__cardSub">
@@ -1208,10 +1492,10 @@ export default function FactorySetup() {
           </fieldset>
         </section>
 
-        {/* STEP 5: Repository Secrets & Labels */}
+        {/* STEP 6: Repository Secrets & Labels */}
         <section id="step-secrets" className="factory__card">
           <header className="factory__cardHead">
-            <span className="factory__stepBadge">Step 5</span>
+            <span className="factory__stepBadge">Step 6</span>
             <div>
               <h2 className="factory__cardTitle">
                 {scm === 'gitlab' ? 'CI/CD Variables & Setup' : 'Repository Secrets & State Labels'}
