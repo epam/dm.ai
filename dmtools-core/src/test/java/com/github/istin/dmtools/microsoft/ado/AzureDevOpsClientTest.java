@@ -9,6 +9,7 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.IUser;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.microsoft.ado.model.AdoUser;
 import com.github.istin.dmtools.microsoft.ado.model.WorkItem;
 import okhttp3.Call;
@@ -584,6 +585,55 @@ public class AzureDevOpsClientTest {
         JSONArray ops = new JSONArray(capturePatchedBody());
         assertEquals("/fields/System.State", ops.getJSONObject(0).getString("path"));
         assertEquals("Closed", ops.getJSONObject(0).getString("value"));
+    }
+
+    @Test
+    void testMoveToStatus_invalidState400_throwsStructuredValidationError() throws IOException {
+        String ado400Body = new JSONObject()
+                .put("customProperties", new JSONObject()
+                        .put("ErrorMessage", "The field 'State' contains the value 'In Review' that is not in the list of supported values")
+                        .put("FieldStatusFlags", "required, hasValues, limitedToValues, invalidListValue"))
+                .toString();
+        mockOkHttp(buildOkResponse(400, "application/json", ado400Body));
+
+        RestClient.RestClientException ex = assertThrows(RestClient.RestClientException.class,
+                () -> client.moveToStatus("2063641", "In Review"));
+
+        assertEquals(400, ex.getCode());
+        JSONObject structured = new JSONObject(ex.getMessage());
+        assertEquals(400, structured.getInt("status"));
+        assertEquals("System.State", structured.getString("field"));
+        assertTrue(structured.getString("message").contains("In Review"));
+        assertTrue(structured.getString("flags").contains("invalidListValue"));
+    }
+
+    @Test
+    void testGetWorkItemTypeStates_usesConfiguredProjectAndEncodesSpaces() throws IOException {
+        String statesJson = "{\"count\":3,\"value\":[{\"name\":\"New\",\"category\":\"Proposed\"},{\"name\":\"Active\",\"category\":\"InProgress\"},{\"name\":\"Closed\",\"category\":\"Completed\"}]}";
+        client.setMockResponse("/TestProject/_apis/wit/workitemtypes/User%20Story/states", statesJson);
+
+        String result = client.getWorkItemTypeStates("User Story", null);
+
+        assertEquals(statesJson, result);
+        assertTrue(client.getLastCalledUrl().contains("/TestProject/_apis/wit/workitemtypes/User%20Story/states"), client.getLastCalledUrl());
+        assertTrue(client.getLastCalledUrl().contains("api-version=7.0"), client.getLastCalledUrl());
+    }
+
+    @Test
+    void testGetWorkItemTypeStates_withExplicitProject() throws IOException {
+        String statesJson = "{\"count\":1,\"value\":[{\"name\":\"Active\"}]}";
+        client.setMockResponse("/CustomProj/_apis/wit/workitemtypes/Bug/states", statesJson);
+
+        String result = client.getWorkItemTypeStates("Bug", "CustomProj");
+
+        assertEquals(statesJson, result);
+        assertTrue(client.getLastCalledUrl().contains("/CustomProj/_apis/wit/workitemtypes/Bug/states"), client.getLastCalledUrl());
+    }
+
+    @Test
+    void testGetWorkItemTypeStates_blankType_throwsIllegalArgument() {
+        assertThrows(IllegalArgumentException.class, () -> client.getWorkItemTypeStates("  ", null));
+        assertThrows(IllegalArgumentException.class, () -> client.getWorkItemTypeStates(null, null));
     }
 
     @Test

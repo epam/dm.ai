@@ -665,6 +665,49 @@ public class AbstractRestClientCoverageTest {
     }
 
     @Test
+    public void testPrintAndCreateException400AdoFieldValidation() throws IOException {
+        Request mockRequest = mock(Request.class);
+        when(mockRequest.url()).thenReturn(HttpUrl.parse("https://dev.azure.com/org/_apis/wit/workitems/2063641?api-version=7.0"));
+
+        String adoBody = "{\"customProperties\":{\"ErrorMessage\":\"The field 'State' contains the value 'In Review' that is not in the list of supported values\", \"FieldStatusFlags\":\"required, hasValues, limitedToValues, invalidListValue\"}}";
+        Response mockResponse = mock(Response.class);
+        when(mockResponse.code()).thenReturn(400);
+        when(mockResponse.body()).thenReturn(ResponseBody.create(adoBody, okhttp3.MediaType.parse("application/json")));
+        when(mockResponse.message()).thenReturn("Bad Request");
+
+        IOException ex = AbstractRestClient.printAndCreateException(mockRequest, mockResponse);
+        assertTrue(ex instanceof RestClient.RestClientException);
+        RestClient.RestClientException restEx = (RestClient.RestClientException) ex;
+        assertEquals(400, restEx.getCode());
+        assertEquals(adoBody, restEx.getBody());
+        org.json.JSONObject structured = new org.json.JSONObject(restEx.getMessage());
+        assertEquals(400, structured.getInt("status"));
+        assertEquals("System.State", structured.getString("field"));
+        assertTrue(structured.getString("message").contains("In Review"));
+    }
+
+    @Test
+    public void testFormatAdoFieldValidationErrorEdgeCases() {
+        assertNull(AbstractRestClient.formatAdoFieldValidationError(null));
+        assertNull(AbstractRestClient.formatAdoFieldValidationError(""));
+        assertNull(AbstractRestClient.formatAdoFieldValidationError("plain error"));
+        assertNull(AbstractRestClient.formatAdoFieldValidationError("FieldStatusFlags not json"));
+        assertNull(AbstractRestClient.formatAdoFieldValidationError("{\"customProperties\":{\"FieldStatusFlags\":\"invalidListValue\"}}"));
+
+        String withRefName = "{\"customProperties\":{\"FieldReferenceName\":\"Custom.Team\",\"ErrorMessage\":\"Invalid value\",\"FieldStatusFlags\":\"invalidListValue\"}}";
+        org.json.JSONObject parsedRef = new org.json.JSONObject(AbstractRestClient.formatAdoFieldValidationError(withRefName));
+        assertEquals("Custom.Team", parsedRef.getString("field"));
+
+        String withCustomFieldInMsg = "{\"message\":\"The field 'Custom.Reason' contains an invalid value\",\"typeKey\":\"RuleValidationException\"}";
+        org.json.JSONObject parsedCustom = new org.json.JSONObject(AbstractRestClient.formatAdoFieldValidationError(withCustomFieldInMsg));
+        assertEquals("Custom.Reason", parsedCustom.getString("field"));
+
+        String withSystemFieldInMsg = "{\"message\":\"The field 'Reason' contains an invalid value\",\"typeKey\":\"RuleValidationException\"}";
+        org.json.JSONObject parsedSys = new org.json.JSONObject(AbstractRestClient.formatAdoFieldValidationError(withSystemFieldInMsg));
+        assertEquals("System.Reason", parsedSys.getString("field"));
+    }
+
+    @Test
     public void testPrintAndCreateException404IssueUrl() throws IOException {
         Request mockRequest = mock(Request.class);
         when(mockRequest.url()).thenReturn(HttpUrl.parse("https://example.com/rest/api/2/issue/TEST-1"));
