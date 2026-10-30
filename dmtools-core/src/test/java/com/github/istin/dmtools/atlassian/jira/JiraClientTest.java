@@ -7,6 +7,7 @@ import com.github.istin.dmtools.atlassian.jira.model.SearchResult;
 import com.github.istin.dmtools.atlassian.jira.model.Ticket;
 import com.github.istin.dmtools.common.model.IChangelog;
 import com.github.istin.dmtools.common.model.ITicket;
+import com.github.istin.dmtools.common.model.IComment;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import okhttp3.OkHttpClient;
 import org.json.JSONArray;
@@ -388,6 +389,57 @@ public class JiraClientTest {
         assertNotEquals("IN", method.invoke(spyClient, "parent in (PSR-18,PSR-17)"));
         assertEquals("PROJ", method.invoke(spyClient, "project = PROJ AND status = Open"));
         assertEquals("TEAM", method.invoke(spyClient, "key = TEAM-123"));
+    }
+
+    @Test
+    public void testUpdateComment() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doReturn(JiraClient.TextType.MARKDOWN).when(spyClient).getTextType();
+        doNothing().when(spyClient).clearCache(any(GenericRequest.class));
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        doReturn("{\"id\":\"10001\",\"body\":\"*Updated* comment\"}").when(spyClient).put(requestCaptor.capture());
+
+        String response = spyClient.updateComment("PROJ-123", "10001", "**Updated** comment");
+
+        assertEquals("{\"id\":\"10001\",\"body\":\"*Updated* comment\"}", response);
+        GenericRequest captured = requestCaptor.getValue();
+        assertEquals("http://example.com/rest/api/latest/issue/PROJ-123/comment/10001", captured.url());
+        assertEquals("*Updated* comment", new JSONObject(captured.getBody()).getString("body"));
+        verify(spyClient).clearCache(any(GenericRequest.class));
+    }
+
+    @Test
+    public void testDeleteComment() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doNothing().when(spyClient).clearCache(any(GenericRequest.class));
+        ArgumentCaptor<GenericRequest> requestCaptor = ArgumentCaptor.forClass(GenericRequest.class);
+        doReturn("").when(spyClient).delete(requestCaptor.capture());
+
+        String response = spyClient.deleteComment("PROJ-123", "10001");
+
+        assertEquals("", response);
+        GenericRequest captured = requestCaptor.getValue();
+        assertEquals("http://example.com/rest/api/latest/issue/PROJ-123/comment/10001", captured.url());
+        verify(spyClient).clearCache(any(GenericRequest.class));
+    }
+
+    @Test
+    public void testDeleteCommentIfExists() throws IOException {
+        JiraClient<Ticket> spyClient = spy(jiraClient);
+        doReturn(JiraClient.TextType.MARKDOWN).when(spyClient).getTextType();
+        IComment matchingComment = mock(IComment.class);
+        when(matchingComment.getId()).thenReturn("10001");
+        when(matchingComment.getBody()).thenReturn("*Target* comment");
+        IComment otherComment = mock(IComment.class);
+        when(otherComment.getId()).thenReturn("10002");
+        when(otherComment.getBody()).thenReturn("Other comment");
+        doReturn(Arrays.asList(matchingComment, otherComment)).when(spyClient).getComments("PROJ-123", null);
+        doReturn("").when(spyClient).deleteComment(anyString(), anyString());
+
+        spyClient.deleteCommentIfExists("PROJ-123", "**Target** comment");
+
+        verify(spyClient).deleteComment("PROJ-123", "10001");
+        verify(spyClient, never()).deleteComment("PROJ-123", "10002");
     }
 
 }
