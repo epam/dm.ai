@@ -109,7 +109,7 @@ This covers commands executed both as Teammate `cliCommands` and via the `cli_ex
 | **Jira** | `JIRA_BASE_PATH`, `JIRA_LOGIN_PASS_TOKEN` | `JIRA_AUTH_TYPE`, `JIRA_FIELDS_MAPPING` |
 | **Azure DevOps** | `ADO_BASE_PATH`, `ADO_PAT`, `ADO_PROJECT` | `ADO_AREA_PATH`, `ADO_ITERATION_PATH` |
 | **Figma** | `FIGMA_ACCESS_TOKEN` | `FIGMA_FILE_KEY` |
-| **Confluence** | `CONFLUENCE_BASE_PATH`, `CONFLUENCE_LOGIN_PASS_TOKEN` | `CONFLUENCE_SPACE_KEY` |
+| **Confluence** | `CONFLUENCE_BASE_PATH`, `CONFLUENCE_LOGIN_PASS_TOKEN` | `CONFLUENCE_DEFAULT_SPACE`, `CONFLUENCE_GRAPHQL_PATH`, `CONFLUENCE_API_VERSION` |
 | **Teams** | `TEAMS_TENANT_ID`, `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET` | `TEAMS_CHANNEL_ID`, `TEAMS_REFRESH_TOKEN` |
 | **GitHub** | `SOURCE_GITHUB_TOKEN` | `SOURCE_REPO_PATH`, `SOURCE_ORG` |
 | **GitLab** | `GITLAB_TOKEN`, `GITLAB_URL` | `GITLAB_PROJECT_ID` |
@@ -172,7 +172,7 @@ FIGMA_FILE_KEY=ABC123XYZ
 # Confluence
 CONFLUENCE_BASE_PATH=https://mycompany.atlassian.net/wiki
 CONFLUENCE_LOGIN_PASS_TOKEN=<your-base64-encoded-email:api-token>
-CONFLUENCE_SPACE_KEY=DOCS
+CONFLUENCE_DEFAULT_SPACE=DOCS
 # Use v2 REST API (required for Atlassian granular/scoped API tokens; legacy v1
 # content endpoints 401 under them). Default: v1 (classic /rest/api/...).
 # CONFLUENCE_API_VERSION=v2
