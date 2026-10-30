@@ -44,6 +44,11 @@ file_write("output.txt", "content");
           "description": "Working directory for command execution. Defaults to repository root if not specified. Use absolute path or path relative to current directory.",
           "example": "/path/to/repo"
         },
+        "expectNonZeroExit": {
+          "type": "string",
+          "description": "When 'true', non-zero exit codes are treated as expected outcomes: suppresses ERROR stack trace logging (logs a single DEBUG line instead) while still propagating the failure.",
+          "example": "true"
+        },
         "command": {
           "type": "string",
           "description": "CLI command to execute. Must start with whitelisted command (git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az).",

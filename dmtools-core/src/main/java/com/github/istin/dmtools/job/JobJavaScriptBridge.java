@@ -466,9 +466,54 @@ public class JobJavaScriptBridge {
             // Convert result to JavaScript-compatible format
             return convertToJSCompatible(result);
         } catch (Exception e) {
-            logger.error("Tool execution failed for {}: {}", toolName, e.getMessage(), e);
+            if (isExpectedCliNonZeroExit(toolName, jsArgs, e)) {
+                logger.debug("Tool {} exited with expected non-zero status: {}", toolName, e.getMessage());
+            } else if (logger.isTraceEnabled()) {
+                logger.error("Tool execution failed for {}: {}", toolName, e.getMessage(), e);
+            } else {
+                logger.error("Tool execution failed for {}: {}", toolName, e.getMessage());
+            }
             throw new RuntimeException("Tool execution failed: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Returns {@code true} when {@code cli_execute_command} was called with
+     * {@code expectNonZeroExit: true/"true"} and failed due to a non-zero exit code.
+     */
+    private static boolean isExpectedCliNonZeroExit(String toolName, Object jsArgs, Throwable error) {
+        if (!"cli_execute_command".equals(toolName) || jsArgs == null) {
+            return false;
+        }
+        boolean hasCliFailedCause = false;
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof com.github.istin.dmtools.common.utils.CliCommandFailedException) {
+                hasCliFailedCause = true;
+                break;
+            }
+        }
+        if (!hasCliFailedCause) {
+            return false;
+        }
+        try {
+            if (jsArgs instanceof Map) {
+                Object val = ((Map<?, ?>) jsArgs).get("expectNonZeroExit");
+                return val != null && Boolean.parseBoolean(String.valueOf(val));
+            }
+            Value value = Value.asValue(jsArgs);
+            if (value != null && value.hasMembers() && value.hasMember("expectNonZeroExit")) {
+                Value member = value.getMember("expectNonZeroExit");
+                if (member != null && !member.isNull()) {
+                    if (member.isBoolean()) {
+                        return member.asBoolean();
+                    }
+                    return Boolean.parseBoolean(String.valueOf(member.as(Object.class)));
+                }
+            }
+        } catch (Exception ignored) {
+            // Fall through to false
+        }
+        return false;
     }
 
     /**

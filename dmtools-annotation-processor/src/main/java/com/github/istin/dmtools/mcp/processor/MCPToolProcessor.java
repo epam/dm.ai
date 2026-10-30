@@ -567,6 +567,11 @@ public class MCPToolProcessor extends AbstractProcessor {
         out.println("            return null;");
         out.println("        }");
         out.println();
+        out.println("        // Handle Boolean to String conversion (JS bridge may pass boolean literals for string-typed params)");
+        out.println("        if (targetType.equals(\"java.lang.String\") && value instanceof Boolean) {");
+        out.println("            return (T) value.toString();");
+        out.println("        }");
+        out.println();
         out.println("        // Handle Number to String conversion (JS bridge passes integral numbers");
         out.println("        // such as parseInt results as Integer/Long/Double for string-typed params)");
         out.println("        if (targetType.equals(\"java.lang.String\") && value instanceof Number) {");
