@@ -1916,6 +1916,101 @@ file_write("output.txt", "content");
       ]
     },
     "description": "Link two Jira issues with a specific relationship type"
+  },
+  {
+    "name": "rovo_search",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Natural-language search query",
+          "example": "deployment architecture for payment service"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        },
+        "targetApp": {
+          "type": "string",
+          "description": "Optional target application filter (e.g. confluence, jira)",
+          "example": "confluence"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of results to return",
+          "example": "10"
+        }
+      },
+      "required": ["query"]
+    },
+    "description": "Semantic natural-language search across Jira, Confluence, and connected third-party sources via Atlassian Rovo MCP in STANDARD mode."
+  },
+  {
+    "name": "rovo_summarize",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contentId": {
+          "type": "string",
+          "description": "Confluence page or content ID",
+          "example": "123456789"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      },
+      "required": ["contentId"]
+    },
+    "description": "Fetch a pre-generated AI summary of a Confluence page via Atlassian Rovo MCP (getConfluenceContent with detail=ai_summary)."
+  },
+  {
+    "name": "rovo_context",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "objectType": {
+          "type": "string",
+          "description": "Type of the Atlassian object (e.g. jira_issue, confluence_page, pull_request, team, goal)",
+          "example": "jira_issue"
+        },
+        "identifier": {
+          "type": "string",
+          "description": "Identifier or ARI/key of the object (e.g. PROJ-123 or page ID)",
+          "example": "PROJ-123"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      },
+      "required": ["objectType", "identifier"]
+    },
+    "description": "Retrieve Atlassian Teamwork Graph relationships (linked Jira issues, Confluence pages, pull requests, repositories, goals, and people) for an object via getGraphContext."
+  },
+  {
+    "name": "rovo_ask",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "Natural-language question to ask Rovo",
+          "example": "How does the authentication token refresh flow work?"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      },
+      "required": ["question"]
+    },
+    "description": "Ask a natural-language question via Atlassian Rovo MCP using AGENTIC search mode; automatically falls back to STANDARD semantic search when Agentic search returns 403 or is not enabled."
   }
 ]}
 
