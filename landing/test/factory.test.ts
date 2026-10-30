@@ -1012,3 +1012,19 @@ describe('FA Universal Agent & Project Memory options', () => {
     assert.equal(byPath['.fah/config.yaml'], undefined);
   });
 });
+
+describe('Issue #783 — CI & Quality Gate step in FactorySetup UI', () => {
+  it('renders Step 4 CI & Quality Gate section with crap4* presets, CI workflow file/name, and required checks inputs', () => {
+    const setupTsx = readFileSync(resolve(here, '../src/components/FactorySetup.tsx'), 'utf8');
+    assert.match(setupTsx, /href="#step-ci"/);
+    assert.match(setupTsx, /<section id="step-ci" className="factory__card">/);
+    assert.match(setupTsx, /CI &amp; Quality Gate/);
+    assert.match(setupTsx, /\['crap4',\s*'Generate crap4\* quality gate'\]/);
+    assert.match(setupTsx, /id="f-quality-preset"/);
+    assert.match(setupTsx, /QUALITY_PRESETS\.map/);
+    assert.match(setupTsx, /id="f-checks"/);
+    assert.match(setupTsx, /Checks \(comma-separated\)/);
+    assert.match(setupTsx, /\['ciFile',\s*'CI workflow file'/);
+    assert.match(setupTsx, /\['ciName',\s*'CI workflow name'/);
+  });
+});
