@@ -19,6 +19,11 @@
             "example": "/path/to/repo",
             "description": "Working directory for command execution. Defaults to repository root if not specified. Use absolute path or path relative to current directory.",
             "type": "string"
+          },
+          "expectNonZeroExit": {
+            "example": "true",
+            "description": "When \u0027true\u0027, non-zero exit codes are treated as expected outcomes: suppresses ERROR stack trace logging (logs a single DEBUG line instead) while still propagating the failure.",
+            "type": "string"
           }
         }
       },

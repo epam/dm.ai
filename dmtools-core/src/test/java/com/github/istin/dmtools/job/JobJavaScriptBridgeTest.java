@@ -1280,6 +1280,130 @@ class JobJavaScriptBridgeTest {
             ));
         }
     }
+
+    @Test
+    void testCliExecuteCommandExpectedNonZeroExitLogsDebugWithoutError() throws Exception {
+        String jsCode = """
+            function action(params) {
+                try {
+                    cli_execute_command({ command: 'git check-ignore -q -- factory-kit', expectNonZeroExit: true });
+                    return 'ignored';
+                } catch (e) {
+                    return 'not-ignored';
+                }
+            }
+            """;
+
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            com.github.istin.dmtools.common.utils.CliCommandFailedException cause =
+                new com.github.istin.dmtools.common.utils.CliCommandFailedException(
+                    "git check-ignore -q -- factory-kit", 1, "");
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("cli_execute_command"),
+                any(Map.class),
+                any(Map.class)
+            )).thenThrow(new java.io.IOException("Command execution failed: " + cause.getMessage(), cause));
+
+            withBridgeCapturedLogs(org.apache.logging.log4j.Level.DEBUG, events, () -> {
+                Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+                assertEquals("not-ignored", result);
+            });
+        }
+
+        boolean hasErrorLog = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR);
+        assertFalse(hasErrorLog, "Expected non-zero exit must not log ERROR in JobJavaScriptBridge");
+
+        boolean hasDebugLog = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.DEBUG
+                        && e.getMessage().getFormattedMessage().contains("exited with expected non-zero status")
+                        && e.getThrown() == null);
+        assertTrue(hasDebugLog, "Expected non-zero exit must log single-line DEBUG without throwable");
+    }
+
+    @Test
+    void testToolExecutionFailureLogsWithoutStackTraceAtDefaultLevel() throws Exception {
+        String jsCode = """
+            function action(params) {
+                try {
+                    cli_execute_command({ command: 'git status' });
+                } catch (e) {
+                    return 'caught';
+                }
+            }
+            """;
+
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("cli_execute_command"),
+                any(Map.class),
+                any(Map.class)
+            )).thenThrow(new java.io.IOException("Unexpected command failure"));
+
+            withBridgeCapturedLogs(org.apache.logging.log4j.Level.DEBUG, events, () -> {
+                Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+                assertEquals("caught", result);
+            });
+        }
+
+        boolean hasErrorWithoutThrowable = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR
+                        && e.getMessage().getFormattedMessage().contains("Tool execution failed for cli_execute_command")
+                        && e.getThrown() == null);
+        assertTrue(hasErrorWithoutThrowable, "At DEBUG level, tool execution failure should log ERROR without stack trace");
+    }
+
+    private interface BridgeThrowingRunnable {
+        void run() throws Exception;
+    }
+
+    private void withBridgeCapturedLogs(
+            org.apache.logging.log4j.Level level,
+            java.util.List<org.apache.logging.log4j.core.LogEvent> events,
+            BridgeThrowingRunnable body) throws Exception {
+        String loggerName = JobJavaScriptBridge.class.getName();
+        org.apache.logging.log4j.core.LoggerContext context =
+                (org.apache.logging.log4j.core.LoggerContext) org.apache.logging.log4j.LogManager.getContext(false);
+        org.apache.logging.log4j.core.config.Configuration configuration = context.getConfiguration();
+        org.apache.logging.log4j.core.layout.PatternLayout layout =
+                org.apache.logging.log4j.core.layout.PatternLayout.createDefaultLayout();
+        String appenderName = "bridge-test-capture-" + System.nanoTime();
+        org.apache.logging.log4j.core.appender.AbstractAppender capture =
+                new org.apache.logging.log4j.core.appender.AbstractAppender(appenderName, null, layout, false, null) {
+                    @Override
+                    public void append(org.apache.logging.log4j.core.LogEvent event) {
+                        events.add(event.toImmutable());
+                    }
+                };
+        capture.start();
+        configuration.addAppender(capture);
+        org.apache.logging.log4j.core.config.LoggerConfig loggerConfig =
+                configuration.getLoggerConfig(loggerName);
+        boolean createdLoggerConfig = false;
+        if (!loggerName.equals(loggerConfig.getName())) {
+            loggerConfig = new org.apache.logging.log4j.core.config.LoggerConfig(loggerName, level, true);
+            configuration.addLogger(loggerName, loggerConfig);
+            createdLoggerConfig = true;
+        }
+        org.apache.logging.log4j.Level previousLevel = loggerConfig.getLevel();
+        loggerConfig.setLevel(level);
+        loggerConfig.addAppender(capture, level, null);
+        context.updateLoggers();
+        try {
+            body.run();
+        } finally {
+            loggerConfig.removeAppender(appenderName);
+            if (createdLoggerConfig) {
+                configuration.removeLogger(loggerName);
+            } else {
+                loggerConfig.setLevel(previousLevel);
+            }
+            capture.stop();
+            context.updateLoggers();
+        }
+    }
 }
 
 
