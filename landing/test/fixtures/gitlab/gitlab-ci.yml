@@ -1,0 +1,97 @@
+stages:
+  - quality
+  - agent
+  - merge
+
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $DMTOOLS_FACTORY_TRIGGER == "issue_webhook"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: never
+
+default:
+  image: eclipse-temurin:21-jdk
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends curl git jq unzip
+    - curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+    - mkdir -p /tmp/dmtools-fa-setup
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/_common.sh -o /tmp/dmtools-fa-setup/_common.sh
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/fa.sh -o /tmp/dmtools-fa-setup/fa.sh
+    - FA_INSTALL_DIR="$HOME/.local/bin" bash /tmp/dmtools-fa-setup/fa.sh
+    - export PATH="$HOME/.local/bin:$PATH"
+    - fa --version
+
+@@QUALITY_JOB@@
+variables:
+  DMTOOLS_PACK_REGISTRY:
+    value: https://github.com/IstiN/dmtools-agents/releases/latest/download
+    description: Release registry URL used to resolve generated agent packs.
+  DMTOOLS_AGENT_CONFIG:
+    value: .dmtools/runners/fa-story-dev.json
+    description: Runner configuration for a manual factory run.
+
+poll-assigned-issues:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $DMTOOLS_FACTORY_TRIGGER == "issue_webhook"'
+  script:
+    - bash .dmtools/scripts/gitlab-factory-poll-issues.sh
+
+ai-teammate:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_TICKET_ID'
+  script:
+    - |
+      if [ ! -f "$DMTOOLS_AGENT_CONFIG" ]; then
+        echo "DMTOOLS_AGENT_CONFIG must point to a generated runner JSON file."
+        exit 1
+      fi
+      dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"
+
+review-merge-request:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /agent:review/'
+  script:
+    - |
+      mkdir -p outputs/pr_review_comments
+      rm -f outputs/pr_review.json outputs/pr_review_general.md outputs/pr_review_comments/*.md
+      dmtools run .dmtools/runners/fa-review.json --inputTicketId "$CI_MERGE_REQUEST_IID"
+      bash .dmtools/scripts/gitlab-factory-publish-review.sh "$CI_MERGE_REQUEST_IID"
+      curl --silent --show-error --fail --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=ai_pr_reviewed" --form-string "remove_labels=agent:review" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" >/dev/null
+
+rework-merge-request:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /agent:rework/'
+  script:
+    - |
+      dmtools run .dmtools/runners/fa-rework.json --inputTicketId "$CI_MERGE_REQUEST_IID"
+      curl --silent --show-error --fail --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --form-string "add_labels=ai_developed" --form-string "remove_labels=agent:rework" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" >/dev/null
+
+merge-approved-merge-request:
+  stage: merge
+  resource_group: dmtools-agent-factory
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /pr_approved/'
+  script:
+    - |
+      author=$(curl --silent --show-error --fail \
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID" | jq -r '.author.username')
+      if [ "$author" != '@@MACHINE@@' ]; then
+        echo "Skipping merge: merge request author $author is not @@MACHINE@@."
+        exit 0
+      fi
+      curl --silent --show-error --fail --request PUT \
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        --form-string "merge_when_pipeline_succeeds=true" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/merge"

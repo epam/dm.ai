@@ -1,0 +1,18 @@
+quality:
+  stage: quality
+  image: golang:@@VERSION@@
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+      if [ -z "$(find . -name '*.go' -not -path './.*' -print -quit)" ]; then echo "No Go source files found — skipping quality checks."; exit 0; fi
+      unformatted=$(gofmt -l .)
+      if [ -n "$unformatted" ]; then echo "Files need gofmt:"; echo "$unformatted"; exit 1; fi
+      if [ ! -f go.mod ]; then echo "No go.mod found — skipping Go tests and CRAP analysis."; exit 0; fi
+      go vet ./...
+      if [ -z "$(find . -name '*_test.go' -not -path './.*' -print -quit)" ]; then echo "No Go tests found — skipping coverage and CRAP analysis."; exit 0; fi
+      go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      go install github.com/vabhzw17eg2qu4m9-bit/crap4go@latest
+      "$(go env GOPATH)/bin/crap4go" --coverage coverage.out

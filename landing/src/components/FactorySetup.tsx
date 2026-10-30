@@ -34,12 +34,15 @@ import {
   requiredSecrets,
   renderFiles,
   renderGitlabFiles,
+  loadGitlabTemplates,
+  GITLAB_WORKFLOW_SOURCE,
   validate,
   prBody,
   type CiDetection,
   type TokenCheck,
   type CiWorkflow,
   type FactoryConfig,
+  type GitlabTemplates,
   type ProviderEntry,
   type QualityPresetId,
   type RepoSummary,
@@ -175,6 +178,9 @@ export default function FactorySetup() {
   const [cfg, setCfg] = useState<FactoryConfig>(defaults);
   const [scm, setScm] = useState<ScmId>('github');
   const [gitlabBaseUrl, setGitlabBaseUrl] = useState('https://gitlab.com');
+  const [gitlabTemplates, setGitlabTemplates] = useState<GitlabTemplates | null>(null);
+  const [gitlabTemplateError, setGitlabTemplateError] = useState('');
+  const [gitlabTemplateAttempt, setGitlabTemplateAttempt] = useState(0);
   const [token, setToken] = useState('');
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [repoLoadError, setRepoLoadError] = useState('');
@@ -208,18 +214,40 @@ export default function FactorySetup() {
       return '';
     }
   }, [gitlabBaseUrl]);
-  const files = useMemo(
-    () =>
-      Object.keys(errors).length
-        ? []
-        : scm === 'gitlab'
-          ? renderGitlabFiles(cfg, normalizedGitlabBaseUrl)
-          : renderFiles(cfg),
-    [cfg, errors, scm, normalizedGitlabBaseUrl],
-  );
+  const generation = useMemo(() => {
+    if (Object.keys(errors).length) {
+      return { files: [], error: '' };
+    }
+    try {
+      if (scm === 'gitlab') {
+        return { files: gitlabTemplates ? renderGitlabFiles(cfg, gitlabTemplates, normalizedGitlabBaseUrl) : [], error: '' };
+      }
+      return {
+        files: renderFiles(cfg),
+        error: '',
+      };
+    } catch (error) {
+      return { files: [], error: (error as Error).message };
+    }
+  }, [cfg, errors, scm, normalizedGitlabBaseUrl, gitlabTemplates]);
+  const files = generation.files;
+  const templateError = gitlabTemplateError || generation.error;
   const set = <K extends keyof FactoryConfig>(k: K, v: FactoryConfig[K]) => setCfg((c) => ({ ...c, [k]: v }));
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const show = (k: string) => (touched[k] ? errors[k] : undefined);
+
+  useEffect(() => {
+    if (scm !== 'gitlab') return;
+    const controller = new AbortController();
+    setGitlabTemplates(null);
+    setGitlabTemplateError('');
+    loadGitlabTemplates(controller.signal).then((templates) => {
+      if (!controller.signal.aborted) setGitlabTemplates(templates);
+    }).catch((error: Error) => {
+      if (!controller.signal.aborted) setGitlabTemplateError(`Unable to load GitLab parent workflows: ${error.message}`);
+    });
+    return () => controller.abort();
+  }, [scm, gitlabTemplateAttempt]);
 
   useEffect(() => {
     const ids = ['step-repo', 'step-fa', 'step-providers', 'step-ci', 'step-runtime', 'step-secrets'];
@@ -437,6 +465,9 @@ export default function FactorySetup() {
     const log = (m: string) => setLines((l) => [...l, m]);
     try {
       if (scm === 'gitlab') {
+        if (!gitlabTemplates || templateError) {
+          throw new Error(templateError || 'GitLab parent workflows have not loaded yet.');
+        }
         const wanted = Object.fromEntries(
           requiredSecrets(cfg, scm, normalizedGitlabBaseUrl).map((x) => [x.name, secretVals[x.name] ?? '']),
         );
@@ -447,7 +478,7 @@ export default function FactorySetup() {
             .then(setExistingLabels)
             .catch(() => {});
         }
-        const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log);
+        const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log, gitlabTemplates);
         setSecretVals({});
         setPrUrl(mergeRequest);
         await ensureGitlabIssueEventWebhook(token, cfg.repo, normalizedGitlabBaseUrl, cfg.baseBranch, log);
@@ -492,7 +523,8 @@ export default function FactorySetup() {
     Object.keys(errors).length === 0 &&
     !tokenInfo?.missingScopes.length &&
     (scm === 'gitlab' || cfg.createRepo || tokenInfo?.push !== false) &&
-    (scm !== 'gitlab' || Boolean(normalizedGitlabBaseUrl));
+    !generation.error &&
+    (scm !== 'gitlab' || (Boolean(normalizedGitlabBaseUrl) && Boolean(gitlabTemplates) && !templateError));
 
   const ciMode: 'existing' | 'crap4' | 'none' = !isCiEnabled(cfg)
     ? 'none'
@@ -1631,15 +1663,19 @@ export default function FactorySetup() {
             {!canSubmit && !busy && (
               <small className="factory__submitHint">
                 {scm === 'gitlab'
-                  ? !normalizedGitlabBaseUrl
-                    ? 'Enter a valid GitLab instance URL.'
-                    : token.length <= 20
-                      ? 'Enter a GitLab personal access token in Step 1.'
-                      : !tokenInfo
-                        ? 'Wait for GitLab to validate the token.'
-                        : Object.keys(errors).length > 0
-                          ? `Complete required fields (${Object.keys(errors).map((k) => LABELS[k] ?? k).join(', ')}).`
-                          : 'Verify GitLab project permissions and try again.'
+                  ? templateError
+                    ? templateError
+                    : !gitlabTemplates
+                      ? 'Loading GitLab parent workflow templates…'
+                      : !normalizedGitlabBaseUrl
+                        ? 'Enter a valid GitLab instance URL.'
+                        : token.length <= 20
+                          ? 'Enter a GitLab personal access token in Step 1.'
+                          : !tokenInfo
+                            ? 'Wait for GitLab to validate the token.'
+                            : Object.keys(errors).length > 0
+                              ? `Complete required fields (${Object.keys(errors).map((k) => LABELS[k] ?? k).join(', ')}).`
+                              : 'Verify GitLab project permissions and try again.'
                   : token.length <= 20
                     ? 'Enter your GitHub setup token in Step 1 to enable PR creation.'
                     : Object.keys(errors).length > 0
@@ -1709,7 +1745,18 @@ export default function FactorySetup() {
             {files.length === 0 && (
               <div className="factory__empty">
                 {scm === 'gitlab' ? (
-                  <p>Workflow generation is currently available for GitHub repositories only.</p>
+                  <>
+                    <p role={templateError ? 'alert' : undefined}>
+                      {templateError || (!gitlabTemplates
+                        ? `Loading templates from ${GITLAB_WORKFLOW_SOURCE.repository}@${GITLAB_WORKFLOW_SOURCE.ref}…`
+                        : 'Complete the required fields to preview the GitLab setup.')}
+                    </p>
+                    {templateError && (
+                      <button type="button" className="btn btn--ghost factory__mini" onClick={() => setGitlabTemplateAttempt((attempt) => attempt + 1)}>
+                        Retry loading templates
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <>
                     <p>The preview appears once these are set:</p>

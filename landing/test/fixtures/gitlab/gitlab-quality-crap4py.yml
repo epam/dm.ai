@@ -1,0 +1,21 @@
+quality:
+  stage: quality
+  image: python:@@VERSION@@
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+      python -m pip install --upgrade pip
+      if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install -e .; fi
+      if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      pip install coverage pytest git+https://github.com/vabhzw17eg2qu4m9-bit/crap4py.git
+      if [ -z "$(find . -name '*.py' -not -path './.*' -not -path './venv/*' -print -quit)" ]; then echo "No Python files found — skipping quality checks."; exit 0; fi
+      set +e
+      coverage run -m pytest
+      test_status=$?
+      set -e
+      if [ "$test_status" -eq 5 ]; then echo "No tests collected — skipping coverage and CRAP analysis."; exit 0; elif [ "$test_status" -ne 0 ]; then exit "$test_status"; fi
+      coverage json -o coverage.json
+      crap4py --coverage coverage.json
