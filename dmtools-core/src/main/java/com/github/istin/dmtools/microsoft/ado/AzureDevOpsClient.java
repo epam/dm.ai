@@ -764,6 +764,28 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         });
     }
 
+    @MCPTool(
+            name = "ado_get_work_item_type_states",
+            description = "List the valid states for a work item type in the project (e.g., New, Active, Resolved, Closed)",
+            integration = "ado",
+            category = "work_item_management"
+    )
+    public String getWorkItemTypeStates(
+            @MCPParam(name = "workItemType", description = "The work item type (e.g. User Story, Bug, Task)", required = true, example = "User Story", aliases = {"issueType", "type"})
+            String workItemType,
+            @MCPParam(name = "project", description = "The project name (defaults to the configured project)", required = false)
+            String projectName
+    ) throws IOException {
+        if (workItemType == null || workItemType.trim().isEmpty()) {
+            throw new IllegalArgumentException("workItemType must not be empty");
+        }
+        String targetProject = (projectName != null && !projectName.trim().isEmpty()) ? projectName.trim() : project;
+        String encodedType = workItemType.trim().replace(" ", "%20");
+        String path = String.format("/%s/_apis/wit/workitemtypes/%s/states", targetProject, encodedType);
+        GenericRequest request = new GenericRequest(this, path(path)).param("api-version", API_VERSION);
+        return execute(request);
+    }
+
     // ========== Label/Tag Operations ==========
 
     @MCPTool(
@@ -2429,10 +2451,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
                 throw AbstractRestClient.printAndCreateException(request, response);
             }
         } catch (IOException e) {
-            logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
-            
             // Check if it's a recoverable connection error
             boolean isRecoverableError = isRecoverableConnectionError(e);
+            if (isRecoverableError) {
+                logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            }
             
             // Maximum of 3 attempts (2 retries)
             final int MAX_RETRIES = 2;
@@ -2451,7 +2474,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
                 return patch(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
-                    logger.error("Non-recoverable PATCH connection error for URL: {}", url, e);
+                    logNonRecoverableError("PATCH", url, e);
                 } else if (retryCount >= MAX_RETRIES) {
                     logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
                 }

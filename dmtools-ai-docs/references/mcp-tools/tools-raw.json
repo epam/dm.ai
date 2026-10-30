@@ -4592,6 +4592,29 @@
     },
     {
       "integration": "ado",
+      "name": "ado_get_work_item_type_states",
+      "category": "work_item_management",
+      "inputSchema": {
+        "required": [
+          "workItemType"
+        ],
+        "type": "object",
+        "properties": {
+          "workItemType": {
+            "example": "User Story",
+            "description": "The work item type (e.g. User Story, Bug, Task)",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project name (defaults to the configured project)",
+            "type": "string"
+          }
+        }
+      },
+      "description": "List the valid states for a work item type in the project (e.g., New, Active, Resolved, Closed)"
+    },
+    {
+      "integration": "ado",
       "name": "ado_add_work_item_label",
       "category": "work_item_management",
       "inputSchema": {

@@ -2011,6 +2011,26 @@ file_write("output.txt", "content");
       "required": ["question"]
     },
     "description": "Ask a natural-language question via Atlassian Rovo MCP using AGENTIC search mode; automatically falls back to STANDARD semantic search when Agentic search returns 403 or is not enabled."
+    "description": "Ask a natural-language question via Atlassian Rovo MCP using AGENTIC search mode; automatically falls back to STANDARD semantic search when Agentic search returns 403 or is not enabled."
+  },
+  {
+    "name": "ado_get_work_item_type_states",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workItemType": {
+          "type": "string",
+          "description": "The work item type (e.g. User Story, Bug, Task)",
+          "example": "User Story"
+        },
+        "project": {
+          "type": "string",
+          "description": "The project name (defaults to the configured project)"
+        }
+      },
+      "required": ["workItemType"]
+    },
+    "description": "List the valid states for a work item type in the project (e.g., New, Active, Resolved, Closed)"
   }
 ]}
 
