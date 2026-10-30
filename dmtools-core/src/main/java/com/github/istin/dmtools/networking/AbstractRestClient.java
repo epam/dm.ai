@@ -13,6 +13,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -212,6 +213,12 @@ public abstract class AbstractRestClient implements RestClient {
             if (body.contains("No issues have a parent epic with key or name")) {
                 return new IOException(RestClientException.NO_SUCH_PARENT_EPICS);
             }
+            String adoFieldValidationError = formatAdoFieldValidationError(body);
+            if (adoFieldValidationError != null) {
+                String sanitizedUrl = sanitizeUrl(request.url().toString());
+                logger.warn("HTTP 400 validation error for {}: {}", sanitizedUrl, adoFieldValidationError);
+                return new RestClient.RestClientException(adoFieldValidationError, body, code);
+            }
         } else if (code == 429 || body.toLowerCase().contains("rate limit")) {
             logger.error("Rate limit response body:\n{}", body);
             return new RateLimitException("rate limit", body, response, code);
@@ -220,10 +227,71 @@ public abstract class AbstractRestClient implements RestClient {
         String responseError = "printAndCreateException error: " + sanitizedUrl + "\n" + body + "\n" + response.message() + "\n" + code;
         if (code == 404 && sanitizedUrl.contains("/issue/")) {
             logger.debug(responseError);
+        } else if (code == 400) {
+            logger.warn(responseError);
         } else {
             logger.error(responseError);
         }
         return new RestClient.RestClientException(responseError, body, code);
+    }
+
+    /**
+     * Extracts a structured JSON message {@code {"status":400,"field":...,"message":...,"flags":...}}
+     * when an HTTP 400 response body is an Azure DevOps work item field validation error
+     * (e.g. {@code FieldStatusFlags} / {@code invalidListValue} / {@code customProperties.ErrorMessage}).
+     * Returns {@code null} when the body does not match an ADO field validation error.
+     */
+    static String formatAdoFieldValidationError(String body) {
+        if (body == null || body.isEmpty()) {
+            return null;
+        }
+        if (!body.contains("FieldStatusFlags") && !body.contains("invalidListValue") && !body.contains("RuleValidationException")) {
+            return null;
+        }
+        try {
+            JSONObject json = new JSONObject(body);
+            JSONObject customProps = json.optJSONObject("customProperties");
+            String errorMessage = customProps != null
+                    ? customProps.optString("ErrorMessage", json.optString("message", ""))
+                    : json.optString("message", "");
+            if (errorMessage.isEmpty()) {
+                return null;
+            }
+            String flags = customProps != null ? customProps.optString("FieldStatusFlags", "") : "";
+            String fieldName = customProps != null ? customProps.optString("FieldReferenceName", "") : "";
+            if (fieldName.isEmpty() && customProps != null) {
+                fieldName = customProps.optString("FieldName", "");
+            }
+            if (fieldName.isEmpty()) {
+                fieldName = inferAdoFieldReferenceName(errorMessage);
+            }
+            JSONObject structured = new JSONObject()
+                    .put("status", 400)
+                    .put("field", fieldName)
+                    .put("message", errorMessage);
+            if (!flags.isEmpty()) {
+                structured.put("flags", flags);
+            }
+            return structured.toString();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String inferAdoFieldReferenceName(String errorMessage) {
+        int start = errorMessage.indexOf("The field '");
+        if (start >= 0) {
+            int nameStart = start + "The field '".length();
+            int nameEnd = errorMessage.indexOf('\'', nameStart);
+            if (nameEnd > nameStart) {
+                String name = errorMessage.substring(nameStart, nameEnd);
+                if ("State".equalsIgnoreCase(name)) {
+                    return "System.State";
+                }
+                return name.contains(".") ? name : "System." + name;
+            }
+        }
+        return "";
     }
 
     public void setClearCache(boolean clearCache) throws IOException {
@@ -444,9 +512,8 @@ public abstract class AbstractRestClient implements RestClient {
                         attemptNumber++;
                     } else {
                         if (!isRecoverableError) {
-                            logger.error("Non-recoverable error for URL: {}", url, e);
+                            logNonRecoverableError("GET", url, e);
                         } else {
-                            retryPolicy.logMaxRetriesExceeded(url, e);
                         }
                         throw e;
                     }
@@ -612,9 +679,8 @@ public abstract class AbstractRestClient implements RestClient {
                     attemptNumber++;
                 } else {
                     if (!isRecoverableError) {
-                        logger.error("Non-recoverable POST error for URL: {}", url, e);
+                        logNonRecoverableError("POST", url, e);
                     } else {
-                        retryPolicy.logMaxRetriesExceeded(url, e);
                     }
                     throw e;
                 }
@@ -688,7 +754,7 @@ public abstract class AbstractRestClient implements RestClient {
                 return put(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
-                    logger.error("Non-recoverable PUT connection error for URL: {}", url, e);
+                    logNonRecoverableError("PUT", url, e);
                 } else if (retryCount >= maxRetries) {
                     logger.error("Max PUT retries ({}) exceeded for URL: {}. Final error: {}", maxRetries, url, e.getMessage());
                 }
@@ -752,7 +818,7 @@ public abstract class AbstractRestClient implements RestClient {
                 return patch(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
-                    logger.error("Non-recoverable PATCH connection error for URL: {}", url, e);
+                    logNonRecoverableError("PATCH", url, e);
                 } else if (retryCount >= maxRetries) {
                     logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", maxRetries, url, e.getMessage());
                 }
@@ -826,6 +892,15 @@ public abstract class AbstractRestClient implements RestClient {
     public void cleanupConnectionPool() {
         client.connectionPool().evictAll();
         logger.debug("Connection pool manually cleaned up");
+    }
+
+    protected void logNonRecoverableError(String method, String url, IOException e) {
+        if (e instanceof RestClient.RestClientException && ((RestClient.RestClientException) e).getCode() == 400) {
+            logger.warn("Non-recoverable {} 400 error for URL: {} - {}", method, sanitizeUrl(url), e.getMessage());
+            logger.debug("Stack trace for {} 400 error on {}", method, sanitizeUrl(url), e);
+        } else {
+            logger.error("Non-recoverable {} connection error for URL: {}", method, sanitizeUrl(url), e);
+        }
     }
 
     public interface Performer<T> {

@@ -1,6 +1,6 @@
 # ADO MCP Tools
 
-**Total Tools**: 44
+**Total Tools**: 45
 
 ## Quick Reference
 
@@ -49,6 +49,7 @@ const result = ado_get_work_item_comments(...);
 | `ado_get_user_by_email` | Get user information by email address in Azure DevOps | `email` (string, **required**) |
 | `ado_get_work_item` | Get a specific Azure DevOps work item by ID with optional field filtering | `id` (string, **required**)<br>`fields` (array, optional) |
 | `ado_get_work_item_comments` | Get all comments for a work item | `id` (string, **required**)<br>`ticket` (object, optional) |
+| `ado_get_work_item_type_states` | List the valid states for a work item type in the project (e.g., New, Active, Resolved, Closed) | `workItemType` (string, **required**)<br>`project` (string, optional) |
 | `ado_link_work_items` | Link two work items with a relationship (e.g., Parent-Child, Related, Tested By) | `sourceId` (string, **required**)<br>`targetId` (string, **required**)<br>`relationship` (string, **required**) |
 | `ado_list_pipeline_runs` | List recent runs of a pipeline. Equivalent to github_list_workflow_runs. | `pipelineId` (number, **required**)<br>`top` (number, optional) |
 | `ado_list_pipelines` | List all pipelines defined in the ADO project. | None |
@@ -731,6 +732,31 @@ dmtools ado_get_work_item_comments "value" "value"
 ```javascript
 // In JavaScript agent
 const result = ado_get_work_item_comments("id", "ticket");
+```
+
+---
+
+### `ado_get_work_item_type_states`
+
+List the valid states for a work item type in the project (e.g., New, Active, Resolved, Closed)
+
+**Parameters:**
+
+- **`workItemType`** (string) 🔴 Required
+  - The work item type (e.g. User Story, Bug, Task)
+  - Example: `User Story`
+
+- **`project`** (string) ⚪ Optional
+  - The project name (defaults to the configured project)
+
+**Example:**
+```bash
+dmtools ado_get_work_item_type_states "User Story"
+```
+
+```javascript
+// In JavaScript agent
+const result = ado_get_work_item_type_states("User Story");
 ```
 
 ---
