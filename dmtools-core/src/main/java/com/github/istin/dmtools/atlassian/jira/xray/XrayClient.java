@@ -959,11 +959,6 @@ public class XrayClient extends JiraClient<Ticket> {
     }
 
     @Override
-    public void deleteCommentIfExists(String ticketKey, String comment) throws IOException {
-        // Empty implementation like BasicJiraClient
-    }
-
-    @Override
     public String[] getDefaultQueryFields() {
         return defaultJiraFields;
     }
