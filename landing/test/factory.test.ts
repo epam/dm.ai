@@ -24,6 +24,10 @@ import {
   normalizeGitlabBaseUrl,
   TOKEN_LINKS,
   renderGitlabFiles,
+  loadGitlabTemplates,
+  GITLAB_TEMPLATE_NAMES,
+  GITLAB_WORKFLOW_SOURCE,
+  type GitlabTemplates,
   ensureGitlabIssueEventWebhook,
   removeGitlabIssueEventWebhook,
   putGitlabVariables,
@@ -37,10 +41,95 @@ import {
 } from '../src/lib/factory.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
+const gitlabTemplates = Object.fromEntries(GITLAB_TEMPLATE_NAMES.map((name) => [
+  name, readFileSync(resolve(here, 'fixtures/gitlab', name), 'utf8'),
+])) as GitlabTemplates;
+
+describe('GitLab parent workflow loading', () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('loads all templates from the requested parent branch without credentials', async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input);
+      calls.push({ url, init });
+      const name = url.split('/').at(-1) as keyof GitlabTemplates;
+      return new Response(gitlabTemplates[name]);
+    }) as typeof fetch;
+    const controller = new AbortController();
+    assert.deepEqual(await loadGitlabTemplates(controller.signal), gitlabTemplates);
+    assert.equal(calls.length, 8);
+    for (const { url, init } of calls) {
+      assert.ok(url.startsWith('https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/feat/gitlab-agent-workflows/gitlab/'));
+      assert.equal(init?.credentials, 'omit');
+      assert.equal(init?.headers, undefined, 'GitLab tokens must never be sent to the parent repository');
+      assert.equal(init?.signal, controller.signal);
+    }
+    assert.equal(GITLAB_WORKFLOW_SOURCE.ref, 'feat/gitlab-agent-workflows');
+  });
+
+  for (const status of [404, 500]) {
+    it(`rejects HTTP ${status} instead of using local templates`, async () => {
+      globalThis.fetch = (async () => new Response('unavailable', { status })) as typeof fetch;
+      await assert.rejects(loadGitlabTemplates(), new RegExp(`Failed to load GitLab template.*HTTP ${status}`));
+    });
+  }
+
+  it('rejects empty templates', async () => {
+    globalThis.fetch = (async () => new Response(' \n')) as typeof fetch;
+    await assert.rejects(loadGitlabTemplates(), /GitLab template.*is empty/);
+  });
+
+  it('propagates network and cancellation failures', async () => {
+    globalThis.fetch = (async () => { throw new Error('network unavailable'); }) as typeof fetch;
+    await assert.rejects(loadGitlabTemplates(), /network unavailable/);
+    globalThis.fetch = (async (_input, init) => {
+      init?.signal?.throwIfAborted();
+      return new Response('');
+    }) as typeof fetch;
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(loadGitlabTemplates(controller.signal), { name: 'AbortError' });
+  });
+
+  it('uses the fetched parent content when rendering setup files', async () => {
+    globalThis.fetch = (async (input) => {
+      const name = String(input).split('/').at(-1) as keyof GitlabTemplates;
+      return new Response(name === 'gitlab-ci.yml'
+        ? `# parent workflow revision\n${gitlabTemplates[name]}`
+        : gitlabTemplates[name]);
+    }) as typeof fetch;
+    const files = renderGitlabFiles(validConfig(), await loadGitlabTemplates());
+    assert.match(files.find((file) => file.path === '.gitlab-ci.yml')!.content, /^# parent workflow revision/);
+  });
+
+  it('rejects unsupported parent placeholders before generating a merge request', async () => {
+    const templates = { ...gitlabTemplates, 'gitlab-ci.yml': '@@UNSUPPORTED_INPUT@@' };
+    const calls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      calls.push(String(input));
+      throw new Error('must not reach GitLab');
+    }) as typeof fetch;
+    await assert.rejects(createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig(), () => {}, templates),
+      /Unresolved GitLab template placeholder/);
+    assert.deepEqual(calls, []);
+  });
+
+  it('does not access GitLab when the parent templates fail to load', async () => {
+    const urls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      urls.push(String(input));
+      return new Response('unavailable', { status: 503 });
+    }) as typeof fetch;
+    await assert.rejects(createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig()), /HTTP 503/);
+    assert.ok(urls.every((url) => url.startsWith('https://raw.githubusercontent.com/')));
+  });
+});
 
 describe('GitLab factory templates', () => {
   const template = (name: string) =>
-    readFileSync(resolve(here, '../src/lib/factory-templates/gitlab', name), 'utf8');
+    readFileSync(resolve(here, 'fixtures/gitlab', name), 'utf8');
 
   const qualityCases = [
     { preset: 'crap4js', toolchain: 'node', version: '24', fallback: '22' },
@@ -59,7 +148,7 @@ describe('GitLab factory templates', () => {
           qualityPreset: preset,
           toolchains: customVersion ? { [toolchain]: version } : {},
         });
-        const files = renderGitlabFiles(config);
+        const files = renderGitlabFiles(config, gitlabTemplates);
         const quality = template(`gitlab-quality-${preset}.yml`)
           .replaceAll('@@VERSION@@', customVersion ? version : fallback);
         const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
@@ -81,7 +170,7 @@ describe('GitLab factory templates', () => {
     validConfig({ ciEnabled: false, qualityPreset: 'crap4js' }),
   ]) {
     it(`omits quality stage and job when ${config.ciEnabled === false ? 'CI is disabled' : 'no preset is selected'}`, () => {
-      const pipeline = renderGitlabFiles(config).find((file) => file.path === '.gitlab-ci.yml')!.content;
+      const pipeline = renderGitlabFiles(config, gitlabTemplates).find((file) => file.path === '.gitlab-ci.yml')!.content;
       assert.equal(pipeline, template('gitlab-ci.yml')
         .replace('  - quality\n', '')
         .replaceAll('@@QUALITY_JOB@@', '')
@@ -92,7 +181,7 @@ describe('GitLab factory templates', () => {
 
   it('renders shell templates with configuration and preserves valid Bash syntax', () => {
     const config = validConfig({ machine: 'factory-bot', baseBranch: 'release/test' });
-    const files = renderGitlabFiles(config);
+    const files = renderGitlabFiles(config, gitlabTemplates);
     for (const name of ['gitlab-factory-poll-issues.sh', 'gitlab-factory-publish-review.sh']) {
       const script = files.find((file) => file.path === `.dmtools/scripts/${name}`)!.content;
       assert.equal(script, template(name)
@@ -185,7 +274,7 @@ describe('Source control options', () => {
 
   it('renders GitLab-native factory jobs and configures GitLab runner settings', () => {
     const cfg = validConfig();
-    const files = renderGitlabFiles(cfg, 'https://gitlab.example.com/gitlab');
+    const files = renderGitlabFiles(cfg, gitlabTemplates, 'https://gitlab.example.com/gitlab');
     assert.ok(files.some((file) => file.path === '.gitlab-ci.yml'));
     assert.ok(files.every((file) => !file.path.startsWith('.github/')));
     assert.ok(files.some((file) => file.path === '.dmtools/config.js'));
@@ -251,7 +340,7 @@ describe('Source control options', () => {
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "trigger" && \$DMTOOLS_FACTORY_TRIGGER == "issue_webhook"/);
     assert.match(pipeline, /poll-assigned-issues:[\s\S]*?rules:\n    - if: '\$CI_PIPELINE_SOURCE == "trigger"/);
     assert.doesNotMatch(pipeline, /CI_PIPELINE_SOURCE == "schedule"/);
-    const qualityFiles = renderGitlabFiles(validConfig({ qualityPreset: 'crap4js' }));
+    const qualityFiles = renderGitlabFiles(validConfig({ qualityPreset: 'crap4js' }), gitlabTemplates);
     const qualityPipeline = qualityFiles.find((file) => file.path === '.gitlab-ci.yml')!.content;
     assert.match(qualityPipeline, /  - quality/);
     assert.match(qualityPipeline, /image: node:22/);
@@ -572,39 +661,53 @@ describe('Source control options', () => {
     }
   });
 
-  it('commits GitLab setup files and opens a merge request', async () => {
-    const origFetch = globalThis.fetch;
-    const calls: { url: string; init?: RequestInit }[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      calls.push({ url, init });
-      if (url.endsWith('/projects/team%2Fapp')) {
-        return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
-      }
-      if (url.includes('/repository/tree?')) return new Response(JSON.stringify([]), { status: 200 });
-      if (url.endsWith('/merge_requests')) {
-        return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
-      }
-      return new Response(JSON.stringify({ id: 1 }), { status: 201 });
-    }) as typeof fetch;
+  for (const reuseTemplates of [false, true]) {
+    it(`commits GitLab setup files using ${reuseTemplates ? 'preview' : 'downloaded'} templates and opens a merge request`, async () => {
+      const origFetch = globalThis.fetch;
+      const calls: { url: string; init?: RequestInit }[] = [];
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, init });
+        if (url.startsWith('https://raw.githubusercontent.com/')) {
+          const name = url.split('/').at(-1) as keyof GitlabTemplates;
+          return new Response(gitlabTemplates[name]);
+        }
+        if (url.endsWith('/projects/team%2Fapp')) {
+          return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
+        }
+        if (url.includes('/repository/tree?')) return new Response(JSON.stringify([]), { status: 200 });
+        if (url.endsWith('/merge_requests')) {
+          return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+        }
+        return new Response(JSON.stringify({ id: 1 }), { status: 201 });
+      }) as typeof fetch;
 
-    try {
-      const mrUrl = await createGitlabMergeRequest(
-        'glpat_test-token-123456789',
-        'team/app',
-        'https://gitlab.example.com',
-        validConfig({ repo: 'team/app', baseBranch: 'main' }),
-      );
-      assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
-      const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
-      const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string }[];
-      assert.ok(actions.some((file) => file.file_path === '.gitlab-ci.yml'));
-      assert.ok(actions.every((file) => !file.file_path.startsWith('.github/')));
-      assert.ok(calls.some((call) => call.url.endsWith('/merge_requests')));
-    } finally {
-      globalThis.fetch = origFetch;
-    }
-  });
+      try {
+        const config = validConfig({ repo: 'team/app', baseBranch: 'main' });
+        const mrUrl = await createGitlabMergeRequest(
+          'glpat_test-token-123456789',
+          'team/app',
+          'https://gitlab.example.com',
+          config,
+          () => {},
+          reuseTemplates ? gitlabTemplates : undefined,
+        );
+        assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
+        const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
+        const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string; content: string }[];
+        assert.ok(actions.some((file) => file.file_path === '.gitlab-ci.yml'));
+        assert.ok(actions.every((file) => !file.file_path.startsWith('.github/')));
+        const preview = renderGitlabFiles(config, gitlabTemplates, 'https://gitlab.example.com');
+        assert.deepEqual(actions.map(({ file_path, content }) => ({ path: file_path, content })), preview);
+        const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
+        assert.ok(mergeRequest);
+        assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /IstiN\/dmtools-agentic-workflows@feat\/gitlab-agent-workflows/);
+        assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length, reuseTemplates ? 0 : 8);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+  }
 });
 
 describe('Issue #749 — agents repository link', () => {

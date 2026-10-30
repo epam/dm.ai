@@ -74,13 +74,21 @@ npm run check      # TypeScript and Astro diagnostics
 The folders separate platform-specific workflows from reusable configuration:
 
 - [`github/`](src/lib/factory-templates/github/): GitHub Actions workflow templates.
-- [`gitlab/`](src/lib/factory-templates/gitlab/): GitLab CI, shell scripts, and quality jobs.
+- [`gitlab/source.ts`](src/lib/factory-templates/gitlab/source.ts): the GitLab parent template source,
+  `IstiN/dmtools-agentic-workflows` at `feat/gitlab-agent-workflows`.
 - [`shared/`](src/lib/factory-templates/shared/): runner JSON templates and agent configuration used by both platforms.
 
-[`factory.ts`](src/lib/factory.ts) selects templates and replaces `@@...@@`
-placeholders with setup values. Edit workflow and shell content in the templates,
-not as embedded strings in the renderer. Run `npm test` to check rendering and
-GitLab shell syntax.
+[`factory.ts`](src/lib/factory.ts) loads GitLab CI, scripts, and quality templates
+from the parent's `gitlab/` directory during setup and replaces `@@...@@`
+placeholders with setup values. The preview and merge request use the same loaded
+templates. Loading errors block setup and offer a retry; there is no local fallback.
+Generated files are committed to the target repository, so pipelines do not fetch
+these templates at runtime and parent changes take effect on the next setup.
+
+Edit GitHub workflow content locally; edit GitLab workflow content in the parent
+repository. [`test/fixtures/gitlab/`](test/fixtures/gitlab/) contains offline
+parent-template snapshots for tests only, never production fallback content.
+Run `npm test` to check loading, rendering, and GitLab shell syntax.
 
 **Text that appears once** lives in its section under `src/sections/`.
 

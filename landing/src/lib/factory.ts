@@ -1,11 +1,4 @@
-import gitlabIssuePoller from './factory-templates/gitlab/gitlab-factory-poll-issues.sh?raw';
-import gitlabReviewPublisher from './factory-templates/gitlab/gitlab-factory-publish-review.sh?raw';
-import gitlabQualityJs from './factory-templates/gitlab/gitlab-quality-crap4js.yml?raw';
-import gitlabQualityDart from './factory-templates/gitlab/gitlab-quality-crap4dart.yml?raw';
-import gitlabQualityJava from './factory-templates/gitlab/gitlab-quality-crap4java.yml?raw';
-import gitlabQualityPy from './factory-templates/gitlab/gitlab-quality-crap4py.yml?raw';
-import gitlabQualityGo from './factory-templates/gitlab/gitlab-quality-crap4go.yml?raw';
-import gitlabCi from './factory-templates/gitlab/gitlab-ci.yml?raw';
+import { GITLAB_WORKFLOW_SOURCE } from './factory-templates/gitlab/source.ts';
 import aiTeammate from './factory-templates/github/ai-teammate.yml?raw';
 import machineSm from './factory-templates/github/machine-sm.yml?raw';
 import machineMerge from './factory-templates/github/machine-merge.yml?raw';
@@ -590,34 +583,66 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
   ];
 }
 
-function renderGitlabQualityJob(c: FactoryConfig): string | null {
+export { GITLAB_WORKFLOW_SOURCE };
+
+export const GITLAB_TEMPLATE_NAMES = [
+  'gitlab-ci.yml',
+  'gitlab-factory-poll-issues.sh',
+  'gitlab-factory-publish-review.sh',
+  'gitlab-quality-crap4js.yml',
+  'gitlab-quality-crap4dart.yml',
+  'gitlab-quality-crap4java.yml',
+  'gitlab-quality-crap4py.yml',
+  'gitlab-quality-crap4go.yml',
+] as const;
+
+export type GitlabTemplates = Record<typeof GITLAB_TEMPLATE_NAMES[number], string>;
+
+export async function loadGitlabTemplates(signal?: AbortSignal): Promise<GitlabTemplates> {
+  const { repository, ref } = GITLAB_WORKFLOW_SOURCE;
+  const entries = await Promise.all(GITLAB_TEMPLATE_NAMES.map(async (name) => {
+    const url = `https://raw.githubusercontent.com/${repository}/${ref}/gitlab/${name}`;
+    const response = await fetch(url, { credentials: 'omit', signal });
+    if (!response.ok) {
+      throw new Error(`Failed to load GitLab template ${name} from ${repository}@${ref}: HTTP ${response.status}`);
+    }
+    const content = await response.text();
+    if (!content.trim()) {
+      throw new Error(`GitLab template ${name} from ${repository}@${ref} is empty.`);
+    }
+    return [name, content];
+  }));
+  return Object.fromEntries(entries) as GitlabTemplates;
+}
+
+function renderGitlabQualityJob(c: FactoryConfig, templates: GitlabTemplates): string | null {
   if (!isCiEnabled(c)) return null;
   const preset = c.qualityPreset ?? 'none';
   if (preset === 'none') return null;
   const jobs = {
-    crap4js: { template: gitlabQualityJs, version: c.toolchains.node || '22' },
-    crap4dart: { template: gitlabQualityDart, version: c.toolchains.flutter || 'stable' },
-    crap4java: { template: gitlabQualityJava, version: c.toolchains.java || '21' },
-    crap4py: { template: gitlabQualityPy, version: c.toolchains.python || '3.12' },
-    crap4go: { template: gitlabQualityGo, version: c.toolchains.go || '1.23' },
+    crap4js: { template: templates['gitlab-quality-crap4js.yml'], version: c.toolchains.node || '22' },
+    crap4dart: { template: templates['gitlab-quality-crap4dart.yml'], version: c.toolchains.flutter || 'stable' },
+    crap4java: { template: templates['gitlab-quality-crap4java.yml'], version: c.toolchains.java || '21' },
+    crap4py: { template: templates['gitlab-quality-crap4py.yml'], version: c.toolchains.python || '3.12' },
+    crap4go: { template: templates['gitlab-quality-crap4go.yml'], version: c.toolchains.go || '1.23' },
   };
   const job = jobs[preset];
   return job.template.replaceAll('@@VERSION@@', job.version);
 }
 
 /** GitLab projects use native GitLab CI jobs; GitHub Actions files are intentionally omitted. */
-export function renderGitlabFiles(c: FactoryConfig, gitlabBaseUrl = 'https://gitlab.com'): FactoryFile[] {
+export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, gitlabBaseUrl = 'https://gitlab.com'): FactoryFile[] {
   const files = renderFiles(c).filter(
     (file) => !file.path.startsWith('.github/'),
   );
-  const qualityJob = renderGitlabQualityJob(c);
+  const qualityJob = renderGitlabQualityJob(c, templates);
   const runnerTemplates: Record<string, string> = {
     '.dmtools/runners/fa-bug-dev.json': runnerBug,
     '.dmtools/runners/fa-story-dev.json': runnerStory,
     '.dmtools/runners/fa-rework.json': runnerRework,
     '.dmtools/runners/fa-review.json': runnerReview,
   };
-  return [
+  const rendered = [
     ...files.map((file) => {
       const tpl = runnerTemplates[file.path];
       return tpl
@@ -626,22 +651,28 @@ export function renderGitlabFiles(c: FactoryConfig, gitlabBaseUrl = 'https://git
     }),
     {
       path: '.dmtools/scripts/gitlab-factory-poll-issues.sh',
-      content: gitlabIssuePoller
+      content: templates['gitlab-factory-poll-issues.sh']
         .replaceAll('@@MACHINE@@', c.machine)
         .replaceAll('@@BASE_BRANCH@@', c.baseBranch),
     },
     {
       path: '.dmtools/scripts/gitlab-factory-publish-review.sh',
-      content: gitlabReviewPublisher,
+      content: templates['gitlab-factory-publish-review.sh'],
     },
     {
       path: '.gitlab-ci.yml',
-      content: gitlabCi
+      content: templates['gitlab-ci.yml']
         .replace(/^  - quality\n/m, (stage) => qualityJob ? stage : '')
         .replaceAll('@@QUALITY_JOB@@', qualityJob ?? '')
         .replaceAll('@@MACHINE@@', c.machine),
     },
   ];
+  for (const file of rendered) {
+    if (/@@[A-Z_]+@@/.test(file.content)) {
+      throw new Error(`Unresolved GitLab template placeholder in ${file.path}. Check the parent workflow templates.`);
+    }
+  }
+  return rendered;
 }
 
 function mergeChecklist(c: FactoryConfig): string {
@@ -1174,11 +1205,12 @@ export async function createGitlabMergeRequest(
   baseUrl: string,
   c: FactoryConfig,
   log: (message: string) => void = () => {},
+  templates?: GitlabTemplates,
 ): Promise<string> {
+  const files = renderGitlabFiles(c, templates ?? await loadGitlabTemplates(), baseUrl);
   const project = gitlabProjectPath(repo);
   const projectInfo = await gitlabRequest<{ default_branch: string }>(token, baseUrl, `/projects/${project}`);
   const base = c.baseBranch || projectInfo.default_branch;
-  const files = renderGitlabFiles(c, baseUrl);
   const fileExists = async (path: string) => {
     try {
       await gitlabRequest(token, baseUrl, `/projects/${project}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(base)}`);
@@ -1214,7 +1246,7 @@ export async function createGitlabMergeRequest(
       source_branch: branch,
       target_branch: base,
       title: 'chore: set up DMTools for GitLab',
-      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nAfter merging this request, a GitLab Issue-event webhook triggers the poller pipeline for Issue events. The poller filters for open issues assigned to the configured AI teammate or labeled with \`agent:dev\`, \`agent:review\`, or \`agent:rework\`. You can also run an agent manually from **Build > Pipelines** by setting \`DMTOOLS_TICKET_ID\` and \`DMTOOLS_AGENT_CONFIG\`. Merge-request pipelines can run the review or rework agent when the corresponding label is present, and approved merge requests by \`${c.machine}\` are merged after the pipeline succeeds.\n\nThe poller requires the \`GITLAB_TOKEN\` project CI/CD variable created by this setup.`,
+      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nWorkflow templates are rendered during setup from \`${GITLAB_WORKFLOW_SOURCE.repository}@${GITLAB_WORKFLOW_SOURCE.ref}\` (\`gitlab/\`). The generated files are committed here; they are not fetched at pipeline runtime.\n\nAfter merging this request, a GitLab Issue-event webhook triggers the poller pipeline for Issue events. The poller filters for open issues assigned to the configured AI teammate or labeled with \`agent:dev\`, \`agent:review\`, or \`agent:rework\`. You can also run an agent manually from **Build > Pipelines** by setting \`DMTOOLS_TICKET_ID\` and \`DMTOOLS_AGENT_CONFIG\`. Merge-request pipelines can run the review or rework agent when the corresponding label is present, and approved merge requests by \`${c.machine}\` are merged after the pipeline succeeds.\n\nThe poller requires the \`GITLAB_TOKEN\` project CI/CD variable created by this setup.`,
       remove_source_branch: true,
     }),
   });
