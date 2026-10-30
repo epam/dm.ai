@@ -982,7 +982,17 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
 
     @Override
     public void deleteCommentIfExists(String ticketKey, String comment) throws IOException {
-        throw new UnsupportedOperationException();
+        if (getTextType() == TrackerClient.TextType.MARKDOWN) {
+            comment = StringUtils.convertToMarkdown(comment);
+        }
+        List<? extends IComment> comments = getComments(ticketKey, null);
+        if (comments != null) {
+            for (IComment commentObject : comments) {
+                if (comment != null && comment.equalsIgnoreCase(commentObject.getBody())) {
+                    deleteComment(ticketKey, commentObject.getId());
+                }
+            }
+        }
     }
 
     @Override
@@ -1040,6 +1050,42 @@ public abstract class JiraClient<T extends Ticket> implements RestClient, Tracke
         GenericRequest commentPostRequest = comment(ticketKey, null);
         commentPostRequest.setBody(new JSONObject().put("body", comment).toString()).post();
         clearCache(commentPostRequest);
+    }
+
+    @MCPTool(
+            name = "jira_update_comment",
+            description = "Update (edit) an existing comment on a Jira ticket by its comment ID. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists",
+            integration = "jira",
+            category = "comment_management",
+            aliases = {"jira_edit_comment", "tracker_update_comment", "tracker_edit_comment"}
+    )
+    public String updateComment(
+            @MCPParam(name = "key", description = "The Jira ticket key containing the comment", required = true) String ticketKey,
+            @MCPParam(name = "commentId", description = "The ID of the comment to update", required = true, aliases = {"id"}) String commentId,
+            @MCPParam(name = "comment", description = "The new comment text (replaces existing content; supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)", required = true, aliases = {"text", "body"}) String comment) throws IOException {
+        if (getTextType() == TrackerClient.TextType.MARKDOWN) {
+            comment = StringUtils.convertToMarkdown(comment);
+        }
+        GenericRequest commentPutRequest = new GenericRequest(this, path("issue/" + ticketKey + "/comment/" + commentId));
+        String response = put(commentPutRequest.setBody(new JSONObject().put("body", comment).toString()));
+        clearCache(comment(ticketKey, null));
+        return response;
+    }
+
+    @MCPTool(
+            name = "jira_delete_comment",
+            description = "Delete a comment from a Jira ticket by its comment ID",
+            integration = "jira",
+            category = "comment_management",
+            aliases = {"tracker_delete_comment"}
+    )
+    public String deleteComment(
+            @MCPParam(name = "key", description = "The Jira ticket key containing the comment", required = true) String ticketKey,
+            @MCPParam(name = "commentId", description = "The ID of the comment to delete", required = true, aliases = {"id"}) String commentId) throws IOException {
+        GenericRequest commentDeleteRequest = new GenericRequest(this, path("issue/" + ticketKey + "/comment/" + commentId));
+        String response = delete(commentDeleteRequest);
+        clearCache(comment(ticketKey, null));
+        return response;
     }
 
     public void deleteRemoteLink(final String ticket, final String globalId) throws IOException {

@@ -685,9 +685,12 @@ public class JiraClientCoverageTest {
         assertTrue(lastPostRequest().getBody().contains("Brand new"));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void testDeleteCommentIfExistsThrows() throws IOException {
+    @Test
+    public void testDeleteCommentIfExistsDeletesMatching() throws IOException {
+        routeGet("issue/TP-1/comment", "{\"comments\":[{\"id\":\"42\",\"body\":\"comment\"}]}");
+        deleteResponse = "";
         client.deleteCommentIfExists("TP-1", "comment");
+        assertTrue(lastDeleteRequest().url().endsWith("issue/TP-1/comment/42"));
     }
 
     @Test

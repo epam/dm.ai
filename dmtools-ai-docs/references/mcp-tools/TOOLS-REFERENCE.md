@@ -1304,6 +1304,53 @@ file_write("output.txt", "content");
     "description": "Post a comment to a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists"
   },
   {
+    "name": "jira_update_comment",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The Jira ticket key containing the comment"
+        },
+        "commentId": {
+          "type": "string",
+          "description": "The ID of the comment to update"
+        },
+        "comment": {
+          "type": "string",
+          "description": "The new comment text (replaces existing content; supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)"
+        }
+      },
+      "required": [
+        "key",
+        "commentId",
+        "comment"
+      ]
+    },
+    "description": "Update (edit) an existing comment on a Jira ticket by its comment ID. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists"
+  },
+  {
+    "name": "jira_delete_comment",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The Jira ticket key containing the comment"
+        },
+        "commentId": {
+          "type": "string",
+          "description": "The ID of the comment to delete"
+        }
+      },
+      "required": [
+        "key",
+        "commentId"
+      ]
+    },
+    "description": "Delete a comment from a Jira ticket by its comment ID"
+  },
+  {
     "name": "jira_get_fix_versions",
     "inputSchema": {
       "type": "object",
