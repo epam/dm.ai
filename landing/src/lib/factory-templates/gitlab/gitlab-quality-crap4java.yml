@@ -1,0 +1,14 @@
+quality:
+  stage: quality
+  image: eclipse-temurin:@@VERSION@@-jdk
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+      apt-get update && apt-get install -y --no-install-recommends git maven
+      if { [ ! -f pom.xml ] && [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; } || [ -z "$(find . -name '*.java' -not -path './.*' -print -quit)" ]; then echo "No Java build file or source files found — skipping Java quality checks."; exit 0; fi
+      git clone --depth 1 https://github.com/IstiN/crap4java.git /tmp/crap4java
+      mvn -q -f /tmp/crap4java/pom.xml -DskipTests package
+      java -jar /tmp/crap4java/target/crap4java-*.jar

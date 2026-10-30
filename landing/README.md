@@ -70,6 +70,18 @@ npm run check      # TypeScript and Astro diagnostics
 
 ## Editing
 
+**Factory workflows** live in [`src/lib/factory-templates/`](src/lib/factory-templates/).
+The folders separate platform-specific workflows from reusable configuration:
+
+- [`github/`](src/lib/factory-templates/github/): GitHub Actions workflow templates.
+- [`gitlab/`](src/lib/factory-templates/gitlab/): GitLab CI, shell scripts, and quality jobs.
+- [`shared/`](src/lib/factory-templates/shared/): runner JSON templates and agent configuration used by both platforms.
+
+[`factory.ts`](src/lib/factory.ts) selects templates and replaces `@@...@@`
+placeholders with setup values. Edit workflow and shell content in the templates,
+not as embedded strings in the renderer. Run `npm test` to check rendering and
+GitLab shell syntax.
+
 **Text that appears once** lives in its section under `src/sections/`.
 
 **Text that appears twice or more** lives in `src/data/content.ts`. The FAQ is

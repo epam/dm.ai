@@ -1,0 +1,18 @@
+quality:
+  stage: quality
+  image: ghcr.io/cirruslabs/flutter:@@VERSION@@
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+      if [ ! -f pubspec.yaml ]; then echo "No pubspec.yaml found — skipping Dart quality checks."; exit 0; fi
+      dart pub get
+      dart format --set-exit-if-changed .
+      dart analyze
+      if [ ! -d test ] || [ -z "$(find test -name '*_test.dart' -print -quit 2>/dev/null)" ]; then echo "No Dart tests found — skipping coverage and CRAP analysis."; exit 0; fi
+      dart test --coverage=coverage
+      dart pub global activate coverage
+      dart pub global run coverage:format_coverage --lcov --in coverage --out coverage/lcov.info --report-on lib
+      if [ -f coverage/lcov.info ]; then dart pub global activate -sgit https://github.com/IstiN/crap4dart.git && crap4dart analyze --lcov coverage/lcov.info; fi

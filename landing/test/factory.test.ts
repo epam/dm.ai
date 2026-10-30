@@ -1,6 +1,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -36,6 +37,73 @@ import {
 } from '../src/lib/factory.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+describe('GitLab factory templates', () => {
+  const template = (name: string) =>
+    readFileSync(resolve(here, '../src/lib/factory-templates/gitlab', name), 'utf8');
+
+  const qualityCases = [
+    { preset: 'crap4js', toolchain: 'node', version: '24', fallback: '22' },
+    { preset: 'crap4dart', toolchain: 'flutter', version: '3.32', fallback: 'stable' },
+    { preset: 'crap4java', toolchain: 'java', version: '17', fallback: '21' },
+    { preset: 'crap4py', toolchain: 'python', version: '3.13', fallback: '3.12' },
+    { preset: 'crap4go', toolchain: 'go', version: '1.24', fallback: '1.23' },
+  ] as const;
+
+  for (const { preset, toolchain, version, fallback } of qualityCases) {
+    for (const customVersion of [false, true]) {
+      it(`renders ${preset} from its template with ${customVersion ? 'custom' : 'default'} version`, () => {
+        const config = validConfig({
+          machine: 'factory-bot',
+          baseBranch: 'release/test',
+          qualityPreset: preset,
+          toolchains: customVersion ? { [toolchain]: version } : {},
+        });
+        const files = renderGitlabFiles(config);
+        const quality = template(`gitlab-quality-${preset}.yml`)
+          .replaceAll('@@VERSION@@', customVersion ? version : fallback);
+        const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
+        assert.equal(pipeline, template('gitlab-ci.yml')
+          .replaceAll('@@QUALITY_JOB@@', quality)
+          .replaceAll('@@MACHINE@@', config.machine));
+        assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
+
+        const script = quality.split('    - |\n')[1]
+          .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
+        const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' });
+        assert.equal(syntax.status, 0, syntax.stderr);
+      });
+    }
+  }
+
+  for (const config of [
+    validConfig({ qualityPreset: 'none' }),
+    validConfig({ ciEnabled: false, qualityPreset: 'crap4js' }),
+  ]) {
+    it(`omits quality stage and job when ${config.ciEnabled === false ? 'CI is disabled' : 'no preset is selected'}`, () => {
+      const pipeline = renderGitlabFiles(config).find((file) => file.path === '.gitlab-ci.yml')!.content;
+      assert.equal(pipeline, template('gitlab-ci.yml')
+        .replace('  - quality\n', '')
+        .replaceAll('@@QUALITY_JOB@@', '')
+        .replaceAll('@@MACHINE@@', config.machine));
+      assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
+    });
+  }
+
+  it('renders shell templates with configuration and preserves valid Bash syntax', () => {
+    const config = validConfig({ machine: 'factory-bot', baseBranch: 'release/test' });
+    const files = renderGitlabFiles(config);
+    for (const name of ['gitlab-factory-poll-issues.sh', 'gitlab-factory-publish-review.sh']) {
+      const script = files.find((file) => file.path === `.dmtools/scripts/${name}`)!.content;
+      assert.equal(script, template(name)
+        .replaceAll('@@MACHINE@@', config.machine)
+        .replaceAll('@@BASE_BRANCH@@', config.baseBranch));
+      assert.doesNotMatch(script, /@@[A-Z_]+@@/);
+      const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' });
+      assert.equal(syntax.status, 0, syntax.stderr);
+    }
+  });
+});
 
 function validConfig(overrides: Partial<FactoryConfig> = {}): FactoryConfig {
   return {

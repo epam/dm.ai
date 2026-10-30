@@ -1,0 +1,17 @@
+quality:
+  stage: quality
+  image: node:@@VERSION@@
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+      if [ ! -f package.json ]; then echo "No package.json found — skipping quality checks."; exit 0; fi
+      if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test && !p.scripts.test.includes('Error: no test specified') ? 0 : 1)"; then
+        npx c8 --reporter=json --reporter=text npm test
+        if [ -f coverage/coverage-final.json ]; then npx --yes github:IstiN/crap4js --coverage coverage/coverage-final.json; fi
+      else
+        echo "No tests configured — skipping coverage and CRAP analysis."
+      fi
