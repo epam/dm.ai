@@ -1324,6 +1324,14 @@ public class PropertyReader {
   public static final String XRAY_CLIENT_SECRET = "XRAY_CLIENT_SECRET";
   public static final String XRAY_BASE_PATH = "XRAY_BASE_PATH";
 
+  // Rovo MCP configuration
+  public static final String ROVO_MCP_URL = "ROVO_MCP_URL";
+  public static final String ROVO_EMAIL = "ROVO_EMAIL";
+  public static final String ROVO_API_TOKEN = "ROVO_API_TOKEN";
+  public static final String ROVO_LOGIN_PASS_TOKEN = "ROVO_LOGIN_PASS_TOKEN";
+  public static final String ROVO_AUTH_TYPE = "ROVO_AUTH_TYPE";
+  public static final String ROVO_CLOUD_ID = "ROVO_CLOUD_ID";
+
   // Microsoft Teams configuration
   public static final String TEAMS_BASE_PATH = "TEAMS_BASE_PATH";
   public static final String TEAMS_CLIENT_ID = "TEAMS_CLIENT_ID";
@@ -1733,5 +1741,55 @@ public class PropertyReader {
 
   public String getJenkinsApiToken() {
     return getValue(JENKINS_API_TOKEN);
+  }
+
+  // -------------------------------------------------------------------------
+  // Rovo MCP
+  // -------------------------------------------------------------------------
+
+  public String getRovoMcpUrl() {
+    String value = getValue(ROVO_MCP_URL);
+    if (value == null || value.trim().isEmpty()) {
+      return "https://mcp.atlassian.com/v2/mcp";
+    }
+    return value.trim();
+  }
+
+  public String getRovoEmail() {
+    return getValue(ROVO_EMAIL);
+  }
+
+  public String getRovoApiToken() {
+    return getValue(ROVO_API_TOKEN);
+  }
+
+  public String getRovoAuthType() {
+    String authType = getValue(ROVO_AUTH_TYPE);
+    return (authType != null && !authType.trim().isEmpty()) ? authType.trim() : "Basic";
+  }
+
+  public String getRovoLoginPassToken() {
+    String email = getRovoEmail();
+    String apiToken = getRovoApiToken();
+    String authType = getRovoAuthType();
+
+    if (email != null && !email.trim().isEmpty()
+        && apiToken != null && !apiToken.trim().isEmpty()) {
+      if ("Bearer".equalsIgnoreCase(authType)) {
+        return apiToken.trim();
+      }
+      String credentials = email.trim() + ":" + apiToken.trim();
+      return Base64.getEncoder().encodeToString(credentials.getBytes());
+    }
+    if ("Bearer".equalsIgnoreCase(authType)
+        && apiToken != null && !apiToken.trim().isEmpty()) {
+      return apiToken.trim();
+    }
+
+    return getValue(ROVO_LOGIN_PASS_TOKEN);
+  }
+
+  public String getRovoCloudId() {
+    return getValue(ROVO_CLOUD_ID);
   }
 }
