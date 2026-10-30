@@ -2,8 +2,8 @@
 
 Complete reference for all MCP tools available in DMtools.
 
-**Total Integrations**: 24
-**Total Tools**: 379
+**Total Integrations**: 25
+**Total Tools**: 383
 
 *Auto-generated from `dmtools list` on: 2026-09-19 11:47:09*
 
@@ -44,6 +44,7 @@ dmtools <tool_name> [arguments]
 | **OLLAMA** | 2 | [ollama-tools.md](ollama-tools.md) |
 | **OPENAI** | 2 | [openai-tools.md](openai-tools.md) |
 | **RALLY** | 1 | [rally-tools.md](rally-tools.md) |
+| **ROVO** | 4 | [rovo-tools.md](rovo-tools.md) |
 | **SHAREPOINT** | 2 | [sharepoint-tools.md](sharepoint-tools.md) |
 | **TEAMS** | 31 | [teams-tools.md](teams-tools.md) |
 | **TESTRAIL** | 18 | [testrail-tools.md](testrail-tools.md) |
@@ -80,6 +81,7 @@ file_write('output.txt', 'content');
 
 - [CONFLUENCE](confluence-tools.md) - 24 tools
 - [SHAREPOINT](sharepoint-tools.md) - 2 tools
+- [ROVO](rovo-tools.md) - 4 tools
 
 ### AI Providers
 
