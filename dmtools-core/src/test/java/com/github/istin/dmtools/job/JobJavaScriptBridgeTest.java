@@ -1323,6 +1323,47 @@ class JobJavaScriptBridgeTest {
     }
 
     @Test
+    void testCliExecuteCommandKnownGitProbeLogsDebugEvenWithoutExplicitFlag() throws Exception {
+        String jsCode = """
+            function action(params) {
+                try {
+                    cli_execute_command({ command: 'git rev-parse --quiet --verify MERGE_HEAD' });
+                    return 'merging';
+                } catch (e) {
+                    return 'not-merging';
+                }
+            }
+            """;
+
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        try (MockedStatic<MCPToolExecutor> mcpMock = mockStatic(MCPToolExecutor.class)) {
+            com.github.istin.dmtools.common.utils.CliCommandFailedException cause =
+                new com.github.istin.dmtools.common.utils.CliCommandFailedException(
+                    "git rev-parse --quiet --verify MERGE_HEAD", 1, "");
+            mcpMock.when(() -> MCPToolExecutor.executeTool(
+                eq("cli_execute_command"),
+                any(Map.class),
+                any(Map.class)
+            )).thenThrow(new java.io.IOException("Command execution failed: " + cause.getMessage(), cause));
+
+            withBridgeCapturedLogs(org.apache.logging.log4j.Level.DEBUG, events, () -> {
+                Object result = bridge.executeJavaScript(jsCode, new JSONObject());
+                assertEquals("not-merging", result);
+            });
+        }
+
+        boolean hasErrorLog = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR);
+        assertFalse(hasErrorLog, "Known git exit-code probe must not log ERROR in JobJavaScriptBridge");
+
+        boolean hasDebugLog = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.DEBUG
+                        && e.getMessage().getFormattedMessage().contains("exited with expected non-zero status")
+                        && e.getThrown() == null);
+        assertTrue(hasDebugLog, "Known git exit-code probe must log single-line DEBUG without throwable");
+    }
+
+    @Test
     void testToolExecutionFailureLogsWithoutStackTraceAtDefaultLevel() throws Exception {
         String jsCode = """
             function action(params) {
