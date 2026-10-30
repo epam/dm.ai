@@ -479,35 +479,60 @@ public class JobJavaScriptBridge {
 
     /**
      * Returns {@code true} when {@code cli_execute_command} was called with
-     * {@code expectNonZeroExit: true/"true"} and failed due to a non-zero exit code.
+     * {@code expectNonZeroExit: true/"true"} (or is a known git exit-code probe)
+     * and failed due to a non-zero exit code.
      */
     private static boolean isExpectedCliNonZeroExit(String toolName, Object jsArgs, Throwable error) {
-        if (!"cli_execute_command".equals(toolName) || jsArgs == null) {
+        if (!"cli_execute_command".equals(toolName)) {
             return false;
         }
-        boolean hasCliFailedCause = false;
+        com.github.istin.dmtools.common.utils.CliCommandFailedException cliFailed = null;
         for (Throwable t = error; t != null; t = t.getCause()) {
             if (t instanceof com.github.istin.dmtools.common.utils.CliCommandFailedException) {
-                hasCliFailedCause = true;
+                cliFailed = (com.github.istin.dmtools.common.utils.CliCommandFailedException) t;
                 break;
             }
         }
-        if (!hasCliFailedCause) {
+        if (cliFailed == null) {
+            return false;
+        }
+        if (com.github.istin.dmtools.cli.CliCommandExecutor.isKnownExitCodeProbe(cliFailed.getCommand())) {
+            return true;
+        }
+        if (jsArgs == null) {
             return false;
         }
         try {
             if (jsArgs instanceof Map) {
-                Object val = ((Map<?, ?>) jsArgs).get("expectNonZeroExit");
-                return val != null && Boolean.parseBoolean(String.valueOf(val));
+                Map<?, ?> map = (Map<?, ?>) jsArgs;
+                Object val = map.get("expectNonZeroExit");
+                if (val != null && Boolean.parseBoolean(String.valueOf(val))) {
+                    return true;
+                }
+                Object cmd = map.get("command");
+                return cmd != null && com.github.istin.dmtools.cli.CliCommandExecutor.isKnownExitCodeProbe(String.valueOf(cmd));
             }
             Value value = Value.asValue(jsArgs);
-            if (value != null && value.hasMembers() && value.hasMember("expectNonZeroExit")) {
-                Value member = value.getMember("expectNonZeroExit");
-                if (member != null && !member.isNull()) {
-                    if (member.isBoolean()) {
-                        return member.asBoolean();
+            if (value != null && value.hasMembers()) {
+                if (value.hasMember("expectNonZeroExit")) {
+                    Value member = value.getMember("expectNonZeroExit");
+                    if (member != null && !member.isNull()) {
+                        boolean expected = member.isBoolean()
+                                ? member.asBoolean()
+                                : Boolean.parseBoolean(String.valueOf(member.as(Object.class)));
+                        if (expected) {
+                            return true;
+                        }
                     }
-                    return Boolean.parseBoolean(String.valueOf(member.as(Object.class)));
+                }
+                if (value.hasMember("command")) {
+                    Value cmdMember = value.getMember("command");
+                    if (cmdMember != null && !cmdMember.isNull()) {
+                        String cmdStr = cmdMember.isString() ? cmdMember.asString() : String.valueOf(cmdMember.as(Object.class));
+                        if (com.github.istin.dmtools.cli.CliCommandExecutor.isKnownExitCodeProbe(cmdStr)) {
+                            return true;
+                        }
+                    }
                 }
             }
         } catch (Exception ignored) {
