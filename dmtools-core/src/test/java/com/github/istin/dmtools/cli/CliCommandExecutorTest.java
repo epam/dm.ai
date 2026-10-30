@@ -641,14 +641,63 @@ public class CliCommandExecutorTest {
     }
 
     @Test
-    public void testExecuteCommand_UnexpectedNonZeroExit_LogsErrorWithThrowable() throws Exception {
+    public void testExecuteCommand_KnownGitExitCodeProbes_AutoDetectedAsExpectedDebug() throws Exception {
+        String[] probes = {
+            "git check-ignore -q -- non-existent-factory-kit-path-1304",
+            "git rev-parse --quiet --verify MERGE_HEAD",
+            "git merge-base --is-ancestor HEAD origin/non-existent-ref-793"
+        };
+        for (String probe : probes) {
+            java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+            withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.DEBUG, events, () -> {
+                try {
+                    executor.executeCommand(probe, null);
+                    fail("Expected IOException to be thrown on non-zero exit for: " + probe);
+                } catch (IOException expected) {
+                    assertTrue(expected.getMessage().contains("exit code"));
+                }
+            });
+
+            boolean hasErrorLog = events.stream()
+                    .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR);
+            assertFalse("Known git exit-code probe should not log ERROR: " + probe, hasErrorLog);
+
+            boolean hasExpectedDebugLog = events.stream()
+                    .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.DEBUG
+                            && e.getMessage().getFormattedMessage().contains("Command exited with expected code")
+                            && e.getThrown() == null);
+            assertTrue("Known git exit-code probe should log DEBUG without throwable: " + probe, hasExpectedDebugLog);
+        }
+    }
+
+    @Test
+    public void testExecuteCommand_UnexpectedNonZeroExit_LogsErrorWithoutThrowableAtDefaultLevel() throws Exception {
         java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
         withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.DEBUG, events, () -> {
             try {
-                executor.executeCommand("git check-ignore -q -- non-existent-factory-kit-path-1304", null);
-                fail("Expected IOException to be thrown on exit code 1");
+                executor.executeCommand("git invalid-subcommand-793", null);
+                fail("Expected IOException to be thrown on non-zero exit");
             } catch (IOException expected) {
-                assertTrue(expected.getMessage().contains("exit code 1"));
+                assertTrue(expected.getMessage().contains("exit code"));
+            }
+        });
+
+        boolean hasErrorWithoutThrowable = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR
+                        && e.getMessage().getFormattedMessage().contains("Command execution failed:")
+                        && e.getThrown() == null);
+        assertTrue("Unexpected CLI non-zero exit should log ERROR without stack trace at DEBUG level", hasErrorWithoutThrowable);
+    }
+
+    @Test
+    public void testExecuteCommand_UnexpectedNonZeroExit_LogsErrorWithThrowableAtTraceLevel() throws Exception {
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.TRACE, events, () -> {
+            try {
+                executor.executeCommand("git invalid-subcommand-793", null);
+                fail("Expected IOException to be thrown on non-zero exit");
+            } catch (IOException expected) {
+                assertTrue(expected.getMessage().contains("exit code"));
             }
         });
 
@@ -656,7 +705,19 @@ public class CliCommandExecutorTest {
                 .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR
                         && e.getMessage().getFormattedMessage().contains("Command execution failed:")
                         && e.getThrown() != null);
-        assertTrue("Should log ERROR with throwable when expectNonZeroExit is not enabled", hasErrorWithThrowable);
+        assertTrue("At TRACE level, unexpected CLI non-zero exit should include throwable", hasErrorWithThrowable);
+    }
+
+    @Test
+    public void testIsKnownExitCodeProbe() {
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git check-ignore -q -- .dmtools/copilot-sessions"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git rev-parse --quiet --verify MERGE_HEAD"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git merge-base --is-ancestor HEAD origin/main"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git diff --cached --quiet HEAD"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git show-ref --verify --quiet refs/heads/main"));
+        assertFalse(CliCommandExecutor.isKnownExitCodeProbe("git push origin main"));
+        assertFalse(CliCommandExecutor.isKnownExitCodeProbe("git status --porcelain"));
+        assertFalse(CliCommandExecutor.isKnownExitCodeProbe(null));
     }
 
     @Test

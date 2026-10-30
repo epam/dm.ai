@@ -164,9 +164,11 @@ public class CliCommandExecutor {
         } catch (IOException | InterruptedException e) {
             // Mask sensitive data in error message
             String maskedError = maskSensitiveData(e.getMessage() != null ? e.getMessage() : "");
-            if (e instanceof CliCommandFailedException && expectedNonZero) {
+            if (e instanceof CliCommandFailedException && (expectedNonZero || isKnownExitCodeProbe(trimmedCommand))) {
                 CliCommandFailedException failed = (CliCommandFailedException) e;
                 logger.debug("Command exited with expected code {}: {}", failed.getExitCode(), maskedCommand);
+            } else if (e instanceof CliCommandFailedException && !logger.isTraceEnabled()) {
+                logger.error("Command execution failed: {} - {}", maskedCommand, maskedError);
             } else {
                 logger.error("Command execution failed: {} - {}", maskedCommand, maskedError, e);
             }
@@ -221,6 +223,32 @@ public class CliCommandExecutor {
         // Basename match (strips leading ./ or full path)
         String basename = Paths.get(token).getFileName().toString();
         return allowed.contains(basename);
+    }
+
+    /**
+     * Returns {@code true} when {@code command} is a standard git exit-code probe whose
+     * non-zero exit code signals a normal boolean condition rather than a command failure
+     * (e.g. {@code git check-ignore}, {@code git rev-parse --quiet --verify},
+     * {@code git merge-base --is-ancestor}, {@code git diff --quiet},
+     * {@code git show-ref --verify --quiet}).
+     *
+     * @param command CLI command string
+     * @return {@code true} if the command is a known exit-code probe
+     */
+    public static boolean isKnownExitCodeProbe(String command) {
+        if (command == null) {
+            return false;
+        }
+        String normalized = command.trim().replaceAll("\\s+", " ").toLowerCase();
+        if (!normalized.startsWith("git ") && !normalized.contains("/git ")) {
+            return false;
+        }
+        return normalized.contains(" check-ignore ")
+                || normalized.endsWith(" check-ignore")
+                || (normalized.contains(" rev-parse ") && normalized.contains("--verify") && (normalized.contains("--quiet") || normalized.contains(" -q")))
+                || (normalized.contains(" merge-base ") && normalized.contains("--is-ancestor"))
+                || (normalized.contains(" diff ") && normalized.contains("--quiet"))
+                || (normalized.contains(" show-ref ") && normalized.contains("--verify") && (normalized.contains("--quiet") || normalized.contains(" -q")));
     }
     
     /**
