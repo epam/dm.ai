@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class Confluence extends AtlassianRestClient implements UriToObject {
@@ -274,17 +275,25 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         // Use default limit of 20 if not specified
         int actualLimit = (limit != null) ? limit : 20;
 
+        String trimmedSpace = defaultSpace != null ? defaultSpace.trim() : "";
+        boolean scopeToDefaultSpace = !trimmedSpace.isEmpty() && !hasSpaceClause(query);
+
         // Try GraphQL API first if path is configured
         if (graphQLPath != null) {
             try {
                 // GraphQLClient automatically uses Bearer auth type
                 // Extract raw token from authorization (without "Basic " prefix)
-                ConfluenceGraphQLClient confluenceGraphQLClient = new ConfluenceGraphQLClient(graphQLPath, authorization);
+                ConfluenceGraphQLClient confluenceGraphQLClient = createGraphQLClient();
                 confluenceGraphQLClient.setAuthType(getAuthType());
-                JSONArray results = confluenceGraphQLClient.search(query, actualLimit);
+                JSONArray results = scopeToDefaultSpace
+                        ? confluenceGraphQLClient.search(query, actualLimit, trimmedSpace)
+                        : confluenceGraphQLClient.search(query, actualLimit);
                 List<SearchResult> searchResults = new ArrayList<>();
                 for (int i = 0; i < results.length(); i++) {
                     JSONObject node = results.getJSONObject(i).getJSONObject("node");
+                    if (scopeToDefaultSpace && !matchesSpace(node, trimmedSpace)) {
+                        continue;
+                    }
                     searchResults.add(new SearchResult(node));
                 }
                 return searchResults;
@@ -298,7 +307,7 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         GenericRequest search = new GenericRequest(this, path("content/search"));
 
         // Design a more comprehensive query
-        String cqlQuery = String.format("(title ~ \"%s\" OR text ~ \"%s\") ORDER BY lastModified ASC", query, query);
+        String cqlQuery = buildTextSearchCql(query, defaultSpace);
         search.param("cql", cqlQuery);
         search.param("limit", String.valueOf(actualLimit));
         search.param("expand", "title,body.excerpt,history,space,body.storage"); // Include additional fields
@@ -313,6 +322,35 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
 
         // Parse response and return the results array
         return JSONModel.convertToModels(SearchResult.class, new JSONObject(response).getJSONArray("results"));
+    }
+
+    private static final Pattern SPACE_CLAUSE_PATTERN =
+            Pattern.compile("\\bspace\\s*(?:=|in\\b)", Pattern.CASE_INSENSITIVE);
+
+    static boolean hasSpaceClause(String query) {
+        return query != null && SPACE_CLAUSE_PATTERN.matcher(query).find();
+    }
+
+    static String buildTextSearchCql(String query, String defaultSpace) {
+        String trimmedSpace = defaultSpace != null ? defaultSpace.trim() : "";
+        String textClause = String.format("(title ~ \"%s\" OR text ~ \"%s\")", query, query);
+        String scoped = !trimmedSpace.isEmpty() && !hasSpaceClause(query)
+                ? textClause + " AND space = \"" + trimmedSpace + "\""
+                : textClause;
+        return scoped + " ORDER BY lastModified ASC";
+    }
+
+    private static boolean matchesSpace(JSONObject node, String expectedSpaceKey) {
+        JSONObject space = node != null ? node.optJSONObject("space") : null;
+        if (space == null) {
+            return true;
+        }
+        String key = space.optString("key", null);
+        return key == null || key.isBlank() || expectedSpaceKey.equalsIgnoreCase(key.trim());
+    }
+
+    ConfluenceGraphQLClient createGraphQLClient() throws IOException {
+        return new ConfluenceGraphQLClient(graphQLPath, authorization);
     }
 
     @MCPTool(
@@ -378,16 +416,16 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
             // v2 filters by numeric space id (resolved from the key via the spaces
             // endpoint); the {"results":[...]} envelope is ContentResult-compatible.
             StringBuilder url = new StringBuilder(pathV2("pages?title=" + urlEncode(title)));
-            if (space != null && !space.isEmpty()) {
-                url.append("&spaceId=").append(spaceIdFromKey(space));
+            if (space != null && !space.trim().isEmpty()) {
+                url.append("&spaceId=").append(spaceIdFromKey(space.trim()));
             }
             url.append("&body-format=storage");
             content = new GenericRequest(this, url.toString());
         } else {
             content = new GenericRequest(this, path("content?expand=body.storage,body.export_view,ancestors,version"));
             content.param("title", title);
-            if (space != null && !space.isEmpty()) {
-                content.param("spaceKey", space);
+            if (space != null && !space.trim().isEmpty()) {
+                content.param("spaceKey", space.trim());
             }
         }
         String response = execute(content);
@@ -1244,10 +1282,8 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
     ) throws IOException {
-        if (defaultSpace == null) {
-            throw new IllegalStateException("Default space not set. Use findContent(String title, String space) instead.");
-        }
-        return findContent(title, defaultSpace, format);
+        String space = requireDefaultSpace("findContent(String title, String space)");
+        return findContent(title, space, format);
     }
 
     /**
@@ -1279,12 +1315,10 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "body", description = "Body content for the new page (if creation is needed)", required = true, example = "<p>This is the page content.</p>")
         String body
     ) throws IOException {
-        if (defaultSpace == null) {
-            throw new IllegalStateException("Default space not set. Use findOrCreate(String title, String parentId, String body, String space) instead.");
-        }
-        Content content = findContent(title, defaultSpace);
+        String space = requireDefaultSpace("findOrCreate(String title, String parentId, String body, String space)");
+        Content content = findContent(title, space);
         if (content == null) {
-            content = createPage(title, parentId, body, defaultSpace);
+            content = createPage(title, parentId, body, space);
         }
         return content;
     }
@@ -1307,10 +1341,8 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
         @MCPParam(name = "format", description = "Output format for the page body. Use 'md' or 'markdown' to convert Confluence storage format to Markdown.", required = false, example = "md")
         String format
     ) throws IOException {
-        if (defaultSpace == null) {
-            throw new IllegalStateException("Default space not set. Use content(String title, String space) instead.");
-        }
-        return content(title, defaultSpace, format);
+        String space = requireDefaultSpace("content(String title, String space)");
+        return content(title, space, format);
     }
 
     /**
@@ -1318,6 +1350,13 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      */
     public ContentResult content(String title) throws IOException {
         return content(title, defaultSpace);
+    }
+
+    private String requireDefaultSpace(String alternativeMethod) {
+        if (defaultSpace == null || defaultSpace.trim().isEmpty()) {
+            throw new IllegalStateException("Default space not set. Use " + alternativeMethod + " instead.");
+        }
+        return defaultSpace.trim();
     }
 
     @Override

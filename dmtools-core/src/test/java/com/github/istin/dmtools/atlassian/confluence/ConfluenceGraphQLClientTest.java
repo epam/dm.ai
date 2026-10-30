@@ -70,4 +70,58 @@ class ConfluenceGraphQLClientTest {
         ConfluenceGraphQLClient testClient2 = new ConfluenceGraphQLClient("invalid-url", "auth");
         assertNotNull(testClient2);
     }
+
+    @Test
+    void testSearchScopesToSpaceKeyInConfluenceFilters() throws IOException {
+        ConfluenceGraphQLClient spyClient = spy(new ConfluenceGraphQLClient(
+                "https://test.atlassian.net",
+                "Bearer test-token"
+        ));
+        spyClient.setSiteId("ari:cloud:confluence::site/test-cloud-id");
+
+        String graphQLResponse = new JSONObject()
+                .put("data", new JSONObject()
+                        .put("search", new JSONObject()
+                                .put("search", new JSONObject()
+                                        .put("edges", new JSONArray()))))
+                .toString();
+
+        doAnswer(invocation -> {
+            JSONObject variables = invocation.getArgument(2);
+            JSONObject filters = variables.getJSONObject("filters");
+            JSONObject confluenceFilters = filters.getJSONObject("confluenceFilters");
+            assertEquals(new JSONArray().put("ENG").toString(), confluenceFilters.getJSONArray("spaces").toString());
+            return graphQLResponse;
+        }).when(spyClient).executeGraphQL(eq("AdvancedAGGSearchQuery"), anyString(), any(JSONObject.class));
+
+        JSONArray edges = spyClient.search("docs", 10, "ENG");
+        assertEquals(0, edges.length());
+    }
+
+    @Test
+    void testSearchWithoutSpaceKeyLeavesConfluenceFiltersEmpty() throws IOException {
+        ConfluenceGraphQLClient spyClient = spy(new ConfluenceGraphQLClient(
+                "https://test.atlassian.net",
+                "Bearer test-token"
+        ));
+        spyClient.setSiteId("ari:cloud:confluence::site/test-cloud-id");
+
+        String graphQLResponse = new JSONObject()
+                .put("data", new JSONObject()
+                        .put("search", new JSONObject()
+                                .put("search", new JSONObject()
+                                        .put("edges", new JSONArray()))))
+                .toString();
+
+        doAnswer(invocation -> {
+            JSONObject variables = invocation.getArgument(2);
+            JSONObject filters = variables.getJSONObject("filters");
+            JSONObject confluenceFilters = filters.getJSONObject("confluenceFilters");
+            assertFalse(confluenceFilters.has("spaces"));
+            return graphQLResponse;
+        }).when(spyClient).executeGraphQL(eq("AdvancedAGGSearchQuery"), anyString(), any(JSONObject.class));
+
+        JSONArray edges = spyClient.search("docs", 10);
+        assertEquals(0, edges.length());
+    }
 }

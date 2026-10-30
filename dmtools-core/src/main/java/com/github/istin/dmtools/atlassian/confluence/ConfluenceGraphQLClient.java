@@ -77,10 +77,21 @@ public class ConfluenceGraphQLClient extends GraphQLClient {
      * Creates search filters with dynamic site ID
      */
     private JSONObject createSearchFilters(String[] contentTypes) throws IOException {
+        return createSearchFilters(contentTypes, null);
+    }
+
+    /**
+     * Creates search filters with dynamic site ID and optional space key
+     */
+    private JSONObject createSearchFilters(String[] contentTypes, String spaceKey) throws IOException {
+        JSONObject confluenceFilters = new JSONObject();
+        if (spaceKey != null && !spaceKey.trim().isEmpty()) {
+            confluenceFilters.put("spaces", new JSONArray().put(spaceKey.trim()));
+        }
         return new JSONObject()
                 .put("entities", new JSONArray(contentTypes))
                 .put("locations", new JSONArray().put(getSiteId()))
-                .put("confluenceFilters", new JSONObject());
+                .put("confluenceFilters", confluenceFilters);
     }
 
     /**
@@ -110,17 +121,31 @@ public class ConfluenceGraphQLClient extends GraphQLClient {
      * Performs an advanced search in Confluence
      */
     public JSONArray search(String searchTerm, int limit) throws IOException {
+        return search(searchTerm, limit, (String) null);
+    }
+
+    /**
+     * Performs an advanced search in Confluence scoped to a specific space key
+     */
+    public JSONArray search(String searchTerm, int limit, String spaceKey) throws IOException {
         return search(searchTerm, limit, new String[]{
                 "ati:cloud:confluence:page",
                 "ati:cloud:confluence:attachment",
                 "ati:cloud:confluence:blogpost"
-        });
+        }, spaceKey);
     }
 
     /**
      * Performs an advanced search with specific content types
      */
     public JSONArray search(String searchTerm, int limit, String[] contentTypes) throws IOException {
+        return search(searchTerm, limit, contentTypes, null);
+    }
+
+    /**
+     * Performs an advanced search with specific content types and optional space key
+     */
+    public JSONArray search(String searchTerm, int limit, String[] contentTypes, String spaceKey) throws IOException {
         String query = ConfluenceGraphQLQueries.ADVANCED_SEARCH_QUERY;
 
         JSONObject variables = new JSONObject()
@@ -130,7 +155,7 @@ public class ConfluenceGraphQLClient extends GraphQLClient {
                 .put("query", searchTerm)
                 .put("first", limit)
                 .put("after", JSONObject.NULL)
-                .put("filters", createSearchFilters(contentTypes))
+                .put("filters", createSearchFilters(contentTypes, spaceKey))
                 .put("experimentContext", createExperimentContext())
                 .put("isLivePagesEnabled", false);
 
