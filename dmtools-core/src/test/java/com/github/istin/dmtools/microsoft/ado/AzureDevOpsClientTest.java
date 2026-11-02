@@ -1006,6 +1006,64 @@ public class AzureDevOpsClientTest {
     }
 
     @Test
+    void testGetUserByEmail_paginatesViaContinuationToken() throws IOException {
+        client.setMockResponse("continuationToken=page2",
+                "{\"value\":[{\"principalName\":\"second@example.com\",\"displayName\":\"Second Page User\",\"descriptor\":\"aad.p2\"}]}");
+        client.setMockResponse("/_apis/graph/users?",
+                "{\"value\":[{\"principalName\":\"first@example.com\",\"displayName\":\"First Page User\"}],\"continuationToken\":\"page2\"}");
+
+        AdoUser user = client.getUserByEmail("second@example.com");
+
+        assertEquals("Second Page User", user.getDisplayName());
+        assertEquals("aad.p2", user.getID());
+        assertTrue(client.getLastCalledUrl().contains("continuationToken=page2"), client.getLastCalledUrl());
+    }
+
+    @Test
+    void testGetUserByEmail_paginatesViaHttpHeaderContinuationToken() throws IOException {
+        Request req1 = new Request.Builder().url("https://vssps.dev.azure.com/TestOrg/_apis/graph/users?api-version=7.1-preview.1").build();
+        Response resp1 = new Response.Builder()
+                .request(req1)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("X-MS-ContinuationToken", "hdr-token-2")
+                .body(ResponseBody.create("{\"value\":[{\"principalName\":\"first@example.com\"}]}", MediaType.parse("application/json")))
+                .build();
+        Request req2 = new Request.Builder().url("https://vssps.dev.azure.com/TestOrg/_apis/graph/users?api-version=7.1-preview.1&continuationToken=hdr-token-2").build();
+        Response resp2 = new Response.Builder()
+                .request(req2)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(ResponseBody.create("{\"value\":[{\"principalName\":\"target@example.com\",\"displayName\":\"Target User\",\"id\":\"guid-99\"}]}", MediaType.parse("application/json")))
+                .build();
+        mockOkHttp(resp1, resp2);
+
+        AdoUser user = client.getUserByEmail("target@example.com");
+
+        assertEquals("Target User", user.getDisplayName());
+        assertEquals("guid-99", user.getID());
+    }
+
+    @Test
+    void testGetUserByEmail_fallbackBuildsAdoUserFromIdentitiesWithoutGraphCall() throws IOException {
+        client.setMockResponse("/_apis/graph/users?", "{\"value\":[]}");
+        client.setMockResponse("/_apis/identities",
+                "{\"value\":[{\"id\":\"11111111-2222-3333-4444-555555555555\","
+                        + "\"descriptor\":\"Microsoft.IdentityModel.Claims.ClaimsIdentity;guid\\\\user@example.com\","
+                        + "\"providerDisplayName\":\"Identity User\","
+                        + "\"customDisplayName\":\"Custom Identity User\"}]}");
+
+        String mention = client.tag("user@example.com");
+
+        assertEquals("<a href=\"#\" data-vss-mention=\"version:2.0,11111111-2222-3333-4444-555555555555\">@Custom Identity User</a>",
+                mention);
+        assertFalse(client.getLastCalledUrl().contains("/_apis/graph/users/Microsoft.IdentityModel"),
+                "must not call Graph API with an Identities ClaimsIdentity descriptor");
+    }
+
+    @Test
     void testGetUserByEmail_notFound_throwsIOException() throws IOException {
         client.setMockResponse("/_apis/graph/users?", "{\"value\":[]}");
         client.setMockResponse("/_apis/identities", "{\"value\":[]}");
