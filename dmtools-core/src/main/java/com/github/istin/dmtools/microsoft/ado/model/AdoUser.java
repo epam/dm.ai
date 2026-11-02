@@ -56,6 +56,21 @@ public class AdoUser extends JSONModel implements IUser {
         if (email == null) {
             email = getString("uniqueName");
         }
+        if (email == null) {
+            JSONObject properties = getJSONObject("properties");
+            if (properties != null) {
+                JSONObject mailProp = properties.optJSONObject("Mail");
+                if (mailProp != null) {
+                    email = mailProp.optString("$value", null);
+                }
+                if (email == null) {
+                    JSONObject accountProp = properties.optJSONObject("Account");
+                    if (accountProp != null) {
+                        email = accountProp.optString("$value", null);
+                    }
+                }
+            }
+        }
         return email;
     }
 
@@ -65,19 +80,25 @@ public class AdoUser extends JSONModel implements IUser {
     public String getDisplayName() {
         String displayName = getString("displayName");
         if (displayName == null) {
+            displayName = getString("customDisplayName");
+        }
+        if (displayName == null) {
+            displayName = getString("providerDisplayName");
+        }
+        if (displayName == null) {
             displayName = getString("display_name");
         }
         if (displayName == null) {
             // Try to get from nested object
             JSONObject authenticatedUser = getJSONObject("authenticatedUser");
             if (authenticatedUser != null) {
-                displayName = authenticatedUser.optString("displayName");
+                displayName = authenticatedUser.optString("displayName", null);
             }
         }
         if (displayName == null) {
             displayName = getString("name");
         }
-        return displayName != null ? displayName : "Unknown User";
+        return displayName != null && !displayName.isEmpty() ? displayName : "Unknown User";
     }
 
     /**

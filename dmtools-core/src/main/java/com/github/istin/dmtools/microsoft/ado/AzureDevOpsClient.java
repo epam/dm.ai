@@ -1464,67 +1464,117 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "email", description = "User email address", required = true)
             String email
     ) throws IOException {
-        // Use Graph API to search for user by email
-        // Graph API endpoint: https://vssps.dev.azure.com/{organization}/_apis/graph/users?api-version=7.1-preview.1
         String graphUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users";
-        GenericRequest request = new GenericRequest(this, graphUrl)
-                .param("api-version", "7.1-preview.1");
-        
-        String response = request.execute();
-        JSONObject result = new JSONObject(response);
-        JSONArray users = result.optJSONArray("value");
-        
-        if (users != null) {
-            for (int i = 0; i < users.length(); i++) {
-                JSONObject user = users.getJSONObject(i);
-                String principalName = user.optString("principalName");
-                String mailAddress = user.optString("mailAddress");
-                
-                if (email.equalsIgnoreCase(principalName) || email.equalsIgnoreCase(mailAddress)) {
-                    return new AdoUser(user);
+        String continuationToken = null;
+        Set<String> seenTokens = new HashSet<>();
+        for (int page = 0; page < 100; page++) {
+            GenericRequest request = new GenericRequest(this, graphUrl)
+                    .param("api-version", "7.1-preview.1")
+                    .param("continuationToken", continuationToken);
+            GraphPageResult pageResult = executeGraphPage(request);
+            JSONObject result = new JSONObject(pageResult.body);
+            JSONArray users = result.optJSONArray("value");
+            if (users != null) {
+                for (int i = 0; i < users.length(); i++) {
+                    JSONObject user = users.getJSONObject(i);
+                    if (email.equalsIgnoreCase(user.optString("principalName"))
+                            || email.equalsIgnoreCase(user.optString("mailAddress"))) {
+                        return new AdoUser(user);
+                    }
                 }
             }
+            String nextToken = pageResult.continuationToken;
+            if (nextToken == null || nextToken.isEmpty()) {
+                nextToken = result.optString("continuationToken", null);
+            }
+            if (nextToken == null || nextToken.isEmpty() || !seenTokens.add(nextToken)) {
+                break;
+            }
+            continuationToken = nextToken;
         }
-        
-        // Fallback: try to get user by UPN (User Principal Name) directly
-        // This is more efficient if the email format matches UPN
+
         try {
-            String userDescriptor = getUserDescriptorByEmail(email);
-            if (userDescriptor != null) {
-                String userUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users/" + userDescriptor;
-                GenericRequest userRequest = new GenericRequest(this, userUrl)
-                        .param("api-version", "7.1-preview.1");
-                String userResponse = userRequest.execute();
-                return new AdoUser(new JSONObject(userResponse));
+            AdoUser fallbackUser = findUserViaIdentities(email);
+            if (fallbackUser != null) {
+                return fallbackUser;
             }
         } catch (Exception e) {
-            logger.warn("Failed to get user descriptor for email: {}", email, e);
+            logger.warn("Failed to resolve user via Identities API for email: {}", email, e);
         }
-        
+
         throw new IOException("User not found with email: " + email);
     }
-    
-    /**
-     * Get user descriptor (a unique identifier) by email.
-     * This is used for more specific user lookups.
-     */
-    private String getUserDescriptorByEmail(String email) throws IOException {
-        // Use Identities API to find user by email
+
+    protected static class GraphPageResult {
+        final String body;
+        final String continuationToken;
+
+        GraphPageResult(String body, String continuationToken) {
+            this.body = body;
+            this.continuationToken = continuationToken;
+        }
+    }
+
+    protected GraphPageResult executeGraphPage(GenericRequest request) throws IOException {
+        if (getClass() != BasicAzureDevOpsClient.class && getClient() == super.getClient()) {
+            return new GraphPageResult(request.execute(), null);
+        }
+        Request.Builder requestBuilder = sign(new Request.Builder())
+                .url(request.url())
+                .header("User-Agent", "DMTools");
+        for (Map.Entry<String, String> header : request.getHeaders().entrySet()) {
+            requestBuilder.header(header.getKey(), header.getValue());
+        }
+        Request httpRequest = requestBuilder.get().build();
+        try (okhttp3.Response response = getClient().newCall(httpRequest).execute()) {
+            if (response.isSuccessful()) {
+                String body = response.body() != null ? response.body().string() : "{}";
+                String token = response.header("X-MS-ContinuationToken");
+                return new GraphPageResult(body, token);
+            }
+            throw printAndCreateException(httpRequest, response);
+        }
+    }
+
+    private AdoUser findUserViaIdentities(String email) throws IOException {
         String identitiesUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/identities";
         GenericRequest request = new GenericRequest(this, identitiesUrl)
                 .param("searchFilter", "MailAddress")
                 .param("filterValue", email)
                 .param("api-version", "7.1-preview.1");
-        
+
         String response = request.execute();
         JSONObject result = new JSONObject(response);
         JSONArray identities = result.optJSONArray("value");
-        
-        if (identities != null && identities.length() > 0) {
-            JSONObject identity = identities.getJSONObject(0);
-            return identity.optString("descriptor");
+        if (identities == null || identities.length() == 0) {
+            return null;
         }
-        
+        JSONObject identity = identities.getJSONObject(0);
+        String id = identity.optString("id", null);
+        String displayName = identity.optString("customDisplayName", null);
+        if (displayName == null || displayName.isEmpty()) {
+            displayName = identity.optString("providerDisplayName", null);
+        }
+        if (displayName == null || displayName.isEmpty()) {
+            displayName = identity.optString("displayName", null);
+        }
+        if ((id != null && !id.isEmpty()) || (displayName != null && !displayName.isEmpty())) {
+            JSONObject normalized = new JSONObject(identity.toString());
+            if (displayName != null && !displayName.isEmpty()) {
+                normalized.put("displayName", displayName);
+            }
+            if (!normalized.has("mailAddress") && !normalized.has("emailAddress")) {
+                normalized.put("mailAddress", email);
+            }
+            return new AdoUser(normalized);
+        }
+        String descriptor = identity.optString("descriptor", null);
+        if (descriptor != null && !descriptor.isEmpty() && !descriptor.contains(";")) {
+            String userUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users/" + descriptor;
+            GenericRequest userRequest = new GenericRequest(this, userUrl)
+                    .param("api-version", "7.1-preview.1");
+            return new AdoUser(new JSONObject(userRequest.execute()));
+        }
         return null;
     }
 
