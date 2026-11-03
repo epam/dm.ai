@@ -6,6 +6,7 @@ package com.github.istin.dmtools.job;
 import com.github.istin.dmtools.pack.AgentPackException;
 import org.json.JSONArray;
 import org.junit.jupiter.api.Test;
+import org.json.JSONObject;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -13,6 +14,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -165,6 +168,120 @@ class ParentConfigResolverPackRefsTest {
                 () -> processor.processRunCommand(new String[]{"run", child.toString()}));
         assertTrue(e.getMessage().contains("pr_review@latest"), e.getMessage());
         assertTrue(e.getMessage().contains("DMTOOLS_PACK_REGISTRY"), e.getMessage());
+    }
+
+    @Test
+    void packRefsInEncodedConfigRewriteIntoPackCache() throws Exception {
+        File zip = buildPackWithInstructions();
+        Path packsRoot = Files.createDirectories(tempDir.resolve("packs"));
+
+        Path child = tempDir.resolve("child.json");
+        Files.writeString(child, """
+                {
+                  "name":"child",
+                  "parent":{"path":"%s"},
+                  "params":{
+                    "cliPrompts":["pack:instructions/review_rules.md"]
+                  }
+                }
+                """.formatted(zip.getAbsolutePath().replace("\\", "\\\\")));
+
+        String rawEncoded = """
+                {
+                  "name":"child",
+                  "params":{
+                    "cliPrompts":[
+                      "pack:instructions/review_rules.md",
+                      {"id":"codegraph","prompt":"pack:instructions/review_rules.md","condition":"pack:js/helper.js"}
+                    ]
+                  }
+                }
+                """;
+
+        // 1. Raw JSON encodedConfig
+        JobParams rawParams = processor(packsRoot)
+                .processRunCommand(new String[]{"run", child.toString(), rawEncoded});
+        assertEncodedConfigPromptsRewritten(rawParams, packsRoot);
+
+        // 2. URL-encoded JSON encodedConfig (as produced by SM)
+        String urlEncoded = URLEncoder.encode(rawEncoded, StandardCharsets.UTF_8);
+        JobParams urlEncodedParams = processor(packsRoot)
+                .processRunCommand(new String[]{"run", child.toString(), urlEncoded});
+        assertEncodedConfigPromptsRewritten(urlEncodedParams, packsRoot);
+    }
+
+    private void assertEncodedConfigPromptsRewritten(JobParams jobParams, Path packsRoot) {
+        String packRootPrefix = packsRoot.toAbsolutePath().normalize().toString();
+        JSONArray prompts = jobParams.getParams().getJSONArray("cliPrompts");
+        assertEquals(2, prompts.length());
+
+        String firstPrompt = prompts.getString(0);
+        assertFalse(firstPrompt.startsWith("pack:"), "pack: prefix should be rewritten: " + firstPrompt);
+        assertTrue(firstPrompt.startsWith(packRootPrefix), "should point into pack cache: " + firstPrompt);
+        assertTrue(Files.exists(Path.of(firstPrompt)), "rewritten path should exist: " + firstPrompt);
+
+        JSONObject section = prompts.getJSONObject(1);
+        assertEquals("codegraph", section.getString("id"));
+        String sectionPrompt = section.getString("prompt");
+        String sectionCondition = section.getString("condition");
+        assertEquals(firstPrompt, sectionPrompt);
+        assertTrue(sectionCondition.startsWith(packRootPrefix), "condition should point into pack cache: " + sectionCondition);
+        assertTrue(Files.exists(Path.of(sectionCondition)), "rewritten condition should exist: " + sectionCondition);
+    }
+
+    @Test
+    void packRefsInCliOverridesRewriteIntoPackCache() throws Exception {
+        File zip = buildPackWithInstructions();
+        Path packsRoot = Files.createDirectories(tempDir.resolve("packs"));
+
+        Path child = tempDir.resolve("child.json");
+        Files.writeString(child, """
+                {
+                  "name":"child",
+                  "parent":{"path":"%s"},
+                  "params":{}
+                }
+                """.formatted(zip.getAbsolutePath().replace("\\", "\\\\")));
+
+        JobParams jobParams = processor(packsRoot).processRunCommand(new String[]{
+                "run",
+                child.toString(),
+                "--cliPrompts",
+                "[\"pack:instructions/review_rules.md\"]",
+                "--jsPath",
+                "pack:js/helper.js"
+        });
+
+        String packRootPrefix = packsRoot.toAbsolutePath().normalize().toString();
+        String rewrittenPrompt = jobParams.getParams().getJSONArray("cliPrompts").getString(0);
+        String rewrittenJs = jobParams.getParams().getString("jsPath");
+        assertTrue(rewrittenPrompt.startsWith(packRootPrefix), "should point into pack cache: " + rewrittenPrompt);
+        assertTrue(Files.exists(Path.of(rewrittenPrompt)), "rewritten prompt should exist: " + rewrittenPrompt);
+        assertTrue(rewrittenJs.startsWith(packRootPrefix), "should point into pack cache: " + rewrittenJs);
+        assertTrue(Files.exists(Path.of(rewrittenJs)), "rewritten jsPath should exist: " + rewrittenJs);
+    }
+
+    @Test
+    void packRefsInEncodedConfigWithNonPackParentThrowIllegalArgumentException() throws Exception {
+        Files.writeString(tempDir.resolve("parent.json"), "{\"params\":{\"k\":\"p\"}}");
+
+        Path child = tempDir.resolve("child.json");
+        Files.writeString(child, """
+                {
+                  "name":"child",
+                  "parent":{"path":"parent.json"},
+                  "params":{}
+                }
+                """);
+
+        String encoded = "{\"params\":{\"cliPrompts\":[\"pack:instructions/review_rules.md\"]}}";
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> processor(tempDir.resolve("packs"))
+                        .processRunCommand(new String[]{"run", child.toString(), encoded}));
+        assertTrue(e.getMessage().contains(
+                        "child config uses pack: references but its parent is not an agent pack"),
+                e.getMessage());
     }
 
     /**
