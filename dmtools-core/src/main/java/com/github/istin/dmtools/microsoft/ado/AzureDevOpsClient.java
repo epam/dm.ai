@@ -21,9 +21,11 @@ import com.github.istin.dmtools.microsoft.ado.model.AdoUser;
 import com.github.istin.dmtools.common.model.IUser;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.MediaType;
+import okhttp3.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -1724,6 +1726,52 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
                 .param("searchCriteria.status", status)
                 .param("api-version", API_VERSION);
         return execute(request);
+    }
+
+    @MCPTool(
+            name = "ado_create_pr",
+            description = "Create a pull request in an Azure DevOps Git repository.",
+            integration = "ado",
+            category = "pull_requests"
+    )
+    public String createPullRequest(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "sourceRefName", description = "The full source branch ref", required = true, example = "refs/heads/feature/saved-cards")
+            String sourceRefName,
+            @MCPParam(name = "targetRefName", description = "The full target branch ref", required = true, example = "refs/heads/main")
+            String targetRefName,
+            @MCPParam(name = "title", description = "The pull request title", required = true, example = "Add saved cards")
+            String title,
+            @MCPParam(name = "description", description = "The pull request description (Markdown supported)", required = false)
+            String description
+    ) throws IOException {
+        GenericRequest request =
+                new GenericRequest(this, path(gitPrPath(repository, "")))
+                        .param("api-version", API_VERSION);
+        JSONObject body =
+                new JSONObject()
+                        .put("sourceRefName", sourceRefName)
+                        .put("targetRefName", targetRefName)
+                        .put("title", title);
+        if (description != null) {
+            body.put("description", description);
+        }
+        Request httpRequest =
+                sign(new Request.Builder())
+                        .url(request.url())
+                        .post(RequestBody.create(body.toString(), JSON))
+                        .build();
+        OkHttpClient creationClient =
+                getClient().newBuilder()
+                        .retryOnConnectionFailure(false)
+                        .build();
+        try (Response response = creationClient.newCall(httpRequest).execute()) {
+            if (!response.isSuccessful()) {
+                throw printAndCreateException(httpRequest, response);
+            }
+            return response.body().string();
+        }
     }
 
     @MCPTool(

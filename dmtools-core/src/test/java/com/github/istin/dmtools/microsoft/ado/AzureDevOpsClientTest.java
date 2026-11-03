@@ -81,6 +81,20 @@ public class AzureDevOpsClientTest {
         client.setOkHttpClient(okHttpClient);
     }
 
+    private void mockPullRequestCreation(Response response) throws IOException {
+        mockOkHttp(response);
+        OkHttpClient.Builder builder = mock(OkHttpClient.Builder.class);
+        when(client.getOkHttpClient().newBuilder()).thenReturn(builder);
+        when(builder.retryOnConnectionFailure(false)).thenReturn(builder);
+        when(builder.build()).thenReturn(client.getOkHttpClient());
+    }
+
+    private Request captureCreationRequest() {
+        ArgumentCaptor<Request> captor = ArgumentCaptor.forClass(Request.class);
+        verify(client.getOkHttpClient()).newCall(captor.capture());
+        return captor.getValue();
+    }
+
     private static String workItemJson(int id, String title, String state, String type) {
         return new JSONObject()
                 .put("id", id)
@@ -1557,6 +1571,83 @@ public class AzureDevOpsClientTest {
         client.setPullRequestVote("repo", "9", "u1", "-10");
 
         assertEquals(-10, new JSONObject(client.getLastPutBody("/reviewers/u1")).getInt("vote"));
+    }
+
+    @Test
+    void testCreatePullRequest_mcpToolPostsBranchRefsAndTitle() throws Exception {
+        String title = "test: TEST-42 verify \"native\" ADO PR creation";
+        String responseBody = """
+                {
+                  "pullRequestId": 123456,
+                  "status": "active",
+                  "sourceRefName": "refs/heads/test/native-pr-creation",
+                  "targetRefName": "refs/heads/main",
+                  "title": "test: TEST-42 verify \\"native\\" ADO PR creation"
+                }
+                """;
+        mockPullRequestCreation(buildOkResponse(201, "application/json", responseBody));
+        Map<String, Object> arguments =
+                Map.of(
+                        "repository", "saved_cards_service",
+                        "sourceRefName", "refs/heads/test/native-pr-creation",
+                        "targetRefName", "refs/heads/main",
+                        "title", title
+                );
+
+        Object result =
+                com.github.istin.dmtools.mcp.generated.MCPToolExecutor.executeTool(
+                        "ado_create_pr",
+                        arguments,
+                        Map.of("ado", client)
+                );
+
+        assertEquals(responseBody, result);
+        Request request = captureCreationRequest();
+        assertEquals("POST", request.method());
+        assertEquals("https://dev.azure.com/TestOrg/TestProject/_apis/git/repositories/saved_cards_service/pullrequests?api-version=7.0",
+                request.url().toString());
+        assertEquals("application/json", request.header("Content-Type"));
+        Buffer buffer = new Buffer();
+        request.body().writeTo(buffer);
+        JSONObject body = new JSONObject(buffer.readUtf8());
+        assertEquals(arguments.get("sourceRefName"), body.getString("sourceRefName"));
+        assertEquals(arguments.get("targetRefName"), body.getString("targetRefName"));
+        assertEquals(title, body.getString("title"));
+        assertFalse(body.has("description"));
+    }
+
+    @Test
+    void testCreatePullRequest_missingBranchPreservesApiFailure() throws IOException {
+        String failureBody = """
+                {
+                  "$id": "1",
+                  "innerException": null,
+                  "message": "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches",
+                  "typeName": "Microsoft.TeamFoundation.Git.Server.GitPullRequestCannotBeActivated, Microsoft.TeamFoundation.Git.Server",
+                  "typeKey": "GitPullRequestCannotBeActivated",
+                  "errorCode": 0,
+                  "eventId": 3000
+                }
+                """;
+        mockPullRequestCreation(buildOkResponse(400, "application/json", failureBody));
+        String description = "Temporary runtime verification of native Azure DevOps PR creation.";
+
+        IOException failure =
+                assertThrows(IOException.class, () -> client.createPullRequest(
+                        "saved_cards_service",
+                        "refs/heads/test/missing-native-pr-source",
+                        "refs/heads/main",
+                        "test: TEST-42 verify \"native\" ADO PR creation",
+                        description
+                ));
+
+        assertTrue(failure.getMessage().contains("TF401398"));
+        assertTrue(failure.getMessage().contains("400"));
+        Request request = captureCreationRequest();
+        assertEquals("POST", request.method());
+        Buffer buffer = new Buffer();
+        request.body().writeTo(buffer);
+        assertEquals(description, new JSONObject(buffer.readUtf8()).getString("description"));
     }
 
     @Test
