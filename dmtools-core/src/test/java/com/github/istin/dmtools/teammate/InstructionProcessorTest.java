@@ -509,4 +509,26 @@ class InstructionProcessorTest {
         String result = processor.buildCombinedPrompt("./" + file.getFileName(), null);
         assertEquals("Role content", result);
     }
+
+    @Test
+    void testPackRefFilePathExpansion() throws IOException {
+        Path commonDir = tempDir.resolve("instructions/common");
+        Files.createDirectories(commonDir);
+        String fileContent = "Pack instruction content";
+        Files.writeString(commonDir.resolve("response_output.md"), fileContent);
+
+        processor = new InstructionProcessor(null, tempDir.toString());
+
+        String[] input = {
+            "pack:instructions/common/response_output.md",
+            "pack:/instructions/common/response_output.md",
+            "pack:instructions/missing.md"
+        };
+        String[] result = processor.extractIfNeeded(input);
+
+        assertEquals(3, result.length);
+        assertTrue(result[0].contains(fileContent));
+        assertTrue(result[1].contains(fileContent));
+        assertEquals("pack:instructions/missing.md", result[2]);
+    }
 }
