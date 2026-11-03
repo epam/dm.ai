@@ -73,6 +73,8 @@ public class ParentConfigResolver {
      * keep the existing behaviour.
      */
     private AgentPackResolver packResolver = new AgentPackResolver();
+    private Path resolvedPackRoot;
+
 
     public ParentConfigResolver() {
         this.configurationMerger = new ConfigurationMerger();
@@ -87,6 +89,14 @@ public class ParentConfigResolver {
         this.packResolver = packResolver;
     }
 
+    public Path getResolvedPackRoot() {
+        return resolvedPackRoot;
+    }
+
+    public void setResolvedPackRoot(Path packRoot) {
+        this.resolvedPackRoot = packRoot;
+    }
+
     /**
      * Resolves parent inheritance for the given child config.
      *
@@ -97,6 +107,11 @@ public class ParentConfigResolver {
      * @throws IllegalArgumentException if the parent file cannot be loaded or is invalid JSON
      */
     public JSONObject resolve(JSONObject childConfig, Path childFilePath) {
+        this.resolvedPackRoot = null;
+        return resolveInternal(childConfig, childFilePath);
+    }
+
+    private JSONObject resolveInternal(JSONObject childConfig, Path childFilePath) {
         if (!childConfig.has(PARENT)) {
             return childConfig;
         }
@@ -120,9 +135,13 @@ public class ParentConfigResolver {
         originalChild.remove(PARENT);
 
         if (loaded.packRoot != null) {
-            // The parent is an agent pack: the child's `pack:` references point
+            this.resolvedPackRoot = loaded.packRoot;
+        }
+
+        if (this.resolvedPackRoot != null) {
+            // The parent (or an ancestor) is an agent pack: the child's `pack:` references point
             // inside it (zip flow — no agents checkout mounted, dmtools-dart parity).
-            rewritePackRefs(originalChild, loaded.packRoot);
+            rewritePackRefs(originalChild, this.resolvedPackRoot);
         } else if (containsPackRef(originalChild)) {
             throw new IllegalArgumentException(
                     "child config uses pack: references but its parent is not an agent pack");
@@ -215,7 +234,7 @@ public class ParentConfigResolver {
         }
 
         JSONObject parentConfig = new JSONObject(parentJson);
-        return new LoadedParent(resolve(parentConfig, parentPath), null);
+        return new LoadedParent(resolveInternal(parentConfig, parentPath), this.resolvedPackRoot);
     }
 
     /**
@@ -240,12 +259,13 @@ public class ParentConfigResolver {
         }
 
         // Recurse: the parent's own parent chain resolves relative to the pack root.
-        JSONObject parentConfig = resolve(new JSONObject(parentJson), pack.entryFile.toPath());
+        JSONObject parentConfig = resolveInternal(new JSONObject(parentJson), pack.entryFile.toPath());
         // Make the parent's pack-relative paths absolute so they keep working after the
         // merge, regardless of where the child lives.
         packResolver.rewritePathsToPackRoot(parentConfig, pack.packRoot);
         // `pack:` references inside the entry config resolve against this same pack.
         rewritePackRefs(parentConfig, pack.packRoot);
+        this.resolvedPackRoot = pack.packRoot;
         return new LoadedParent(parentConfig, pack.packRoot);
     }
 
@@ -270,6 +290,37 @@ public class ParentConfigResolver {
      * the config's parent is a pack.
      */
     private static final String PACK_SCHEME = "pack:";
+
+    /**
+     * Rewrites any {@code pack:} references in {@code config} (for example, those
+     * introduced after parent resolution via encoded config or CLI overrides)
+     * against the pack root resolved during {@link #resolve(JSONObject, Path)}.
+     */
+    public void rewriteRemainingPackRefs(JSONObject config) {
+        rewriteRemainingPackRefs(config, null);
+    }
+
+    /**
+     * Rewrites any {@code pack:} references in {@code config} against the resolved
+     * pack root or {@code fallbackPackRoot} (used when running an agent pack directly).
+     *
+     * @throws IllegalArgumentException if {@code config} contains {@code pack:} references
+     *                                  and no pack root is in effect
+     * @throws AgentPackException       if a {@code pack:} reference escapes the pack root
+     *                                  or does not exist inside the pack
+     */
+    public void rewriteRemainingPackRefs(JSONObject config, Path fallbackPackRoot) {
+        if (config == null) {
+            return;
+        }
+        Path effectivePackRoot = this.resolvedPackRoot != null ? this.resolvedPackRoot : fallbackPackRoot;
+        if (effectivePackRoot != null) {
+            rewritePackRefs(config, effectivePackRoot);
+        } else if (containsPackRef(config)) {
+            throw new IllegalArgumentException(
+                    "child config uses pack: references but its parent is not an agent pack");
+        }
+    }
 
     /**
      * Rewrites every {@code pack:} string under {@code node} to an absolute path inside
