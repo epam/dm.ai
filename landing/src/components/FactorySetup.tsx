@@ -12,7 +12,7 @@ import {
   createRepo,
   defaults,
   detectCi,
-  ensureGitlabIssueEventWebhook,
+  ensureGitlabFactorySchedule,
   ensureGitlabLabels,
   ensureLabels,
   isCiEnabled,
@@ -55,6 +55,8 @@ const CUSTOM = '__custom__';
 const LABELS: Record<string, string> = {
   repo: 'Repository',
   machine: 'AI teammate account',
+  gitlabDev: 'AI development account',
+  gitlabReviewer: 'AI reviewer account',
   ciFile: 'CI workflow file',
   ciName: 'CI workflow name',
   checks: 'Checks',
@@ -207,6 +209,7 @@ export default function FactorySetup() {
   const [activeStep, setActiveStep] = useState<string>('step-repo');
 
   const errors = useMemo(() => validate(cfg, scm), [cfg, scm]);
+  const gitlabDevAccount = cfg.gitlabMultipleTeammates ? cfg.gitlabDev : cfg.machine;
   const normalizedGitlabBaseUrl = useMemo(() => {
     try {
       return normalizeGitlabBaseUrl(gitlabBaseUrl);
@@ -481,7 +484,9 @@ export default function FactorySetup() {
         const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log, gitlabTemplates);
         setSecretVals({});
         setPrUrl(mergeRequest);
-        await ensureGitlabIssueEventWebhook(token, cfg.repo, normalizedGitlabBaseUrl, cfg.baseBranch, log);
+        if (cfg.gitlabAutoLifecycle !== false) {
+          await ensureGitlabFactorySchedule(token, cfg.repo, normalizedGitlabBaseUrl, cfg.baseBranch, log);
+        }
         listGitlabVariableNames(token, cfg.repo, normalizedGitlabBaseUrl)
           .then(setExisting)
           .catch((e) => setError((e as Error).message));
@@ -690,19 +695,56 @@ export default function FactorySetup() {
               </div>
             )}
 
-            <div className="factory__field">
-              <label htmlFor="f-machine">AI teammate account</label>
-              <input
-                id="f-machine"
-                value={cfg.machine}
-                aria-invalid={!!show('machine')}
-                onBlur={() => touch('machine')}
-                onChange={(e) => set('machine', e.target.value.trim())}
-              />
-              <small className={show('machine') ? 'is-error' : ''}>
-                {show('machine') ?? `${scm === 'gitlab' ? 'GitLab' : 'GitHub'} username that issues are assigned to`}
-              </small>
-            </div>
+            {scm === 'gitlab' && (
+              <div className="factory__field">
+                <label htmlFor="f-gitlab-teammates">AI teammate accounts</label>
+                <select
+                  id="f-gitlab-teammates"
+                  value={cfg.gitlabMultipleTeammates ? 'multiple' : 'single'}
+                  disabled={busy}
+                  onChange={(e) => set('gitlabMultipleTeammates', e.target.value === 'multiple')}
+                >
+                  <option value="single">Single AI teammate</option>
+                  <option value="multiple">Multiple AI teammates</option>
+                </select>
+                <small>Use one account for all work, or separate development and review identities.</small>
+              </div>
+            )}
+
+            {scm === 'gitlab' && cfg.gitlabMultipleTeammates ? (
+              <>
+                {([
+                  { key: 'gitlabDev', label: 'AI development account', hint: 'GitLab username for development and rework' },
+                  { key: 'gitlabReviewer', label: 'AI reviewer account', hint: 'GitLab username for code review' },
+                ] as const).map(({ key, label, hint }) => (
+                  <div className="factory__field" key={key}>
+                    <label htmlFor={`f-${key}`}>{label}</label>
+                    <input
+                      id={`f-${key}`}
+                      value={cfg[key]}
+                      aria-invalid={!!show(key)}
+                      onBlur={() => touch(key)}
+                      onChange={(e) => set(key, e.target.value.trim())}
+                    />
+                    <small className={show(key) ? 'is-error' : ''}>{show(key) ?? hint}</small>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="factory__field">
+                <label htmlFor="f-machine">AI teammate account</label>
+                <input
+                  id="f-machine"
+                  value={cfg.machine}
+                  aria-invalid={!!show('machine')}
+                  onBlur={() => touch('machine')}
+                  onChange={(e) => set('machine', e.target.value.trim())}
+                />
+                <small className={show('machine') ? 'is-error' : ''}>
+                  {show('machine') ?? `${scm === 'gitlab' ? 'GitLab' : 'GitHub'} username that issues are assigned to`}
+                </small>
+              </div>
+            )}
           </div>
 
           <div className="factory__field">
@@ -752,7 +794,7 @@ export default function FactorySetup() {
                       scopes. Its user needs Developer or higher access to push branches and create merge requests.
                     </li>
                     <li className="is-warn">
-                      This setup also needs Maintainer access to manage project webhooks and trigger tokens.
+                      This setup also needs Maintainer access to manage the reconciliation schedule and remove legacy factory webhooks.
                     </li>
                   </>
                 ) : tokenInfo.kind === 'classic' &&
@@ -926,8 +968,8 @@ export default function FactorySetup() {
             </small>
             {scm === 'gitlab' && (
               <small className="is-warn">
-                GitLab setup opens a merge request with a manual DMTools pipeline. The GitHub event-driven factory
-                state machine, automatic quality workflows, and auto-merge are not generated for GitLab.
+                GitLab setup generates automatic development, validation and review, with explicitly requested rework and Machine jobs
+                progress in the issue. Approved merge requests remain open for a human to merge.
               </small>
             )}
           </div>
@@ -1134,7 +1176,7 @@ export default function FactorySetup() {
               <h2 className="factory__cardTitle">CI &amp; Quality Gate</h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'GitLab CI runs native factory jobs for Issue-event webhook processing, manual runs, and merge requests. You can also generate a language-specific crap4* quality job.'
+                  ? 'GitLab CI runs native factory jobs on a ten-minute schedule, manual runs, and merge requests. Direct issue/MR webhooks are disabled to avoid pipelines for status updates. You can also generate a language-specific crap4* quality job.'
                   : (
                       <>
                         Choose how the state machine validates PRs before merging: use your existing CI workflow,
@@ -1502,7 +1544,7 @@ export default function FactorySetup() {
               </h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'Create GitLab CI automation for Issue-event webhook processing, manual runs, merge-request review/rework, and approved merges.'
+                  ? 'Automatically develop, validate and review. Rework requires an explicit request; approved MRs remain open for human merge.'
                   : 'Seal repository secrets in your browser (libsodium) and ensure the 12 factory state-machine labels exist.'}
               </p>
             </div>
@@ -1512,7 +1554,7 @@ export default function FactorySetup() {
             <legend>Repository secrets</legend>
             <small>
               {scm === 'gitlab'
-                ? 'Optional — supplied secret values are stored as GitLab project CI/CD variables with masked and hidden enabled before the merge request opens. GitLab requires version 17.4 or newer and single-line values that meet its masking rules; existing non-hidden secrets are deleted and recreated with hidden enabled. After merging the setup request, a project webhook starts the poller on every Issue event.'
+                ? 'Optional — supplied secrets are stored as masked and hidden GitLab project CI/CD variables (GitLab 17.4+). Existing non-hidden secrets are recreated with hidden enabled. After merging setup, a ten-minute reconciliation schedule drives the automatic lifecycle; validation completion requests reconciliation and Machine jobs tracks each leg in the issue. Setup removes legacy factory webhooks.'
                 : 'Optional — fill a value and it is stored as an encrypted Actions secret before the PR opens. Values are sealed in this browser with the repository public key (libsodium), sent only to api.github.com and never readable afterwards. Leave a field empty to add it yourself later.'}
             </small>
             {secretsList.map((x) => (
@@ -1822,12 +1864,19 @@ export default function FactorySetup() {
               {scm === 'gitlab' ? (
                 <ul>
                   <li>
-                    The GitLab Issue-event webhook starts the poller for any issue event; the poller filters for assigned
-                    or labeled work.
+                    A ten-minute schedule starts the factory; validation completion requests reconciliation.
+                    New issues, assignments, and labels are picked up on the next tick, without webhook pipelines for status updates.
                   </li>
-                  <li>Merge-request pipelines can run the review or rework runner based on labels.</li>
-                  <li>Approved merge requests by {cfg.machine || 'ai-teammate'} are queued to merge after pipeline success.</li>
-                  <li>Manual agent runs are available from GitLab Build → Pipelines using ticket and runner variables.</li>
+                  <li>Development automatically leads to validation and review. Add <code>agent:rework</code> explicitly to request existing-MR fixes.</li>
+                  <li>Approved merge requests remain open for human merge; the factory never merges them.</li>
+                  <li>The issue's Machine jobs section links each development, validation, review and rework run.</li>
+                  {cfg.gitlabMultipleTeammates && (
+                    <li>
+                      Development and rework use <code>{cfg.gitlabDev}</code> with <code>GITLAB_DEV_TOKEN</code>;
+                      code review uses <code>{cfg.gitlabReviewer}</code> with <code>GITLAB_REVIEWER_TOKEN</code>.
+                    </li>
+                  )}
+                  <li>Manual runs use <code>DMTOOLS_MR_IID</code> and optional <code>DMTOOLS_FACTORY_LEG</code>.</li>
                 </ul>
               ) : (
                 <ul>
@@ -1871,13 +1920,21 @@ export default function FactorySetup() {
               {scm === 'gitlab' ? (
                 <ul>
                   <li>
-                    Assign an open issue to <code>{cfg.machine || 'ai-teammate'}</code> or add <code>agent:dev</code>,
+                    Assign an open issue to <code>{gitlabDevAccount || 'ai-teammate'}</code> or add <code>agent:dev</code>,
                     <code>agent:review</code>, or <code>agent:rework</code>; the poller selects a generated runner.
                   </li>
                   <li>
-                    Merge requests labeled <code>agent:review</code> or <code>agent:rework</code> are processed by their
-                    corresponding runner. A <code>pr_approved</code> label queues eligible machine-authored MRs to merge
-                    after pipeline success.
+                    Labels on the issue and MR track progress. Successful validation starts review; requested changes
+                    and open review threads wait for an explicit <code>agent:rework</code> label on the issue or MR.
+                    Each request runs rework once, followed by validation and review of the updated head.
+                    <code>pr_approved</code> means ready for human merge, not automatic merging.
+                  </li>
+                  <li>
+                    Rework updates the existing MR source branch and replies to every open review thread; it never
+                    creates another MR. An issue labeled <code>agent:rework</code> must have exactly one linked open MR.
+                    For manual rework, set <code>DMTOOLS_FACTORY_LEG=rework</code> and <code>DMTOOLS_MR_IID</code>
+                    {' '}to the MR IID, not the issue ID. Failed agents escalate to
+                    <code>needs-human</code>; investigate and remove stop labels before requesting another attempt.
                   </li>
                 </ul>
               ) : (
