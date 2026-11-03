@@ -197,14 +197,24 @@ public class InstructionProcessor {
     }
 
     private boolean isFilePath(String input) {
-        return input.startsWith("/") || input.startsWith("./") || input.startsWith("../");
+        return input.startsWith("/") || input.startsWith("./") || input.startsWith("../")
+                || input.startsWith("pack:");
     }
 
     private String processFilePath(String input) {
         try {
             Path basePath = Paths.get(workingDirectory);
-            Path filePath = input.startsWith("/") ?
-                    Paths.get(input) : basePath.resolve(input).normalize();
+            Path filePath;
+            if (input.startsWith("pack:")) {
+                String stripped = input.substring("pack:".length());
+                while (stripped.startsWith("/")) {
+                    stripped = stripped.substring(1);
+                }
+                filePath = basePath.resolve(stripped).normalize();
+            } else {
+                filePath = input.startsWith("/") ?
+                        Paths.get(input) : basePath.resolve(input).normalize();
+            }
 
             logger.debug("Resolving file path '{}' relative to working directory: {} -> {}",
                     input, workingDirectory, filePath);
