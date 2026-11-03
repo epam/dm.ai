@@ -80,6 +80,13 @@ public class AgentPackResolver {
     private static final Pattern REGISTRY_REF =
             Pattern.compile("^([A-Za-z0-9_-]+)@(latest|[A-Za-z0-9][A-Za-z0-9._-]*)$");
 
+    /**
+     * Matches a GitHub/local release download URL so a 404 on a pinned pack
+     * version can fall back to earlier releases via {@code /repos/{owner}/{repo}/releases}.
+     */
+    private static final Pattern GITHUB_RELEASE_ASSET_URL = Pattern.compile(
+            "^(https?://[^/]+)/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/releases/download/([^/]+)/([A-Za-z0-9._-]+\\.zip)$");
+
     /** Allowed charset for manifest {@code agent}/{@code version} / catalog versions. */
     private static final Pattern SAFE_SEGMENT = Pattern.compile("^[A-Za-z0-9._-]+$");
 
@@ -389,15 +396,81 @@ public class AgentPackResolver {
     }
 
     private Path download(String url, String githubToken) throws IOException {
-        HttpResult response = httpGet(url, githubToken);
+        String effectiveUrl = url;
+        HttpResult response = httpGet(effectiveUrl, githubToken);
+        if (response.statusCode == 404) {
+            String fallbackUrl = findAssetInEarlierReleases(effectiveUrl, githubToken);
+            if (fallbackUrl != null) {
+                HttpResult fallbackResp = httpGet(fallbackUrl, githubToken);
+                if (fallbackResp.statusCode == 200) {
+                    System.err.println("Resolved pinned pack asset from earlier release -> " + fallbackUrl);
+                    effectiveUrl = fallbackUrl;
+                    response = fallbackResp;
+                }
+            }
+        }
         if (response.statusCode != 200) {
             throw new AgentPackException("Failed to download pack: HTTP "
                     + response.statusCode + " for " + url);
         }
         Path tmp = Files.createTempFile("dmtools-pack-", ".zip");
         Files.write(tmp, response.body);
-        verifyDownloadedSha256(tmp, url, githubToken);
+        verifyDownloadedSha256(tmp, effectiveUrl, githubToken);
         return tmp;
+    }
+
+    /**
+     * Searches earlier GitHub releases ({@code /repos/{owner}/{repo}/releases})
+     * when a pinned pack asset 404s in the current release (gh-1325 / gh-1283).
+     */
+    private String findAssetInEarlierReleases(String url, String githubToken) {
+        Matcher m = GITHUB_RELEASE_ASSET_URL.matcher(url);
+        if (!m.matches()) {
+            return null;
+        }
+        String origin = m.group(1);
+        String owner = m.group(2);
+        String repo = m.group(3);
+        String assetName = m.group(5);
+        String apiBase = "https://github.com".equalsIgnoreCase(origin)
+                ? "https://api.github.com"
+                : origin;
+        for (int page = 1; page <= 3; page++) {
+            String apiUrl = apiBase + "/repos/" + owner + "/" + repo
+                    + "/releases?per_page=100&page=" + page;
+            HttpResult res = httpGetJson(apiUrl, githubToken);
+            if (res.statusCode != 200) {
+                return null;
+            }
+            try {
+                JSONArray releases = new JSONArray(new String(res.body, StandardCharsets.UTF_8));
+                if (releases.isEmpty()) {
+                    return null;
+                }
+                for (int i = 0; i < releases.length(); i++) {
+                    JSONObject rel = releases.optJSONObject(i);
+                    if (rel == null) continue;
+                    String tag = rel.optString("tag_name", "");
+                    JSONArray assets = rel.optJSONArray("assets");
+                    if (assets == null) continue;
+                    for (int j = 0; j < assets.length(); j++) {
+                        JSONObject a = assets.optJSONObject(j);
+                        if (a != null && assetName.equals(a.optString("name", ""))) {
+                            String dl = a.optString("browser_download_url", "");
+                            if (!dl.isEmpty()) {
+                                return dl;
+                            }
+                            if (!tag.isEmpty()) {
+                                return origin + "/" + owner + "/" + repo + "/releases/download/" + tag + "/" + assetName;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /** Verifies the downloaded zip against the sibling {@code .sha256} asset. */
@@ -443,6 +516,23 @@ public class AgentPackResolver {
             return new HttpResult(response.code(), body != null ? body.bytes() : new byte[0]);
         } catch (IOException e) {
             logger.debug("HTTP GET failed for {}: {}", url, e.getMessage());
+            return new HttpResult(0, new byte[0]);
+        }
+    }
+
+    private HttpResult httpGetJson(String url, String githubToken) {
+        Request.Builder builder = new Request.Builder()
+                .url(url)
+                .header("Accept", "application/vnd.github+json");
+        String host = hostOf(url);
+        if (githubToken != null && ("github.com".equals(host) || "api.github.com".equals(host))) {
+            builder.header("Authorization", "Bearer " + githubToken);
+        }
+        try (Response response = httpClient.newCall(builder.build()).execute()) {
+            ResponseBody body = response.body();
+            return new HttpResult(response.code(), body != null ? body.bytes() : new byte[0]);
+        } catch (IOException e) {
+            logger.debug("HTTP GET JSON failed for {}: {}", url, e.getMessage());
             return new HttpResult(0, new byte[0]);
         }
     }
