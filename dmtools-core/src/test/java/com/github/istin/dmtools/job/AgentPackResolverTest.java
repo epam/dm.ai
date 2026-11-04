@@ -401,4 +401,41 @@ public class AgentPackResolverTest {
         }
         assertFalse(packsRoot.resolve("my_agent-1.2.0").toFile().exists());
     }
+
+    // ------------------------------------------------------------------
+    // Parent directory creation and $HOME resolution (dm.ai #824)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testResolveCreatesMissingParentDirectories() throws IOException {
+        File zip = buildPack("my_agent", "1.0.0");
+        Path nestedPacksRoot = tmp.getRoot().toPath().resolve("nonexistent/.dmtools/packs");
+        assertFalse(Files.exists(nestedPacksRoot.getParent()));
+
+        AgentPackResolver nestedResolver = new AgentPackResolver(nestedPacksRoot);
+        AgentPackResolver.ResolvedPack pack = nestedResolver.resolve(zip.getAbsolutePath());
+
+        assertTrue(Files.isDirectory(nestedPacksRoot));
+        assertTrue(pack.entryFile.isFile());
+    }
+
+    @Test
+    public void testDefaultPacksRootPrefersHomeEnvOverUserHomeProperty() {
+        assertEquals(
+                Path.of("/builds/proj/.ci-home/.dmtools/packs"),
+                AgentPackResolver.defaultPacksRoot("/builds/proj/.ci-home", "/root")
+        );
+        assertEquals(
+                Path.of("/builds/proj/.ci-home/.dmtools/packs"),
+                AgentPackResolver.defaultPacksRoot("  /builds/proj/.ci-home  ", "/root")
+        );
+        assertEquals(
+                Path.of("/root/.dmtools/packs"),
+                AgentPackResolver.defaultPacksRoot("  ", "/root")
+        );
+        assertEquals(
+                Path.of("/root/.dmtools/packs"),
+                AgentPackResolver.defaultPacksRoot(null, "/root")
+        );
+    }
 }
