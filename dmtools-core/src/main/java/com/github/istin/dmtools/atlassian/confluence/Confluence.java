@@ -795,9 +795,8 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
 
     @NotNull
     public static String prepareBodyForConfluence(String body) {
-        body = body.replaceAll("<br>", "\n").replaceAll("<br/>", "\n");
         body = HtmlCleaner.convertLinksUrlsToConfluenceFormat(body);
-        return body;
+        return body.replaceAll("(?i)<br\\s*/?>", "<br/>");
     }
 
     /**
@@ -810,8 +809,8 @@ public class Confluence extends AtlassianRestClient implements UriToObject {
      */
     @NotNull
     public static String prepareStorageBodyForConfluence(String body) {
-        String prepared = body.replaceAll("<br>", "\n").replaceAll("<br/>", "\n");
-        return HtmlCleaner.convertLinksUrlsToConfluenceFormatPreservingCdata(prepared);
+        String prepared = HtmlCleaner.convertLinksUrlsToConfluenceFormatPreservingCdata(body);
+        return prepared.replaceAll("(?i)<br\\s*/?>", "<br/>");
     }
 
     public static String macroHTML(String body) {
