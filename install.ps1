@@ -82,16 +82,55 @@ function Get-DownloadBase {
     return "https://github.com/$REPO/releases/download/$Version"
 }
 
+# Compare two stable CLI version tags (vX.Y.Z) and return the newer one.
+function Select-NewerCliVersion {
+    param([string]$V1, [string]$V2)
+    if (-not $V1) { return $V2 }
+    if (-not $V2 -or $V1 -eq $V2) { return $V1 }
+    try {
+        $ver1 = [Version]($V1 -replace '^v', '')
+        $ver2 = [Version]($V2 -replace '^v', '')
+        if ($ver2 -gt $ver1) { return $V2 }
+    } catch { }
+    return $V1
+}
+
+# Resolve the latest CLI tag via GitHub /releases/latest HTTP redirect.
+function Get-LatestVersionFromRedirect {
+    try {
+        $response = Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest" -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        $location = $response.Headers.Location
+        if ($location -match 'tag/([^/]+)') {
+            $version = $matches[1]
+            if ($version -match '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+                return $version
+            }
+        }
+    } catch { }
+    return $null
+}
+
 # Get latest CLI release version (filters out skill releases)
 function Get-LatestVersion {
     Write-Progress-Message "Fetching latest CLI release information..."
 
     # Try the public manifest first to avoid GitHub API rate limits.
     $manifestVersion = Get-LatestVersionFromManifest
+    $redirectVersion = Get-LatestVersionFromRedirect
     if ($manifestVersion -ne $null) {
+        if ($redirectVersion -ne $null) {
+            $newerVersion = Select-NewerCliVersion -V1 $manifestVersion -V2 $redirectVersion
+            if ($newerVersion -ne $manifestVersion) {
+                Write-Warn "Manifest version ($manifestVersion) is behind GitHub latest release ($redirectVersion); using $newerVersion."
+                return $newerVersion
+            }
+        }
         return $manifestVersion
     }
-
+    if ($redirectVersion -ne $null) {
+        Write-Progress-Message "Found latest CLI release via redirect: $redirectVersion"
+        return $redirectVersion
+    }
     try {
         # Get all releases (not just latest) to filter CLI releases
         $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO/releases" -TimeoutSec 30

@@ -895,6 +895,45 @@ get_release_download_base() {
     echo "https://github.com/${REPO}/releases/download/${version}"
 }
 
+# Compare two stable CLI version tags (vX.Y.Z) and print the newer one.
+pick_newer_cli_version() {
+    local v1="$1"
+    local v2="$2"
+    if [ -z "$v1" ]; then
+        echo "$v2"
+        return 0
+    fi
+    if [ -z "$v2" ] || [ "$v1" = "$v2" ]; then
+        echo "$v1"
+        return 0
+    fi
+    printf '%s\n%s\n' "$v1" "$v2" | awk -F. '
+    {
+        raw = $0
+        sub(/^v/, "", $1)
+        maj = $1 + 0
+        min = $2 + 0
+        pat = $3 + 0
+        if (NR == 1 || maj > bmaj || (maj == bmaj && min > bmin) || (maj == bmaj && min == bmin && pat > bpat)) {
+            bmaj = maj; bmin = min; bpat = pat; best = raw
+        }
+    }
+    END { print best }'
+}
+
+# Resolve the latest CLI tag via GitHub /releases/latest HTTP redirect (does not consume GitHub REST API rate limits).
+get_latest_version_from_release_redirect() {
+    local effective_url
+    local tag
+    effective_url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' --connect-timeout 5 --max-time 15 "https://github.com/${REPO}/releases/latest" 2>/dev/null) || return 1
+    tag=$(printf '%s\n' "$effective_url" | sed -nE 's#.*/releases/tag/(v[0-9]+\.[0-9]+\.[0-9]+)$#\1#p' | head -1)
+    if [ -n "$tag" ]; then
+        echo "$tag"
+        return 0
+    fi
+    return 1
+}
+
 # Get latest CLI release version (filters out skill/standalone releases, paginates if needed)
 get_latest_version() {
     progress "Fetching latest CLI release information..." >&2
@@ -914,11 +953,27 @@ get_latest_version() {
     if fetch_manifest; then
         version=$(manifest_latest_value "version")
         if [ -n "$version" ] && echo "$version" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            local redirect_version
+            redirect_version=$(get_latest_version_from_release_redirect || true)
+            if [ -n "$redirect_version" ]; then
+                local newer_version
+                newer_version=$(pick_newer_cli_version "$version" "$redirect_version")
+                if [ "$newer_version" != "$version" ]; then
+                    warn "Manifest version ($version) is behind GitHub latest release ($redirect_version); using $newer_version." >&2
+                    version="$newer_version"
+                fi
+            fi
             progress "Found latest CLI release from manifest: $version" >&2
             echo "$version"
             return 0
         fi
         warn "Manifest did not contain a valid latest CLI version, falling back to GitHub API." >&2
+    fi
+
+    if version=$(get_latest_version_from_release_redirect); then
+        progress "Found latest CLI release via redirect: $version" >&2
+        echo "$version"
+        return 0
     fi
 
     # Paginate through releases until a CLI release (^vX.Y.Z$) is found or no more pages

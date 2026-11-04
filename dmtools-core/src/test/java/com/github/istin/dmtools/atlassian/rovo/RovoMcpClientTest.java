@@ -18,6 +18,8 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +35,9 @@ import static org.mockito.Mockito.*;
 class RovoMcpClientTest {
 
     private static class StubRovoMcpClient extends RovoMcpClient {
+        final List<GenericRequest> handshakeRequests = new ArrayList<>();
+        String simulatedSessionHeader = "session-abc-123";
+
         StubRovoMcpClient(String basePath, String authorization, String authType, String defaultCloudId) throws IOException {
             super(basePath, authorization, authType, defaultCloudId);
         }
@@ -40,6 +45,15 @@ class RovoMcpClientTest {
         @Override
         public String post(GenericRequest request) throws IOException {
             return "{}";
+        }
+
+        @Override
+        protected String postMcpHandshakeRequest(GenericRequest genericRequest, boolean captureSessionHeader) throws IOException {
+            handshakeRequests.add(genericRequest);
+            if (captureSessionHeader && simulatedSessionHeader != null) {
+                setSessionId(simulatedSessionHeader);
+            }
+            return "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{}}}";
         }
     }
 
@@ -347,5 +361,47 @@ class RovoMcpClientTest {
         assertTrue(McpCliHandler.isIntegrationConfigured("rovo", config));
         ApplicationConfiguration empty = mock(ApplicationConfiguration.class);
         assertFalse(McpCliHandler.isIntegrationConfigured("rovo", empty));
+    }
+
+    @Test
+    void callMcpTool_performsInitializeHandshakeOnceAndAttachesSessionHeader() throws IOException {
+        doReturn(wrapMcpTextResult("{\"results\":[]}")).when(client).post(any(GenericRequest.class));
+
+        client.rovoSearch("first query", null, null, null);
+        client.rovoSearch("second query", null, null, null);
+
+        assertEquals(2, client.handshakeRequests.size());
+        JSONObject initPayload = new JSONObject(client.handshakeRequests.get(0).getBody());
+        assertEquals("initialize", initPayload.getString("method"));
+        assertEquals(RovoMcpClient.MCP_PROTOCOL_VERSION,
+                initPayload.getJSONObject("params").getString("protocolVersion"));
+
+        JSONObject notifyPayload = new JSONObject(client.handshakeRequests.get(1).getBody());
+        assertEquals("notifications/initialized", notifyPayload.getString("method"));
+        assertFalse(notifyPayload.has("id"));
+
+        assertEquals("session-abc-123", client.getSessionId());
+        assertTrue(client.isSessionInitialized());
+
+        Request signed = client.sign(new Request.Builder().url("https://mcp.atlassian.com/v2/mcp")).build();
+        assertEquals("session-abc-123", signed.header(RovoMcpClient.MCP_SESSION_ID_HEADER));
+    }
+
+    @Test
+    void callMcpTool_reinitializesSessionAndRetriesOnMissingOrExpiredSession400() throws IOException {
+        RestClient.RestClientException missingSession = new RestClient.RestClientException(
+                "400 Bad Request",
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32600,\"message\":\"Bad Request: Request must be an initialize request if no session ID is provided.\"},\"id\":null}",
+                400
+        );
+        doThrow(missingSession)
+                .doReturn(wrapMcpTextResult("{\"results\":[{\"id\":\"recovered\"}]}"))
+                .when(client).post(any(GenericRequest.class));
+
+        String result = client.rovoSearch("retry after session expiry", null, null, null);
+
+        assertEquals("{\"results\":[{\"id\":\"recovered\"}]}", result);
+        assertEquals(4, client.handshakeRequests.size());
+        verify(client, times(2)).post(any(GenericRequest.class));
     }
 }

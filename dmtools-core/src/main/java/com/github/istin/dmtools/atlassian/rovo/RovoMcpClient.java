@@ -11,6 +11,7 @@ import com.github.istin.dmtools.networking.AbstractRestClient;
 import lombok.Getter;
 import lombok.Setter;
 import okhttp3.Request;
+import okhttp3.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -31,6 +32,8 @@ public class RovoMcpClient extends AbstractRestClient {
 
     public static final String DEFAULT_MCP_URL = "https://mcp.atlassian.com/v2/mcp";
 
+    public static final String MCP_PROTOCOL_VERSION = "2025-03-26";
+    public static final String MCP_SESSION_ID_HEADER = "Mcp-Session-Id";
     private static final Logger logger = LogManager.getLogger(RovoMcpClient.class);
 
     private final AtomicInteger requestIdCounter = new AtomicInteger(1);
@@ -42,6 +45,14 @@ public class RovoMcpClient extends AbstractRestClient {
     @Getter
     @Setter
     private String defaultCloudId;
+
+    @Getter
+    @Setter
+    private volatile String sessionId;
+
+    @Getter
+    @Setter
+    private volatile boolean sessionInitialized;
 
     public RovoMcpClient(String basePath, String authorization) throws IOException {
         this(basePath, authorization, "Basic", null);
@@ -106,6 +117,10 @@ public class RovoMcpClient extends AbstractRestClient {
         if (authHeaderValue != null) {
             builder.header("Authorization", authHeaderValue);
         }
+        String currentSessionId = this.sessionId;
+        if (currentSessionId != null && !currentSessionId.trim().isEmpty()) {
+            builder.header(MCP_SESSION_ID_HEADER, currentSessionId.trim());
+        }
         return builder
                 .header("Accept", "application/json, text/event-stream")
                 .header("Content-Type", "application/json");
@@ -149,14 +164,134 @@ public class RovoMcpClient extends AbstractRestClient {
     }
 
     /**
-     * Invokes a remote tool on the Atlassian Rovo MCP server via JSON-RPC 2.0 {@code tools/call}.
+     * Builds a JSON-RPC 2.0 {@code initialize} handshake payload for MCP Streamable HTTP.
+     */
+    public JSONObject buildInitializeRequest() {
+        JSONObject clientInfo = new JSONObject();
+        clientInfo.put("name", "dmtools");
+        clientInfo.put("version", "1.0.0");
+
+        JSONObject params = new JSONObject();
+        params.put("protocolVersion", MCP_PROTOCOL_VERSION);
+        params.put("capabilities", new JSONObject());
+        params.put("clientInfo", clientInfo);
+
+        JSONObject rpc = new JSONObject();
+        rpc.put("jsonrpc", "2.0");
+        rpc.put("id", requestIdCounter.getAndIncrement());
+        rpc.put("method", "initialize");
+        rpc.put("params", params);
+        return rpc;
+    }
+
+    /**
+     * Builds a JSON-RPC 2.0 {@code notifications/initialized} notification payload.
+     */
+    public JSONObject buildInitializedNotification() {
+        JSONObject rpc = new JSONObject();
+        rpc.put("jsonrpc", "2.0");
+        rpc.put("method", "notifications/initialized");
+        return rpc;
+    }
+
+    /**
+     * Performs the MCP Streamable HTTP {@code initialize} handshake once per client session,
+     * capturing the {@code Mcp-Session-Id} response header when returned by the server and
+     * sending {@code notifications/initialized}.
+     */
+    public synchronized void ensureSessionInitialized() throws IOException {
+        if (sessionInitialized) {
+            return;
+        }
+        JSONObject initPayload = buildInitializeRequest();
+        GenericRequest initRequest = new GenericRequest(this, getBasePath());
+        initRequest.setBody(initPayload.toString());
+        String initResponse = postMcpHandshakeRequest(initRequest, true);
+        unwrapMcpResponse(initResponse);
+
+        JSONObject notifyPayload = buildInitializedNotification();
+        GenericRequest notifyRequest = new GenericRequest(this, getBasePath());
+        notifyRequest.setBody(notifyPayload.toString());
+        try {
+            postMcpHandshakeRequest(notifyRequest, false);
+        } catch (IOException e) {
+            logger.debug("Ignoring notifications/initialized error from Rovo MCP endpoint: {}", e.getMessage());
+        }
+        sessionInitialized = true;
+    }
+
+    /**
+     * Resets the current MCP session state so the next tool call performs a fresh initialize handshake.
+     */
+    public synchronized void resetSession() {
+        this.sessionId = null;
+        this.sessionInitialized = false;
+    }
+
+    protected String postMcpHandshakeRequest(GenericRequest genericRequest, boolean captureSessionHeader) throws IOException {
+        String url = genericRequest.url();
+        okhttp3.RequestBody body = okhttp3.RequestBody.create(JSON, genericRequest.getBody());
+        Request.Builder builder = sign(new Request.Builder())
+                .url(url)
+                .header("User-Agent", "DMTools");
+        for (java.util.Map.Entry<String, String> header : genericRequest.getHeaders().entrySet()) {
+            builder.header(header.getKey(), header.getValue());
+        }
+        Request request = builder.post(body).build();
+        try (Response response = client.newCall(request).execute()) {
+            if (captureSessionHeader) {
+                String headerVal = response.header(MCP_SESSION_ID_HEADER);
+                if (headerVal != null && !headerVal.trim().isEmpty()) {
+                    this.sessionId = headerVal.trim();
+                }
+            }
+            if (response.isSuccessful()) {
+                return response.body() != null ? response.body().string() : "";
+            }
+            throw AbstractRestClient.printAndCreateException(request, response);
+        }
+    }
+
+    private static boolean isMissingOrExpiredSessionError(IOException error) {
+        if (error == null) {
+            return false;
+        }
+        String combined = ((error.getMessage() != null ? error.getMessage() : "") + " "
+                + (error instanceof RestClient.RestClientException
+                ? ((RestClient.RestClientException) error).getBody()
+                : "")).toLowerCase();
+        return combined.contains("must be an initialize request")
+                || combined.contains("no session id")
+                || combined.contains("session not found")
+                || combined.contains("invalid session")
+                || combined.contains("session expired");
+    }
+
+    /**
+     * Invokes a remote tool on the Atlassian Rovo MCP server via JSON-RPC 2.0 {@code tools/call},
+     * automatically performing the MCP {@code initialize} handshake first and re-initializing once
+     * if the server reports a missing or expired session.
      */
     public String callMcpTool(String remoteToolName, JSONObject arguments) throws IOException {
+        ensureSessionInitialized();
         JSONObject payload = buildToolCallRequest(remoteToolName, arguments);
         GenericRequest request = new GenericRequest(this, getBasePath());
         request.setBody(payload.toString());
-        String rawResponse = post(request);
-        return unwrapMcpResponse(rawResponse);
+        try {
+            String rawResponse = post(request);
+            return unwrapMcpResponse(rawResponse);
+        } catch (IOException firstError) {
+            if (!isMissingOrExpiredSessionError(firstError)) {
+                throw firstError;
+            }
+            logger.info("Rovo MCP session missing or expired; re-initializing and retrying {}", remoteToolName);
+            resetSession();
+            ensureSessionInitialized();
+            GenericRequest retryRequest = new GenericRequest(this, getBasePath());
+            retryRequest.setBody(buildToolCallRequest(remoteToolName, arguments).toString());
+            String retryResponse = post(retryRequest);
+            return unwrapMcpResponse(retryResponse);
+        }
     }
 
     /**

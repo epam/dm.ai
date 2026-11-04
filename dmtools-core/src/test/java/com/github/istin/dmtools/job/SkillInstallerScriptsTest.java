@@ -88,4 +88,15 @@ class SkillInstallerScriptsTest {
         assertTrue(fn.contains("--global"), "the main installer installs globally only");
         assertFalse(fn.contains("error \""), "a failing skill step must warn, never abort the CLI install");
     }
+
+    @Test
+    void installersCrossCheckManifestVersionAgainstReleaseRedirect() throws IOException {
+        String sh = read("install.sh");
+        assertTrue(sh.contains("pick_newer_cli_version"), "install.sh must compare manifest version with redirect version");
+        assertTrue(sh.contains("get_latest_version_from_release_redirect"), "install.sh must check GitHub releases/latest redirect");
+
+        String ps1 = read("install.ps1");
+        assertTrue(ps1.contains("Select-NewerCliVersion"), "install.ps1 must compare manifest version with redirect version");
+        assertTrue(ps1.contains("Get-LatestVersionFromRedirect"), "install.ps1 must check GitHub releases/latest redirect");
+    }
 }
