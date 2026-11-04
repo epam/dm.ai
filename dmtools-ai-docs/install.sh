@@ -536,7 +536,18 @@ download_skill() {
 
     print_info "Extracting $asset_name..."
     mkdir -p "$extract_dir"
-    unzip -q "$asset_path" -d "$extract_dir"
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -q "$asset_path" -d "$extract_dir"
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -m zipfile -e "$asset_path" "$extract_dir"
+    elif command -v jar >/dev/null 2>&1; then
+        (cd "$extract_dir" && jar xf "$asset_path")
+    elif [ -x "$HOME/.dmtools/jre/bin/jar" ]; then
+        (cd "$extract_dir" && "$HOME/.dmtools/jre/bin/jar" xf "$asset_path")
+    else
+        print_error "No zip extraction tool found (unzip, python3, or jar required)"
+        return 1
+    fi
 
     local skill_source=""
     if [ -f "$extract_dir/SKILL.md" ]; then
