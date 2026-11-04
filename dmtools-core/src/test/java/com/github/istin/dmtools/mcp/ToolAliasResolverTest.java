@@ -266,4 +266,30 @@ class ToolAliasResolverTest {
             assertTrue(hasTrackerAlias, tool + " needs a tracker_* alias");
         }
     }
+
+    @Test
+    @DisplayName("source_code_create_pr is registered for github, gitlab, and ado and routes via DEFAULT_SOURCE_CODE")
+    void testSourceCodeCreatePrRegisteredAndRoutes() {
+        assertEquals("github_create_pr",
+                com.github.istin.dmtools.mcp.generated.MCPToolRegistry
+                        .getToolByAliasAndIntegration("source_code_create_pr", "github").getName());
+        assertEquals("gitlab_create_mr",
+                com.github.istin.dmtools.mcp.generated.MCPToolRegistry
+                        .getToolByAliasAndIntegration("source_code_create_pr", "gitlab").getName());
+        assertEquals("ado_create_pr",
+                com.github.istin.dmtools.mcp.generated.MCPToolRegistry
+                        .getToolByAliasAndIntegration("source_code_create_pr", "ado").getName());
+
+        PropertyReader.setOverrides(Map.of("DEFAULT_SOURCE_CODE", "github"));
+        assertEquals("github_create_pr",
+                ToolAliasResolver.resolve("source_code_create_pr", null, new PropertyReader()));
+
+        PropertyReader.setOverrides(Map.of("DEFAULT_SOURCE_CODE", "gitlab"));
+        assertEquals("gitlab_create_mr",
+                ToolAliasResolver.resolve("source_code_create_pr", null, new PropertyReader()));
+
+        PropertyReader.setOverrides(Map.of("DEFAULT_SOURCE_CODE", "ado"));
+        assertEquals("ado_create_pr",
+                ToolAliasResolver.resolve("source_code_create_pr", null, new PropertyReader()));
+    }
 }
