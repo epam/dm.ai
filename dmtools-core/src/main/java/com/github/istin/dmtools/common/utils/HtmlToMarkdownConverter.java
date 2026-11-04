@@ -53,6 +53,7 @@ public final class HtmlToMarkdownConverter {
     // Strikethrough markers survive CopyDown as plain text and become ~~ in restore() (dm.ai#676).
     private static final String STRIKE_OPEN = "DMSTRIKEOPEN";
     private static final String STRIKE_CLOSE = "DMSTRIKECLOSE";
+    private static final String BR_PLACEHOLDER = "DMBRIDX";
 
     private HtmlToMarkdownConverter() {}
 
@@ -253,9 +254,11 @@ public final class HtmlToMarkdownConverter {
         }
 
         private static String cellToMarkdown(Element cell) {
-            String cellMarkdown = new CopyDown().convert(cell.html()).trim();
+            String cellHtml = cell.html().replaceAll("(?i)<br\\s*/?>", " " + BR_PLACEHOLDER + " ");
+            String cellMarkdown = new CopyDown().convert(cellHtml).trim();
             cellMarkdown = cellMarkdown.replace("|", "\\|");
             cellMarkdown = cellMarkdown.replaceAll("\\s+", " ").trim();
+            cellMarkdown = cellMarkdown.replaceAll("\\s*" + BR_PLACEHOLDER + "\\s*", "<br/>");
             return cellMarkdown;
         }
 

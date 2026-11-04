@@ -60,6 +60,22 @@ public class MarkdownToConfluenceStorageTest {
     }
 
     @Test
+    public void testTableCellBrRoundTrip() {
+        String md = "| Test ID | Check | Comment | Result |\n"
+                + "|---|---|---|---|\n"
+                + "| 1 | Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated | AC 1 | |";
+        String storage = MarkdownToConfluenceStorage.toStorage(md);
+        String prepared = Confluence.prepareStorageBodyForConfluence(storage);
+
+        assertTrue("Should preserve <br/> inside td after prepareStorageBodyForConfluence",
+                prepared.contains("<td>Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated</td>"));
+
+        String roundTripped = ConfluenceStorageMarkdown.toMarkdown(prepared);
+        assertTrue("Should round-trip <br/> inside table cells",
+                roundTripped.contains("| 1 | Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated | AC 1 |  |"));
+    }
+
+    @Test
     public void testFencedCodeBlock() {
         String md = "```java\nSystem.out.println(\"hello\");\n```";
         String storage = MarkdownToConfluenceStorage.toStorage(md);
