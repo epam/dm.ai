@@ -114,8 +114,17 @@ jobs:
           # Push to a transient branch and open a PR so the change goes through
           # the required status checks on main instead of bypassing them.
           BRANCH="chore/release-site-data-${VERSION}"
-          git checkout -b "$BRANCH"
-          git push origin "$BRANCH"
+          git checkout -B "$BRANCH"
+          for attempt in 1 2 3 4; do
+            if git push --force origin "$BRANCH"; then
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "Failed to push $BRANCH after 4 attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
           gh pr create \
             --title "chore(release): update site data for ${VERSION}" \
             --body "Automated release site data update for ${VERSION}." \
