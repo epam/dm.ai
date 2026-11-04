@@ -83,8 +83,10 @@ if [ "$action" = review ]; then
         exit 1
       fi
     fi
-    rm -f "$context/merge_request.json" "$context/changes.json" "$context/discussions.json" "$context/runner.json" "$context/agent.log"
-    rmdir "$context"
+    if ! rm -rf -- "$context"; then
+      echo "Failed to remove the temporary review context: $context" >&2
+      exit 1
+    fi
     exit "$status"
   }
   orchestrator="$PWD"

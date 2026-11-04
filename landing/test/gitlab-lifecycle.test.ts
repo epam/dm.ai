@@ -91,6 +91,14 @@ if (command === 'curl') {
     fs.writeFileSync('dev-change','changed');process.exit(0);
   }
   state.reviews++;
+  if(mode==='review-context-files'||mode==='review-context-failure'||mode==='real-review-isolation'){
+    const context=process.env.DMTOOLS_REVIEW_CONTEXT;
+    fs.mkdirSync(path.join(context,'.agent-cache','nested'),{recursive:true});
+    fs.writeFileSync(path.join(context,'.agent-cache','nested','session'),'runtime');
+    fs.writeFileSync(path.join(context,'scratch.md'),'agent scratch file');
+    fs.symlinkSync(root,path.join(context,'orchestrator-link'));
+  }
+  if(mode==='review-context-failure'){save();process.exit(7);}
   if(mode==='review-failure'){save();process.exit(1);}
   fs.mkdirSync('outputs',{recursive:true});
   const decision=mode==='endless-rework'||mode==='explicit-request-changes'||(mode==='review-rework'&&state.reviews===1)?'request_changes':'approve';
@@ -214,6 +222,7 @@ node -e 'const fs=require("fs");const s=JSON.parse(fs.readFileSync("state.json")
     const command = entry === 'intake'
       ? ['.dmtools/scripts/gitlab-factory-poll-issues.sh']
       : entry === 'wake' ? ['.dmtools/scripts/gitlab-factory-lifecycle.sh', 'wake']
+      : entry === 'review' ? ['.dmtools/scripts/gitlab-factory-lifecycle.sh', 'review', '36']
       : entry === 'job-failure' || entry === 'job-cancelled'
         ? ['.dmtools/scripts/gitlab-factory-job.sh', '8', 'dev', 'bash', '-c', entry === 'job-cancelled' ? 'exit 143' : 'exit 9']
         : ['.dmtools/scripts/gitlab-factory-lifecycle.sh', 'run', '36', '', entry === 'manual-rework' ? 'rework' : ''];
@@ -244,9 +253,11 @@ node -e 'const fs=require("fs");const s=JSON.parse(fs.readFileSync("state.json")
     const events: Event[] = readFileSync(join(dir, 'events.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
     const checkoutPreserved = readFileSync(join(dir, 'app.txt'), 'utf8') === 'original';
     const runtimeLeaked = ['.fah/session', '.cursor/skills/generated'].some((path) => existsSync(join(dir, path)));
+    const reviewRuns = events.filter((e) => e.command === 'dmtools' && !e.args?.[1]?.includes('fa-story-dev'));
+    const contextsRemoved = reviewRuns.every((e) => !existsSync(dirname(e.cwd!)));
     const published = mode.startsWith('real-intake') && existsSync(join(dir, 'pushed'))
       ? realGit('diff', '--name-only', 'main', 'ai/issue-8-456').split('\n').filter(Boolean) : undefined;
-    return { result, state, events, pendingState, checkoutPreserved, runtimeLeaked, published };
+    return { result, state, events, pendingState, checkoutPreserved, runtimeLeaked, contextsRemoved, published };
   } finally {
     rmSync(dir, { recursive: true });
   }
@@ -384,10 +395,11 @@ describe('GitLab automatic lifecycle', { concurrency: 4 }, () => {
 
   for (const mode of ['review-contamination', 'real-review-isolation']) {
     it(`isolates review mutations and runtime artifacts from the next rework checkout (${mode})`, () => {
-      const { result, events, checkoutPreserved, runtimeLeaked } = exercise(mode);
+      const { result, events, checkoutPreserved, runtimeLeaked, contextsRemoved } = exercise(mode);
       assert.equal(result.status, 0, result.stderr);
       assert.equal(checkoutPreserved, true);
       assert.equal(runtimeLeaked, false);
+      assert.equal(contextsRemoved, true);
       const review = events.find((e) => e.command === 'dmtools')!;
       const worktree = events.find((e) => e.command === 'git' && e.args?.[0] === 'worktree' && e.args[1] === 'add')!;
       assert.equal(review.cwd, worktree.args?.[3]);
@@ -403,6 +415,26 @@ describe('GitLab automatic lifecycle', { concurrency: 4 }, () => {
     assert.equal(runtimeLeaked, false);
     assert.ok(events.some((e) => e.command === 'git' && e.args?.[1] === 'remove'));
     assert.ok(!events.some((e) => e.command === 'publish-review'));
+  });
+
+  for (const mode of ['review-context-files', 'review-context-failure']) {
+    it(`removes the entire review context without masking lifecycle success or failure (${mode})`, () => {
+      const { result, state, events, contextsRemoved, checkoutPreserved } = exercise(mode);
+      assert.equal(result.status, mode === 'review-context-failure' ? 1 : 0, result.stderr);
+      assert.equal(contextsRemoved, true);
+      assert.equal(checkoutPreserved, true, 'Cleanup must not follow symlinks into the orchestration checkout');
+      assert.equal(events.filter((e) => e.command === 'publish-review').length, mode === 'review-context-failure' ? 0 : 1);
+      assert.equal(state.mrLabels.includes('needs-human'), mode === 'review-context-failure');
+      assert.doesNotMatch(result.stderr, /Directory not empty/);
+    });
+  }
+
+  it('preserves the original agent exit status when cleaning a failed direct review', () => {
+    const { result, contextsRemoved, checkoutPreserved } = exercise('review-context-failure', 'review');
+    assert.equal(result.status, 7, result.stderr);
+    assert.equal(contextsRemoved, true);
+    assert.equal(checkoutPreserved, true);
+    assert.doesNotMatch(result.stderr, /Directory not empty/);
   });
 
   for (const mode of ['review-failure', 'invalid-verdict', 'stale-review', 'review-fetch-failure', 'review-fetch-stale', 'wrong-validation-head', 'progress-failure', 'no-progress']) {

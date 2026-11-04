@@ -29,8 +29,10 @@ cleanup_rework() {
       exit 1
     fi
   fi
-  rm -f "$context/credential-helper" "$context/merge_request.json" "$context/discussions.json" "$context/pr_discussions_raw.json" "$context/changes.json" "$context/runner.json" "$context/agent.log" "$context/ci_failures.json"
-  rmdir "$context"
+  if ! rm -rf -- "$context"; then
+    echo "Failed to remove the temporary rework context: $context" >&2
+    exit 1
+  fi
   exit "$status"
 }
 trap cleanup_rework EXIT
@@ -80,7 +82,7 @@ done
 printf '%s' "$discussions" > "$context/discussions.json"
 printf '%s' "$discussions" | jq '{
   threads: [.[] | select(any(.notes[]; .resolvable == true and .resolved == false)) | {
-    threadId: .id, rootCommentId: .notes[0].id,
+    threadId: .id, rootCommentId: .notes[0].id, noteIds: [.notes[] | select(.system != true) | .id],
     body: (.notes | map(select(.system != true) | .body) | join("\n\n"))
   }]
 }' > "$context/pr_discussions_raw.json"
@@ -139,8 +141,8 @@ if grep -Eq 'Agent completed with exit code: [1-9][0-9]*|CLI command executed bu
   echo "Rework agent failed; branch and review threads were not published." >&2
   exit 1
 fi
-if [ ! -s outputs/response.md ] || [ ! -s outputs/review_replies.json ]; then
-  echo "Rework must produce outputs/response.md and outputs/review_replies.json." >&2
+if [ ! -s outputs/response.md ]; then
+  echo "Rework must produce outputs/response.md." >&2
   exit 1
 fi
 if grep -q '^BLOCKED:' outputs/response.md; then
@@ -148,28 +150,74 @@ if grep -q '^BLOCKED:' outputs/response.md; then
   echo "Rework is blocked; review threads and trigger labels remain unchanged." >&2
   exit 1
 fi
-
-jq -e --slurpfile inventory "$context/pr_discussions_raw.json" '
-  (.replies | type == "array") and
-  all(.replies[];
-    (.threadId | type == "string" and test("^[0-9a-f]+$")) and
-    (.inReplyToId | type == "number") and
-    (.reply | type == "string" and test("^outputs/review_replies/[A-Za-z0-9_-]+[.]md$"))
-  ) and
-  (([.replies[].threadId] | sort) == ([$inventory[0].threads[].threadId] | sort)) and
-  all(.replies[]; . as $reply |
-    any($inventory[0].threads[];
-      .threadId == $reply.threadId and .rootCommentId == $reply.inReplyToId))
-' outputs/review_replies.json >/dev/null || {
-  echo "Rework replies must cover every open review thread exactly once with its original IDs." >&2
-  exit 1
-}
-while IFS= read -r reply_file; do
-  if [ ! -s "$reply_file" ] || [ -L "$reply_file" ] || [ -L outputs/review_replies ]; then
-    echo "Missing, empty or symlinked rework reply file: $reply_file" >&2
+open_threads=$(jq '.threads | length' "$context/pr_discussions_raw.json")
+if [ ! -s outputs/review_replies.json ]; then
+  if [ "$open_threads" -gt 0 ]; then
+    echo "Rework must write outputs/review_replies.json for the $open_threads open review thread(s)." >&2
     exit 1
   fi
-done < <(jq -r '.replies[].reply' outputs/review_replies.json)
+  printf '{"replies":[]}' > outputs/review_replies.json
+fi
+
+# Resolve every agent reply to one open discussion. threadId is authoritative; inReplyToId (number or digit
+# string, any note in the thread) is the fallback. Replies to non-thread notes such as review summaries are ignored.
+if ! jq -e '.replies | type == "array"' outputs/review_replies.json >/dev/null 2>&1; then
+  echo "outputs/review_replies.json must be a JSON object with a \"replies\" array." >&2
+  exit 1
+fi
+if [ -L outputs/review_replies ]; then
+  echo "outputs/review_replies must not be a symlink." >&2
+  exit 1
+fi
+replies_dir=$(cd outputs && mkdir -p review_replies && cd review_replies && pwd -P)
+: > "$context/replies.tsv"
+reply_problems=()
+reply_index=0
+while IFS= read -r entry; do
+  reply_index=$((reply_index + 1))
+  thread=$(jq -r --argjson entry "$entry" '
+    ($entry.threadId // "" | tostring) as $tid
+    | ($entry.inReplyToId // "" | tostring) as $note
+    | ([.threads[] | select(.threadId == $tid)] | first // empty | .threadId)
+      // ([.threads[] | select(($note | test("^[0-9]+$")) and ((.noteIds // [.rootCommentId]) | map(tostring) | index($note)))] | first // empty | .threadId)
+      // ""' "$context/pr_discussions_raw.json")
+  if [ -z "$thread" ]; then
+    echo "Ignoring rework reply #$reply_index: it does not target an open review thread ($(printf '%s' "$entry" | jq -c '{threadId, inReplyToId}'))."
+    continue
+  fi
+  reply_value=$(printf '%s' "$entry" | jq -r '.reply // "" | tostring')
+  if [[ "$reply_value" == *.md ]] && [[ "$reply_value" != *$'\n'* ]]; then
+    reply_file="$reply_value"
+    [[ "$reply_file" = /* ]] || reply_file="$PWD/$reply_file"
+    reply_parent=$(cd "$(dirname "$reply_file")" 2>/dev/null && pwd -P || true)
+    if [ "$reply_parent" != "$replies_dir" ] || [ -L "$reply_file" ] || [ ! -f "$reply_file" ] || [ ! -s "$reply_file" ]; then
+      reply_problems+=("reply #$reply_index for thread $thread: '$reply_value' is not a non-empty regular file in outputs/review_replies/")
+      continue
+    fi
+    reply_file="$replies_dir/$(basename "$reply_file")"
+  elif [ -n "${reply_value//[[:space:]]/}" ]; then
+    reply_file="$replies_dir/inline_reply_$reply_index.md"
+    printf '%s\n' "$reply_value" > "$reply_file"
+  else
+    reply_problems+=("reply #$reply_index for thread $thread has no reply text or file")
+    continue
+  fi
+  if grep -q "^$thread"$'\t' "$context/replies.tsv"; then
+    reply_problems+=("thread $thread has more than one reply")
+    continue
+  fi
+  printf '%s\t%s\n' "$thread" "$reply_file" >> "$context/replies.tsv"
+done < <(jq -c '.replies[] | if type == "object" then . else {reply: .} end' outputs/review_replies.json)
+while IFS= read -r thread; do
+  grep -q "^$thread"$'\t' "$context/replies.tsv" || reply_problems+=("open thread $thread has no reply")
+done < <(jq -r '.threads[].threadId' "$context/pr_discussions_raw.json")
+if [ "${#reply_problems[@]}" -gt 0 ]; then
+  echo "Rework replies must answer every open review thread exactly once; nothing was published:" >&2
+  printf '  - %s\n' "${reply_problems[@]}" >&2
+  echo "Open threads: $(jq -c '[.threads[] | {threadId, rootCommentId}]' "$context/pr_discussions_raw.json")" >&2
+  echo "Agent replies: $(jq -c '.replies' outputs/review_replies.json | cut -c1-2000)" >&2
+  exit 1
+fi
 
 current_branch=$(git branch --show-current)
 if [ -n "$current_branch" ] && [ "$current_branch" != "$branch" ]; then
@@ -235,16 +283,14 @@ for ((attempt=1; attempt<=12; attempt++)); do
   sleep 5
 done
 
-while IFS= read -r reply; do
-  thread=$(printf '%s' "$reply" | jq -r '.threadId')
+while IFS=$'\t' read -r thread reply_file; do
   if [[ ! "$thread" =~ ^[0-9a-f]+$ ]]; then
     echo "Invalid GitLab discussion ID." >&2
     exit 1
   fi
-  reply_file=$(printf '%s' "$reply" | jq -r '.reply')
   gitlab_api POST "$mr_path/discussions/$thread/notes" --data-urlencode "body@$reply_file" >/dev/null
   gitlab_api PUT "$mr_path/discussions/$thread" --data-urlencode 'resolved=true' >/dev/null
-done < <(jq -c '.replies[]' outputs/review_replies.json)
+done < "$context/replies.tsv"
 gitlab_api POST "$mr_path/notes" --data-urlencode "body@outputs/response.md" >/dev/null
 gitlab_api PUT "$mr_path" --data-urlencode 'add_labels=ai_developed' \
   --data-urlencode 'remove_labels=agent:rework' >/dev/null

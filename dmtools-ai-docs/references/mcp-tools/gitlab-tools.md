@@ -37,6 +37,8 @@ offline snapshots only.
    rework leg). Each request is consumed once and updates the existing source
    branch. Replies are posted in the original discussion threads, then the
    new head is validated and reviewed. Rework never starts automatically.
+   Every open thread needs exactly one reply; if one is missing, duplicated or
+   empty, nothing is pushed and the job log lists each problem.
 5. Approval and successful validation add `pr_approved` to the issue and MR.
    **The MR stays open for human merge.** The factory does not merge it.
 
@@ -74,6 +76,10 @@ validation pipeline and updates the same entry when it finishes.
   skill changes in the main CI checkout cannot block rework or enter its
   commit. The original checkout is preserved, and temporary worktrees are
   cleaned up on both success and failure.
+- Cleanup also removes extra agent-generated files and hidden directories in
+  each temporary review/rework context without following symlinks. Successful
+  cleanup preserves the operation's exit status instead of failing an already
+  published review because the context is not empty.
 - Rework fetch/push authenticates with the development account using a
   username-qualified HTTPS URL, avoiding Runner job-token URL rewriting.
   Push authorization is checked with a dry run before invoking AI. An API

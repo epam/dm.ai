@@ -129,6 +129,13 @@ if (command === 'git') {
   const context = process.env.DMTOOLS_REWORK_CONTEXT;
   const threads = JSON.parse(fs.readFileSync(path.join(context, 'pr_discussions_raw.json'), 'utf8')).threads;
   log({ contextThreads: threads.length, runner: JSON.parse(fs.readFileSync(args[1], 'utf8')) });
+  if(mode==='context-files'||mode==='context-failure'){
+    fs.mkdirSync(path.join(context,'.agent-cache','nested'),{recursive:true});
+    fs.writeFileSync(path.join(context,'.agent-cache','nested','session'),'runtime');
+    fs.writeFileSync(path.join(context,'scratch.md'),'agent scratch file');
+    fs.symlinkSync(root,path.join(context,'orchestrator-link'));
+  }
+  if(mode==='context-failure')process.exit(7);
   fs.mkdirSync('outputs/review_replies', {recursive:true});
   fs.writeFileSync('outputs/response.md', mode === 'blocked' ? 'BLOCKED: Cannot complete safely.' : 'Fixed and tested suggestions.');
   const replies = threads.map(t => {
@@ -138,7 +145,19 @@ if (command === 'git') {
   });
   if (mode === 'missing-reply') replies.pop();
   if (mode === 'wrong-root') replies[0].inReplyToId = 9999;
+  if (mode === 'wrong-ids') Object.assign(replies[0], {threadId: 'ffff', inReplyToId: 9999});
   if (mode === 'unsafe-path') replies[0].reply = '../secret.md';
+  if (mode === 'absolute-reply-path') replies[0].reply = path.resolve(replies[0].reply);
+  if (mode === 'string-note-id') replies[0] = {inReplyToId: String(replies[0].inReplyToId), reply: replies[0].reply};
+  if (mode === 'dotted-reply-name') {
+    fs.renameSync(replies[0].reply, 'outputs/review_replies/thread.app_shell.md');
+    replies[0].reply = 'outputs/review_replies/thread.app_shell.md';
+  }
+  if (mode === 'inline-reply') replies[0].reply = 'Switched to IndexedStack in lib/shell/app_shell.dart.';
+  if (mode === 'summary-reply') replies.push({threadId: 'abc123', inReplyToId: 777, reply: replies[0].reply});
+  if (mode === 'duplicate-reply') replies.push({...replies[0]});
+  if (mode === 'empty-reply') fs.writeFileSync(replies[0].reply, '');
+  if (mode === 'missing-replies-json') { process.exit(0); }
   fs.writeFileSync('outputs/review_replies.json', JSON.stringify({replies}));
 }
 `;
@@ -223,13 +242,26 @@ function runRework(mode = 'success', entry: 'direct' | 'issue' | 'mr' = 'direct'
         assert.equal(events.filter(e=>e.pushed).at(-1)?.mrHead,published.stdout.trim());
       }
     }
-    return { result, events };
+    const agent = events.find((e) => e.command === 'dmtools');
+    const contextRemoved = agent !== undefined && !existsSync(dirname(agent.cwd!));
+    return { result, events, contextRemoved };
   } finally {
     rmSync(dir, { recursive: true });
   }
 }
 
 describe('GitLab rework', () => {
+  for (const mode of ['context-files', 'context-failure']) {
+    it(`removes the entire rework context and preserves the agent exit status (${mode})`, () => {
+      const { result, events, contextRemoved } = runRework(mode);
+      assert.equal(result.status, mode === 'context-failure' ? 7 : 0, result.stderr);
+      assert.equal(contextRemoved, true);
+      assert.equal(events.some((e) => e.command === 'git' && e.args?.includes('push') && !e.args.includes('--dry-run')),
+        mode === 'context-files');
+      assert.doesNotMatch(result.stderr, /Directory not empty/);
+    });
+  }
+
   it('uses the existing MR on every entry point and disables pack-side publishing', () => {
     const pipeline = generated.find((file) => file.path === '.gitlab-ci.yml')!.content;
     assert.match(pipeline, /gitlab-factory-rework.sh "\$CI_MERGE_REQUEST_IID"/);
@@ -364,8 +396,37 @@ describe('GitLab rework', () => {
     });
   }
 
+  for (const mode of ['wrong-root', 'absolute-reply-path', 'string-note-id', 'dotted-reply-name', 'inline-reply', 'summary-reply']) {
+    it(`normalizes an unambiguous agent reply and resolves the open thread (${mode})`, () => {
+      const { result, events } = runRework(mode);
+      assert.equal(result.status, 0, result.stderr);
+      const posts = events.filter((e) => e.command === 'curl' && e.args?.includes('POST') && e.args?.at(-1)?.includes('/discussions/'));
+      assert.equal(posts.length, 1);
+      assert.match(posts[0].args!.at(-1)!, /\/discussions\/2a\/notes$/);
+      assert.ok(posts[0].args!.some((arg) => /^body@\/.+\/outputs\/review_replies\/[^/]+\.md$/.test(arg)));
+      assert.ok(events.some((e) => e.command === 'curl' && e.args?.includes('resolved=true')));
+      if (mode === 'summary-reply') assert.match(result.stdout, /Ignoring rework reply #2: it does not target an open review thread/);
+    });
+  }
+
+  for (const [mode, detail] of [
+    ['wrong-ids', /open thread 2a has no reply/],
+    ['duplicate-reply', /thread 2a has more than one reply/],
+    ['empty-reply', /is not a non-empty regular file in outputs\/review_replies\//],
+    ['unsafe-path', /'\.\.\/secret\.md' is not a non-empty regular file/],
+    ['missing-replies-json', /must write outputs\/review_replies\.json for the 1 open review thread/],
+  ] as const) {
+    it(`explains rejected rework replies before pushing (${mode})`, () => {
+      const { result, events } = runRework(mode);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, detail);
+      if (mode !== 'missing-replies-json') assert.match(result.stderr, /Open threads: \[\{"threadId":"2a","rootCommentId":42\}\]/);
+      assert.ok(!events.some((e) => e.command === 'git' && e.args?.includes('push') && !e.args.includes('--dry-run')));
+    });
+  }
+
   for (const mode of ['closed', 'fork', 'stale-fetch', 'unrelated-head', 'agent-failure', 'agent-reported-failure', 'api-failure',
-    'missing-output', 'missing-reply', 'wrong-root', 'unsafe-path', 'wrong-branch', 'concurrent', 'push-failure', 'stale-head', 'blocked']) {
+    'missing-output', 'missing-reply', 'wrong-ids', 'duplicate-reply', 'unsafe-path', 'wrong-branch', 'concurrent', 'push-failure', 'stale-head', 'blocked']) {
     it(`fails visibly and preserves review threads and trigger labels on ${mode}`, () => {
       const { result, events } = runRework(mode);
       assert.notEqual(result.status, 0);
