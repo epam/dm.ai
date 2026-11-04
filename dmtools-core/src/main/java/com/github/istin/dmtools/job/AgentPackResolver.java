@@ -136,7 +136,12 @@ public class AgentPackResolver {
     }
 
     static Path defaultPacksRoot() {
-        return Path.of(System.getProperty("user.home"), ".dmtools", "packs");
+        return defaultPacksRoot(System.getenv("HOME"), System.getProperty("user.home"));
+    }
+
+    static Path defaultPacksRoot(String homeEnv, String userHomeProp) {
+        String home = (homeEnv != null && !homeEnv.trim().isEmpty()) ? homeEnv.trim() : userHomeProp;
+        return Path.of(home, ".dmtools", "packs");
     }
 
     /**
@@ -504,8 +509,12 @@ public class AgentPackResolver {
             return;
         }
 
-        Path tmp = Files.createTempDirectory(packsRoot.toAbsolutePath().getParent() != null
-                ? packsRoot.toAbsolutePath().getParent() : Files.createTempDirectory("dmtools").toAbsolutePath(),
+        Path tempParent = packsRoot.toAbsolutePath().getParent();
+        if (tempParent != null) {
+            Files.createDirectories(tempParent);
+        }
+        Path tmp = Files.createTempDirectory(tempParent != null
+                ? tempParent : Files.createTempDirectory("dmtools").toAbsolutePath(),
                 "pack-unpack-");
         try {
             Map<String, String> manifestHashes = manifestHashes(manifest);
