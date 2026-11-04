@@ -141,4 +141,14 @@ public class HtmlToMarkdownConverterTest {
         assertTrue(markdown.contains("a = b + c"));
         assertFalse(markdown.contains("DMCODEIDX"));
     }
+
+    @Test
+    public void convert_preservesBrInsideTableCells() {
+        String html = "<table><tbody><tr><th>Test ID</th><th>Check</th></tr>"
+                + "<tr><td>1</td><td>Check that the manifest is generated:<br/>- Column A is populated<br>- Column B is populated</td></tr></tbody></table>";
+
+        String markdown = HtmlToMarkdownConverter.convert(html);
+
+        assertTrue(markdown.contains("| 1 | Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated |"));
+    }
 }

@@ -386,7 +386,18 @@ public class ConfluenceCoverageTest {
     @Test
     public void testPrepareBodyForConfluence() {
         String result = Confluence.prepareBodyForConfluence("line1<br>line2<br/>line3");
-        assertEquals("line1\nline2\nline3", result);
+        assertEquals("line1<br/>line2<br/>line3", result);
+    }
+
+    @Test
+    public void testPrepareStorageBodyForConfluence_PreservesBrInTableCells() {
+        String md = "| Test ID | Check |\n| --- | --- |\n| 1 | Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated |";
+        String storage = MarkdownToConfluenceStorage.toStorage(md);
+        String preparedPlain = Confluence.prepareBodyForConfluence(storage);
+        String preparedStorage = Confluence.prepareStorageBodyForConfluence(storage);
+
+        assertTrue(preparedPlain.contains("<td>Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated</td>"));
+        assertTrue(preparedStorage.contains("<td>Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated</td>"));
     }
 
     @Test
