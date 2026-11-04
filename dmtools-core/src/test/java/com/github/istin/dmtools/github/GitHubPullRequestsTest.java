@@ -54,6 +54,34 @@ public class GitHubPullRequestsTest {
     }
 
     @Test
+    public void testCreatePrWithBodyAndParameterAliasesViaMcpExecutor() throws Exception {
+        GitHubPullRequests spy = spy(gitHub);
+        doReturn("{\"number\":75}").when(spy).post(any(GenericRequest.class));
+
+        java.util.Map<String, Object> args = java.util.Map.of(
+                "workspace", "acme",
+                "repository", "widgets",
+                "title", "Add feature Y",
+                "sourceBranch", "feature/y",
+                "targetBranch", "main"
+        );
+        com.github.istin.dmtools.mcp.generated.MCPToolExecutor.executeTool(
+                "github_create_pr",
+                args,
+                java.util.Map.of("github", spy)
+        );
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(spy).post(captor.capture());
+        assertEquals("https://api.github.com/repos/acme/widgets/pulls", captor.getValue().url());
+        JSONObject body = new JSONObject(captor.getValue().getBody());
+        assertEquals("Add feature Y", body.getString("title"));
+        assertEquals("feature/y", body.getString("head"));
+        assertEquals("main", body.getString("base"));
+        assertFalse(body.has("body"));
+    }
+
+    @Test
     public void testClosePrPatchesStateClosed() throws Exception {
         GitHubPullRequests spy = spy(gitHub);
         doReturn("{}").when(spy).patch(any(GenericRequest.class));

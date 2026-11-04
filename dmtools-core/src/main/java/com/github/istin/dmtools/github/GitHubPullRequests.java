@@ -29,25 +29,39 @@ public abstract class GitHubPullRequests extends GitHubIssues {
             name = "github_create_pr",
             description = "Create a GitHub pull request",
             integration = "github",
-            category = "pull_requests"
+            category = "pull_requests",
+            aliases = {"source_code_create_pr"}
     )
     public String createPr(
-            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = true, example = "IstiN")
+            @MCPParam(name = "owner", description = "The repository owner (user or organization)", required = true, example = "IstiN", aliases = {"workspace"})
             String owner,
-            @MCPParam(name = "repo", description = "The repository name", required = true, example = "dmtools")
+            @MCPParam(name = "repo", description = "The repository name", required = true, example = "dmtools", aliases = {"repository"})
             String repo,
             @MCPParam(name = "title", description = "The title of the new pull request", required = true, example = "Add feature X")
             String title,
-            @MCPParam(name = "head", description = "The branch containing changes (source)", required = true, example = "feature/x")
+            @MCPParam(name = "head", description = "The branch containing changes (source)", required = true, example = "feature/x", aliases = {"sourceBranch", "sourceRefName"})
             String head,
-            @MCPParam(name = "base", description = "The branch to merge changes into (target)", required = true, example = "main")
+            @MCPParam(name = "base", description = "The branch to merge changes into (target)", required = true, example = "main", aliases = {"targetBranch", "targetRefName"})
             String base) throws IOException {
+        return createPr(owner, repo, title, head, base, null);
+    }
+
+    public String createPr(
+            String owner,
+            String repo,
+            String title,
+            String head,
+            String base,
+            String body) throws IOException {
         String path = path(String.format("repos/%s/%s/pulls", owner, repo));
         GenericRequest postRequest = new GenericRequest(this, path);
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("title", title);
         jsonObject.put("head", head);
         jsonObject.put("base", base);
+        if (body != null) {
+            jsonObject.put("body", body);
+        }
         postRequest.setBody(jsonObject.toString());
         return post(postRequest);
     }
