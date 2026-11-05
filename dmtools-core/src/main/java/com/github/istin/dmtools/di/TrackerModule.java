@@ -10,6 +10,7 @@ import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.github.GitHubTrackerClient;
+import com.github.istin.dmtools.gitlab.GitLabTrackerClient;
 import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
 import dagger.Module;
 import dagger.Provides;
@@ -35,6 +36,7 @@ public class TrackerModule {
         boolean adoAttempted = false;
         boolean rallyAttempted = false;
         boolean githubAttempted = false;
+        boolean gitlabAttempted = false;
         
         // Check if a specific default tracker is configured
         String defaultTracker = configuration.getDefaultTracker();
@@ -104,12 +106,24 @@ public class TrackerModule {
                     logger.error("Failed to initialize GitHubTrackerClient (DEFAULT_TRACKER=github): " + e.getMessage());
                 }
                 githubAttempted = true;
+            } else if ("gitlab".equalsIgnoreCase(defaultTracker.trim())) {
+                try {
+                    logger.debug("Attempting to initialize TrackerClient via GitLabTrackerClient as DEFAULT_TRACKER=gitlab...");
+                    TrackerClient<? extends ITicket> gitlabClient = GitLabTrackerClient.getInstance();
+                    if (gitlabClient != null) {
+                        logger.debug("GitLabTrackerClient initialized successfully.");
+                        return gitlabClient;
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to initialize GitLabTrackerClient (DEFAULT_TRACKER=gitlab): " + e.getMessage());
+                }
+                gitlabAttempted = true;
             } else {
-                logger.warn("Unknown DEFAULT_TRACKER value: '{}'. Valid values: 'jira', 'ado', 'rally', 'jira_xray', 'github'", defaultTracker);
+                logger.warn("Unknown DEFAULT_TRACKER value: '{}'. Valid values: 'jira', 'ado', 'rally', 'jira_xray', 'github', 'gitlab'", defaultTracker);
             }
         }
         
-        // Auto-detection fallback (in order: Jira -> ADO -> Rally)
+        // Auto-detection fallback (Jira -> ADO -> Rally -> GitHub -> GitLab)
         logger.info("Auto-detecting available tracker configuration...");
         
         // Try Jira if not already attempted
@@ -167,6 +181,20 @@ public class TrackerModule {
                 logger.debug("GitHubTrackerClient auto-detection failed: {}", e.getMessage());
             }
         }
+
+        // Try GitLab last so existing provider auto-detection precedence is preserved.
+        if (!gitlabAttempted) {
+            try {
+                logger.debug("Attempting to auto-detect GitLabTrackerClient...");
+                TrackerClient<? extends ITicket> gitlabClient = GitLabTrackerClient.getInstance();
+                if (gitlabClient != null) {
+                    logger.debug("GitLabTrackerClient auto-detected and initialized successfully.");
+                    return gitlabClient;
+                }
+            } catch (Exception e) {
+                logger.debug("GitLabTrackerClient auto-detection failed: {}", e.getMessage());
+            }
+        }
         
         // No tracker configuration found
         if (isTestEnvironment()) {
@@ -175,11 +203,12 @@ public class TrackerModule {
             return new com.github.istin.dmtools.common.tracker.NoOpTrackerClient();
         }
 
-        logger.error("No tracker configuration found. Please configure one of: JIRA, ADO, Rally, or X-ray");
+        logger.error("No tracker configuration found. Please configure one of: JIRA, ADO, Rally, GitHub, GitLab, or X-ray");
         throw new RuntimeException("Failed to create TrackerClient instance. " +
                 "Please configure JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +
                 "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN), " +
                 "Rally (RALLY_PATH + RALLY_TOKEN), or " +
+                "GitLab (GITLAB_TOKEN), GitHub (SOURCE_GITHUB_TOKEN), or " +
                 "X-ray (JIRA_BASE_PATH + JIRA_API_TOKEN + XRAY_CLIENT_ID + XRAY_CLIENT_SECRET + XRAY_BASE_PATH)");
     }
     
