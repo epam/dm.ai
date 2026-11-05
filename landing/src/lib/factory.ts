@@ -276,6 +276,8 @@ function runnerJson(
       cliPrompts: [
         'Review the existing GitLab MR described by DMTOOLS_REVIEW_CONTEXT. Read merge_request.json, ' +
         'changes.json and discussions.json from that directory. Review the current diff, not the CI checkout. ' +
+        'Your working directory is the MR checkout. Write all review artifacts only under its outputs/ directory. ' +
+        'Treat DMTOOLS_REVIEW_CONTEXT as read-only input: never create or copy outputs there, and do not remove it. ' +
         'Write outputs/pr_review_general.md with your verdict and findings. ' +
         'Write outputs/pr_review.json as {"decision":"approve",' +
         '"generalComment":"outputs/pr_review_general.md","inlineComments":[' +
@@ -856,6 +858,23 @@ export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, 
     functions = functions.replace('git status --porcelain --untracked-files=all',
       "git status --porcelain --untracked-files=all -- . ':!input' ':!outputs' ':!logs'")
       .replace('  git add -A\n', "  git add -A -- . ':!input' ':!outputs' ':!logs'\n");
+    functions = replaceGitlabAnchor(functions,
+      `  if [ "$status" -ne 0 ]; then
+    rm -f "$output_file"
+    return "$status"
+  fi`,
+      `  if [ "$status" -ne 0 ]; then
+    if grep -Fq 'rmdir: failed to remove ' "$output_file" &&
+      grep -Fq 'Directory not empty' "$output_file" &&
+      grep -Fq 'Agent completed with exit code: 0' "$output_file" &&
+      ! grep -Eq 'Agent completed with exit code: [1-9][0-9]*|CLI command executed but did not produce output file:' "$output_file"; then
+      echo "Ignoring temporary-directory cleanup failure after successful agent completion." >&2
+      status=0
+    else
+      rm -f "$output_file"
+      return "$status"
+    fi
+  fi`);
     functions = replaceGitlabAnchor(functions, '  echo "Created GitLab merge request: $mr_url"',
       '  printf \'%s\' "$mr_response" | jq -er \'.iid | numbers\' > "${DMTOOLS_FACTORY_MR_FILE:?Missing MR result file}"\n' +
       '  echo "Created GitLab merge request: $mr_url"');

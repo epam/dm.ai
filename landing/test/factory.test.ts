@@ -501,6 +501,11 @@ describe('Source control options', () => {
     assert.match(poller, /branch protection/);
     assert.match(poller, /projects\/\$CI_PROJECT_ID\/merge_requests/);
     assert.match(poller, /Created GitLab merge request:/);
+    const lifecycleFiles = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true }), gitlabTemplates);
+    const reviewRunner = JSON.parse(lifecycleFiles.find((file) => file.path === '.dmtools/runners/fa-review.json')!.content);
+    const reviewPrompt = reviewRunner.params.cliPrompts.join('\n');
+    assert.match(reviewPrompt, /Write all review artifacts only under its outputs\/ directory/);
+    assert.match(reviewPrompt, /Treat DMTOOLS_REVIEW_CONTEXT as read-only input/);
     assert.ok(
       poller.indexOf('publish_issue_changes "$iid" "$base_sha"') <
         poller.indexOf('add_labels=$result_label'),
@@ -510,6 +515,26 @@ describe('Source control options', () => {
     assert.equal(gitlabToken.name, 'GITLAB_TOKEN');
     assert.match(gitlabToken.hint, /api and write_repository scopes/);
     assert.match(gitlabToken.hint, /Developer or higher access/);
+  });
+
+  it('ignores a non-empty-directory cleanup failure only after successful agent completion', () => {
+    const poller = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true }), gitlabTemplates)
+      .find((file) => file.path === '.dmtools/scripts/gitlab-factory-poll-issues.sh')!.content;
+    const runAgent = poller.match(/run_agent\(\) \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(runAgent, 'rendered poller should contain run_agent');
+
+    const runWithOutput = (completion: string) => [
+      'set -Eeuo pipefail',
+      runAgent,
+      `dmtools() { printf '%s\\n' '${completion}' "rmdir: failed to remove '/tmp/context': Directory not empty"; return 1; }`,
+      'run_agent review.json',
+    ].join('\n');
+    const recovered = spawnSync('bash', ['-c', runWithOutput('Agent completed with exit code: 0')], { encoding: 'utf8' });
+    assert.equal(recovered.status, 0, recovered.stderr);
+    assert.match(recovered.stderr, /Ignoring temporary-directory cleanup failure/);
+
+    const failedAgent = spawnSync('bash', ['-c', runWithOutput('Agent completed with exit code: 1')], { encoding: 'utf8' });
+    assert.notEqual(failedAgent.status, 0);
   });
 
   it('replaces a truncated trigger token instead of configuring a webhook that returns 404', async () => {
