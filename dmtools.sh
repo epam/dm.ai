@@ -271,6 +271,12 @@ find_jar_file() {
 
 JAR_FILE=$(find_jar_file)
 
+# Propagate $HOME to the JVM when set (e.g. redirected HOME in CI containers)
+JAVA_HOME_OPT=()
+if [ -n "${HOME:-}" ]; then
+    JAVA_HOME_OPT=("-Duser.home=$HOME")
+fi
+
 # Prints the usage text. JobRunner MUST get an explicit --help: with no arguments and a TTY it
 # starts the interactive command picker instead (dm.ai#670: `dmtools --help` opened the picker).
 usage() {
@@ -284,7 +290,7 @@ Or if you're developing locally, build the project first:
 
 Note: Java 17+ is required for DMTools to run."
     fi
-    execute_java_command "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner --help
+    execute_java_command "$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true -Djava.rmi.server.hostname=127.0.0.1 --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner --help
     exit 0
 }
 
@@ -292,7 +298,7 @@ Note: Java 17+ is required for DMTools to run."
 # Parse arguments
 if [ $# -eq 0 ]; then
     if [ -t 0 ] && [ -t 1 ]; then
-        chosen=$("$JAVA_CMD" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner interactive)
+        chosen=$("$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:log4j2-cli.xml -Dlog4j.configuration=log4j2-cli.xml -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner interactive)
         if [ -n "$chosen" ]; then
             if [[ "$chosen" == run:* ]]; then
                 target="${chosen#run:}"
@@ -403,7 +409,7 @@ case "$COMMAND" in
         usage
         ;;
     "interactive"|"i")
-        chosen=$("$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner interactive)
+        chosen=$("$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner interactive)
         if [ -n "$chosen" ]; then
             if [[ "$chosen" == run:* ]]; then
                 target="${chosen#run:}"
@@ -433,7 +439,7 @@ case "$COMMAND" in
         if [ -z "$JAR_FILE" ] || [ ! -f "$JAR_FILE" ]; then
             error "DMTools JAR file not found. Please install DMTools first or build the project."
         fi
-        "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner doctor
+        "$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner doctor
         exit $?
         ;;
     "run")
@@ -449,7 +455,7 @@ case "$COMMAND" in
 
         info "Executing job with file: $JSON_FILE"
         # Run is not a tool — stderr must NOT be suppressed so errors are visible in CI logs
-        "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE" "${EXTRA_RUN_ARGS[@]}"
+        "$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner run "$JSON_FILE" "${EXTRA_RUN_ARGS[@]}"
         exit $?
         ;;
 esac
@@ -475,9 +481,9 @@ if [[ "$COMMAND" == -* ]]; then
     
     # Execute directly without mcp prefix
     if [ "$DEBUG" = true ]; then
-        "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}"
+        "$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}"
     else
-        "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}" 2>/dev/null
+        "$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner "${CMD_ARGS[@]}" 2>/dev/null
     fi
     exit $?
 fi
@@ -526,7 +532,7 @@ fi
 
 # Execute command via JobRunner as MCP tool
 if [ "$DEBUG" = true ]; then
-    "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}"
+    "$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}"
 else
-    "$JAVA_CMD" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}" 2>/dev/null
+    "$JAVA_CMD" "${JAVA_HOME_OPT[@]}" -Dlog4j2.configurationFile=classpath:$LOG_CONFIG -Dlog4j.configuration=$LOG_CONFIG -Dlog4j2.disable.jmx=true -Djava.net.preferIPv4Stack=true --add-opens java.base/java.lang=ALL-UNNAMED -XX:-PrintWarnings -Dpolyglot.engine.WarnInterpreterOnly=false -Dpolyglotimpl.AttachLibraryFailureAction=ignore -cp "$JAR_FILE" com.github.istin.dmtools.job.JobRunner mcp "${CMD_ARGS[@]}" 2>/dev/null
 fi

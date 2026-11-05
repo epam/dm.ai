@@ -176,11 +176,6 @@ public class BasicJiraClient extends JiraClient<Ticket> {
     }
 
     @Override
-    public void deleteCommentIfExists(String ticketKey, String comment) throws IOException {
-
-    }
-
-    @Override
     public String[] getDefaultQueryFields() {
         return defaultJiraFields;
     }

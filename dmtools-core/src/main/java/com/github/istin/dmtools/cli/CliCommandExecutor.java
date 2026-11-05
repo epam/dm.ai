@@ -79,6 +79,24 @@ public class CliCommandExecutor {
      * @throws InterruptedException If the command is interrupted
      * @throws SecurityException If command is not whitelisted
      */
+    public String executeCommand(String command, String workingDirectory)
+            throws IOException, InterruptedException {
+        return executeCommand(command, workingDirectory, null);
+    }
+
+    /**
+     * Execute CLI command from JavaScript post-action function with optional expected non-zero exit handling.
+     *
+     * @param command CLI command to execute (must start with whitelisted command)
+     * @param workingDirectory Working directory for command execution (optional, defaults to git root or current directory)
+     * @param expectNonZeroExit When {@code "true"}, non-zero exit codes are treated as expected outcomes:
+     *                          no exception is logged at ERROR, only a single concise DEBUG line is emitted,
+     *                          and the exception is thrown without causing noisy stack traces in the log
+     * @return Command output as string (stdout/stderr combined)
+     * @throws IOException If an I/O error occurs during command execution
+     * @throws InterruptedException If the command is interrupted
+     * @throws SecurityException If command is not whitelisted
+     */
     @MCPTool(
         name = "cli_execute_command",
         description = "Execute CLI commands from JavaScript post-actions. Base whitelist: git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az. Additional commands can be enabled via CLI_ALLOWED_COMMANDS env var (comma-separated) in dmtools.env or agent envVariables, e.g. CLI_ALLOWED_COMMANDS=find,ls,cat,pytest,python3,curl,bash,run-cursor-agent.sh. Returns command output as string.",
@@ -97,7 +115,13 @@ public class CliCommandExecutor {
             description = "Working directory for command execution. Defaults to repository root if not specified. Use absolute path or path relative to current directory.",
             required = false,
             example = "/path/to/repo"
-        ) String workingDirectory
+        ) String workingDirectory,
+        @MCPParam(
+            name = "expectNonZeroExit",
+            description = "When 'true', non-zero exit codes are treated as expected outcomes: suppresses ERROR stack trace logging (logs a single DEBUG line instead) while still propagating the failure.",
+            required = false,
+            example = "true"
+        ) String expectNonZeroExit
     ) throws IOException, InterruptedException {
         
         // Validate command is not null or empty
@@ -106,6 +130,7 @@ public class CliCommandExecutor {
         }
         
         String trimmedCommand = command.trim();
+        boolean expectedNonZero = Boolean.parseBoolean(expectNonZeroExit);
         
         // Security check: Validate command against whitelist (base + configurable extras)
         Set<String> effectiveAllowed = buildEffectiveAllowedCommands();
@@ -139,7 +164,14 @@ public class CliCommandExecutor {
         } catch (IOException | InterruptedException e) {
             // Mask sensitive data in error message
             String maskedError = maskSensitiveData(e.getMessage() != null ? e.getMessage() : "");
-            logger.error("Command execution failed: {} - {}", maskedCommand, maskedError, e);
+            if (e instanceof CliCommandFailedException && (expectedNonZero || isKnownExitCodeProbe(trimmedCommand))) {
+                CliCommandFailedException failed = (CliCommandFailedException) e;
+                logger.debug("Command exited with expected code {}: {}", failed.getExitCode(), maskedCommand);
+            } else if (e instanceof CliCommandFailedException && !logger.isTraceEnabled()) {
+                logger.error("Command execution failed: {} - {}", maskedCommand, maskedError);
+            } else {
+                logger.error("Command execution failed: {} - {}", maskedCommand, maskedError, e);
+            }
             
             // Re-throw with masked error message
             if (e instanceof CliCommandFailedException) {
@@ -191,6 +223,32 @@ public class CliCommandExecutor {
         // Basename match (strips leading ./ or full path)
         String basename = Paths.get(token).getFileName().toString();
         return allowed.contains(basename);
+    }
+
+    /**
+     * Returns {@code true} when {@code command} is a standard git exit-code probe whose
+     * non-zero exit code signals a normal boolean condition rather than a command failure
+     * (e.g. {@code git check-ignore}, {@code git rev-parse --quiet --verify},
+     * {@code git merge-base --is-ancestor}, {@code git diff --quiet},
+     * {@code git show-ref --verify --quiet}).
+     *
+     * @param command CLI command string
+     * @return {@code true} if the command is a known exit-code probe
+     */
+    public static boolean isKnownExitCodeProbe(String command) {
+        if (command == null) {
+            return false;
+        }
+        String normalized = command.trim().replaceAll("\\s+", " ").toLowerCase();
+        if (!normalized.startsWith("git ") && !normalized.contains("/git ")) {
+            return false;
+        }
+        return normalized.contains(" check-ignore ")
+                || normalized.endsWith(" check-ignore")
+                || (normalized.contains(" rev-parse ") && normalized.contains("--verify") && (normalized.contains("--quiet") || normalized.contains(" -q")))
+                || (normalized.contains(" merge-base ") && normalized.contains("--is-ancestor"))
+                || (normalized.contains(" diff ") && normalized.contains("--quiet"))
+                || (normalized.contains(" show-ref ") && normalized.contains("--verify") && (normalized.contains("--quiet") || normalized.contains(" -q")));
     }
     
     /**

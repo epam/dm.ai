@@ -21,9 +21,11 @@ import com.github.istin.dmtools.microsoft.ado.model.AdoUser;
 import com.github.istin.dmtools.common.model.IUser;
 import com.github.istin.dmtools.networking.AbstractRestClient;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.MediaType;
+import okhttp3.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -764,6 +766,28 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         });
     }
 
+    @MCPTool(
+            name = "ado_get_work_item_type_states",
+            description = "List the valid states for a work item type in the project (e.g., New, Active, Resolved, Closed)",
+            integration = "ado",
+            category = "work_item_management"
+    )
+    public String getWorkItemTypeStates(
+            @MCPParam(name = "workItemType", description = "The work item type (e.g. User Story, Bug, Task)", required = true, example = "User Story", aliases = {"issueType", "type"})
+            String workItemType,
+            @MCPParam(name = "project", description = "The project name (defaults to the configured project)", required = false)
+            String projectName
+    ) throws IOException {
+        if (workItemType == null || workItemType.trim().isEmpty()) {
+            throw new IllegalArgumentException("workItemType must not be empty");
+        }
+        String targetProject = (projectName != null && !projectName.trim().isEmpty()) ? projectName.trim() : project;
+        String encodedType = workItemType.trim().replace(" ", "%20");
+        String path = String.format("/%s/_apis/wit/workitemtypes/%s/states", targetProject, encodedType);
+        GenericRequest request = new GenericRequest(this, path(path)).param("api-version", API_VERSION);
+        return execute(request);
+    }
+
     // ========== Label/Tag Operations ==========
 
     @MCPTool(
@@ -1442,67 +1466,117 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "email", description = "User email address", required = true)
             String email
     ) throws IOException {
-        // Use Graph API to search for user by email
-        // Graph API endpoint: https://vssps.dev.azure.com/{organization}/_apis/graph/users?api-version=7.1-preview.1
         String graphUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users";
-        GenericRequest request = new GenericRequest(this, graphUrl)
-                .param("api-version", "7.1-preview.1");
-        
-        String response = request.execute();
-        JSONObject result = new JSONObject(response);
-        JSONArray users = result.optJSONArray("value");
-        
-        if (users != null) {
-            for (int i = 0; i < users.length(); i++) {
-                JSONObject user = users.getJSONObject(i);
-                String principalName = user.optString("principalName");
-                String mailAddress = user.optString("mailAddress");
-                
-                if (email.equalsIgnoreCase(principalName) || email.equalsIgnoreCase(mailAddress)) {
-                    return new AdoUser(user);
+        String continuationToken = null;
+        Set<String> seenTokens = new HashSet<>();
+        for (int page = 0; page < 100; page++) {
+            GenericRequest request = new GenericRequest(this, graphUrl)
+                    .param("api-version", "7.1-preview.1")
+                    .param("continuationToken", continuationToken);
+            GraphPageResult pageResult = executeGraphPage(request);
+            JSONObject result = new JSONObject(pageResult.body);
+            JSONArray users = result.optJSONArray("value");
+            if (users != null) {
+                for (int i = 0; i < users.length(); i++) {
+                    JSONObject user = users.getJSONObject(i);
+                    if (email.equalsIgnoreCase(user.optString("principalName"))
+                            || email.equalsIgnoreCase(user.optString("mailAddress"))) {
+                        return new AdoUser(user);
+                    }
                 }
             }
+            String nextToken = pageResult.continuationToken;
+            if (nextToken == null || nextToken.isEmpty()) {
+                nextToken = result.optString("continuationToken", null);
+            }
+            if (nextToken == null || nextToken.isEmpty() || !seenTokens.add(nextToken)) {
+                break;
+            }
+            continuationToken = nextToken;
         }
-        
-        // Fallback: try to get user by UPN (User Principal Name) directly
-        // This is more efficient if the email format matches UPN
+
         try {
-            String userDescriptor = getUserDescriptorByEmail(email);
-            if (userDescriptor != null) {
-                String userUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users/" + userDescriptor;
-                GenericRequest userRequest = new GenericRequest(this, userUrl)
-                        .param("api-version", "7.1-preview.1");
-                String userResponse = userRequest.execute();
-                return new AdoUser(new JSONObject(userResponse));
+            AdoUser fallbackUser = findUserViaIdentities(email);
+            if (fallbackUser != null) {
+                return fallbackUser;
             }
         } catch (Exception e) {
-            logger.warn("Failed to get user descriptor for email: {}", email, e);
+            logger.warn("Failed to resolve user via Identities API for email: {}", email, e);
         }
-        
+
         throw new IOException("User not found with email: " + email);
     }
-    
-    /**
-     * Get user descriptor (a unique identifier) by email.
-     * This is used for more specific user lookups.
-     */
-    private String getUserDescriptorByEmail(String email) throws IOException {
-        // Use Identities API to find user by email
+
+    protected static class GraphPageResult {
+        final String body;
+        final String continuationToken;
+
+        GraphPageResult(String body, String continuationToken) {
+            this.body = body;
+            this.continuationToken = continuationToken;
+        }
+    }
+
+    protected GraphPageResult executeGraphPage(GenericRequest request) throws IOException {
+        if (getClass() != BasicAzureDevOpsClient.class && getClient() == super.getClient()) {
+            return new GraphPageResult(request.execute(), null);
+        }
+        Request.Builder requestBuilder = sign(new Request.Builder())
+                .url(request.url())
+                .header("User-Agent", "DMTools");
+        for (Map.Entry<String, String> header : request.getHeaders().entrySet()) {
+            requestBuilder.header(header.getKey(), header.getValue());
+        }
+        Request httpRequest = requestBuilder.get().build();
+        try (okhttp3.Response response = getClient().newCall(httpRequest).execute()) {
+            if (response.isSuccessful()) {
+                String body = response.body() != null ? response.body().string() : "{}";
+                String token = response.header("X-MS-ContinuationToken");
+                return new GraphPageResult(body, token);
+            }
+            throw printAndCreateException(httpRequest, response);
+        }
+    }
+
+    private AdoUser findUserViaIdentities(String email) throws IOException {
         String identitiesUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/identities";
         GenericRequest request = new GenericRequest(this, identitiesUrl)
                 .param("searchFilter", "MailAddress")
                 .param("filterValue", email)
                 .param("api-version", "7.1-preview.1");
-        
+
         String response = request.execute();
         JSONObject result = new JSONObject(response);
         JSONArray identities = result.optJSONArray("value");
-        
-        if (identities != null && identities.length() > 0) {
-            JSONObject identity = identities.getJSONObject(0);
-            return identity.optString("descriptor");
+        if (identities == null || identities.length() == 0) {
+            return null;
         }
-        
+        JSONObject identity = identities.getJSONObject(0);
+        String id = identity.optString("id", null);
+        String displayName = identity.optString("customDisplayName", null);
+        if (displayName == null || displayName.isEmpty()) {
+            displayName = identity.optString("providerDisplayName", null);
+        }
+        if (displayName == null || displayName.isEmpty()) {
+            displayName = identity.optString("displayName", null);
+        }
+        if ((id != null && !id.isEmpty()) || (displayName != null && !displayName.isEmpty())) {
+            JSONObject normalized = new JSONObject(identity.toString());
+            if (displayName != null && !displayName.isEmpty()) {
+                normalized.put("displayName", displayName);
+            }
+            if (!normalized.has("mailAddress") && !normalized.has("emailAddress")) {
+                normalized.put("mailAddress", email);
+            }
+            return new AdoUser(normalized);
+        }
+        String descriptor = identity.optString("descriptor", null);
+        if (descriptor != null && !descriptor.isEmpty() && !descriptor.contains(";")) {
+            String userUrl = "https://vssps.dev.azure.com/" + organization + "/_apis/graph/users/" + descriptor;
+            GenericRequest userRequest = new GenericRequest(this, userUrl)
+                    .param("api-version", "7.1-preview.1");
+            return new AdoUser(new JSONObject(userRequest.execute()));
+        }
         return null;
     }
 
@@ -1652,6 +1726,65 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
                 .param("searchCriteria.status", status)
                 .param("api-version", API_VERSION);
         return execute(request);
+    }
+
+    @MCPTool(
+            name = "ado_create_pr",
+            description = "Create a pull request in an Azure DevOps Git repository.",
+            integration = "ado",
+            category = "pull_requests",
+            aliases = {"source_code_create_pr"}
+    )
+    public String createPullRequest(
+            @MCPParam(name = "repository", description = "The Git repository name", required = true, example = "ai-native-sdlc-blueprint")
+            String repository,
+            @MCPParam(name = "sourceRefName", description = "The full source branch ref", required = true, example = "refs/heads/feature/saved-cards")
+            String sourceRefName,
+            @MCPParam(name = "targetRefName", description = "The full target branch ref", required = true, example = "refs/heads/main")
+            String targetRefName,
+            @MCPParam(name = "title", description = "The pull request title", required = true, example = "Add saved cards")
+            String title,
+            @MCPParam(name = "description", description = "The pull request description (Markdown supported)", required = false)
+            String description
+    ) throws IOException {
+        GenericRequest request =
+                new GenericRequest(this, path(gitPrPath(repository, "")))
+                        .param("api-version", API_VERSION);
+        JSONObject body =
+                new JSONObject()
+                        .put("sourceRefName", normalizeBranchRef(sourceRefName))
+                        .put("targetRefName", normalizeBranchRef(targetRefName))
+                        .put("title", title);
+        if (description != null) {
+            body.put("description", description);
+        }
+        Request httpRequest =
+                sign(new Request.Builder())
+                        .url(request.url())
+                        .header("User-Agent", "DMTools")
+                        .post(RequestBody.create(body.toString(), JSON))
+                        .build();
+        OkHttpClient creationClient =
+                getClient().newBuilder()
+                        .retryOnConnectionFailure(false)
+                        .build();
+        try (Response response = creationClient.newCall(httpRequest).execute()) {
+            if (!response.isSuccessful()) {
+                throw printAndCreateException(httpRequest, response);
+            }
+            return response.body() != null ? response.body().string() : "";
+        }
+    }
+
+    private static String normalizeBranchRef(String refName) {
+        if (refName == null) {
+            return null;
+        }
+        String trimmed = refName.trim();
+        if (trimmed.isEmpty() || trimmed.startsWith("refs/")) {
+            return trimmed;
+        }
+        return "refs/heads/" + trimmed;
     }
 
     @MCPTool(
@@ -2429,10 +2562,11 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
                 throw AbstractRestClient.printAndCreateException(request, response);
             }
         } catch (IOException e) {
-            logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
-            
             // Check if it's a recoverable connection error
             boolean isRecoverableError = isRecoverableConnectionError(e);
+            if (isRecoverableError) {
+                logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/3)", url, e.getMessage(), retryCount + 1);
+            }
             
             // Maximum of 3 attempts (2 retries)
             final int MAX_RETRIES = 2;
@@ -2451,7 +2585,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
                 return patch(genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
-                    logger.error("Non-recoverable PATCH connection error for URL: {}", url, e);
+                    logNonRecoverableError("PATCH", url, e);
                 } else if (retryCount >= MAX_RETRIES) {
                     logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", MAX_RETRIES, url, e.getMessage());
                 }

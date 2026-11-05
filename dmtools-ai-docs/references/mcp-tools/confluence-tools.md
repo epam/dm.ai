@@ -21,6 +21,17 @@ const result = confluence_search_content_by_text(...);
 const result = confluence_content_by_id(...);
 ```
 
+## Default Space Scoping (`CONFLUENCE_DEFAULT_SPACE`)
+
+When `CONFLUENCE_DEFAULT_SPACE` is configured (non-empty), implicit-space read operations automatically scope queries to that space:
+
+- `confluence_search_content_by_text` — adds `AND space = "<CONFLUENCE_DEFAULT_SPACE>"` to the generated CQL query (unless the query already contains an explicit `space =` or `space in` clause) and scopes GraphQL search filters (`confluenceFilters.spaces`) + results to the default space.
+- `confluence_find_content` — looks up the page by title in `CONFLUENCE_DEFAULT_SPACE`.
+- `confluence_content_by_title` — lists pages matching the title in `CONFLUENCE_DEFAULT_SPACE`.
+- `confluence_find_or_create` — finds or creates the page by title in `CONFLUENCE_DEFAULT_SPACE`.
+
+Operations that take an explicit `space` / `spaceKey`, `contentId` / `pageId`, or URL (`confluence_content_by_title_and_space`, `confluence_find_content_by_title_and_space`, `confluence_get_children_by_name`, `confluence_content_by_id`, `confluence_contents_by_urls`, `confluence_create_page`, `confluence_update_page`, `confluence_update_page_with_history`, `confluence_sync_markdown_directory`, etc.) use the explicitly supplied target. When `CONFLUENCE_DEFAULT_SPACE` is unset or blank, `confluence_search_content_by_text` searches across all accessible spaces.
+
 ## Available Tools
 
 | Tool Name | Description | Parameters |

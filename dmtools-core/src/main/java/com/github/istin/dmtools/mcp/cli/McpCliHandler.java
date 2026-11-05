@@ -18,6 +18,7 @@ import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.common.utils.PropertyReader;
 import com.github.istin.dmtools.di.DaggerKnowledgeBaseComponent;
 import com.github.istin.dmtools.di.KnowledgeBaseComponent;
+import com.github.istin.dmtools.atlassian.rovo.BasicRovoMcpClient;
 import com.github.istin.dmtools.di.DaggerMermaidIndexComponent;
 import com.github.istin.dmtools.di.MermaidIndexComponent;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
@@ -601,6 +602,14 @@ public class McpCliHandler {
         }
 
         try {
+            // Create Atlassian Rovo MCP client
+            clients.put("rovo", BasicRovoMcpClient.getInstance());
+            logger.debug("Created BasicRovoMcpClient instance");
+        } catch (IOException e) {
+            logger.warn("Failed to create BasicRovoMcpClient: {}", e.getMessage());
+        }
+
+        try {
             // Create ADO client
             clients.put("ado", BasicAzureDevOpsClient.getInstance());
             logger.debug("Created BasicAzureDevOpsClient instance");
@@ -896,7 +905,7 @@ public class McpCliHandler {
         Set<String> nonAIIntegrations = Set.of(
             "jira", "confluence", "ado", "figma", "file", "cli", "env",
             "teams", "sharepoint", "testrail", "kb", "mermaid", "github",
-            "gitlab", "bitrise", "source", "tracker", "scm", "ci"
+            "gitlab", "bitrise", "source", "tracker", "scm", "ci", "rovo"
         );
         if (parts.length > 0 && nonAIIntegrations.contains(parts[0])) {
             return null;
@@ -962,8 +971,38 @@ public class McpCliHandler {
         if (com.github.istin.dmtools.scm.ScmCiTools.resolveCiProvider(config.getValue("DEFAULT_CI")) != null) {
             integrations.add("ci");
         }
+        if (isIntegrationConfigured("rovo", config)) {
+            integrations.add("rovo");
+        }
         logger.debug("Available integrations (config-detected): {}", integrations);
         return integrations;
+    }
+
+    /**
+     * Checks whether an integration has its required configuration present,
+     * without creating client instances or making network calls.
+     */
+    public static boolean isIntegrationConfigured(String integration, ApplicationConfiguration config) {
+        if (config == null || integration == null) {
+            return false;
+        }
+        if ("rovo".equalsIgnoreCase(integration)) {
+            String loginPass = config.getValue(PropertyReader.ROVO_LOGIN_PASS_TOKEN);
+            if (loginPass != null && !loginPass.trim().isEmpty()) {
+                return true;
+            }
+            String apiToken = config.getValue(PropertyReader.ROVO_API_TOKEN);
+            if (apiToken == null || apiToken.trim().isEmpty()) {
+                return false;
+            }
+            String authType = config.getValue(PropertyReader.ROVO_AUTH_TYPE);
+            if ("Bearer".equalsIgnoreCase(authType != null ? authType.trim() : "")) {
+                return true;
+            }
+            String email = config.getValue(PropertyReader.ROVO_EMAIL);
+            return email != null && !email.trim().isEmpty();
+        }
+        return ConfigDoctor.getConfiguredIntegrations(config).contains(integration.toLowerCase());
     }
 
     /**

@@ -44,6 +44,11 @@ file_write("output.txt", "content");
           "description": "Working directory for command execution. Defaults to repository root if not specified. Use absolute path or path relative to current directory.",
           "example": "/path/to/repo"
         },
+        "expectNonZeroExit": {
+          "type": "string",
+          "description": "When 'true', non-zero exit codes are treated as expected outcomes: suppresses ERROR stack trace logging (logs a single DEBUG line instead) while still propagating the failure.",
+          "example": "true"
+        },
         "command": {
           "type": "string",
           "description": "CLI command to execute. Must start with whitelisted command (git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az).",
@@ -1304,6 +1309,53 @@ file_write("output.txt", "content");
     "description": "Post a comment to a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists"
   },
   {
+    "name": "jira_update_comment",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The Jira ticket key containing the comment"
+        },
+        "commentId": {
+          "type": "string",
+          "description": "The ID of the comment to update"
+        },
+        "comment": {
+          "type": "string",
+          "description": "The new comment text (replaces existing content; supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)"
+        }
+      },
+      "required": [
+        "key",
+        "commentId",
+        "comment"
+      ]
+    },
+    "description": "Update (edit) an existing comment on a Jira ticket by its comment ID. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists"
+  },
+  {
+    "name": "jira_delete_comment",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The Jira ticket key containing the comment"
+        },
+        "commentId": {
+          "type": "string",
+          "description": "The ID of the comment to delete"
+        }
+      },
+      "required": [
+        "key",
+        "commentId"
+      ]
+    },
+    "description": "Delete a comment from a Jira ticket by its comment ID"
+  },
+  {
     "name": "jira_get_fix_versions",
     "inputSchema": {
       "type": "object",
@@ -1864,6 +1916,121 @@ file_write("output.txt", "content");
       ]
     },
     "description": "Link two Jira issues with a specific relationship type"
+  },
+  {
+    "name": "rovo_search",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Natural-language search query",
+          "example": "deployment architecture for payment service"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        },
+        "targetApp": {
+          "type": "string",
+          "description": "Optional target application filter (e.g. confluence, jira)",
+          "example": "confluence"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of results to return",
+          "example": "10"
+        }
+      },
+      "required": ["query"]
+    },
+    "description": "Semantic natural-language search across Jira, Confluence, and connected third-party sources via Atlassian Rovo MCP in STANDARD mode."
+  },
+  {
+    "name": "rovo_summarize",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contentId": {
+          "type": "string",
+          "description": "Confluence page or content ID",
+          "example": "123456789"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      },
+      "required": ["contentId"]
+    },
+    "description": "Fetch a pre-generated AI summary of a Confluence page via Atlassian Rovo MCP (getConfluenceContent with detail=ai_summary)."
+  },
+  {
+    "name": "rovo_context",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "objectType": {
+          "type": "string",
+          "description": "Type of the Atlassian object (e.g. jira_issue, confluence_page, pull_request, team, goal)",
+          "example": "jira_issue"
+        },
+        "identifier": {
+          "type": "string",
+          "description": "Identifier or ARI/key of the object (e.g. PROJ-123 or page ID)",
+          "example": "PROJ-123"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      },
+      "required": ["objectType", "identifier"]
+    },
+    "description": "Retrieve Atlassian Teamwork Graph relationships (linked Jira issues, Confluence pages, pull requests, repositories, goals, and people) for an object via getGraphContext."
+  },
+  {
+    "name": "rovo_ask",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "Natural-language question to ask Rovo",
+          "example": "How does the authentication token refresh flow work?"
+        },
+        "cloudId": {
+          "type": "string",
+          "description": "Atlassian Cloud ID (optional, defaults to ROVO_CLOUD_ID)",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      },
+      "required": ["question"]
+    },
+    "description": "Ask a natural-language question via Atlassian Rovo MCP using AGENTIC search mode; automatically falls back to STANDARD semantic search when Agentic search returns 403 or is not enabled."
+    "description": "Ask a natural-language question via Atlassian Rovo MCP using AGENTIC search mode; automatically falls back to STANDARD semantic search when Agentic search returns 403 or is not enabled."
+  },
+  {
+    "name": "ado_get_work_item_type_states",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workItemType": {
+          "type": "string",
+          "description": "The work item type (e.g. User Story, Bug, Task)",
+          "example": "User Story"
+        },
+        "project": {
+          "type": "string",
+          "description": "The project name (defaults to the configured project)"
+        }
+      },
+      "required": ["workItemType"]
+    },
+    "description": "List the valid states for a work item type in the project (e.g., New, Active, Resolved, Closed)"
   }
 ]}
 

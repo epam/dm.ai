@@ -23,7 +23,7 @@ const result = cli_execute_command(...);
 
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
-| `cli_execute_command` | Execute CLI commands from JavaScript post-actions. Base whitelist: git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az. Additional commands can be enabled via CLI_ALLOWED_COMMANDS env var (comma-separated) in dmtools.env or agent envVariables, e.g. CLI_ALLOWED_COMMANDS=find,ls,cat,pytest,python3,curl,bash,run-cursor-agent.sh. Returns command output as string. | `command` (string, **required**)<br>`workingDirectory` (string, optional) |
+| `cli_execute_command` | Execute CLI commands from JavaScript post-actions. Base whitelist: git, gh, dmtools, npm, yarn, docker, kubectl, terraform, ansible, aws, gcloud, az. Additional commands can be enabled via CLI_ALLOWED_COMMANDS env var (comma-separated) in dmtools.env or agent envVariables, e.g. CLI_ALLOWED_COMMANDS=find,ls,cat,pytest,python3,curl,bash,run-cursor-agent.sh. Returns command output as string. | `command` (string, **required**)<br>`workingDirectory` (string, optional)<br>`expectNonZeroExit` (string, optional) |
 
 ## Detailed Parameter Information
 
@@ -40,6 +40,10 @@ Execute CLI commands from JavaScript post-actions. Base whitelist: git, gh, dmto
 - **`workingDirectory`** (string) ⚪ Optional
   - Working directory for command execution. Defaults to repository root if not specified. Use absolute path or path relative to current directory.
   - Example: `/path/to/repo`
+
+- **`expectNonZeroExit`** (string) ⚪ Optional
+  - When 'true', non-zero exit codes are treated as expected outcomes: suppresses ERROR stack trace logging (logs a single DEBUG line instead) while still propagating the failure.
+  - Example: `true`
 
 **Example:**
 ```bash

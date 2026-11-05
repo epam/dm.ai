@@ -135,6 +135,7 @@ public class RunCommandProcessor {
         try {
             if (JobRunner.isKnownJobName(filePath) && !Files.exists(Paths.get(filePath))) {
                 logger.info("Detected known job name for run command: {}", filePath);
+                parentConfigResolver.setResolvedPackRoot(null);
                 return buildDirectJobParams(filePath, encodedConfig, cliOverrides);
             }
 
@@ -148,6 +149,9 @@ public class RunCommandProcessor {
             // pack cache so JS/prompts/scripts resolve without the repo checkout (#579 §3).
             if (packRoot != null) {
                 packResolver.rewritePathsToPackRoot(resolvedConfig, packRoot);
+                if (parentConfigResolver.getResolvedPackRoot() == null) {
+                    parentConfigResolver.setResolvedPackRoot(packRoot);
+                }
             }
             fileJson = resolvedConfig.toString();
 
@@ -237,7 +241,10 @@ public class RunCommandProcessor {
         String finalConfigJson = mergeEncodedConfig(baseConfigJson, encodedConfig);
         finalConfigJson = applyCliOverrides(finalConfigJson, cliOverrides);
 
-        JobParams jobParams = new JobParams(finalConfigJson);
+        JSONObject finalConfig = new JSONObject(finalConfigJson);
+        parentConfigResolver.rewriteRemainingPackRefs(finalConfig);
+
+        JobParams jobParams = new JobParams(finalConfig.toString());
         logger.info("JobParams created successfully for job: {}", jobParams.getName());
         return jobParams;
     }

@@ -1,6 +1,6 @@
 # JIRA MCP Tools
 
-**Total Tools**: 69
+**Total Tools**: 71
 
 ## Quick Reference
 
@@ -38,6 +38,7 @@ const result = jira_xray_search_tickets(...);
 | `jira_create_ticket_basic` | Create a new Jira ticket with basic fields (project, issue type, summary, description) | `project` (string, **required**)<br>`issueType` (string, **required**)<br>`summary` (string, **required**)<br>`description` (string, **required**) |
 | `jira_create_ticket_with_json` | Create a new Jira ticket with custom fields using JSON configuration | `project` (string, **required**)<br>`fieldsJson` (object, **required**) |
 | `jira_create_ticket_with_parent` | Create a new Jira ticket with a parent relationship | `project` (string, **required**)<br>`issueType` (string, **required**)<br>`summary` (string, **required**)<br>`description` (string, **required**)<br>`parentKey` (string, **required**) |
+| `jira_delete_comment` | Delete a comment from a Jira ticket by its comment ID | `key` (string, **required**)<br>`commentId` (string, **required**) |
 | `jira_delete_project` | Delete a Jira project by moving it to trash. The project key remains reserved until permanently deleted from Jira Admin > System > Trash. Set confirmDelete to 'true' to proceed. | `projectKey` (string, **required**)<br>`confirmDelete` (string, **required**) |
 | `jira_delete_ticket` | Delete a Jira ticket by key | `key` (string, **required**) |
 | `jira_download_attachment` | Download a Jira attachment by URL and save it as a file | `href` (string, **required**) |
@@ -78,6 +79,7 @@ const result = jira_xray_search_tickets(...);
 | `jira_sync_project_workflow` | Sync the workflow (statuses) of a target project to exactly match the source project using Jira's bulk workflow update API. Replaces the target workflow's statuses and transitions with those from the source project. Existing issues with removed statuses are automatically migrated to the closest matching new status. Works with team-managed (next-gen) Jira projects. | `sourceProjectKey` (string, **required**)<br>`targetProjectKey` (string, **required**) |
 | `jira_test` | Test Jira connectivity by fetching the current user's profile | None |
 | `jira_update_all_fields_with_name` | Update ALL fields with the same name in a Jira ticket. Useful when there are multiple custom fields with the same display name. | `key` (string, **required**)<br>`fieldName` (string, **required**)<br>`value` (object, **required**) |
+| `jira_update_comment` | Update (edit) an existing comment on a Jira ticket by its comment ID. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists | `key` (string, **required**)<br>`commentId` (string, **required**)<br>`comment` (string, **required**) |
 | `jira_update_description` | Update the description of a Jira ticket. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists | `key` (string, **required**)<br>`description` (string, **required**) |
 | `jira_update_field` | Update field(s) in a Jira ticket. When using field names (e.g., 'Dependencies'), updates ALL fields with that name. When using custom field IDs (e.g., 'customfield_10091'), updates only that specific field. | `key` (string, **required**)<br>`field` (string, **required**)<br>`value` (object, **required**) |
 | `jira_update_field_as_adf` | Update a rich-text field in a Jira ticket using Jira API v3 and Atlassian Document Format (ADF). The value can be a plain string (wrapped into a paragraph) or a JSON object/array representing an ADF document. Required for interactive task-list checkboxes in Jira Cloud. | `key` (string, **required**)<br>`field` (string, **required**)<br>`value` (object, **required**) |
@@ -467,6 +469,30 @@ dmtools jira_delete_project "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_delete_project("projectKey", "confirmDelete");
+```
+
+---
+
+### `jira_delete_comment`
+
+Delete a comment from a Jira ticket by its comment ID
+
+**Parameters:**
+
+- **`key`** (string) 🔴 Required
+  - The Jira ticket key containing the comment
+
+- **`commentId`** (string) 🔴 Required
+  - The ID of the comment to delete
+
+**Example:**
+```bash
+dmtools jira_delete_comment "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_delete_comment("key", "commentId");
 ```
 
 ---
@@ -1361,6 +1387,33 @@ dmtools jira_update_all_fields_with_name "value" "value"
 ```javascript
 // In JavaScript agent
 const result = jira_update_all_fields_with_name("key", "fieldName");
+```
+
+---
+
+### `jira_update_comment`
+
+Update (edit) an existing comment on a Jira ticket by its comment ID. Supports Jira markup syntax: h2. for headings, *text* for bold, {code}text{code} for inline code, * for bullet lists
+
+**Parameters:**
+
+- **`key`** (string) 🔴 Required
+  - The Jira ticket key containing the comment
+
+- **`commentId`** (string) 🔴 Required
+  - The ID of the comment to update
+
+- **`comment`** (string) 🔴 Required
+  - The new comment text (replaces existing content; supports Jira markup: h2. headings, *bold*, {code}code{code}, * lists)
+
+**Example:**
+```bash
+dmtools jira_update_comment "value" "value" "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = jira_update_comment("key", "commentId", "comment");
 ```
 
 ---

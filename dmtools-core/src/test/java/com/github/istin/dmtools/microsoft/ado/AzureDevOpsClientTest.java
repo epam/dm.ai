@@ -9,6 +9,7 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.model.IUser;
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
+import com.github.istin.dmtools.common.networking.RestClient;
 import com.github.istin.dmtools.microsoft.ado.model.AdoUser;
 import com.github.istin.dmtools.microsoft.ado.model.WorkItem;
 import okhttp3.Call;
@@ -78,6 +79,20 @@ public class AzureDevOpsClientTest {
             when(call.execute()).thenReturn(responses[0], java.util.Arrays.copyOfRange(responses, 1, responses.length));
         }
         client.setOkHttpClient(okHttpClient);
+    }
+
+    private void mockPullRequestCreation(Response response) throws IOException {
+        mockOkHttp(response);
+        OkHttpClient.Builder builder = mock(OkHttpClient.Builder.class);
+        when(client.getOkHttpClient().newBuilder()).thenReturn(builder);
+        when(builder.retryOnConnectionFailure(false)).thenReturn(builder);
+        when(builder.build()).thenReturn(client.getOkHttpClient());
+    }
+
+    private Request captureCreationRequest() {
+        ArgumentCaptor<Request> captor = ArgumentCaptor.forClass(Request.class);
+        verify(client.getOkHttpClient()).newCall(captor.capture());
+        return captor.getValue();
     }
 
     private static String workItemJson(int id, String title, String state, String type) {
@@ -587,6 +602,55 @@ public class AzureDevOpsClientTest {
     }
 
     @Test
+    void testMoveToStatus_invalidState400_throwsStructuredValidationError() throws IOException {
+        String ado400Body = new JSONObject()
+                .put("customProperties", new JSONObject()
+                        .put("ErrorMessage", "The field 'State' contains the value 'In Review' that is not in the list of supported values")
+                        .put("FieldStatusFlags", "required, hasValues, limitedToValues, invalidListValue"))
+                .toString();
+        mockOkHttp(buildOkResponse(400, "application/json", ado400Body));
+
+        RestClient.RestClientException ex = assertThrows(RestClient.RestClientException.class,
+                () -> client.moveToStatus("2063641", "In Review"));
+
+        assertEquals(400, ex.getCode());
+        JSONObject structured = new JSONObject(ex.getMessage());
+        assertEquals(400, structured.getInt("status"));
+        assertEquals("System.State", structured.getString("field"));
+        assertTrue(structured.getString("message").contains("In Review"));
+        assertTrue(structured.getString("flags").contains("invalidListValue"));
+    }
+
+    @Test
+    void testGetWorkItemTypeStates_usesConfiguredProjectAndEncodesSpaces() throws IOException {
+        String statesJson = "{\"count\":3,\"value\":[{\"name\":\"New\",\"category\":\"Proposed\"},{\"name\":\"Active\",\"category\":\"InProgress\"},{\"name\":\"Closed\",\"category\":\"Completed\"}]}";
+        client.setMockResponse("/TestProject/_apis/wit/workitemtypes/User%20Story/states", statesJson);
+
+        String result = client.getWorkItemTypeStates("User Story", null);
+
+        assertEquals(statesJson, result);
+        assertTrue(client.getLastCalledUrl().contains("/TestProject/_apis/wit/workitemtypes/User%20Story/states"), client.getLastCalledUrl());
+        assertTrue(client.getLastCalledUrl().contains("api-version=7.0"), client.getLastCalledUrl());
+    }
+
+    @Test
+    void testGetWorkItemTypeStates_withExplicitProject() throws IOException {
+        String statesJson = "{\"count\":1,\"value\":[{\"name\":\"Active\"}]}";
+        client.setMockResponse("/CustomProj/_apis/wit/workitemtypes/Bug/states", statesJson);
+
+        String result = client.getWorkItemTypeStates("Bug", "CustomProj");
+
+        assertEquals(statesJson, result);
+        assertTrue(client.getLastCalledUrl().contains("/CustomProj/_apis/wit/workitemtypes/Bug/states"), client.getLastCalledUrl());
+    }
+
+    @Test
+    void testGetWorkItemTypeStates_blankType_throwsIllegalArgument() {
+        assertThrows(IllegalArgumentException.class, () -> client.getWorkItemTypeStates("  ", null));
+        assertThrows(IllegalArgumentException.class, () -> client.getWorkItemTypeStates(null, null));
+    }
+
+    @Test
     void testUpdateTicket_nullInitializer_sendsEmptyPatch() throws IOException {
         mockOkHttp(buildOkResponse(200, "application/json", "ok"));
 
@@ -953,6 +1017,64 @@ public class AzureDevOpsClientTest {
         AdoUser user = client.getUserByEmail("u@example.com");
 
         assertEquals("Desc User", user.getDisplayName());
+    }
+
+    @Test
+    void testGetUserByEmail_paginatesViaContinuationToken() throws IOException {
+        client.setMockResponse("continuationToken=page2",
+                "{\"value\":[{\"principalName\":\"second@example.com\",\"displayName\":\"Second Page User\",\"descriptor\":\"aad.p2\"}]}");
+        client.setMockResponse("/_apis/graph/users?",
+                "{\"value\":[{\"principalName\":\"first@example.com\",\"displayName\":\"First Page User\"}],\"continuationToken\":\"page2\"}");
+
+        AdoUser user = client.getUserByEmail("second@example.com");
+
+        assertEquals("Second Page User", user.getDisplayName());
+        assertEquals("aad.p2", user.getID());
+        assertTrue(client.getLastCalledUrl().contains("continuationToken=page2"), client.getLastCalledUrl());
+    }
+
+    @Test
+    void testGetUserByEmail_paginatesViaHttpHeaderContinuationToken() throws IOException {
+        Request req1 = new Request.Builder().url("https://vssps.dev.azure.com/TestOrg/_apis/graph/users?api-version=7.1-preview.1").build();
+        Response resp1 = new Response.Builder()
+                .request(req1)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("X-MS-ContinuationToken", "hdr-token-2")
+                .body(ResponseBody.create("{\"value\":[{\"principalName\":\"first@example.com\"}]}", MediaType.parse("application/json")))
+                .build();
+        Request req2 = new Request.Builder().url("https://vssps.dev.azure.com/TestOrg/_apis/graph/users?api-version=7.1-preview.1&continuationToken=hdr-token-2").build();
+        Response resp2 = new Response.Builder()
+                .request(req2)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(ResponseBody.create("{\"value\":[{\"principalName\":\"target@example.com\",\"displayName\":\"Target User\",\"id\":\"guid-99\"}]}", MediaType.parse("application/json")))
+                .build();
+        mockOkHttp(resp1, resp2);
+
+        AdoUser user = client.getUserByEmail("target@example.com");
+
+        assertEquals("Target User", user.getDisplayName());
+        assertEquals("guid-99", user.getID());
+    }
+
+    @Test
+    void testGetUserByEmail_fallbackBuildsAdoUserFromIdentitiesWithoutGraphCall() throws IOException {
+        client.setMockResponse("/_apis/graph/users?", "{\"value\":[]}");
+        client.setMockResponse("/_apis/identities",
+                "{\"value\":[{\"id\":\"11111111-2222-3333-4444-555555555555\","
+                        + "\"descriptor\":\"Microsoft.IdentityModel.Claims.ClaimsIdentity;guid\\\\user@example.com\","
+                        + "\"providerDisplayName\":\"Identity User\","
+                        + "\"customDisplayName\":\"Custom Identity User\"}]}");
+
+        String mention = client.tag("user@example.com");
+
+        assertEquals("<a href=\"#\" data-vss-mention=\"version:2.0,11111111-2222-3333-4444-555555555555\">@Custom Identity User</a>",
+                mention);
+        assertFalse(client.getLastCalledUrl().contains("/_apis/graph/users/Microsoft.IdentityModel"),
+                "must not call Graph API with an Identities ClaimsIdentity descriptor");
     }
 
     @Test
@@ -1449,6 +1571,100 @@ public class AzureDevOpsClientTest {
         client.setPullRequestVote("repo", "9", "u1", "-10");
 
         assertEquals(-10, new JSONObject(client.getLastPutBody("/reviewers/u1")).getInt("vote"));
+    }
+
+    @Test
+    void testCreatePullRequest_mcpToolPostsBranchRefsAndTitle() throws Exception {
+        String title = "test: TEST-42 verify \"native\" ADO PR creation";
+        String responseBody = """
+                {
+                  "pullRequestId": 123456,
+                  "status": "active",
+                  "sourceRefName": "refs/heads/test/native-pr-creation",
+                  "targetRefName": "refs/heads/main",
+                  "title": "test: TEST-42 verify \\"native\\" ADO PR creation"
+                }
+                """;
+        mockPullRequestCreation(buildOkResponse(201, "application/json", responseBody));
+        Map<String, Object> arguments =
+                Map.of(
+                        "repository", "saved_cards_service",
+                        "sourceRefName", "refs/heads/test/native-pr-creation",
+                        "targetRefName", "refs/heads/main",
+                        "title", title
+                );
+
+        Object result =
+                com.github.istin.dmtools.mcp.generated.MCPToolExecutor.executeTool(
+                        "ado_create_pr",
+                        arguments,
+                        Map.of("ado", client)
+                );
+
+        assertEquals(responseBody, result);
+        Request request = captureCreationRequest();
+        assertEquals("POST", request.method());
+        assertEquals("https://dev.azure.com/TestOrg/TestProject/_apis/git/repositories/saved_cards_service/pullrequests?api-version=7.0",
+                request.url().toString());
+        assertEquals("application/json", request.header("Content-Type"));
+        assertEquals("DMTools", request.header("User-Agent"));
+        Buffer buffer = new Buffer();
+        request.body().writeTo(buffer);
+        JSONObject body = new JSONObject(buffer.readUtf8());
+        assertEquals(arguments.get("sourceRefName"), body.getString("sourceRefName"));
+        assertEquals(arguments.get("targetRefName"), body.getString("targetRefName"));
+        assertEquals(title, body.getString("title"));
+        assertFalse(body.has("description"));
+    }
+
+    @Test
+    void testCreatePullRequest_normalizesShortBranchNames() throws Exception {
+        mockPullRequestCreation(buildOkResponse(201, "application/json", "{\"pullRequestId\":7}"));
+
+        client.createPullRequest("saved_cards_service", "feature/short", "main", "Short refs", "Body");
+
+        Request request = captureCreationRequest();
+        Buffer buffer = new Buffer();
+        request.body().writeTo(buffer);
+        JSONObject body = new JSONObject(buffer.readUtf8());
+        assertEquals("refs/heads/feature/short", body.getString("sourceRefName"));
+        assertEquals("refs/heads/main", body.getString("targetRefName"));
+        assertEquals("Short refs", body.getString("title"));
+        assertEquals("Body", body.getString("description"));
+    }
+
+    @Test
+    void testCreatePullRequest_missingBranchPreservesApiFailure() throws IOException {
+        String failureBody = """
+                {
+                  "$id": "1",
+                  "innerException": null,
+                  "message": "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches",
+                  "typeName": "Microsoft.TeamFoundation.Git.Server.GitPullRequestCannotBeActivated, Microsoft.TeamFoundation.Git.Server",
+                  "typeKey": "GitPullRequestCannotBeActivated",
+                  "errorCode": 0,
+                  "eventId": 3000
+                }
+                """;
+        mockPullRequestCreation(buildOkResponse(400, "application/json", failureBody));
+        String description = "Temporary runtime verification of native Azure DevOps PR creation.";
+
+        IOException failure =
+                assertThrows(IOException.class, () -> client.createPullRequest(
+                        "saved_cards_service",
+                        "refs/heads/test/missing-native-pr-source",
+                        "refs/heads/main",
+                        "test: TEST-42 verify \"native\" ADO PR creation",
+                        description
+                ));
+
+        assertTrue(failure.getMessage().contains("TF401398"));
+        assertTrue(failure.getMessage().contains("400"));
+        Request request = captureCreationRequest();
+        assertEquals("POST", request.method());
+        Buffer buffer = new Buffer();
+        request.body().writeTo(buffer);
+        assertEquals(description, new JSONObject(buffer.readUtf8()).getString("description"));
     }
 
     @Test

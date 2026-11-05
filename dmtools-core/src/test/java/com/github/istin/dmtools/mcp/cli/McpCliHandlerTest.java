@@ -744,4 +744,13 @@ class McpCliHandlerTest {
         Set<String> explicit = McpCliHandler.resolveAvailableIntegrations("jira", configWith("github", "actions"));
         assertEquals(Set.of("jira"), explicit);
     }
+
+    @Test
+    public void rovoIntegrationAppearsWhenConfigured() {
+        ApplicationConfiguration cfg = mock(ApplicationConfiguration.class);
+        when(cfg.getValue("ROVO_LOGIN_PASS_TOKEN")).thenReturn("dXNlcjp0b2tlbg==");
+        Set<String> resolved = McpCliHandler.resolveAvailableIntegrations(null, cfg);
+        assertTrue(resolved.contains("rovo"));
+        assertTrue(McpCliHandler.isIntegrationConfigured("rovo", cfg));
+    }
 }

@@ -612,4 +612,175 @@ public class CliCommandExecutorTest {
             PropertyReader.clearOverrides();
         }
     }
+
+    // ============================================================================
+    // expectNonZeroExit Tests (gh-1304)
+    // ============================================================================
+
+    @Test
+    public void testExecuteCommand_ExpectedNonZeroExit_LogsDebugWithoutErrorStackTrace() throws Exception {
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.DEBUG, events, () -> {
+            try {
+                executor.executeCommand("git check-ignore -q -- non-existent-factory-kit-path-1304", null, "true");
+                fail("Expected IOException to be thrown on exit code 1");
+            } catch (IOException expected) {
+                assertTrue(expected.getMessage().contains("exit code 1"));
+            }
+        });
+
+        boolean hasErrorLog = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR);
+        assertFalse("Should not log ERROR when expectNonZeroExit is true", hasErrorLog);
+
+        boolean hasExpectedDebugLog = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.DEBUG
+                        && e.getMessage().getFormattedMessage().contains("Command exited with expected code 1:")
+                        && e.getThrown() == null);
+        assertTrue("Should log concise single-line DEBUG message without throwable", hasExpectedDebugLog);
+    }
+
+    @Test
+    public void testExecuteCommand_KnownGitExitCodeProbes_AutoDetectedAsExpectedDebug() throws Exception {
+        String[] probes = {
+            "git check-ignore -q -- non-existent-factory-kit-path-1304",
+            "git rev-parse --quiet --verify MERGE_HEAD",
+            "git merge-base --is-ancestor HEAD origin/non-existent-ref-793"
+        };
+        for (String probe : probes) {
+            java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+            withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.DEBUG, events, () -> {
+                try {
+                    executor.executeCommand(probe, null);
+                    fail("Expected IOException to be thrown on non-zero exit for: " + probe);
+                } catch (IOException expected) {
+                    assertTrue(expected.getMessage().contains("exit code"));
+                }
+            });
+
+            boolean hasErrorLog = events.stream()
+                    .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR);
+            assertFalse("Known git exit-code probe should not log ERROR: " + probe, hasErrorLog);
+
+            boolean hasExpectedDebugLog = events.stream()
+                    .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.DEBUG
+                            && e.getMessage().getFormattedMessage().contains("Command exited with expected code")
+                            && e.getThrown() == null);
+            assertTrue("Known git exit-code probe should log DEBUG without throwable: " + probe, hasExpectedDebugLog);
+        }
+    }
+
+    @Test
+    public void testExecuteCommand_UnexpectedNonZeroExit_LogsErrorWithoutThrowableAtDefaultLevel() throws Exception {
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.DEBUG, events, () -> {
+            try {
+                executor.executeCommand("git invalid-subcommand-793", null);
+                fail("Expected IOException to be thrown on non-zero exit");
+            } catch (IOException expected) {
+                assertTrue(expected.getMessage().contains("exit code"));
+            }
+        });
+
+        boolean hasErrorWithoutThrowable = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR
+                        && e.getMessage().getFormattedMessage().contains("Command execution failed:")
+                        && e.getThrown() == null);
+        assertTrue("Unexpected CLI non-zero exit should log ERROR without stack trace at DEBUG level", hasErrorWithoutThrowable);
+    }
+
+    @Test
+    public void testExecuteCommand_UnexpectedNonZeroExit_LogsErrorWithThrowableAtTraceLevel() throws Exception {
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.TRACE, events, () -> {
+            try {
+                executor.executeCommand("git invalid-subcommand-793", null);
+                fail("Expected IOException to be thrown on non-zero exit");
+            } catch (IOException expected) {
+                assertTrue(expected.getMessage().contains("exit code"));
+            }
+        });
+
+        boolean hasErrorWithThrowable = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR
+                        && e.getMessage().getFormattedMessage().contains("Command execution failed:")
+                        && e.getThrown() != null);
+        assertTrue("At TRACE level, unexpected CLI non-zero exit should include throwable", hasErrorWithThrowable);
+    }
+
+    @Test
+    public void testIsKnownExitCodeProbe() {
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git check-ignore -q -- .dmtools/copilot-sessions"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git rev-parse --quiet --verify MERGE_HEAD"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git merge-base --is-ancestor HEAD origin/main"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git diff --cached --quiet HEAD"));
+        assertTrue(CliCommandExecutor.isKnownExitCodeProbe("git show-ref --verify --quiet refs/heads/main"));
+        assertFalse(CliCommandExecutor.isKnownExitCodeProbe("git push origin main"));
+        assertFalse(CliCommandExecutor.isKnownExitCodeProbe("git status --porcelain"));
+        assertFalse(CliCommandExecutor.isKnownExitCodeProbe(null));
+    }
+
+    @Test
+    public void testExecuteCommand_ExitZeroWithExpectNonZeroExit_SucceedsWithoutError() throws Exception {
+        java.util.List<org.apache.logging.log4j.core.LogEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        withCapturedLogEvents(CliCommandExecutor.class.getName(), org.apache.logging.log4j.Level.DEBUG, events, () -> {
+            String result = executor.executeCommand("git --version", null, "true");
+            assertNotNull(result);
+            assertTrue(result.toLowerCase().contains("git version"));
+        });
+
+        boolean hasErrorLog = events.stream()
+                .anyMatch(e -> e.getLevel() == org.apache.logging.log4j.Level.ERROR);
+        assertFalse("Should not log ERROR on exit 0", hasErrorLog);
+    }
+
+    private interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+
+    private void withCapturedLogEvents(
+            String loggerName,
+            org.apache.logging.log4j.Level level,
+            java.util.List<org.apache.logging.log4j.core.LogEvent> events,
+            ThrowingRunnable body) throws Exception {
+        org.apache.logging.log4j.core.LoggerContext context =
+                (org.apache.logging.log4j.core.LoggerContext) org.apache.logging.log4j.LogManager.getContext(false);
+        org.apache.logging.log4j.core.config.Configuration configuration = context.getConfiguration();
+        org.apache.logging.log4j.core.layout.PatternLayout layout =
+                org.apache.logging.log4j.core.layout.PatternLayout.createDefaultLayout();
+        String appenderName = "cli-test-capture-" + System.nanoTime();
+        org.apache.logging.log4j.core.appender.AbstractAppender capture =
+                new org.apache.logging.log4j.core.appender.AbstractAppender(appenderName, null, layout, false, null) {
+                    @Override
+                    public void append(org.apache.logging.log4j.core.LogEvent event) {
+                        events.add(event.toImmutable());
+                    }
+                };
+        capture.start();
+        configuration.addAppender(capture);
+        org.apache.logging.log4j.core.config.LoggerConfig loggerConfig =
+                configuration.getLoggerConfig(loggerName);
+        boolean createdLoggerConfig = false;
+        if (!loggerName.equals(loggerConfig.getName())) {
+            loggerConfig = new org.apache.logging.log4j.core.config.LoggerConfig(loggerName, level, true);
+            configuration.addLogger(loggerName, loggerConfig);
+            createdLoggerConfig = true;
+        }
+        org.apache.logging.log4j.Level previousLevel = loggerConfig.getLevel();
+        loggerConfig.setLevel(level);
+        loggerConfig.addAppender(capture, level, null);
+        context.updateLoggers();
+        try {
+            body.run();
+        } finally {
+            loggerConfig.removeAppender(appenderName);
+            if (createdLoggerConfig) {
+                configuration.removeLogger(loggerName);
+            } else {
+                loggerConfig.setLevel(previousLevel);
+            }
+            capture.stop();
+            context.updateLoggers();
+        }
+    }
 }

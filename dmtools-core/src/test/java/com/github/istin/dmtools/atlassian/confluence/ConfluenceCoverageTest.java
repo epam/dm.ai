@@ -150,6 +150,114 @@ public class ConfluenceCoverageTest {
         assertEquals(1, results.size());
     }
 
+    @Test
+    public void testSearchContentByText_RestApiPathUnconfiguredDefaultSpace() throws IOException {
+        doReturn("{\"results\": [{\"id\": \"1\", \"title\": \"Doc\"}]}")
+                .when(confluence).execute(any(GenericRequest.class));
+
+        confluence.searchContentByText("doc", 5);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(confluence).execute(captor.capture());
+        String url = captor.getValue().url();
+        String decodedUrl = java.net.URLDecoder.decode(url, java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(decodedUrl.contains("cql=(title ~ \"doc\" OR text ~ \"doc\") ORDER BY lastModified ASC"));
+        assertFalse(decodedUrl.contains("space ="));
+    }
+
+    @Test
+    public void testSearchContentByText_RestApiPathScopesToDefaultSpace() throws IOException {
+        Confluence withSpace = Mockito.spy(new Confluence("http://example.com", "auth", null, "ENG"));
+        doReturn("{\"results\": [{\"id\": \"1\", \"title\": \"Doc\"}]}")
+                .when(withSpace).execute(any(GenericRequest.class));
+
+        List<SearchResult> results = withSpace.searchContentByText("doc", 10);
+
+        assertEquals(1, results.size());
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(withSpace).execute(captor.capture());
+        String decodedUrl = java.net.URLDecoder.decode(captor.getValue().url(), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(decodedUrl.contains(
+                "cql=(title ~ \"doc\" OR text ~ \"doc\") AND space = \"ENG\" ORDER BY lastModified ASC"));
+    }
+
+    @Test
+    public void testSearchContentByText_RestApiPathBlankDefaultSpaceNotScoped() throws IOException {
+        Confluence withBlankSpace = Mockito.spy(new Confluence("http://example.com", "auth", null, "   "));
+        doReturn("{\"results\": []}").when(withBlankSpace).execute(any(GenericRequest.class));
+
+        withBlankSpace.searchContentByText("doc", 10);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(withBlankSpace).execute(captor.capture());
+        String decodedUrl = java.net.URLDecoder.decode(captor.getValue().url(), java.nio.charset.StandardCharsets.UTF_8);
+        assertFalse(decodedUrl.contains("space ="));
+    }
+
+    @Test
+    public void testSearchContentByText_ExplicitSpaceClauseTakesPrecedenceOverDefaultSpace() throws IOException {
+        Confluence withSpace = Mockito.spy(new Confluence("http://example.com", "auth", null, "ENG"));
+        doReturn("{\"results\": []}").when(withSpace).execute(any(GenericRequest.class));
+
+        withSpace.searchContentByText("doc AND space = \"OTHER\"", 10);
+
+        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
+        verify(withSpace).execute(captor.capture());
+        String decodedUrl = java.net.URLDecoder.decode(captor.getValue().url(), java.nio.charset.StandardCharsets.UTF_8);
+        assertFalse(decodedUrl.contains("space = \"ENG\""));
+
+        withSpace.searchContentByText("doc AND space in (\"OTHER\", \"QA\")", 10);
+        verify(withSpace, times(2)).execute(captor.capture());
+        String decodedInUrl = java.net.URLDecoder.decode(captor.getValue().url(), java.nio.charset.StandardCharsets.UTF_8);
+        assertFalse(decodedInUrl.contains("space = \"ENG\""));
+    }
+
+    @Test
+    public void testSearchContentByText_GraphqlPathScopesToDefaultSpaceAndFiltersResults() throws IOException {
+        Confluence withSpace = Mockito.spy(new Confluence("http://example.com", "auth", null, "ENG"));
+        withSpace.setGraphQLPath("https://example.atlassian.net/gateway/api");
+        ConfluenceGraphQLClient mockGraphQL = mock(ConfluenceGraphQLClient.class);
+        doReturn(mockGraphQL).when(withSpace).createGraphQLClient();
+
+        JSONArray edges = new JSONArray()
+                .put(new JSONObject().put("node", new JSONObject()
+                        .put("id", "1")
+                        .put("title", "In Space")
+                        .put("space", new JSONObject().put("key", "ENG"))))
+                .put(new JSONObject().put("node", new JSONObject()
+                        .put("id", "2")
+                        .put("title", "Other Space")
+                        .put("space", new JSONObject().put("key", "OTHER"))));
+        when(mockGraphQL.search("doc", 10, "ENG")).thenReturn(edges);
+
+        List<SearchResult> results = withSpace.searchContentByText("doc", 10);
+
+        assertEquals(1, results.size());
+        assertEquals("1", results.get(0).getId());
+        verify(mockGraphQL).search("doc", 10, "ENG");
+        verify(withSpace, never()).execute(any(GenericRequest.class));
+    }
+
+    @Test
+    public void testSearchContentByText_GraphqlPathUnconfiguredDefaultSpace() throws IOException {
+        confluence.setGraphQLPath("https://example.atlassian.net/gateway/api");
+        ConfluenceGraphQLClient mockGraphQL = mock(ConfluenceGraphQLClient.class);
+        doReturn(mockGraphQL).when(confluence).createGraphQLClient();
+
+        JSONArray edges = new JSONArray()
+                .put(new JSONObject().put("node", new JSONObject()
+                        .put("id", "1")
+                        .put("title", "Doc")
+                        .put("space", new JSONObject().put("key", "OTHER"))));
+        when(mockGraphQL.search("doc", 20)).thenReturn(edges);
+
+        List<SearchResult> results = confluence.searchContentByText("doc", null);
+
+        assertEquals(1, results.size());
+        assertEquals("1", results.get(0).getId());
+        verify(mockGraphQL).search("doc", 20);
+    }
+
     // ------------------------------------------------------------------
     // profile / testConnection
     // ------------------------------------------------------------------
@@ -278,7 +386,18 @@ public class ConfluenceCoverageTest {
     @Test
     public void testPrepareBodyForConfluence() {
         String result = Confluence.prepareBodyForConfluence("line1<br>line2<br/>line3");
-        assertEquals("line1\nline2\nline3", result);
+        assertEquals("line1<br/>line2<br/>line3", result);
+    }
+
+    @Test
+    public void testPrepareStorageBodyForConfluence_PreservesBrInTableCells() {
+        String md = "| Test ID | Check |\n| --- | --- |\n| 1 | Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated |";
+        String storage = MarkdownToConfluenceStorage.toStorage(md);
+        String preparedPlain = Confluence.prepareBodyForConfluence(storage);
+        String preparedStorage = Confluence.prepareStorageBodyForConfluence(storage);
+
+        assertTrue(preparedPlain.contains("<td>Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated</td>"));
+        assertTrue(preparedStorage.contains("<td>Check that the manifest is generated:<br/>- Column A is populated<br/>- Column B is populated</td>"));
     }
 
     @Test
@@ -593,6 +712,18 @@ public class ConfluenceCoverageTest {
     @Test(expected = IllegalStateException.class)
     public void testContentByTitleInDefaultSpace_NoDefaultSpace() throws IOException {
         confluence.contentByTitleInDefaultSpace("T", null);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testFindContentInDefaultSpace_BlankDefaultSpace() throws IOException {
+        Confluence withBlank = new Confluence("http://example.com", "auth", null, "  ");
+        withBlank.findContentInDefaultSpace("T", null);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testContentByTitleInDefaultSpace_BlankDefaultSpace() throws IOException {
+        Confluence withBlank = new Confluence("http://example.com", "auth", null, "  ");
+        withBlank.contentByTitleInDefaultSpace("T", null);
     }
 
     // ------------------------------------------------------------------

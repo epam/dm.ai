@@ -26,6 +26,16 @@ bash skill-install.sh --skills confluence
 - Core configuration keys: `CONFLUENCE_BASE_PATH`, `CONFLUENCE_LOGIN_PASS_TOKEN`
 - Common optional keys: `CONFLUENCE_GRAPHQL_PATH`, `CONFLUENCE_DEFAULT_SPACE`, `CONFLUENCE_API_VERSION`
 
+### Default space scoping (`CONFLUENCE_DEFAULT_SPACE`)
+
+When `CONFLUENCE_DEFAULT_SPACE` is set, read operations without an explicit space parameter are scoped to the configured default space:
+
+- `confluence_search_content_by_text`: scopes both REST CQL search (`AND space = "<CONFLUENCE_DEFAULT_SPACE>"` unless the query already specifies `space =` / `space in`) and GraphQL search (`confluenceFilters.spaces`) to `CONFLUENCE_DEFAULT_SPACE`.
+- `confluence_find_content` and `confluence_content_by_title`: look up pages by title in `CONFLUENCE_DEFAULT_SPACE`.
+- `confluence_find_or_create`: looks up and creates pages in `CONFLUENCE_DEFAULT_SPACE`.
+
+Explicit space keys (`confluence_content_by_title_and_space`, `confluence_find_content_by_title_and_space`, `confluence_get_children_by_name`), page IDs (`confluence_content_by_id`), URLs (`confluence_contents_by_urls`), and page creation/update tools (`confluence_create_page`, `confluence_update_page`) take precedence and remain unchanged. If `CONFLUENCE_DEFAULT_SPACE` is unset or blank, `confluence_search_content_by_text` searches across all accessible spaces.
+
 ### Granular/scoped Atlassian API tokens (Confluence v2 API)
 
 Atlassian's newer **granular/scoped API tokens** (created via `id.atlassian.com` →

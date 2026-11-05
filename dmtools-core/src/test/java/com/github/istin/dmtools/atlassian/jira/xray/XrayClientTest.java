@@ -14,6 +14,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import com.github.istin.dmtools.atlassian.jira.model.Comment;
+import java.util.Collections;
+import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
 
 /**
@@ -118,8 +121,15 @@ public class XrayClientTest {
             return; // Skip if client not initialized
         }
         
-        // Should not throw exception (empty implementation)
-        xrayClient.deleteCommentIfExists("TEST-1", "test comment");
+        XrayClient spyClient = spy(xrayClient);
+        Comment mockComment = mock(Comment.class);
+        when(mockComment.getBody()).thenReturn("test comment");
+        when(mockComment.getId()).thenReturn("101");
+        doReturn(Collections.singletonList(mockComment)).when(spyClient).getComments("TEST-1", null);
+        doReturn("").when(spyClient).deleteComment("TEST-1", "101");
+
+        spyClient.deleteCommentIfExists("TEST-1", "test comment");
+        verify(spyClient).deleteComment("TEST-1", "101");
     }
 
     @Test

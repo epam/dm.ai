@@ -78,7 +78,9 @@ class DocsCountsConsistencyTest {
             Map.entry("Rally", "rally"),
             Map.entry("SCM", "scm"),
             Map.entry("CI", "ci"),
-            Map.entry("ENV", "env")
+            Map.entry("ENV", "env"),
+            Map.entry("Rovo", "rovo"),
+            Map.entry("Atlassian Rovo", "rovo")
     );
 
     @Test
