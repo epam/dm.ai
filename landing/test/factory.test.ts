@@ -59,7 +59,7 @@ describe('GitLab parent workflow loading', () => {
     }) as typeof fetch;
     const controller = new AbortController();
     assert.deepEqual(await loadGitlabTemplates(controller.signal), gitlabTemplates);
-    assert.equal(calls.length, 8);
+    assert.equal(calls.length, GITLAB_TEMPLATE_NAMES.length);
     for (const { url, init } of calls) {
       assert.ok(url.startsWith('https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/feat/gitlab-agent-workflows/gitlab/'));
       assert.equal(init?.credentials, 'omit');
@@ -104,8 +104,22 @@ describe('GitLab parent workflow loading', () => {
     assert.match(files.find((file) => file.path === '.gitlab-ci.yml')!.content, /^# parent workflow revision/);
   });
 
+  it('sources the entire automatic lifecycle and account selector from downloaded templates', () => {
+    const names = [
+      'gitlab-auto-ci.yml', 'gitlab-factory-common.sh', 'gitlab-factory-job.sh',
+      'gitlab-factory-lifecycle.sh', 'gitlab-factory-intake.sh', 'gitlab-factory-rework.sh',
+      'gitlab-factory-select-teammate.sh',
+    ] as const;
+    const templates = { ...gitlabTemplates };
+    for (const name of names) templates[name] = `# fetched:${name}\n${templates[name]}`;
+    const files = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true, gitlabMultipleTeammates: true }), templates);
+    for (const name of names) {
+      assert.ok(files.some((file) => file.content.includes(`# fetched:${name}`)), `${name} must come from the parent`);
+    }
+  });
+
   it('rejects unsupported parent placeholders before generating a merge request', async () => {
-    const templates = { ...gitlabTemplates, 'gitlab-ci.yml': '@@UNSUPPORTED_INPUT@@' };
+    const templates = { ...gitlabTemplates, 'gitlab-ci.yml': `@@UNSUPPORTED_INPUT@@\n${gitlabTemplates['gitlab-ci.yml']}` };
     const calls: string[] = [];
     globalThis.fetch = (async (input) => {
       calls.push(String(input));
@@ -128,8 +142,88 @@ describe('GitLab parent workflow loading', () => {
 });
 
 describe('GitLab factory templates', () => {
+  const multiConfig = () => validConfig({
+    gitlabMultipleTeammates: true,
+    gitlabDev: 'custom-dev',
+    gitlabReviewer: 'custom-reviewer',
+  });
+
+  it('requires distinct valid accounts only in GitLab multiple-teammate mode', () => {
+    const config = multiConfig();
+    assert.deepEqual(validate(config, 'gitlab'), {});
+    assert.equal(validate({ ...config, machine: '' }, 'gitlab').machine, undefined);
+    for (const key of ['gitlabDev', 'gitlabReviewer'] as const) {
+      for (const value of ['', 'bad username', "bad'username"]) {
+        assert.ok(validate({ ...config, [key]: value }, 'gitlab')[key]);
+        assert.throws(() => renderGitlabFiles({ ...config, [key]: value }, gitlabTemplates), /username/);
+      }
+    }
+    assert.match(validate({ ...config, gitlabReviewer: 'CUSTOM-DEV' }, 'gitlab').gitlabReviewer, /different/);
+    assert.deepEqual(validate({ ...config, gitlabDev: '', gitlabReviewer: '' }, 'github'), {});
+  });
+
+  it('lists separate GitLab token fields with the selected account names', () => {
+    const secrets = requiredSecrets(multiConfig(), 'gitlab');
+    assert.deepEqual(secrets.slice(0, 2).map((secret) => secret.name), ['GITLAB_DEV_TOKEN', 'GITLAB_REVIEWER_TOKEN']);
+    assert.match(secrets[0].hint, /custom-dev/);
+    assert.match(secrets[1].hint, /custom-reviewer/);
+    assert.ok(!secrets.some((secret) => secret.name === 'GITLAB_TOKEN'));
+    assert.equal(requiredSecrets({ ...multiConfig(), gitlabMultipleTeammates: false }, 'gitlab')[0].name, 'GITLAB_TOKEN');
+    assert.equal(requiredSecrets(multiConfig(), 'github')[0].name, 'SOURCE_GITHUB_TOKEN');
+  });
+
+  it('routes GitLab jobs, poller work and manual reviews to their account tokens', () => {
+    const files = renderGitlabFiles(multiConfig(), gitlabTemplates);
+    const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
+    for (const job of ['poll-assigned-issues', 'ai-teammate', 'review-merge-request', 'rework-merge-request', 'merge-approved-merge-request']) {
+      const token = job === 'review-merge-request' || job === 'merge-approved-merge-request' ? 'GITLAB_REVIEWER_TOKEN' : 'GITLAB_DEV_TOKEN';
+      assert.ok(pipeline.includes(`${job}:\n  variables:\n    GITLAB_TOKEN: "$${token}"`));
+    }
+    assert.match(pipeline, /select_gitlab_teammate "\$DMTOOLS_AGENT_CONFIG"/);
+    assert.match(pipeline, /author" != 'custom-dev'/);
+    const poller = files.find((file) => file.path.endsWith('gitlab-factory-poll-issues.sh'))!.content;
+    assert.match(poller, /machine='custom-dev'/);
+    assert.equal(poller.match(/select_gitlab_teammate "\$config"/g)?.length, 2);
+    assert.match(poller, /select_gitlab_teammate merge/);
+    const selector = files.find((file) => file.path.endsWith('gitlab-factory-select-teammate.sh'))!.content;
+    for (const role of ['dev', 'rework-merge-request', '.dmtools/runners/fa-story-dev.json', '.dmtools/runners/fa-rework.json',
+      'review-merge-request', '.dmtools/runners/fa-review.json', 'merge', 'merge-approved-merge-request']) {
+      const result = spawnSync('bash', ['-c', `${selector}\nselect_gitlab_teammate "$1"\nprintf '%s' "$GITLAB_TOKEN"`, '--', role], {
+        encoding: 'utf8',
+        env: { GITLAB_DEV_TOKEN: 'dev-test-token', GITLAB_REVIEWER_TOKEN: 'review-test-token' },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, /review|merge-approved|^merge$/.test(role) ? 'review-test-token' : 'dev-test-token');
+    }
+    for (const role of ['dev', 'merge']) {
+      const result = spawnSync('bash', ['-c', `${selector}\nselect_gitlab_teammate "$1"`, '--', role], { encoding: 'utf8', env: {} });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /Set the GITLAB_(DEV|REVIEWER)_TOKEN/);
+    }
+    for (const file of files.filter((file) => file.path.endsWith('.sh'))) {
+      const result = spawnSync('bash', ['-n'], { input: file.content, encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+    }
+    assert.ok(!renderGitlabFiles(validConfig(), gitlabTemplates).some((file) => file.path.endsWith('gitlab-factory-select-teammate.sh')));
+    assert.deepEqual(renderFiles(multiConfig()), renderFiles(validConfig()));
+  });
+
+  it('fails explicitly when parent templates cannot route multiple teammates safely', () => {
+    assert.throws(() => renderGitlabFiles(multiConfig(), { ...gitlabTemplates, 'gitlab-ci.yml': 'changed parent' }),
+      /incompatible with factory setup/);
+  });
+
   const template = (name: string) =>
     readFileSync(resolve(here, 'fixtures/gitlab', name), 'utf8');
+  const withReworkJobs = (pipeline: string) => pipeline
+    .replace('dmtools run .dmtools/runners/fa-rework.json --inputTicketId "$CI_MERGE_REQUEST_IID"',
+      'bash .dmtools/scripts/gitlab-factory-rework.sh "$CI_MERGE_REQUEST_IID"')
+    .replace('      dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"',
+      `      if [ "$DMTOOLS_AGENT_CONFIG" = '.dmtools/runners/fa-rework.json' ]; then
+        bash .dmtools/scripts/gitlab-factory-rework.sh "$DMTOOLS_TICKET_ID"
+      else
+        dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"
+      fi`);
 
   const qualityCases = [
     { preset: 'crap4js', toolchain: 'node', version: '24', fallback: '22' },
@@ -152,9 +246,9 @@ describe('GitLab factory templates', () => {
         const quality = template(`gitlab-quality-${preset}.yml`)
           .replaceAll('@@VERSION@@', customVersion ? version : fallback);
         const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
-        assert.equal(pipeline, template('gitlab-ci.yml')
+        assert.equal(pipeline, withReworkJobs(template('gitlab-ci.yml')
           .replaceAll('@@QUALITY_JOB@@', quality)
-          .replaceAll('@@MACHINE@@', config.machine));
+          .replaceAll('@@MACHINE@@', config.machine)));
         assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
 
         const script = quality.split('    - |\n')[1]
@@ -171,10 +265,10 @@ describe('GitLab factory templates', () => {
   ]) {
     it(`omits quality stage and job when ${config.ciEnabled === false ? 'CI is disabled' : 'no preset is selected'}`, () => {
       const pipeline = renderGitlabFiles(config, gitlabTemplates).find((file) => file.path === '.gitlab-ci.yml')!.content;
-      assert.equal(pipeline, template('gitlab-ci.yml')
+      assert.equal(pipeline, withReworkJobs(template('gitlab-ci.yml')
         .replace('  - quality\n', '')
         .replaceAll('@@QUALITY_JOB@@', '')
-        .replaceAll('@@MACHINE@@', config.machine));
+        .replaceAll('@@MACHINE@@', config.machine)));
       assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
     });
   }
@@ -184,9 +278,10 @@ describe('GitLab factory templates', () => {
     const files = renderGitlabFiles(config, gitlabTemplates);
     for (const name of ['gitlab-factory-poll-issues.sh', 'gitlab-factory-publish-review.sh']) {
       const script = files.find((file) => file.path === `.dmtools/scripts/${name}`)!.content;
-      assert.equal(script, template(name)
+      assert.ok(script.startsWith(template(name)
+        .split('\npage=1\n')[0]
         .replaceAll('@@MACHINE@@', config.machine)
-        .replaceAll('@@BASE_BRANCH@@', config.baseBranch));
+        .replaceAll('@@BASE_BRANCH@@', config.baseBranch)));
       assert.doesNotMatch(script, /@@[A-Z_]+@@/);
       const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' });
       assert.equal(syntax.status, 0, syntax.stderr);
@@ -197,6 +292,7 @@ describe('GitLab factory templates', () => {
 function validConfig(overrides: Partial<FactoryConfig> = {}): FactoryConfig {
   return {
     ...defaults,
+    gitlabAutoLifecycle: false,
     repo: 'acme/demo',
     ...overrides,
   };
@@ -334,7 +430,7 @@ describe('Source control options', () => {
     );
     assert.match(
       pipeline,
-      /rework-merge-request:[\s\S]*?script:\n    - \|\n      dmtools run \.dmtools\/runners\/fa-rework\.json/,
+      /rework-merge-request:[\s\S]*?script:\n    - \|\n      bash \.dmtools\/scripts\/gitlab-factory-rework\.sh "\$CI_MERGE_REQUEST_IID"/,
     );
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/);
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "trigger" && \$DMTOOLS_FACTORY_TRIGGER == "issue_webhook"/);
@@ -381,8 +477,8 @@ describe('Source control options', () => {
     assert.match(poller, /run_agent "\$config" --inputTicketId "\$iid"/);
     assert.match(
       poller,
-      /if \[ "\$trigger" != 'agent:review' \]; then\s+publish_issue_changes "\$iid" "\$base_sha"\s+else\s+related_merge_requests=/,
-      'issue review runs should not require code changes or create a branch/MR',
+      /elif \[ "\$trigger" != 'agent:review' \]; then\s+run_agent "\$config" --inputTicketId "\$iid"\s+publish_issue_changes "\$iid" "\$base_sha"\s+else\s+run_agent "\$config" --inputTicketId "\$iid"\s+related_merge_requests=/,
+      'only development should create a branch/MR; review and rework use existing MRs',
     );
     assert.match(poller, /if \[ "\$trigger" = 'agent:review' \]; then\s+result_label='ai_pr_reviewed'/);
     assert.match(poller, /issues\/\$iid\/related_merge_requests/);
@@ -405,6 +501,11 @@ describe('Source control options', () => {
     assert.match(poller, /branch protection/);
     assert.match(poller, /projects\/\$CI_PROJECT_ID\/merge_requests/);
     assert.match(poller, /Created GitLab merge request:/);
+    const lifecycleFiles = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true }), gitlabTemplates);
+    const reviewRunner = JSON.parse(lifecycleFiles.find((file) => file.path === '.dmtools/runners/fa-review.json')!.content);
+    const reviewPrompt = reviewRunner.params.cliPrompts.join('\n');
+    assert.match(reviewPrompt, /Write all review artifacts only under its outputs\/ directory/);
+    assert.match(reviewPrompt, /Treat DMTOOLS_REVIEW_CONTEXT as read-only input/);
     assert.ok(
       poller.indexOf('publish_issue_changes "$iid" "$base_sha"') <
         poller.indexOf('add_labels=$result_label'),
@@ -414,6 +515,77 @@ describe('Source control options', () => {
     assert.equal(gitlabToken.name, 'GITLAB_TOKEN');
     assert.match(gitlabToken.hint, /api and write_repository scopes/);
     assert.match(gitlabToken.hint, /Developer or higher access/);
+  });
+
+  it('ignores a non-empty-directory cleanup failure only after successful agent completion', () => {
+    const poller = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true }), gitlabTemplates)
+      .find((file) => file.path === '.dmtools/scripts/gitlab-factory-poll-issues.sh')!.content;
+    const runAgent = poller.match(/run_agent\(\) \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(runAgent, 'rendered poller should contain run_agent');
+
+    const runWithOutput = (completion: string) => [
+      'set -Eeuo pipefail',
+      runAgent,
+      `dmtools() { printf '%s\\n' '${completion}' "rmdir: failed to remove '/tmp/context': Directory not empty"; return 1; }`,
+      'run_agent review.json',
+    ].join('\n');
+    const recovered = spawnSync('bash', ['-c', runWithOutput('Agent completed with exit code: 0')], { encoding: 'utf8' });
+    assert.equal(recovered.status, 0, recovered.stderr);
+    assert.match(recovered.stderr, /Ignoring temporary-directory cleanup failure/);
+
+    const failedAgent = spawnSync('bash', ['-c', runWithOutput('Agent completed with exit code: 1')], { encoding: 'utf8' });
+    assert.notEqual(failedAgent.status, 0);
+  });
+
+  it('replaces a truncated trigger token instead of configuring a webhook that returns 404', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body = init?.body instanceof URLSearchParams
+        ? Object.fromEntries(init.body)
+        : init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, method, body });
+      if (url.includes('/triggers?')) {
+        return Response.json([{ id: 21, token: 'abcd', description: 'DMTools factory issue webhook' }]);
+      }
+      if (url.endsWith('/triggers') && method === 'POST') {
+        return Response.json({ id: 22, token: 'full-trigger-token', description: 'DMTools factory issue webhook' });
+      }
+      if (url.includes('/hooks?')) {
+        return Response.json([{
+          id: 34,
+          url: 'https://gitlab.example.com/api/v4/projects/team%2Fapp/trigger/pipeline?token=abcd&ref=main&variables%5BDMTOOLS_FACTORY_TRIGGER%5D=issue_webhook',
+        }]);
+      }
+      if (url.endsWith('/hooks/34') && method === 'PUT') return Response.json({ id: 34 });
+      if (url.endsWith('/triggers/21') && method === 'DELETE') return new Response(null, { status: 204 });
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      await ensureGitlabIssueEventWebhook('setup-token', 'team/app', 'https://gitlab.example.com', 'main');
+      assert.equal(calls.filter((call) => call.url.endsWith('/triggers') && call.method === 'POST').length, 1);
+      const updated = calls.find((call) => call.url.endsWith('/hooks/34') && call.method === 'PUT');
+      assert.equal(new URL(String(updated?.body?.url)).searchParams.get('token'), 'full-trigger-token');
+      assert.ok(calls.some((call) => call.url.endsWith('/triggers/21') && call.method === 'DELETE'));
+
+      calls.length = 0;
+      globalThis.fetch = (async (input) => {
+        const url = String(input);
+        calls.push({ url, method: 'GET' });
+        return url.includes('/triggers?')
+          ? Response.json([])
+          : Response.json({ id: 22, token: 'abcd', description: 'DMTools factory issue webhook' });
+      }) as typeof fetch;
+      await assert.rejects(
+        ensureGitlabIssueEventWebhook('setup-token', 'team/app', 'https://gitlab.example.com', 'main'),
+        /did not return the factory webhook trigger token/,
+      );
+      assert.ok(calls.every((call) => !call.url.includes('/hooks')));
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 
   it('creates and updates a managed GitLab issue-event webhook idempotently', async () => {
@@ -702,7 +874,8 @@ describe('Source control options', () => {
         const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
         assert.ok(mergeRequest);
         assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /IstiN\/dmtools-agentic-workflows@feat\/gitlab-agent-workflows/);
-        assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length, reuseTemplates ? 0 : 8);
+        assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length,
+          reuseTemplates ? 0 : GITLAB_TEMPLATE_NAMES.length);
       } finally {
         globalThis.fetch = origFetch;
       }

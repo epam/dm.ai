@@ -24,6 +24,7 @@ import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.config.InMemoryConfiguration;
 
 import com.github.istin.dmtools.github.GitHubActions;
+import com.github.istin.dmtools.gitlab.GitLabTrackerClient;
 
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
@@ -153,6 +154,8 @@ public class ServerManagedIntegrationsModule {
                     client = createAdoClient(resolvedIntegrations);
                 } else if ("rally".equalsIgnoreCase(defaultTracker)) {
                     client = createRallyClient(resolvedIntegrations);
+                } else if ("gitlab".equalsIgnoreCase(defaultTracker)) {
+                    client = createGitLabClient(resolvedIntegrations);
                 }
                 
                 if (client != null) {
@@ -188,8 +191,13 @@ public class ServerManagedIntegrationsModule {
                 client = createRallyClient(resolvedIntegrations);
                 if (client != null) return client;
             }
+
+            if (resolvedIntegrations.has("gitlab")) {
+                client = createGitLabClient(resolvedIntegrations);
+                if (client != null) return client;
+            }
             
-            logger.error("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira or ADO or Rally) available - returning null TrackerClient");
+            logger.error("❌ [ServerManagedIntegrationsModule] No valid TrackerClient integration (Jira, ADO, Rally, or GitLab) available - returning null TrackerClient");
             return null;
         } catch (Exception e) {
             logger.error("❌ [ServerManagedIntegrationsModule] Failed to create TrackerClient instance with resolved credentials: " + e.getMessage());
@@ -318,6 +326,22 @@ public class ServerManagedIntegrationsModule {
             }
         }
         return null;
+    }
+
+    private TrackerClient<? extends ITicket> createGitLabClient(JSONObject resolvedIntegrations) throws IOException {
+        if (!resolvedIntegrations.has("gitlab")) {
+            return null;
+        }
+        JSONObject gitlabConfig = resolvedIntegrations.getJSONObject("gitlab");
+        String token = gitlabConfig.optString("GITLAB_TOKEN", "");
+        if (token.isEmpty()) {
+            logger.error("❌ [ServerManagedIntegrationsModule] GitLab configuration is missing GITLAB_TOKEN");
+            return null;
+        }
+        String basePath = gitlabConfig.optString("GITLAB_BASE_PATH", "https://gitlab.com");
+        String workspace = gitlabConfig.optString("GITLAB_WORKSPACE", "");
+        String repository = gitlabConfig.optString("GITLAB_REPOSITORY", "");
+        return new GitLabTrackerClient(basePath, token, workspace, repository);
     }
     
     /**
