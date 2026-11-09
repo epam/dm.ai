@@ -130,7 +130,7 @@ dependencies {
     // AWS SDK for Bedrock IAM authentication
     api 'software.amazon.awssdk:auth:2.57.7'
     api 'software.amazon.awssdk:aws-core:2.57.7'
-    api 'software.amazon.awssdk:regions:2.57.7'
+    api 'software.amazon.awssdk:regions:2.57.10'
 
     // Google Cloud authentication for Vertex AI
     api 'com.google.auth:google-auth-library-oauth2-http:1.55.0'
