@@ -29,6 +29,9 @@ INSTALL_ALL_SKILLS=false
 SKIP_UNKNOWN_SKILLS=false
 PRUNE_SKILLS=false
 GLOBAL_ONLY=false
+case "$(printf '%s' "${DMTOOLS_SKILLS_GLOBAL_ONLY:-false}" | tr '[:upper:]' '[:lower:]')" in
+    true|1|yes|on) GLOBAL_ONLY=true ;;
+esac
 POSITIONAL_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -36,9 +39,9 @@ while [ $# -gt 0 ]; do
             INSTALL_ALL=true
             shift
             ;;
-        --global)
-            # Only the user-level agent directories (~/.claude, ~/.copilot, ~/.agents): used by the main
-            # installer so a `curl | bash` run never writes into whatever directory it was started in.
+        --global|--global-only|--no-local-skills)
+            # Only the user-level agent directories (~/.claude, ~/.cursor, ~/.copilot, ~/.codex, ~/.agents):
+            # used by the main installer so a `curl | bash` run never writes into whatever directory it was started in.
             GLOBAL_ONLY=true
             shift
             ;;
@@ -104,7 +107,7 @@ while [ $# -gt 0 ]; do
             echo "  --skill <name>    Select a single skill package"
             echo "  --skills=<csv>    Allowed alias for comma-separated packages"
             echo "  --all-skills      Select all supported skill packages"
-            echo "  --global          Install only to user-level agent dirs (~/.claude, ~/.copilot, ~/.agents)"
+            echo "  --global          Install only to user-level agent dirs (~/.claude, ~/.cursor, ~/.copilot, ~/.codex, ~/.agents)"
             echo "  --prune           Also remove known skill packages that are not selected (default: keep them)"
             echo "  --skip-unknown    Warn and continue when unknown skill names are supplied"
             echo "  --help, -h        Show this help message"
@@ -112,6 +115,7 @@ while [ $# -gt 0 ]; do
             echo "Environment Variables:"
             echo "  INSTALL_LOCATION   Set to number (1,2,3...) to select specific location"
             echo "  DMTOOLS_SKILLS     Comma-separated package list for non-interactive installs"
+            echo "  DMTOOLS_SKILLS_GLOBAL_ONLY  Set to true to never write to current workspace"
             echo ""
             echo "Examples:"
             echo "  curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/skill-install.sh | bash"
@@ -478,10 +482,40 @@ detect_skill_dirs() {
         fi
     fi
 
+    # Global: Cursor (~/.cursor/skills)
+    local home_cursor="$HOME/.cursor"
+    if [ -d "$home_cursor/skills" ] || [ -d "$home_cursor" ]; then
+        local already_added=false
+        for d in "${found_dirs[@]}"; do
+            if [ "$d" = ".cursor/skills" ]; then
+                already_added=true
+                break
+            fi
+        done
+        if [ "$already_added" = false ]; then
+            found_dirs+=("$home_cursor/skills")
+        fi
+    fi
+
     # Global: GitHub Copilot CLI (~/.copilot/skills)
     local home_copilot="$HOME/.copilot"
     if [ -d "$home_copilot/skills" ] || [ -d "$home_copilot" ]; then
         found_dirs+=("$home_copilot/skills")
+    fi
+
+    # Global: Codex (~/.codex/skills)
+    local home_codex="$HOME/.codex"
+    if [ -d "$home_codex/skills" ] || [ -d "$home_codex" ]; then
+        local already_added=false
+        for d in "${found_dirs[@]}"; do
+            if [ "$d" = ".codex/skills" ]; then
+                already_added=true
+                break
+            fi
+        done
+        if [ "$already_added" = false ]; then
+            found_dirs+=("$home_codex/skills")
+        fi
     fi
 
     # Global: cross-agent skills (~/.agents/skills)
@@ -500,7 +534,14 @@ detect_skill_dirs() {
     fi
 
     if [ ${#found_dirs[@]} -eq 0 ]; then
-        found_dirs+=(".cursor/skills")
+        if [ "$GLOBAL_ONLY" = true ]; then
+            # Global-only mode (used by main install.sh and headless CI):
+            # NEVER fall back to a relative workspace path (.cursor/skills) —
+            # default to the user-level cross-agent directory (~/.agents/skills).
+            found_dirs+=("$home_agents/skills")
+        else
+            found_dirs+=(".cursor/skills")
+        fi
     fi
 
     echo "${found_dirs[@]}"
