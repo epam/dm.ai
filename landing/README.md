@@ -74,21 +74,17 @@ npm run check      # TypeScript and Astro diagnostics
 The folders separate platform-specific workflows from reusable configuration:
 
 - [`github/`](src/lib/factory-templates/github/): GitHub Actions workflow templates.
-- [`gitlab/source.ts`](src/lib/factory-templates/gitlab/source.ts): the GitLab parent template source,
-  `IstiN/dmtools-agentic-workflows` at `feat/gitlab-agent-workflows`.
+- [`gitlab/machine-sm.yml`](src/lib/factory-templates/gitlab/machine-sm.yml): the standalone GitLab CI pipeline for scheduled and manual `sm_gitlab` runs.
 - [`shared/`](src/lib/factory-templates/shared/): runner JSON templates and agent configuration used by both platforms.
 
-[`factory.ts`](src/lib/factory.ts) loads GitLab CI, scripts, and quality templates
-from the parent's `gitlab/` directory during setup and replaces `@@...@@`
-placeholders with setup values. The preview and merge request use the same loaded
-templates. Loading errors block setup and offer a retry; there is no local fallback.
-Generated files are committed to the target repository, so pipelines do not fetch
-these templates at runtime and parent changes take effect on the next setup.
+GitLab setup generates only `.gitlab-ci.yml` from the local machine-SM template;
+it does not fetch other GitLab workflow templates. It runs `sm_gitlab@latest`
+every ten minutes. To run it manually from GitLab, start a web pipeline with
+`DMTOOLS_MACHINE_SM=true`; manual runs default to dry-run, and
+`DMTOOLS_MACHINE_SM_DRY_RUN=false` applies actions. Configure the masked
+`GITLAB_TOKEN` project CI/CD variable.
 
-Edit GitHub workflow content locally; edit GitLab workflow content in the parent
-repository. [`test/fixtures/gitlab/`](test/fixtures/gitlab/) contains offline
-parent-template snapshots for tests only, never production fallback content.
-Run `npm test` to check loading, rendering, and GitLab shell syntax.
+Run `npm test` to check workflow rendering and GitLab shell syntax.
 
 **Text that appears once** lives in its section under `src/sections/`.
 

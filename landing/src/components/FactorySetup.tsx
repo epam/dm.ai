@@ -31,18 +31,15 @@ import {
   putSecrets,
   putGitlabVariables,
   createGitlabMergeRequest,
+  renderGitlabMachineSmFiles,
   requiredSecrets,
   renderFiles,
-  renderGitlabFiles,
-  loadGitlabTemplates,
-  GITLAB_WORKFLOW_SOURCE,
   validate,
   prBody,
   type CiDetection,
   type TokenCheck,
   type CiWorkflow,
   type FactoryConfig,
-  type GitlabTemplates,
   type ProviderEntry,
   type QualityPresetId,
   type RepoSummary,
@@ -180,9 +177,6 @@ export default function FactorySetup() {
   const [cfg, setCfg] = useState<FactoryConfig>(defaults);
   const [scm, setScm] = useState<ScmId>('github');
   const [gitlabBaseUrl, setGitlabBaseUrl] = useState('https://gitlab.com');
-  const [gitlabTemplates, setGitlabTemplates] = useState<GitlabTemplates | null>(null);
-  const [gitlabTemplateError, setGitlabTemplateError] = useState('');
-  const [gitlabTemplateAttempt, setGitlabTemplateAttempt] = useState(0);
   const [token, setToken] = useState('');
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [repoLoadError, setRepoLoadError] = useState('');
@@ -223,7 +217,7 @@ export default function FactorySetup() {
     }
     try {
       if (scm === 'gitlab') {
-        return { files: gitlabTemplates ? renderGitlabFiles(cfg, gitlabTemplates, normalizedGitlabBaseUrl) : [], error: '' };
+        return { files: renderGitlabMachineSmFiles(cfg), error: '' };
       }
       return {
         files: renderFiles(cfg),
@@ -232,25 +226,12 @@ export default function FactorySetup() {
     } catch (error) {
       return { files: [], error: (error as Error).message };
     }
-  }, [cfg, errors, scm, normalizedGitlabBaseUrl, gitlabTemplates]);
+  }, [cfg, errors, scm, normalizedGitlabBaseUrl]);
   const files = generation.files;
-  const templateError = gitlabTemplateError || generation.error;
+  const templateError = generation.error;
   const set = <K extends keyof FactoryConfig>(k: K, v: FactoryConfig[K]) => setCfg((c) => ({ ...c, [k]: v }));
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const show = (k: string) => (touched[k] ? errors[k] : undefined);
-
-  useEffect(() => {
-    if (scm !== 'gitlab') return;
-    const controller = new AbortController();
-    setGitlabTemplates(null);
-    setGitlabTemplateError('');
-    loadGitlabTemplates(controller.signal).then((templates) => {
-      if (!controller.signal.aborted) setGitlabTemplates(templates);
-    }).catch((error: Error) => {
-      if (!controller.signal.aborted) setGitlabTemplateError(`Unable to load GitLab parent workflows: ${error.message}`);
-    });
-    return () => controller.abort();
-  }, [scm, gitlabTemplateAttempt]);
 
   useEffect(() => {
     const ids = ['step-repo', 'step-fa', 'step-providers', 'step-ci', 'step-runtime', 'step-secrets'];
@@ -468,9 +449,6 @@ export default function FactorySetup() {
     const log = (m: string) => setLines((l) => [...l, m]);
     try {
       if (scm === 'gitlab') {
-        if (!gitlabTemplates || templateError) {
-          throw new Error(templateError || 'GitLab parent workflows have not loaded yet.');
-        }
         const wanted = Object.fromEntries(
           requiredSecrets(cfg, scm, normalizedGitlabBaseUrl).map((x) => [x.name, secretVals[x.name] ?? '']),
         );
@@ -481,7 +459,7 @@ export default function FactorySetup() {
             .then(setExistingLabels)
             .catch(() => {});
         }
-        const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log, gitlabTemplates);
+        const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log);
         setSecretVals({});
         setPrUrl(mergeRequest);
         if (cfg.gitlabAutoLifecycle !== false) {
@@ -529,7 +507,7 @@ export default function FactorySetup() {
     !tokenInfo?.missingScopes.length &&
     (scm === 'gitlab' || cfg.createRepo || tokenInfo?.push !== false) &&
     !generation.error &&
-    (scm !== 'gitlab' || (Boolean(normalizedGitlabBaseUrl) && Boolean(gitlabTemplates) && !templateError));
+    (scm !== 'gitlab' || Boolean(normalizedGitlabBaseUrl));
 
   const ciMode: 'existing' | 'crap4' | 'none' = !isCiEnabled(cfg)
     ? 'none'
@@ -542,7 +520,7 @@ export default function FactorySetup() {
 
   const stepRepoReady = Boolean(cfg.repo && !errors.repo && !errors.baseBranch && !errors.machine);
   const stepProvidersReady = Boolean(!errors.providers);
-  const stepCiReady = Boolean(!errors.ciFile && !errors.ciName && !errors.checks);
+  const stepCiReady = scm === 'gitlab' || Boolean(!errors.ciFile && !errors.ciName && !errors.checks);
   const stepRuntimeReady = Boolean(!errors.runner && !errors.merge);
   const secretsList = requiredSecrets(cfg, scm, normalizedGitlabBaseUrl || gitlabBaseUrl);
   const configuredSecretsCount = secretsList.filter((s) => existing.includes(s.name) || Boolean(secretVals[s.name])).length;
@@ -593,7 +571,9 @@ export default function FactorySetup() {
             <span className="factory__stepNum">4</span>
             <span>
               <strong>CI &amp; Quality Gate</strong>
-              <small>{ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}</small>
+              <small>
+                {scm === 'gitlab' ? 'Machine SM only' : ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}
+              </small>
             </span>
           </a>
           <a
@@ -1176,7 +1156,7 @@ export default function FactorySetup() {
               <h2 className="factory__cardTitle">CI &amp; Quality Gate</h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'GitLab CI runs native factory jobs on a ten-minute schedule, manual runs, and merge requests. Direct issue/MR webhooks are disabled to avoid pipelines for status updates. You can also generate a language-specific crap4* quality job.'
+                  ? 'GitLab setup generates only the scheduled and manually triggerable machine SM pipeline. It does not configure validation or merge workflows.'
                   : (
                       <>
                         Choose how the state machine validates PRs before merging: use your existing CI workflow,
@@ -1187,6 +1167,12 @@ export default function FactorySetup() {
             </div>
           </header>
 
+          {scm === 'gitlab' ? (
+            <p className="factory__group">
+              This setup adds only the GitLab machine SM pipeline. Configure your project’s CI validation and merge
+              policies separately; they are not generated or changed here.
+            </p>
+          ) : (
           <fieldset className="factory__group">
             <legend>CI &amp; quality checks</legend>
             <div className="factory__seg" role="radiogroup" aria-label="CI mode">
@@ -1238,7 +1224,7 @@ export default function FactorySetup() {
               <>
                 <small>
                   Generates a ready-to-use{' '}
-                  <code>{scm === 'gitlab' ? '.gitlab-ci.yml' : '.github/workflows/quality.yml'}</code> powered by the{' '}
+                  <code>.github/workflows/quality.yml</code> powered by the{' '}
                   <strong>crap4*</strong> CRAP metric (Change Risk Anti-Patterns = cyclomatic complexity + test
                   coverage) for your tech stack.
                 </small>
@@ -1273,15 +1259,9 @@ export default function FactorySetup() {
             {ciMode === 'existing' && (
               <>
                 <small>
-                  {scm === 'gitlab'
-                    ? 'The generated factory pipeline does not import or dispatch existing GitLab CI jobs. Choose a crap4* preset to add a generated quality job, or configure your existing checks in the project after merging.'
-                    : (
-                        <>
-                          The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong>{' '}
-                          the CI workflow on the PR head when validation is due and merges once the checks below are
-                          green — so the workflow needs a <code>workflow_dispatch</code> trigger.
-                        </>
-                      )}
+                  The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong>{' '}
+                  the CI workflow on the PR head when validation is due and merges once the checks below are
+                  green — so the workflow needs a <code>workflow_dispatch</code> trigger.
                 </small>
                 {gatesBusy && <small>Reading branch protection and workflows…</small>}
                 {scm === 'github' && ci && ci.workflows.length === 0 && (
@@ -1392,6 +1372,7 @@ export default function FactorySetup() {
               </>
             )}
           </fieldset>
+          )}
         </section>
 
         {/* STEP 5: Runtime, Toolchains & Merge Identity */}
@@ -1401,12 +1382,20 @@ export default function FactorySetup() {
             <div>
               <h2 className="factory__cardTitle">Runner, Toolchains &amp; Merge Identity</h2>
               <p className="factory__cardSub">
-                Select the GitHub Actions runner label, cached SDK toolchains, and the identity that merges approved
-                PRs.
+                {scm === 'gitlab'
+                  ? 'The GitLab setup only installs the machine SM job; runner, toolchain, and merge settings are not generated.'
+                  : 'Select the GitHub Actions runner label, cached SDK toolchains, and the identity that merges approved PRs.'}
               </p>
             </div>
           </header>
 
+          {scm === 'gitlab' ? (
+            <p className="factory__group">
+              The machine SM job runs on the GitLab runner configured for this project. Configure other CI, toolchains,
+              and merge policies separately; this setup does not change them.
+            </p>
+          ) : (
+          <>
           <div className="factory__field">
             <label htmlFor="f-runner">Runner</label>
             <select
@@ -1532,6 +1521,8 @@ export default function FactorySetup() {
               </p>
             )}
           </fieldset>
+          </>
+          )}
         </section>
 
         {/* STEP 6: Repository Secrets & Labels */}
@@ -1707,17 +1698,15 @@ export default function FactorySetup() {
                 {scm === 'gitlab'
                   ? templateError
                     ? templateError
-                    : !gitlabTemplates
-                      ? 'Loading GitLab parent workflow templates…'
-                      : !normalizedGitlabBaseUrl
-                        ? 'Enter a valid GitLab instance URL.'
-                        : token.length <= 20
-                          ? 'Enter a GitLab personal access token in Step 1.'
-                          : !tokenInfo
-                            ? 'Wait for GitLab to validate the token.'
-                            : Object.keys(errors).length > 0
-                              ? `Complete required fields (${Object.keys(errors).map((k) => LABELS[k] ?? k).join(', ')}).`
-                              : 'Verify GitLab project permissions and try again.'
+                    : !normalizedGitlabBaseUrl
+                      ? 'Enter a valid GitLab instance URL.'
+                      : token.length <= 20
+                        ? 'Enter a GitLab personal access token in Step 1.'
+                        : !tokenInfo
+                          ? 'Wait for GitLab to validate the token.'
+                          : Object.keys(errors).length > 0
+                            ? `Complete required fields (${Object.keys(errors).map((k) => LABELS[k] ?? k).join(', ')}).`
+                            : 'Verify GitLab project permissions and try again.'
                   : token.length <= 20
                     ? 'Enter your GitHub setup token in Step 1 to enable PR creation.'
                     : Object.keys(errors).length > 0
@@ -1788,16 +1777,7 @@ export default function FactorySetup() {
               <div className="factory__empty">
                 {scm === 'gitlab' ? (
                   <>
-                    <p role={templateError ? 'alert' : undefined}>
-                      {templateError || (!gitlabTemplates
-                        ? `Loading templates from ${GITLAB_WORKFLOW_SOURCE.repository}@${GITLAB_WORKFLOW_SOURCE.ref}…`
-                        : 'Complete the required fields to preview the GitLab setup.')}
-                    </p>
-                    {templateError && (
-                      <button type="button" className="btn btn--ghost factory__mini" onClick={() => setGitlabTemplateAttempt((attempt) => attempt + 1)}>
-                        Retry loading templates
-                      </button>
-                    )}
+                    <p>Complete the required fields to preview the GitLab machine SM workflow.</p>
                   </>
                 ) : (
                   <>

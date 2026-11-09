@@ -1,0 +1,61 @@
+stages:
+  - agent
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_SM == "true"'
+    - when: never
+
+variables:
+  DMTOOLS_PACK_REGISTRY:
+    value: https://github.com/IstiN/dmtools-agents/releases/latest/download
+    description: Release registry used to resolve the GitLab machine agent pack.
+  DMTOOLS_MACHINE_SM:
+    value: "false"
+    description: Set true when starting a web pipeline to run the machine SM manually.
+  DMTOOLS_MACHINE_SM_DRY_RUN:
+    value: "true"
+    description: Manual machine SM runs are dry by default; set false to apply actions.
+  GITLAB_MACHINE_AUTHOR: "@@MACHINE_AUTHOR@@"
+
+default:
+  image: eclipse-temurin:21-jdk
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends curl jq
+    - curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+
+machine-sm:
+  stage: agent
+  resource_group: dmtools-machine-sm
+  interruptible: false
+  variables:
+    GITLAB_BASE_PATH: "$CI_SERVER_URL"
+    GITLAB_WORKSPACE: "$CI_PROJECT_NAMESPACE"
+    GITLAB_REPOSITORY: "$CI_PROJECT_NAME"
+  script:
+    - |
+      set -Eeuo pipefail
+      if [ -z "${GITLAB_TOKEN:-}" ]; then
+        GITLAB_TOKEN="${GITLAB_DEV_TOKEN:-}"
+      fi
+      : "${GITLAB_TOKEN:?Set GITLAB_TOKEN or GITLAB_DEV_TOKEN as a masked GitLab CI/CD variable}"
+      export GITLAB_TOKEN
+
+      dry_run=false
+      if [ "$CI_PIPELINE_SOURCE" = "web" ]; then
+        dry_run="${DMTOOLS_MACHINE_SM_DRY_RUN:-true}"
+      fi
+      case "$dry_run" in
+        true|false) ;;
+        *) echo "DMTOOLS_MACHINE_SM_DRY_RUN must be true or false." >&2; exit 1 ;;
+      esac
+
+      override=$(jq -cn \
+        --arg owner "$GITLAB_WORKSPACE" \
+        --arg repo "$GITLAB_REPOSITORY" \
+        --arg machineAuthor "$GITLAB_MACHINE_AUTHOR" \
+        --argjson dryRun "$dry_run" \
+        '{params:{jobParams:{owner:$owner,repo:$repo,machineAuthor:$machineAuthor,dryRun:$dryRun}}}')
+      dmtools run sm_gitlab@latest "$override"

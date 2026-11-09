@@ -1,9 +1,9 @@
-import { GITLAB_WORKFLOW_SOURCE } from './factory-templates/gitlab/source.ts';
 import aiTeammate from './factory-templates/github/ai-teammate.yml?raw';
 import machineSm from './factory-templates/github/machine-sm.yml?raw';
 import machineMerge from './factory-templates/github/machine-merge.yml?raw';
 import mergeTrigger from './factory-templates/github/merge-trigger.yml?raw';
 import smKicker from './factory-templates/github/sm-kicker.yml?raw';
+import gitlabMachineSm from './factory-templates/gitlab/machine-sm.yml?raw';
 import faUniversal from './factory-templates/github/fa-universal.yml?raw';
 import dmtoolsConfig from './factory-templates/shared/config.js?raw';
 import runnerBug from './factory-templates/shared/runner-bug.json?raw';
@@ -73,6 +73,11 @@ export interface FactoryConfig {
   faUniversal?: boolean; // default true: generate .github/workflows/fa-universal.yml (@fa interactive agent)
   faMemory?: boolean; // default true: generate .fah/config.yaml & persist repo memory under .fah/memory
 }
+
+export const GITLAB_WORKFLOW_SOURCE = {
+  repository: 'IstiN/dmtools-agentic-workflows',
+  ref: 'feat/gitlab-agent-workflows',
+} as const;
 
 /** Who merges machine PRs: the factory PAT, a separate PAT, or a GitHub App (job-scoped token). */
 export interface MergeIdentity {
@@ -213,7 +218,7 @@ export function validate(c: FactoryConfig, scm: ScmId = 'github'): Record<string
   } else if (!(scm === 'gitlab' ? GITLAB_LOGIN : LOGIN).test(c.machine)) {
     e.machine = scm === 'gitlab' ? 'Not a valid GitLab username' : 'Not a valid GitHub login';
   }
-  if (isCiEnabled(c)) {
+  if (scm === 'github' && isCiEnabled(c)) {
     if (!/^[\w.-]+\.ya?ml$/.test(c.ciFile)) e.ciFile = 'Workflow file name, e.g. ci.yml';
     if (!c.ciName.trim() || /['"\n]/.test(c.ciName)) e.ciName = 'Workflow display name (no quotes)';
     if (!c.checks.length || c.checks.some((x) => !x.trim() || /['",\n]/.test(x))) e.checks = 'At least one check name (no quotes or commas)';
@@ -648,7 +653,13 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
   ];
 }
 
-export { GITLAB_WORKFLOW_SOURCE };
+export function renderGitlabMachineSmFiles(c: FactoryConfig): FactoryFile[] {
+  const machineAuthor = c.gitlabMultipleTeammates ? c.gitlabDev : c.machine;
+  return [{
+    path: '.gitlab-ci.yml',
+    content: gitlabMachineSm.replaceAll('@@MACHINE_AUTHOR@@', machineAuthor),
+  }];
+}
 
 export const GITLAB_TEMPLATE_NAMES = [
   'gitlab-ci.yml',
@@ -1463,16 +1474,15 @@ export async function putGitlabVariables(
   }
 }
 
-/** Creates a GitLab branch, commits generated GitLab setup files, and opens a merge request. */
+/** Creates a GitLab branch, commits the machine SM pipeline, and opens a merge request. */
 export async function createGitlabMergeRequest(
   token: string,
   repo: string,
   baseUrl: string,
   c: FactoryConfig,
   log: (message: string) => void = () => {},
-  templates?: GitlabTemplates,
 ): Promise<string> {
-  const files = renderGitlabFiles(c, templates ?? await loadGitlabTemplates(), baseUrl);
+  const files = renderGitlabMachineSmFiles(c);
   const project = gitlabProjectPath(repo);
   const projectInfo = await gitlabRequest<{ default_branch: string }>(token, baseUrl, `/projects/${project}`);
   const base = c.baseBranch || projectInfo.default_branch;
@@ -1511,9 +1521,7 @@ export async function createGitlabMergeRequest(
       source_branch: branch,
       target_branch: base,
       title: 'chore: set up DMTools for GitLab',
-      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nWorkflow templates are rendered during setup from \`${GITLAB_WORKFLOW_SOURCE.repository}@${GITLAB_WORKFLOW_SOURCE.ref}\` (\`gitlab/\`). The generated files are committed here; they are not fetched at pipeline runtime.\n\n${c.gitlabAutoLifecycle !== false
-        ? 'A ten-minute reconciliation schedule drives development, validation and review automatically; validation completion requests reconciliation. Direct Issue/MR webhooks are removed so progress and label updates do not create pipelines. Assign an issue to the development account or add `agent:dev`; it is picked up on the next tick. Each leg is tracked in the issue description under **Machine jobs**, with job links and completion results. Rework requires an explicit `agent:rework` label on the issue or MR, or a manual run with `DMTOOLS_FACTORY_LEG=rework`. Each request runs once, updates the existing MR branch and replies to all open review threads, then validates and reviews the result. Review feedback and validation failures never start rework automatically. Review runs in an isolated checkout of the exact MR head. Agent failures escalate to `needs-human`. **Approved MRs remain open for a human to merge; automatic merging is disabled.** Manual runs use `DMTOOLS_MR_IID` and optional `DMTOOLS_FACTORY_LEG=review` or `rework`.'
-        : 'Manual runs execute the configured factory runners.'}\n\n${c.gitlabMultipleTeammates ? `Development and rework use \`${c.gitlabDev}\` with \`GITLAB_DEV_TOKEN\`. Code review uses \`${c.gitlabReviewer}\` with \`GITLAB_REVIEWER_TOKEN\`. Both accounts need Developer or higher project access.` : 'The factory requires the `GITLAB_TOKEN` project CI/CD variable created by this setup.'}`,
+      description: `Adds a GitLab-native scheduled machine SM pipeline for \`${repo}\`. The pipeline runs \`sm_gitlab@latest\` every ten minutes. Manual runs use \`DMTOOLS_MACHINE_SM=true\` and default to dry-run; set \`DMTOOLS_MACHINE_SM_DRY_RUN=false\` to apply actions. The pipeline requires the masked \`GITLAB_TOKEN\` project CI/CD variable. GitLab SM currently supports dispatch rules only; validation and merge automation are not included.`,
       remove_source_branch: true,
     }),
   });

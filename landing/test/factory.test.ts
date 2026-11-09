@@ -24,6 +24,7 @@ import {
   normalizeGitlabBaseUrl,
   TOKEN_LINKS,
   renderGitlabFiles,
+  renderGitlabMachineSmFiles,
   loadGitlabTemplates,
   GITLAB_TEMPLATE_NAMES,
   GITLAB_WORKFLOW_SOURCE,
@@ -118,26 +119,47 @@ describe('GitLab parent workflow loading', () => {
     }
   });
 
-  it('rejects unsupported parent placeholders before generating a merge request', async () => {
-    const templates = { ...gitlabTemplates, 'gitlab-ci.yml': `@@UNSUPPORTED_INPUT@@\n${gitlabTemplates['gitlab-ci.yml']}` };
-    const calls: string[] = [];
-    globalThis.fetch = (async (input) => {
-      calls.push(String(input));
-      throw new Error('must not reach GitLab');
-    }) as typeof fetch;
-    await assert.rejects(createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig(), () => {}, templates),
-      /Unresolved GitLab template placeholder/);
-    assert.deepEqual(calls, []);
+  it('generates a scheduled and manually selectable GitLab machine SM workflow', () => {
+    const files = renderGitlabMachineSmFiles(validConfig());
+    const machineSm = files[0].content;
+    assert.match(machineSm, /CI_PIPELINE_SOURCE == "schedule"/);
+    assert.match(machineSm, /CI_PIPELINE_SOURCE == "web" && \$DMTOOLS_MACHINE_SM == "true"/);
+    assert.match(machineSm, /dmtools run sm_gitlab@latest "\$override"/);
+    assert.match(machineSm, /DMTOOLS_MACHINE_SM_DRY_RUN:-true/);
+    assert.match(machineSm, /--arg owner "\$GITLAB_WORKSPACE"/);
+    assert.match(machineSm, /--arg repo "\$GITLAB_REPOSITORY"/);
+    assert.match(machineSm, /machineAuthor:\$machineAuthor/);
+    assert.match(machineSm, /GITLAB_MACHINE_AUTHOR: "ai-teammate"/);
+    assert.match(machineSm, /GITLAB_TOKEN="\$\{GITLAB_DEV_TOKEN:-\}"/);
+    assert.doesNotMatch(machineSm, /@@[A-Z_]+@@/);
+    assert.deepEqual(files.map((file) => file.path), ['.gitlab-ci.yml']);
+    const multiTeammateWorkflow = renderGitlabMachineSmFiles(validConfig({
+      gitlabMultipleTeammates: true,
+      gitlabDev: 'dev-bot',
+    }))[0].content;
+    assert.match(multiTeammateWorkflow, /GITLAB_MACHINE_AUTHOR: "dev-bot"/);
   });
 
-  it('does not access GitLab when the parent templates fail to load', async () => {
-    const urls: string[] = [];
+  it('creates GitLab machine SM setup without requesting parent templates', async () => {
+    const calls: string[] = [];
     globalThis.fetch = (async (input) => {
-      urls.push(String(input));
-      return new Response('unavailable', { status: 503 });
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith('/projects/team%2Fapp')) {
+        return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
+      }
+      if (url.endsWith('/merge_requests')) {
+        return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+      }
+      return new Response(JSON.stringify({ id: 1 }), { status: 201 });
     }) as typeof fetch;
-    await assert.rejects(createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig()), /HTTP 503/);
-    assert.ok(urls.every((url) => url.startsWith('https://raw.githubusercontent.com/')));
+    try {
+      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig());
+      assert.ok(calls.some((url) => url.endsWith('/repository/commits')));
+      assert.ok(!calls.some((url) => url.startsWith('https://raw.githubusercontent.com/')));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
@@ -310,6 +332,11 @@ describe('Source control options', () => {
   it('accepts nested GitLab namespaces in repository paths', () => {
     assert.equal(validate(validConfig({ repo: 'team/platform/service' }), 'gitlab').repo, undefined);
     assert.equal(validate(validConfig({ repo: 'team' }), 'gitlab').repo, 'Use group/project');
+  });
+
+  it('does not require GitHub CI settings for the GitLab machine SM workflow', () => {
+    const config = validConfig({ ciFile: '', ciName: '', checks: [] });
+    assert.deepEqual(validate(config, 'gitlab'), {});
   });
 
   it('normalizes GitLab instance URLs, including self-managed path prefixes', () => {
@@ -833,21 +860,15 @@ describe('Source control options', () => {
     }
   });
 
-  for (const reuseTemplates of [false, true]) {
-    it(`commits GitLab setup files using ${reuseTemplates ? 'preview' : 'downloaded'} templates and opens a merge request`, async () => {
+  it('commits only the machine SM workflow and opens a merge request without fetching templates', async () => {
       const origFetch = globalThis.fetch;
       const calls: { url: string; init?: RequestInit }[] = [];
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         calls.push({ url, init });
-        if (url.startsWith('https://raw.githubusercontent.com/')) {
-          const name = url.split('/').at(-1) as keyof GitlabTemplates;
-          return new Response(gitlabTemplates[name]);
-        }
         if (url.endsWith('/projects/team%2Fapp')) {
           return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
         }
-        if (url.includes('/repository/tree?')) return new Response(JSON.stringify([]), { status: 200 });
         if (url.endsWith('/merge_requests')) {
           return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
         }
@@ -855,32 +876,29 @@ describe('Source control options', () => {
       }) as typeof fetch;
 
       try {
-        const config = validConfig({ repo: 'team/app', baseBranch: 'main' });
         const mrUrl = await createGitlabMergeRequest(
           'glpat_test-token-123456789',
           'team/app',
           'https://gitlab.example.com',
-          config,
+          validConfig({ repo: 'team/app', baseBranch: 'main' }),
           () => {},
-          reuseTemplates ? gitlabTemplates : undefined,
         );
         assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
         const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
         const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string; content: string }[];
-        assert.ok(actions.some((file) => file.file_path === '.gitlab-ci.yml'));
-        assert.ok(actions.every((file) => !file.file_path.startsWith('.github/')));
-        const preview = renderGitlabFiles(config, gitlabTemplates, 'https://gitlab.example.com');
-        assert.deepEqual(actions.map(({ file_path, content }) => ({ path: file_path, content })), preview);
+        assert.deepEqual(actions.map((file) => file.file_path), ['.gitlab-ci.yml']);
+        assert.deepEqual(
+          actions.map(({ file_path, content }) => ({ path: file_path, content })),
+          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' })).map(({ path, content }) => ({ path, content })),
+        );
         const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
         assert.ok(mergeRequest);
-        assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /IstiN\/dmtools-agentic-workflows@feat\/gitlab-agent-workflows/);
-        assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length,
-          reuseTemplates ? 0 : GITLAB_TEMPLATE_NAMES.length);
+        assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /sm_gitlab@latest/);
+        assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length, 0);
       } finally {
         globalThis.fetch = origFetch;
       }
-    });
-  }
+  });
 });
 
 describe('Issue #749 — agents repository link', () => {
