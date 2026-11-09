@@ -99,4 +99,62 @@ class SkillInstallerScriptsTest {
         assertTrue(ps1.contains("Select-NewerCliVersion"), "install.ps1 must compare manifest version with redirect version");
         assertTrue(ps1.contains("Get-LatestVersionFromRedirect"), "install.ps1 must check GitHub releases/latest redirect");
     }
+
+    @Test
+    void globalOnlyModeNeverFallsBackToWorkspaceRelativeCursorDir() throws IOException {
+        String script = read("dmtools-ai-docs/install.sh");
+        assertTrue(script.contains("--global|--global-only|--no-local-skills"),
+                "skill-install.sh must accept --global, --global-only, and --no-local-skills");
+        assertTrue(script.contains("DMTOOLS_SKILLS_GLOBAL_ONLY"),
+                "skill-install.sh must honor DMTOOLS_SKILLS_GLOBAL_ONLY");
+        String detect = script.substring(script.indexOf("detect_skill_dirs() {"));
+        detect = detect.substring(0, detect.indexOf("\n}\n"));
+        assertTrue(detect.contains("local home_cursor=\"$HOME/.cursor\""),
+                "detect_skill_dirs must detect global ~/.cursor/skills");
+        assertTrue(detect.contains("if [ \"$GLOBAL_ONLY\" = true ]; then"),
+                "detect_skill_dirs must branch on GLOBAL_ONLY when no global dir exists yet");
+        assertTrue(detect.contains("found_dirs+=(\"$home_agents/skills\")"),
+                "global-only fallback must use $HOME/.agents/skills instead of relative .cursor/skills");
+    }
+
+    @Test
+    void detectSkillDirsUnderGlobalOnlyNeverReturnsWorkspaceRelativePaths() throws Exception {
+        Path scriptPath = Paths.get("").toAbsolutePath().getParent().resolve("dmtools-ai-docs/install.sh");
+        Path tempHome = Files.createTempDirectory("dmtools-test-home-");
+        Path tempWorkspace = Files.createTempDirectory("dmtools-test-workspace-");
+        Files.createDirectories(tempWorkspace.resolve(".cursor/skills"));
+        Files.createDirectories(tempWorkspace.resolve(".claude/skills"));
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    "bash", "-c",
+                    "source \"$1\" --global && detect_skill_dirs",
+                    "bash", scriptPath.toString()
+            );
+            pb.directory(tempWorkspace.toFile());
+            pb.environment().put("HOME", tempHome.toString());
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            assertEquals(0, p.waitFor(), "detect_skill_dirs failed: " + out);
+            assertEquals(tempHome.resolve(".agents/skills").toString(), out,
+                    "When no global agent dirs exist in $HOME, --global must fall back to $HOME/.agents/skills and never touch workspace .cursor/skills");
+            assertFalse(out.contains(".cursor/skills") && !out.startsWith(tempHome.toString()),
+                    "detect_skill_dirs must not return a relative workspace path under --global");
+        } finally {
+            deleteRecursively(tempHome);
+            deleteRecursively(tempWorkspace);
+        }
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        if (!Files.exists(root)) return;
+        try (var stream = Files.walk(root)) {
+            stream.sorted((a, b) -> b.compareTo(a)).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException ignored) {
+                }
+            });
+        }
+    }
 }
