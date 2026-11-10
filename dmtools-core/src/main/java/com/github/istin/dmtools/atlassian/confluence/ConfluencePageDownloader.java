@@ -126,8 +126,10 @@ public class ConfluencePageDownloader {
                 String bodyText = page.getStorage() != null && page.getStorage().getValue() != null
                         ? page.getStorage().getValue().trim() : "";
                 if (!bodyText.isBlank()) {
-                    String markdownText = ConfluenceStorageMarkdown.toMarkdown(
-                            mentionResolver.resolve(excerptInliner.inline(bodyText, page.getSpaceKey())));
+                    String resolvedStorage = mentionResolver.resolve(
+                            excerptInliner.inline(bodyText, page.getSpaceKey()));
+                    String markdownText = ConfluenceStorageMarkdown.toMarkdownWithRenderedFallback(
+                            resolvedStorage, page.getExportViewValue());
                     Path mdFile = pageFolder.resolve(safeName + ".md");
                     Files.write(mdFile, markdownText.getBytes(StandardCharsets.UTF_8));
                     logger.info("Wrote Confluence page -> {} ({} chars, markdown)", mdFile, markdownText.length());
@@ -263,6 +265,22 @@ public class ConfluencePageDownloader {
                     && seenIds.add(linked.getId())) {
                 related.add(linked);
             }
+        }
+
+        // 4. Immediate parent page from expanded ancestors (so child specifications
+        // inherit parent-level shared rules/conventions when depth >= 1)
+        try {
+            String parentId = page.getParentId();
+            if (parentId != null && !parentId.isBlank()
+                    && !alreadyQueuedIds.contains(parentId)
+                    && seenIds.add(parentId)) {
+                Content parent = confluence.contentById(parentId);
+                if (parent != null && parent.getId() != null) {
+                    related.add(parent);
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not resolve parent Confluence page for {}: {}", page.getId(), e.getMessage());
         }
 
         return related;
