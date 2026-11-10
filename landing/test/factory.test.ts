@@ -122,22 +122,43 @@ describe('GitLab parent workflow loading', () => {
   it('generates a scheduled and manually selectable GitLab machine SM workflow', () => {
     const files = renderGitlabMachineSmFiles(validConfig());
     const machineSm = files[0].content;
+    const teammate = files[1].content;
+    assert.match(machineSm, /gitlab\/factory-sm\.yml/);
+    assert.match(machineSm, /1a3b5f373654def6871a91bf616e0280d00c42b7/);
+    assert.match(machineSm, /local: ai-teammate\.yml/);
+    assert.match(machineSm, /^factory-sm:\n/m);
     assert.match(machineSm, /CI_PIPELINE_SOURCE == "schedule"/);
     assert.match(machineSm, /CI_PIPELINE_SOURCE == "web" && \$DMTOOLS_MACHINE_SM == "true"/);
-    assert.match(machineSm, /dmtools run sm_gitlab@latest "\$override"/);
-    assert.match(machineSm, /DMTOOLS_MACHINE_SM_DRY_RUN:-true/);
-    assert.match(machineSm, /--arg owner "\$GITLAB_WORKSPACE"/);
-    assert.match(machineSm, /--arg repo "\$GITLAB_REPOSITORY"/);
-    assert.match(machineSm, /machineAuthor:\$machineAuthor/);
-    assert.match(machineSm, /GITLAB_MACHINE_AUTHOR: "ai-teammate"/);
-    assert.match(machineSm, /GITLAB_TOKEN="\$\{GITLAB_DEV_TOKEN:-\}"/);
+    assert.match(machineSm, /SM_DRY_RUN: "false"/);
+    assert.match(machineSm, /SM_DRY_RUN: "true"/);
+    assert.match(machineSm, /SM_MACHINE_AUTHOR: "ai-teammate"/);
+    assert.match(machineSm, /FACTORY_ISSUE:\n    value: ""/);
+    assert.match(machineSm, /FACTORY_MR:\n    value: ""/);
+    assert.match(machineSm, /FACTORY_LEG:\n    value: ""/);
+    assert.match(machineSm, /project-local issue IID for the ai-teammate job/);
+    assert.match(machineSm, /project-local merge request IID for the ai-teammate job/);
+    assert.match(machineSm, /apt-get install .*curl jq git nodejs gh unzip/);
+    assert.doesNotMatch(machineSm, /dmtools run sm_gitlab@latest/);
+    assert.doesNotMatch(machineSm, /@@GITLAB_TOKEN_MAPPING@@/);
     assert.doesNotMatch(machineSm, /@@[A-Z_]+@@/);
-    assert.deepEqual(files.map((file) => file.path), ['.gitlab-ci.yml']);
+    assert.deepEqual(files.map((file) => file.path), ['.gitlab-ci.yml', 'ai-teammate.yml']);
+    assert.match(teammate, /gitlab\/factory-teammate\.yml/);
+    assert.match(teammate, /^ai-teammate:\n  extends: \.factory-teammate/m);
+    assert.match(teammate, /FACTORY_HOME_REF: "1a3b5f373654def6871a91bf616e0280d00c42b7"/);
+    assert.match(teammate, /FACTORY_ISSUE/);
+    assert.match(teammate, /FACTORY_MR/);
+    assert.doesNotMatch(teammate, /@@[A-Z_]+@@/);
     const multiTeammateWorkflow = renderGitlabMachineSmFiles(validConfig({
       gitlabMultipleTeammates: true,
       gitlabDev: 'dev-bot',
-    }))[0].content;
-    assert.match(multiTeammateWorkflow, /GITLAB_MACHINE_AUTHOR: "dev-bot"/);
+    }));
+    const multiMachineSm = multiTeammateWorkflow[0].content;
+    const multiTeammate = multiTeammateWorkflow[1].content;
+    assert.match(multiMachineSm, /SM_MACHINE_AUTHOR: "dev-bot"/);
+    assert.match(multiMachineSm, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
+    assert.match(multiTeammate, /AGENT_HANDLE: "dev-bot"/);
+    assert.match(multiTeammate, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
+    assert.doesNotMatch(machineSm, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
   });
 
   it('creates GitLab machine SM setup without requesting parent templates', async () => {
@@ -190,7 +211,11 @@ describe('GitLab factory templates', () => {
     assert.match(secrets[0].hint, /custom-dev/);
     assert.match(secrets[1].hint, /custom-reviewer/);
     assert.ok(!secrets.some((secret) => secret.name === 'GITLAB_TOKEN'));
+    assert.equal(secrets[2].name, 'SOURCE_GITHUB_TOKEN');
+    assert.match(secrets[2].hint, /release repositories/);
     assert.equal(requiredSecrets({ ...multiConfig(), gitlabMultipleTeammates: false }, 'gitlab')[0].name, 'GITLAB_TOKEN');
+    assert.ok(requiredSecrets({ ...multiConfig(), gitlabMultipleTeammates: false }, 'gitlab')
+      .some((secret) => secret.name === 'SOURCE_GITHUB_TOKEN'));
     assert.equal(requiredSecrets(multiConfig(), 'github')[0].name, 'SOURCE_GITHUB_TOKEN');
   });
 
@@ -886,14 +911,14 @@ describe('Source control options', () => {
         assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
         const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
         const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string; content: string }[];
-        assert.deepEqual(actions.map((file) => file.file_path), ['.gitlab-ci.yml']);
+        assert.deepEqual(actions.map((file) => file.file_path), ['.gitlab-ci.yml', 'ai-teammate.yml']);
         assert.deepEqual(
           actions.map(({ file_path, content }) => ({ path: file_path, content })),
           renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' })).map(({ path, content }) => ({ path, content })),
         );
         const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
         assert.ok(mergeRequest);
-        assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /sm_gitlab@latest/);
+        assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /shared parent workflows/);
         assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length, 0);
       } finally {
         globalThis.fetch = origFetch;

@@ -74,15 +74,39 @@ npm run check      # TypeScript and Astro diagnostics
 The folders separate platform-specific workflows from reusable configuration:
 
 - [`github/`](src/lib/factory-templates/github/): GitHub Actions workflow templates.
-- [`gitlab/machine-sm.yml`](src/lib/factory-templates/gitlab/machine-sm.yml): the standalone GitLab CI pipeline for scheduled and manual `sm_gitlab` runs.
+- [`gitlab/machine-sm.yml`](src/lib/factory-templates/gitlab/machine-sm.yml): the GitLab caller pipeline that includes the pinned `gitlab/factory-sm.yml` parent from dmtools-agentic-workflows.
+- [`gitlab/ai-teammate.yml`](src/lib/factory-templates/gitlab/ai-teammate.yml): the issue/MR teammate caller that extends the pinned `gitlab/factory-teammate.yml` parent.
 - [`shared/`](src/lib/factory-templates/shared/): runner JSON templates and agent configuration used by both platforms.
 
-GitLab setup generates only `.gitlab-ci.yml` from the local machine-SM template;
-it does not fetch other GitLab workflow templates. It runs `sm_gitlab@latest`
-every ten minutes. To run it manually from GitLab, start a web pipeline with
-`DMTOOLS_MACHINE_SM=true`; manual runs default to dry-run, and
-`DMTOOLS_MACHINE_SM_DRY_RUN=false` applies actions. Configure the masked
-`GITLAB_TOKEN` project CI/CD variable.
+GitLab setup generates `.gitlab-ci.yml` and `ai-teammate.yml`. The root
+pipeline includes the pinned `gitlab/factory-sm.yml` parent and the local
+teammate caller. Both parent templates are pinned to the same immutable
+commit from the GitLab-support branch of dmtools-agentic-workflows. The
+included `factory-sm` job runs on schedules; to run it manually, start a web
+pipeline with `DMTOOLS_MACHINE_SM=true`. Scheduled runs apply actions; manual
+machine-SM runs default to dry-run. Set `SM_DRY_RUN=false` in the manual
+pipeline variables to apply actions.
+
+The `ai-teammate` job supports one project-local issue or merge-request IID.
+In GitLab, open **Build → Pipelines → Run pipeline**, select the default
+branch, enter an IID in either `FACTORY_ISSUE` or `FACTORY_MR` (not both),
+then run the pipeline. These variables are declared in `.gitlab-ci.yml` so
+GitLab exposes them in the run form. Web, API, and trigger pipelines are
+supported. Leave
+`FACTORY_LEG` empty to let the parent derive the action from the issue/MR
+labels and machine assignment, or set it to `dev`, `bug`, `story`, `review`,
+or `rework`. The parent requires the include SHA in `FACTORY_HOME_REF` to
+match the immutable commit used by `ai-teammate.yml`.
+
+The project must have `.dmtools/config.js` with GitLab-compatible machine-SM
+and teammate runner configuration (`sm.runners.bug`/`story` or `dev`, `review`, and
+`rework`). The generated pipeline installs the required tools in its default
+Temurin image. Configure masked `GITLAB_TOKEN` and
+`SOURCE_GITHUB_TOKEN` CI/CD variables. `GITLAB_TOKEN` needs GitLab `api` and
+`write_repository` scopes plus project access; the GitHub token is used to
+resolve and download the DMTools CLI and agent-pack releases. In
+multi-teammate mode, `GITLAB_DEV_TOKEN` is mapped to the parent jobs'
+`GITLAB_TOKEN`.
 
 Run `npm test` to check workflow rendering and GitLab shell syntax.
 

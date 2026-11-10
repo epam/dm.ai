@@ -948,8 +948,7 @@ export default function FactorySetup() {
             </small>
             {scm === 'gitlab' && (
               <small className="is-warn">
-                GitLab setup generates automatic development, validation and review, with explicitly requested rework and Machine jobs
-                progress in the issue. Approved merge requests remain open for a human to merge.
+                GitLab setup adds the scheduled machine state-machine job and an issue/MR teammate job that runs when dispatched with a project-local IID.
               </small>
             )}
           </div>
@@ -1156,7 +1155,7 @@ export default function FactorySetup() {
               <h2 className="factory__cardTitle">CI &amp; Quality Gate</h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'GitLab setup generates only the scheduled and manually triggerable machine SM pipeline. It does not configure validation or merge workflows.'
+                  ? 'GitLab setup adds a scheduled machine SM pipeline and a reusable teammate job for issue or merge-request IIDs.'
                   : (
                       <>
                         Choose how the state machine validates PRs before merging: use your existing CI workflow,
@@ -1169,8 +1168,11 @@ export default function FactorySetup() {
 
           {scm === 'gitlab' ? (
             <p className="factory__group">
-              This setup adds only the GitLab machine SM pipeline. Configure your project’s CI validation and merge
-              policies separately; they are not generated or changed here.
+              The teammate job runs on the default branch when a web, API, or trigger pipeline supplies exactly one
+              <code> FACTORY_ISSUE </code> or <code> FACTORY_MR </code> IID. It inherits the shared GitLab teammate
+              parent workflow. In GitLab, open <strong>Build → Pipelines → Run pipeline</strong>, select the default
+              branch, enter one IID in the corresponding <code>FACTORY_ISSUE</code> or <code>FACTORY_MR</code> field,
+              then run the pipeline. Configure CI validation and merge policies separately.
             </p>
           ) : (
           <fieldset className="factory__group">
@@ -1383,7 +1385,7 @@ export default function FactorySetup() {
               <h2 className="factory__cardTitle">Runner, Toolchains &amp; Merge Identity</h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'The GitLab setup only installs the machine SM job; runner, toolchain, and merge settings are not generated.'
+                  ? 'The GitLab setup installs shared machine-SM and teammate jobs; runner, toolchain, and merge settings are not generated.'
                   : 'Select the GitHub Actions runner label, cached SDK toolchains, and the identity that merges approved PRs.'}
               </p>
             </div>
@@ -1391,8 +1393,8 @@ export default function FactorySetup() {
 
           {scm === 'gitlab' ? (
             <p className="factory__group">
-              The machine SM job runs on the GitLab runner configured for this project. Configure other CI, toolchains,
-              and merge policies separately; this setup does not change them.
+              Both jobs use the GitLab runner configured for this project. Configure other CI, toolchains, and merge
+              policies separately; this setup does not change them.
             </p>
           ) : (
           <>
@@ -1535,7 +1537,7 @@ export default function FactorySetup() {
               </h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'Automatically develop, validate and review. Rework requires an explicit request; approved MRs remain open for human merge.'
+                  ? 'Configure the scheduled GitLab machine state-machine job using the shared factory workflow.'
                   : 'Seal repository secrets in your browser (libsodium) and ensure the 12 factory state-machine labels exist.'}
               </p>
             </div>
@@ -1545,7 +1547,7 @@ export default function FactorySetup() {
             <legend>Repository secrets</legend>
             <small>
               {scm === 'gitlab'
-                ? 'Optional — supplied secrets are stored as masked and hidden GitLab project CI/CD variables (GitLab 17.4+). Existing non-hidden secrets are recreated with hidden enabled. After merging setup, a ten-minute reconciliation schedule drives the automatic lifecycle; validation completion requests reconciliation and Machine jobs tracks each leg in the issue. Setup removes legacy factory webhooks.'
+                ? 'Required for the included machine-SM parent: configure GITLAB_TOKEN and SOURCE_GITHUB_TOKEN. Supplied values are stored as masked and hidden GitLab project CI/CD variables (GitLab 17.4+). Existing non-hidden secrets are recreated with hidden enabled.'
                 : 'Optional — fill a value and it is stored as an encrypted Actions secret before the PR opens. Values are sealed in this browser with the repository public key (libsodium), sent only to api.github.com and never readable afterwards. Leave a field empty to add it yourself later.'}
             </small>
             {secretsList.map((x) => (

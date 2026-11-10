@@ -4,6 +4,7 @@ import machineMerge from './factory-templates/github/machine-merge.yml?raw';
 import mergeTrigger from './factory-templates/github/merge-trigger.yml?raw';
 import smKicker from './factory-templates/github/sm-kicker.yml?raw';
 import gitlabMachineSm from './factory-templates/gitlab/machine-sm.yml?raw';
+import gitlabAiTeammate from './factory-templates/gitlab/ai-teammate.yml?raw';
 import faUniversal from './factory-templates/github/fa-universal.yml?raw';
 import dmtoolsConfig from './factory-templates/shared/config.js?raw';
 import runnerBug from './factory-templates/shared/runner-bug.json?raw';
@@ -655,10 +656,16 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
 
 export function renderGitlabMachineSmFiles(c: FactoryConfig): FactoryFile[] {
   const machineAuthor = c.gitlabMultipleTeammates ? c.gitlabDev : c.machine;
-  return [{
-    path: '.gitlab-ci.yml',
-    content: gitlabMachineSm.replaceAll('@@MACHINE_AUTHOR@@', machineAuthor),
-  }];
+  const gitlabTokenMapping = c.gitlabMultipleTeammates
+    ? '  variables:\n    GITLAB_TOKEN: "$GITLAB_DEV_TOKEN"'
+    : '';
+  const render = (template: string) => template
+    .replaceAll('@@MACHINE_AUTHOR@@', machineAuthor)
+    .replace('@@GITLAB_TOKEN_MAPPING@@', gitlabTokenMapping);
+  return [
+    { path: '.gitlab-ci.yml', content: render(gitlabMachineSm) },
+    { path: 'ai-teammate.yml', content: render(gitlabAiTeammate) },
+  ];
 }
 
 export const GITLAB_TEMPLATE_NAMES = [
@@ -1474,7 +1481,7 @@ export async function putGitlabVariables(
   }
 }
 
-/** Creates a GitLab branch, commits the machine SM pipeline, and opens a merge request. */
+/** Creates a GitLab branch, commits the machine-SM and teammate callers, and opens a merge request. */
 export async function createGitlabMergeRequest(
   token: string,
   repo: string,
@@ -1521,7 +1528,7 @@ export async function createGitlabMergeRequest(
       source_branch: branch,
       target_branch: base,
       title: 'chore: set up DMTools for GitLab',
-      description: `Adds a GitLab-native scheduled machine SM pipeline for \`${repo}\`. The pipeline runs \`sm_gitlab@latest\` every ten minutes. Manual runs use \`DMTOOLS_MACHINE_SM=true\` and default to dry-run; set \`DMTOOLS_MACHINE_SM_DRY_RUN=false\` to apply actions. The pipeline requires the masked \`GITLAB_TOKEN\` project CI/CD variable. GitLab SM currently supports dispatch rules only; validation and merge automation are not included.`,
+      description: `Adds a scheduled GitLab machine SM pipeline and an issue/MR teammate job for \`${repo}\`. Both include shared parent workflows from IstiN/dmtools-agentic-workflows. Dispatch the teammate job on the default branch with exactly one project-local \`FACTORY_ISSUE\` or \`FACTORY_MR\` IID. Configure masked \`GITLAB_TOKEN\` and \`SOURCE_GITHUB_TOKEN\` project CI/CD variables, plus \`.dmtools/config.js\` with GitLab-compatible runner configuration.`,
       remove_source_branch: true,
     }),
   });
@@ -1686,6 +1693,13 @@ export function requiredSecrets(
         hint: `Classic PAT created while logged in as ${c.machine || 'the AI teammate account'} — scopes repo + workflow (workflow lets agents edit .github/workflows). The account needs write access to the repository.`,
         url: TOKEN_LINKS.agent,
       }];
+  if (scm === 'gitlab') {
+    out.push({
+      name: 'SOURCE_GITHUB_TOKEN',
+      hint: 'GitHub token used by GitHub CLI to resolve and download DMTools and agent-pack releases; it needs read access to those release repositories.',
+      url: TOKEN_LINKS.githubTokens,
+    });
+  }
   const seen = new Set<string>();
   for (const e of allEntries(c)) {
     if (seen.has(e.keyEnv)) continue;
@@ -1724,6 +1738,7 @@ export const TOKEN_LINKS = {
   setup: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20setup',
   setupGitlab: (baseUrl = 'https://gitlab.com') =>
     `${normalizeGitlabBaseUrl(baseUrl)}/-/user_settings/personal_access_tokens`,
+  githubTokens: 'https://github.com/settings/tokens',
   /** SOURCE_GITHUB_TOKEN of the AI teammate: push branches incl. workflow edits, labels, PRs, issues, dispatch. */
   agent: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20agent',
   /** Separate merge PAT: merge PRs + labels. */

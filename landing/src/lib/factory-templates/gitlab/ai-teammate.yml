@@ -1,0 +1,12 @@
+include:
+  - remote: https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/1a3b5f373654def6871a91bf616e0280d00c42b7/gitlab/factory-teammate.yml
+
+ai-teammate:
+  extends: .factory-teammate
+  resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "api" || $CI_PIPELINE_SOURCE == "trigger" || $CI_PIPELINE_SOURCE == "web") && (($FACTORY_ISSUE != "" && $FACTORY_MR == "") || ($FACTORY_ISSUE == "" && $FACTORY_MR != ""))'
+  variables:
+    FACTORY_HOME_REF: "1a3b5f373654def6871a91bf616e0280d00c42b7"
+    AGENT_HANDLE: "@@MACHINE_AUTHOR@@"
+@@GITLAB_TOKEN_MAPPING@@
