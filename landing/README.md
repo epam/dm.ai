@@ -78,14 +78,18 @@ The folders separate platform-specific workflows from reusable configuration:
 - [`gitlab/ai-teammate.yml`](src/lib/factory-templates/gitlab/ai-teammate.yml): the issue/MR teammate caller that extends the pinned `gitlab/factory-teammate.yml` parent.
 - [`shared/`](src/lib/factory-templates/shared/): runner JSON templates and agent configuration used by both platforms.
 
-GitLab setup generates `.gitlab-ci.yml` and `ai-teammate.yml`. The root
-pipeline includes the pinned `gitlab/factory-sm.yml` parent and the local
-teammate caller. Both parent templates are pinned to the same immutable
-commit from the GitLab-support branch of dmtools-agentic-workflows. The
-included `factory-sm` job runs on schedules; to run it manually, start a web
-pipeline with `DMTOOLS_MACHINE_SM=true`. Scheduled runs apply actions; manual
-machine-SM runs default to dry-run. Set `SM_DRY_RUN=false` in the manual
-pipeline variables to apply actions.
+GitLab setup generates `.gitlab-ci.yml`, `ai-teammate.yml`,
+`.dmtools/config.js`, and GitLab-compatible runner JSON files under
+`.dmtools/runners/` when they do not already exist. Existing `.dmtools/`
+configuration is preserved; review the setup MR and ensure
+`.dmtools/config.js` points to GitLab-compatible runner files before running
+the pipeline. The root pipeline includes the pinned `gitlab/factory-sm.yml`
+parent and the local teammate caller. Both parent templates are pinned to the
+same immutable commit from the GitLab-support branch of dmtools-agentic-workflows. The
+included `factory-sm` job runs on schedules; to run it manually, start a web pipeline with
+`DMTOOLS_MACHINE_SM=true`. Scheduled runs apply actions; manual machine-SM
+runs default to dry-run. Set `SM_DRY_RUN=false` in the manual pipeline
+variables to apply actions.
 
 The `ai-teammate` job supports one project-local issue or merge-request IID.
 In GitLab, open **Build → Pipelines → Run pipeline**, select the default
@@ -98,15 +102,78 @@ labels and machine assignment, or set it to `dev`, `bug`, `story`, `review`,
 or `rework`. The parent requires the include SHA in `FACTORY_HOME_REF` to
 match the immutable commit used by `ai-teammate.yml`.
 
-The project must have `.dmtools/config.js` with GitLab-compatible machine-SM
-and teammate runner configuration (`sm.runners.bug`/`story` or `dev`, `review`, and
-`rework`). The generated pipeline installs the required tools in its default
-Temurin image. Configure masked `GITLAB_TOKEN` and
+To automatically run the `dev` teammate for queued issues, create a pipeline
+schedule in **Build → Pipeline schedules** on the default branch with cron
+`*/10 * * * *`. Every scheduled pipeline automatically runs both `factory-sm`
+and `ai-teammate-scan`; no scan opt-in variable or issue IID is required.
+The scan selects open issues with the `agent:dev` label assigned to an account
+whose username or display name is `ai-dev`, including project bots with
+generated usernames. Set `DMTOOLS_AI_DEV_USERNAME` only to override that
+assignee selector (an exact username is recommended if display names are
+ambiguous). The scan starts one API pipeline per matching issue and passes
+the resolved actual username as `AGENT_HANDLE` to `ai-teammate-auto`, which
+extends the shared teammate parent. The parent checks whether the issue is
+eligible for a dev run. Use the schedule's **Run** action to scan immediately.
+If pipeline creation fails, the scan fails and logs GitLab's API response body
+to help diagnose validation errors or pipeline-variable restrictions.
+Dispatched pipelines also pass the pinned `FACTORY_HOME_REF` as a pipeline
+variable, so a project or group CI/CD variable with the same name cannot
+override it. Remove any such stale variable anyway.
+Before the parent script runs, both teammate jobs log the issue's state, labels,
+and assignees. They also resolve `AGENT_HANDLE` from an assignee display name
+(for example `ai-dev`) to that assignee's actual username, because the parent
+derives the dev leg only from exact username matches. This also covers manual
+web runs. The same step creates `.git/info`, which GitLab Runner clones omit
+but the parent needs for its `.git/info/exclude` entries. It also removes the
+runner's `url.*.insteadOf` and credential entries that carry the read-only
+`gitlab-ci-token`, from whichever git config file defines them (GitLab Runner
+usually adds them through an `include.path` template config). Otherwise git
+pushes with the CI job token and GitLab rejects the branch push ("You are not
+allowed to push code to this project"), so no merge request is created. The
+job then logs the effective push URL (credentials masked), the `GITLAB_TOKEN`
+access level and scopes, and the result of a `git push --dry-run` with
+`GITLAB_TOKEN`, warning when the token cannot push.
+After a successful dev leg, both teammate jobs also require an open merge
+request linked to the issue before review is queued. If the pack's MR lacks the
+closing reference, the job links the `ai/gl-<IID>` branch MR by prepending
+`Closes #<IID>`. If no MR exists (for example because the branch push failed),
+the job fails, swaps `agent:review` for `needs-human`, and comments on the
+issue instead of reporting success.
+When the MR exists, the job adds `ai_developed`. As on GitHub, `agent:dev` is
+not removed after implementation: it stays as the machine-leg marker that the
+scan and machine SM use to find (and re-fire) dev work, while `ai_developed`
+plus `agent:review` record that the dev leg finished and hand the issue to
+review. The agent pack cannot label GitLab issues itself. When a new dev leg
+starts, a stale `ai_developed` from a previous cycle is cleared first, so the
+label always marks the latest implementation. A dev leg that ends in ask-mode
+(`ai_questions_asked`) is not treated as a missing MR.
+The schedule interval is configured in GitLab, not in the YAML, and GitLab
+instance schedule limits apply.
+
+The generated `.dmtools/config.js` configures the machine-SM and teammate
+runners (`sm.runners.bug`, `story`, `review`, and `rework`). As with the GitHub
+factory, the runners keep the agent pack's own pre/post actions: the dev leg
+creates the branch, then commits, pushes, and opens the merge request; rework
+pushes to the existing merge request; review publishes its findings. The parent
+template supplies `GITLAB_TOKEN` push credentials and the protected-branch push
+guard. The runners set `customParams.scmProvider` to `gitlab` and
+`targetRepository.owner`/`repo` to the project group and name, so the pack
+calls GitLab merge request APIs instead of GitHub. Dev runners require the MR
+description to start with `Closes #<IID>`, which lets the review leg resolve
+the MR from the issue. The review runner also writes the `decision` field that
+the parent reads. The generated
+pipeline installs the required tools in its default Temurin image. Configure
+masked `GITLAB_TOKEN` and
 `SOURCE_GITHUB_TOKEN` CI/CD variables. `GITLAB_TOKEN` needs GitLab `api` and
 `write_repository` scopes plus project access; the GitHub token is used to
 resolve and download the DMTools CLI and agent-pack releases. In
 multi-teammate mode, `GITLAB_DEV_TOKEN` is mapped to the parent jobs'
-`GITLAB_TOKEN`.
+`GITLAB_TOKEN` for scanning, development, rework, pushes and MR creation.
+Before a review leg (`FACTORY_LEG=review`, or an `agent:review` label without
+`status:In Review`), `ai-teammate` and `ai-teammate-auto` switch
+`GITLAB_TOKEN` to `GITLAB_REVIEWER_TOKEN` and `AGENT_HANDLE` to the reviewer
+account, so review notes, MR comments and label changes come from the reviewer.
+The job fails if `GITLAB_REVIEWER_TOKEN` is missing on a review leg.
 
 Run `npm test` to check workflow rendering and GitLab shell syntax.
 

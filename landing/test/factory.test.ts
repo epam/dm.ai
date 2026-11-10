@@ -1,8 +1,9 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   defaults,
@@ -127,7 +128,9 @@ describe('GitLab parent workflow loading', () => {
     assert.match(machineSm, /1a3b5f373654def6871a91bf616e0280d00c42b7/);
     assert.match(machineSm, /local: ai-teammate\.yml/);
     assert.match(machineSm, /^factory-sm:\n/m);
+    assert.match(machineSm, /^factory-sm:\n  extends: \.factory-sm/m);
     assert.match(machineSm, /CI_PIPELINE_SOURCE == "schedule"/);
+    assert.doesNotMatch(machineSm, /DMTOOLS_AI_TEAMMATE_SCAN/);
     assert.match(machineSm, /CI_PIPELINE_SOURCE == "web" && \$DMTOOLS_MACHINE_SM == "true"/);
     assert.match(machineSm, /SM_DRY_RUN: "false"/);
     assert.match(machineSm, /SM_DRY_RUN: "true"/);
@@ -137,28 +140,442 @@ describe('GitLab parent workflow loading', () => {
     assert.match(machineSm, /FACTORY_LEG:\n    value: ""/);
     assert.match(machineSm, /project-local issue IID for the ai-teammate job/);
     assert.match(machineSm, /project-local merge request IID for the ai-teammate job/);
-    assert.match(machineSm, /apt-get install .*curl jq git nodejs gh unzip/);
+    assert.match(machineSm, /Acquire::Retries=3 update/);
+    assert.match(machineSm, /apt-get .*Acquire::Retries=3 install .*curl jq git nodejs gh unzip/);
+    assert.match(machineSm, /Package install failed; refreshing apt indexes/);
     assert.doesNotMatch(machineSm, /dmtools run sm_gitlab@latest/);
     assert.doesNotMatch(machineSm, /@@GITLAB_TOKEN_MAPPING@@/);
     assert.doesNotMatch(machineSm, /@@[A-Z_]+@@/);
-    assert.deepEqual(files.map((file) => file.path), ['.gitlab-ci.yml', 'ai-teammate.yml']);
+    assert.deepEqual(files.map((file) => file.path), [
+      '.gitlab-ci.yml',
+      'ai-teammate.yml',
+      '.dmtools/config.js',
+      '.dmtools/runners/fa-bug-dev.json',
+      '.dmtools/runners/fa-story-dev.json',
+      '.dmtools/runners/fa-review.json',
+      '.dmtools/runners/fa-rework.json',
+    ]);
     assert.match(teammate, /gitlab\/factory-teammate\.yml/);
     assert.match(teammate, /^ai-teammate:\n  extends: \.factory-teammate/m);
     assert.match(teammate, /FACTORY_HOME_REF: "1a3b5f373654def6871a91bf616e0280d00c42b7"/);
     assert.match(teammate, /FACTORY_ISSUE/);
     assert.match(teammate, /FACTORY_MR/);
+    assert.match(teammate, /^ai-teammate-auto:\n  extends: \.factory-teammate/m);
+    assert.match(teammate, /AGENT_HANDLE: "\$DMTOOLS_AI_DEV_USERNAME"/);
+    assert.match(teammate, /key: "DMTOOLS_AI_TEAMMATE_SCAN", value: "true"/);
+    assert.match(teammate, /key: "FACTORY_HOME_REF", value: "[0-9a-f]{40}"/);
+    assert.match(teammate, /key: "DMTOOLS_AI_DEV_USERNAME", value: \$username/);
+    assert.match(teammate, /assignee="\$\{DMTOOLS_AI_DEV_USERNAME:-ai-dev\}"/);
+    assert.match(teammate, /ai-teammate-scan:[\s\S]*?rules:\n    - if: '\$CI_COMMIT_BRANCH == \$CI_DEFAULT_BRANCH && \$CI_PIPELINE_SOURCE == "schedule"'\n/);
+    assert.match(teammate, /No matching assigned issues found on page/);
+    assert.match(teammate, /Starting ai-teammate API pipeline for issue/);
+    assert.match(teammate, /labels=agent:dev/);
+    assert.match(teammate, /key: "FACTORY_ISSUE", value: \$issue/);
+    assert.match(teammate, /curl --fail-with-body/);
+    assert.doesNotMatch(teammate, /--form/);
+    assert.doesNotMatch(teammate, /@@GITLAB_TOKEN_MAPPING@@/);
     assert.doesNotMatch(teammate, /@@[A-Z_]+@@/);
+    const machineConfig = files.find((file) => file.path === '.dmtools/config.js')!;
+    assert.match(machineConfig.content, /machineAuthor: 'ai-teammate'/);
+    assert.match(machineConfig.content, /bug: '.dmtools\/runners\/fa-bug-dev\.json'/);
+    assert.match(machineConfig.content, /story: '.dmtools\/runners\/fa-story-dev\.json'/);
+    assert.match(machineConfig.content, /review: '.dmtools\/runners\/fa-review\.json'/);
+    assert.match(machineConfig.content, /rework: '.dmtools\/runners\/fa-rework\.json'/);
+    const storyRunner = JSON.parse(files.find((file) => file.path === '.dmtools/runners/fa-story-dev.json')!.content);
+    assert.equal(storyRunner.params.envVariables.DEFAULT_TRACKER, 'gitlab');
+    assert.equal(storyRunner.params.envVariables.DEFAULT_SCM, 'gitlab');
+    assert.equal(storyRunner.params.envVariables.GITLAB_BASE_PATH, 'https://gitlab.com');
+    for (const path of ['.dmtools/runners/fa-bug-dev.json', '.dmtools/runners/fa-story-dev.json']) {
+      const devRunner = JSON.parse(files.find((file) => file.path === path)!.content);
+      assert.equal(devRunner.params.customParams.scmProvider, 'gitlab', `${path} must create GitLab MRs`);
+      assert.equal(devRunner.params.customParams.targetRepository.owner, 'acme');
+      assert.equal(devRunner.params.customParams.targetRepository.repo, 'demo');
+      assert.equal(devRunner.params.customParams.targetRepository.workingDir, '.');
+      assert.ok(devRunner.params.cliPrompts.some((prompt: string) => /first line must be exactly "Closes #<IID>"/.test(prompt)));
+      assert.equal(devRunner.params.postJSAction, undefined, 'pack post-action must commit, push and create the MR');
+    }
+    const reworkRunner = JSON.parse(files.find((file) => file.path === '.dmtools/runners/fa-rework.json')!.content);
+    assert.equal(reworkRunner.params.customParams.scmProvider, 'gitlab');
+    assert.equal(reworkRunner.params.customParams.targetRepository.owner, 'acme');
+    for (const action of ['preJSAction', 'preCliJSAction', 'postJSAction']) {
+      assert.equal(reworkRunner.params[action], undefined, `rework must keep the pack ${action} that pushes to the MR`);
+    }
+    assert.doesNotMatch(JSON.stringify(reworkRunner), /DMTOOLS_REWORK_CONTEXT/);
+    const reviewRunner = JSON.parse(files.find((file) => file.path === '.dmtools/runners/fa-review.json')!.content);
+    assert.equal(reviewRunner.params.customParams.scmProvider, 'gitlab');
+    assert.equal(reviewRunner.params.customParams.targetRepository.repo, 'demo');
+    assert.equal(reviewRunner.params.postJSAction, undefined, 'review must keep the pack publisher');
+    assert.doesNotMatch(JSON.stringify(reviewRunner), /DMTOOLS_REVIEW_CONTEXT/);
+    assert.ok(reviewRunner.params.cliPrompts.includes('pack:instructions/pr_review/review_verdict_rules.md'));
+    assert.ok(reviewRunner.params.cliPrompts.some((prompt: string) => /top-level "decision" field/.test(prompt)));
+    for (const auto of [true, false]) {
+      const review = JSON.parse(renderGitlabMachineSmFiles(validConfig({ gitlabAutoLifecycle: auto }))
+        .find((file) => file.path === '.dmtools/runners/fa-review.json')!.content);
+      assert.equal(review.params.preCliJSAction, undefined);
+    }
     const multiTeammateWorkflow = renderGitlabMachineSmFiles(validConfig({
       gitlabMultipleTeammates: true,
       gitlabDev: 'dev-bot',
     }));
     const multiMachineSm = multiTeammateWorkflow[0].content;
     const multiTeammate = multiTeammateWorkflow[1].content;
+    const multiMachineConfig = multiTeammateWorkflow.find((file) => file.path === '.dmtools/config.js')!;
     assert.match(multiMachineSm, /SM_MACHINE_AUTHOR: "dev-bot"/);
     assert.match(multiMachineSm, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
     assert.match(multiTeammate, /AGENT_HANDLE: "dev-bot"/);
     assert.match(multiTeammate, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
+    assert.match(multiTeammate, /ai-teammate-auto:[\s\S]*?GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
+    assert.match(multiTeammate, /ai-teammate-scan:[\s\S]*?GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
     assert.doesNotMatch(machineSm, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
+    assert.match(multiTeammate, /ai-teammate:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
+    assert.match(multiTeammate, /ai-teammate-auto:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
+    assert.doesNotMatch(teammate, /GITLAB_REVIEWER_HANDLE: "/);
+    assert.match(multiMachineConfig.content, /machineAuthor: 'dev-bot'/);
+    for (const [content, mode] of [[teammate, 'single'], [multiTeammate, 'multi']] as const) {
+      for (const job of ['ai-teammate', 'ai-teammate-auto']) {
+        const body = content.split(`\n${job}:\n`)[1].split(/\n\n/)[0];
+        assert.equal(body.match(/^  variables:$/gm)?.length, 1, `${job} must have one variables block (${mode})`);
+        assert.match(body, /FACTORY_HOME_REF: "[0-9a-f]{40}"/);
+        assert.match(body, /before_script:\n    - !reference \[\.dmtools-install-tools, script\]\n    - !reference \[\.ai-teammate-select-token, script\]\n    - !reference \[\.ai-teammate-git-auth, script\]\n    - !reference \[\.ai-teammate-resolve-handle, script\]/);
+      }
+    }
+    assert.match(machineSm, /before_script:\n    - !reference \[\.dmtools-install-tools, script\]/);
+    assert.match(machineSm, /^\.dmtools-install-tools:\n  script:\n    - \|/m);
+    assert.doesNotMatch(multiTeammate, /@@GITLAB_TOKEN_VARIABLE@@/);
+  });
+
+  it('removes runner job-token git rewrites, including included config, and checks GITLAB_TOKEN push access', () => {
+    const teammate = renderGitlabMachineSmFiles(validConfig())[1].content;
+    const script = teammate.split('\n.ai-teammate-git-auth:\n')[1].split('    - |\n')[1].split('\n\n')[0]
+      .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
+    const dir = mkdtempSync(join(tmpdir(), 'gl-auth-'));
+    try {
+      let runs = 0;
+      const run = (access: number, scopes: string, options: { rewritten?: boolean; remote?: 'ok' | 'missing' } = {}) => {
+        const { rewritten = true, remote = 'ok' } = options;
+        const id = runs++;
+        const repo = join(dir, `r${id}`);
+        const included = join(dir, `r${id}.tmp-git-template-config`);
+        const bare = join(dir, `remote${id}`);
+        const setup = spawnSync('bash', ['-c', `
+          set -e
+          mkdir -p tpl && git init -q --template=tpl "${repo}" && cd "${repo}"
+          git -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+          if [ "${remote}" = ok ]; then git init -q --bare "${bare}.git"; fi
+          if [ "${rewritten}" = true ]; then
+            git config -f "${included}" url."https://gitlab-ci-token:SECRET@git.example.com/".insteadOf "https://git.example.com/"
+            git config -f "${included}" credential."https://git.example.com".username gitlab-ci-token
+            git config --local include.path "${included}"
+            git config --local url."https://gitlab-ci-token:SECRET@git.example.com/".pushInsteadOf "${bare}"
+            git config url."https://mirror.example.com/".insteadOf "git@mirror:"
+          fi
+          git remote add origin https://git.example.com/mobile/factory.git
+        `], { cwd: dir, encoding: 'utf8' });
+        assert.equal(setup.status, 0, setup.stderr);
+        return spawnSync('bash', ['-c', `
+          set -euo pipefail
+          curl() {
+            case "$*" in
+              *personal_access_tokens/self*) printf '{"scopes":[%s]}' "$SCOPES" ;;
+              *) printf '{"permissions":{"project_access":{"access_level":%s},"group_access":null}}' "$ACCESS" ;;
+            esac
+          }
+          ${script}
+          printf 'PUSH=%s\\n' "$(git remote get-url --push origin)"
+          git config --list --show-origin
+          test -d .git/info && echo INFO_OK
+        `], {
+          cwd: repo, encoding: 'utf8',
+          env: { PATH: process.env.PATH, HOME: dir, GIT_CONFIG_NOSYSTEM: '1', GITLAB_TOKEN: 't',
+            CI_API_V4_URL: 'https://git.example.com/api/v4', CI_PROJECT_ID: '1', CI_JOB_ID: '7', CI_PROJECT_URL: bare,
+            ACCESS: String(access), SCOPES: scopes },
+        });
+      };
+      const ok = run(40, '"api"');
+      assert.equal(ok.status, 0, ok.stderr);
+      assert.match(ok.stdout, /Removed CI job-token git config from .*tmp-git-template-config/);
+      assert.match(ok.stdout, /PUSH=.*remote0\.git\n/);
+      assert.doesNotMatch(ok.stdout, /gitlab-ci-token|SECRET/);
+      assert.match(ok.stdout, /url\.https:\/\/mirror\.example\.com\/\.insteadof=git@mirror:/);
+      assert.match(ok.stdout, /INFO_OK/);
+      assert.match(ok.stdout, /GITLAB_TOKEN project access level: 40; scopes: api/);
+      assert.match(ok.stdout, /Git push access check with GITLAB_TOKEN: OK/);
+      assert.equal(ok.stderr, '');
+      const weak = run(20, '"read_api","read_repository"');
+      assert.equal(weak.status, 0, weak.stderr);
+      assert.match(weak.stderr, /needs at least the Developer role/);
+      assert.match(weak.stderr, /needs the api or write_repository scope/);
+      const clean = run(40, '"api"', { rewritten: false });
+      assert.equal(clean.status, 0, clean.stderr);
+      assert.match(clean.stdout, /Git push URL: .*remote2\.git\n/);
+      assert.doesNotMatch(clean.stdout, /Removed CI job-token/);
+      const denied = run(40, '"api"', { remote: 'missing' });
+      assert.equal(denied.status, 0, denied.stderr);
+      assert.match(denied.stderr, /git push access check with GITLAB_TOKEN failed/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails dev legs that finish without an open merge request instead of queueing review', () => {
+    const teammate = renderGitlabMachineSmFiles(validConfig())[1].content;
+    for (const job of ['ai-teammate', 'ai-teammate-auto']) {
+      const body = teammate.split(`\n${job}:\n`)[1].split(/\n\n/)[0];
+      assert.match(body, /\n  script:\n    - !reference \[\.factory-teammate, script\]\n    - !reference \[\.ai-teammate-verify-mr, script\]/);
+    }
+    const script = teammate.split('\n.ai-teammate-verify-mr:\n')[1].split('    - |\n')[1].split('\n\n')[0]
+      .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
+    const run = (env: Record<string, string>) => spawnSync('bash', ['-c', `
+      set -euo pipefail
+      api() {
+        printf 'API %s\\n' "$*" >&2
+        case "$1" in
+          issues/*/related_merge_requests*) printf '%s' "$RELATED" ;;
+          merge_requests\\?*) printf '%s' "$BRANCH_MRS" ;;
+          issues/17) printf '%s' "$ISSUE" ;;
+          *) printf '{}' ;;
+        esac
+      }
+      update_labels() { printf 'LABELS add=%s remove=%s\\n' "$1" "$2"; }
+      note() { printf 'NOTE %s\\n' "$1"; }
+      leg="$LEG"; number=17; anchor=gl-17; agent_result=0
+      ${script}
+      echo DONE
+    `], { encoding: 'utf8', env: { PATH: process.env.PATH, CI_PROJECT_ID: '5', BRANCH_MRS: '[]', LEG: 'dev',
+      ISSUE: '{"labels":["agent:dev"]}', ...env } });
+    const linked = run({ RELATED: '[{"iid":3,"state":"opened","project_id":5}]' });
+    assert.equal(linked.status, 0, linked.stderr);
+    assert.match(linked.stdout, /LABELS add=ai_developed remove=\n/);
+    assert.match(linked.stdout, /Issue #17 has 1 open merge request\(s\); labeled ai_developed\nDONE/);
+    assert.doesNotMatch(linked.stdout, /remove=[^\n]*agent:dev/);
+    const byBranch = run({ RELATED: '[]', BRANCH_MRS: '[{"iid":9,"description":"Body"}]' });
+    assert.equal(byBranch.status, 0, byBranch.stderr);
+    assert.match(byBranch.stderr, /source_branch=ai%2Fgl-17/);
+    assert.match(byBranch.stderr, /API merge_requests\/9 --request PUT --data-urlencode description=Closes #17\n\nBody/);
+    assert.match(byBranch.stdout, /Linked merge request !9 to issue #17/);
+    assert.match(byBranch.stdout, /LABELS add=ai_developed/);
+    const missing = run({ RELATED: '[{"iid":4,"state":"closed","project_id":5},{"iid":2,"state":"opened","project_id":6}]' });
+    assert.equal(missing.status, 1);
+    assert.match(missing.stdout, /LABELS add=needs-human remove=agent:review/);
+    assert.doesNotMatch(missing.stdout, /add=ai_developed/);
+    assert.match(missing.stdout, /NOTE AI Teammate dev run finished without an open merge request/);
+    assert.doesNotMatch(missing.stdout, /DONE/);
+    const asked = run({ RELATED: '[]', ISSUE: '{"labels":["agent:dev","ai_questions_asked"]}' });
+    assert.equal(asked.status, 0, asked.stderr);
+    assert.match(asked.stdout, /waiting for answers \(ai_questions_asked\); no merge request expected yet/);
+    assert.doesNotMatch(asked.stdout, /needs-human|ai_developed|DONE/);
+    const review = run({ LEG: 'review', RELATED: '[]' });
+    assert.equal(review.status, 0, review.stderr);
+    assert.doesNotMatch(review.stderr, /API/);
+  });
+
+  it('selects GITLAB_DEV_TOKEN for development legs and GITLAB_REVIEWER_TOKEN for review legs', () => {
+    const teammate = renderGitlabMachineSmFiles(validConfig({ gitlabMultipleTeammates: true, gitlabDev: 'dev-bot' }))[1].content;
+    const script = teammate.split('\n.ai-teammate-select-token:\n')[1].split('    - |\n')[1].split('\n\n')[0]
+      .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
+    const run = (labels: string, env: Record<string, string> = {}) => spawnSync('bash', ['-c', `
+      set -euo pipefail
+      curl() { printf '%s' '{"labels":'"$LABELS"'}'; }
+      ${script}
+      printf 'TOKEN=%s HANDLE=%s ROLE=%s\\n' "$GITLAB_TOKEN" "$AGENT_HANDLE" "$FACTORY_TEAMMATE_ROLE"
+    `], {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH, FACTORY_ISSUE: '17', GITLAB_TOKEN: 'dev-token', GITLAB_DEV_TOKEN: 'dev-token',
+        GITLAB_REVIEWER_TOKEN: 'review-token', GITLAB_REVIEWER_HANDLE: 'ai-reviewer', AGENT_HANDLE: 'dev-bot',
+        CI_API_V4_URL: 'https://gitlab.example.com/api/v4', CI_PROJECT_ID: '1', LABELS: labels, ...env,
+      },
+    });
+    const dev = run('["agent:dev"]');
+    assert.equal(dev.status, 0, dev.stderr);
+    assert.match(dev.stdout, /Development leg \(dev\): using GITLAB_DEV_TOKEN/);
+    assert.match(dev.stdout, /TOKEN=dev-token HANDLE=dev-bot ROLE=dev/);
+    const rework = run('["agent:dev","agent:rework"]');
+    assert.match(rework.stdout, /TOKEN=dev-token HANDLE=dev-bot ROLE=dev/);
+    const review = run('["agent:dev","ai_developed","agent:review"]');
+    assert.equal(review.status, 0, review.stderr);
+    assert.match(review.stdout, /Review leg: using GITLAB_REVIEWER_TOKEN as ai-reviewer/);
+    assert.match(review.stdout, /TOKEN=review-token HANDLE=ai-reviewer ROLE=reviewer/);
+    const inReview = run('["agent:review","status:In Review"]');
+    assert.match(inReview.stdout, /TOKEN=dev-token .*ROLE=dev/);
+    const explicit = run('["agent:dev"]', { FACTORY_LEG: 'review' });
+    assert.match(explicit.stdout, /TOKEN=review-token HANDLE=ai-reviewer ROLE=reviewer/);
+    const missing = run('["agent:review"]', { GITLAB_REVIEWER_TOKEN: '' });
+    assert.notEqual(missing.status, 0);
+    assert.match(missing.stderr, /GITLAB_REVIEWER_TOKEN is required/);
+    const single = run('["agent:review"]', { GITLAB_REVIEWER_HANDLE: '' });
+    assert.match(single.stdout, /TOKEN=dev-token HANDLE=dev-bot ROLE=dev/);
+  });
+
+  it('resolves AGENT_HANDLE from issue assignee display names before the teammate parent runs', () => {
+    const teammate = renderGitlabMachineSmFiles(validConfig())[1].content;
+    const resolver = teammate.split('\n.ai-teammate-resolve-handle:\n')[1];
+    const script = resolver.split('    - |\n')[1].split('\n\n')[0]
+      .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
+    const run = (handle: string, extra = '', labels = '') => spawnSync('bash', ['-c', `
+      set -euo pipefail
+      curl() {
+        if [ "\${FAIL:-}" = true ]; then return 22; fi
+        case " $* " in *" PUT "*) printf 'PUT %s\\n' "$*" >&2; return 0 ;; esac
+        printf '%s' '{"state":"opened","labels":'"$LABELS"',"assignees":[{"username":"project_297486_bot_abc","name":"ai-dev"},{"username":"human","name":"Human"}]}'
+      }
+      ${script}
+      printf 'HANDLE=%s\\n' "$AGENT_HANDLE"
+    `], {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH, FACTORY_ISSUE: '17', FACTORY_MR: '', GITLAB_TOKEN: 't', AGENT_HANDLE: handle,
+        CI_API_V4_URL: 'https://gitlab.example.com/api/v4', CI_PROJECT_ID: '1', ...(extra ? { FAIL: extra } : {}),
+        LABELS: labels || '["agent:dev"]',
+      },
+    });
+    const byName = run('ai-dev');
+    assert.equal(byName.status, 0, byName.stderr);
+    assert.match(byName.stdout, /Resolved AGENT_HANDLE ai-dev to assignee username project_297486_bot_abc/);
+    assert.match(byName.stdout, /HANDLE=project_297486_bot_abc/);
+    assert.match(byName.stdout, /labels: agent:dev/);
+    assert.match(byName.stdout, /assignees: project_297486_bot_abc \(ai-dev\), human \(Human\)/);
+    assert.doesNotMatch(byName.stderr, /PUT/);
+    const stale = run('ai-dev', '', '["agent:dev","ai_developed"]');
+    assert.equal(stale.status, 0, stale.stderr);
+    assert.match(stale.stderr, /PUT .*remove_labels=ai_developed/);
+    assert.match(stale.stdout, /Cleared stale ai_developed from issue #17 before a new dev leg/);
+    const reviewing = run('ai-dev', '', '["agent:dev","ai_developed","agent:review"]');
+    assert.doesNotMatch(reviewing.stderr, /PUT/);
+    const byUsername = run('human');
+    assert.match(byUsername.stdout, /HANDLE=human\n/);
+    assert.doesNotMatch(byUsername.stdout, /Resolved/);
+    const missing = run('nobody');
+    assert.equal(missing.status, 0);
+    assert.match(missing.stdout, /HANDLE=nobody/);
+    assert.match(missing.stderr, /no assignee of issue #17 matches AGENT_HANDLE=nobody/);
+    const failed = run('ai-dev', 'true');
+    assert.equal(failed.status, 0);
+    assert.match(failed.stdout, /HANDLE=ai-dev/);
+    assert.match(failed.stderr, /unable to read issue #17/);
+  });
+
+  it('executes scheduled issue scanning and dispatches eligible issues using their actual usernames', () => {
+    const teammate = renderGitlabMachineSmFiles(validConfig())[1].content;
+    const script = teammate.split('\nai-teammate-scan:\n')[1].split('  script:\n    - |\n')[1]
+      .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
+    const run = (issues: unknown, extraEnv: Record<string, string> = {}) => spawnSync('bash', ['-c', `
+      curl() {
+        case " $* " in
+          *" --get "*)
+            printf 'LIST %s\\n' "$*" >&2
+            if [ "\${FAIL_LIST:-}" = true ]; then return 22; fi
+            case " $* " in
+              *" page=2 "*) printf '%s' '[]' ;;
+              *) printf '%s' "$ISSUES" ;;
+            esac
+            ;;
+          *)
+            local data="" content_type=""
+            while [ "$#" -gt 0 ]; do
+              case "$1" in
+                --data) data="$2"; shift 2 ;;
+                --header)
+                  if [ "$2" = "Content-Type: application/json" ]; then content_type=json; fi
+                  shift 2 ;;
+                *) shift ;;
+              esac
+            done
+            [ "$content_type" = json ] || return 22
+            local request
+            request="$(printf '%s' "$data" | jq -ce '
+              select((.ref | type == "string") and (.variables | type == "array")) |
+              select(.variables | all(.[]; (.key | type == "string") and (.value | type == "string")))
+            ')" || return 22
+            printf 'DISPATCH %s\\n' "$request" >&2
+            if [ "\${FAIL_DISPATCH:-}" = true ]; then
+              printf '%s' '{"message":{"variables":["is invalid"]}}'
+              return 22
+            fi
+            printf '%s' '{"id":123}'
+            ;;
+        esac
+      }
+      ${script}
+    `], {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        GITLAB_TOKEN: 'test-token',
+        CI_API_V4_URL: 'https://gitlab.example.com/api/v4',
+        CI_PROJECT_ID: '123',
+        CI_DEFAULT_BRANCH: 'main',
+        ISSUES: JSON.stringify(issues),
+        ...extraEnv,
+      },
+    });
+    const issue = (iid: number, username: string, name: string) => ({
+      iid, state: 'opened', labels: ['agent:dev'], assignees: [{ username, name }],
+    });
+    const eligible = run([
+      issue(17, 'project_bot_123', 'ai-dev'),
+      issue(18, 'ai-dev', 'Developer'),
+      issue(19, 'other-bot', 'Other'),
+      { ...issue(20, 'ai-dev', 'Developer'), state: 'closed' },
+      { ...issue(21, 'ai-dev', 'Developer'), labels: ['agent:review'] },
+      { ...issue(22, 'ai-dev', 'Developer'), assignees: [] },
+    ]);
+    assert.equal(eligible.status, 0, eligible.stderr);
+    const requests = eligible.stderr.split('\n')
+      .filter((line) => line.startsWith('DISPATCH '))
+      .map((line) => JSON.parse(line.slice('DISPATCH '.length)));
+    assert.deepEqual(requests, [
+      {
+        ref: 'main',
+        variables: [
+          { key: 'FACTORY_ISSUE', value: '17' },
+          { key: 'FACTORY_MR', value: '' },
+          { key: 'FACTORY_HOME_REF', value: '1a3b5f373654def6871a91bf616e0280d00c42b7' },
+          { key: 'DMTOOLS_AI_TEAMMATE_SCAN', value: 'true' },
+          { key: 'DMTOOLS_AI_DEV_USERNAME', value: 'project_bot_123' },
+        ],
+      },
+      {
+        ref: 'main',
+        variables: [
+          { key: 'FACTORY_ISSUE', value: '18' },
+          { key: 'FACTORY_MR', value: '' },
+          { key: 'FACTORY_HOME_REF', value: '1a3b5f373654def6871a91bf616e0280d00c42b7' },
+          { key: 'DMTOOLS_AI_TEAMMATE_SCAN', value: 'true' },
+          { key: 'DMTOOLS_AI_DEV_USERNAME', value: 'ai-dev' },
+        ],
+      },
+    ]);
+    assert.match(eligible.stdout, /Dispatched 2 ai-teammate pipelines/);
+
+    const empty = run([]);
+    assert.equal(empty.status, 0, empty.stderr);
+    assert.match(empty.stdout, /Dispatched 0 ai-teammate pipelines/);
+    assert.doesNotMatch(empty.stderr, /DISPATCH/);
+
+    const custom = run([issue(23, 'custom-bot', 'Developer')], { DMTOOLS_AI_DEV_USERNAME: 'custom-bot' });
+    assert.equal(custom.status, 0, custom.stderr);
+    assert.match(custom.stderr, /"key":"DMTOOLS_AI_DEV_USERNAME","value":"custom-bot"/);
+
+    const paged = run(Array.from({ length: 100 }, (_, index) => issue(index + 1, 'other', 'Other')));
+    assert.equal(paged.status, 0, paged.stderr);
+    assert.match(paged.stderr, /page=2/);
+    assert.match(paged.stdout, /Dispatched 0 ai-teammate pipelines/);
+
+    const errorCases: Record<string, string>[] = [
+      { FAIL_LIST: 'true' }, { FAIL_DISPATCH: 'true' }, { GITLAB_TOKEN: '' },
+    ];
+    for (const extraEnv of errorCases) {
+      const failed = run([issue(17, 'ai-dev', 'Developer')], extraEnv);
+      assert.notEqual(failed.status, 0, 'API or missing-token errors must fail the scan');
+      assert.doesNotMatch(failed.stdout, /Dispatched \d+ ai-teammate pipelines/);
+      if (extraEnv.FAIL_DISPATCH) {
+        assert.match(failed.stdout, /"variables":\["is invalid"\]/);
+      }
+    }
+    const malformed = run({ message: 'Unexpected API response' });
+    assert.notEqual(malformed.status, 0);
+    assert.match(malformed.stderr, /Expected an issues array/);
   });
 
   it('creates GitLab machine SM setup without requesting parent templates', async () => {
@@ -172,12 +589,50 @@ describe('GitLab parent workflow loading', () => {
       if (url.endsWith('/merge_requests')) {
         return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
       }
+      if (url.includes('/repository/files/')) {
+        return new Response(JSON.stringify({ message: '404 File Not Found' }), { status: 404 });
+      }
       return new Response(JSON.stringify({ id: 1 }), { status: 201 });
     }) as typeof fetch;
     try {
       await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig());
       assert.ok(calls.some((url) => url.endsWith('/repository/commits')));
       assert.ok(!calls.some((url) => url.startsWith('https://raw.githubusercontent.com/')));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('preserves existing GitLab runner configuration in the setup merge request', async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const logs: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.endsWith('/projects/team%2Fapp')) {
+        return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
+      }
+      if (url.includes('/repository/files/.dmtools%2Fconfig.js?') ||
+          url.includes('/repository/files/.dmtools%2Frunners%2Ffa-bug-dev.json?')) {
+        return new Response(JSON.stringify({ file_name: 'config.js' }), { status: 200 });
+      }
+      if (url.includes('/repository/files/')) {
+        return new Response(JSON.stringify({ message: '404 File Not Found' }), { status: 404 });
+      }
+      if (url.endsWith('/merge_requests')) {
+        return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+      }
+      return new Response(JSON.stringify({ id: 1 }), { status: 201 });
+    }) as typeof fetch;
+    try {
+      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig(), (message) => logs.push(message));
+      const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
+      const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string }[];
+      assert.ok(!actions.some((action) => action.file_path === '.dmtools/config.js'));
+      assert.ok(!actions.some((action) => action.file_path === '.dmtools/runners/fa-bug-dev.json'));
+      assert.ok(logs.some((message) => message.includes('preserved existing runner configuration files')));
+      const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
+      assert.match(JSON.parse(String(mergeRequest?.init?.body)).description, /Existing runner configuration files were preserved/);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -433,6 +888,8 @@ describe('Source control options', () => {
     assert.match(story.content, /"GITLAB_BASE_PATH": "https:\/\/gitlab\.example\.com\/gitlab"/);
     assert.match(story.content, /"GITLAB_WORKSPACE": "acme"/);
     assert.match(story.content, /"GITLAB_REPOSITORY": "demo"/);
+    assert.equal(JSON.parse(story.content).params.customParams.scmProvider, undefined,
+      'lifecycle scripts create MRs themselves; the pack must not create a second one');
     const review = files.find((file) => file.path === '.dmtools/runners/fa-review.json');
     assert.ok(review);
     assert.equal(JSON.parse(review.content).params.requireCliOutputFile, false);
@@ -885,7 +1342,7 @@ describe('Source control options', () => {
     }
   });
 
-  it('commits only the machine SM workflow and opens a merge request without fetching templates', async () => {
+  it('commits the machine SM, teammate, and runner setup without fetching templates', async () => {
       const origFetch = globalThis.fetch;
       const calls: { url: string; init?: RequestInit }[] = [];
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -896,6 +1353,9 @@ describe('Source control options', () => {
         }
         if (url.endsWith('/merge_requests')) {
           return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+        }
+        if (url.includes('/repository/files/')) {
+          return new Response(JSON.stringify({ message: '404 File Not Found' }), { status: 404 });
         }
         return new Response(JSON.stringify({ id: 1 }), { status: 201 });
       }) as typeof fetch;
@@ -911,11 +1371,20 @@ describe('Source control options', () => {
         assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
         const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
         const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string; content: string }[];
-        assert.deepEqual(actions.map((file) => file.file_path), ['.gitlab-ci.yml', 'ai-teammate.yml']);
+        assert.deepEqual(
+          actions.map((file) => file.file_path),
+          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' }), 'https://gitlab.example.com')
+            .map((file) => file.path),
+        );
         assert.deepEqual(
           actions.map(({ file_path, content }) => ({ path: file_path, content })),
-          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' })).map(({ path, content }) => ({ path, content })),
+          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' }), 'https://gitlab.example.com')
+            .map(({ path, content }) => ({ path, content })),
         );
+        const storyRunner = JSON.parse(
+          actions.find((file) => file.file_path === '.dmtools/runners/fa-story-dev.json')!.content,
+        );
+        assert.equal(storyRunner.params.envVariables.GITLAB_BASE_PATH, 'https://gitlab.example.com');
         const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
         assert.ok(mergeRequest);
         assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /shared parent workflows/);

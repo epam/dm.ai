@@ -1,12 +1,262 @@
 include:
   - remote: https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/1a3b5f373654def6871a91bf616e0280d00c42b7/gitlab/factory-teammate.yml
 
+.ai-teammate-select-token:
+  script:
+    - |
+      # Multi-teammate mode: development/rework legs use GITLAB_DEV_TOKEN (mapped to GITLAB_TOKEN above), review legs
+      # use GITLAB_REVIEWER_TOKEN so review notes, MR comments and labels come from the reviewer account.
+      # The leg is derived like .factory-teammate does: FACTORY_LEG, else agent:rework / agent:review labels.
+      FACTORY_TEAMMATE_ROLE=dev
+      if [ -n "${GITLAB_REVIEWER_HANDLE:-}" ]; then
+        role_leg="${FACTORY_LEG:-}"
+        if [ -z "$role_leg" ] && [ -n "${GITLAB_TOKEN:-}" ]; then
+          if [ -n "${FACTORY_MR:-}" ]; then role_endpoint="merge_requests/$FACTORY_MR"; else role_endpoint="issues/${FACTORY_ISSUE:-0}"; fi
+          role_labels="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            "$CI_API_V4_URL/projects/$CI_PROJECT_ID/$role_endpoint" | jq -c '.labels // []' 2>/dev/null || echo '[]')"
+          role_leg="$(jq -r 'if index("agent:rework") then (if index("status:In Rework") then "" else "rework" end)
+            elif index("agent:review") then (if index("status:In Review") then "" else "review" end) else "dev" end' \
+            <<< "$role_labels" 2>/dev/null || echo dev)"
+        fi
+        if [ "$role_leg" = review ]; then
+          if [ -z "${GITLAB_REVIEWER_TOKEN:-}" ]; then
+            echo "GITLAB_REVIEWER_TOKEN is required for review legs in multi-teammate mode" >&2
+            exit 1
+          fi
+          export GITLAB_TOKEN="$GITLAB_REVIEWER_TOKEN" AGENT_HANDLE="$GITLAB_REVIEWER_HANDLE"
+          FACTORY_TEAMMATE_ROLE=reviewer
+          echo "Review leg: using GITLAB_REVIEWER_TOKEN as $GITLAB_REVIEWER_HANDLE"
+        else
+          echo "Development leg (${role_leg:-none}): using GITLAB_DEV_TOKEN"
+        fi
+      fi
+      export FACTORY_TEAMMATE_ROLE
+
+.ai-teammate-git-auth:
+  script:
+    - |
+      # GitLab Runner clones with its own git template: .git/info may be missing, and
+      # url.*.insteadOf / credential entries (often in a file pulled in via include.path)
+      # route pushes through the read-only CI job token. Remove them from whichever file defines them.
+      # Runner scripts use pipefail, so git config lookups that match nothing must not abort the job.
+      mkdir -p "$(git rev-parse --git-dir)/info"
+      job_token_entries="$(git config --show-origin --get-regexp \
+        '^(url\..*\.(insteadof|pushinsteadof)|credential\..+\.username)$' 2>/dev/null || true)"
+      while IFS=$'\t' read -r source entry; do
+        [ -n "$entry" ] || continue
+        key="${entry%% *}"; value="${entry#* }"
+        case "$key" in
+          url.*gitlab-ci-token*) section="url.${key#url.}"; section="${section%.*}" ;;
+          credential.*) [ "$value" = gitlab-ci-token ] || continue; section="credential.${key#credential.}"; section="${section%.*}" ;;
+          *) continue ;;
+        esac
+        file="${source#file:}"
+        if git config --file "$file" --remove-section "$section" 2>/dev/null; then
+          echo "Removed CI job-token git config from $file"
+        else
+          echo "Warning: unable to remove CI job-token git config from $source" >&2
+        fi
+      done <<< "$job_token_entries"
+      if [ -n "${CI_PROJECT_URL:-}" ]; then git remote set-url origin "$CI_PROJECT_URL.git"; fi
+      push_url="$(git remote get-url --push origin 2>/dev/null || true)"
+      echo "Git push URL: $(printf '%s' "$push_url" | sed -E 's#://[^@/]*@#://***@#')"
+      case "$push_url" in
+        *://*@*) echo "Warning: the git push URL still embeds credentials, so pushes will not use GITLAB_TOKEN" >&2 ;;
+      esac
+      if [ -n "${GITLAB_TOKEN:-}" ]; then
+        access="$(curl --silent --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID" 2>/dev/null \
+          | jq -r '[.permissions.project_access.access_level // 0, .permissions.group_access.access_level // 0] | max' 2>/dev/null || true)"
+        scopes="$(curl --silent --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$CI_API_V4_URL/personal_access_tokens/self" 2>/dev/null \
+          | jq -r '(.scopes // []) | join(",")' 2>/dev/null || true)"
+        case "$access" in ''|*[!0-9]*) access=0 ;; esac
+        echo "GITLAB_TOKEN project access level: $access; scopes: ${scopes:-unknown}"
+        if [ "$access" -lt 30 ]; then
+          echo "Warning: GITLAB_TOKEN needs at least the Developer role (30) to push branches and open merge requests" >&2
+        fi
+        case ",$scopes," in
+          *,api,*|*,write_repository,*|,,) ;;
+          *) echo "Warning: GITLAB_TOKEN needs the api or write_repository scope to push branches" >&2 ;;
+        esac
+        if [ "${FACTORY_TEAMMATE_ROLE:-dev}" = reviewer ]; then
+          echo "Review leg: skipping the git push access check"
+        elif push_check="$(git -c credential.helper= \
+          -c 'credential.helper=!f() { if [ "$1" = get ]; then echo username=oauth2; echo "password=$GITLAB_TOKEN"; fi; }; f' \
+          push --dry-run origin "HEAD:refs/heads/dmtools-push-check-${CI_JOB_ID:-0}" 2>&1)"; then
+          echo "Git push access check with GITLAB_TOKEN: OK"
+        else
+          echo "Warning: git push access check with GITLAB_TOKEN failed; the teammate will not be able to push its branch or open a merge request:" >&2
+          printf '%s\n' "$push_check" | sed -E 's#://[^@/]*@#://***@#g' >&2
+        fi
+      fi
+
+.ai-teammate-resolve-handle:
+  script:
+    - |
+      if [ -n "${FACTORY_ISSUE:-}" ] && [ -z "${FACTORY_MR:-}" ] && [ -n "${GITLAB_TOKEN:-}" ] && \
+        [ "${FACTORY_TEAMMATE_ROLE:-dev}" != reviewer ]; then
+        handle="${AGENT_HANDLE:-}"
+        if issue_json="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues/$FACTORY_ISSUE")"; then
+          echo "Issue #$FACTORY_ISSUE state: $(printf '%s' "$issue_json" | jq -r '.state')"
+          echo "Issue #$FACTORY_ISSUE labels: $(printf '%s' "$issue_json" | jq -r '.labels | join(", ")')"
+          echo "Issue #$FACTORY_ISSUE assignees: $(printf '%s' "$issue_json" | jq -r '[.assignees[]? | "\(.username) (\(.name))"] | join(", ")')"
+          if [ -z "${FACTORY_LEG:-}" ] || [ "$FACTORY_LEG" = dev ] || [ "$FACTORY_LEG" = bug ] || [ "$FACTORY_LEG" = story ]; then
+            if printf '%s' "$issue_json" | jq -e '(.labels | index("ai_developed")) and
+              (.labels | any(. == "agent:review" or . == "agent:rework" or . == "status:In Development" or . == "ai_questions_asked" or . == "ai_pr_reviewed") | not)' >/dev/null; then
+              if curl --fail --silent --show-error --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+                --data-urlencode "remove_labels=ai_developed" \
+                "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues/$FACTORY_ISSUE" >/dev/null; then
+                echo "Cleared stale ai_developed from issue #$FACTORY_ISSUE before a new dev leg"
+              else
+                echo "Warning: unable to clear stale ai_developed from issue #$FACTORY_ISSUE" >&2
+              fi
+            fi
+          fi
+          resolved="$(printf '%s' "$issue_json" | jq -r --arg handle "$handle" \
+            'first(.assignees[]? | select(.username == $handle)) // first(.assignees[]? | select(.name == $handle)) | .username // empty')"
+          if [ -z "$resolved" ]; then
+            echo "Warning: no assignee of issue #$FACTORY_ISSUE matches AGENT_HANDLE=$handle by username or display name; the dev leg will not run" >&2
+          elif [ "$resolved" != "$handle" ]; then
+            echo "Resolved AGENT_HANDLE $handle to assignee username $resolved"
+            export AGENT_HANDLE="$resolved"
+          fi
+        else
+          echo "Warning: unable to read issue #$FACTORY_ISSUE to resolve AGENT_HANDLE" >&2
+        fi
+      fi
+
+.ai-teammate-verify-mr:
+  script:
+    - |
+      # Runs in the parent script's shell after a successful dev leg (api, update_labels, note, leg, number, anchor
+      # come from .factory-teammate). The pack only logs push/MR failures, so require an open MR before review.
+      if [[ "${leg:-}" == dev && "${agent_result:-1}" == 0 ]]; then
+        issue_labels="$(api "issues/$number" | jq -c '.labels // []' 2>/dev/null || echo '[]')"
+        if jq -e 'index("ai_questions_asked")' <<< "$issue_labels" >/dev/null 2>&1; then
+          echo "Issue #$number is waiting for answers (ai_questions_asked); no merge request expected yet"
+          exit 0
+        fi
+        related="$(api "issues/$number/related_merge_requests?per_page=100" || echo '[]')"
+        mr_count="$(jq --argjson project "$CI_PROJECT_ID" \
+          '[.[] | select(.state == "opened" and .project_id == $project)] | length' <<< "$related" 2>/dev/null || echo 0)"
+        if [[ "$mr_count" == 0 ]]; then
+          source_branch="$(jq -rn --arg branch "ai/$anchor" '$branch | @uri')"
+          branch_mrs="$(api "merge_requests?state=opened&source_branch=$source_branch" || echo '[]')"
+          branch_mr="$(jq -r '.[0].iid // empty' <<< "$branch_mrs" 2>/dev/null || true)"
+          if [[ -n "$branch_mr" ]]; then
+            description="$(jq -r '.[0].description // ""' <<< "$branch_mrs")"
+            api "merge_requests/$branch_mr" --request PUT \
+              --data-urlencode "description=Closes #$number"$'\n\n'"$description" >/dev/null
+            echo "Linked merge request !$branch_mr to issue #$number"
+            mr_count=1
+          fi
+        fi
+        if [[ "$mr_count" == 0 ]]; then
+          echo "Dev run finished without an open merge request for issue #$number; check the push and MR errors above" >&2
+          update_labels needs-human 'agent:review'
+          note 'AI Teammate dev run finished without an open merge request (branch push or MR creation failed). Fix the cause, remove needs-human, and re-queue.'
+          exit 1
+        fi
+        # GitHub parity: agent:dev stays as the machine-leg marker; ai_developed records the finished dev leg.
+        # The pack cannot label GitLab issues (its tracker supports jira/ado/github only), so set it here.
+        if update_labels ai_developed '' || { sleep 5; update_labels ai_developed ''; }; then
+          echo "Issue #$number has $mr_count open merge request(s); labeled ai_developed"
+        else
+          echo "Warning: issue #$number has $mr_count open merge request(s) but adding ai_developed failed" >&2
+        fi
+      fi
+
 ai-teammate:
   extends: .factory-teammate
+  before_script:
+    - !reference [.dmtools-install-tools, script]
+    - !reference [.ai-teammate-select-token, script]
+    - !reference [.ai-teammate-git-auth, script]
+    - !reference [.ai-teammate-resolve-handle, script]
+  script:
+    - !reference [.factory-teammate, script]
+    - !reference [.ai-teammate-verify-mr, script]
   resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true"'
+      when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "api" || $CI_PIPELINE_SOURCE == "trigger" || $CI_PIPELINE_SOURCE == "web") && (($FACTORY_ISSUE != "" && $FACTORY_MR == "") || ($FACTORY_ISSUE == "" && $FACTORY_MR != ""))'
   variables:
     FACTORY_HOME_REF: "1a3b5f373654def6871a91bf616e0280d00c42b7"
     AGENT_HANDLE: "@@MACHINE_AUTHOR@@"
+@@GITLAB_TOKEN_VARIABLE@@
+
+ai-teammate-auto:
+  extends: .factory-teammate
+  before_script:
+    - !reference [.dmtools-install-tools, script]
+    - !reference [.ai-teammate-select-token, script]
+    - !reference [.ai-teammate-git-auth, script]
+    - !reference [.ai-teammate-resolve-handle, script]
+  script:
+    - !reference [.factory-teammate, script]
+    - !reference [.ai-teammate-verify-mr, script]
+  resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true" && $FACTORY_ISSUE != "" && $FACTORY_MR == ""'
+  variables:
+    FACTORY_HOME_REF: "1a3b5f373654def6871a91bf616e0280d00c42b7"
+    AGENT_HANDLE: "$DMTOOLS_AI_DEV_USERNAME"
+@@GITLAB_TOKEN_VARIABLE@@
+
+ai-teammate-scan:
+  resource_group: ai-teammate-scan-$CI_PROJECT_ID
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule"'
 @@GITLAB_TOKEN_MAPPING@@
+  script:
+    - |
+      set -euo pipefail
+      : "${GITLAB_TOKEN:?Set a GitLab token with api access to list issues and create pipelines}"
+      assignee="${DMTOOLS_AI_DEV_USERNAME:-ai-dev}"
+      echo "Scanning open issues with label agent:dev assigned to $assignee"
+      page=1
+      dispatched=0
+      while :; do
+        response="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --get \
+          --data-urlencode "state=opened" \
+          --data-urlencode "labels=agent:dev" \
+          --data-urlencode "per_page=100" \
+          --data-urlencode "page=$page" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues")"
+        count="$(printf '%s' "$response" | jq -er 'if type == "array" then length else error("Expected an issues array") end')"
+        if [ "$count" -eq 0 ]; then
+          break
+        fi
+        issue_assignees="$(printf '%s' "$response" | jq -r --arg assignee "$assignee" \
+          '.[] | select(.state == "opened" and (.labels | index("agent:dev"))) |
+           . as $issue | [.assignees[]? | select(.username == $assignee or .name == $assignee)] |
+           select(length > 0) | [$issue.iid, .[0].username] | @tsv')"
+        if [ -z "$issue_assignees" ]; then
+          echo "No matching assigned issues found on page $page"
+        else
+          while IFS=$'\t' read -r issue_iid username; do
+            [ -n "$issue_iid" ] || continue
+            echo "Starting ai-teammate API pipeline for issue #$issue_iid"
+            payload="$(jq -n --arg ref "$CI_DEFAULT_BRANCH" --arg issue "$issue_iid" --arg username "$username" \
+              '{ref: $ref, variables: [
+                {key: "FACTORY_ISSUE", value: $issue},
+                {key: "FACTORY_MR", value: ""},
+                {key: "FACTORY_HOME_REF", value: "1a3b5f373654def6871a91bf616e0280d00c42b7"},
+                {key: "DMTOOLS_AI_TEAMMATE_SCAN", value: "true"},
+                {key: "DMTOOLS_AI_DEV_USERNAME", value: $username}
+              ]}')"
+            curl --fail-with-body --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+              --header "Content-Type: application/json" \
+              --request POST \
+              --data "$payload" \
+              "$CI_API_V4_URL/projects/$CI_PROJECT_ID/pipeline"
+            dispatched=$((dispatched + 1))
+          done <<< "$issue_assignees"
+        fi
+        if [ "$count" -lt 100 ]; then
+          break
+        fi
+        page=$((page + 1))
+      done
+      echo "Dispatched $dispatched ai-teammate pipelines"

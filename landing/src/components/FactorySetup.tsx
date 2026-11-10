@@ -1385,7 +1385,7 @@ export default function FactorySetup() {
               <h2 className="factory__cardTitle">Runner, Toolchains &amp; Merge Identity</h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'The GitLab setup installs shared machine-SM and teammate jobs; runner, toolchain, and merge settings are not generated.'
+                  ? 'The GitLab setup installs shared machine-SM and teammate jobs and adds runner configuration unless project configuration already exists.'
                   : 'Select the GitHub Actions runner label, cached SDK toolchains, and the identity that merges approved PRs.'}
               </p>
             </div>
@@ -1393,8 +1393,12 @@ export default function FactorySetup() {
 
           {scm === 'gitlab' ? (
             <p className="factory__group">
-              Both jobs use the GitLab runner configured for this project. Configure other CI, toolchains, and merge
-              policies separately; this setup does not change them.
+              Both jobs use the GitLab runner configured for this project. Setup generates the DMTools machine-SM and
+              teammate runner configuration when it is missing, but preserves existing files under <code>.dmtools/</code>.
+              To scan every 10 minutes for issues assigned to <code>ai-dev</code> with <code>agent:dev</code>, add a
+              GitLab pipeline schedule on the default branch; no scan opt-in variable is required. The scan resolves
+              the assignee's actual username, including bot accounts named <code>ai-dev</code>.
+              Configure other CI, toolchains, and merge policies separately.
             </p>
           ) : (
           <>

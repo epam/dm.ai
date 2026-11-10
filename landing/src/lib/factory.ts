@@ -261,15 +261,31 @@ function providerEnv(list: ProviderEntry[], mode: 'default' | 'queue'): Record<s
   return env;
 }
 
+type GitlabRunnerFlow = 'lifecycle' | 'teammate';
+
+const GITLAB_TEAMMATE_DEV_PROMPT =
+  'GitLab merge request linkage (required): outputs/response.md becomes the GitLab merge request description. ' +
+  'Its first line must be exactly "Closes #<IID>", where <IID> is the "number" field of input/gl-<IID>/ticket.json, ' +
+  'so GitLab links the merge request to the issue and the review leg can find it. ' +
+  'Never put closing keywords in commit messages. Do not push or open the merge request yourself: ' +
+  'the factory post-action commits, pushes the branch and creates the GitLab merge request.';
+
+const GITLAB_TEAMMATE_REVIEW_PROMPT =
+  'GitLab factory verdict (required): in addition to "recommendation", outputs/pr_review.json must contain ' +
+  'a top-level "decision" field with the same value (APPROVE, REQUEST_CHANGES or BLOCK). ' +
+  'The GitLab factory reads "decision" to route approval or rework.';
+
 function runnerJson(
   tpl: string,
   c: FactoryConfig,
   review: boolean,
   scm: ScmId = 'github',
   gitlabBaseUrl = 'https://gitlab.com',
+  gitlabFlow: GitlabRunnerFlow = 'lifecycle',
 ): string {
   const json = JSON.parse(tpl);
-  if (scm === 'gitlab' && review && c.gitlabAutoLifecycle !== false) {
+  const lifecycle = scm === 'gitlab' && gitlabFlow === 'lifecycle';
+  if (lifecycle && review && c.gitlabAutoLifecycle !== false) {
     delete json.merge;
     Object.assign(json.params, {
       preJSAction: '',
@@ -294,7 +310,7 @@ function runnerJson(
       ],
     });
   }
-  if (scm === 'gitlab' && tpl === runnerRework) {
+  if (lifecycle && tpl === runnerRework) {
     Object.assign(json.params, {
       preJSAction: '',
       preCliJSAction: '',
@@ -322,6 +338,25 @@ function runnerJson(
   }
   const list = review && c.providers.reviewSeparate ? c.providers.reviewEntries : c.providers.entries;
   if (json.params.customParams?.targetRepository) json.params.customParams.targetRepository.baseBranch = c.baseBranch;
+  if (scm === 'gitlab' && gitlabFlow === 'teammate') {
+    // Like GitHub, the pack's own pre/post actions branch, commit, push and publish; they select
+    // the forge (PR vs MR APIs) only via customParams.scmProvider, which defaults to GitHub.
+    json.params.customParams = {
+      ...json.params.customParams,
+      scmProvider: 'gitlab',
+      targetRepository: {
+        ...json.params.customParams?.targetRepository,
+        workingDir: '.',
+        baseBranch: c.baseBranch,
+        owner: c.repo.split('/').slice(0, -1).join('/'),
+        repo: c.repo.split('/').at(-1) ?? '',
+      },
+    };
+    const prompts = tpl === runnerBug || tpl === runnerStory
+      ? [GITLAB_TEAMMATE_DEV_PROMPT]
+      : review ? [GITLAB_TEAMMATE_REVIEW_PROMPT] : [];
+    if (prompts.length) json.params.cliPrompts = [...(json.params.cliPrompts ?? []), ...prompts];
+  }
   json.params.envVariables = {
     ...(scm === 'gitlab'
       ? {
@@ -654,17 +689,29 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
   ];
 }
 
-export function renderGitlabMachineSmFiles(c: FactoryConfig): FactoryFile[] {
+export function renderGitlabMachineSmFiles(
+  c: FactoryConfig,
+  gitlabBaseUrl = 'https://gitlab.com',
+): FactoryFile[] {
   const machineAuthor = c.gitlabMultipleTeammates ? c.gitlabDev : c.machine;
   const gitlabTokenMapping = c.gitlabMultipleTeammates
     ? '  variables:\n    GITLAB_TOKEN: "$GITLAB_DEV_TOKEN"'
     : '';
   const render = (template: string) => template
     .replaceAll('@@MACHINE_AUTHOR@@', machineAuthor)
-    .replace('@@GITLAB_TOKEN_MAPPING@@', gitlabTokenMapping);
+    .replace(/^@@GITLAB_TOKEN_VARIABLE@@\n/gm, c.gitlabMultipleTeammates
+      ? `    GITLAB_TOKEN: "$GITLAB_DEV_TOKEN"\n    GITLAB_REVIEWER_HANDLE: "${c.gitlabReviewer}"\n`
+      : '')
+    .replaceAll('@@GITLAB_TOKEN_MAPPING@@', gitlabTokenMapping);
+  const runnerConfig = { ...c, machine: machineAuthor };
   return [
     { path: '.gitlab-ci.yml', content: render(gitlabMachineSm) },
     { path: 'ai-teammate.yml', content: render(gitlabAiTeammate) },
+    { path: '.dmtools/config.js', content: fill(dmtoolsConfig, runnerConfig) },
+    { path: '.dmtools/runners/fa-bug-dev.json', content: runnerJson(runnerBug, runnerConfig, false, 'gitlab', gitlabBaseUrl, 'teammate') },
+    { path: '.dmtools/runners/fa-story-dev.json', content: runnerJson(runnerStory, runnerConfig, false, 'gitlab', gitlabBaseUrl, 'teammate') },
+    { path: '.dmtools/runners/fa-review.json', content: runnerJson(runnerReview, runnerConfig, true, 'gitlab', gitlabBaseUrl, 'teammate') },
+    { path: '.dmtools/runners/fa-rework.json', content: runnerJson(runnerRework, runnerConfig, false, 'gitlab', gitlabBaseUrl, 'teammate') },
   ];
 }
 
@@ -1481,7 +1528,7 @@ export async function putGitlabVariables(
   }
 }
 
-/** Creates a GitLab branch, commits the machine-SM and teammate callers, and opens a merge request. */
+/** Creates the GitLab machine-SM and teammate setup MR without replacing existing runner configuration. */
 export async function createGitlabMergeRequest(
   token: string,
   repo: string,
@@ -1489,7 +1536,7 @@ export async function createGitlabMergeRequest(
   c: FactoryConfig,
   log: (message: string) => void = () => {},
 ): Promise<string> {
-  const files = renderGitlabMachineSmFiles(c);
+  const files = renderGitlabMachineSmFiles(c, baseUrl);
   const project = gitlabProjectPath(repo);
   const projectInfo = await gitlabRequest<{ default_branch: string }>(token, baseUrl, `/projects/${project}`);
   const base = c.baseBranch || projectInfo.default_branch;
@@ -1503,16 +1550,20 @@ export async function createGitlabMergeRequest(
     }
   };
   const existing = await Promise.all(files.map((file) => fileExists(file.path)));
+  const preservedRunnerFiles = files.filter((file, index) => file.path.startsWith('.dmtools/') && existing[index]);
   const branch = `chore/dmtools-factory-${Date.now().toString(36)}`;
   await gitlabRequest(token, baseUrl, `/projects/${project}/repository/branches`, {
     method: 'POST',
     body: JSON.stringify({ branch, ref: base }),
   });
-  const actions = files.map((file, index) => ({
-    action: existing[index] ? 'update' : 'create',
-    file_path: file.path,
-    content: file.content,
-  }));
+  const actions = files
+    .map((file, index) => ({ file, index }))
+    .filter(({ file, index }) => !file.path.startsWith('.dmtools/') || !existing[index])
+    .map(({ file, index }) => ({
+      action: existing[index] ? 'update' : 'create',
+      file_path: file.path,
+      content: file.content,
+    }));
   await gitlabRequest(token, baseUrl, `/projects/${project}/repository/commits`, {
     method: 'POST',
     body: JSON.stringify({
@@ -1521,14 +1572,20 @@ export async function createGitlabMergeRequest(
       actions,
     }),
   });
-  log(`committed ${files.length} GitLab setup files to ${branch}`);
+  log(`committed ${actions.length} GitLab setup files to ${branch}`);
+  if (preservedRunnerFiles.length) {
+    log(`preserved existing runner configuration files: ${preservedRunnerFiles.map((file) => file.path).join(', ')}`);
+  }
+  const runnerConfigNote = preservedRunnerFiles.length
+    ? `\n\nExisting runner configuration files were preserved and not overwritten: ${preservedRunnerFiles.map((file) => `\`${file.path}\``).join(', ')}. Verify that \`.dmtools/config.js\` points to GitLab-compatible runner files before running the pipeline.`
+    : '';
   const mr = await gitlabRequest<{ web_url: string }>(token, baseUrl, `/projects/${project}/merge_requests`, {
     method: 'POST',
     body: JSON.stringify({
       source_branch: branch,
       target_branch: base,
       title: 'chore: set up DMTools for GitLab',
-      description: `Adds a scheduled GitLab machine SM pipeline and an issue/MR teammate job for \`${repo}\`. Both include shared parent workflows from IstiN/dmtools-agentic-workflows. Dispatch the teammate job on the default branch with exactly one project-local \`FACTORY_ISSUE\` or \`FACTORY_MR\` IID. Configure masked \`GITLAB_TOKEN\` and \`SOURCE_GITHUB_TOKEN\` project CI/CD variables, plus \`.dmtools/config.js\` with GitLab-compatible runner configuration.`,
+      description: `Adds a scheduled GitLab machine SM pipeline and an issue/MR teammate job for \`${repo}\`. Both include shared parent workflows from IstiN/dmtools-agentic-workflows. The setup includes \`.dmtools/config.js\` and GitLab-compatible runner JSON files when those files do not already exist. Dispatch the teammate job on the default branch with exactly one project-local \`FACTORY_ISSUE\` or \`FACTORY_MR\` IID. Configure masked \`GITLAB_TOKEN\` and \`SOURCE_GITHUB_TOKEN\` project CI/CD variables.${runnerConfigNote}`,
       remove_source_branch: true,
     }),
   });
