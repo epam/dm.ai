@@ -79,6 +79,22 @@ public class Content extends JSONModel implements Key, TicketLink, ToText {
         return new Storage(body.getJSONObject(STORAGE));
     }
 
+    /**
+     * Rendered {@code body.export_view.value} HTML when expanded on the request, or {@code null}.
+     */
+    public String getExportViewValue() {
+        JSONObject json = getJSONObject();
+        if (json == null) {
+            return null;
+        }
+        JSONObject body = json.optJSONObject("body");
+        if (body == null) {
+            return null;
+        }
+        JSONObject exportView = body.optJSONObject("export_view");
+        return exportView != null ? exportView.optString("value", null) : null;
+    }
+
     public int getVersionNumber() {
         return getJSONObject(VERSION).getInt("number");
     }

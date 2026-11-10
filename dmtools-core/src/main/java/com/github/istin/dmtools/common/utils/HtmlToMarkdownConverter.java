@@ -207,14 +207,65 @@ public final class HtmlToMarkdownConverter {
             Document doc = parseFragment(htmlWithoutExtracted);
             Elements tableElements = doc.getElementsByTag("table");
             int index = 0;
-            for (Element table : tableElements) {
-                String markdownTable = convertTableToMarkdown(table);
-                tables.add(markdownTable);
-                Element placeholder = doc.createElement("p").text(TABLE_PLACEHOLDER_PREFIX + index);
-                table.replaceWith(placeholder);
-                index++;
+            // Convert innermost tables first so nested tables inside <td>/<th> cells
+            // are rendered into compact inline rows before their enclosing outer table
+            // iterates over its own direct <tr> rows.
+            for (int i = tableElements.size() - 1; i >= 0; i--) {
+                Element table = tableElements.get(i);
+                boolean isNestedInTable = table.parent() != null && table.parent().closest("table") != null;
+                if (isNestedInTable) {
+                    String inlineNested = convertNestedTableToInlineHtml(table);
+                    Element span = doc.createElement("span");
+                    span.html(inlineNested);
+                    table.replaceWith(span);
+                } else {
+                    String markdownTable = convertTableToMarkdown(table);
+                    tables.add(markdownTable);
+                    Element placeholder = doc.createElement("p").text(TABLE_PLACEHOLDER_PREFIX + index);
+                    table.replaceWith(placeholder);
+                    index++;
+                }
             }
             htmlWithoutExtracted = bodyHtml(doc);
+        }
+
+        private static List<Element> directTableRows(Element table) {
+            List<Element> trs = new ArrayList<>();
+            for (Element child : table.children()) {
+                String tag = child.tagName();
+                if ("tr".equalsIgnoreCase(tag)) {
+                    trs.add(child);
+                } else if ("thead".equalsIgnoreCase(tag)
+                        || "tbody".equalsIgnoreCase(tag)
+                        || "tfoot".equalsIgnoreCase(tag)) {
+                    for (Element row : child.children()) {
+                        if ("tr".equalsIgnoreCase(row.tagName())) {
+                            trs.add(row);
+                        }
+                    }
+                }
+            }
+            return trs;
+        }
+
+        private static String convertNestedTableToInlineHtml(Element table) {
+            List<String> renderedRows = new ArrayList<>();
+            for (Element tr : directTableRows(table)) {
+                List<String> cells = new ArrayList<>();
+                for (Element child : tr.children()) {
+                    String tag = child.tagName();
+                    if ("th".equalsIgnoreCase(tag) || "td".equalsIgnoreCase(tag)) {
+                        String cellText = cellToMarkdown(child);
+                        if (!cellText.isEmpty()) {
+                            cells.add(cellText);
+                        }
+                    }
+                }
+                if (!cells.isEmpty()) {
+                    renderedRows.add(String.join(": ", cells));
+                }
+            }
+            return String.join("<br/>", renderedRows);
         }
 
         private static String convertTableToMarkdown(Element table) {
@@ -222,7 +273,7 @@ public final class HtmlToMarkdownConverter {
             int maxColumns = 0;
             boolean hasHeader = false;
 
-            for (Element tr : table.getElementsByTag("tr")) {
+            for (Element tr : directTableRows(table)) {
                 List<String> cells = new ArrayList<>();
                 for (Element child : tr.children()) {
                     String tag = child.tagName();
