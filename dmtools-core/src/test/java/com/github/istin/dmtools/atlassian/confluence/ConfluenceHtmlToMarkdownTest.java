@@ -451,4 +451,51 @@ public class ConfluenceHtmlToMarkdownTest {
         assertEquals(plain, withNull);
         assertEquals(plain, withBlank);
     }
+
+    @Test
+    public void testToMarkdown_preservesExpandAndPanelMacroTitlesAndNestedExpandTitles() {
+        String html = "<ac:structured-macro ac:name=\"expand\">"
+                + "<ac:parameter ac:name=\"title\">Edge Case 1: Timeout</ac:parameter>"
+                + "<ac:rich-text-body>"
+                + "<p>When the upstream times out after 30s, return 504.</p>"
+                + "<ac:structured-macro ac:name=\"note\">"
+                + "<ac:parameter ac:name=\"title\">Retry Policy</ac:parameter>"
+                + "<ac:rich-text-body><p>Retry up to 2 times.</p></ac:rich-text-body>"
+                + "</ac:structured-macro>"
+                + "</ac:rich-text-body>"
+                + "</ac:structured-macro>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Outer expand title must be preserved", markdown.contains("Edge Case 1: Timeout"));
+        assertTrue("Outer expand body must be preserved", markdown.contains("When the upstream times out after 30s"));
+        assertTrue("Nested note macro title must not be stripped by outer richBody cleanup",
+                markdown.contains("Retry Policy"));
+        assertTrue("Nested note macro body must be preserved", markdown.contains("Retry up to 2 times."));
+    }
+
+    @Test
+    public void testToMarkdown_nestedTableInsideCellDoesNotCorruptOuterTableRows() {
+        String html = "<table><tbody>"
+                + "<tr><th>Field</th><th>Details</th></tr>"
+                + "<tr><td>Config</td><td>"
+                + "<table><tbody>"
+                + "<tr><th>Key</th><th>Val</th></tr>"
+                + "<tr><td>timeout</td><td>30s</td></tr>"
+                + "</tbody></table>"
+                + "</td></tr>"
+                + "<tr><td>Status</td><td>Active</td></tr>"
+                + "</tbody></table>";
+
+        String markdown = ConfluenceStorageMarkdown.toMarkdown(html);
+
+        assertTrue("Outer table header must be intact", markdown.contains("| Field | Details |"));
+        assertTrue("Outer table trailing row must remain a 2-column row", markdown.contains("| Status | Active |"));
+        assertTrue("Nested table content must be preserved inside the Config row",
+                markdown.contains("timeout: 30s"));
+        // Outer table should have exactly 4 pipe lines: header, separator, Config row, Status row
+        String[] lines = markdown.trim().split("\\R");
+        assertEquals("Nested table rows must not leak as separate top-level rows in the outer table",
+                4, lines.length);
+    }
 }
