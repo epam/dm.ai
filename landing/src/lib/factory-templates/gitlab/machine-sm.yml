@@ -24,11 +24,13 @@ variables:
     value: ""
     description: Optional teammate leg (dev, bug, story, review, or rework); leave empty to derive it from issue/MR state.
   SM_MACHINE_AUTHOR: "@@MACHINE_AUTHOR@@"
+  DMTOOLS_GITLAB_TEAMMATES: "@@GITLAB_TEAMMATES@@"
 
 default:
   image: eclipse-temurin:21-jdk
   before_script:
     - !reference [.dmtools-install-tools, script]
+    - !reference [.dmtools-use-dev-token, script]
 
 .dmtools-install-tools:
   script:
@@ -46,6 +48,24 @@ default:
         apt-get -o Acquire::Retries=3 update
       done
 
+.dmtools-use-dev-token:
+  script:
+    - |
+      # Project/group CI/CD variables override job-level YAML variables, so a project GITLAB_TOKEN would win over a
+      # `GITLAB_TOKEN: $GITLAB_DEV_TOKEN` mapping. Select the development token at runtime instead.
+      if [ -n "${GITLAB_DEV_TOKEN:-}" ]; then
+        export GITLAB_TOKEN="$GITLAB_DEV_TOKEN"
+        token_name=GITLAB_DEV_TOKEN
+      elif [ "${DMTOOLS_GITLAB_TEAMMATES:-single}" = multiple ]; then
+        echo "GITLAB_DEV_TOKEN is required in multi-teammate mode; add it as a masked CI/CD variable" >&2
+        exit 1
+      else
+        token_name=GITLAB_TOKEN
+      fi
+      token_user="$(curl --fail --silent --header "PRIVATE-TOKEN: ${GITLAB_TOKEN:-}" "$CI_API_V4_URL/user" 2>/dev/null \
+        | jq -r '.username // empty' 2>/dev/null || true)"
+      echo "Using $token_name as GITLAB_TOKEN (GitLab user: ${token_user:-unknown})"
+
 factory-sm:
   extends: .factory-sm
   resource_group: dmtools-machine-sm
@@ -57,4 +77,3 @@ factory-sm:
     - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_SM == "true"'
       variables:
         SM_DRY_RUN: "true"
-@@GITLAB_TOKEN_MAPPING@@

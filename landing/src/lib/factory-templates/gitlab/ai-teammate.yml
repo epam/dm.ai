@@ -4,11 +4,11 @@ include:
 .ai-teammate-select-token:
   script:
     - |
-      # Multi-teammate mode: development/rework legs use GITLAB_DEV_TOKEN (mapped to GITLAB_TOKEN above), review legs
-      # use GITLAB_REVIEWER_TOKEN so review notes, MR comments and labels come from the reviewer account.
+      # .dmtools-use-dev-token already exported GITLAB_DEV_TOKEN as GITLAB_TOKEN for development/rework legs.
+      # Review legs switch to GITLAB_REVIEWER_TOKEN so review notes, MR comments and labels come from the reviewer.
       # The leg is derived like .factory-teammate does: FACTORY_LEG, else agent:rework / agent:review labels.
       FACTORY_TEAMMATE_ROLE=dev
-      if [ -n "${GITLAB_REVIEWER_HANDLE:-}" ]; then
+      if [ -n "${GITLAB_REVIEWER_TOKEN:-}" ] || [ "${DMTOOLS_GITLAB_TEAMMATES:-single}" = multiple ]; then
         role_leg="${FACTORY_LEG:-}"
         if [ -z "$role_leg" ] && [ -n "${GITLAB_TOKEN:-}" ]; then
           if [ -n "${FACTORY_MR:-}" ]; then role_endpoint="merge_requests/$FACTORY_MR"; else role_endpoint="issues/${FACTORY_ISSUE:-0}"; fi
@@ -23,11 +23,14 @@ include:
             echo "GITLAB_REVIEWER_TOKEN is required for review legs in multi-teammate mode" >&2
             exit 1
           fi
-          export GITLAB_TOKEN="$GITLAB_REVIEWER_TOKEN" AGENT_HANDLE="$GITLAB_REVIEWER_HANDLE"
+          export GITLAB_TOKEN="$GITLAB_REVIEWER_TOKEN"
+          if [ -n "${GITLAB_REVIEWER_HANDLE:-}" ]; then export AGENT_HANDLE="$GITLAB_REVIEWER_HANDLE"; fi
           FACTORY_TEAMMATE_ROLE=reviewer
-          echo "Review leg: using GITLAB_REVIEWER_TOKEN as $GITLAB_REVIEWER_HANDLE"
+          token_user="$(curl --fail --silent --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$CI_API_V4_URL/user" 2>/dev/null \
+            | jq -r '.username // empty' 2>/dev/null || true)"
+          echo "Review leg: using GITLAB_REVIEWER_TOKEN as GITLAB_TOKEN (GitLab user: ${token_user:-unknown})"
         else
-          echo "Development leg (${role_leg:-none}): using GITLAB_DEV_TOKEN"
+          echo "Development leg (${role_leg:-none}): keeping the development token"
         fi
       fi
       export FACTORY_TEAMMATE_ROLE
@@ -157,12 +160,11 @@ include:
           note 'AI Teammate dev run finished without an open merge request (branch push or MR creation failed). Fix the cause, remove needs-human, and re-queue.'
           exit 1
         fi
-        # GitHub parity: agent:dev stays as the machine-leg marker; ai_developed records the finished dev leg.
-        # The pack cannot label GitLab issues (its tracker supports jira/ado/github only), so set it here.
-        if update_labels ai_developed '' || { sleep 5; update_labels ai_developed ''; }; then
-          echo "Issue #$number has $mr_count open merge request(s); labeled ai_developed"
+        # The pack cannot label GitLab issues (its tracker supports jira/ado/github only), so update labels here.
+        if update_labels ai_developed 'agent:dev' || { sleep 5; update_labels ai_developed 'agent:dev'; }; then
+          echo "Issue #$number has $mr_count open merge request(s); labeled ai_developed and removed agent:dev"
         else
-          echo "Warning: issue #$number has $mr_count open merge request(s) but adding ai_developed failed" >&2
+          echo "Warning: issue #$number has $mr_count open merge request(s) but updating ai_developed/agent:dev labels failed" >&2
         fi
       fi
 
@@ -170,6 +172,7 @@ ai-teammate:
   extends: .factory-teammate
   before_script:
     - !reference [.dmtools-install-tools, script]
+    - !reference [.dmtools-use-dev-token, script]
     - !reference [.ai-teammate-select-token, script]
     - !reference [.ai-teammate-git-auth, script]
     - !reference [.ai-teammate-resolve-handle, script]
@@ -184,12 +187,13 @@ ai-teammate:
   variables:
     FACTORY_HOME_REF: "1a3b5f373654def6871a91bf616e0280d00c42b7"
     AGENT_HANDLE: "@@MACHINE_AUTHOR@@"
-@@GITLAB_TOKEN_VARIABLE@@
+@@GITLAB_REVIEWER_HANDLE_VARIABLE@@
 
 ai-teammate-auto:
   extends: .factory-teammate
   before_script:
     - !reference [.dmtools-install-tools, script]
+    - !reference [.dmtools-use-dev-token, script]
     - !reference [.ai-teammate-select-token, script]
     - !reference [.ai-teammate-git-auth, script]
     - !reference [.ai-teammate-resolve-handle, script]
@@ -202,13 +206,12 @@ ai-teammate-auto:
   variables:
     FACTORY_HOME_REF: "1a3b5f373654def6871a91bf616e0280d00c42b7"
     AGENT_HANDLE: "$DMTOOLS_AI_DEV_USERNAME"
-@@GITLAB_TOKEN_VARIABLE@@
+@@GITLAB_REVIEWER_HANDLE_VARIABLE@@
 
 ai-teammate-scan:
   resource_group: ai-teammate-scan-$CI_PROJECT_ID
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule"'
-@@GITLAB_TOKEN_MAPPING@@
   script:
     - |
       set -euo pipefail

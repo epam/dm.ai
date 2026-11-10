@@ -139,13 +139,12 @@ closing reference, the job links the `ai/gl-<IID>` branch MR by prepending
 `Closes #<IID>`. If no MR exists (for example because the branch push failed),
 the job fails, swaps `agent:review` for `needs-human`, and comments on the
 issue instead of reporting success.
-When the MR exists, the job adds `ai_developed`. As on GitHub, `agent:dev` is
-not removed after implementation: it stays as the machine-leg marker that the
-scan and machine SM use to find (and re-fire) dev work, while `ai_developed`
-plus `agent:review` record that the dev leg finished and hand the issue to
-review. The agent pack cannot label GitLab issues itself. When a new dev leg
-starts, a stale `ai_developed` from a previous cycle is cleared first, so the
-label always marks the latest implementation. A dev leg that ends in ask-mode
+When the MR exists, the job adds `ai_developed` and removes `agent:dev`, so the
+issue is no longer queued for another development run. The issue remains queued
+for review via `agent:review`. The agent pack cannot label GitLab issues
+itself. When a new dev leg starts, a stale `ai_developed` from a previous cycle
+is cleared first, so the label always marks the latest implementation. A dev
+leg that ends in ask-mode
 (`ai_questions_asked`) is not treated as a missing MR.
 The schedule interval is configured in GitLab, not in the YAML, and GitLab
 instance schedule limits apply.
@@ -166,14 +165,20 @@ pipeline installs the required tools in its default Temurin image. Configure
 masked `GITLAB_TOKEN` and
 `SOURCE_GITHUB_TOKEN` CI/CD variables. `GITLAB_TOKEN` needs GitLab `api` and
 `write_repository` scopes plus project access; the GitHub token is used to
-resolve and download the DMTools CLI and agent-pack releases. In
-multi-teammate mode, `GITLAB_DEV_TOKEN` is mapped to the parent jobs'
-`GITLAB_TOKEN` for scanning, development, rework, pushes and MR creation.
-Before a review leg (`FACTORY_LEG=review`, or an `agent:review` label without
-`status:In Review`), `ai-teammate` and `ai-teammate-auto` switch
-`GITLAB_TOKEN` to `GITLAB_REVIEWER_TOKEN` and `AGENT_HANDLE` to the reviewer
-account, so review notes, MR comments and label changes come from the reviewer.
-The job fails if `GITLAB_REVIEWER_TOKEN` is missing on a review leg.
+resolve and download the DMTools CLI and agent-pack releases.
+Project and group CI/CD variables take precedence over job `variables:` in
+`.gitlab-ci.yml`, so tokens are selected in the job script, not by YAML
+mapping. Every job's `before_script` (`.dmtools-use-dev-token`) exports
+`GITLAB_DEV_TOKEN` as `GITLAB_TOKEN` whenever it is set (in either mode), for
+the machine SM, scanning, development, rework, pushes and MR creation, and logs
+the token name and its GitLab user. In multi-teammate mode
+(`DMTOOLS_GITLAB_TEAMMATES: "multiple"`) the job fails if `GITLAB_DEV_TOKEN` is
+missing. Before a review leg (`FACTORY_LEG=review`, or an `agent:review` label
+without `status:In Review`), `ai-teammate` and `ai-teammate-auto` switch
+`GITLAB_TOKEN` to `GITLAB_REVIEWER_TOKEN` (and, in multi-teammate mode,
+`AGENT_HANDLE` to the reviewer account), so review notes, MR comments and label
+changes come from the reviewer. In multi-teammate mode the job fails if
+`GITLAB_REVIEWER_TOKEN` is missing on a review leg.
 
 Run `npm test` to check workflow rendering and GitLab shell syntax.
 

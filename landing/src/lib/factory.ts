@@ -694,15 +694,12 @@ export function renderGitlabMachineSmFiles(
   gitlabBaseUrl = 'https://gitlab.com',
 ): FactoryFile[] {
   const machineAuthor = c.gitlabMultipleTeammates ? c.gitlabDev : c.machine;
-  const gitlabTokenMapping = c.gitlabMultipleTeammates
-    ? '  variables:\n    GITLAB_TOKEN: "$GITLAB_DEV_TOKEN"'
-    : '';
   const render = (template: string) => template
     .replaceAll('@@MACHINE_AUTHOR@@', machineAuthor)
-    .replace(/^@@GITLAB_TOKEN_VARIABLE@@\n/gm, c.gitlabMultipleTeammates
-      ? `    GITLAB_TOKEN: "$GITLAB_DEV_TOKEN"\n    GITLAB_REVIEWER_HANDLE: "${c.gitlabReviewer}"\n`
-      : '')
-    .replaceAll('@@GITLAB_TOKEN_MAPPING@@', gitlabTokenMapping);
+    .replaceAll('@@GITLAB_TEAMMATES@@', c.gitlabMultipleTeammates ? 'multiple' : 'single')
+    .replace(/^@@GITLAB_REVIEWER_HANDLE_VARIABLE@@\n/gm, c.gitlabMultipleTeammates
+      ? `    GITLAB_REVIEWER_HANDLE: "${c.gitlabReviewer}"\n`
+      : '');
   const runnerConfig = { ...c, machine: machineAuthor };
   return [
     { path: '.gitlab-ci.yml', content: render(gitlabMachineSm) },

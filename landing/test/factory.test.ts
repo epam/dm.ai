@@ -221,12 +221,16 @@ describe('GitLab parent workflow loading', () => {
     const multiTeammate = multiTeammateWorkflow[1].content;
     const multiMachineConfig = multiTeammateWorkflow.find((file) => file.path === '.dmtools/config.js')!;
     assert.match(multiMachineSm, /SM_MACHINE_AUTHOR: "dev-bot"/);
-    assert.match(multiMachineSm, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
+    assert.match(multiMachineSm, /DMTOOLS_GITLAB_TEAMMATES: "multiple"/);
+    assert.match(machineSm, /DMTOOLS_GITLAB_TEAMMATES: "single"/);
     assert.match(multiTeammate, /AGENT_HANDLE: "dev-bot"/);
-    assert.match(multiTeammate, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
-    assert.match(multiTeammate, /ai-teammate-auto:[\s\S]*?GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
-    assert.match(multiTeammate, /ai-teammate-scan:[\s\S]*?GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
-    assert.doesNotMatch(machineSm, /GITLAB_TOKEN: "\$GITLAB_DEV_TOKEN"/);
+    for (const content of [machineSm, multiMachineSm, teammate, multiTeammate]) {
+      assert.doesNotMatch(content, /GITLAB_TOKEN: "\$GITLAB_(DEV|REVIEWER)_TOKEN"/);
+      assert.doesNotMatch(content, /@@/);
+    }
+    for (const content of [machineSm, multiMachineSm]) {
+      assert.match(content, /default:\n  image: [^\n]+\n  before_script:\n    - !reference \[\.dmtools-install-tools, script\]\n    - !reference \[\.dmtools-use-dev-token, script\]\n/);
+    }
     assert.match(multiTeammate, /ai-teammate:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
     assert.match(multiTeammate, /ai-teammate-auto:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
     assert.doesNotMatch(teammate, /GITLAB_REVIEWER_HANDLE: "/);
@@ -236,7 +240,7 @@ describe('GitLab parent workflow loading', () => {
         const body = content.split(`\n${job}:\n`)[1].split(/\n\n/)[0];
         assert.equal(body.match(/^  variables:$/gm)?.length, 1, `${job} must have one variables block (${mode})`);
         assert.match(body, /FACTORY_HOME_REF: "[0-9a-f]{40}"/);
-        assert.match(body, /before_script:\n    - !reference \[\.dmtools-install-tools, script\]\n    - !reference \[\.ai-teammate-select-token, script\]\n    - !reference \[\.ai-teammate-git-auth, script\]\n    - !reference \[\.ai-teammate-resolve-handle, script\]/);
+        assert.match(body, /before_script:\n    - !reference \[\.dmtools-install-tools, script\]\n    - !reference \[\.dmtools-use-dev-token, script\]\n    - !reference \[\.ai-teammate-select-token, script\]\n    - !reference \[\.ai-teammate-git-auth, script\]\n    - !reference \[\.ai-teammate-resolve-handle, script\]/);
       }
     }
     assert.match(machineSm, /before_script:\n    - !reference \[\.dmtools-install-tools, script\]/);
@@ -345,15 +349,14 @@ describe('GitLab parent workflow loading', () => {
       ISSUE: '{"labels":["agent:dev"]}', ...env } });
     const linked = run({ RELATED: '[{"iid":3,"state":"opened","project_id":5}]' });
     assert.equal(linked.status, 0, linked.stderr);
-    assert.match(linked.stdout, /LABELS add=ai_developed remove=\n/);
-    assert.match(linked.stdout, /Issue #17 has 1 open merge request\(s\); labeled ai_developed\nDONE/);
-    assert.doesNotMatch(linked.stdout, /remove=[^\n]*agent:dev/);
+    assert.match(linked.stdout, /LABELS add=ai_developed remove=agent:dev\n/);
+    assert.match(linked.stdout, /Issue #17 has 1 open merge request\(s\); labeled ai_developed and removed agent:dev\nDONE/);
     const byBranch = run({ RELATED: '[]', BRANCH_MRS: '[{"iid":9,"description":"Body"}]' });
     assert.equal(byBranch.status, 0, byBranch.stderr);
     assert.match(byBranch.stderr, /source_branch=ai%2Fgl-17/);
     assert.match(byBranch.stderr, /API merge_requests\/9 --request PUT --data-urlencode description=Closes #17\n\nBody/);
     assert.match(byBranch.stdout, /Linked merge request !9 to issue #17/);
-    assert.match(byBranch.stdout, /LABELS add=ai_developed/);
+    assert.match(byBranch.stdout, /LABELS add=ai_developed remove=agent:dev/);
     const missing = run({ RELATED: '[{"iid":4,"state":"closed","project_id":5},{"iid":2,"state":"opened","project_id":6}]' });
     assert.equal(missing.status, 1);
     assert.match(missing.stdout, /LABELS add=needs-human remove=agent:review/);
@@ -369,42 +372,60 @@ describe('GitLab parent workflow loading', () => {
     assert.doesNotMatch(review.stderr, /API/);
   });
 
-  it('selects GITLAB_DEV_TOKEN for development legs and GITLAB_REVIEWER_TOKEN for review legs', () => {
-    const teammate = renderGitlabMachineSmFiles(validConfig({ gitlabMultipleTeammates: true, gitlabDev: 'dev-bot' }))[1].content;
-    const script = teammate.split('\n.ai-teammate-select-token:\n')[1].split('    - |\n')[1].split('\n\n')[0]
+  it('selects GITLAB_DEV_TOKEN for development legs and GITLAB_REVIEWER_TOKEN for review legs at runtime', () => {
+    const extract = (content: string, job: string) => content.split(`\n${job}:\n`)[1].split('    - |\n')[1].split('\n\n')[0]
       .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
-    const run = (labels: string, env: Record<string, string> = {}) => spawnSync('bash', ['-c', `
+    const render = (multi: boolean) => {
+      const files = renderGitlabMachineSmFiles(validConfig(multi ? { gitlabMultipleTeammates: true, gitlabDev: 'dev-bot' } : {}));
+      return `${extract(files[0].content, '.dmtools-use-dev-token')}\n${extract(files[1].content, '.ai-teammate-select-token')}`;
+    };
+    const run = (multi: boolean, labels: string, env: Record<string, string | undefined> = {}) => spawnSync('bash', ['-c', `
       set -euo pipefail
-      curl() { printf '%s' '{"labels":'"$LABELS"'}'; }
-      ${script}
+      curl() {
+        case "$*" in
+          */user) case "$*" in *review-token*) echo '{"username":"ai-reviewer"}' ;; *dev-token*) echo '{"username":"dev-bot"}' ;;
+            *) echo '{"username":"setup-user"}' ;; esac ;;
+          *) printf '%s' '{"labels":'"$LABELS"'}' ;;
+        esac
+      }
+      ${render(multi)}
       printf 'TOKEN=%s HANDLE=%s ROLE=%s\\n' "$GITLAB_TOKEN" "$AGENT_HANDLE" "$FACTORY_TEAMMATE_ROLE"
     `], {
       encoding: 'utf8',
-      env: {
-        PATH: process.env.PATH, FACTORY_ISSUE: '17', GITLAB_TOKEN: 'dev-token', GITLAB_DEV_TOKEN: 'dev-token',
-        GITLAB_REVIEWER_TOKEN: 'review-token', GITLAB_REVIEWER_HANDLE: 'ai-reviewer', AGENT_HANDLE: 'dev-bot',
+      env: Object.fromEntries(Object.entries({
+        PATH: process.env.PATH, FACTORY_ISSUE: '17', GITLAB_TOKEN: 'setup-token', GITLAB_DEV_TOKEN: 'dev-token',
+        GITLAB_REVIEWER_TOKEN: 'review-token', AGENT_HANDLE: 'dev-bot',
+        DMTOOLS_GITLAB_TEAMMATES: multi ? 'multiple' : 'single', ...(multi ? { GITLAB_REVIEWER_HANDLE: 'ai-reviewer' } : {}),
         CI_API_V4_URL: 'https://gitlab.example.com/api/v4', CI_PROJECT_ID: '1', LABELS: labels, ...env,
-      },
+      }).filter((entry): entry is [string, string] => entry[1] !== undefined)),
     });
-    const dev = run('["agent:dev"]');
+    const dev = run(true, '["agent:dev"]');
     assert.equal(dev.status, 0, dev.stderr);
-    assert.match(dev.stdout, /Development leg \(dev\): using GITLAB_DEV_TOKEN/);
+    assert.match(dev.stdout, /Using GITLAB_DEV_TOKEN as GITLAB_TOKEN \(GitLab user: dev-bot\)/);
+    assert.match(dev.stdout, /Development leg \(dev\): keeping the development token/);
     assert.match(dev.stdout, /TOKEN=dev-token HANDLE=dev-bot ROLE=dev/);
-    const rework = run('["agent:dev","agent:rework"]');
+    const rework = run(true, '["agent:dev","agent:rework"]');
     assert.match(rework.stdout, /TOKEN=dev-token HANDLE=dev-bot ROLE=dev/);
-    const review = run('["agent:dev","ai_developed","agent:review"]');
+    const review = run(true, '["agent:dev","ai_developed","agent:review"]');
     assert.equal(review.status, 0, review.stderr);
-    assert.match(review.stdout, /Review leg: using GITLAB_REVIEWER_TOKEN as ai-reviewer/);
+    assert.match(review.stdout, /Review leg: using GITLAB_REVIEWER_TOKEN as GITLAB_TOKEN \(GitLab user: ai-reviewer\)/);
     assert.match(review.stdout, /TOKEN=review-token HANDLE=ai-reviewer ROLE=reviewer/);
-    const inReview = run('["agent:review","status:In Review"]');
+    const inReview = run(true, '["agent:review","status:In Review"]');
     assert.match(inReview.stdout, /TOKEN=dev-token .*ROLE=dev/);
-    const explicit = run('["agent:dev"]', { FACTORY_LEG: 'review' });
+    const explicit = run(true, '["agent:dev"]', { FACTORY_LEG: 'review' });
     assert.match(explicit.stdout, /TOKEN=review-token HANDLE=ai-reviewer ROLE=reviewer/);
-    const missing = run('["agent:review"]', { GITLAB_REVIEWER_TOKEN: '' });
-    assert.notEqual(missing.status, 0);
-    assert.match(missing.stderr, /GITLAB_REVIEWER_TOKEN is required/);
-    const single = run('["agent:review"]', { GITLAB_REVIEWER_HANDLE: '' });
-    assert.match(single.stdout, /TOKEN=dev-token HANDLE=dev-bot ROLE=dev/);
+    const missingReviewer = run(true, '["agent:review"]', { GITLAB_REVIEWER_TOKEN: undefined });
+    assert.notEqual(missingReviewer.status, 0);
+    assert.match(missingReviewer.stderr, /GITLAB_REVIEWER_TOKEN is required/);
+    const missingDev = run(true, '["agent:dev"]', { GITLAB_DEV_TOKEN: undefined });
+    assert.notEqual(missingDev.status, 0);
+    assert.match(missingDev.stderr, /GITLAB_DEV_TOKEN is required in multi-teammate mode/);
+    const singleSetup = run(false, '["agent:review"]', { GITLAB_DEV_TOKEN: undefined, GITLAB_REVIEWER_TOKEN: undefined });
+    assert.equal(singleSetup.status, 0, singleSetup.stderr);
+    assert.match(singleSetup.stdout, /Using GITLAB_TOKEN as GITLAB_TOKEN \(GitLab user: setup-user\)/);
+    assert.match(singleSetup.stdout, /TOKEN=setup-token HANDLE=dev-bot ROLE=dev/);
+    const singleDev = run(false, '["agent:dev"]', { GITLAB_REVIEWER_TOKEN: undefined });
+    assert.match(singleDev.stdout, /TOKEN=dev-token HANDLE=dev-bot ROLE=dev/);
   });
 
   it('resolves AGENT_HANDLE from issue assignee display names before the teammate parent runs', () => {
