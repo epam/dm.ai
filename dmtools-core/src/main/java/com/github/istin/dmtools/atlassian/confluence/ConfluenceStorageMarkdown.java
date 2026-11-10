@@ -584,19 +584,59 @@ public final class ConfluenceStorageMarkdown {
             macro.replaceWith(doc.createElement("p").text(
                     "[Whiteboard (content not available via API)" + (url.isBlank() ? "" : ": " + url) + "]"));
         } else {
-            Element richBody = macro.getElementsByTag("ac:rich-text-body").first();
+            Element richBody = null;
+            String macroTitle = "";
+            for (Element child : macro.children()) {
+                String tag = child.tagName();
+                if ("ac:rich-text-body".equalsIgnoreCase(tag) && richBody == null) {
+                    richBody = child;
+                } else if ("ac:parameter".equalsIgnoreCase(tag)
+                        && ("title".equalsIgnoreCase(child.attr("ac:name"))
+                            || ("".equals(child.attr("ac:name")) && "expand".equals(macroName)))) {
+                    macroTitle = child.text().trim();
+                }
+            }
+            if (richBody == null) {
+                richBody = macro.getElementsByTag("ac:rich-text-body").first();
+            }
             if (richBody != null) {
-                // Macro configuration (ac:parameter) never belongs inside the rendered
-                // body — strip it before unwrapping so it cannot leak as text, even
-                // before the next iteration gets a chance to process nested macros.
-                richBody.getElementsByTag("ac:parameter").remove();
+                // Direct child parameters of rich-text-body never belong inside the rendered
+                // body — strip them before unwrapping, while preserving parameters of nested
+                // inner <ac:structured-macro> elements for the next resolution iteration.
+                for (Element child : new ArrayList<>(richBody.children())) {
+                    if ("ac:parameter".equalsIgnoreCase(child.tagName())) {
+                        child.remove();
+                    }
+                }
                 Element div = doc.createElement("div");
-                div.html(richBody.html());
+                if (!macroTitle.isEmpty() && isTitledContainerMacro(macroName)) {
+                    Element titleParagraph = doc.createElement("p");
+                    Element strong = doc.createElement("strong");
+                    strong.text(macroTitle);
+                    titleParagraph.appendChild(strong);
+                    div.appendChild(titleParagraph);
+                }
+                div.append(richBody.html());
                 macro.replaceWith(div);
             } else {
                 // Remove unknown macros so their parameter text doesn't leak into Markdown.
                 macro.remove();
             }
+        }
+    }
+
+    private static boolean isTitledContainerMacro(String macroName) {
+        switch (macroName) {
+            case "expand":
+            case "panel":
+            case "info":
+            case "note":
+            case "warning":
+            case "tip":
+            case "details":
+                return true;
+            default:
+                return false;
         }
     }
 
