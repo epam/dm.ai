@@ -80,6 +80,9 @@ export const GITLAB_WORKFLOW_SOURCE = {
   ref: 'feat/gitlab-agent-workflows',
 } as const;
 
+/** Immutable dmtools-agentic-workflows commit pinned by the GitLab machine SM / teammate includes. */
+export const GITLAB_FACTORY_HOME_REF = 'd2f9002657abb56fc4f8bbeb62819b8811118ab3';
+
 /** Who merges machine PRs: the factory PAT, a separate PAT, or a GitHub App (job-scoped token). */
 export interface MergeIdentity {
   mode: 'factory' | 'token' | 'app';
@@ -695,6 +698,7 @@ export function renderGitlabMachineSmFiles(
 ): FactoryFile[] {
   const machineAuthor = c.gitlabMultipleTeammates ? c.gitlabDev : c.machine;
   const render = (template: string) => template
+    .replaceAll('@@FACTORY_HOME_REF@@', GITLAB_FACTORY_HOME_REF)
     .replaceAll('@@MACHINE_AUTHOR@@', machineAuthor)
     .replaceAll('@@GITLAB_TEAMMATES@@', c.gitlabMultipleTeammates ? 'multiple' : 'single')
     .replace(/^@@GITLAB_REVIEWER_HANDLE_VARIABLE@@\n/gm, c.gitlabMultipleTeammates

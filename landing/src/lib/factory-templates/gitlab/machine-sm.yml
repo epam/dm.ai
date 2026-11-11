@@ -1,5 +1,5 @@
 include:
-  - remote: https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/1a3b5f373654def6871a91bf616e0280d00c42b7/gitlab/factory-sm.yml
+  - remote: https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/@@FACTORY_HOME_REF@@/gitlab/factory-sm.yml
   - local: ai-teammate.yml
 
 workflow:
@@ -23,48 +23,14 @@ variables:
   FACTORY_LEG:
     value: ""
     description: Optional teammate leg (dev, bug, story, review, or rework); leave empty to derive it from issue/MR state.
+  FACTORY_HOME_REF: "@@FACTORY_HOME_REF@@"
   SM_MACHINE_AUTHOR: "@@MACHINE_AUTHOR@@"
   DMTOOLS_GITLAB_TEAMMATES: "@@GITLAB_TEAMMATES@@"
+  DMTOOLS_GITLAB_INSTALL_TOOLS: "true"
+  DMTOOLS_GITLAB_FACTORY_HELPERS: "true"
 
 default:
   image: eclipse-temurin:21-jdk
-  before_script:
-    - !reference [.dmtools-install-tools, script]
-    - !reference [.dmtools-use-dev-token, script]
-
-.dmtools-install-tools:
-  script:
-    - |
-      set -eu
-      apt-get -o Acquire::Retries=3 update
-      attempt=1
-      while ! apt-get -o Acquire::Retries=3 install -y --no-install-recommends curl jq git nodejs gh unzip tar coreutils; do
-        if [ "$attempt" -ge 3 ]; then
-          echo "Unable to install required tools after $attempt attempts" >&2
-          exit 1
-        fi
-        attempt=$((attempt + 1))
-        echo "Package install failed; refreshing apt indexes before retry $attempt" >&2
-        apt-get -o Acquire::Retries=3 update
-      done
-
-.dmtools-use-dev-token:
-  script:
-    - |
-      # Project/group CI/CD variables override job-level YAML variables, so a project GITLAB_TOKEN would win over a
-      # `GITLAB_TOKEN: $GITLAB_DEV_TOKEN` mapping. Select the development token at runtime instead.
-      if [ -n "${GITLAB_DEV_TOKEN:-}" ]; then
-        export GITLAB_TOKEN="$GITLAB_DEV_TOKEN"
-        token_name=GITLAB_DEV_TOKEN
-      elif [ "${DMTOOLS_GITLAB_TEAMMATES:-single}" = multiple ]; then
-        echo "GITLAB_DEV_TOKEN is required in multi-teammate mode; add it as a masked CI/CD variable" >&2
-        exit 1
-      else
-        token_name=GITLAB_TOKEN
-      fi
-      token_user="$(curl --fail --silent --header "PRIVATE-TOKEN: ${GITLAB_TOKEN:-}" "$CI_API_V4_URL/user" 2>/dev/null \
-        | jq -r '.username // empty' 2>/dev/null || true)"
-      echo "Using $token_name as GITLAB_TOKEN (GitLab user: ${token_user:-unknown})"
 
 factory-sm:
   extends: .factory-sm
@@ -77,3 +43,6 @@ factory-sm:
     - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_SM == "true"'
       variables:
         SM_DRY_RUN: "true"
+  variables:
+    # Job variables inherited from .factory-sm override global ones, so restate the machine author here.
+    SM_MACHINE_AUTHOR: "@@MACHINE_AUTHOR@@"

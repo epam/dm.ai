@@ -86,6 +86,10 @@ configuration is preserved; review the setup MR and ensure
 the pipeline. The root pipeline includes the pinned `gitlab/factory-sm.yml`
 parent and the local teammate caller. Both parent templates are pinned to the
 same immutable commit from the GitLab-support branch of dmtools-agentic-workflows. The
+generated files are thin callers: tool installation, token selection, the
+queue scan, and the teammate helpers described below live in the shared parents
+and are enabled by `DMTOOLS_GITLAB_INSTALL_TOOLS: "true"` and
+`DMTOOLS_GITLAB_FACTORY_HELPERS: "true"` in `.gitlab-ci.yml`. The
 included `factory-sm` job runs on schedules; to run it manually, start a web pipeline with
 `DMTOOLS_MACHINE_SM=true`. Scheduled runs apply actions; manual machine-SM
 runs default to dry-run. Set `SM_DRY_RUN=false` in the manual pipeline
@@ -105,13 +109,14 @@ match the immutable commit used by `ai-teammate.yml`.
 To automatically run the `dev` or `rework` teammate for queued issues, create a pipeline
 schedule in **Build → Pipeline schedules** on the default branch with cron
 `*/10 * * * *`. Every scheduled pipeline automatically runs both `factory-sm`
-and `ai-teammate-scan`; no scan opt-in variable or issue IID is required.
+and the shared parent's `ai-teammate-scan`; no scan opt-in variable or issue IID is required.
 The scan selects open issues with the `agent:rework` label, regardless of
 assignment, or with the `agent:dev` label assigned to an account
 whose username or display name is `ai-dev`, including project bots with
 generated usernames. Set `DMTOOLS_AI_DEV_USERNAME` only to override that
 assignee selector (an exact username is recommended if display names are
-ambiguous). The scan starts one API pipeline per matching issue and passes
+ambiguous). The scan also queues review and rework for open merge requests.
+It starts one API pipeline per matching issue or MR and passes
 the resolved actual username as `AGENT_HANDLE` to `ai-teammate-auto`, which
 extends the shared teammate parent. The parent checks whether the issue is
 eligible and derives the leg from live labels (`agent:rework` takes precedence).
@@ -172,7 +177,8 @@ both teammate jobs close the cycle on the linked counterpart too, like GitHub's
 `close-rework-cycle.sh` and `close-review-cycle.sh`. The parent relabels only
 the issue or MR it ran on. This step also removes `agent:rework` and
 `status:In Rework` (or `agent:review` and `status:In Review`) from the linked
-MR or issue. The link comes from the issue's open related MR (preferring
+MR or issue. A failed or canceled rework removes only `status:In Rework`, so
+`agent:rework` stays and the rework is retried. The link comes from the issue's open related MR (preferring
 `ai/gl-<IID>`), or from the MR's `Closes #<IID>` reference or `ai/gl-<IID>`
 branch. After a successful rework, the MR's `ai_validated`, `ai_validating`,
 `validation_failed`, `ai_pr_reviewed`, and `pr_approved` labels are cleared,
@@ -201,14 +207,14 @@ masked `GITLAB_TOKEN` and
 resolve and download the DMTools CLI and agent-pack releases.
 Project and group CI/CD variables take precedence over job `variables:` in
 `.gitlab-ci.yml`, so tokens are selected in the job script, not by YAML
-mapping. Every job's `before_script` (`.dmtools-use-dev-token`) exports
+mapping. Every job's shared `before_script` exports
 `GITLAB_DEV_TOKEN` as `GITLAB_TOKEN` whenever it is set (in either mode), for
 the machine SM, scanning, development, rework, pushes and MR creation, and logs
 the token name and its GitLab user. In multi-teammate mode
 (`DMTOOLS_GITLAB_TEAMMATES: "multiple"`) the job fails if `GITLAB_DEV_TOKEN` is
 missing. Before a review leg (`FACTORY_LEG=review`, or an `agent:review` label
 without `status:In Review`), `ai-teammate` and `ai-teammate-auto` switch
-`GITLAB_TOKEN` to `GITLAB_REVIEWER_TOKEN` (and, in multi-teammate mode,
+`GITLAB_TOKEN` to `GITLAB_REVIEWER_TOKEN` whenever it is set (and, in multi-teammate mode,
 `AGENT_HANDLE` to the reviewer account), so review notes, MR comments and label
 changes come from the reviewer. In multi-teammate mode the job fails if
 `GITLAB_REVIEWER_TOKEN` is missing on a review leg.
