@@ -78,8 +78,15 @@ The folders separate platform-specific workflows from reusable configuration:
 - [`gitlab/ai-teammate.yml`](src/lib/factory-templates/gitlab/ai-teammate.yml): the issue/MR teammate caller that extends the pinned `gitlab/factory-teammate.yml` parent.
 - [`shared/`](src/lib/factory-templates/shared/): runner JSON templates and agent configuration used by both platforms.
 
-GitLab setup generates `.gitlab-ci.yml`, `ai-teammate.yml`,
-`.dmtools/config.js`, and GitLab-compatible runner JSON files under
+GitLab setup targets the project's default branch because the shared scan and
+teammate dispatches run on that branch. It inspects the branch's CI
+configuration and its resolved includes. It updates the existing CI file while
+preserving project jobs and settings, or creates `.gitlab-ci.yml` if no
+configuration exists. A custom CI
+path is supported when it points to a file in the same project; external CI
+configuration paths and conflicting unmanaged factory files or jobs must be
+resolved before setup. Setup generates or updates its managed `ai-teammate.yml`
+and creates `.dmtools/config.js` and GitLab-compatible runner JSON files under
 `.dmtools/runners/` when they do not already exist. Existing `.dmtools/`
 configuration is preserved; review the setup MR and ensure
 `.dmtools/config.js` points to GitLab-compatible runner files before running
@@ -89,16 +96,97 @@ same immutable commit from the GitLab-support branch of dmtools-agentic-workflow
 generated files are thin callers: tool installation, token selection, the
 queue scan, and the teammate helpers described below live in the shared parents
 and are enabled by `DMTOOLS_GITLAB_INSTALL_TOOLS: "true"` and
-`DMTOOLS_GITLAB_FACTORY_HELPERS: "true"` in `.gitlab-ci.yml`. The
-included `factory-sm` job runs on schedules; to run it manually, start a web pipeline with
-`DMTOOLS_MACHINE_SM=true`. Scheduled runs apply actions; manual machine-SM
+`DMTOOLS_GITLAB_FACTORY_HELPERS: "true"` in the project CI file. The
+included `factory-sm` job runs on the managed schedule; to run it manually,
+start a web pipeline with `DMTOOLS_MACHINE_SM=true`. Scheduled runs apply
+actions; manual machine-SM
 runs default to dry-run. Set `SM_DRY_RUN=false` in the manual pipeline
 variables to apply actions.
+
+### GitLab CI & quality gate
+
+The GitLab factory observes the **whole pipeline for the merge request's
+current head**, rather than dispatching a named workflow or checking selected
+jobs as on GitHub. All required project checks must run in merge-request
+pipelines; branch-only jobs are not included automatically.
+
+In Step 4, choose **Existing pipeline** to keep using the project's CI,
+**Generate crap4* quality gate** to add `.dmtools-factory-quality.yml`, or
+**No generated gate** to add no new quality job. The generated job runs in
+merge-request pipelines and supports JavaScript/TypeScript, Dart/Flutter, Java,
+Python, and Go. Select the matching stack and toolchain version; a mismatched
+repository fails the job. The Java preset requires Maven, and the JavaScript
+analyzer requires Node.js 22 or newer. As with the existing quality templates,
+coverage and CRAP analysis can be skipped when a project has no tests; missing
+coverage after tests run fails the generated job.
+
+No generated gate does **not** disable pipeline validation: any existing MR
+pipeline still determines the validation status, and an MR without a head
+pipeline cannot be marked validated. Existing pipeline mode requires an
+existing project CI file. For a generated gate, setup adds an MR pipeline
+workflow rule directly to the root configuration. Review the setup MR and
+make sure existing project jobs also have MR-compatible rules.
+
+### GitLab agent toolchains
+
+As on GitHub, Step 5 **Frameworks & tools** selects the SDKs available to the
+agent legs. Nothing is selected by default. In GitLab, the selected Java version
+chooses the `eclipse-temurin:<version>-jdk` image for the `ai-teammate` and
+`ai-teammate-auto` jobs (`21` when Java is unselected). Selected Node.js,
+Python (via `uv`), Go, and Flutter SDKs are downloaded by the generated
+`.dmtools-teammate-toolchains` script after the parent `before_script` and
+added to `PATH` for the agent. Runners must be Linux `amd64` or `arm64` with
+outbound access to the SDK download sites. Choosing a crap4* preset in Step 4
+also selects its toolchain.
+
+### GitLab runner and merge identity
+
+Step 5 **Runner** is the GitLab counterpart of the GitHub `runs-on` label:
+the selected job `tags:` are applied to every factory job (`factory-sm`,
+`ai-teammate-scan`, `ai-teammate`, `ai-teammate-auto`,
+`dmtools-factory-merge`, and `dmtools-quality`). The default, **Project
+default runners (no tags)**, leaves the jobs untagged. The list offers the
+GitLab.com hosted `saas-linux-*` tags; self-managed runners use **Custom
+tags…** (comma-separated). Re-running setup with no tags removes the managed
+jobs' previous tags.
+
+**Merge identity** controls the generated `dmtools-factory-merge` job in
+`ai-teammate.yml`, the GitLab counterpart of GitHub's `factory-merge`
+workflow. It runs on the managed factory schedule. To run it manually, start
+a web pipeline on the default branch with `DMTOOLS_MACHINE_MERGE=true`. It
+merges an open, non-draft MR into the default branch only if all of these
+hold:
+
+- The MR has both `pr_approved` and `ai_validated`.
+- It has none of the hold, active-leg or validation labels: `blocked`,
+  `agent:skip`, `provider_quota`, `needs-human`, `agent:review`,
+  `agent:rework`, `status:In Review`, `status:In Rework`, `ai_validating`,
+  `validation_failed`.
+- Its head pipeline is green on the current head SHA.
+- GitLab reports it `mergeable`.
+- The latest `pr_approved` label event is newer than the MR's latest diff
+  version, so a push after approval blocks the merge.
+
+The merge is pinned to the checked SHA. It squashes unless the project's squash
+option is **Do not allow**. A failed merge fails the job after the other MRs
+are processed. Set `DMTOOLS_MERGE_DRY_RUN=true` to log decisions without
+merging.
+
+There are two identities:
+
+- **Factory token** merges with `GITLAB_TOKEN`, or with `GITLAB_DEV_TOKEN` in
+  multi-teammate mode.
+- **Separate token** reads the named masked CI/CD variable (default
+  `GITLAB_MERGE_TOKEN`). It is typically a project or group access token,
+  which gives merges their own bot identity.
+
+GitHub Apps have no GitLab equivalent, so the App option is GitHub-only. Either
+token's user must be allowed to merge into the protected default branch.
 
 The `ai-teammate` job supports one project-local issue or merge-request IID.
 In GitLab, open **Build → Pipelines → Run pipeline**, select the default
 branch, enter an IID in either `FACTORY_ISSUE` or `FACTORY_MR` (not both),
-then run the pipeline. These variables are declared in `.gitlab-ci.yml` so
+then run the pipeline. These variables are declared in the project CI file so
 GitLab exposes them in the run form. Web, API, and trigger pipelines are
 supported. Leave
 `FACTORY_LEG` empty to let the parent derive the action from the issue/MR
@@ -106,10 +194,19 @@ labels and machine assignment, or set it to `dev`, `bug`, `story`, `review`,
 or `rework`. The parent requires the include SHA in `FACTORY_HOME_REF` to
 match the immutable commit used by `ai-teammate.yml`.
 
-To automatically run the `dev` or `rework` teammate for queued issues, create a pipeline
-schedule in **Build → Pipeline schedules** on the default branch with cron
-`*/10 * * * *`. Every scheduled pipeline automatically runs both `factory-sm`
-and the shared parent's `ai-teammate-scan`; no scan opt-in variable or issue IID is required.
+Setup creates or updates the managed pipeline schedule in **Build → Pipeline
+schedules** for the target branch with cron `*/10 * * * *` and the variable
+`DMTOOLS_FACTORY_SCHEDULE=true`. The marker allows the factory schedule through
+restrictive existing workflow rules without enabling unrelated schedules.
+GitLab lets only a schedule's owner edit it or see its variables, and scheduled
+pipelines run as the owner, so setup takes ownership of an existing managed
+schedule for the setup token's account before updating it. If the marker is
+missing, the factory jobs match no rules and GitLab silently creates no
+pipeline, even from the schedule's **Run** action.
+Keep this variable if recreating the schedule manually. The managed schedule
+runs `factory-sm`, the shared parent's `ai-teammate-scan`, and the
+`dmtools-factory-merge` merge bot; no scan
+opt-in variable or issue IID is required.
 The scan selects open issues with the `agent:rework` label, regardless of
 assignment, or with the `agent:dev` label assigned to an account
 whose username or display name is `ai-dev`, including project bots with
@@ -206,7 +303,7 @@ masked `GITLAB_TOKEN` and
 `write_repository` scopes plus project access; the GitHub token is used to
 resolve and download the DMTools CLI and agent-pack releases.
 Project and group CI/CD variables take precedence over job `variables:` in
-`.gitlab-ci.yml`, so tokens are selected in the job script, not by YAML
+the project CI file, so tokens are selected in the job script, not by YAML
 mapping. Every job's shared `before_script` exports
 `GITLAB_DEV_TOKEN` as `GITLAB_TOKEN` whenever it is set (in either mode), for
 the machine SM, scanning, development, rework, pushes and MR creation, and logs

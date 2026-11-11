@@ -43,6 +43,7 @@ import {
 } from '../src/lib/factory.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
+const gitlabRevision = 'a'.repeat(40);
 const gitlabTemplates = Object.fromEntries(GITLAB_TEMPLATE_NAMES.map((name) => [
   name, readFileSync(resolve(here, 'fixtures/gitlab', name), 'utf8'),
 ])) as GitlabTemplates;
@@ -170,7 +171,7 @@ describe('GitLab parent workflow loading', () => {
     assert.match(teammate, /^ai-teammate-auto:[\s\S]*?\$DMTOOLS_AI_TEAMMATE_SCAN == "true" && \(\(\$FACTORY_ISSUE != "" && \$FACTORY_MR == ""\) \|\| \(\$FACTORY_ISSUE == "" && \$FACTORY_MR != ""\)\)'/m,
       'scan dispatches issue and MR review/rework anchors');
     assert.doesNotMatch(teammate, /^ai-teammate-scan:|^\.ai-teammate-/m, 'scan and helper jobs come from the shared template');
-    assert.doesNotMatch(teammate, /curl |jq |apt-get/, 'teammate caller must not duplicate shared shell logic');
+    assert.doesNotMatch(teammate.split(/^# Merge bot:/m)[0], /curl |jq |apt-get/, 'teammate caller must not duplicate shared shell logic');
     assert.doesNotMatch(teammate, /@@GITLAB_TOKEN_MAPPING@@/);
     assert.doesNotMatch(teammate, /@@[A-Z_]+@@/);
     const machineConfig = files.find((file) => file.path === '.dmtools/config.js')!;
@@ -227,7 +228,9 @@ describe('GitLab parent workflow loading', () => {
       assert.doesNotMatch(content, /@@/);
     }
     for (const content of [machineSm, multiMachineSm]) {
-      assert.match(content, /default:\n  image: [^\n]+\n\n/);
+      assert.doesNotMatch(content, /^default:/m);
+      assert.match(content, /^factory-sm:\n  extends: \.factory-sm\n  image: eclipse-temurin:21-jdk/m);
+      assert.match(content, /^ai-teammate-scan:\n  image: eclipse-temurin:21-jdk/m);
     }
     assert.match(multiTeammate, /ai-teammate:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
     assert.match(multiTeammate, /ai-teammate-auto:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
@@ -253,6 +256,9 @@ describe('GitLab parent workflow loading', () => {
       if (url.endsWith('/projects/team%2Fapp')) {
         return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
       }
+      if (url.endsWith('/repository/branches/main')) {
+        return Response.json({ commit: { id: gitlabRevision } });
+      }
       if (url.endsWith('/merge_requests')) {
         return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
       }
@@ -262,7 +268,8 @@ describe('GitLab parent workflow loading', () => {
       return new Response(JSON.stringify({ id: 1 }), { status: 201 });
     }) as typeof fetch;
     try {
-      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig());
+      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com',
+        validConfig({ repo: 'team/app', ciEnabled: false }));
       assert.ok(calls.some((url) => url.endsWith('/repository/commits')));
       assert.ok(!calls.some((url) => url.startsWith('https://raw.githubusercontent.com/')));
     } finally {
@@ -279,6 +286,9 @@ describe('GitLab parent workflow loading', () => {
       if (url.endsWith('/projects/team%2Fapp')) {
         return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
       }
+      if (url.endsWith('/repository/branches/main')) {
+        return Response.json({ commit: { id: gitlabRevision } });
+      }
       if (url.includes('/repository/files/.dmtools%2Fconfig.js?') ||
           url.includes('/repository/files/.dmtools%2Frunners%2Ffa-bug-dev.json?')) {
         return new Response(JSON.stringify({ file_name: 'config.js' }), { status: 200 });
@@ -292,7 +302,8 @@ describe('GitLab parent workflow loading', () => {
       return new Response(JSON.stringify({ id: 1 }), { status: 201 });
     }) as typeof fetch;
     try {
-      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig(), (message) => logs.push(message));
+      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com',
+        validConfig({ repo: 'team/app', ciEnabled: false }), (message) => logs.push(message));
       const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
       const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string }[];
       assert.ok(!actions.some((action) => action.file_path === '.dmtools/config.js'));
@@ -1018,6 +1029,9 @@ describe('Source control options', () => {
         if (url.endsWith('/projects/team%2Fapp')) {
           return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
         }
+        if (url.endsWith('/repository/branches/main')) {
+          return Response.json({ commit: { id: gitlabRevision } });
+        }
         if (url.endsWith('/merge_requests')) {
           return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
         }
@@ -1032,7 +1046,7 @@ describe('Source control options', () => {
           'glpat_test-token-123456789',
           'team/app',
           'https://gitlab.example.com',
-          validConfig({ repo: 'team/app', baseBranch: 'main' }),
+          validConfig({ repo: 'team/app', baseBranch: 'main', ciEnabled: false }),
           () => {},
         );
         assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
@@ -1040,12 +1054,12 @@ describe('Source control options', () => {
         const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string; content: string }[];
         assert.deepEqual(
           actions.map((file) => file.file_path),
-          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' }), 'https://gitlab.example.com')
+          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main', ciEnabled: false }), 'https://gitlab.example.com')
             .map((file) => file.path),
         );
         assert.deepEqual(
           actions.map(({ file_path, content }) => ({ path: file_path, content })),
-          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' }), 'https://gitlab.example.com')
+          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main', ciEnabled: false }), 'https://gitlab.example.com')
             .map(({ path, content }) => ({ path, content })),
         );
         const storyRunner = JSON.parse(

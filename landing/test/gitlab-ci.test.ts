@@ -1,0 +1,1036 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { isMap, isSeq, parse, parseDocument } from 'yaml';
+import {
+  GITLAB_QUALITY_FILE,
+  createGitlabMergeRequest,
+  defaults,
+  gitlabPrBody,
+  inspectGitlabCi,
+  renderGitlabMachineSmFiles,
+  requiredSecrets,
+  validate,
+  type FactoryConfig,
+  type GitlabCiSnapshot,
+} from '../src/lib/factory.ts';
+
+const config = (overrides: Partial<FactoryConfig> = {}): FactoryConfig => ({
+  ...defaults, repo: 'team/app', ...overrides,
+});
+const revision = 'a'.repeat(40);
+
+const snapshot = (content: string | null, mergedYaml = content, overrides: Partial<GitlabCiSnapshot> = {}): GitlabCiSnapshot => ({
+  repo: 'team/app',
+  baseUrl: 'https://gitlab.example.com',
+  path: '.gitlab-ci.yml',
+  ref: 'main',
+  revision,
+  content,
+  mergedYaml,
+  qualityContent: null,
+  teammateContent: null,
+  fileVersions: content === null ? {} : { '.gitlab-ci.yml': 'original-commit' },
+  ...overrides,
+});
+
+const existingCi = `# Existing project pipeline
+stages: [compile, verify]
+include:
+  - local: shared.yml
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - when: never
+variables:
+  PROJECT_SETTING: keep-me
+default:
+  image: alpine:3.20
+compile:
+  stage: compile
+  script:
+    - echo "project build"
+`;
+
+const qualityCases = [
+  { preset: 'crap4js', tool: 'node', version: '24', image: 'node:24', command: 'github:IstiN/crap4js' },
+  { preset: 'crap4dart', tool: 'flutter', version: 'beta', image: 'ubuntu:24.04', command: 'crap4dart analyze' },
+  { preset: 'crap4java', tool: 'java', version: '17', image: 'eclipse-temurin:17-jdk', command: 'crap4java' },
+  { preset: 'crap4py', tool: 'python', version: '3.13', image: 'python:3.13', command: 'crap4py' },
+  { preset: 'crap4go', tool: 'go', version: '1.24', image: 'golang:1.24', command: 'crap4go' },
+] as const;
+
+describe('GitLab factory quality gates', () => {
+  for (const { preset, tool, version, image, command } of qualityCases) {
+    it(`generates a runnable ${preset} MR job using the selected version`, () => {
+      const files = renderGitlabMachineSmFiles(config({ qualityPreset: preset, toolchains: { [tool]: version } }));
+      const pipeline = parse(files.find((file) => file.path === '.gitlab-ci.yml')!.content);
+      const quality = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'];
+
+      assert.ok(pipeline.include.some((entry: { local?: string }) => entry.local === GITLAB_QUALITY_FILE));
+      assert.ok(pipeline.workflow.rules.some((rule: { if?: string }) => rule.if === '$CI_PIPELINE_SOURCE == "merge_request_event"'));
+      assert.equal(quality.stage, 'test');
+      assert.equal(quality.image, image);
+      assert.deepEqual(quality.needs, []);
+      assert.equal(quality.allow_failure, false);
+      assert.deepEqual(quality.rules, [{ if: '$CI_PIPELINE_SOURCE == "merge_request_event"' }]);
+      assert.match(quality.script[0], new RegExp(command.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      const syntax = spawnSync('bash', ['-n'], { input: quality.script[0], encoding: 'utf8' });
+      assert.equal(syntax.status, 0, syntax.stderr);
+    });
+  }
+
+  it('runs Flutter-specific analysis and tests for Flutter projects', () => {
+    const files = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4dart' }));
+    const quality = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'];
+    assert.match(quality.script[0], /flutter pub get/);
+    assert.match(quality.script[0], /flutter analyze/);
+    assert.match(quality.script[0], /flutter test --coverage/);
+    assert.match(quality.script[0], /dart pub global run crap4dart:crap4dart analyze/);
+  });
+
+  it('rejects unsupported Node.js versions for GitLab without changing GitHub validation', () => {
+    const cfg = config({ qualityPreset: 'crap4js', toolchains: { node: '20' } });
+    assert.match(validate(cfg, 'gitlab').qualityVersion, /Node\.js 22 or newer/);
+    assert.equal(validate(cfg, 'github').qualityVersion, undefined);
+    assert.throws(() => renderGitlabMachineSmFiles(cfg), /Node\.js 22 or newer/);
+    assert.equal(validate({ ...cfg, ciEnabled: false }, 'gitlab').qualityVersion, undefined);
+  });
+
+  it('fails every generated job if the selected stack does not match the repository', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-quality-'));
+    try {
+      for (const preset of ['crap4js', 'crap4dart', 'crap4java', 'crap4py', 'crap4go'] as const) {
+        const files = renderGitlabMachineSmFiles(config({ qualityPreset: preset }));
+        const quality = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'];
+        const result = spawnSync('bash', ['-e', '-c', quality.script[0]], { cwd: dir, encoding: 'utf8' });
+        assert.equal(result.status, 1, preset);
+        assert.match(result.stderr, /Configured quality gate does not match this repository/, preset);
+      }
+    } finally {
+      rmdirSync(dir);
+    }
+  });
+
+  it('does not generate a quality job when no gate is selected or CI is disabled', () => {
+    for (const cfg of [config(), config({ ciEnabled: false, qualityPreset: 'crap4js' })]) {
+      const files = renderGitlabMachineSmFiles(cfg);
+      assert.ok(!files.some((file) => file.path === GITLAB_QUALITY_FILE));
+      assert.doesNotMatch(files[0].content, /dmtools-quality|merge_request_event/);
+    }
+    assert.match(gitlabPrBody(config({ ciEnabled: false })), /existing merge-request pipelines are still observed/);
+    assert.match(gitlabPrBody(config({ ciEnabled: false })), /without a head pipeline/);
+  });
+
+  it('runs factory jobs only on the managed schedule, not unrelated project schedules', () => {
+    const root = parse(renderGitlabMachineSmFiles(config())[0].content);
+    const factorySchedule = root['factory-sm'].rules.find((rule: { if?: string }) => rule.if?.includes('"schedule"'));
+    const scanSchedule = root['ai-teammate-scan'].rules.find((rule: { if?: string }) => rule.if?.includes('"schedule"'));
+    assert.match(factorySchedule.if, /\$DMTOOLS_FACTORY_SCHEDULE == "true"/);
+    assert.match(scanSchedule.if, /\$DMTOOLS_FACTORY_SCHEDULE == "true"/);
+    assert.match(scanSchedule.if, /\$CI_COMMIT_BRANCH == \$CI_DEFAULT_BRANCH/);
+    assert.ok(root['factory-sm'].rules.some((rule: { if?: string }) => rule.if?.includes('$DMTOOLS_MACHINE_SM')));
+  });
+
+  it('fails JavaScript jobs if tests produce no coverage and propagates analyzer failures', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-quality-js-'));
+    try {
+      mkdirSync(join(dir, 'bin'));
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+      writeFileSync(join(dir, 'bin/npm'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/npx'), `#!/bin/sh
+if [ "$1" = c8 ]; then
+  if [ "\${OMIT_COVERAGE:-}" != 1 ]; then mkdir -p coverage; echo '{}' > coverage/coverage-final.json; fi
+  exit 0
+fi
+exit "\${GATE_EXIT:-0}"
+`, { mode: 0o755 });
+      const files = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }));
+      const script = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'].script[0];
+      const env = { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` };
+      const missing = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, OMIT_COVERAGE: '1' }, encoding: 'utf8' });
+      assert.equal(missing.status, 1);
+      assert.match(missing.stderr, /Missing JavaScript coverage data/);
+      const failingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, GATE_EXIT: '2' }, encoding: 'utf8' });
+      assert.equal(failingGate.status, 2);
+      const passingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env, encoding: 'utf8' });
+      assert.equal(passingGate.status, 0, passingGate.stderr);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('installs official Flutter releases and runs Flutter coverage with the Dart analyzer', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-quality-dart-'));
+    try {
+      const bin = join(dir, 'bin');
+      const fx = join(dir, 'fx');
+      const project = join(dir, 'project');
+      mkdirSync(bin);
+      mkdirSync(join(project, 'test'), { recursive: true });
+      writeFileSync(join(project, 'pubspec.yaml'), 'environment:\n  sdk: ^3.13.7\ndependencies:\n  flutter:\n    sdk: flutter\n');
+      writeFileSync(join(project, 'test/example_test.dart'), '');
+      const tool = (path: string, body: string) => {
+        mkdirSync(join(path, '..'), { recursive: true });
+        writeFileSync(path, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+      };
+      tool(join(fx, 'flutter/bin/flutter'), `echo "flutter $*" >> "$TEST_LOG"
+if [ "$1" = test ] && [ "\${OMIT_COVERAGE:-}" != 1 ]; then mkdir -p coverage; echo 'SF:lib/example.dart' > coverage/lcov.info; fi`);
+      tool(join(fx, 'flutter/bin/cache/dart-sdk/bin/dart'), `echo "dart $*" >> "$TEST_LOG"
+if [ "$1" = format ]; then exit "\${FORMAT_EXIT:-0}"; fi
+if [ "$4" = crap4dart:crap4dart ]; then exit "\${GATE_EXIT:-0}"; fi`);
+      const packed = spawnSync('tar', ['-cJf', join(fx, 'flutter.txz'), '-C', fx, 'flutter'], { encoding: 'utf8' });
+      assert.equal(packed.status, 0, packed.stderr);
+      writeFileSync(join(fx, 'releases.json'), JSON.stringify({
+        base_url: 'https://storage.example/releases',
+        current_release: { stable: 'new', beta: 'beta' },
+        releases: [{ hash: 'new', channel: 'stable', archive: 'stable/linux/flutter_3.47.9-stable.tar.xz', dart_sdk_version: '3.13.7' }],
+      }));
+      tool(join(bin, 'uname'), 'echo x86_64');
+      tool(join(bin, 'apt-get'), 'echo "apt-get $*" >> "$TEST_LOG"');
+      tool(join(bin, 'git'), 'echo "git $*" >> "$TEST_LOG"');
+      tool(join(bin, 'curl'), `for arg; do url="$arg"; done
+case "$url" in
+  https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json) cat "${fx}/releases.json" ;;
+  https://storage.example/releases/stable/linux/flutter_3.47.9-stable.tar.xz) cat "${fx}/flutter.txz" ;;
+  *) exit 22 ;;
+esac`);
+      const files = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4dart' }));
+      const quality = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'];
+      assert.equal(quality.image, 'ubuntu:24.04');
+      assert.doesNotMatch(quality.script[0], /cirruslabs/);
+      const env = { ...process.env, HOME: dir, PATH: `${bin}:${process.env.PATH}`, TEST_LOG: join(dir, 'calls') };
+      const run = (extra: Record<string, string> = {}) =>
+        spawnSync('bash', ['-c', quality.script[0]], { cwd: project, env: { ...env, ...extra }, encoding: 'utf8' });
+      const missing = run({ OMIT_COVERAGE: '1' });
+      assert.equal(missing.status, 1);
+      assert.match(missing.stderr, /Missing Dart coverage data/);
+      assert.equal(run({ GATE_EXIT: '2' }).status, 2);
+      const unformatted = run({ FORMAT_EXIT: '1' });
+      assert.equal(unformatted.status, 1);
+      assert.match(unformatted.stderr, /Dart formatting check failed: run 'dart format \.'/);
+      const passing = run();
+      assert.equal(passing.status, 0, passing.stderr);
+      const calls = readFileSync(join(dir, 'calls'), 'utf8');
+      assert.match(calls, /apt-get .*install -y --no-install-recommends ca-certificates curl git jq unzip xz-utils/);
+      assert.match(calls, /flutter pub get/);
+      assert.match(calls, /flutter analyze/);
+      assert.match(calls, /flutter test --coverage/);
+      assert.match(calls, /dart pub global run crap4dart:crap4dart analyze/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('handles Python test outcomes and propagates analyzer failures', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-quality-python-'));
+    try {
+      mkdirSync(join(dir, 'bin'));
+      writeFileSync(join(dir, 'example.py'), 'value = 1\n');
+      writeFileSync(join(dir, 'bin/python'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/pip'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/coverage'), `#!/bin/sh
+if [ "$1" = run ]; then exit "\${TEST_EXIT:-0}"; fi
+if [ "$1" = json ]; then echo '{}' > coverage.json; fi
+`, { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/crap4py'), '#!/bin/sh\necho "$*" >> "$TEST_LOG"\nexit "${GATE_EXIT:-0}"\n', { mode: 0o755 });
+      const files = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4py' }));
+      const script = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'].script[0];
+      const env = { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}`, TEST_LOG: join(dir, 'calls') };
+      const noTests = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, TEST_EXIT: '5' }, encoding: 'utf8' });
+      assert.equal(noTests.status, 0, noTests.stderr);
+      assert.match(noTests.stdout, /No tests collected/);
+      const failingTests = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, TEST_EXIT: '1' }, encoding: 'utf8' });
+      assert.equal(failingTests.status, 1);
+      const failingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, GATE_EXIT: '2' }, encoding: 'utf8' });
+      assert.equal(failingGate.status, 2);
+      const passingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env, encoding: 'utf8' });
+      assert.equal(passingGate.status, 0, passingGate.stderr);
+      assert.match(readFileSync(join(dir, 'calls'), 'utf8'), /--coverage coverage\.json/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('builds the Go analyzer from its actual module and propagates gate failures', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-quality-go-'));
+    try {
+      mkdirSync(join(dir, 'bin'));
+      writeFileSync(join(dir, 'go.mod'), 'module example\n');
+      writeFileSync(join(dir, 'main.go'), 'package main\n');
+      writeFileSync(join(dir, 'main_test.go'), 'package main\n');
+      writeFileSync(join(dir, 'bin/gofmt'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/git'), '#!/bin/sh\nmkdir -p "$5"\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/go'), `#!/bin/sh
+echo "$*" >> "$TEST_LOG"
+case "$1" in
+  test) if [ "\${OMIT_COVERAGE:-}" != 1 ]; then echo 'mode: atomic' > coverage.out; fi ;;
+  build) printf '#!/bin/sh\\nexit "\${GATE_EXIT:-0}"\\n' > "$3"; chmod +x "$3" ;;
+esac
+`, { mode: 0o755 });
+      const files = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4go' }));
+      const script = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'].script[0];
+      const env = { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}`, TMPDIR: dir, TEST_LOG: join(dir, 'calls') };
+      const missing = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, OMIT_COVERAGE: '1' }, encoding: 'utf8' });
+      assert.equal(missing.status, 1);
+      assert.match(missing.stderr, /Missing Go coverage data/);
+      const failingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, GATE_EXIT: '2' }, encoding: 'utf8' });
+      assert.equal(failingGate.status, 2);
+      const passingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env, encoding: 'utf8' });
+      assert.equal(passingGate.status, 0, passingGate.stderr);
+      const calls = readFileSync(join(dir, 'calls'), 'utf8');
+      assert.match(calls, /build -o .*crap4go/);
+      assert.doesNotMatch(calls, /install .*crap4go/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('analyzes Maven modules and fails if any module lacks JaCoCo coverage', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-quality-java-'));
+    try {
+      mkdirSync(join(dir, 'bin'));
+      mkdirSync(join(dir, 'module/src/main/java'), { recursive: true });
+      writeFileSync(join(dir, 'pom.xml'), '<project/>');
+      writeFileSync(join(dir, 'module/pom.xml'), '<project/>');
+      writeFileSync(join(dir, 'module/src/main/java/App.java'), 'class App {}');
+      writeFileSync(join(dir, 'bin/apt-get'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/git'), '#!/bin/sh\nmkdir -p "$5"\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/mvn'), '#!/bin/sh\nmkdir -p "$(dirname "$3")/target"\ntouch "$(dirname "$3")/target/crap4java-test.jar"\n', { mode: 0o755 });
+      writeFileSync(join(dir, 'bin/java'), `#!/bin/sh
+echo "$*" >> "$TEST_LOG"
+mkdir -p "$TEST_PROJECT/module/target/site/jacoco"
+echo '<report/>' > "$TEST_PROJECT/module/target/site/jacoco/jacoco.xml"
+exit "\${GATE_EXIT:-0}"
+`, { mode: 0o755 });
+      const files = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4java' }));
+      const script = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'].script[0];
+      const env = { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}`, TMPDIR: dir, TEST_LOG: join(dir, 'calls'), TEST_PROJECT: dir };
+      const passingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env, encoding: 'utf8' });
+      assert.equal(passingGate.status, 0, passingGate.stderr);
+      assert.match(readFileSync(join(dir, 'calls'), 'utf8'), /module\/src\/main\/java\/App\.java/);
+      mkdirSync(join(dir, 'module2/src/main/java'), { recursive: true });
+      writeFileSync(join(dir, 'module2/pom.xml'), '<project/>');
+      writeFileSync(join(dir, 'module2/src/main/java/App.java'), 'class App {}');
+      const missing = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env, encoding: 'utf8' });
+      assert.notEqual(missing.status, 0);
+      assert.match(missing.stderr, /Missing JaCoCo coverage for .\/module2/);
+      const failingGate = spawnSync('bash', ['-e', '-c', script], { cwd: dir, env: { ...env, GATE_EXIT: '2' }, encoding: 'utf8' });
+      assert.notEqual(failingGate.status, 0);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('rejects unsafe toolchain versions instead of interpolating them into YAML', () => {
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js', toolchains: { node: '22\nother: value' } })),
+      /Invalid GitLab quality toolchain version/,
+    );
+  });
+});
+
+describe('GitLab agent toolchains', () => {
+  const teammateFile = (cfg: FactoryConfig) =>
+    renderGitlabMachineSmFiles(cfg).find((file) => file.path === 'ai-teammate.yml')!.content;
+  const toolchainScript = (content: string) => {
+    const doc = parseDocument(content);
+    assert.deepEqual(doc.errors, []);
+    return (doc.toJS() as Record<string, { script: string[] }>)['.dmtools-teammate-toolchains'].script[0];
+  };
+
+  it('keeps the parent lifecycle unchanged when no toolchain is selected', () => {
+    const content = teammateFile(config()).split(/^# Merge bot:/m)[0];
+    assert.doesNotMatch(content, /dmtools-teammate-toolchains|before_script/);
+    assert.equal(content.match(/image: eclipse-temurin:21-jdk/g)?.length, 2);
+    assert.match(gitlabPrBody(config()), /Teammate jobs run on `eclipse-temurin:21-jdk`\./);
+  });
+
+  it('uses the selected Java image and installs the other selected SDKs after the parent before_script', () => {
+    const cfg = config({ toolchains: { java: '17', node: '24', python: '3.13', go: '1.24', flutter: 'beta' } });
+    const content = teammateFile(cfg);
+    const jobs = parseDocument(content).toJS() as Record<string, { image: string; before_script: unknown[]; extends: string }>;
+    for (const job of ['ai-teammate', 'ai-teammate-auto']) {
+      assert.equal(jobs[job].image, 'eclipse-temurin:17-jdk');
+      assert.equal(jobs[job].extends, '.factory-teammate');
+      assert.deepEqual(jobs[job].before_script, [['.factory-teammate', 'before_script'], ['.dmtools-teammate-toolchains', 'script']]);
+    }
+    assert.equal(content.match(/!reference \[\.factory-teammate, before_script\]/g)?.length, 2);
+    const script = toolchainScript(content);
+    for (const line of ['DMTOOLS_NODE_VERSION="24"', 'DMTOOLS_PYTHON_VERSION="3.13"', 'DMTOOLS_GO_VERSION="1.24"', 'DMTOOLS_FLUTTER_VERSION="beta"']) {
+      assert.ok(script.includes(line), line);
+    }
+    const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' });
+    assert.equal(syntax.status, 0, syntax.stderr);
+    assert.doesNotMatch(content, /@@/);
+    assert.match(gitlabPrBody(cfg), /`eclipse-temurin:17-jdk` and install Node\.js 24, Python 3\.13, Flutter beta, Go 1\.24/);
+  });
+
+  it('rejects unsupported versions and reserved toolchain job names', () => {
+    assert.throws(() => renderGitlabMachineSmFiles(config({ toolchains: { go: '1.24"\nx: y' } })), /Unsupported Go version/);
+    assert.throws(() => renderGitlabMachineSmFiles(config({ toolchains: { java: '8' } })), /Unsupported Java \(Temurin\) version/);
+    const ci = `${existingCi}.dmtools-teammate-toolchains:\n  script: [echo nope]\n`;
+    assert.throws(() => renderGitlabMachineSmFiles(config(), undefined, snapshot(ci)), /reserved for DMTools agent toolchains/);
+  });
+
+  it('installs the selected SDKs and exports them on PATH for the agent', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-toolchains-'));
+    try {
+      const bin = join(dir, 'bin');
+      const fixtures = join(dir, 'fixtures');
+      mkdirSync(bin);
+      const tool = (path: string, body: string) => {
+        mkdirSync(join(path, '..'), { recursive: true });
+        writeFileSync(path, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+      };
+      tool(join(fixtures, 'node/node-v24.1.0-linux-x64/bin/node'), 'echo node-24');
+      tool(join(fixtures, 'go/go/bin/go'), 'echo go-1.24');
+      tool(join(fixtures, 'flutter/flutter/bin/flutter'), 'echo "flutter $*"');
+      for (const [name, source, flag, entry] of [
+        ['node.tgz', 'node', '-czf', 'node-v24.1.0-linux-x64'],
+        ['go.tgz', 'go', '-czf', 'go'],
+        ['flutter.txz', 'flutter', '-cJf', 'flutter'],
+      ]) {
+        const packed = spawnSync('tar', [flag, join(fixtures, name), '-C', join(fixtures, source), entry], { encoding: 'utf8' });
+        assert.equal(packed.status, 0, packed.stderr);
+      }
+      writeFileSync(join(fixtures, 'node.json'), JSON.stringify([{ version: 'v25.0.0' }, { version: 'v24.1.0' }, { version: 'v24.0.0' }]));
+      writeFileSync(join(fixtures, 'go.json'), JSON.stringify([
+        { version: 'go1.25rc1', stable: false, files: [] },
+        { version: 'go1.24.3', stable: true, files: [
+          { os: 'darwin', arch: 'amd64', kind: 'archive', filename: 'go1.24.3.darwin-amd64.tar.gz' },
+          { os: 'linux', arch: 'amd64', kind: 'archive', filename: 'go1.24.3.linux-amd64.tar.gz' },
+        ] },
+      ]));
+      writeFileSync(join(fixtures, 'flutter.json'), JSON.stringify({
+        base_url: 'https://storage.example/releases',
+        current_release: { stable: 's1', beta: 'b1' },
+        releases: [
+          { hash: 's1', channel: 'stable', archive: 'stable/linux/flutter_stable.tar.xz' },
+          { hash: 'b1', channel: 'beta', archive: 'beta/linux/flutter_beta.tar.xz' },
+        ],
+      }));
+      writeFileSync(join(fixtures, 'uv-install.sh'), `mkdir -p "$UV_INSTALL_DIR"
+cat > "$UV_INSTALL_DIR/uv" <<'UV'
+#!/bin/sh
+prefix="$UV_PYTHON_INSTALL_DIR/cpython-$3/bin"
+case "$2" in
+  install) mkdir -p "$prefix"; printf "#!/bin/sh\\necho python-$3\\n" > "$prefix/python"; printf "#!/bin/sh\\necho pip-$3\\n" > "$prefix/pip"; chmod +x "$prefix/python" "$prefix/pip" ;;
+  find) echo "$prefix/python3.13" ;;
+esac
+UV
+chmod +x "$UV_INSTALL_DIR/uv"
+`);
+      tool(join(bin, 'uname'), 'echo "${FAKE_ARCH:-x86_64}"');
+      tool(join(bin, 'apt-get'), 'echo "apt-get $*" >> "$HOME/calls"');
+      tool(join(bin, 'git'), 'echo "git $*" >> "$HOME/calls"');
+      tool(join(bin, 'curl'), `for arg; do url="$arg"; done
+echo "curl $url" >> "$HOME/calls"
+case "$url" in
+  https://nodejs.org/dist/index.json) cat "${fixtures}/node.json" ;;
+  https://nodejs.org/dist/v24.1.0/node-v24.1.0-linux-x64.tar.gz) cat "${fixtures}/node.tgz" ;;
+  https://astral.sh/uv/install.sh) cat "${fixtures}/uv-install.sh" ;;
+  'https://go.dev/dl/?mode=json&include=all') cat "${fixtures}/go.json" ;;
+  https://go.dev/dl/go1.24.3.linux-amd64.tar.gz) cat "${fixtures}/go.tgz" ;;
+  https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json) cat "${fixtures}/flutter.json" ;;
+  https://storage.example/releases/beta/linux/flutter_beta.tar.xz) cat "${fixtures}/flutter.txz" ;;
+  *) echo "unexpected $url" >&2; exit 22 ;;
+esac`);
+      const script = toolchainScript(teammateFile(config({ toolchains: { node: '24', python: '3.13', go: '1.24', flutter: 'beta' } })));
+      const env = { ...process.env, HOME: dir, PATH: `${bin}:${process.env.PATH}` };
+      const run = spawnSync('bash', ['-c', `${script}\nnode; python; pip; go version; flutter run-check`], { env, encoding: 'utf8' });
+      assert.equal(run.status, 0, run.stderr);
+      const ln = run.stdout.trim().split('\n').slice(-5);
+      assert.deepEqual(ln, ['node-24', 'python-3.13', 'pip-3.13', 'go-1.24', 'flutter run-check']);
+      const calls = readFileSync(join(dir, 'calls'), 'utf8');
+      assert.match(calls, /apt-get .*install -y --no-install-recommends xz-utils/);
+      assert.match(calls, /git config --global --add safe.directory .*\.dmtools-toolchains\/flutter/);
+      assert.doesNotMatch(calls, /git clone/);
+
+      const unsupported = spawnSync('bash', ['-c', script], { env: { ...env, FAKE_ARCH: 'ppc64le' }, encoding: 'utf8' });
+      assert.equal(unsupported.status, 1);
+      assert.match(unsupported.stderr, /Unsupported runner architecture/);
+      const missing = toolchainScript(teammateFile(config({ toolchains: { node: '22' } })));
+      const missingRun = spawnSync('bash', ['-c', missing], { env, encoding: 'utf8' });
+      assert.equal(missingRun.status, 1);
+      assert.match(missingRun.stderr, /Node\.js 22 is not available/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('GitLab runner tags and merge identity', () => {
+  const jobs = (files: { path: string; content: string }[]) => Object.assign({},
+    ...files.filter((file) => file.path.endsWith('.yml')).map((file) => parse(file.content))) as Record<string, Record<string, unknown>>;
+  const factoryJobs = ['factory-sm', 'ai-teammate-scan', 'ai-teammate', 'ai-teammate-auto', 'dmtools-factory-merge', 'dmtools-quality'];
+
+  it('applies the selected runner tags to every factory job and clears them when reset', () => {
+    const tagged = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js', gitlabRunnerTags: ['saas-linux-medium-amd64'] }));
+    for (const name of factoryJobs) assert.deepEqual(jobs(tagged)[name].tags, ['saas-linux-medium-amd64'], name);
+    const untagged = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }));
+    for (const name of factoryJobs) assert.equal(jobs(untagged)[name].tags, undefined, name);
+
+    const custom = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js', gitlabRunnerTags: ['docker', 'linux'] }), 'https://gitlab.example.com', snapshot(existingCi));
+    assert.deepEqual(jobs(custom)['factory-sm'].tags, ['docker', 'linux']);
+    const next = snapshot(custom[0].content, custom[0].content, {
+      qualityContent: custom.find((file) => file.path === GITLAB_QUALITY_FILE)!.content,
+      teammateContent: custom.find((file) => file.path === 'ai-teammate.yml')!.content,
+    });
+    const reset = jobs(renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', next));
+    for (const name of factoryJobs) assert.equal(reset[name].tags, undefined, name);
+    assert.ok(reset.compile, 'existing project jobs are preserved');
+  });
+
+  it('validates GitLab runner tags without affecting the GitHub runner label', () => {
+    assert.equal(validate(config({ gitlabRunnerTags: ['docker', 'linux'] }), 'gitlab').runner, undefined);
+    for (const tags of [['bad tag'], ['a,b'], ['x', 'x'], ['']]) {
+      assert.ok(validate(config({ gitlabRunnerTags: tags }), 'gitlab').runner, tags.join('|'));
+    }
+    assert.throws(() => renderGitlabMachineSmFiles(config({ gitlabRunnerTags: ['bad tag'] })), /Invalid GitLab runner tags/);
+    assert.equal(validate(config({ runner: 'not valid', gitlabRunnerTags: [] }), 'gitlab').runner, undefined);
+    assert.ok(validate(config({ runner: 'not valid', gitlabRunnerTags: ['bad tag'] }), 'github').runner);
+  });
+
+  it('runs the merge bot with the factory token or a separate token variable', () => {
+    const factory = jobs(renderGitlabMachineSmFiles(config()))['dmtools-factory-merge'];
+    assert.deepEqual(factory.before_script, [
+      ['.factory-teammate-install-tools', 'script'],
+      ['.factory-teammate-use-dev-token', 'script'],
+    ]);
+    assert.deepEqual(factory.variables, { GIT_STRATEGY: 'none', DMTOOLS_MERGE_TOKEN_NAME: 'GITLAB_TOKEN' });
+    assert.deepEqual((factory.rules as { if: string }[]).map((rule) => rule.if), [
+      '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule" && $DMTOOLS_FACTORY_SCHEDULE == "true"',
+      '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_MERGE == "true"',
+    ]);
+    const multi = jobs(renderGitlabMachineSmFiles(config({ gitlabMultipleTeammates: true })))['dmtools-factory-merge'];
+    assert.equal((multi.variables as Record<string, string>).DMTOOLS_MERGE_TOKEN_NAME, 'GITLAB_DEV_TOKEN');
+
+    const cfg = config({ merge: { mode: 'token', tokenSecret: 'GITLAB_MERGE_TOKEN' } });
+    const files = renderGitlabMachineSmFiles(cfg);
+    const separate = jobs(files)['dmtools-factory-merge'];
+    assert.deepEqual(separate.before_script, [['.factory-teammate-install-tools', 'script']]);
+    assert.deepEqual(separate.variables, {
+      GIT_STRATEGY: 'none', DMTOOLS_MERGE_TOKEN: '$GITLAB_MERGE_TOKEN', DMTOOLS_MERGE_TOKEN_NAME: 'GITLAB_MERGE_TOKEN',
+    });
+    const root = parse(files[0].content) as { workflow: { rules: { if?: string }[] }; variables: Record<string, unknown> };
+    assert.ok(root.workflow.rules.some((rule) => rule.if === '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_MERGE == "true"'));
+    assert.deepEqual(root.variables.DMTOOLS_MACHINE_MERGE, { value: 'false', description: 'Set true when starting a web pipeline to run the merge bot manually.' });
+    assert.ok(requiredSecrets(cfg, 'gitlab').some((secret) => secret.name === 'GITLAB_MERGE_TOKEN'));
+    assert.ok(!requiredSecrets(config(), 'gitlab').some((secret) => secret.name === 'GITLAB_MERGE_TOKEN'));
+    const body = gitlabPrBody(cfg);
+    assert.match(body, /dmtools-factory-merge` merge bot/);
+    assert.match(body, /merges with the `GITLAB_MERGE_TOKEN` token/);
+    assert.match(body, /Masked variable `GITLAB_MERGE_TOKEN`/);
+    assert.doesNotMatch(body, /human to merge/);
+    assert.match(gitlabPrBody(config({ gitlabRunnerTags: ['docker'] })), /runners tagged `docker`/);
+    assert.match(gitlabPrBody(config()), /default GitLab runners \(no tags\)/);
+  });
+
+  it('rejects GitHub App merge identity and reserved merge-bot job names', () => {
+    const app = config({ merge: { mode: 'app', tokenSecret: 'GITLAB_MERGE_TOKEN' } });
+    assert.match(validate(app, 'gitlab').merge ?? '', /GitHub Apps are not available on GitLab/);
+    assert.equal(validate(app, 'github').merge, undefined);
+    assert.throws(() => renderGitlabMachineSmFiles(app), /GitHub Apps are not available/);
+    assert.match(validate(config({ merge: { mode: 'token', tokenSecret: 'bad-name' } }), 'gitlab').merge ?? '', /Variable name/);
+    const collision = `${existingCi}\ndmtools-factory-merge:\n  script: echo mine\n`;
+    assert.throws(() => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com', snapshot(collision)),
+      /reserved for the DMTools merge bot/);
+    assert.throws(() => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+      snapshot(existingCi, `${existingCi}\ndmtools-factory-merge:\n  script: echo mine\n`)), /cannot be updated safely/);
+  });
+
+  it('merges only approved, validated, green and mergeable MRs approved after their head', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitlab-merge-'));
+    try {
+      const bin = join(dir, 'bin');
+      const fx = join(dir, 'fx');
+      mkdirSync(bin);
+      mkdirSync(fx);
+      const sha = (iid: number) => `sha${iid}`;
+      const labels = ['pr_approved', 'ai_validated'];
+      const mrs: Record<number, Record<string, unknown>> = {
+        1: {},
+        2: {},
+        3: { head_pipeline: { sha: sha(3), status: 'failed' } },
+        4: { labels: [...labels, 'needs-human'] },
+        5: { head_pipeline: { sha: 'old', status: 'success' } },
+        6: {},
+        7: { detailed_merge_status: 'not_approved' },
+        8: { draft: true },
+      };
+      for (const [key, override] of Object.entries(mrs)) {
+        const iid = Number(key);
+        writeFileSync(join(fx, `mr-${iid}.json`), JSON.stringify({
+          iid, state: 'opened', draft: false, target_branch: 'main', sha: sha(iid), labels,
+          head_pipeline: { sha: sha(iid), status: 'success' }, detailed_merge_status: 'mergeable', ...override,
+        }));
+        writeFileSync(join(fx, `versions-${iid}.json`), JSON.stringify([
+          { id: 20, head_commit_sha: sha(iid), created_at: '2026-01-01T10:00:00.123Z' },
+          { id: 10, head_commit_sha: 'older', created_at: '2026-01-01T09:00:00.000Z' },
+        ]));
+        // MR 2 was approved at 09:30Z (11:30+02:00), before its current head version was pushed.
+        writeFileSync(join(fx, `events-${iid}.json`), JSON.stringify([
+          { action: 'add', label: { name: 'pr_approved' }, created_at: iid === 2 ? '2026-01-01T11:30:00.000+02:00' : '2026-01-01T10:05:00Z' },
+          { action: 'add', label: { name: 'ai_validated' }, created_at: '2026-01-01T12:00:00Z' },
+        ]));
+      }
+      writeFileSync(join(fx, 'merge-fail-6'), '');
+      writeFileSync(join(bin, 'curl'), `#!/bin/bash
+url="" method=GET data=""
+prev=""
+for arg; do
+  [ "$prev" = --request ] && method="$arg"
+  [ "$prev" = --data-urlencode ] && data="$data $arg"
+  prev="$arg"; url="$arg"
+done
+echo "$method $url$data" >> "$HOME/calls"
+api=https://gl.example/api/v4
+case "$url" in
+  $api/user) echo '{"username":"merge-bot"}' ;;
+  $api/projects/1) cat "${fx}/project.json" ;;
+  $api/projects/1/merge_requests)
+    case "$data" in *page=1) echo '[{"iid":1},{"iid":2},{"iid":3},{"iid":4},{"iid":5},{"iid":6},{"iid":7},{"iid":8}]' ;; *) echo '[]' ;; esac ;;
+  $api/projects/1/merge_requests/*/versions) iid="\${url%/versions}"; cat "${fx}/versions-\${iid##*/}.json" ;;
+  $api/projects/1/merge_requests/*/resource_label_events)
+    iid="\${url%/resource_label_events}"
+    case "$data" in *page=1) cat "${fx}/events-\${iid##*/}.json" ;; *) echo '[]' ;; esac ;;
+  $api/projects/1/merge_requests/*/merge)
+    iid="\${url%/merge}"; iid="\${iid##*/}"
+    [ ! -e "${fx}/merge-fail-$iid" ] || exit 22
+    echo '{"state":"merged"}' ;;
+  $api/projects/1/merge_requests/*) cat "${fx}/mr-\${url##*/}.json" ;;
+  *) echo "unexpected $url" >&2; exit 22 ;;
+esac
+`, { mode: 0o755 });
+      const script = (cfg: FactoryConfig) => (parse(renderGitlabMachineSmFiles(cfg)[1].content) as
+        Record<string, { script: string[] }>)['dmtools-factory-merge'].script[0];
+      const env = {
+        ...process.env, HOME: dir, PATH: `${bin}:${process.env.PATH}`,
+        CI_API_V4_URL: 'https://gl.example/api/v4', CI_PROJECT_ID: '1', CI_DEFAULT_BRANCH: 'main', GITLAB_TOKEN: 'factory-token',
+      };
+      const calls = () => readFileSync(join(dir, 'calls'), 'utf8');
+      writeFileSync(join(fx, 'project.json'), '{"squash_option":"default_off"}');
+
+      const run = spawnSync('bash', ['-c', script(config())], { env, encoding: 'utf8' });
+      assert.equal(run.status, 1, 'a failed merge fails the job');
+      const merges = calls().split('\n').filter((line) => line.startsWith('PUT'));
+      assert.deepEqual(merges, [
+        'PUT https://gl.example/api/v4/projects/1/merge_requests/1/merge sha=sha1 squash=true',
+        'PUT https://gl.example/api/v4/projects/1/merge_requests/6/merge sha=sha6 squash=true',
+      ]);
+      assert.match(run.stdout, /!1: merged sha1 \(merged\)/);
+      assert.match(run.stdout, /!2: skipped \(pr_approved predates head sha2\)/);
+      assert.match(run.stdout, /!3: skipped \(head pipeline is failed\)/);
+      assert.match(run.stdout, /!4: skipped \(held by needs-human\)/);
+      assert.match(run.stdout, /!5: skipped \(head pipeline is not for sha5\)/);
+      assert.match(run.stdout, /!7: skipped \(merge status is not_approved\)/);
+      assert.match(run.stdout, /!8: skipped \(draft\)/);
+      assert.match(run.stderr, /!6: merge failed/);
+      assert.match(run.stdout, /1 merged, 1 failed/);
+      assert.match(calls(), /merge_requests state=opened target_branch=main labels=pr_approved,ai_validated per_page=100 page=1/);
+
+      rmSync(join(fx, 'merge-fail-6'));
+      rmSync(join(dir, 'calls'));
+      writeFileSync(join(fx, 'project.json'), '{"squash_option":"never"}');
+      const separate = config({ merge: { mode: 'token', tokenSecret: 'GITLAB_MERGE_TOKEN' } });
+      const ok = spawnSync('bash', ['-c', script(separate)], { env: { ...env, DMTOOLS_MERGE_TOKEN: 'merge-token' }, encoding: 'utf8' });
+      assert.equal(ok.status, 0, ok.stderr);
+      assert.match(calls(), /merge_requests\/1\/merge sha=sha1 squash=false/);
+      assert.match(ok.stdout, /2 merged, 0 failed/);
+
+      rmSync(join(dir, 'calls'));
+      const dry = spawnSync('bash', ['-c', script(config())], { env: { ...env, DMTOOLS_MERGE_DRY_RUN: 'true' }, encoding: 'utf8' });
+      assert.equal(dry.status, 0, dry.stderr);
+      assert.match(dry.stdout, /!1: would merge sha1 \(dry run\)/);
+      assert.doesNotMatch(calls(), /^PUT/m);
+
+      const missing = spawnSync('bash', ['-c', script(separate)], {
+        env: { ...env, GITLAB_TOKEN: '', DMTOOLS_MERGE_TOKEN: '$GITLAB_MERGE_TOKEN', DMTOOLS_MERGE_TOKEN_NAME: 'GITLAB_MERGE_TOKEN' },
+        encoding: 'utf8',
+      });
+      assert.equal(missing.status, 1);
+      assert.match(missing.stderr, /add GITLAB_MERGE_TOKEN as a masked CI\/CD variable/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('Preserving GitLab project CI', () => {
+  it('keeps existing jobs, stages, includes and rules while adding a quality gate', () => {
+    const files = renderGitlabMachineSmFiles(
+      config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', snapshot(existingCi),
+    );
+    const rootContent = files[0].content;
+    const root = parse(rootContent);
+    const original = parse(existingCi);
+    const quality = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'];
+    const teammate = parse(files.find((file) => file.path === 'ai-teammate.yml')!.content);
+
+    assert.match(rootContent, /# Existing project pipeline/);
+    assert.deepEqual(root.stages, original.stages);
+    assert.deepEqual(root.compile, original.compile);
+    assert.deepEqual(root.default, original.default);
+    assert.equal(root.variables.PROJECT_SETTING, 'keep-me');
+    assert.ok(root.include.some((entry: { local?: string }) => entry.local === 'shared.yml'));
+    assert.ok(root.include.some((entry: { local?: string }) => entry.local === GITLAB_QUALITY_FILE));
+    assert.ok(root.workflow.rules.some((rule: { if?: string }) => rule.if === '$CI_PIPELINE_SOURCE == "push"'));
+    assert.ok(root.workflow.rules.some((rule: { if?: string }) => rule.if?.includes('DMTOOLS_FACTORY_SCHEDULE')));
+    assert.ok(root.workflow.rules.some((rule: { if?: string }) => rule.if === '$CI_PIPELINE_SOURCE == "merge_request_event"'));
+    assert.equal(root['factory-sm'].stage, 'compile');
+    assert.deepEqual(root['factory-sm'].needs, []);
+    assert.equal(root['ai-teammate-scan'].stage, 'compile');
+    assert.equal(teammate['ai-teammate'].stage, 'compile');
+    assert.equal(quality.stage, 'compile');
+  });
+
+  it('uses stages and workflow rules inherited through project includes', () => {
+    const root = 'include:\n  - local: shared.yml\nbuild:\n  script: echo project\n';
+    const merged = `stages: [verify, deploy]
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - when: never
+build:
+  stage: verify
+  script: echo project
+`;
+    const files = renderGitlabMachineSmFiles(
+      config({ qualityPreset: 'crap4go' }), 'https://gitlab.example.com', snapshot(root, merged),
+    );
+    const pipeline = parse(files[0].content);
+    assert.equal(pipeline['factory-sm'].stage, 'verify');
+    assert.ok(pipeline.workflow.rules.some((rule: { if?: string }) => rule.if === '$CI_COMMIT_BRANCH == "main"'));
+    assert.ok(pipeline.workflow.rules.some((rule: { if?: string }) => rule.if?.includes('DMTOOLS_FACTORY_SCHEDULE')));
+    assert.equal(pipeline.build.script, 'echo project');
+  });
+
+  it('rejects inherited workflows when conditional includes could change them by pipeline source', () => {
+    const source = `include:
+  - local: conditional.yml
+    rules:
+      - if: '$CI_PIPELINE_SOURCE == "push"'
+build:
+  script: echo project
+`;
+    const merged = `workflow:\n  rules:\n    - if: '$CI_PIPELINE_SOURCE == "push"'\nbuild:\n  script: echo project\n`;
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', snapshot(source, merged)),
+      /inherited GitLab workflow with conditional includes/,
+    );
+  });
+
+  it('keeps unrestricted project workflows unrestricted when adding MR pipelines', () => {
+    const source = 'build:\n  script: echo project\n';
+    const files = renderGitlabMachineSmFiles(
+      config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', snapshot(source),
+    );
+    const pipeline = parse(files[0].content);
+    assert.deepEqual(pipeline.workflow.rules, [
+      { if: '$CI_PIPELINE_SOURCE == "merge_request_event"' },
+      { when: 'always' },
+    ]);
+  });
+
+  it('places required factory rules before existing deny rules for the same event', () => {
+    const source = `workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $DMTOOLS_FACTORY_SCHEDULE == "true"'
+      when: never
+    - when: always
+build:
+  script: echo project
+`;
+    const files = renderGitlabMachineSmFiles(
+      config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', snapshot(source),
+    );
+    const rules = parse(files[0].content).workflow.rules as { if?: string; when?: string }[];
+    for (const condition of [
+      '$CI_PIPELINE_SOURCE == "merge_request_event"',
+      '$CI_PIPELINE_SOURCE == "schedule" && $DMTOOLS_FACTORY_SCHEDULE == "true"',
+    ]) {
+      const first = rules.find((rule) => rule.if === condition);
+      assert.equal(first?.when, undefined);
+      assert.ok(rules.some((rule) => rule.if === condition && rule.when === 'never'));
+    }
+  });
+
+  it('preserves GitLab reference tags and does not duplicate managed includes on repeated setup', () => {
+    const source = `stages: [test]
+.shared:
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
+workflow:
+  rules:
+    - !reference [.shared, rules]
+build:
+  script: echo project
+`;
+    const first = renderGitlabMachineSmFiles(
+      config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', snapshot(source),
+    );
+    assert.match(first[0].content, /!reference/);
+    const next = snapshot(first[0].content, first[0].content, {
+      qualityContent: first.find((file) => file.path === GITLAB_QUALITY_FILE)!.content,
+      teammateContent: first.find((file) => file.path === 'ai-teammate.yml')!.content,
+    });
+    const second = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', next);
+    const doc = parseDocument(second[0].content);
+    assert.equal(doc.errors.length, 0);
+    const includeText = second[0].content;
+    assert.equal(includeText.match(/local: \.?\/?ai-teammate\.yml/g)?.length, 1);
+    assert.equal(includeText.match(/local: \.?\/?dmtools-factory-quality\.yml/g)?.length, 1);
+    assert.equal(includeText.match(/gitlab\/factory-sm\.yml/g)?.length, 1);
+    const rules = doc.getIn(['workflow', 'rules'], true);
+    assert.ok(isSeq(rules));
+    assert.equal(rules.items.filter((rule) =>
+      isMap(rule) && String(rule.get('if') ?? '').includes('DMTOOLS_FACTORY_SCHEDULE')).length, 1);
+  });
+
+  it('removes only the managed quality include when the gate is disabled', () => {
+    const source = `include:
+  - local: shared.yml
+  - local: ${GITLAB_QUALITY_FILE}
+build:
+  script: echo project
+`;
+    const current = snapshot(source, source, { qualityContent: '# Generated by DMTools factory setup.\n' });
+    const files = renderGitlabMachineSmFiles(config({ ciEnabled: false }), 'https://gitlab.example.com', current);
+    const pipeline = parse(files[0].content);
+    assert.ok(pipeline.include.some((entry: { local?: string }) => entry.local === 'shared.yml'));
+    assert.ok(!pipeline.include.some((entry: { local?: string }) => entry.local === GITLAB_QUALITY_FILE));
+    assert.ok(!files.some((file) => file.path === GITLAB_QUALITY_FILE));
+    assert.equal(pipeline.build.script, 'echo project');
+  });
+
+  it('recognizes root-relative managed includes when disabling the generated gate', () => {
+    const first = renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com', snapshot(existingCi));
+    const root = first[0].content
+      .replace('local: ai-teammate.yml', 'local: /ai-teammate.yml')
+      .replace('local: .dmtools-factory-quality.yml', 'local: ./.dmtools-factory-quality.yml');
+    const next = snapshot(root, root, {
+      qualityContent: first.find((file) => file.path === GITLAB_QUALITY_FILE)!.content,
+      teammateContent: first.find((file) => file.path === 'ai-teammate.yml')!.content,
+    });
+    const updated = parse(renderGitlabMachineSmFiles(config({ ciEnabled: false }), 'https://gitlab.example.com', next)[0].content);
+    const locals = updated.include.map((entry: { local?: string }) => entry.local).filter(Boolean);
+    assert.equal(locals.filter((name: string) => name.endsWith('ai-teammate.yml')).length, 1);
+    assert.ok(!locals.some((name: string) => name.endsWith(GITLAB_QUALITY_FILE)));
+  });
+
+  it('fails explicitly on job collisions, unmanaged files and invalid YAML', () => {
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+        snapshot('factory-sm:\n  script: echo unrelated\n')),
+      /unrelated factory-sm job/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+        snapshot('.factory-sm:\n  script: echo unrelated\nfactory-sm:\n  extends: .factory-sm\n')),
+      /unrelated factory-sm job/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com',
+        snapshot(existingCi, existingCi, { qualityContent: 'user data' })),
+      /not a DMTools factory file/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+        snapshot(existingCi, existingCi, { teammateContent: 'user data' })),
+      /will not be overwritten/,
+    );
+    for (const teammateContent of ['', '# Mention /gitlab/factory-teammate.yml in an unrelated file\n']) {
+      assert.throws(
+        () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+          snapshot(existingCi, existingCi, { teammateContent })),
+        /will not be overwritten/,
+      );
+    }
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com',
+        snapshot(existingCi, existingCi, { qualityContent: '' })),
+      /not a DMTools factory file/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com', snapshot('build: [broken')),
+      /valid GitLab CI YAML mapping/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+        snapshot('include: [shared.yml]\n', 'ai-teammate:\n  script: echo unrelated\n')),
+      /teammate or factory parent jobs/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+        snapshot(`include:\n  - local: ai-teammate.yml\n    rules:\n      - when: never\n`)),
+      /include has custom options/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config({ qualityPreset: 'crap4js' }), 'https://gitlab.example.com',
+        snapshot('dmtools-quality:\n  script: echo unrelated\n', undefined, {
+          qualityContent: '# Generated by DMTools factory setup.\n',
+        })),
+      /unrelated dmtools-quality job/,
+    );
+    assert.throws(
+      () => renderGitlabMachineSmFiles(config(), 'https://gitlab.example.com',
+        snapshot('variables:\n  DMTOOLS_FACTORY_SCHEDULE: "true"\nbuild:\n  script: echo project\n')),
+      /reserved for the DMTools factory schedule/,
+    );
+  });
+});
+
+describe('GitLab CI inspection and setup MR', () => {
+  const projectUrl = 'https://gitlab.example.com/api/v4/projects/team%2Fapp';
+  const fileResponse = (content: string) => Response.json({
+    encoding: 'base64', content: Buffer.from(content).toString('base64'), last_commit_id: 'original-commit',
+  });
+
+  it('inspects custom CI paths and commits the preserved configuration and selected gate', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === projectUrl) return Response.json({ default_branch: 'main', ci_config_path: 'ci/pipeline.yml' });
+      if (url.endsWith('/repository/branches/main')) return Response.json({ commit: { id: revision } });
+      if (url.includes('/repository/files/ci%2Fpipeline.yml?')) return fileResponse(existingCi);
+      if (url.includes('/repository/files/')) return new Response('Not found', { status: 404 });
+      if (url.includes('/ci/lint?')) return Response.json({ valid: true, merged_yaml: existingCi });
+      if (url.endsWith('/merge_requests')) return Response.json({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' });
+      return Response.json({ id: 1 });
+    }) as typeof fetch;
+    try {
+      const cfg = config({ qualityPreset: 'crap4js' });
+      const inspected = await inspectGitlabCi('token', 'team/app', 'https://gitlab.example.com', 'main');
+      assert.equal(inspected.path, 'ci/pipeline.yml');
+      assert.equal(inspected.content, existingCi);
+      assert.equal(inspected.revision, revision);
+      assert.equal(inspected.fileVersions['ci/pipeline.yml'], 'original-commit');
+      const lint = calls.find((call) => call.url.includes('/ci/lint?'))!;
+      assert.equal(new URL(lint.url).searchParams.get('content_ref'), revision);
+      assert.equal(lint.init?.method, undefined);
+      assert.equal(lint.init?.body, undefined);
+      assert.equal((lint.init?.headers as Record<string, string>)['PRIVATE-TOKEN'], 'token');
+
+      const url = await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', cfg);
+      assert.equal(url, 'https://gitlab.example.com/team/app/-/merge_requests/1');
+      const commit = calls.find((call) => call.url.endsWith('/repository/commits'))!;
+      const branch = calls.find((call) => call.url.endsWith('/repository/branches'))!;
+      assert.equal(JSON.parse(String(branch.init?.body)).ref, revision);
+      const actions = JSON.parse(String(commit.init?.body)).actions as {
+        action: string; file_path: string; content: string; last_commit_id?: string;
+      }[];
+      const root = actions.find((action) => action.file_path === 'ci/pipeline.yml')!;
+      assert.equal(root.action, 'update');
+      assert.equal(root.last_commit_id, 'original-commit');
+      assert.deepEqual(parse(root.content).compile, parse(existingCi).compile);
+      assert.ok(actions.some((action) => action.file_path === GITLAB_QUALITY_FILE && action.action === 'create'));
+      const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'))!;
+      const description = JSON.parse(String(mergeRequest.init?.body)).description;
+      assert.match(description, /entire pipeline/);
+      assert.match(description, /crap4js/);
+      assert.match(description, /ci\/pipeline\.yml/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('reports CI lint errors and rejects external CI paths before writing anything', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === projectUrl) return Response.json({ default_branch: 'main' });
+      if (url.endsWith('/repository/branches/main')) return Response.json({ commit: { id: revision } });
+      if (url.includes('/repository/files/.gitlab-ci.yml?')) return fileResponse(existingCi);
+      if (url.includes('/repository/files/')) return new Response('Not found', { status: 404 });
+      if (url.includes('/ci/lint?')) return Response.json({ valid: false, errors: ['bad include'] });
+      throw new Error(`Unexpected request: ${url}`);
+    }) as typeof fetch;
+    try {
+      await assert.rejects(inspectGitlabCi('token', 'team/app', 'https://gitlab.example.com', 'main'), /bad include/);
+      assert.ok(!calls.some((url) => url.endsWith('/repository/branches')));
+      globalThis.fetch = (async () => Response.json({
+        default_branch: 'main', ci_config_path: 'pipeline.yml@other/project',
+      })) as typeof fetch;
+      await assert.rejects(inspectGitlabCi('token', 'team/app', 'https://gitlab.example.com', 'main'), /local project CI configuration path/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('updates a custom CI file inside .dmtools without treating it as preserved runner configuration', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === projectUrl) return Response.json({ default_branch: 'main', ci_config_path: '.dmtools/pipeline.yml' });
+      if (url.endsWith('/repository/branches/main')) return Response.json({ commit: { id: revision } });
+      if (url.includes('/repository/files/.dmtools%2Fpipeline.yml?')) return fileResponse(existingCi);
+      if (url.includes('/repository/files/')) return new Response('Not found', { status: 404 });
+      if (url.includes('/ci/lint?')) return Response.json({ valid: true, merged_yaml: existingCi });
+      if (url.endsWith('/merge_requests')) return Response.json({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' });
+      return Response.json({ id: 1 });
+    }) as typeof fetch;
+    try {
+      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', config({ qualityPreset: 'crap4js' }));
+      const commit = calls.find((call) => call.url.endsWith('/repository/commits'))!;
+      const actions = JSON.parse(String(commit.init?.body)).actions as { file_path: string; action: string }[];
+      assert.ok(actions.some((action) => action.file_path === '.dmtools/pipeline.yml' && action.action === 'update'));
+      assert.ok(actions.some((action) => action.file_path === '.dmtools/config.js' && action.action === 'create'));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('rejects custom CI paths that collide with managed factory files', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      for (const path of [
+        'ai-teammate.yml', GITLAB_QUALITY_FILE, '.dmtools/config.js',
+        '.dmtools/runners/fa-bug-dev.json', '.dmtools/runners/fa-story-dev.json',
+        '.dmtools/runners/fa-review.json', '.dmtools/runners/fa-rework.json',
+      ]) {
+        globalThis.fetch = (async () => Response.json({ default_branch: 'main', ci_config_path: path })) as typeof fetch;
+        await assert.rejects(inspectGitlabCi('token', 'team/app', 'https://gitlab.example.com', 'main'),
+          /conflicts with a factory-managed file/);
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not create a branch when an existing pipeline is selected but missing', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === projectUrl) return Response.json({ default_branch: 'main' });
+      if (url.endsWith('/repository/branches/main')) return Response.json({ commit: { id: revision } });
+      if (url.includes('/repository/files/')) return new Response('Not found', { status: 404 });
+      throw new Error(`Unexpected request: ${url}`);
+    }) as typeof fetch;
+    try {
+      await assert.rejects(createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', config()),
+        /No existing GitLab CI configuration/);
+      assert.ok(!calls.some((url) => url.endsWith('/repository/branches')));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('rejects a non-default target branch before inspecting files or creating a branch', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      calls.push(String(input));
+      return Response.json({ default_branch: 'main' });
+    }) as typeof fetch;
+    try {
+      await assert.rejects(
+        createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', config({ baseBranch: 'release' })),
+        /requires the project default branch \(main\)/,
+      );
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0], projectUrl);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

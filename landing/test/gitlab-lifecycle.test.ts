@@ -563,13 +563,22 @@ describe('GitLab factory schedule', () => {
     const original = globalThis.fetch;
     const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
     let created = false;
+    let marked = false;
     globalThis.fetch = (async (input, init) => {
       const url = String(input), method = init?.method ?? 'GET';
       calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       if (url.includes('/hooks?') || url.includes('/triggers?')) return Response.json([]);
+      if (url.endsWith('/api/v4/user')) return Response.json({ id: 7 });
+      if (url.endsWith('/pipeline_schedules/1') && method === 'GET') {
+        return Response.json({ variables: marked ? [{ key: 'DMTOOLS_FACTORY_SCHEDULE', value: 'true' }] : [] });
+      }
+      if (url.endsWith('/pipeline_schedules/1/variables') && method === 'POST') {
+        marked = true;
+        return Response.json({ key: 'DMTOOLS_FACTORY_SCHEDULE', value: 'true' });
+      }
       if (method === 'GET') return Response.json([
         { id: 99, description: 'Unrelated schedule' },
-        ...(created ? [{ id: 1, description: 'DMTools factory reconciliation' }] : []),
+        ...(created ? [{ id: 1, description: 'DMTools factory reconciliation', owner: { id: 7 } }] : []),
       ]);
       created = true;
       return Response.json({ id: 1 });
@@ -577,12 +586,14 @@ describe('GitLab factory schedule', () => {
     try {
       await ensureGitlabFactorySchedule('token', 'team/app', 'https://gitlab.example.com', 'main');
       await ensureGitlabFactorySchedule('token', 'team/app', 'https://gitlab.example.com', 'main');
-      assert.equal(calls.filter((c) => c.method === 'POST').length, 1);
+      assert.equal(calls.filter((c) => c.method === 'POST').length, 2);
+      assert.ok(calls.some((c) => c.method === 'POST' && c.body?.key === 'DMTOOLS_FACTORY_SCHEDULE'));
       const update = calls.find((c) => c.method === 'PUT')!;
       assert.match(update.url, /pipeline_schedules\/1$/);
       assert.equal(update.body?.cron, '*/10 * * * *');
       assert.equal(update.body?.active, true);
       assert.ok(!calls.some((c) => c.url.endsWith('/99')));
+      assert.ok(!calls.some((c) => c.url.endsWith('/take_ownership')));
     } finally { globalThis.fetch = original; }
   });
 
@@ -593,6 +604,7 @@ describe('GitLab factory schedule', () => {
       const url = String(input), method = init?.method ?? 'GET';
       calls.push({ url, method });
       if (url.includes('/pipeline_schedules?')) return Response.json([]);
+      if (url.endsWith('/pipeline_schedules/5') && method === 'GET') return Response.json({ variables: [] });
       if (url.includes('/hooks?')) return Response.json([
         { id: 1, url: 'https://gitlab.example.com/api/v4/projects/123/trigger/pipeline?variables%5BDMTOOLS_FACTORY_TRIGGER%5D=issue_webhook' },
         { id: 2, url: 'https://other.example.com/notification' },
@@ -608,6 +620,7 @@ describe('GitLab factory schedule', () => {
       const writes = calls.filter((c) => c.method !== 'GET');
       assert.deepEqual(writes.map((c) => [c.method, new URL(c.url).pathname]), [
         ['POST', '/api/v4/projects/team%2Fapp/pipeline_schedules'],
+        ['POST', '/api/v4/projects/team%2Fapp/pipeline_schedules/5/variables'],
         ['DELETE', '/api/v4/projects/team%2Fapp/hooks/1'],
         ['DELETE', '/api/v4/projects/team%2Fapp/triggers/3'],
       ]);
@@ -627,6 +640,76 @@ describe('GitLab factory schedule', () => {
       await assert.rejects(
         ensureGitlabFactorySchedule('token', 'team/app', 'https://gitlab.example.com', 'main'), /403/);
       assert.ok(calls.every((url) => url.includes('/pipeline_schedules')));
+    } finally { globalThis.fetch = original; }
+  });
+
+  it('takes ownership of a schedule owned by another account before updating it', async () => {
+    const original = globalThis.fetch;
+    const calls: { url: string; method: string }[] = [];
+    let owned = false;
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input), method = init?.method ?? 'GET';
+      calls.push({ url, method });
+      if (url.includes('/hooks?') || url.includes('/triggers?')) return Response.json([]);
+      if (url.endsWith('/api/v4/user')) return Response.json({ id: 7 });
+      if (url.includes('/pipeline_schedules?')) return Response.json([{ id: 1, description: 'DMTools factory reconciliation', owner: { id: 3 } }]);
+      if (url.endsWith('/take_ownership')) { owned = true; return Response.json({ id: 1 }); }
+      if (method === 'PUT' && !owned) return new Response('403 Forbidden', { status: 403 });
+      if (url.endsWith('/pipeline_schedules/1') && method === 'GET') return Response.json({ variables: [] });
+      return Response.json({ id: 1 });
+    }) as typeof fetch;
+    try {
+      await ensureGitlabFactorySchedule('token', 'team/app', 'https://gitlab.example.com', 'main');
+      const writes = calls.filter((c) => c.method !== 'GET').map((c) => [c.method, new URL(c.url).pathname]);
+      assert.deepEqual(writes, [
+        ['POST', '/api/v4/projects/team%2Fapp/pipeline_schedules/1/take_ownership'],
+        ['PUT', '/api/v4/projects/team%2Fapp/pipeline_schedules/1'],
+        ['POST', '/api/v4/projects/team%2Fapp/pipeline_schedules/1/variables'],
+      ]);
+    } finally { globalThis.fetch = original; }
+  });
+
+  it('updates an existing factory schedule marker when its value is wrong', async () => {
+    const original = globalThis.fetch;
+    const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input), method = init?.method ?? 'GET';
+      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (url.includes('/hooks?') || url.includes('/triggers?')) return Response.json([]);
+      if (url.endsWith('/api/v4/user')) return Response.json({ id: 7 });
+      if (url.includes('/pipeline_schedules?')) return Response.json([{ id: 1, description: 'DMTools factory reconciliation', owner: { id: 7 } }]);
+      if (url.endsWith('/pipeline_schedules/1') && method === 'GET') {
+        return Response.json({ variables: [{ key: 'DMTOOLS_FACTORY_SCHEDULE', value: 'false' }] });
+      }
+      return Response.json({ id: 1 });
+    }) as typeof fetch;
+    try {
+      await ensureGitlabFactorySchedule('token', 'team/app', 'https://gitlab.example.com', 'main');
+      const variable = calls.find((call) => call.url.endsWith('/variables/DMTOOLS_FACTORY_SCHEDULE'));
+      assert.equal(variable?.method, 'PUT');
+      assert.equal(variable?.body?.value, 'true');
+    } finally { globalThis.fetch = original; }
+  });
+
+  it('converts an existing file-type factory schedule marker to an environment variable', async () => {
+    const original = globalThis.fetch;
+    const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input), method = init?.method ?? 'GET';
+      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (url.includes('/hooks?') || url.includes('/triggers?')) return Response.json([]);
+      if (url.endsWith('/api/v4/user')) return Response.json({ id: 7 });
+      if (url.includes('/pipeline_schedules?')) return Response.json([{ id: 1, description: 'DMTools factory reconciliation', owner: { id: 7 } }]);
+      if (url.endsWith('/pipeline_schedules/1') && method === 'GET') {
+        return Response.json({ variables: [{ key: 'DMTOOLS_FACTORY_SCHEDULE', value: 'true', variable_type: 'file' }] });
+      }
+      return Response.json({ id: 1 });
+    }) as typeof fetch;
+    try {
+      await ensureGitlabFactorySchedule('token', 'team/app', 'https://gitlab.example.com', 'main');
+      const variable = calls.find((call) => call.url.endsWith('/variables/DMTOOLS_FACTORY_SCHEDULE'));
+      assert.equal(variable?.method, 'PUT');
+      assert.equal(variable?.body?.variable_type, 'env_var');
     } finally { globalThis.fetch = original; }
   });
 });

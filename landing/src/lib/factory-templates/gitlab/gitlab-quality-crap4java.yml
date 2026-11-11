@@ -1,0 +1,27 @@
+quality:
+  stage: quality
+  image: eclipse-temurin:@@VERSION@@-jdk
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+      if [ ! -f pom.xml ] || [ -z "$(find . -type f -name '*.java' -path '*/src/*' -not -path './.*' -not -path '*/target/*' -print -quit)" ]; then echo "Configured quality gate does not match this repository: missing Maven pom.xml or Java source files under src/" >&2; exit 1; fi
+      apt-get update && apt-get install -y --no-install-recommends git maven
+      tool_dir=$(mktemp -d /tmp/dmtools-crap4java.XXXXXX)
+      trap 'rm -rf "$tool_dir"' EXIT
+      git clone --depth 1 https://github.com/IstiN/crap4java.git "$tool_dir/source"
+      mvn -q -f "$tool_dir/source/pom.xml" -DskipTests package
+      set -- "$tool_dir"/source/target/crap4java-*.jar
+      if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then echo "Could not build the crap4java analyzer." >&2; exit 1; fi
+      find . -type f -name '*.java' -path '*/src/*' -not -path './.*' -not -path '*/target/*' -print0 | xargs -0 java -jar "$1"
+      if [ -z "$(find . -type f -path '*/target/site/jacoco/jacoco.xml' -size +0c -print -quit)" ]; then echo "Missing JaCoCo coverage data; CRAP analysis cannot run." >&2; exit 1; fi
+      find . -type f -name pom.xml -not -path './.*' -not -path '*/target/*' -not -path '*/src/*' -exec sh -c '
+        for pom do
+          module=${pom%/pom.xml}
+          if [ -d "$module/src" ] && [ -n "$(find "$module/src" -type f -name "*.java" -print -quit)" ] && [ ! -s "$module/target/site/jacoco/jacoco.xml" ]; then
+            echo "Missing JaCoCo coverage for $module." >&2; exit 1
+          fi
+        done
+      ' sh {} +

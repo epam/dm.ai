@@ -1,0 +1,23 @@
+quality:
+  stage: quality
+  image: ubuntu:24.04
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - |
+      if [ ! -f pubspec.yaml ]; then echo "Configured quality gate does not match this repository: missing pubspec.yaml" >&2; exit 1; fi
+      apt-get -o Acquire::Retries=3 update
+      apt-get -o Acquire::Retries=3 install -y --no-install-recommends ca-certificates curl git jq unzip xz-utils
+@@FLUTTER_INSTALL@@
+      dart pub get
+      if ! dart format --output=none --set-exit-if-changed .; then echo "Dart formatting check failed: run 'dart format .' and commit the changes." >&2; exit 1; fi
+      dart analyze
+      if [ ! -d test ] || [ -z "$(find test -name '*_test.dart' -print -quit 2>/dev/null)" ]; then echo "No Dart tests found — skipping coverage and CRAP analysis."; exit 0; fi
+      dart test --coverage=coverage
+      dart pub global activate coverage
+      dart pub global run coverage:format_coverage --lcov --in coverage --out coverage/lcov.info --report-on lib
+      if [ ! -s coverage/lcov.info ]; then echo "Missing Dart coverage data; CRAP analysis cannot run." >&2; exit 1; fi
+      dart pub global activate -sgit https://github.com/IstiN/crap4dart.git
+      dart pub global run crap4dart:crap4dart analyze --lcov coverage/lcov.info

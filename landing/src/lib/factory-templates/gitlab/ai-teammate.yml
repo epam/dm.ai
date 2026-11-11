@@ -1,9 +1,15 @@
 # Teammate lifecycle, token selection, queue scanning and label automation come from the shared template.
 include:
   - remote: https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/@@FACTORY_HOME_REF@@/gitlab/factory-teammate.yml
+@@GITLAB_TOOLCHAIN_JOB@@
 
 ai-teammate:
   extends: .factory-teammate
+  image: eclipse-temurin:@@GITLAB_JAVA_VERSION@@-jdk
+  stage: @@GITLAB_STAGE@@
+  needs: []
+@@GITLAB_RUNNER_TAGS@@
+@@GITLAB_TOOLCHAIN_BEFORE_SCRIPT@@
   resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
   rules:
     - if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true"'
@@ -16,6 +22,11 @@ ai-teammate:
 
 ai-teammate-auto:
   extends: .factory-teammate
+  image: eclipse-temurin:@@GITLAB_JAVA_VERSION@@-jdk
+  stage: @@GITLAB_STAGE@@
+  needs: []
+@@GITLAB_RUNNER_TAGS@@
+@@GITLAB_TOOLCHAIN_BEFORE_SCRIPT@@
   resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true" && (($FACTORY_ISSUE != "" && $FACTORY_MR == "") || ($FACTORY_ISSUE == "" && $FACTORY_MR != ""))'
@@ -23,3 +34,24 @@ ai-teammate-auto:
     FACTORY_HOME_REF: "@@FACTORY_HOME_REF@@"
     AGENT_HANDLE: "$DMTOOLS_AI_DEV_USERNAME"
 @@GITLAB_REVIEWER_HANDLE_VARIABLE@@
+
+# Merge bot: the GitLab counterpart of the GitHub factory-merge workflow.
+dmtools-factory-merge:
+  image: eclipse-temurin:21-jdk
+  stage: @@GITLAB_STAGE@@
+  needs: []
+@@GITLAB_RUNNER_TAGS@@
+  resource_group: dmtools-factory-merge-$CI_PROJECT_ID
+  interruptible: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule" && $DMTOOLS_FACTORY_SCHEDULE == "true"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_MERGE == "true"'
+  variables:
+    GIT_STRATEGY: none
+@@GITLAB_MERGE_VARIABLES@@
+  before_script:
+    - !reference [.factory-teammate-install-tools, script]
+@@GITLAB_MERGE_TOKEN_SCRIPT@@
+  script:
+    - |
+@@GITLAB_MERGE_SCRIPT@@
