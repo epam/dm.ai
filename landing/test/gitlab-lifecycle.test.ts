@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
-  defaults, renderGitlabFiles, GITLAB_TEMPLATE_NAMES, ensureGitlabFactorySchedule, type GitlabTemplates,
+  defaults, renderGitlabFiles, GITLAB_TEMPLATE_NAMES, GITLAB_QUALITY_FILE, ensureGitlabFactorySchedule, type GitlabTemplates,
 } from '../src/lib/factory.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -266,11 +266,12 @@ node -e 'const fs=require("fs");const s=JSON.parse(fs.readFileSync("state.json")
 describe('GitLab automatic lifecycle', { concurrency: 4 }, () => {
   it('generates validation-only API pipelines without agent lock and no automatic merge', () => {
     const pipeline = files.find((f) => f.path === '.gitlab-ci.yml')!.content;
-    assert.match(pipeline, /CI_PIPELINE_SOURCE == "api" && \$DMTOOLS_FACTORY_PHASE == "validation"/);
+    const quality = files.find((f) => f.path === GITLAB_QUALITY_FILE)!.content;
+    assert.match(quality, /CI_PIPELINE_SOURCE == "api" && \$DMTOOLS_FACTORY_PHASE == "validation"/);
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "schedule"/);
     assert.doesNotMatch(pipeline, /CI_PIPELINE_SOURCE == "trigger"|DMTOOLS_FACTORY_TRIGGER/);
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "api" && \$DMTOOLS_FACTORY_PHASE == "reconcile"/);
-    assert.match(pipeline, /after_script:[\s\S]*gitlab-factory-lifecycle\.sh wake/);
+    assert.match(quality, /after_script:[\s\S]*gitlab-factory-lifecycle\.sh wake/);
     assert.equal(pipeline.match(/resource_group:/g)?.length, 1);
     assert.doesNotMatch(pipeline, /merge-approved|\/merge"|merge_when_pipeline_succeeds/);
     for (const file of files.filter((f) => f.path.endsWith('.sh'))) {
@@ -294,13 +295,12 @@ describe('GitLab automatic lifecycle', { concurrency: 4 }, () => {
     assert.ok(request.args?.includes('variables[][value]=reconcile'));
   });
 
-  it('uses Flutter commands for Flutter projects and rejects a mismatched quality preset', () => {
-    const flutter = renderGitlabFiles({ ...config, qualityPreset: 'crap4dart' }, templates)
-      .find((f) => f.path === '.gitlab-ci.yml')!.content;
-    assert.match(flutter, /flutter pub get/);
-    assert.match(flutter, /flutter analyze/);
-    assert.match(flutter, /flutter test --coverage/);
-    assert.match(flutter, /Configured quality gate does not match this repository: missing pubspec.yaml/);
+  it('uses the shared Dart quality gate and disables lifecycle validation when no gate is selected', () => {
+    const files = renderGitlabFiles({ ...config, qualityPreset: 'crap4dart' }, templates);
+    const quality = files.find((f) => f.path === GITLAB_QUALITY_FILE)!.content;
+    assert.match(quality, /\.factory-quality-crap4dart/);
+    assert.match(quality, /DMTOOLS_QUALITY_FLUTTER_VERSION/);
+    assert.match(quality, /factory-quality\.yml/);
     const withoutGate = renderGitlabFiles({ ...config, qualityPreset: 'none' }, templates);
     assert.match(withoutGate.find((f) => f.path.endsWith('gitlab-factory-lifecycle.sh'))!.content,
       /if \[ 'false' != true \]/);

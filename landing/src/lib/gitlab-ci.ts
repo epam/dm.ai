@@ -252,6 +252,12 @@ export function renderGitlabPipeline(
         }
       }
     }
+    if (quality && isMap(doc.contents) && doc.contents.items.some((pair) => {
+      const key = isScalar(pair.key) ? pair.key.value : pair.key;
+      return typeof key === 'string' && /^\.factory-quality(-|$)/.test(key);
+    })) {
+      throw new Error('The existing GitLab CI configuration defines .factory-quality jobs, which are reserved for DMTools quality gates.');
+    }
     if (quality && (doc.has('dmtools-quality') || (merged.has('dmtools-quality') && !managedQuality))) {
       throw new Error('The existing GitLab CI configuration already has an unrelated dmtools-quality job.');
     }
@@ -296,18 +302,34 @@ export function renderGitlabPipeline(
   return doc.toString();
 }
 
-export function renderGitlabQualityPipeline(template: string, stage: string, tags: string[] = []): string {
-  const source = pipelineDocument(template, 'GitLab quality template');
-  const job = source.get('quality', true);
-  if (!isMap(job)) throw new Error('GitLab quality template is missing its quality job.');
-  job.set('stage', stage);
-  job.set('needs', source.createNode([]));
-  job.set('allow_failure', false);
-  job.set('after_script', source.createNode([]));
-  job.set('rules', source.createNode([{ if: '$CI_PIPELINE_SOURCE == "merge_request_event"' }]));
-  if (tags.length) job.set('tags', source.createNode(tags));
-  else job.delete('tags');
-  const output = new Document();
-  output.set('dmtools-quality', job);
+export interface GitlabQualityGate {
+  preset: string;
+  image: string;
+  variables: Record<string, string>;
+  /** Immutable dmtools-agentic-workflows commit that provides gitlab/factory-quality.yml. */
+  ref: string;
+}
+
+export function renderGitlabQualityPipeline(
+  gate: GitlabQualityGate,
+  stage: string,
+  tags: string[] = [],
+  options: { rules?: Array<Record<string, string>>; afterScript?: string[] } = {},
+): string {
+  const job: Record<string, unknown> = {
+    extends: `.factory-quality-${gate.preset}`,
+    stage,
+    image: gate.image,
+  };
+  if (Object.keys(gate.variables).length) job.variables = gate.variables;
+  job.rules = options.rules ?? [{ if: '$CI_PIPELINE_SOURCE == "merge_request_event"' }];
+  job.needs = [];
+  job.allow_failure = false;
+  if (options.afterScript) job.after_script = options.afterScript;
+  if (tags.length) job.tags = tags;
+  const output = new Document({
+    include: [{ remote: `https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/${gate.ref}/gitlab/factory-quality.yml` }],
+    'dmtools-quality': job,
+  });
   return `${GITLAB_QUALITY_MARKER}\n${output.toString()}`;
 }

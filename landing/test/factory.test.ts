@@ -2,7 +2,8 @@ import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { resolve, dirname, join } from 'node:path';
+import { parse } from 'yaml';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   defaults,
@@ -29,6 +30,8 @@ import {
   GITLAB_TEMPLATE_NAMES,
   GITLAB_WORKFLOW_SOURCE,
   GITLAB_FACTORY_HOME_REF,
+  GITLAB_QUALITY_HOME_REF,
+  GITLAB_QUALITY_FILE,
   type GitlabTemplates,
   ensureGitlabIssueEventWebhook,
   removeGitlabIssueEventWebhook,
@@ -415,7 +418,7 @@ describe('GitLab factory templates', () => {
 
   for (const { preset, toolchain, version, fallback } of qualityCases) {
     for (const customVersion of [false, true]) {
-      it(`renders ${preset} from its template with ${customVersion ? 'custom' : 'default'} version`, () => {
+      it(`renders ${preset} as a pinned shared quality job with ${customVersion ? 'custom' : 'default'} version`, () => {
         const config = validConfig({
           machine: 'factory-bot',
           baseBranch: 'release/test',
@@ -423,18 +426,27 @@ describe('GitLab factory templates', () => {
           toolchains: customVersion ? { [toolchain]: version } : {},
         });
         const files = renderGitlabFiles(config, gitlabTemplates);
-        const quality = template(`gitlab-quality-${preset}.yml`)
-          .replaceAll('@@VERSION@@', customVersion ? version : fallback);
         const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
         assert.equal(pipeline, withReworkJobs(template('gitlab-ci.yml')
-          .replaceAll('@@QUALITY_JOB@@', quality)
+          .replaceAll('@@QUALITY_JOB@@', `include:\n  - local: ${GITLAB_QUALITY_FILE}\n`)
           .replaceAll('@@MACHINE@@', config.machine)));
         assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
-
-        const script = quality.split('    - |\n')[1]
-          .split('\n').map((line) => line.replace(/^      /, '')).join('\n');
-        const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' });
-        assert.equal(syntax.status, 0, syntax.stderr);
+        const quality = parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'];
+        assert.equal(quality.extends, `.factory-quality-${preset}`);
+        assert.equal(quality.image, preset === 'crap4dart'
+          ? 'ubuntu:24.04'
+          : preset === 'crap4js'
+            ? `node:${customVersion ? version : fallback}`
+            : preset === 'crap4java'
+              ? `eclipse-temurin:${customVersion ? version : fallback}-jdk`
+              : preset === 'crap4py'
+                ? `python:${customVersion ? version : fallback}`
+                : `golang:${customVersion ? version : fallback}`);
+        assert.ok(parse(files.find((file) => file.path === GITLAB_QUALITY_FILE)!.content).include[0].remote
+          .endsWith(`/${GITLAB_QUALITY_HOME_REF}/gitlab/factory-quality.yml`));
+        if (preset === 'crap4dart') {
+          assert.equal(quality.variables.DMTOOLS_QUALITY_FLUTTER_VERSION, customVersion ? version : fallback);
+        }
       });
     }
   }
@@ -450,6 +462,7 @@ describe('GitLab factory templates', () => {
         .replaceAll('@@QUALITY_JOB@@', '')
         .replaceAll('@@MACHINE@@', config.machine)));
       assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
+      assert.ok(!renderGitlabFiles(config, gitlabTemplates).some((file) => file.path === GITLAB_QUALITY_FILE));
     });
   }
 
@@ -625,9 +638,12 @@ describe('Source control options', () => {
     assert.doesNotMatch(pipeline, /CI_PIPELINE_SOURCE == "schedule"/);
     const qualityFiles = renderGitlabFiles(validConfig({ qualityPreset: 'crap4js' }), gitlabTemplates);
     const qualityPipeline = qualityFiles.find((file) => file.path === '.gitlab-ci.yml')!.content;
+    const quality = parse(qualityFiles.find((file) => file.path === GITLAB_QUALITY_FILE)!.content)['dmtools-quality'];
     assert.match(qualityPipeline, /  - quality/);
-    assert.match(qualityPipeline, /image: node:22/);
-    assert.match(qualityPipeline, /npx --yes github:IstiN\/crap4js/);
+    assert.match(qualityPipeline, new RegExp(`local: ${GITLAB_QUALITY_FILE.replaceAll('.', '\\.')}`));
+    assert.equal(quality.image, 'node:22');
+    assert.equal(quality.extends, '.factory-quality-crap4js');
+    assert.equal(quality.script, undefined);
     const poller = files.find((file) => file.path === '.dmtools/scripts/gitlab-factory-poll-issues.sh')!.content;
     assert.match(poller, /assignees.*username == \$machine/);
     assert.match(poller, /agent:dev/);

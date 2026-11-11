@@ -5,11 +5,6 @@ import mergeTrigger from './factory-templates/github/merge-trigger.yml?raw';
 import smKicker from './factory-templates/github/sm-kicker.yml?raw';
 import gitlabMachineSm from './factory-templates/gitlab/machine-sm.yml?raw';
 import gitlabAiTeammate from './factory-templates/gitlab/ai-teammate.yml?raw';
-import gitlabQualityJs from './factory-templates/gitlab/gitlab-quality-crap4js.yml?raw';
-import gitlabQualityDart from './factory-templates/gitlab/gitlab-quality-crap4dart.yml?raw';
-import gitlabQualityJava from './factory-templates/gitlab/gitlab-quality-crap4java.yml?raw';
-import gitlabQualityPython from './factory-templates/gitlab/gitlab-quality-crap4py.yml?raw';
-import gitlabQualityGo from './factory-templates/gitlab/gitlab-quality-crap4go.yml?raw';
 import gitlabToolchainScript from './factory-templates/gitlab/teammate-toolchains.sh?raw';
 import gitlabMergeScript from './factory-templates/gitlab/factory-merge.sh?raw';
 import faUniversal from './factory-templates/github/fa-universal.yml?raw';
@@ -27,6 +22,7 @@ import {
   renderGitlabPipeline,
   renderGitlabQualityPipeline,
   type GitlabCiSnapshot,
+  type GitlabQualityGate,
 } from './gitlab-ci.ts';
 
 export { GITLAB_QUALITY_FILE };
@@ -103,6 +99,9 @@ export const GITLAB_WORKFLOW_SOURCE = {
 
 /** Immutable dmtools-agentic-workflows commit pinned by the GitLab machine SM / teammate includes. */
 export const GITLAB_FACTORY_HOME_REF = 'd2f9002657abb56fc4f8bbeb62819b8811118ab3';
+
+/** Immutable dmtools-agentic-workflows commit that provides the shared GitLab CRAP quality gates. */
+export const GITLAB_QUALITY_HOME_REF = 'e941f06e61ef5ad863084cd1724a8f939e59be38';
 
 /** Who merges machine PRs: the factory PAT, a separate PAT, or a GitHub App (job-scoped token). */
 export interface MergeIdentity {
@@ -766,13 +765,7 @@ export function renderGitlabMachineSmFiles(
       ? `    GITLAB_REVIEWER_HANDLE: "${c.gitlabReviewer}"\n`
       : '');
   const runnerConfig = { ...c, machine: machineAuthor };
-  const quality = renderGitlabQualityJob(c, {
-    'gitlab-quality-crap4js.yml': gitlabQualityJs,
-    'gitlab-quality-crap4dart.yml': gitlabQualityDart,
-    'gitlab-quality-crap4java.yml': gitlabQualityJava,
-    'gitlab-quality-crap4py.yml': gitlabQualityPython,
-    'gitlab-quality-crap4go.yml': gitlabQualityGo,
-  });
+  const quality = gitlabQualityGate(c);
   const toolchains = gitlabTeammateToolchains(c);
   const renderTeammate = (template: string) => render(template)
     .replaceAll('@@GITLAB_JAVA_VERSION@@', toolchains.java)
@@ -839,11 +832,6 @@ export const GITLAB_TEMPLATE_NAMES = [
   'gitlab-ci.yml',
   'gitlab-factory-poll-issues.sh',
   'gitlab-factory-publish-review.sh',
-  'gitlab-quality-crap4js.yml',
-  'gitlab-quality-crap4dart.yml',
-  'gitlab-quality-crap4java.yml',
-  'gitlab-quality-crap4py.yml',
-  'gitlab-quality-crap4go.yml',
   'gitlab-auto-ci.yml',
   'gitlab-factory-common.sh',
   'gitlab-factory-job.sh',
@@ -854,12 +842,6 @@ export const GITLAB_TEMPLATE_NAMES = [
 ] as const;
 
 export type GitlabTemplates = Record<typeof GITLAB_TEMPLATE_NAMES[number], string>;
-type GitlabQualityTemplates = Pick<GitlabTemplates,
-  | 'gitlab-quality-crap4js.yml'
-  | 'gitlab-quality-crap4dart.yml'
-  | 'gitlab-quality-crap4java.yml'
-  | 'gitlab-quality-crap4py.yml'
-  | 'gitlab-quality-crap4go.yml'>;
 
 const GITLAB_MANAGED_FILES = new Set([
   'ai-teammate.yml',
@@ -888,48 +870,27 @@ export async function loadGitlabTemplates(signal?: AbortSignal): Promise<GitlabT
   return Object.fromEntries(entries) as GitlabTemplates;
 }
 
-function renderGitlabQualityJob(c: FactoryConfig, templates: GitlabQualityTemplates): string | null {
+function gitlabQualityGate(c: FactoryConfig): GitlabQualityGate | null {
   if (!isCiEnabled(c)) return null;
   const preset = c.qualityPreset ?? 'none';
   if (preset === 'none') return null;
-  const jobs = {
-    crap4js: { template: templates['gitlab-quality-crap4js.yml'], version: c.toolchains.node || '22' },
-    crap4dart: { template: templates['gitlab-quality-crap4dart.yml'], version: c.toolchains.flutter || 'stable' },
-    crap4java: { template: templates['gitlab-quality-crap4java.yml'], version: c.toolchains.java || '21' },
-    crap4py: { template: templates['gitlab-quality-crap4py.yml'], version: c.toolchains.python || '3.12' },
-    crap4go: { template: templates['gitlab-quality-crap4go.yml'], version: c.toolchains.go || '1.23' },
-  };
-  const job = jobs[preset];
-  if (!job) throw new Error(`Unknown GitLab quality preset: ${preset}`);
-  if (!/^[\w.-]+$/.test(job.version)) throw new Error(`Invalid GitLab quality toolchain version: ${job.version}`);
-  let content = job.template.replaceAll('@@VERSION@@', job.version);
-  if (preset === 'crap4dart') {
+  const gates = {
+    crap4js: { version: c.toolchains.node || '22', image: (v: string) => `node:${v}` },
     // Official Flutter releases track the current Dart SDK; third-party Flutter images can lag behind it.
-    const install = `DMTOOLS_NODE_VERSION=""\nDMTOOLS_PYTHON_VERSION=""\nDMTOOLS_GO_VERSION=""\nDMTOOLS_FLUTTER_VERSION="${job.version}"\n${gitlabToolchainScript}`;
-    content = content.replace(/^@@FLUTTER_INSTALL@@\n/m, () => indent(install, 6));
+    crap4dart: { version: c.toolchains.flutter || 'stable', image: () => 'ubuntu:24.04' },
+    crap4java: { version: c.toolchains.java || '21', image: (v: string) => `eclipse-temurin:${v}-jdk` },
+    crap4py: { version: c.toolchains.python || '3.12', image: (v: string) => `python:${v}` },
+    crap4go: { version: c.toolchains.go || '1.23', image: (v: string) => `golang:${v}` },
+  };
+  const gate = gates[preset];
+  if (!gate) throw new Error(`Unknown GitLab quality preset: ${preset}`);
+  if (!/^[\w.-]+$/.test(gate.version)) throw new Error(`Invalid GitLab quality toolchain version: ${gate.version}`);
+  const variables: Record<string, string> = {};
+  if (preset === 'crap4dart') {
+    variables.DMTOOLS_QUALITY_FLUTTER_VERSION = gate.version;
+    if (c.gitlabAutoLifecycle === false) variables.DMTOOLS_QUALITY_FLUTTER_COMMANDS = 'false';
   }
-  if (c.gitlabAutoLifecycle !== false) {
-    content = content.replace(
-      /if \[ ! -f ([^\]]+) \]; then echo "[^"]+"; exit 0; fi/g,
-      'if [ ! -f $1 ]; then echo "Configured quality gate does not match this repository: missing $1" >&2; exit 1; fi',
-    );
-    if (preset === 'crap4dart') {
-      content = content
-        .replace('      dart pub get', '      if grep -Eq \'^  flutter:\' pubspec.yaml; then flutter pub get; else dart pub get; fi')
-        .replace('      dart analyze', '      if grep -Eq \'^  flutter:\' pubspec.yaml; then flutter analyze; else dart analyze; fi')
-        .replace(
-          '      dart test --coverage=coverage\n      dart pub global activate coverage\n      dart pub global run coverage:format_coverage --lcov --in coverage --out coverage/lcov.info --report-on lib',
-          `      if grep -Eq '^  flutter:' pubspec.yaml; then
-        flutter test --coverage
-      else
-        dart test --coverage=coverage
-        dart pub global activate coverage
-        dart pub global run coverage:format_coverage --lcov --in coverage --out coverage/lcov.info --report-on lib
-      fi`,
-        );
-    }
-  }
-  return content;
+  return { preset, image: gate.image(gate.version), variables, ref: GITLAB_QUALITY_HOME_REF };
 }
 
 function replaceGitlabAnchor(content: string, anchor: string, replacement: string): string {
@@ -951,7 +912,20 @@ export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, 
   const files = renderFiles(c).filter(
     (file) => !file.path.startsWith('.github/'),
   );
-  const qualityJob = renderGitlabQualityJob(c, templates);
+  const quality = gitlabQualityGate(c);
+  const qualityRules = c.gitlabAutoLifecycle === false
+    ? undefined
+    : [
+      { if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_FACTORY_PHASE == "validation"' },
+      { if: '$CI_PIPELINE_SOURCE == "merge_request_event"' },
+    ];
+  const qualityAfterScript = c.gitlabAutoLifecycle === false
+    ? undefined
+    : [
+      'if [ "$CI_PIPELINE_SOURCE" = api ] && [ "${DMTOOLS_FACTORY_PHASE:-}" = validation ]; then\n' +
+        '  bash .dmtools/scripts/gitlab-factory-lifecycle.sh wake\n' +
+        'fi',
+    ];
   const runnerTemplates: Record<string, string> = {
     '.dmtools/runners/fa-bug-dev.json': runnerBug,
     '.dmtools/runners/fa-story-dev.json': runnerStory,
@@ -978,10 +952,17 @@ export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, 
     {
       path: '.gitlab-ci.yml',
       content: templates['gitlab-ci.yml']
-        .replace(/^  - quality\n/m, (stage) => qualityJob ? stage : '')
-        .replaceAll('@@QUALITY_JOB@@', qualityJob ?? '')
+        .replace(/^  - quality\n/m, (stage) => quality ? stage : '')
+        .replaceAll('@@QUALITY_JOB@@', quality ? `include:\n  - local: ${GITLAB_QUALITY_FILE}\n` : '')
         .replaceAll('@@MACHINE@@', c.machine),
     },
+    ...(quality ? [{
+      path: GITLAB_QUALITY_FILE,
+      content: renderGitlabQualityPipeline(quality, 'quality', [], {
+        rules: qualityRules,
+        afterScript: qualityAfterScript,
+      }),
+    }] : []),
   ];
   if (c.gitlabMultipleTeammates) {
     const selector = '.dmtools/scripts/gitlab-factory-select-teammate.sh';
@@ -1088,19 +1069,8 @@ export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, 
       '  echo "Created GitLab merge request: $mr_url"');
     poller.content = functions + '\n' + templates['gitlab-factory-intake.sh'];
     const pipeline = rendered.find((file) => file.path === '.gitlab-ci.yml')!;
-    const quality = qualityJob?.replace(
-      '  rules:\n',
-      `  after_script:
-    - |
-      if [ "$CI_PIPELINE_SOURCE" = api ] && [ "\${DMTOOLS_FACTORY_PHASE:-}" = validation ]; then
-        bash .dmtools/scripts/gitlab-factory-lifecycle.sh wake
-      fi
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_FACTORY_PHASE == "validation"'
-`,
-    ) ?? '';
     pipeline.content = templates['gitlab-auto-ci.yml']
-      .replaceAll('@@QUALITY_JOB@@', quality)
+      .replaceAll('@@QUALITY_JOB@@', quality ? `include:\n  - local: ${GITLAB_QUALITY_FILE}\n` : '')
       .replace('  - quality\n', quality ? '  - quality\n' : '');
     rendered.push(
       { path: '.dmtools/scripts/gitlab-factory-common.sh', content: templates['gitlab-factory-common.sh'] },

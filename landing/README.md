@@ -119,6 +119,10 @@ repository fails the job. The Java preset requires Maven, and the JavaScript
 analyzer requires Node.js 22 or newer. As with the existing quality templates,
 coverage and CRAP analysis can be skipped when a project has no tests; missing
 coverage after tests run fails the generated job.
+The generated job extends a shared CRAP gate pinned to an immutable
+`dmtools-agentic-workflows` commit; its scripts are not copied into the project.
+The Dart gate installs official Flutter by default, using the selected Flutter
+version (or `stable`).
 
 No generated gate does **not** disable pipeline validation: any existing MR
 pipeline still determines the validation status, and an MR without a head
