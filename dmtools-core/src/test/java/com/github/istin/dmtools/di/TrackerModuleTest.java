@@ -196,41 +196,41 @@ public class TrackerModuleTest {
 
             assertSame(githubClient, result);
         }
+    }
 
-        @Test
-        void testProvideTrackerClient_DefaultTrackerGitlabSuccess() {
-            when(configuration.getDefaultTracker()).thenReturn("gitlab");
-            GitLabTrackerClient gitlabClient = mock(GitLabTrackerClient.class);
+    @Test
+    void testProvideTrackerClient_DefaultTrackerGitlabSuccess() {
+        when(configuration.getDefaultTracker()).thenReturn("gitlab");
+        GitLabTrackerClient gitlabClient = mock(GitLabTrackerClient.class);
 
-            try (MockedStatic<GitLabTrackerClient> gitlab = mockStatic(GitLabTrackerClient.class)) {
-                gitlab.when(GitLabTrackerClient::getInstance).thenReturn(gitlabClient);
+        try (MockedStatic<GitLabTrackerClient> gitlab = mockStatic(GitLabTrackerClient.class)) {
+            gitlab.when(GitLabTrackerClient::getInstance).thenReturn(gitlabClient);
 
-                TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
+            TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
-                assertSame(gitlabClient, result);
-            }
+            assertSame(gitlabClient, result);
         }
+    }
 
-        @Test
-        void testProvideTrackerClient_AutoDetectsGitlabAfterExistingProviders() {
-            when(configuration.getDefaultTracker()).thenReturn(null);
-            GitLabTrackerClient gitlabClient = mock(GitLabTrackerClient.class);
+    @Test
+    void testProvideTrackerClient_AutoDetectsGitlabAfterExistingProviders() {
+        when(configuration.getDefaultTracker()).thenReturn(null);
+        GitLabTrackerClient gitlabClient = mock(GitLabTrackerClient.class);
 
-            try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
-                 MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
-                 MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
-                 MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class);
-                 MockedStatic<GitLabTrackerClient> gitlab = mockStatic(GitLabTrackerClient.class)) {
-                jira.when(BasicJiraClient::getInstance).thenReturn(null);
-                ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
-                rally.when(BasicRallyClient::getInstance).thenReturn(null);
-                github.when(GitHubTrackerClient::getInstance).thenReturn(null);
-                gitlab.when(GitLabTrackerClient::getInstance).thenReturn(gitlabClient);
+        try (MockedStatic<BasicJiraClient> jira = mockStatic(BasicJiraClient.class);
+             MockedStatic<BasicAzureDevOpsClient> ado = mockStatic(BasicAzureDevOpsClient.class);
+             MockedStatic<BasicRallyClient> rally = mockStatic(BasicRallyClient.class);
+             MockedStatic<GitHubTrackerClient> github = mockStatic(GitHubTrackerClient.class);
+             MockedStatic<GitLabTrackerClient> gitlab = mockStatic(GitLabTrackerClient.class)) {
+            jira.when(BasicJiraClient::getInstance).thenReturn(null);
+            ado.when(BasicAzureDevOpsClient::getInstance).thenReturn(null);
+            rally.when(BasicRallyClient::getInstance).thenReturn(null);
+            github.when(GitHubTrackerClient::getInstance).thenReturn(null);
+            gitlab.when(GitLabTrackerClient::getInstance).thenReturn(gitlabClient);
 
-                TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
+            TrackerClient<? extends ITicket> result = module.provideTrackerClient(configuration);
 
-                assertSame(gitlabClient, result);
-            }
+            assertSame(gitlabClient, result);
         }
     }
 
