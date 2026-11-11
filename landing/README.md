@@ -102,18 +102,39 @@ labels and machine assignment, or set it to `dev`, `bug`, `story`, `review`,
 or `rework`. The parent requires the include SHA in `FACTORY_HOME_REF` to
 match the immutable commit used by `ai-teammate.yml`.
 
-To automatically run the `dev` teammate for queued issues, create a pipeline
+To automatically run the `dev` or `rework` teammate for queued issues, create a pipeline
 schedule in **Build → Pipeline schedules** on the default branch with cron
 `*/10 * * * *`. Every scheduled pipeline automatically runs both `factory-sm`
 and `ai-teammate-scan`; no scan opt-in variable or issue IID is required.
-The scan selects open issues with the `agent:dev` label assigned to an account
+The scan selects open issues with the `agent:rework` label, regardless of
+assignment, or with the `agent:dev` label assigned to an account
 whose username or display name is `ai-dev`, including project bots with
 generated usernames. Set `DMTOOLS_AI_DEV_USERNAME` only to override that
 assignee selector (an exact username is recommended if display names are
 ambiguous). The scan starts one API pipeline per matching issue and passes
 the resolved actual username as `AGENT_HANDLE` to `ai-teammate-auto`, which
 extends the shared teammate parent. The parent checks whether the issue is
-eligible for a dev run. Use the schedule's **Run** action to scan immediately.
+eligible and derives the leg from live labels (`agent:rework` takes precedence).
+Issues held by `agent:skip`, `blocked`, `provider_quota`, or `needs-human`
+are skipped, as are rework issues already labeled `status:In Rework`.
+Dev issues waiting for review, answers, or an active leg are also skipped.
+Use the schedule's **Run** action to scan immediately.
+The same scan also keeps merge request validation labels in sync with the
+head pipeline, like the GitHub state machine: `ai_validating` while CI runs on
+the current head, `ai_validated` when it succeeds, and `validation_failed` when
+it fails. A moved head or a missing head pipeline removes a stale `ai_validated`.
+Draft MRs are skipped. `ai_validated` enables the `review-after-dev` and
+`review-machine-unlinked` state-machine rules.
+When the head pipeline of a machine-authored MR fails, the scan arms rework the
+way GitHub's `rework-on-validation-failed` rule does. It adds `agent:rework` to
+the linked issue (`Closes #N` or an `ai/gl-<IID>` branch), so the next scan
+dispatches it, or to the MR itself, where the state machine's `rework-on-label`
+rule picks it up. A marker note limits this to one arm per head SHA. If CI is
+still red on the same head after that rework, the arm is withheld:
+`needs-human` is added once to the MR and its issue, with an explanatory note.
+A new push restarts the budget. MRs and issues that are already in rework or
+held (`needs-human`, `blocked`, `agent:skip`, `provider_quota`) are not armed.
+If the MR notes cannot be read, the arm is skipped for that scan.
 If pipeline creation fails, the scan fails and logs GitLab's API response body
 to help diagnose validation errors or pipeline-variable restrictions.
 Dispatched pipelines also pass the pinned `FACTORY_HOME_REF` as a pipeline
@@ -146,6 +167,18 @@ itself. When a new dev leg starts, a stale `ai_developed` from a previous cycle
 is cleared first, so the label always marks the latest implementation. A dev
 leg that ends in ask-mode
 (`ai_questions_asked`) is not treated as a missing MR.
+After every rework or review leg, whether it succeeds, fails, or is canceled,
+both teammate jobs close the cycle on the linked counterpart too, like GitHub's
+`close-rework-cycle.sh` and `close-review-cycle.sh`. The parent relabels only
+the issue or MR it ran on. This step also removes `agent:rework` and
+`status:In Rework` (or `agent:review` and `status:In Review`) from the linked
+MR or issue. The link comes from the issue's open related MR (preferring
+`ai/gl-<IID>`), or from the MR's `Closes #<IID>` reference or `ai/gl-<IID>`
+branch. After a successful rework, the MR's `ai_validated`, `ai_validating`,
+`validation_failed`, `ai_pr_reviewed`, and `pr_approved` labels are cleared,
+because the head moved. After a successful review, the MR gets `ai_pr_reviewed`
+for any verdict, so `review-external-once` does not review it again. An
+approval also clears `rework-round:<N>` and `needs-human`.
 The schedule interval is configured in GitLab, not in the YAML, and GitLab
 instance schedule limits apply.
 

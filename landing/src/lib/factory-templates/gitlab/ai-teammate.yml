@@ -168,6 +168,74 @@ include:
         fi
       fi
 
+.ai-teammate-close-cycle:
+  script:
+    - |
+      # Mirrors GitHub close-rework-cycle.sh / close-review-cycle.sh plus the PR-side review labels:
+      # the parent only relabels its anchor, so the linked issue/MR counterpart keeps stale trigger labels.
+      set +e
+      state=.dmtools/factory-state.json
+      if [ -f "$state" ]; then
+        endpoint="$(jq -r '.endpoint // empty' "$state")"
+        leg="$(jq -r '.leg // empty' "$state")"
+        token="${GITLAB_DEV_TOKEN:-${GITLAB_TOKEN:-}}"
+        if [ "$leg" = review ] && [ -n "${GITLAB_REVIEWER_TOKEN:-}" ]; then token="$GITLAB_REVIEWER_TOKEN"; fi
+        base="$CI_API_V4_URL/projects/$CI_PROJECT_ID"
+        gl() { curl --silent --show-error --fail --max-time 30 --header "PRIVATE-TOKEN: $token" "$@"; }
+        relabel() {
+          [ -n "$2$3" ] || return 0
+          if gl --request PUT --data-urlencode "add_labels=$2" --data-urlencode "remove_labels=$3" "$base/$1" >/dev/null; then
+            echo "Labels on $1: added [${2}] removed [${3}]"
+          else
+            echo "Warning: unable to update labels on $1" >&2
+          fi
+        }
+        issue=""; mr=""
+        case "$endpoint" in
+          issues/[1-9]*) issue="${endpoint#issues/}" ;;
+          merge_requests/[1-9]*) mr="${endpoint#merge_requests/}" ;;
+        esac
+        if [ -z "$mr" ] && [ -f .dmtools/merge-request.json ]; then mr="$(jq -r '.iid // empty' .dmtools/merge-request.json)"; fi
+        if [ -n "$token" ] && [ -n "$issue" ] && [ -z "$mr" ]; then
+          mr="$(gl "$base/issues/$issue/related_merge_requests?per_page=100" | jq -r --argjson project "$CI_PROJECT_ID" --arg branch "ai/gl-$issue" \
+            '[.[] | select(.state == "opened" and .project_id == $project)] as $open |
+             (first($open[] | select(.source_branch == $branch)) // (if ($open | length) == 1 then $open[0] else null end)) | .iid // empty')"
+        fi
+        if [ -n "$token" ] && [ -n "$mr" ] && [ -z "$issue" ]; then
+          issue="$(gl "$base/merge_requests/$mr" | jq -r \
+            '((.description // "") | capture("(?i)\\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\\s+#(?<n>[0-9]+)").n) //
+             ((.source_branch // "") | capture("^ai/gl-(?<n>[0-9]+)$").n) // empty' 2>/dev/null)"
+        fi
+        case "$leg" in
+          rework) close_labels='agent:rework,status:In Rework' ;;
+          review) close_labels='agent:review,status:In Review' ;;
+          *) close_labels='' ;;
+        esac
+        if [ -z "$token" ]; then
+          echo "Warning: no GitLab token available to close the $leg cycle on linked issue/MR" >&2
+        elif [ -n "$close_labels" ]; then
+          echo "Closing $leg cycle (job ${CI_JOB_STATUS:-unknown}) on issue #${issue:-none} and MR !${mr:-none}"
+          [ -z "$issue" ] || relabel "issues/$issue" '' "$close_labels"
+          [ -z "$mr" ] || relabel "merge_requests/$mr" '' "$close_labels"
+          if [ "${CI_JOB_STATUS:-}" = success ] && [ "$leg" = rework ] && [ -n "$mr" ]; then
+            relabel "merge_requests/$mr" '' 'ai_validated,ai_validating,validation_failed,ai_pr_reviewed,pr_approved'
+          fi
+          if [ "${CI_JOB_STATUS:-}" = success ] && [ "$leg" = review ]; then
+            decision="$(jq -r '(.decision // .verdict // "") | ascii_upcase' outputs/pr_review.json 2>/dev/null)"
+            [ -z "$mr" ] || relabel "merge_requests/$mr" ai_pr_reviewed ''
+            case "$decision" in
+              APPROVE|APPROVED)
+                for target in ${issue:+issues/$issue} ${mr:+merge_requests/$mr}; do
+                  rounds="$(gl "$base/$target" | jq -r '[.labels[]? | select(test("^rework-round[:-][0-9]+$"))] + ["needs-human"] | join(",")')"
+                  relabel "$target" '' "$rounds"
+                done
+                ;;
+            esac
+          fi
+        fi
+      fi
+      true
+
 ai-teammate:
   extends: .factory-teammate
   before_script:
@@ -179,6 +247,9 @@ ai-teammate:
   script:
     - !reference [.factory-teammate, script]
     - !reference [.ai-teammate-verify-mr, script]
+  after_script:
+    - !reference [.factory-teammate, after_script]
+    - !reference [.ai-teammate-close-cycle, script]
   resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
   rules:
     - if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true"'
@@ -200,6 +271,9 @@ ai-teammate-auto:
   script:
     - !reference [.factory-teammate, script]
     - !reference [.ai-teammate-verify-mr, script]
+  after_script:
+    - !reference [.factory-teammate, after_script]
+    - !reference [.ai-teammate-close-cycle, script]
   resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true" && $FACTORY_ISSUE != "" && $FACTORY_MR == ""'
@@ -217,13 +291,12 @@ ai-teammate-scan:
       set -euo pipefail
       : "${GITLAB_TOKEN:?Set a GitLab token with api access to list issues and create pipelines}"
       assignee="${DMTOOLS_AI_DEV_USERNAME:-ai-dev}"
-      echo "Scanning open issues with label agent:dev assigned to $assignee"
+      echo "Scanning open issues for agent:rework (any assignee) or agent:dev assigned to $assignee"
       page=1
       dispatched=0
       while :; do
         response="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --get \
           --data-urlencode "state=opened" \
-          --data-urlencode "labels=agent:dev" \
           --data-urlencode "per_page=100" \
           --data-urlencode "page=$page" \
           "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues")"
@@ -232,11 +305,19 @@ ai-teammate-scan:
           break
         fi
         issue_assignees="$(printf '%s' "$response" | jq -r --arg assignee "$assignee" \
-          '.[] | select(.state == "opened" and (.labels | index("agent:dev"))) |
-           . as $issue | [.assignees[]? | select(.username == $assignee or .name == $assignee)] |
-           select(length > 0) | [$issue.iid, .[0].username] | @tsv')"
+          '.[] | select(.state == "opened") |
+           select((.labels // []) | any(. == "agent:skip" or . == "blocked" or . == "provider_quota" or . == "needs-human") | not) |
+           [.assignees[]? | select(.username == $assignee or .name == $assignee)] as $matches |
+           if (.labels // [] | index("agent:rework")) then
+             select((.labels // []) | index("status:In Rework") | not) |
+             [.iid, ($matches[0].username // $assignee)] | @tsv
+           else
+             select((.labels // []) | index("agent:dev")) |
+             select((.labels // []) | any(. == "agent:review" or . == "status:In Development" or . == "status:In Review" or . == "status:In Rework" or . == "ai_questions_asked" or . == "ai_pr_reviewed") | not) |
+             select($matches | length > 0) | [.iid, $matches[0].username] | @tsv
+           end')"
         if [ -z "$issue_assignees" ]; then
-          echo "No matching assigned issues found on page $page"
+          echo "No eligible queued issues found on page $page"
         else
           while IFS=$'\t' read -r issue_iid username; do
             [ -n "$issue_iid" ] || continue
@@ -263,3 +344,112 @@ ai-teammate-scan:
         page=$((page + 1))
       done
       echo "Dispatched $dispatched ai-teammate pipelines"
+      # Validation labels, like GitHub's SM: ai_validating while head CI runs, ai_validated when it is green,
+      # validation_failed when it fails; a moved head voids ai_validated until its own pipeline is green.
+      # Red CI on a machine-authored MR arms agent:rework like GitHub's rework-on-validation-failed (arm_rework):
+      # at most one arm per head SHA (MR note marker). If the head is still red and unchanged after that rework,
+      # the arm is withheld and needs-human is added once, so an unfixable failure cannot loop.
+      api_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID"
+      machine_author="${SM_MACHINE_AUTHOR:-}"
+      armed=0
+      arm_red_ci() {
+        local mr_json="$1" mr_iid head issue notes target issue_json
+        printf '%s' "$mr_json" | jq -e --arg machine "$machine_author" --arg assignee "$assignee" '
+          .head_pipeline != null and .head_pipeline.sha == .sha and .head_pipeline.status == "failed" and
+          ((.author.username // "") as $u | (.author.name // "") as $n |
+            ($machine != "" and $u == $machine) or $u == $assignee or $n == $assignee) and
+          ((.labels // []) | any(. == "agent:rework" or . == "status:In Rework" or . == "needs-human" or
+            . == "blocked" or . == "agent:skip" or . == "provider_quota") | not)' >/dev/null || return 0
+        mr_iid="$(printf '%s' "$mr_json" | jq -r .iid)"
+        head="$(printf '%s' "$mr_json" | jq -r .sha)"
+        issue="$(printf '%s' "$mr_json" | jq -r \
+          '((.description // "") | capture("(?i)\\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\\s+#(?<n>[0-9]+)").n) //
+           ((.source_branch // "") | capture("^ai/gl-(?<n>[0-9]+)$").n) // empty' 2>/dev/null || true)"
+        if [ -n "$issue" ]; then
+          if ! issue_json="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$api_base/issues/$issue")"; then
+            echo "Warning: unable to read issue #$issue linked to red MR !$mr_iid; rework not armed this tick" >&2
+            return 0
+          fi
+          if printf '%s' "$issue_json" | jq -e '.state != "opened" or ((.labels // []) | any(. == "agent:rework" or
+            . == "status:In Rework" or . == "needs-human" or . == "blocked" or . == "agent:skip" or . == "provider_quota"))' >/dev/null; then
+            return 0
+          fi
+        fi
+        # Fail closed: without the marker history the per-head bound cannot be enforced.
+        if ! notes="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --get \
+          --data-urlencode "per_page=100" --data-urlencode "sort=desc" --data-urlencode "order_by=created_at" \
+          "$api_base/merge_requests/$mr_iid/notes")"; then
+          echo "Warning: unable to read notes of red MR !$mr_iid; rework not armed this tick" >&2
+          return 0
+        fi
+        if printf '%s' "$notes" | jq -e --arg m "<!-- dmtools:red-ci-arm head=$head -->" 'any(.[]?; (.body // "") | contains($m))' >/dev/null; then
+          if printf '%s' "$notes" | jq -e --arg m "<!-- dmtools:red-ci-withheld head=$head -->" 'any(.[]?; (.body // "") | contains($m))' >/dev/null; then
+            return 0
+          fi
+          for target in ${issue:+issues/$issue} "merge_requests/$mr_iid"; do
+            curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --request PUT \
+              --data-urlencode "add_labels=needs-human" "$api_base/$target" >/dev/null \
+              || echo "Warning: unable to add needs-human to $target" >&2
+          done
+          curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --request POST \
+            --data-urlencode "body=🛑 Rework arm withheld on head $head: CI is still red after an automatic rework left the head unchanged. A human owns this MR; push a fix (a new head restarts validation) and remove needs-human. <!-- dmtools:red-ci-withheld head=$head -->" \
+            "$api_base/merge_requests/$mr_iid/notes" >/dev/null || echo "Warning: unable to post escalation on MR !$mr_iid" >&2
+          echo "MR !$mr_iid: CI still red on unchanged head ${head:0:8} after rework; escalated with needs-human"
+          return 0
+        fi
+        target="merge_requests/$mr_iid"
+        if [ -n "$issue" ]; then target="issues/$issue"; fi
+        if ! curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --request PUT \
+          --data-urlencode "add_labels=agent:rework" "$api_base/$target" >/dev/null; then
+          echo "Warning: unable to arm agent:rework on $target for red MR !$mr_iid" >&2
+          return 0
+        fi
+        curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --request POST \
+          --data-urlencode "body=🔴 CI pipeline failed on head $head; armed agent:rework on ${target%%/*} ${target##*/} (once per head). <!-- dmtools:red-ci-arm head=$head -->" \
+          "$api_base/merge_requests/$mr_iid/notes" >/dev/null || echo "Warning: unable to record the rework arm on MR !$mr_iid" >&2
+        echo "MR !$mr_iid: CI failed on head ${head:0:8}; armed agent:rework on $target"
+        armed=$((armed + 1))
+      }
+      mr_page=1
+      synced=0
+      while :; do
+        if ! mrs="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --get \
+          --data-urlencode "state=opened" --data-urlencode "per_page=100" --data-urlencode "page=$mr_page" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests")"; then
+          echo "Warning: unable to list open merge requests for validation labels" >&2
+          break
+        fi
+        mr_count="$(printf '%s' "$mrs" | jq -r 'if type == "array" then length else 0 end')"
+        [ "$mr_count" -gt 0 ] || break
+        for mr_iid in $(printf '%s' "$mrs" | jq -r '.[] | select(.draft != true and .work_in_progress != true) | .iid'); do
+          if ! mr_json="$(curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid")"; then
+            echo "Warning: unable to read MR !$mr_iid for validation labels" >&2
+            continue
+          fi
+          changes="$(printf '%s' "$mr_json" | jq -r '
+            (.labels // []) as $have |
+            (if .head_pipeline != null and .head_pipeline.sha == .sha then .head_pipeline.status else "" end) as $status |
+            (if $status == "success" then [["ai_validated"], ["ai_validating", "validation_failed"]]
+             elif $status == "failed" then [["validation_failed"], ["ai_validated", "ai_validating"]]
+             elif $status == "" or $status == "canceled" or $status == "skipped" or $status == "manual" then [[], ["ai_validated", "ai_validating"]]
+             else [["ai_validating"], ["ai_validated", "validation_failed"]] end) as [$add, $remove] |
+            [($add - $have | join(",")), ([$remove[] | select(. as $l | $have | index($l))] | join(","))] | join("|")')"
+          IFS='|' read -r add remove <<< "$changes"
+          if [ -n "$add$remove" ]; then
+            if curl --fail --silent --show-error --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --request PUT \
+              --data-urlencode "add_labels=$add" --data-urlencode "remove_labels=$remove" \
+              "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid" >/dev/null; then
+              echo "MR !$mr_iid validation labels: added [$add] removed [$remove]"
+              synced=$((synced + 1))
+            else
+              echo "Warning: unable to update validation labels on MR !$mr_iid" >&2
+            fi
+          fi
+          arm_red_ci "$mr_json" || true
+        done
+        [ "$mr_count" -ge 100 ] || break
+        mr_page=$((mr_page + 1))
+      done
+      echo "Updated validation labels on $synced merge request(s)"
+      echo "Armed agent:rework for red CI on $armed merge request(s)"
