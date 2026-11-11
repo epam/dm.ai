@@ -342,6 +342,10 @@ parse_installer_args() {
                 INSTALLER_NO_SKILL_FILES=true
                 shift
                 ;;
+            --global|--global-skills|--no-local-skills)
+                # Global-only skill placement (already the default for main install.sh; accepted as explicit CLI flag).
+                shift
+                ;;
             --skill)
                 if [ $# -lt 2 ]; then
                     error "Missing value for --skill. Use --skill jira"
@@ -377,10 +381,11 @@ parse_installer_args() {
                 shift
                 ;;
             --help|-h)
-                echo "Usage: install.sh [--skill <name>] [--skills=<name,name>] [--all-skills] [--skip-unknown] [--strict] [version]"
+                echo "Usage: install.sh [--skill <name>] [--skills=<name,name>] [--all-skills] [--global-skills] [--no-skills] [--skip-unknown] [--strict] [version]"
                 echo "  --skill <name>      Select a single skill. Repeat to add more skills."
                 echo "  --skills=<csv>      Allowed alias for comma-separated skill selection."
                 echo "  --all-skills        Install every supported skill."
+                echo "  --global-skills     Install skills only into user-level directories (~/.claude, ~/.cursor, ~/.copilot, ~/.codex, ~/.agents; default)"
                 echo "  --no-skills         Do not install skill files into agent directories (~/.claude, ...)"
                 echo "  --skip-unknown      Warn and continue when unknown skill names are supplied."
                 echo "  --strict            Legacy alias for strict invalid-skill handling."
@@ -2054,7 +2059,7 @@ install_agent_skills() {
         args+=("--skills=${EFFECTIVE_SKILLS_CSV}")
     fi
     [ "$SKIP_UNKNOWN_SKILLS" = true ] && args+=(--skip-unknown)
-    if ! DMTOOLS_SKILL_RELEASE_BASE_URL="$base" bash "$script" "${args[@]}"; then
+    if ! DMTOOLS_SKILL_RELEASE_BASE_URL="$base" DMTOOLS_SKILLS_GLOBAL_ONLY=true bash "$script" "${args[@]}"; then
         warn "Skill installation did not complete; the DMTools CLI itself is installed."
     fi
     return 0
