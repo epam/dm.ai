@@ -1,0 +1,48 @@
+include:
+  - remote: https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/@@FACTORY_HOME_REF@@/gitlab/factory-sm.yml
+  - local: ai-teammate.yml
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_SM == "true"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && (($FACTORY_ISSUE != "" && $FACTORY_MR == "") || ($FACTORY_ISSUE == "" && $FACTORY_MR != ""))'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "api" || $CI_PIPELINE_SOURCE == "trigger") && (($FACTORY_ISSUE != "" && $FACTORY_MR == "") || ($FACTORY_ISSUE == "" && $FACTORY_MR != ""))'
+    - when: never
+
+variables:
+  DMTOOLS_MACHINE_SM:
+    value: "false"
+    description: Set true when starting a web pipeline to run the machine SM manually.
+  FACTORY_ISSUE:
+    value: ""
+    description: Optional project-local issue IID for the ai-teammate job; leave empty when running an MR or machine SM.
+  FACTORY_MR:
+    value: ""
+    description: Optional project-local merge request IID for the ai-teammate job; leave empty when running an issue or machine SM.
+  FACTORY_LEG:
+    value: ""
+    description: Optional teammate leg (dev, bug, story, review, or rework); leave empty to derive it from issue/MR state.
+  FACTORY_HOME_REF: "@@FACTORY_HOME_REF@@"
+  SM_MACHINE_AUTHOR: "@@MACHINE_AUTHOR@@"
+  DMTOOLS_GITLAB_TEAMMATES: "@@GITLAB_TEAMMATES@@"
+  DMTOOLS_GITLAB_INSTALL_TOOLS: "true"
+  DMTOOLS_GITLAB_FACTORY_HELPERS: "true"
+
+default:
+  image: eclipse-temurin:21-jdk
+
+factory-sm:
+  extends: .factory-sm
+  resource_group: dmtools-machine-sm
+  interruptible: false
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      variables:
+        SM_DRY_RUN: "false"
+    - if: '$CI_PIPELINE_SOURCE == "web" && $DMTOOLS_MACHINE_SM == "true"'
+      variables:
+        SM_DRY_RUN: "true"
+  variables:
+    # Job variables inherited from .factory-sm override global ones, so restate the machine author here.
+    SM_MACHINE_AUTHOR: "@@MACHINE_AUTHOR@@"

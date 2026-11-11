@@ -12,7 +12,7 @@ import {
   createRepo,
   defaults,
   detectCi,
-  ensureGitlabIssueEventWebhook,
+  ensureGitlabFactorySchedule,
   ensureGitlabLabels,
   ensureLabels,
   isCiEnabled,
@@ -31,18 +31,15 @@ import {
   putSecrets,
   putGitlabVariables,
   createGitlabMergeRequest,
+  renderGitlabMachineSmFiles,
   requiredSecrets,
   renderFiles,
-  renderGitlabFiles,
-  loadGitlabTemplates,
-  GITLAB_WORKFLOW_SOURCE,
   validate,
   prBody,
   type CiDetection,
   type TokenCheck,
   type CiWorkflow,
   type FactoryConfig,
-  type GitlabTemplates,
   type ProviderEntry,
   type QualityPresetId,
   type RepoSummary,
@@ -55,6 +52,8 @@ const CUSTOM = '__custom__';
 const LABELS: Record<string, string> = {
   repo: 'Repository',
   machine: 'AI teammate account',
+  gitlabDev: 'AI development account',
+  gitlabReviewer: 'AI reviewer account',
   ciFile: 'CI workflow file',
   ciName: 'CI workflow name',
   checks: 'Checks',
@@ -178,9 +177,6 @@ export default function FactorySetup() {
   const [cfg, setCfg] = useState<FactoryConfig>(defaults);
   const [scm, setScm] = useState<ScmId>('github');
   const [gitlabBaseUrl, setGitlabBaseUrl] = useState('https://gitlab.com');
-  const [gitlabTemplates, setGitlabTemplates] = useState<GitlabTemplates | null>(null);
-  const [gitlabTemplateError, setGitlabTemplateError] = useState('');
-  const [gitlabTemplateAttempt, setGitlabTemplateAttempt] = useState(0);
   const [token, setToken] = useState('');
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [repoLoadError, setRepoLoadError] = useState('');
@@ -207,6 +203,7 @@ export default function FactorySetup() {
   const [activeStep, setActiveStep] = useState<string>('step-repo');
 
   const errors = useMemo(() => validate(cfg, scm), [cfg, scm]);
+  const gitlabDevAccount = cfg.gitlabMultipleTeammates ? cfg.gitlabDev : cfg.machine;
   const normalizedGitlabBaseUrl = useMemo(() => {
     try {
       return normalizeGitlabBaseUrl(gitlabBaseUrl);
@@ -220,7 +217,7 @@ export default function FactorySetup() {
     }
     try {
       if (scm === 'gitlab') {
-        return { files: gitlabTemplates ? renderGitlabFiles(cfg, gitlabTemplates, normalizedGitlabBaseUrl) : [], error: '' };
+        return { files: renderGitlabMachineSmFiles(cfg), error: '' };
       }
       return {
         files: renderFiles(cfg),
@@ -229,25 +226,12 @@ export default function FactorySetup() {
     } catch (error) {
       return { files: [], error: (error as Error).message };
     }
-  }, [cfg, errors, scm, normalizedGitlabBaseUrl, gitlabTemplates]);
+  }, [cfg, errors, scm, normalizedGitlabBaseUrl]);
   const files = generation.files;
-  const templateError = gitlabTemplateError || generation.error;
+  const templateError = generation.error;
   const set = <K extends keyof FactoryConfig>(k: K, v: FactoryConfig[K]) => setCfg((c) => ({ ...c, [k]: v }));
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const show = (k: string) => (touched[k] ? errors[k] : undefined);
-
-  useEffect(() => {
-    if (scm !== 'gitlab') return;
-    const controller = new AbortController();
-    setGitlabTemplates(null);
-    setGitlabTemplateError('');
-    loadGitlabTemplates(controller.signal).then((templates) => {
-      if (!controller.signal.aborted) setGitlabTemplates(templates);
-    }).catch((error: Error) => {
-      if (!controller.signal.aborted) setGitlabTemplateError(`Unable to load GitLab parent workflows: ${error.message}`);
-    });
-    return () => controller.abort();
-  }, [scm, gitlabTemplateAttempt]);
 
   useEffect(() => {
     const ids = ['step-repo', 'step-fa', 'step-providers', 'step-ci', 'step-runtime', 'step-secrets'];
@@ -465,9 +449,6 @@ export default function FactorySetup() {
     const log = (m: string) => setLines((l) => [...l, m]);
     try {
       if (scm === 'gitlab') {
-        if (!gitlabTemplates || templateError) {
-          throw new Error(templateError || 'GitLab parent workflows have not loaded yet.');
-        }
         const wanted = Object.fromEntries(
           requiredSecrets(cfg, scm, normalizedGitlabBaseUrl).map((x) => [x.name, secretVals[x.name] ?? '']),
         );
@@ -478,10 +459,12 @@ export default function FactorySetup() {
             .then(setExistingLabels)
             .catch(() => {});
         }
-        const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log, gitlabTemplates);
+        const mergeRequest = await createGitlabMergeRequest(token, cfg.repo, normalizedGitlabBaseUrl, cfg, log);
         setSecretVals({});
         setPrUrl(mergeRequest);
-        await ensureGitlabIssueEventWebhook(token, cfg.repo, normalizedGitlabBaseUrl, cfg.baseBranch, log);
+        if (cfg.gitlabAutoLifecycle !== false) {
+          await ensureGitlabFactorySchedule(token, cfg.repo, normalizedGitlabBaseUrl, cfg.baseBranch, log);
+        }
         listGitlabVariableNames(token, cfg.repo, normalizedGitlabBaseUrl)
           .then(setExisting)
           .catch((e) => setError((e as Error).message));
@@ -524,7 +507,7 @@ export default function FactorySetup() {
     !tokenInfo?.missingScopes.length &&
     (scm === 'gitlab' || cfg.createRepo || tokenInfo?.push !== false) &&
     !generation.error &&
-    (scm !== 'gitlab' || (Boolean(normalizedGitlabBaseUrl) && Boolean(gitlabTemplates) && !templateError));
+    (scm !== 'gitlab' || Boolean(normalizedGitlabBaseUrl));
 
   const ciMode: 'existing' | 'crap4' | 'none' = !isCiEnabled(cfg)
     ? 'none'
@@ -537,7 +520,7 @@ export default function FactorySetup() {
 
   const stepRepoReady = Boolean(cfg.repo && !errors.repo && !errors.baseBranch && !errors.machine);
   const stepProvidersReady = Boolean(!errors.providers);
-  const stepCiReady = Boolean(!errors.ciFile && !errors.ciName && !errors.checks);
+  const stepCiReady = scm === 'gitlab' || Boolean(!errors.ciFile && !errors.ciName && !errors.checks);
   const stepRuntimeReady = Boolean(!errors.runner && !errors.merge);
   const secretsList = requiredSecrets(cfg, scm, normalizedGitlabBaseUrl || gitlabBaseUrl);
   const configuredSecretsCount = secretsList.filter((s) => existing.includes(s.name) || Boolean(secretVals[s.name])).length;
@@ -588,7 +571,9 @@ export default function FactorySetup() {
             <span className="factory__stepNum">4</span>
             <span>
               <strong>CI &amp; Quality Gate</strong>
-              <small>{ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}</small>
+              <small>
+                {scm === 'gitlab' ? 'Machine SM only' : ciMode === 'none' ? 'Skipped' : ciMode === 'crap4' ? cfg.qualityPreset : cfg.ciFile}
+              </small>
             </span>
           </a>
           <a
@@ -690,19 +675,56 @@ export default function FactorySetup() {
               </div>
             )}
 
-            <div className="factory__field">
-              <label htmlFor="f-machine">AI teammate account</label>
-              <input
-                id="f-machine"
-                value={cfg.machine}
-                aria-invalid={!!show('machine')}
-                onBlur={() => touch('machine')}
-                onChange={(e) => set('machine', e.target.value.trim())}
-              />
-              <small className={show('machine') ? 'is-error' : ''}>
-                {show('machine') ?? `${scm === 'gitlab' ? 'GitLab' : 'GitHub'} username that issues are assigned to`}
-              </small>
-            </div>
+            {scm === 'gitlab' && (
+              <div className="factory__field">
+                <label htmlFor="f-gitlab-teammates">AI teammate accounts</label>
+                <select
+                  id="f-gitlab-teammates"
+                  value={cfg.gitlabMultipleTeammates ? 'multiple' : 'single'}
+                  disabled={busy}
+                  onChange={(e) => set('gitlabMultipleTeammates', e.target.value === 'multiple')}
+                >
+                  <option value="single">Single AI teammate</option>
+                  <option value="multiple">Multiple AI teammates</option>
+                </select>
+                <small>Use one account for all work, or separate development and review identities.</small>
+              </div>
+            )}
+
+            {scm === 'gitlab' && cfg.gitlabMultipleTeammates ? (
+              <>
+                {([
+                  { key: 'gitlabDev', label: 'AI development account', hint: 'GitLab username for development and rework' },
+                  { key: 'gitlabReviewer', label: 'AI reviewer account', hint: 'GitLab username for code review' },
+                ] as const).map(({ key, label, hint }) => (
+                  <div className="factory__field" key={key}>
+                    <label htmlFor={`f-${key}`}>{label}</label>
+                    <input
+                      id={`f-${key}`}
+                      value={cfg[key]}
+                      aria-invalid={!!show(key)}
+                      onBlur={() => touch(key)}
+                      onChange={(e) => set(key, e.target.value.trim())}
+                    />
+                    <small className={show(key) ? 'is-error' : ''}>{show(key) ?? hint}</small>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="factory__field">
+                <label htmlFor="f-machine">AI teammate account</label>
+                <input
+                  id="f-machine"
+                  value={cfg.machine}
+                  aria-invalid={!!show('machine')}
+                  onBlur={() => touch('machine')}
+                  onChange={(e) => set('machine', e.target.value.trim())}
+                />
+                <small className={show('machine') ? 'is-error' : ''}>
+                  {show('machine') ?? `${scm === 'gitlab' ? 'GitLab' : 'GitHub'} username that issues are assigned to`}
+                </small>
+              </div>
+            )}
           </div>
 
           <div className="factory__field">
@@ -752,7 +774,7 @@ export default function FactorySetup() {
                       scopes. Its user needs Developer or higher access to push branches and create merge requests.
                     </li>
                     <li className="is-warn">
-                      This setup also needs Maintainer access to manage project webhooks and trigger tokens.
+                      This setup also needs Maintainer access to manage the reconciliation schedule and remove legacy factory webhooks.
                     </li>
                   </>
                 ) : tokenInfo.kind === 'classic' &&
@@ -926,8 +948,7 @@ export default function FactorySetup() {
             </small>
             {scm === 'gitlab' && (
               <small className="is-warn">
-                GitLab setup opens a merge request with a manual DMTools pipeline. The GitHub event-driven factory
-                state machine, automatic quality workflows, and auto-merge are not generated for GitLab.
+                GitLab setup adds the scheduled machine state-machine job and an issue/MR teammate job that runs when dispatched with a project-local IID.
               </small>
             )}
           </div>
@@ -1134,7 +1155,7 @@ export default function FactorySetup() {
               <h2 className="factory__cardTitle">CI &amp; Quality Gate</h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'GitLab CI runs native factory jobs for Issue-event webhook processing, manual runs, and merge requests. You can also generate a language-specific crap4* quality job.'
+                  ? 'GitLab setup adds a scheduled machine SM pipeline and a reusable teammate job for issue or merge-request IIDs.'
                   : (
                       <>
                         Choose how the state machine validates PRs before merging: use your existing CI workflow,
@@ -1145,6 +1166,15 @@ export default function FactorySetup() {
             </div>
           </header>
 
+          {scm === 'gitlab' ? (
+            <p className="factory__group">
+              The teammate job runs on the default branch when a web, API, or trigger pipeline supplies exactly one
+              <code> FACTORY_ISSUE </code> or <code> FACTORY_MR </code> IID. It inherits the shared GitLab teammate
+              parent workflow. In GitLab, open <strong>Build → Pipelines → Run pipeline</strong>, select the default
+              branch, enter one IID in the corresponding <code>FACTORY_ISSUE</code> or <code>FACTORY_MR</code> field,
+              then run the pipeline. Configure CI validation and merge policies separately.
+            </p>
+          ) : (
           <fieldset className="factory__group">
             <legend>CI &amp; quality checks</legend>
             <div className="factory__seg" role="radiogroup" aria-label="CI mode">
@@ -1196,7 +1226,7 @@ export default function FactorySetup() {
               <>
                 <small>
                   Generates a ready-to-use{' '}
-                  <code>{scm === 'gitlab' ? '.gitlab-ci.yml' : '.github/workflows/quality.yml'}</code> powered by the{' '}
+                  <code>.github/workflows/quality.yml</code> powered by the{' '}
                   <strong>crap4*</strong> CRAP metric (Change Risk Anti-Patterns = cyclomatic complexity + test
                   coverage) for your tech stack.
                 </small>
@@ -1231,15 +1261,9 @@ export default function FactorySetup() {
             {ciMode === 'existing' && (
               <>
                 <small>
-                  {scm === 'gitlab'
-                    ? 'The generated factory pipeline does not import or dispatch existing GitLab CI jobs. Choose a crap4* preset to add a generated quality job, or configure your existing checks in the project after merging.'
-                    : (
-                        <>
-                          The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong>{' '}
-                          the CI workflow on the PR head when validation is due and merges once the checks below are
-                          green — so the workflow needs a <code>workflow_dispatch</code> trigger.
-                        </>
-                      )}
+                  The factory does not wait for push/PR-triggered CI: its state machine <strong>dispatches</strong>{' '}
+                  the CI workflow on the PR head when validation is due and merges once the checks below are
+                  green — so the workflow needs a <code>workflow_dispatch</code> trigger.
                 </small>
                 {gatesBusy && <small>Reading branch protection and workflows…</small>}
                 {scm === 'github' && ci && ci.workflows.length === 0 && (
@@ -1350,6 +1374,7 @@ export default function FactorySetup() {
               </>
             )}
           </fieldset>
+          )}
         </section>
 
         {/* STEP 5: Runtime, Toolchains & Merge Identity */}
@@ -1359,12 +1384,24 @@ export default function FactorySetup() {
             <div>
               <h2 className="factory__cardTitle">Runner, Toolchains &amp; Merge Identity</h2>
               <p className="factory__cardSub">
-                Select the GitHub Actions runner label, cached SDK toolchains, and the identity that merges approved
-                PRs.
+                {scm === 'gitlab'
+                  ? 'The GitLab setup installs shared machine-SM and teammate jobs and adds runner configuration unless project configuration already exists.'
+                  : 'Select the GitHub Actions runner label, cached SDK toolchains, and the identity that merges approved PRs.'}
               </p>
             </div>
           </header>
 
+          {scm === 'gitlab' ? (
+            <p className="factory__group">
+              Both jobs use the GitLab runner configured for this project. Setup generates the DMTools machine-SM and
+              teammate runner configuration when it is missing, but preserves existing files under <code>.dmtools/</code>.
+              To scan every 10 minutes for issues assigned to <code>ai-dev</code> with <code>agent:dev</code>, add a
+              GitLab pipeline schedule on the default branch; no scan opt-in variable is required. The scan resolves
+              the assignee's actual username, including bot accounts named <code>ai-dev</code>.
+              Configure other CI, toolchains, and merge policies separately.
+            </p>
+          ) : (
+          <>
           <div className="factory__field">
             <label htmlFor="f-runner">Runner</label>
             <select
@@ -1490,6 +1527,8 @@ export default function FactorySetup() {
               </p>
             )}
           </fieldset>
+          </>
+          )}
         </section>
 
         {/* STEP 6: Repository Secrets & Labels */}
@@ -1502,7 +1541,7 @@ export default function FactorySetup() {
               </h2>
               <p className="factory__cardSub">
                 {scm === 'gitlab'
-                  ? 'Create GitLab CI automation for Issue-event webhook processing, manual runs, merge-request review/rework, and approved merges.'
+                  ? 'Configure the scheduled GitLab machine state-machine job using the shared factory workflow.'
                   : 'Seal repository secrets in your browser (libsodium) and ensure the 12 factory state-machine labels exist.'}
               </p>
             </div>
@@ -1512,7 +1551,7 @@ export default function FactorySetup() {
             <legend>Repository secrets</legend>
             <small>
               {scm === 'gitlab'
-                ? 'Optional — supplied secret values are stored as GitLab project CI/CD variables with masked and hidden enabled before the merge request opens. GitLab requires version 17.4 or newer and single-line values that meet its masking rules; existing non-hidden secrets are deleted and recreated with hidden enabled. After merging the setup request, a project webhook starts the poller on every Issue event.'
+                ? 'Required for the included machine-SM parent: configure GITLAB_TOKEN and SOURCE_GITHUB_TOKEN. Supplied values are stored as masked and hidden GitLab project CI/CD variables (GitLab 17.4+). Existing non-hidden secrets are recreated with hidden enabled.'
                 : 'Optional — fill a value and it is stored as an encrypted Actions secret before the PR opens. Values are sealed in this browser with the repository public key (libsodium), sent only to api.github.com and never readable afterwards. Leave a field empty to add it yourself later.'}
             </small>
             {secretsList.map((x) => (
@@ -1665,17 +1704,15 @@ export default function FactorySetup() {
                 {scm === 'gitlab'
                   ? templateError
                     ? templateError
-                    : !gitlabTemplates
-                      ? 'Loading GitLab parent workflow templates…'
-                      : !normalizedGitlabBaseUrl
-                        ? 'Enter a valid GitLab instance URL.'
-                        : token.length <= 20
-                          ? 'Enter a GitLab personal access token in Step 1.'
-                          : !tokenInfo
-                            ? 'Wait for GitLab to validate the token.'
-                            : Object.keys(errors).length > 0
-                              ? `Complete required fields (${Object.keys(errors).map((k) => LABELS[k] ?? k).join(', ')}).`
-                              : 'Verify GitLab project permissions and try again.'
+                    : !normalizedGitlabBaseUrl
+                      ? 'Enter a valid GitLab instance URL.'
+                      : token.length <= 20
+                        ? 'Enter a GitLab personal access token in Step 1.'
+                        : !tokenInfo
+                          ? 'Wait for GitLab to validate the token.'
+                          : Object.keys(errors).length > 0
+                            ? `Complete required fields (${Object.keys(errors).map((k) => LABELS[k] ?? k).join(', ')}).`
+                            : 'Verify GitLab project permissions and try again.'
                   : token.length <= 20
                     ? 'Enter your GitHub setup token in Step 1 to enable PR creation.'
                     : Object.keys(errors).length > 0
@@ -1746,16 +1783,7 @@ export default function FactorySetup() {
               <div className="factory__empty">
                 {scm === 'gitlab' ? (
                   <>
-                    <p role={templateError ? 'alert' : undefined}>
-                      {templateError || (!gitlabTemplates
-                        ? `Loading templates from ${GITLAB_WORKFLOW_SOURCE.repository}@${GITLAB_WORKFLOW_SOURCE.ref}…`
-                        : 'Complete the required fields to preview the GitLab setup.')}
-                    </p>
-                    {templateError && (
-                      <button type="button" className="btn btn--ghost factory__mini" onClick={() => setGitlabTemplateAttempt((attempt) => attempt + 1)}>
-                        Retry loading templates
-                      </button>
-                    )}
+                    <p>Complete the required fields to preview the GitLab machine SM workflow.</p>
                   </>
                 ) : (
                   <>
@@ -1822,12 +1850,19 @@ export default function FactorySetup() {
               {scm === 'gitlab' ? (
                 <ul>
                   <li>
-                    The GitLab Issue-event webhook starts the poller for any issue event; the poller filters for assigned
-                    or labeled work.
+                    A ten-minute schedule starts the factory; validation completion requests reconciliation.
+                    New issues, assignments, and labels are picked up on the next tick, without webhook pipelines for status updates.
                   </li>
-                  <li>Merge-request pipelines can run the review or rework runner based on labels.</li>
-                  <li>Approved merge requests by {cfg.machine || 'ai-teammate'} are queued to merge after pipeline success.</li>
-                  <li>Manual agent runs are available from GitLab Build → Pipelines using ticket and runner variables.</li>
+                  <li>Development automatically leads to validation and review. Add <code>agent:rework</code> explicitly to request existing-MR fixes.</li>
+                  <li>Approved merge requests remain open for human merge; the factory never merges them.</li>
+                  <li>The issue's Machine jobs section links each development, validation, review and rework run.</li>
+                  {cfg.gitlabMultipleTeammates && (
+                    <li>
+                      Development and rework use <code>{cfg.gitlabDev}</code> with <code>GITLAB_DEV_TOKEN</code>;
+                      code review uses <code>{cfg.gitlabReviewer}</code> with <code>GITLAB_REVIEWER_TOKEN</code>.
+                    </li>
+                  )}
+                  <li>Manual runs use <code>DMTOOLS_MR_IID</code> and optional <code>DMTOOLS_FACTORY_LEG</code>.</li>
                 </ul>
               ) : (
                 <ul>
@@ -1871,13 +1906,21 @@ export default function FactorySetup() {
               {scm === 'gitlab' ? (
                 <ul>
                   <li>
-                    Assign an open issue to <code>{cfg.machine || 'ai-teammate'}</code> or add <code>agent:dev</code>,
+                    Assign an open issue to <code>{gitlabDevAccount || 'ai-teammate'}</code> or add <code>agent:dev</code>,
                     <code>agent:review</code>, or <code>agent:rework</code>; the poller selects a generated runner.
                   </li>
                   <li>
-                    Merge requests labeled <code>agent:review</code> or <code>agent:rework</code> are processed by their
-                    corresponding runner. A <code>pr_approved</code> label queues eligible machine-authored MRs to merge
-                    after pipeline success.
+                    Labels on the issue and MR track progress. Successful validation starts review; requested changes
+                    and open review threads wait for an explicit <code>agent:rework</code> label on the issue or MR.
+                    Each request runs rework once, followed by validation and review of the updated head.
+                    <code>pr_approved</code> means ready for human merge, not automatic merging.
+                  </li>
+                  <li>
+                    Rework updates the existing MR source branch and replies to every open review thread; it never
+                    creates another MR. An issue labeled <code>agent:rework</code> must have exactly one linked open MR.
+                    For manual rework, set <code>DMTOOLS_FACTORY_LEG=rework</code> and <code>DMTOOLS_MR_IID</code>
+                    {' '}to the MR IID, not the issue ID. Failed agents escalate to
+                    <code>needs-human</code>; investigate and remove stop labels before requesting another attempt.
                   </li>
                 </ul>
               ) : (

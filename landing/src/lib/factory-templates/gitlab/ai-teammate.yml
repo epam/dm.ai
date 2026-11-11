@@ -1,0 +1,25 @@
+# Teammate lifecycle, token selection, queue scanning and label automation come from the shared template.
+include:
+  - remote: https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/@@FACTORY_HOME_REF@@/gitlab/factory-teammate.yml
+
+ai-teammate:
+  extends: .factory-teammate
+  resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "api" || $CI_PIPELINE_SOURCE == "trigger" || $CI_PIPELINE_SOURCE == "web") && (($FACTORY_ISSUE != "" && $FACTORY_MR == "") || ($FACTORY_ISSUE == "" && $FACTORY_MR != ""))'
+  variables:
+    FACTORY_HOME_REF: "@@FACTORY_HOME_REF@@"
+    AGENT_HANDLE: "@@MACHINE_AUTHOR@@"
+@@GITLAB_REVIEWER_HANDLE_VARIABLE@@
+
+ai-teammate-auto:
+  extends: .factory-teammate
+  resource_group: teammate-$CI_PROJECT_ID-$FACTORY_ISSUE-$FACTORY_MR
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "api" && $DMTOOLS_AI_TEAMMATE_SCAN == "true" && (($FACTORY_ISSUE != "" && $FACTORY_MR == "") || ($FACTORY_ISSUE == "" && $FACTORY_MR != ""))'
+  variables:
+    FACTORY_HOME_REF: "@@FACTORY_HOME_REF@@"
+    AGENT_HANDLE: "$DMTOOLS_AI_DEV_USERNAME"
+@@GITLAB_REVIEWER_HANDLE_VARIABLE@@

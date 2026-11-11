@@ -12,6 +12,90 @@ dmtools list | jq '.tools[] | select(.name | startswith("gitlab_"))'
 dmtools gitlab_test [arguments]
 ```
 
+## Automatic GitLab factory lifecycle
+
+The factory setup generates a native GitLab lifecycle:
+
+All GitLab script and pipeline templates are loaded from
+`IstiN/dmtools-agentic-workflows` at the configured workflow ref. There are no
+bundled runtime script fallbacks in the setup UI; local test fixtures are
+offline snapshots only.
+
+1. Assign an open issue to the development account or add `agent:dev`.
+2. Development receives the issue title, link and description, excluding the
+   Machine jobs section, as its explicit request. It then pushes a branch and
+   opens one linked merge request. Installer-generated files such as
+   `.cursor/skills` are not published. A blocked, empty or change-free run adds
+   `needs-human` and opens no MR.
+3. The factory runs the configured quality gate against that exact MR head,
+   then reviews its diff. With no generated quality preset, validation is
+   explicitly disabled rather than dispatching an empty pipeline. Inline
+   findings on unchanged context lines carry both old and new line numbers;
+   findings outside the diff become general MR threads.
+4. Requested changes, unresolved review suggestions, and failed validation
+   wait for a human to add `agent:rework` to the issue or MR (or run the manual
+   rework leg). Each request is consumed once and updates the existing source
+   branch. Replies are posted in the original discussion threads, then the
+   new head is validated and reviewed. Rework never starts automatically.
+   Every open thread needs exactly one reply; if one is missing, duplicated or
+   empty, nothing is pushed and the job log lists each problem.
+5. Approval and successful validation add `pr_approved` to the issue and MR.
+   **The MR stays open for human merge.** The factory does not merge it.
+
+The issue description's **Machine jobs** section links each development,
+validation, review and rework leg, including running/completed/failed status
+and timestamps. Existing issue text outside the managed section is preserved.
+
+Setup creates an idempotent ten-minute reconciliation schedule and removes
+legacy factory-managed Issue/Merge Request webhooks and their trigger tokens.
+New issues, assignments, and actionable labels are picked up within ten minutes.
+Progress and status updates no longer create webhook pipelines. Manual runs
+and validation-completion callbacks can also request reconciliation.
+Pipeline jobs are serialized with a project
+resource group; validation-only pipelines do not acquire that lock.
+The factory releases its runner while validation is pending, then resumes from
+a quality-job callback or the reconciliation schedule. Machine jobs links the
+validation pipeline and updates the same entry when it finishes.
+
+- Multiple-account mode: `GITLAB_DEV_TOKEN` runs development/rework and
+  `GITLAB_REVIEWER_TOKEN` runs code review. Single-account mode uses `GITLAB_TOKEN`.
+- Both tokens need `api` and project access. Development also needs
+  `write_repository`; setup needs Maintainer access for schedules and legacy webhook cleanup.
+- Manual run: **Build > Pipelines**, set `DMTOOLS_MR_IID` to an existing MR IID
+  and optionally `DMTOOLS_FACTORY_LEG=review` or `rework`.
+- Issue-based review/rework requires exactly one linked open MR; ambiguous or
+  missing targets fail rather than creating another MR.
+- `blocked`, `needs-human`, and `agent:skip` pause automation. Agent failures
+  require human intervention. Inspect the failure, remove stop labels when
+  safe, and add `agent:rework` again to request another attempt.
+- Review runs in a temporary Git worktree at the exact MR head. Review-created
+  runtime files and source mutations are discarded with that worktree, leaving
+  the orchestration checkout untouched for later explicit rework.
+- Rework uses its own temporary detached worktree at the exact MR source
+  commit and pushes explicitly to the existing branch. Installer-generated
+  skill changes in the main CI checkout cannot block rework or enter its
+  commit. The original checkout is preserved, and temporary worktrees are
+  cleaned up on both success and failure.
+- Cleanup also removes extra agent-generated files and hidden directories in
+  each temporary review/rework context without following symlinks. Successful
+  cleanup preserves the operation's exit status instead of failing an already
+  published review because the context is not empty.
+- Rework fetch/push authenticates with the development account using a
+  username-qualified HTTPS URL, avoiding Runner job-token URL rewriting.
+  Push authorization is checked with a dry run before invoking AI. An API
+  error while loading failed CI jobs stops rework instead of silently
+  reporting that no failures exist.
+- The final rework checkout may be detached or on the exact MR source branch.
+  Other branches and commits not descending from the original head are rejected;
+  concurrent remote-head changes still block publication.
+- After pushing, rework verifies the remote Git branch and allows up to 55 seconds
+  for GitLab MR head metadata to catch up. Only then are replies posted and
+  discussions resolved. Timeout errors distinguish a successful push from pending
+  MR metadata and leave discussions open.
+- Failed or cancelled jobs keep their failure in Machine jobs. Agent/publishing
+  failures do not mark threads resolved or arm approval. Head changes invalidate
+  previous validation and review.
+
 ## Usage in JavaScript Agents
 
 ```javascript
@@ -1205,4 +1289,3 @@ const result = gitlab_upload_release_asset("workspace", "repository");
 ```
 
 ---
-

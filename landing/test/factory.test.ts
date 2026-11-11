@@ -2,7 +2,7 @@ import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   defaults,
@@ -24,9 +24,11 @@ import {
   normalizeGitlabBaseUrl,
   TOKEN_LINKS,
   renderGitlabFiles,
+  renderGitlabMachineSmFiles,
   loadGitlabTemplates,
   GITLAB_TEMPLATE_NAMES,
   GITLAB_WORKFLOW_SOURCE,
+  GITLAB_FACTORY_HOME_REF,
   type GitlabTemplates,
   ensureGitlabIssueEventWebhook,
   removeGitlabIssueEventWebhook,
@@ -59,7 +61,7 @@ describe('GitLab parent workflow loading', () => {
     }) as typeof fetch;
     const controller = new AbortController();
     assert.deepEqual(await loadGitlabTemplates(controller.signal), gitlabTemplates);
-    assert.equal(calls.length, 8);
+    assert.equal(calls.length, GITLAB_TEMPLATE_NAMES.length);
     for (const { url, init } of calls) {
       assert.ok(url.startsWith('https://raw.githubusercontent.com/IstiN/dmtools-agentic-workflows/feat/gitlab-agent-workflows/gitlab/'));
       assert.equal(init?.credentials, 'omit');
@@ -104,32 +106,293 @@ describe('GitLab parent workflow loading', () => {
     assert.match(files.find((file) => file.path === '.gitlab-ci.yml')!.content, /^# parent workflow revision/);
   });
 
-  it('rejects unsupported parent placeholders before generating a merge request', async () => {
-    const templates = { ...gitlabTemplates, 'gitlab-ci.yml': '@@UNSUPPORTED_INPUT@@' };
-    const calls: string[] = [];
-    globalThis.fetch = (async (input) => {
-      calls.push(String(input));
-      throw new Error('must not reach GitLab');
-    }) as typeof fetch;
-    await assert.rejects(createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig(), () => {}, templates),
-      /Unresolved GitLab template placeholder/);
-    assert.deepEqual(calls, []);
+  it('sources the entire automatic lifecycle and account selector from downloaded templates', () => {
+    const names = [
+      'gitlab-auto-ci.yml', 'gitlab-factory-common.sh', 'gitlab-factory-job.sh',
+      'gitlab-factory-lifecycle.sh', 'gitlab-factory-intake.sh', 'gitlab-factory-rework.sh',
+      'gitlab-factory-select-teammate.sh',
+    ] as const;
+    const templates = { ...gitlabTemplates };
+    for (const name of names) templates[name] = `# fetched:${name}\n${templates[name]}`;
+    const files = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true, gitlabMultipleTeammates: true }), templates);
+    for (const name of names) {
+      assert.ok(files.some((file) => file.content.includes(`# fetched:${name}`)), `${name} must come from the parent`);
+    }
   });
 
-  it('does not access GitLab when the parent templates fail to load', async () => {
-    const urls: string[] = [];
+  it('generates a scheduled and manually selectable GitLab machine SM workflow', () => {
+    const files = renderGitlabMachineSmFiles(validConfig());
+    const machineSm = files[0].content;
+    const teammate = files[1].content;
+    assert.match(machineSm, /gitlab\/factory-sm\.yml/);
+    assert.match(GITLAB_FACTORY_HOME_REF, /^[0-9a-f]{40}$/);
+    assert.ok(machineSm.includes(`dmtools-agentic-workflows/${GITLAB_FACTORY_HOME_REF}/gitlab/factory-sm.yml`));
+    assert.ok(machineSm.includes(`FACTORY_HOME_REF: "${GITLAB_FACTORY_HOME_REF}"`));
+    assert.match(machineSm, /local: ai-teammate\.yml/);
+    assert.match(machineSm, /^factory-sm:\n/m);
+    assert.match(machineSm, /^factory-sm:\n  extends: \.factory-sm/m);
+    assert.match(machineSm, /CI_PIPELINE_SOURCE == "schedule"/);
+    assert.doesNotMatch(machineSm, /DMTOOLS_AI_TEAMMATE_SCAN/);
+    assert.match(machineSm, /CI_PIPELINE_SOURCE == "web" && \$DMTOOLS_MACHINE_SM == "true"/);
+    assert.match(machineSm, /SM_DRY_RUN: "false"/);
+    assert.match(machineSm, /SM_DRY_RUN: "true"/);
+    assert.match(machineSm, /SM_MACHINE_AUTHOR: "ai-teammate"/);
+    assert.match(machineSm, /^factory-sm:[\s\S]*?\n  variables:\n(?:    #[^\n]*\n)?    SM_MACHINE_AUTHOR: "ai-teammate"/m,
+      'job variables inherited from .factory-sm override the global machine author');
+    assert.match(machineSm, /FACTORY_ISSUE:\n    value: ""/);
+    assert.match(machineSm, /FACTORY_MR:\n    value: ""/);
+    assert.match(machineSm, /FACTORY_LEG:\n    value: ""/);
+    assert.match(machineSm, /project-local issue IID for the ai-teammate job/);
+    assert.match(machineSm, /project-local merge request IID for the ai-teammate job/);
+    assert.match(machineSm, /DMTOOLS_GITLAB_INSTALL_TOOLS: "true"/);
+    assert.match(machineSm, /DMTOOLS_GITLAB_FACTORY_HELPERS: "true"/);
+    assert.doesNotMatch(machineSm, /apt-get|curl |before_script|^\.dmtools-/m, 'setup logic comes from the shared template');
+    assert.doesNotMatch(machineSm, /dmtools run sm_gitlab@latest/);
+    assert.doesNotMatch(machineSm, /@@GITLAB_TOKEN_MAPPING@@/);
+    assert.doesNotMatch(machineSm, /@@[A-Z_]+@@/);
+    assert.deepEqual(files.map((file) => file.path), [
+      '.gitlab-ci.yml',
+      'ai-teammate.yml',
+      '.dmtools/config.js',
+      '.dmtools/runners/fa-bug-dev.json',
+      '.dmtools/runners/fa-story-dev.json',
+      '.dmtools/runners/fa-review.json',
+      '.dmtools/runners/fa-rework.json',
+    ]);
+    assert.match(teammate, /gitlab\/factory-teammate\.yml/);
+    assert.ok(teammate.includes(`dmtools-agentic-workflows/${GITLAB_FACTORY_HOME_REF}/gitlab/factory-teammate.yml`));
+    assert.match(teammate, /^ai-teammate:\n  extends: \.factory-teammate/m);
+    assert.ok(teammate.includes(`FACTORY_HOME_REF: "${GITLAB_FACTORY_HOME_REF}"`));
+    assert.match(teammate, /FACTORY_ISSUE/);
+    assert.match(teammate, /FACTORY_MR/);
+    assert.match(teammate, /^ai-teammate-auto:\n  extends: \.factory-teammate/m);
+    assert.match(teammate, /AGENT_HANDLE: "\$DMTOOLS_AI_DEV_USERNAME"/);
+    assert.match(teammate, /^ai-teammate-auto:[\s\S]*?\$DMTOOLS_AI_TEAMMATE_SCAN == "true" && \(\(\$FACTORY_ISSUE != "" && \$FACTORY_MR == ""\) \|\| \(\$FACTORY_ISSUE == "" && \$FACTORY_MR != ""\)\)'/m,
+      'scan dispatches issue and MR review/rework anchors');
+    assert.doesNotMatch(teammate, /^ai-teammate-scan:|^\.ai-teammate-/m, 'scan and helper jobs come from the shared template');
+    assert.doesNotMatch(teammate, /curl |jq |apt-get/, 'teammate caller must not duplicate shared shell logic');
+    assert.doesNotMatch(teammate, /@@GITLAB_TOKEN_MAPPING@@/);
+    assert.doesNotMatch(teammate, /@@[A-Z_]+@@/);
+    const machineConfig = files.find((file) => file.path === '.dmtools/config.js')!;
+    assert.match(machineConfig.content, /machineAuthor: 'ai-teammate'/);
+    assert.match(machineConfig.content, /bug: '.dmtools\/runners\/fa-bug-dev\.json'/);
+    assert.match(machineConfig.content, /story: '.dmtools\/runners\/fa-story-dev\.json'/);
+    assert.match(machineConfig.content, /review: '.dmtools\/runners\/fa-review\.json'/);
+    assert.match(machineConfig.content, /rework: '.dmtools\/runners\/fa-rework\.json'/);
+    const storyRunner = JSON.parse(files.find((file) => file.path === '.dmtools/runners/fa-story-dev.json')!.content);
+    assert.equal(storyRunner.params.envVariables.DEFAULT_TRACKER, 'gitlab');
+    assert.equal(storyRunner.params.envVariables.DEFAULT_SCM, 'gitlab');
+    assert.equal(storyRunner.params.envVariables.GITLAB_BASE_PATH, 'https://gitlab.com');
+    for (const path of ['.dmtools/runners/fa-bug-dev.json', '.dmtools/runners/fa-story-dev.json']) {
+      const devRunner = JSON.parse(files.find((file) => file.path === path)!.content);
+      assert.equal(devRunner.params.customParams.scmProvider, 'gitlab', `${path} must create GitLab MRs`);
+      assert.equal(devRunner.params.customParams.targetRepository.owner, 'acme');
+      assert.equal(devRunner.params.customParams.targetRepository.repo, 'demo');
+      assert.equal(devRunner.params.customParams.targetRepository.workingDir, '.');
+      assert.ok(devRunner.params.cliPrompts.some((prompt: string) => /first line must be exactly "Closes #<IID>"/.test(prompt)));
+      assert.equal(devRunner.params.postJSAction, undefined, 'pack post-action must commit, push and create the MR');
+    }
+    const reworkRunner = JSON.parse(files.find((file) => file.path === '.dmtools/runners/fa-rework.json')!.content);
+    assert.equal(reworkRunner.params.customParams.scmProvider, 'gitlab');
+    assert.equal(reworkRunner.params.customParams.targetRepository.owner, 'acme');
+    for (const action of ['preJSAction', 'preCliJSAction', 'postJSAction']) {
+      assert.equal(reworkRunner.params[action], undefined, `rework must keep the pack ${action} that pushes to the MR`);
+    }
+    assert.doesNotMatch(JSON.stringify(reworkRunner), /DMTOOLS_REWORK_CONTEXT/);
+    const reviewRunner = JSON.parse(files.find((file) => file.path === '.dmtools/runners/fa-review.json')!.content);
+    assert.equal(reviewRunner.params.customParams.scmProvider, 'gitlab');
+    assert.equal(reviewRunner.params.customParams.targetRepository.repo, 'demo');
+    assert.equal(reviewRunner.params.postJSAction, undefined, 'review must keep the pack publisher');
+    assert.doesNotMatch(JSON.stringify(reviewRunner), /DMTOOLS_REVIEW_CONTEXT/);
+    assert.ok(reviewRunner.params.cliPrompts.includes('pack:instructions/pr_review/review_verdict_rules.md'));
+    assert.ok(reviewRunner.params.cliPrompts.some((prompt: string) => /top-level "decision" field/.test(prompt)));
+    for (const auto of [true, false]) {
+      const review = JSON.parse(renderGitlabMachineSmFiles(validConfig({ gitlabAutoLifecycle: auto }))
+        .find((file) => file.path === '.dmtools/runners/fa-review.json')!.content);
+      assert.equal(review.params.preCliJSAction, undefined);
+    }
+    const multiTeammateWorkflow = renderGitlabMachineSmFiles(validConfig({
+      gitlabMultipleTeammates: true,
+      gitlabDev: 'dev-bot',
+    }));
+    const multiMachineSm = multiTeammateWorkflow[0].content;
+    const multiTeammate = multiTeammateWorkflow[1].content;
+    const multiMachineConfig = multiTeammateWorkflow.find((file) => file.path === '.dmtools/config.js')!;
+    assert.match(multiMachineSm, /SM_MACHINE_AUTHOR: "dev-bot"/);
+    assert.match(multiMachineSm, /DMTOOLS_GITLAB_TEAMMATES: "multiple"/);
+    assert.match(machineSm, /DMTOOLS_GITLAB_TEAMMATES: "single"/);
+    assert.match(multiTeammate, /AGENT_HANDLE: "dev-bot"/);
+    for (const content of [machineSm, multiMachineSm, teammate, multiTeammate]) {
+      assert.doesNotMatch(content, /GITLAB_TOKEN: "\$GITLAB_(DEV|REVIEWER)_TOKEN"/);
+      assert.doesNotMatch(content, /@@/);
+    }
+    for (const content of [machineSm, multiMachineSm]) {
+      assert.match(content, /default:\n  image: [^\n]+\n\n/);
+    }
+    assert.match(multiTeammate, /ai-teammate:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
+    assert.match(multiTeammate, /ai-teammate-auto:[\s\S]*?GITLAB_REVIEWER_HANDLE: "ai-reviewer"/);
+    assert.doesNotMatch(teammate, /GITLAB_REVIEWER_HANDLE: "/);
+    assert.match(multiMachineConfig.content, /machineAuthor: 'dev-bot'/);
+    for (const [content, mode] of [[teammate, 'single'], [multiTeammate, 'multi']] as const) {
+      for (const job of ['ai-teammate', 'ai-teammate-auto']) {
+        const body = content.split(`\n${job}:\n`)[1].split(/\n\n/)[0];
+        assert.equal(body.match(/^  variables:$/gm)?.length, 1, `${job} must have one variables block (${mode})`);
+        assert.match(body, /FACTORY_HOME_REF: "[0-9a-f]{40}"/);
+        assert.match(body, /resource_group: teammate-\$CI_PROJECT_ID-\$FACTORY_ISSUE-\$FACTORY_MR/);
+        assert.doesNotMatch(body, /^  (before_script|script|after_script):/m, `${job} must inherit the shared lifecycle (${mode})`);
+      }
+    }
+    assert.doesNotMatch(multiTeammate, /@@GITLAB_TOKEN_VARIABLE@@/);
+  });
+
+  it('creates GitLab machine SM setup without requesting parent templates', async () => {
+    const calls: string[] = [];
     globalThis.fetch = (async (input) => {
-      urls.push(String(input));
-      return new Response('unavailable', { status: 503 });
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith('/projects/team%2Fapp')) {
+        return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
+      }
+      if (url.endsWith('/merge_requests')) {
+        return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+      }
+      if (url.includes('/repository/files/')) {
+        return new Response(JSON.stringify({ message: '404 File Not Found' }), { status: 404 });
+      }
+      return new Response(JSON.stringify({ id: 1 }), { status: 201 });
     }) as typeof fetch;
-    await assert.rejects(createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig()), /HTTP 503/);
-    assert.ok(urls.every((url) => url.startsWith('https://raw.githubusercontent.com/')));
+    try {
+      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig());
+      assert.ok(calls.some((url) => url.endsWith('/repository/commits')));
+      assert.ok(!calls.some((url) => url.startsWith('https://raw.githubusercontent.com/')));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('preserves existing GitLab runner configuration in the setup merge request', async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const logs: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.endsWith('/projects/team%2Fapp')) {
+        return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
+      }
+      if (url.includes('/repository/files/.dmtools%2Fconfig.js?') ||
+          url.includes('/repository/files/.dmtools%2Frunners%2Ffa-bug-dev.json?')) {
+        return new Response(JSON.stringify({ file_name: 'config.js' }), { status: 200 });
+      }
+      if (url.includes('/repository/files/')) {
+        return new Response(JSON.stringify({ message: '404 File Not Found' }), { status: 404 });
+      }
+      if (url.endsWith('/merge_requests')) {
+        return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+      }
+      return new Response(JSON.stringify({ id: 1 }), { status: 201 });
+    }) as typeof fetch;
+    try {
+      await createGitlabMergeRequest('token', 'team/app', 'https://gitlab.example.com', validConfig(), (message) => logs.push(message));
+      const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
+      const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string }[];
+      assert.ok(!actions.some((action) => action.file_path === '.dmtools/config.js'));
+      assert.ok(!actions.some((action) => action.file_path === '.dmtools/runners/fa-bug-dev.json'));
+      assert.ok(logs.some((message) => message.includes('preserved existing runner configuration files')));
+      const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
+      assert.match(JSON.parse(String(mergeRequest?.init?.body)).description, /Existing runner configuration files were preserved/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
 describe('GitLab factory templates', () => {
+  const multiConfig = () => validConfig({
+    gitlabMultipleTeammates: true,
+    gitlabDev: 'custom-dev',
+    gitlabReviewer: 'custom-reviewer',
+  });
+
+  it('requires distinct valid accounts only in GitLab multiple-teammate mode', () => {
+    const config = multiConfig();
+    assert.deepEqual(validate(config, 'gitlab'), {});
+    assert.equal(validate({ ...config, machine: '' }, 'gitlab').machine, undefined);
+    for (const key of ['gitlabDev', 'gitlabReviewer'] as const) {
+      for (const value of ['', 'bad username', "bad'username"]) {
+        assert.ok(validate({ ...config, [key]: value }, 'gitlab')[key]);
+        assert.throws(() => renderGitlabFiles({ ...config, [key]: value }, gitlabTemplates), /username/);
+      }
+    }
+    assert.match(validate({ ...config, gitlabReviewer: 'CUSTOM-DEV' }, 'gitlab').gitlabReviewer, /different/);
+    assert.deepEqual(validate({ ...config, gitlabDev: '', gitlabReviewer: '' }, 'github'), {});
+  });
+
+  it('lists separate GitLab token fields with the selected account names', () => {
+    const secrets = requiredSecrets(multiConfig(), 'gitlab');
+    assert.deepEqual(secrets.slice(0, 2).map((secret) => secret.name), ['GITLAB_DEV_TOKEN', 'GITLAB_REVIEWER_TOKEN']);
+    assert.match(secrets[0].hint, /custom-dev/);
+    assert.match(secrets[1].hint, /custom-reviewer/);
+    assert.ok(!secrets.some((secret) => secret.name === 'GITLAB_TOKEN'));
+    assert.equal(secrets[2].name, 'SOURCE_GITHUB_TOKEN');
+    assert.match(secrets[2].hint, /release repositories/);
+    assert.equal(requiredSecrets({ ...multiConfig(), gitlabMultipleTeammates: false }, 'gitlab')[0].name, 'GITLAB_TOKEN');
+    assert.ok(requiredSecrets({ ...multiConfig(), gitlabMultipleTeammates: false }, 'gitlab')
+      .some((secret) => secret.name === 'SOURCE_GITHUB_TOKEN'));
+    assert.equal(requiredSecrets(multiConfig(), 'github')[0].name, 'SOURCE_GITHUB_TOKEN');
+  });
+
+  it('routes GitLab jobs, poller work and manual reviews to their account tokens', () => {
+    const files = renderGitlabFiles(multiConfig(), gitlabTemplates);
+    const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
+    for (const job of ['poll-assigned-issues', 'ai-teammate', 'review-merge-request', 'rework-merge-request', 'merge-approved-merge-request']) {
+      const token = job === 'review-merge-request' || job === 'merge-approved-merge-request' ? 'GITLAB_REVIEWER_TOKEN' : 'GITLAB_DEV_TOKEN';
+      assert.ok(pipeline.includes(`${job}:\n  variables:\n    GITLAB_TOKEN: "$${token}"`));
+    }
+    assert.match(pipeline, /select_gitlab_teammate "\$DMTOOLS_AGENT_CONFIG"/);
+    assert.match(pipeline, /author" != 'custom-dev'/);
+    const poller = files.find((file) => file.path.endsWith('gitlab-factory-poll-issues.sh'))!.content;
+    assert.match(poller, /machine='custom-dev'/);
+    assert.equal(poller.match(/select_gitlab_teammate "\$config"/g)?.length, 2);
+    assert.match(poller, /select_gitlab_teammate merge/);
+    const selector = files.find((file) => file.path.endsWith('gitlab-factory-select-teammate.sh'))!.content;
+    for (const role of ['dev', 'rework-merge-request', '.dmtools/runners/fa-story-dev.json', '.dmtools/runners/fa-rework.json',
+      'review-merge-request', '.dmtools/runners/fa-review.json', 'merge', 'merge-approved-merge-request']) {
+      const result = spawnSync('bash', ['-c', `${selector}\nselect_gitlab_teammate "$1"\nprintf '%s' "$GITLAB_TOKEN"`, '--', role], {
+        encoding: 'utf8',
+        env: { GITLAB_DEV_TOKEN: 'dev-test-token', GITLAB_REVIEWER_TOKEN: 'review-test-token' },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, /review|merge-approved|^merge$/.test(role) ? 'review-test-token' : 'dev-test-token');
+    }
+    for (const role of ['dev', 'merge']) {
+      const result = spawnSync('bash', ['-c', `${selector}\nselect_gitlab_teammate "$1"`, '--', role], { encoding: 'utf8', env: {} });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /Set the GITLAB_(DEV|REVIEWER)_TOKEN/);
+    }
+    for (const file of files.filter((file) => file.path.endsWith('.sh'))) {
+      const result = spawnSync('bash', ['-n'], { input: file.content, encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+    }
+    assert.ok(!renderGitlabFiles(validConfig(), gitlabTemplates).some((file) => file.path.endsWith('gitlab-factory-select-teammate.sh')));
+    assert.deepEqual(renderFiles(multiConfig()), renderFiles(validConfig()));
+  });
+
+  it('fails explicitly when parent templates cannot route multiple teammates safely', () => {
+    assert.throws(() => renderGitlabFiles(multiConfig(), { ...gitlabTemplates, 'gitlab-ci.yml': 'changed parent' }),
+      /incompatible with factory setup/);
+  });
+
   const template = (name: string) =>
     readFileSync(resolve(here, 'fixtures/gitlab', name), 'utf8');
+  const withReworkJobs = (pipeline: string) => pipeline
+    .replace('dmtools run .dmtools/runners/fa-rework.json --inputTicketId "$CI_MERGE_REQUEST_IID"',
+      'bash .dmtools/scripts/gitlab-factory-rework.sh "$CI_MERGE_REQUEST_IID"')
+    .replace('      dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"',
+      `      if [ "$DMTOOLS_AGENT_CONFIG" = '.dmtools/runners/fa-rework.json' ]; then
+        bash .dmtools/scripts/gitlab-factory-rework.sh "$DMTOOLS_TICKET_ID"
+      else
+        dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"
+      fi`);
 
   const qualityCases = [
     { preset: 'crap4js', toolchain: 'node', version: '24', fallback: '22' },
@@ -152,9 +415,9 @@ describe('GitLab factory templates', () => {
         const quality = template(`gitlab-quality-${preset}.yml`)
           .replaceAll('@@VERSION@@', customVersion ? version : fallback);
         const pipeline = files.find((file) => file.path === '.gitlab-ci.yml')!.content;
-        assert.equal(pipeline, template('gitlab-ci.yml')
+        assert.equal(pipeline, withReworkJobs(template('gitlab-ci.yml')
           .replaceAll('@@QUALITY_JOB@@', quality)
-          .replaceAll('@@MACHINE@@', config.machine));
+          .replaceAll('@@MACHINE@@', config.machine)));
         assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
 
         const script = quality.split('    - |\n')[1]
@@ -171,10 +434,10 @@ describe('GitLab factory templates', () => {
   ]) {
     it(`omits quality stage and job when ${config.ciEnabled === false ? 'CI is disabled' : 'no preset is selected'}`, () => {
       const pipeline = renderGitlabFiles(config, gitlabTemplates).find((file) => file.path === '.gitlab-ci.yml')!.content;
-      assert.equal(pipeline, template('gitlab-ci.yml')
+      assert.equal(pipeline, withReworkJobs(template('gitlab-ci.yml')
         .replace('  - quality\n', '')
         .replaceAll('@@QUALITY_JOB@@', '')
-        .replaceAll('@@MACHINE@@', config.machine));
+        .replaceAll('@@MACHINE@@', config.machine)));
       assert.doesNotMatch(pipeline, /@@[A-Z_]+@@/);
     });
   }
@@ -184,9 +447,10 @@ describe('GitLab factory templates', () => {
     const files = renderGitlabFiles(config, gitlabTemplates);
     for (const name of ['gitlab-factory-poll-issues.sh', 'gitlab-factory-publish-review.sh']) {
       const script = files.find((file) => file.path === `.dmtools/scripts/${name}`)!.content;
-      assert.equal(script, template(name)
+      assert.ok(script.startsWith(template(name)
+        .split('\npage=1\n')[0]
         .replaceAll('@@MACHINE@@', config.machine)
-        .replaceAll('@@BASE_BRANCH@@', config.baseBranch));
+        .replaceAll('@@BASE_BRANCH@@', config.baseBranch)));
       assert.doesNotMatch(script, /@@[A-Z_]+@@/);
       const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' });
       assert.equal(syntax.status, 0, syntax.stderr);
@@ -197,6 +461,7 @@ describe('GitLab factory templates', () => {
 function validConfig(overrides: Partial<FactoryConfig> = {}): FactoryConfig {
   return {
     ...defaults,
+    gitlabAutoLifecycle: false,
     repo: 'acme/demo',
     ...overrides,
   };
@@ -214,6 +479,11 @@ describe('Source control options', () => {
   it('accepts nested GitLab namespaces in repository paths', () => {
     assert.equal(validate(validConfig({ repo: 'team/platform/service' }), 'gitlab').repo, undefined);
     assert.equal(validate(validConfig({ repo: 'team' }), 'gitlab').repo, 'Use group/project');
+  });
+
+  it('does not require GitHub CI settings for the GitLab machine SM workflow', () => {
+    const config = validConfig({ ciFile: '', ciName: '', checks: [] });
+    assert.deepEqual(validate(config, 'gitlab'), {});
   });
 
   it('normalizes GitLab instance URLs, including self-managed path prefixes', () => {
@@ -285,6 +555,8 @@ describe('Source control options', () => {
     assert.match(story.content, /"GITLAB_BASE_PATH": "https:\/\/gitlab\.example\.com\/gitlab"/);
     assert.match(story.content, /"GITLAB_WORKSPACE": "acme"/);
     assert.match(story.content, /"GITLAB_REPOSITORY": "demo"/);
+    assert.equal(JSON.parse(story.content).params.customParams.scmProvider, undefined,
+      'lifecycle scripts create MRs themselves; the pack must not create a second one');
     const review = files.find((file) => file.path === '.dmtools/runners/fa-review.json');
     assert.ok(review);
     assert.equal(JSON.parse(review.content).params.requireCliOutputFile, false);
@@ -334,7 +606,7 @@ describe('Source control options', () => {
     );
     assert.match(
       pipeline,
-      /rework-merge-request:[\s\S]*?script:\n    - \|\n      dmtools run \.dmtools\/runners\/fa-rework\.json/,
+      /rework-merge-request:[\s\S]*?script:\n    - \|\n      bash \.dmtools\/scripts\/gitlab-factory-rework\.sh "\$CI_MERGE_REQUEST_IID"/,
     );
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/);
     assert.match(pipeline, /CI_PIPELINE_SOURCE == "trigger" && \$DMTOOLS_FACTORY_TRIGGER == "issue_webhook"/);
@@ -381,8 +653,8 @@ describe('Source control options', () => {
     assert.match(poller, /run_agent "\$config" --inputTicketId "\$iid"/);
     assert.match(
       poller,
-      /if \[ "\$trigger" != 'agent:review' \]; then\s+publish_issue_changes "\$iid" "\$base_sha"\s+else\s+related_merge_requests=/,
-      'issue review runs should not require code changes or create a branch/MR',
+      /elif \[ "\$trigger" != 'agent:review' \]; then\s+run_agent "\$config" --inputTicketId "\$iid"\s+publish_issue_changes "\$iid" "\$base_sha"\s+else\s+run_agent "\$config" --inputTicketId "\$iid"\s+related_merge_requests=/,
+      'only development should create a branch/MR; review and rework use existing MRs',
     );
     assert.match(poller, /if \[ "\$trigger" = 'agent:review' \]; then\s+result_label='ai_pr_reviewed'/);
     assert.match(poller, /issues\/\$iid\/related_merge_requests/);
@@ -405,6 +677,11 @@ describe('Source control options', () => {
     assert.match(poller, /branch protection/);
     assert.match(poller, /projects\/\$CI_PROJECT_ID\/merge_requests/);
     assert.match(poller, /Created GitLab merge request:/);
+    const lifecycleFiles = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true }), gitlabTemplates);
+    const reviewRunner = JSON.parse(lifecycleFiles.find((file) => file.path === '.dmtools/runners/fa-review.json')!.content);
+    const reviewPrompt = reviewRunner.params.cliPrompts.join('\n');
+    assert.match(reviewPrompt, /Write all review artifacts only under its outputs\/ directory/);
+    assert.match(reviewPrompt, /Treat DMTOOLS_REVIEW_CONTEXT as read-only input/);
     assert.ok(
       poller.indexOf('publish_issue_changes "$iid" "$base_sha"') <
         poller.indexOf('add_labels=$result_label'),
@@ -414,6 +691,77 @@ describe('Source control options', () => {
     assert.equal(gitlabToken.name, 'GITLAB_TOKEN');
     assert.match(gitlabToken.hint, /api and write_repository scopes/);
     assert.match(gitlabToken.hint, /Developer or higher access/);
+  });
+
+  it('ignores a non-empty-directory cleanup failure only after successful agent completion', () => {
+    const poller = renderGitlabFiles(validConfig({ gitlabAutoLifecycle: true }), gitlabTemplates)
+      .find((file) => file.path === '.dmtools/scripts/gitlab-factory-poll-issues.sh')!.content;
+    const runAgent = poller.match(/run_agent\(\) \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(runAgent, 'rendered poller should contain run_agent');
+
+    const runWithOutput = (completion: string) => [
+      'set -Eeuo pipefail',
+      runAgent,
+      `dmtools() { printf '%s\\n' '${completion}' "rmdir: failed to remove '/tmp/context': Directory not empty"; return 1; }`,
+      'run_agent review.json',
+    ].join('\n');
+    const recovered = spawnSync('bash', ['-c', runWithOutput('Agent completed with exit code: 0')], { encoding: 'utf8' });
+    assert.equal(recovered.status, 0, recovered.stderr);
+    assert.match(recovered.stderr, /Ignoring temporary-directory cleanup failure/);
+
+    const failedAgent = spawnSync('bash', ['-c', runWithOutput('Agent completed with exit code: 1')], { encoding: 'utf8' });
+    assert.notEqual(failedAgent.status, 0);
+  });
+
+  it('replaces a truncated trigger token instead of configuring a webhook that returns 404', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body = init?.body instanceof URLSearchParams
+        ? Object.fromEntries(init.body)
+        : init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, method, body });
+      if (url.includes('/triggers?')) {
+        return Response.json([{ id: 21, token: 'abcd', description: 'DMTools factory issue webhook' }]);
+      }
+      if (url.endsWith('/triggers') && method === 'POST') {
+        return Response.json({ id: 22, token: 'full-trigger-token', description: 'DMTools factory issue webhook' });
+      }
+      if (url.includes('/hooks?')) {
+        return Response.json([{
+          id: 34,
+          url: 'https://gitlab.example.com/api/v4/projects/team%2Fapp/trigger/pipeline?token=abcd&ref=main&variables%5BDMTOOLS_FACTORY_TRIGGER%5D=issue_webhook',
+        }]);
+      }
+      if (url.endsWith('/hooks/34') && method === 'PUT') return Response.json({ id: 34 });
+      if (url.endsWith('/triggers/21') && method === 'DELETE') return new Response(null, { status: 204 });
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      await ensureGitlabIssueEventWebhook('setup-token', 'team/app', 'https://gitlab.example.com', 'main');
+      assert.equal(calls.filter((call) => call.url.endsWith('/triggers') && call.method === 'POST').length, 1);
+      const updated = calls.find((call) => call.url.endsWith('/hooks/34') && call.method === 'PUT');
+      assert.equal(new URL(String(updated?.body?.url)).searchParams.get('token'), 'full-trigger-token');
+      assert.ok(calls.some((call) => call.url.endsWith('/triggers/21') && call.method === 'DELETE'));
+
+      calls.length = 0;
+      globalThis.fetch = (async (input) => {
+        const url = String(input);
+        calls.push({ url, method: 'GET' });
+        return url.includes('/triggers?')
+          ? Response.json([])
+          : Response.json({ id: 22, token: 'abcd', description: 'DMTools factory issue webhook' });
+      }) as typeof fetch;
+      await assert.rejects(
+        ensureGitlabIssueEventWebhook('setup-token', 'team/app', 'https://gitlab.example.com', 'main'),
+        /did not return the factory webhook trigger token/,
+      );
+      assert.ok(calls.every((call) => !call.url.includes('/hooks')));
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 
   it('creates and updates a managed GitLab issue-event webhook idempotently', async () => {
@@ -661,53 +1009,57 @@ describe('Source control options', () => {
     }
   });
 
-  for (const reuseTemplates of [false, true]) {
-    it(`commits GitLab setup files using ${reuseTemplates ? 'preview' : 'downloaded'} templates and opens a merge request`, async () => {
+  it('commits the machine SM, teammate, and runner setup without fetching templates', async () => {
       const origFetch = globalThis.fetch;
       const calls: { url: string; init?: RequestInit }[] = [];
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         calls.push({ url, init });
-        if (url.startsWith('https://raw.githubusercontent.com/')) {
-          const name = url.split('/').at(-1) as keyof GitlabTemplates;
-          return new Response(gitlabTemplates[name]);
-        }
         if (url.endsWith('/projects/team%2Fapp')) {
           return new Response(JSON.stringify({ default_branch: 'main' }), { status: 200 });
         }
-        if (url.includes('/repository/tree?')) return new Response(JSON.stringify([]), { status: 200 });
         if (url.endsWith('/merge_requests')) {
           return new Response(JSON.stringify({ web_url: 'https://gitlab.example.com/team/app/-/merge_requests/1' }), { status: 201 });
+        }
+        if (url.includes('/repository/files/')) {
+          return new Response(JSON.stringify({ message: '404 File Not Found' }), { status: 404 });
         }
         return new Response(JSON.stringify({ id: 1 }), { status: 201 });
       }) as typeof fetch;
 
       try {
-        const config = validConfig({ repo: 'team/app', baseBranch: 'main' });
         const mrUrl = await createGitlabMergeRequest(
           'glpat_test-token-123456789',
           'team/app',
           'https://gitlab.example.com',
-          config,
+          validConfig({ repo: 'team/app', baseBranch: 'main' }),
           () => {},
-          reuseTemplates ? gitlabTemplates : undefined,
         );
         assert.equal(mrUrl, 'https://gitlab.example.com/team/app/-/merge_requests/1');
         const commit = calls.find((call) => call.url.endsWith('/repository/commits'));
         const actions = JSON.parse(String(commit?.init?.body)).actions as { file_path: string; content: string }[];
-        assert.ok(actions.some((file) => file.file_path === '.gitlab-ci.yml'));
-        assert.ok(actions.every((file) => !file.file_path.startsWith('.github/')));
-        const preview = renderGitlabFiles(config, gitlabTemplates, 'https://gitlab.example.com');
-        assert.deepEqual(actions.map(({ file_path, content }) => ({ path: file_path, content })), preview);
+        assert.deepEqual(
+          actions.map((file) => file.file_path),
+          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' }), 'https://gitlab.example.com')
+            .map((file) => file.path),
+        );
+        assert.deepEqual(
+          actions.map(({ file_path, content }) => ({ path: file_path, content })),
+          renderGitlabMachineSmFiles(validConfig({ repo: 'team/app', baseBranch: 'main' }), 'https://gitlab.example.com')
+            .map(({ path, content }) => ({ path, content })),
+        );
+        const storyRunner = JSON.parse(
+          actions.find((file) => file.file_path === '.dmtools/runners/fa-story-dev.json')!.content,
+        );
+        assert.equal(storyRunner.params.envVariables.GITLAB_BASE_PATH, 'https://gitlab.example.com');
         const mergeRequest = calls.find((call) => call.url.endsWith('/merge_requests'));
         assert.ok(mergeRequest);
-        assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /IstiN\/dmtools-agentic-workflows@feat\/gitlab-agent-workflows/);
-        assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length, reuseTemplates ? 0 : 8);
+        assert.match(JSON.parse(String(mergeRequest.init?.body)).description, /shared parent workflows/);
+        assert.equal(calls.filter((call) => call.url.startsWith('https://raw.githubusercontent.com/')).length, 0);
       } finally {
         globalThis.fetch = origFetch;
       }
-    });
-  }
+  });
 });
 
 describe('Issue #749 — agents repository link', () => {
