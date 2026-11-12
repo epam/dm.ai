@@ -260,6 +260,10 @@ public class JobJavaScriptBridge {
             // Expose set_env_variable for runtime property switching (alias name only, value stays in Java)
             jsContext.getBindings("js").putMember("set_env_variable", new SetEnvVariableProxy());
 
+            // Expose java.lang.System.getenv for non-secret selectors such as DEFAULT_TRACKER, so
+            // js/common/trackers.js picks the active tracker instead of falling back to Jira
+            bindJavaEnvironmentShim();
+
             // Expose MCP tools using generated infrastructure
             exposeMCPToolsUsingGenerated();
 
@@ -816,6 +820,20 @@ public class JobJavaScriptBridge {
     }
 
     /**
+     * Binds the allow-listed {@code java.lang.System.getenv} shim as global {@code java}, unless a
+     * real {@code java} global with {@code lang} already exists (never break host access).
+     */
+    private void bindJavaEnvironmentShim() {
+        Value bindings = jsContext.getBindings("js");
+        Value existing = bindings.getMember("java");
+        if (existing != null && !existing.isNull() && existing.hasMember("lang")
+                && !JsEnvironmentShim.isShim(existing)) {
+            return;
+        }
+        bindings.putMember("java", JsEnvironmentShim.create(name -> new PropertyReader().getValue(name)));
+    }
+
+    /**
      * Proxy for set_env_variable(propertyName, envVarName) JS function.
      * Allows a JS agent to redirect a dmtools property to read from a different env variable.
      * The actual token value stays in Java — JS only provides the env var NAME.
@@ -966,6 +984,9 @@ public class JobJavaScriptBridge {
 
             // Ensure set_env_variable is available for this execution
             jsContext.getBindings("js").putMember("set_env_variable", new SetEnvVariableProxy());
+
+            // Ensure java.lang.System.getenv (allow-listed) is available for this execution
+            bindJavaEnvironmentShim();
 
             // Node/js compat layer — default-off, same knob contract as
             // parallelWorkers (params.jobParams.nodeCompat === true).
@@ -1477,6 +1498,7 @@ public class JobJavaScriptBridge {
                                                          JSONObject parameters) {
         try {
             ensureJavaScriptContext();
+            bindJavaEnvironmentShim();
             setCurrentScriptDirectory(scriptDirectory == null || scriptDirectory.isEmpty()
                     ? "" : scriptDirectory + "/__jsr_job__.js");
             JsNodeCompat.Handle workerCompat = null;
