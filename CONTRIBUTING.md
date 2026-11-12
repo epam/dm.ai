@@ -11,7 +11,13 @@ cd dmtools-cli
 
 # Copy the example env file and fill in your credentials
 cp dmtools.env.example dmtools.env
+
+# Activate the tracked .githooks/pre-commit quality gate (applies to all git worktrees)
+git config core.hooksPath .githooks
+# or: ./gradlew installGitHooks
 ```
+
+> **Pre-commit Quality Gate:** `.githooks/pre-commit` enforces the CI quality gate on staged `.java` files (`<= 2800` lines per file and `jscpd` duplication `<= 2%`). Never bypass with `--no-verify`.
 
 ## Building
 
