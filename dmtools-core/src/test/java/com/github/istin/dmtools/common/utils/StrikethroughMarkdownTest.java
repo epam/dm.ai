@@ -100,4 +100,50 @@ class StrikethroughMarkdownTest {
         String storage = MarkdownToConfluenceStorage.toStorage("keep ~~this~~ please");
         assertEquals("keep ~~this~~ please", HtmlToMarkdownConverter.convert(storage).trim());
     }
+
+    // ---- Contract: edge whitespace, adjacency, nesting, code ----
+
+    private static String md(String html) {
+        return HtmlToMarkdownConverter.convert(html).trim();
+    }
+
+    @Test
+    void htmlToMarkdown_singleTagsAttributesAndCase() {
+        assertEquals("~~a~~", md("<p><del>a</del></p>"));
+        assertEquals("~~a~~", md("<p><s>a</s></p>"));
+        assertEquals("~~a~~", md("<p><strike>a</strike></p>"));
+        assertEquals("x ~~a~~", md("<p>x <DEL class=\"c\" data-x=\"1\">a</DEL></p>"));
+    }
+
+    @Test
+    void htmlToMarkdown_edgeWhitespaceMovesOutsideMarkers() {
+        assertEquals("x ~~text~~", md("<p>x<del> text</del></p>"));
+        assertEquals("~~text~~ y", md("<p><del>text </del>y</p>"));
+        assertEquals("a b", md("<p>a<del> </del>b</p>"));
+        assertEquals("ab", md("<p>a<del></del>b</p>"));
+    }
+
+    @Test
+    void htmlToMarkdown_adjacentRuns() {
+        assertEquals("~~A~~ ~~B~~", md("<p><del>A</del><del> B</del></p>"));
+        assertEquals("~~AB~~", md("<p><del>A</del><del>B</del></p>"));
+        assertEquals("~~x~~", md("<p><del><s>x</s></del></p>"));
+    }
+
+    @Test
+    void htmlToMarkdown_nestingWithEmphasis() {
+        assertEquals("**~~Title~~** ~~text~~", md("<p><strong><del>Title</del></strong><del> text</del></p>"));
+        assertEquals("~~**Title** text~~", md("<p><del><strong>Title</strong> text</del></p>"));
+    }
+
+    @Test
+    void htmlToMarkdown_strikeInsideInlineCodeStaysLiteral() {
+        assertEquals("`x` ~~y~~", md("<p><code><del>x</del></code> <del>y</del></p>"));
+    }
+
+    @Test
+    void storageMarkdown_strikeIsPreserved() {
+        assertEquals("**~~Q?~~** ~~resolved~~", com.github.istin.dmtools.atlassian.confluence.ConfluenceStorageMarkdown
+                .toMarkdown("<p><strong><del>Q?</del></strong><del> resolved</del></p>").trim());
+    }
 }
