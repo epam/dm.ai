@@ -7,6 +7,7 @@ import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.graalvm.polyglot.proxy.ProxyObject;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -47,9 +48,9 @@ final class JsEnvironmentShim {
             }
             return lookup.apply(name.asString());
         };
-        ProxyObject system = ProxyObject.fromMap(Map.of("getenv", getenv));
-        ProxyObject lang = ProxyObject.fromMap(Map.of("System", system));
-        return ProxyObject.fromMap(Map.of("lang", lang, SHIM_MARKER, true));
+        ProxyObject system = ProxyObject.fromMap(new HashMap<>(Map.of("getenv", getenv)));
+        ProxyObject lang = ProxyObject.fromMap(new HashMap<>(Map.of("System", system)));
+        return ProxyObject.fromMap(new HashMap<>(Map.of("lang", lang, SHIM_MARKER, true)));
     }
 
     static final String SHIM_MARKER = "__dmtoolsEnvShim";
