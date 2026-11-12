@@ -401,7 +401,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     "TrackerClient is not configured, but inputJql is provided. " +
                     "Please configure Jira (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN) or " +
                     "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN) or " +
-                    "Rally (RALLY_PATH + RALLY_TOKEN). " +
+                    "Rally (RALLY_PATH + RALLY_TOKEN) or " +
+                    "GitHub Issues (DEFAULT_TRACKER=github + SOURCE_GITHUB_TOKEN). " +
                     "Alternatively, remove inputJql parameter if tracker integration is not needed."
                 );
             } else if (!hasCliCommands) {
