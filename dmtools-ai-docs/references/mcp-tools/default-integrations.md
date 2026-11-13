@@ -12,13 +12,15 @@ the call to the correct integration based on environment variables.
 1. You call a generic alias, e.g. `source_code_list_prs` or `tracker_get_ticket`.
 2. DMtools looks up all implementations registered for that alias.
 3. **Explicit key formats win first** (only for `tracker_*` calls carrying an issue key):
-   `gh-123` or `owner/repo#123` always route to GitHub — they are not valid keys anywhere else.
+   `gh-123` or `owner/repo#123` always route to GitHub, while `gl-123` or a
+   multi-segment `group/subgroup/project#123` always route to GitLab — they are
+   not valid keys anywhere else.
 4. If only one implementation exists, it is used automatically.
 5. If multiple implementations exist (e.g., GitHub **and** GitLab), the routing
    property is consulted from the config chain (`config.properties` → `dmtools.env`
    → environment variables):
    - `DEFAULT_SOURCE_CODE` → `github` or `gitlab`
-   - `DEFAULT_TRACKER` → `jira`, `ado`, or `github`
+   - `DEFAULT_TRACKER` → `jira`, `ado`, `github`, or `gitlab`
 6. If no routing property is set, **key-format detection** applies to `tracker_*`
    calls: `PROJ-123` → Jira, bare integer (`12345`) → ADO.
 7. Otherwise the first registered implementation is used (with a warning).
@@ -47,6 +49,9 @@ DEFAULT_TRACKER=ado
 
 # Use GitHub Issues for all tracker_* calls
 DEFAULT_TRACKER=github
+
+# Use GitLab Issues for all tracker_* calls
+DEFAULT_TRACKER=gitlab
 ```
 
 Add these to your `dmtools.env` file or export them as shell environment variables.
@@ -86,25 +91,25 @@ These aliases abstract over **GitHub** and **GitLab** PR/MR operations.
 
 ## Tracker Aliases (`tracker_*`)
 
-These aliases abstract over **Jira**, **Azure DevOps (ADO)** work items, and
-**GitHub Issues**.
+These aliases abstract over **Jira**, **Azure DevOps (ADO)** work items,
+**GitHub Issues**, and **GitLab Issues**.
 
-| Alias | Jira Implementation | ADO Implementation | GitHub Implementation |
-|-------|---------------------|--------------------|-----------------------|
-| `tracker_search` | `jira_search_by_jql` | `ado_search_by_wiql` | `github_search_issues` |
-| `tracker_get_ticket` | `jira_get_ticket` | `ado_get_work_item` | `github_get_issue` |
-| `tracker_get_comments` | `jira_get_comments` | `ado_get_work_item_comments` | `github_get_pr_comments` |
-| `tracker_post_comment` | `jira_post_comment` | `ado_add_work_item_comment` | `github_create_comment` |
-| `tracker_add_label` | `jira_add_label` | `ado_add_work_item_label` | `github_add_labels` |
-| `tracker_remove_label` | `jira_remove_label` | `ado_remove_work_item_label` | `github_remove_label` |
-| `tracker_assign_ticket` | `jira_assign_ticket_to` | `ado_assign_work_item` | `github_assign_issue` |
-| `tracker_assign` | `jira_assign_ticket_to` | `ado_assign_work_item` | `github_assign_issue` |
-| `tracker_move_to_status` | `jira_move_to_status` | `ado_move_to_state` | `github_move_issue_to_status` |
-| `tracker_get_my_profile` | `jira_get_my_profile` | `ado_get_my_profile` | `github_test` |
-| `tracker_get_user_by_email` | `jira_get_account_by_email` | `ado_get_user_by_email` | — |
-| `tracker_link_tickets` | `jira_link_issues` | `ado_link_work_items` | — |
-| `tracker_create_ticket` | `jira_create_ticket_basic` | `ado_create_work_item` | `github_create_issue` |
-| `tracker_download_attachment` | `jira_download_attachment` | `ado_download_attachment` | — |
+| Alias | Jira Implementation | ADO Implementation | GitHub Implementation | GitLab Implementation |
+|-------|---------------------|--------------------|-----------------------|-----------------------|
+| `tracker_search` | `jira_search_by_jql` | `ado_search_by_wiql` | `github_search_issues` | `gitlab_search_issues` |
+| `tracker_get_ticket` | `jira_get_ticket` | `ado_get_work_item` | `github_get_issue` | `gitlab_get_issue` |
+| `tracker_get_comments` | `jira_get_comments` | `ado_get_work_item_comments` | `github_get_pr_comments` | `gitlab_get_issue_comments` |
+| `tracker_post_comment` | `jira_post_comment` | `ado_add_work_item_comment` | `github_create_comment` | `gitlab_create_issue_comment` |
+| `tracker_add_label` | `jira_add_label` | `ado_add_work_item_label` | `github_add_labels` | `gitlab_add_issue_label` |
+| `tracker_remove_label` | `jira_remove_label` | `ado_remove_work_item_label` | `github_remove_label` | `gitlab_remove_issue_label` |
+| `tracker_assign_ticket` | `jira_assign_ticket_to` | `ado_assign_work_item` | `github_assign_issue` | `gitlab_assign_issue` |
+| `tracker_assign` | `jira_assign_ticket_to` | `ado_assign_work_item` | `github_assign_issue` | `gitlab_assign_issue` |
+| `tracker_move_to_status` | `jira_move_to_status` | `ado_move_to_state` | `github_move_issue_to_status` | `gitlab_move_issue_to_status` |
+| `tracker_get_my_profile` | `jira_get_my_profile` | `ado_get_my_profile` | `github_test` | — |
+| `tracker_get_user_by_email` | `jira_get_account_by_email` | `ado_get_user_by_email` | — | — |
+| `tracker_link_tickets` | `jira_link_issues` | `ado_link_work_items` | — | — |
+| `tracker_create_ticket` | `jira_create_ticket_basic` | `ado_create_work_item` | `github_create_issue` | `gitlab_create_issue` |
+| `tracker_download_attachment` | `jira_download_attachment` | `ado_download_attachment` | — | — |
 
 ### Aligned Parameter Names (tracker_*)
 

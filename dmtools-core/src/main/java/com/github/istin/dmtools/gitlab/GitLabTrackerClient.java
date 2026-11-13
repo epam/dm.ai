@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.List;
 
 /** Tracker client backed by GitLab project issues. */
-public class GitLabTrackerClient extends GitLab implements TrackerClient<GitLabTicket> {
+public class GitLabTrackerClient extends GitLabIssues implements TrackerClient<GitLabTicket> {
 
     private static final Logger logger = LogManager.getLogger(GitLabTrackerClient.class);
     private static final String UNSUPPORTED = "Not supported by the GitLab issues tracker backend: ";
@@ -122,7 +122,7 @@ public class GitLabTrackerClient extends GitLab implements TrackerClient<GitLabT
         int page = 1;
         while (true) {
             GenericRequest request = new GenericRequest(this,
-                    path("projects/" + encodePathSegment(projectPath) + "/issues"));
+                    path("projects/" + encodeProjectPath(projectPath) + "/issues"));
             request.param("state", "all").param("per_page", 100).param("page", page);
             request.param("search", searchQuery);
             JSONArray issues = new JSONArray(execute(request));
@@ -250,7 +250,7 @@ public class GitLabTrackerClient extends GitLab implements TrackerClient<GitLabT
             body.put("description", description);
         }
         String response = post(new GenericRequest(this,
-                path("projects/" + encodePathSegment(projectPath) + "/issues")).setBody(body.toString()));
+                path("projects/" + encodeProjectPath(projectPath) + "/issues")).setBody(body.toString()));
         return new GitLabTicket(projectPath, response).getTicketKey();
     }
 
@@ -285,7 +285,7 @@ public class GitLabTrackerClient extends GitLab implements TrackerClient<GitLabT
         try {
             IssueRef ref = resolveIssueRef(ticketKey);
             return getBasePath() + "/" + ref.projectPath + "/-/issues/" + ref.iid;
-        } catch (IOException | IllegalArgumentException e) {
+        } catch (IllegalArgumentException e) {
             return ticketKey;
         }
     }
@@ -367,10 +367,6 @@ public class GitLabTrackerClient extends GitLab implements TrackerClient<GitLabT
         return patch(new GenericRequest(this, issuePath(ref)).setBody(body.toString()));
     }
 
-    private String issuePath(IssueRef ref) {
-        return path("projects/" + encodePathSegment(ref.projectPath) + "/issues/" + ref.iid);
-    }
-
     private List<GitLabTicket> toTickets(String projectPath, JSONArray issues) {
         List<GitLabTicket> tickets = new ArrayList<>();
         for (int i = 0; i < issues.length(); i++) {
@@ -382,24 +378,8 @@ public class GitLabTrackerClient extends GitLab implements TrackerClient<GitLabT
         return tickets;
     }
 
-    private IssueRef resolveIssueRef(String ticketKey) throws IOException {
-        if (ticketKey == null || ticketKey.trim().isEmpty()) {
-            throw new IllegalArgumentException("GitLab issue key must not be empty");
-        }
-        String key = ticketKey.trim();
-        int separator = key.lastIndexOf('#');
-        if (separator > 0 && separator < key.length() - 1) {
-            String projectPath = key.substring(0, separator);
-            String iid = key.substring(separator + 1);
-            if (iid.matches("\\d+")) {
-                return new IssueRef(projectPath, iid);
-            }
-        }
-        if (key.matches("\\d+")) {
-            return new IssueRef(defaultProjectPath(), key);
-        }
-        throw new IllegalArgumentException("Cannot parse GitLab issue key: " + ticketKey
-                + ". Expected namespace/project#iid or a numeric IID with a configured default project.");
+    private IssueRef resolveIssueRef(String ticketKey) {
+        return resolveIssueRef(ticketKey, null, null, null);
     }
 
     private String defaultProjectPath() throws IOException {
@@ -425,25 +405,11 @@ public class GitLabTrackerClient extends GitLab implements TrackerClient<GitLabT
         return getDefaultWorkspace() + "/" + value;
     }
 
-    private static String encodePathSegment(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
-    }
-
     private static String normalizeBasePath(String basePath) {
         String normalized = basePath == null || basePath.trim().isEmpty() ? DEFAULT_BASE_PATH : basePath.trim();
         while (normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
-    }
-
-    private static class IssueRef {
-        private final String projectPath;
-        private final String iid;
-
-        private IssueRef(String projectPath, String iid) {
-            this.projectPath = projectPath;
-            this.iid = iid;
-        }
     }
 }

@@ -1,6 +1,6 @@
 # GITLAB MCP Tools
 
-**Total Tools**: 34
+**Total Tools**: 45
 
 ## Quick Reference
 
@@ -110,15 +110,22 @@ const result = gitlab_add_mr_label(...);
 | Tool Name | Description | Parameters |
 |-----------|-------------|------------|
 | `gitlab_add_inline_mr_comment` | Create a new inline code review comment on a specific file and line in a GitLab merge request. Requires base_sha, head_sha, start_sha from the MR diff refs (use gitlab_get_mr to get them from diff_refs). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`filePath` (string, **required**)<br>`line` (string, **required**)<br>`text` (string, **required**)<br>`baseSha` (string, **required**)<br>`headSha` (string, **required**)<br>`startSha` (string, **required**) |
+| `gitlab_add_issue_label` | Add a label to a GitLab issue. | `label` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `gitlab_add_mr_comment` | Add a general discussion comment to a GitLab merge request. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`text` (string, **required**) |
 | `gitlab_add_mr_label` | Add a label to a GitLab merge request. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`label` (string, **required**) |
 | `gitlab_approve_mr` | Approve a GitLab merge request. Adds your approval to the MR. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_assign_issue` | Assign a GitLab issue to a user by username. | `user` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `gitlab_cancel_job` | Cancel a GitLab CI job. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`jobId` (string, **required**) |
+| `gitlab_close_issue` | Close a GitLab issue. | `workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
+| `gitlab_create_issue` | Create a GitLab issue. | `title` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional)<br>`body` (string, optional)<br>`key` (string, optional) |
+| `gitlab_create_issue_comment` | Create a comment (note) on a GitLab issue. | `body` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `gitlab_create_mr` | Create a GitLab merge request from a source branch into a target branch. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`sourceBranch` (string, **required**)<br>`targetBranch` (string, **required**)<br>`title` (string, **required**)<br>`description` (string, optional)<br>`removeSourceBranch` (string, optional) |
 | `gitlab_create_mr_note` | Create a note (comment) on a GitLab merge request. Same endpoint as gitlab_add_mr_comment; the dmtools-dart catalog exposes both names. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`text` (string, **required**) |
 | `gitlab_delete_release_asset` | Delete a GitLab release asset by its asset name. Removes both the release link and the underlying Generic Package Registry file. Use gitlab_list_release_assets to find asset names. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`assetName` (string, **required**)<br>`packageName` (string, optional) |
 | `gitlab_download_release_asset` | Download a GitLab release asset (a file published to the Generic Package Registry and attached to a release) to a local file path. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**)<br>`assetName` (string, **required**)<br>`targetFilePath` (string, **required**)<br>`packageName` (string, optional) |
 | `gitlab_get_commit_statuses` | Get CI/CD statuses for a commit SHA in a GitLab project. Returns one entry per status report (e.g. posted by an external CI like Jenkins via the gitlabBuilds plugin, or GitLab's own pipeline). Equivalent of GitHub's 'check runs' for GitLab. When the same status name was reported more than once for this commit (e.g. a CI job was retried), only the most recent report per name is returned. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`commitSha` (string, **required**) |
+| `gitlab_get_issue` | Get details of a GitLab issue including title, description, state, author, labels, and assignees. | `workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
+| `gitlab_get_issue_comments` | Get all comments (notes) of a GitLab issue, oldest first. Returns a JSON array of notes. | `workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `gitlab_get_job_logs` | Get GitLab CI job trace logs. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`jobId` (string, **required**) |
 | `gitlab_get_mr` | Get details of a specific GitLab merge request including title, description, state, author, diff_refs (base_sha, head_sha, start_sha needed for inline comments). | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
 | `gitlab_get_mr_activities` | Get all activities for a GitLab merge request. Approvals are fetched from the real GitLab Approvals API. General discussion notes are also included. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
@@ -135,10 +142,14 @@ const result = gitlab_add_mr_label(...);
 | `gitlab_list_project_jobs` | List recent GitLab CI jobs for a project. | `workspace` (string, **required**)<br>`repository` (string, **required**) |
 | `gitlab_list_release_assets` | List all assets (asset links) attached to a GitLab release. Returns a JSON array of link objects including id, name, url, and direct_asset_url. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`tagName` (string, **required**) |
 | `gitlab_merge_mr` | Merge a GitLab merge request. Optionally provide a custom merge commit message. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`mergeCommitMessage` (string, optional) |
+| `gitlab_move_issue_to_status` | Move a GitLab issue to a status. 'done'/'closed'/'completed'/'resolved' close the issue, 'open'/'reopened' reopen it; any other status is applied as a scoped 'status::<status>' label. | `statusName` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `gitlab_rebase_mr` | Ask GitLab to rebase/update a merge request source branch with its target branch. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
+| `gitlab_remove_issue_label` | Remove a label from a GitLab issue. | `label` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `gitlab_remove_mr_label` | Remove a label from a GitLab merge request. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`label` (string, **required**) |
+| `gitlab_reopen_issue` | Reopen a closed GitLab issue. | `workspace` (string, optional)<br>`repository` (string, optional)<br>`issueNumber` (string, optional)<br>`key` (string, optional) |
 | `gitlab_reply_to_mr_thread` | Reply to an existing discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`discussionId` (string, **required**)<br>`text` (string, **required**) |
 | `gitlab_resolve_mr_thread` | Resolve (close) a review discussion thread in a GitLab merge request. Use the discussion id from gitlab_get_mr_discussions. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**)<br>`discussionId` (string, **required**) |
+| `gitlab_search_issues` | Search GitLab issues of a project with a query string matched against title and description. Returns a JSON array of issues. | `query` (string, **required**)<br>`workspace` (string, optional)<br>`repository` (string, optional)<br>`state` (string, optional) |
 | `gitlab_test` | Test GitLab connectivity by fetching the current user's profile | None |
 | `gitlab_trigger_pipeline` | Trigger a GitLab CI pipeline for a branch or tag using the authenticated API token. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`ref` (string, **required**)<br>`variablesJson` (string, optional) |
 | `gitlab_unapprove_mr` | Unapprove a GitLab merge request. Revokes your approval from the MR. | `workspace` (string, **required**)<br>`repository` (string, **required**)<br>`pullRequestId` (string, **required**) |
@@ -196,6 +207,44 @@ dmtools gitlab_add_inline_mr_comment "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_add_inline_mr_comment("workspace", "repository");
+```
+
+---
+
+### `gitlab_add_issue_label`
+
+Add a label to a GitLab issue.
+
+**Parameters:**
+
+- **`label`** (string) 🔴 Required
+  - The label name to add
+  - Example: `bug`
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_add_issue_label "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_add_issue_label(...);
 ```
 
 ---
@@ -298,6 +347,44 @@ const result = gitlab_approve_mr("workspace", "repository");
 
 ---
 
+### `gitlab_assign_issue`
+
+Assign a GitLab issue to a user by username.
+
+**Parameters:**
+
+- **`user`** (string) 🔴 Required
+  - The assignee GitLab username
+  - Example: `jsmith`
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_assign_issue "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_assign_issue(...);
+```
+
+---
+
 ### `gitlab_cancel_job`
 
 Cancel a GitLab CI job.
@@ -324,6 +411,116 @@ dmtools gitlab_cancel_job "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_cancel_job("workspace", "repository");
+```
+
+---
+
+### `gitlab_close_issue`
+
+Close a GitLab issue.
+
+**Parameters:**
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_close_issue "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_close_issue(...);
+```
+
+---
+
+### `gitlab_create_issue`
+
+Create a GitLab issue.
+
+**Parameters:**
+
+- **`title`** (string) 🔴 Required
+  - The title of the new issue
+  - Example: `Something is broken`
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`body`** (string) ⚪ Optional
+  - The issue description (markdown)
+  - Example: `Steps to reproduce...`
+
+- **`key`** (string) ⚪ Optional
+  - Composite project key 'namespace/project' (alternative to workspace/repository)
+  - Example: `mygroup/myrepo`
+
+**Example:**
+```bash
+dmtools gitlab_create_issue "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_create_issue(...);
+```
+
+---
+
+### `gitlab_create_issue_comment`
+
+Create a comment (note) on a GitLab issue.
+
+**Parameters:**
+
+- **`body`** (string) 🔴 Required
+  - The comment body text
+  - Example: `Looks good!`
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_create_issue_comment "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_create_issue_comment(...);
 ```
 
 ---
@@ -514,6 +711,74 @@ dmtools gitlab_get_commit_statuses "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_get_commit_statuses("workspace", "repository");
+```
+
+---
+
+### `gitlab_get_issue`
+
+Get details of a GitLab issue including title, description, state, author, labels, and assignees.
+
+**Parameters:**
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_get_issue "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_issue(...);
+```
+
+---
+
+### `gitlab_get_issue_comments`
+
+Get all comments (notes) of a GitLab issue, oldest first. Returns a JSON array of notes.
+
+**Parameters:**
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_get_issue_comments "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_get_issue_comments(...);
 ```
 
 ---
@@ -1022,6 +1287,44 @@ const result = gitlab_merge_mr("workspace", "repository");
 
 ---
 
+### `gitlab_move_issue_to_status`
+
+Move a GitLab issue to a status. 'done'/'closed'/'completed'/'resolved' close the issue, 'open'/'reopened' reopen it; any other status is applied as a scoped 'status::<status>' label.
+
+**Parameters:**
+
+- **`statusName`** (string) 🔴 Required
+  - The target status name
+  - Example: `Done`
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_move_issue_to_status "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_move_issue_to_status(...);
+```
+
+---
+
 ### `gitlab_rebase_mr`
 
 Ask GitLab to rebase/update a merge request source branch with its target branch.
@@ -1048,6 +1351,44 @@ dmtools gitlab_rebase_mr "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_rebase_mr("workspace", "repository");
+```
+
+---
+
+### `gitlab_remove_issue_label`
+
+Remove a label from a GitLab issue.
+
+**Parameters:**
+
+- **`label`** (string) 🔴 Required
+  - The label name to remove
+  - Example: `bug`
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_remove_issue_label "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_remove_issue_label(...);
 ```
 
 ---
@@ -1082,6 +1423,40 @@ dmtools gitlab_remove_mr_label "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_remove_mr_label("workspace", "repository");
+```
+
+---
+
+### `gitlab_reopen_issue`
+
+Reopen a closed GitLab issue.
+
+**Parameters:**
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name
+  - Example: `myrepo`
+
+- **`issueNumber`** (string) ⚪ Optional
+  - The issue IID
+  - Example: `42`
+
+- **`key`** (string) ⚪ Optional
+  - Composite issue key 'namespace/project#123' or 'gl-123' (alternative to workspace/repository/issueNumber)
+  - Example: `mygroup/myrepo#42`
+
+**Example:**
+```bash
+dmtools gitlab_reopen_issue "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_reopen_issue(...);
 ```
 
 ---
@@ -1154,6 +1529,40 @@ dmtools gitlab_resolve_mr_thread "value" "value"
 ```javascript
 // In JavaScript agent
 const result = gitlab_resolve_mr_thread("workspace", "repository");
+```
+
+---
+
+### `gitlab_search_issues`
+
+Search GitLab issues of a project with a query string matched against title and description. Returns a JSON array of issues.
+
+**Parameters:**
+
+- **`query`** (string) 🔴 Required
+  - Text matched against issue title and description
+  - Example: `login fails`
+
+- **`workspace`** (string) ⚪ Optional
+  - GitLab group or namespace to scope the search to
+  - Example: `mygroup`
+
+- **`repository`** (string) ⚪ Optional
+  - Repository name to scope the search to
+  - Example: `myrepo`
+
+- **`state`** (string) ⚪ Optional
+  - Issue state filter: opened, closed, all (default: all)
+  - Example: `opened`
+
+**Example:**
+```bash
+dmtools gitlab_search_issues "value"
+```
+
+```javascript
+// In JavaScript agent
+const result = gitlab_search_issues(...);
 ```
 
 ---

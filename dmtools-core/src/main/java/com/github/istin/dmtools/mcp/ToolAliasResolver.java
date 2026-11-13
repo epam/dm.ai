@@ -36,6 +36,9 @@ public final class ToolAliasResolver {
     /** {@code gh-123} or composite {@code owner/repo#123} — unambiguously GitHub. */
     private static final Pattern GITHUB_KEY = Pattern.compile(
             "(?:gh-\\d+|[\\w.-]+/[\\w.-]+#\\d+)", Pattern.CASE_INSENSITIVE);
+    /** {@code gl-123} or a multi-segment composite {@code group/sub/project#123} — unambiguously GitLab. */
+    private static final Pattern GITLAB_KEY = Pattern.compile(
+            "(?:gl-\\d+|(?:[\\w.-]+/){2,}[\\w.-]+#\\d+)", Pattern.CASE_INSENSITIVE);
     /** Classic Jira key: {@code PROJ-123}. */
     private static final Pattern JIRA_KEY = Pattern.compile("[A-Z][A-Z0-9]+-\\d+");
     /** Bare numeric id — ADO work item. */
@@ -76,13 +79,21 @@ public final class ToolAliasResolver {
             return toolName;
         }
 
-        // 1. Explicit GitHub key format always routes to GitHub.
+        // 1. Explicit GitHub / GitLab key formats always route to their forge.
         if (keyHint != null && GITHUB_KEY.matcher(keyHint.trim()).matches()) {
             MCPToolDefinition gh = byIntegration(candidates, "github");
             if (gh != null) {
                 logger.debug("Resolved alias '{}' -> '{}' via GitHub key format '{}'",
                         toolName, gh.getName(), keyHint);
                 return gh.getName();
+            }
+        }
+        if (keyHint != null && GITLAB_KEY.matcher(keyHint.trim()).matches()) {
+            MCPToolDefinition gl = byIntegration(candidates, "gitlab");
+            if (gl != null) {
+                logger.debug("Resolved alias '{}' -> '{}' via GitLab key format '{}'",
+                        toolName, gl.getName(), keyHint);
+                return gl.getName();
             }
         }
 
