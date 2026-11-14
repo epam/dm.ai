@@ -1258,6 +1258,7 @@ public class PropertyReader {
   public static final String OPENAI_MAX_TOKENS = "OPENAI_MAX_TOKENS";
   public static final String OPENAI_TEMPERATURE = "OPENAI_TEMPERATURE";
   public static final String OPENAI_MAX_TOKENS_PARAM_NAME = "OPENAI_MAX_TOKENS_PARAM_NAME";
+  public static final String OPENAI_EXTRA_BODY = "OPENAI_EXTRA_BODY";
   public static final String DEFAULT_LLM = "DEFAULT_LLM";
   public static final String DEFAULT_TRACKER = "DEFAULT_TRACKER";
 
@@ -1685,6 +1686,14 @@ public class PropertyReader {
     // Use "max_tokens" for older models (gpt-3.5-turbo, gpt-4 base)
     // Use empty string to skip sending the parameter
     return getValue(OPENAI_MAX_TOKENS_PARAM_NAME, "max_completion_tokens");
+  }
+
+  /**
+   * JSON object whose fields are merged into every OpenAI chat request body,
+   * e.g. {@code {"top_k":20,"min_p":0.0}}. Returns null when not set.
+   */
+  public String getOpenAIExtraBody() {
+    return getValue(OPENAI_EXTRA_BODY);
   }
 
   public String getDefaultLLM() {

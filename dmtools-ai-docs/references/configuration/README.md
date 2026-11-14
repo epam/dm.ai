@@ -126,6 +126,21 @@ Configure at least one AI provider:
 | **DIAL** | `DIAL_API_KEY`, `DIAL_URL` | `DIAL_MODEL` | Enterprise gateway |
 | **Ollama** | `OLLAMA_BASE_URL` | `OLLAMA_MODEL` | Local models |
 
+#### OpenAI-compatible servers (llama.cpp, vLLM, LM Studio)
+
+Use the OpenAI client with `DEFAULT_LLM=openai`. `OPENAI_EXTRA_BODY` is a single-line JSON object whose fields are merged into every chat request, for parameters the OpenAI API lacks. It overrides `temperature` and the max-tokens field but never `model` or `messages`; invalid JSON fails at startup.
+
+```bash
+DEFAULT_LLM=openai
+OPENAI_BASE_PATH=http://llm-server.local/v1/chat/completions
+OPENAI_API_KEY=not-used            # required by DMTools even if the server ignores it
+OPENAI_MODEL=your-model-id
+OPENAI_TEMPERATURE=1.0
+OPENAI_MAX_TOKENS=32768
+OPENAI_MAX_TOKENS_PARAM_NAME=max_tokens
+OPENAI_EXTRA_BODY={"top_p":0.95,"top_k":20,"min_p":0.0,"chat_template_kwargs":{"enable_thinking":true}}
+```
+
 ## 📝 Configuration File Examples
 
 ### Minimal Configuration (Jira + Gemini)

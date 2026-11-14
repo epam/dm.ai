@@ -42,4 +42,12 @@ public interface OpenAIConfiguration {
      * @return The parameter name: "max_completion_tokens" (default for newer models), "max_tokens" (older models), or empty to skip
      */
     String getOpenAIMaxTokensParamName();
+
+    /**
+     * JSON object whose fields are merged into every chat request body
+     * (e.g. sampling parameters an OpenAI-compatible server supports). Null when not set.
+     */
+    default String getOpenAIExtraBody() {
+        return null;
+    }
 }
