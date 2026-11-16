@@ -91,6 +91,35 @@ public class CliPromptsConfig {
     }
 
     /**
+     * Converts a map of structured {@link CliPromptsConfig} into a map of flat string arrays.
+     */
+    public static java.util.Map<String, String[]> toStringArrayMap(java.util.Map<String, CliPromptsConfig> configMap) {
+        if (configMap == null) {
+            return null;
+        }
+        java.util.Map<String, String[]> result = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<String, CliPromptsConfig> entry : configMap.entrySet()) {
+            CliPromptsConfig cfg = entry.getValue();
+            result.put(entry.getKey(), cfg != null ? cfg.toStringArray() : new String[0]);
+        }
+        return result;
+    }
+
+    /**
+     * Converts a map of plain string arrays into a map of structured {@link CliPromptsConfig}.
+     */
+    public static java.util.Map<String, CliPromptsConfig> fromStringArrayMap(java.util.Map<String, String[]> stringMap) {
+        if (stringMap == null) {
+            return null;
+        }
+        java.util.Map<String, CliPromptsConfig> result = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<String, String[]> entry : stringMap.entrySet()) {
+            result.put(entry.getKey(), fromStrings(entry.getValue()));
+        }
+        return result;
+    }
+
+    /**
      * Flattens the config back into a plain string array, preserving the original order.
      * Unnamed items contribute their prompt directly; named sections contribute their prompts
      * in the section's position.

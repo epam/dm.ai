@@ -162,7 +162,8 @@ public class AgentPackResolver {
     /** Known config keys whose string values are single path references. */
     private static final String[] PATH_KEYS = {
         "jsPath", "preJSAction", "preCliJSAction", "postJSAction",
-        "timerJSAction", "preprocessJSAction", "preAction", "postAction", "descriptionPath"
+        "timerJSAction", "preprocessJSAction", "preAction", "postAction", "descriptionPath",
+        "prompt", "condition"
     };
 
     /** Array-valued config keys whose string items may be path references. */

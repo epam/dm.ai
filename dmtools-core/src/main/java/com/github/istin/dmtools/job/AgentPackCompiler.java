@@ -220,32 +220,13 @@ public class AgentPackCompiler {
         collectSinglePathKeys(config, closure, visitedJs);
 
         // cliPrompts: mixed array of literal role strings, file paths, and section objects.
-        JSONArray cliPrompts = findArray(config, "cliPrompts");
-        if (cliPrompts != null) {
-            for (int i = 0; i < cliPrompts.length(); i++) {
-                Object item = cliPrompts.get(i);
-                if (item instanceof String) {
-                    maybeAddPathReference((String) item, closure, visitedJs);
-                } else if (item instanceof JSONObject) {
-                    JSONObject section = (JSONObject) item;
-                    String singlePrompt = section.optString("prompt", null);
-                    if (singlePrompt != null && !singlePrompt.isEmpty()) {
-                        maybeAddPathReference(singlePrompt, closure, visitedJs);
-                    }
-                    JSONArray prompts = section.optJSONArray("prompts");
-                    if (prompts != null) {
-                        for (int j = 0; j < prompts.length(); j++) {
-                            Object p = prompts.get(j);
-                            if (p instanceof String) {
-                                maybeAddPathReference((String) p, closure, visitedJs);
-                            }
-                        }
-                    }
-                    String condition = section.optString("condition", null);
-                    if (condition != null && !condition.isEmpty()) {
-                        addPathReference(condition, closure, visitedJs);
-                    }
-                }
+        collectCliPromptsArray(findArray(config, "cliPrompts"), closure, visitedJs);
+
+        // cliPromptsByTracker: tracker -> mixed array of literal strings, file paths, and section objects.
+        JSONObject cliPromptsByTracker = findObject(config, "cliPromptsByTracker");
+        if (cliPromptsByTracker != null) {
+            for (String trackerKey : cliPromptsByTracker.keySet()) {
+                collectCliPromptsArray(cliPromptsByTracker.optJSONArray(trackerKey), closure, visitedJs);
             }
         }
 
@@ -265,6 +246,38 @@ public class AgentPackCompiler {
             }
             if (referencesScripts) {
                 includeScriptsSubtree(closure);
+            }
+        }
+    }
+
+    /** Collects referenced prompt files and condition scripts from a cliPrompts-shaped JSONArray. */
+    private void collectCliPromptsArray(JSONArray cliPrompts, Map<String, File> closure, Set<String> visitedJs) throws IOException {
+        if (cliPrompts == null) {
+            return;
+        }
+        for (int i = 0; i < cliPrompts.length(); i++) {
+            Object item = cliPrompts.get(i);
+            if (item instanceof String) {
+                maybeAddPathReference((String) item, closure, visitedJs);
+            } else if (item instanceof JSONObject) {
+                JSONObject section = (JSONObject) item;
+                String singlePrompt = section.optString("prompt", null);
+                if (singlePrompt != null && !singlePrompt.isEmpty()) {
+                    maybeAddPathReference(singlePrompt, closure, visitedJs);
+                }
+                JSONArray prompts = section.optJSONArray("prompts");
+                if (prompts != null) {
+                    for (int j = 0; j < prompts.length(); j++) {
+                        Object p = prompts.get(j);
+                        if (p instanceof String) {
+                            maybeAddPathReference((String) p, closure, visitedJs);
+                        }
+                    }
+                }
+                String condition = section.optString("condition", null);
+                if (condition != null && !condition.isEmpty()) {
+                    addPathReference(condition, closure, visitedJs);
+                }
             }
         }
     }
@@ -514,6 +527,15 @@ public class AgentPackCompiler {
         }
         JSONObject params = config.optJSONObject("params");
         return params != null ? params.optJSONArray(key) : null;
+    }
+
+    /** Finds a JSONObject by key, looking under {@code params} when not at top level. */
+    private JSONObject findObject(JSONObject config, String key) {
+        if (config.has(key)) {
+            return config.optJSONObject(key);
+        }
+        JSONObject params = config.optJSONObject("params");
+        return params != null ? params.optJSONObject(key) : null;
     }
 
     /** Depth-first search for a string value by key anywhere in the object tree. */
