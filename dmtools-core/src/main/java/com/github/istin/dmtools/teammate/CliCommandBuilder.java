@@ -49,7 +49,7 @@ public class CliCommandBuilder {
      * markup. In all other cases (no contentOutput routing, target "both", or no confluence
      * prompts declared) the configured tracker type is kept, preserving existing behavior.
      */
-    public static String resolvePromptTrackerType(Map<String, String[]> cliPromptsByTracker,
+    public static String resolvePromptTrackerType(Map<String, ?> cliPromptsByTracker,
                                                   String trackerType,
                                                   Map<String, Object> customParams) {
         if (customParams != null) {
@@ -73,6 +73,18 @@ public class CliCommandBuilder {
     public static String[] resolveCliPrompts(String[] baseCliPrompts,
                                               Map<String, String[]> cliPromptsByTracker,
                                               String trackerType) {
+        return resolveCliPrompts(baseCliPrompts, cliPromptsByTracker, trackerType, null);
+    }
+
+    /**
+     * Resolves the effective CLI prompts by merging base {@code cliPrompts} with structured
+     * tracker-specific prompts from {@code cliPromptsByTracker}, evaluating any conditional
+     * sections in the tracker prompts with {@code conditionEvaluator}.
+     */
+    public static String[] resolveCliPrompts(String[] baseCliPrompts,
+                                              Map<String, ?> cliPromptsByTracker,
+                                              String trackerType,
+                                              java.util.function.Predicate<String> conditionEvaluator) {
         String effectiveTracker = trackerType;
         if (effectiveTracker == null || effectiveTracker.isBlank()) {
             effectiveTracker = "ado";
@@ -81,7 +93,13 @@ public class CliCommandBuilder {
             return baseCliPrompts;
         }
 
-        String[] trackerPrompts = cliPromptsByTracker.get(effectiveTracker);
+        Object rawValue = cliPromptsByTracker.get(effectiveTracker);
+        String[] trackerPrompts = null;
+        if (rawValue instanceof CliPromptsConfig) {
+            trackerPrompts = ((CliPromptsConfig) rawValue).toStringArray(conditionEvaluator);
+        } else if (rawValue instanceof String[]) {
+            trackerPrompts = (String[]) rawValue;
+        }
         if (trackerPrompts == null || trackerPrompts.length == 0) {
             return baseCliPrompts;
         }
@@ -177,7 +195,7 @@ public class CliCommandBuilder {
      * @return commands with aggregated prompt appended, or original commands if no prompt provided
      */
     public String[] buildCommands(String[] cliCommands, String cliPrompt, CliPromptsConfig cliPrompts,
-                                   Map<String, String[]> cliPromptsByTracker,
+                                   Map<String, ?> cliPromptsByTracker,
                                    Map<String, Object> customParams,
                                    java.util.function.Predicate<String> conditionEvaluator) throws IOException {
         if (cliCommands == null || cliCommands.length == 0) {
@@ -187,7 +205,7 @@ public class CliCommandBuilder {
         String trackerType = configuration != null ? configuration.getDefaultTracker() : null;
         trackerType = resolvePromptTrackerType(cliPromptsByTracker, trackerType, customParams);
         String[] flatPrompts = cliPrompts != null ? cliPrompts.toStringArray(conditionEvaluator) : null;
-        String[] mergedCliPrompts = resolveCliPrompts(flatPrompts, cliPromptsByTracker, trackerType);
+        String[] mergedCliPrompts = resolveCliPrompts(flatPrompts, cliPromptsByTracker, trackerType, conditionEvaluator);
         if (mergedCliPrompts != flatPrompts) {
             logger.info("Merged tracker-specific cliPrompts ({} total prompts)", mergedCliPrompts.length);
         }

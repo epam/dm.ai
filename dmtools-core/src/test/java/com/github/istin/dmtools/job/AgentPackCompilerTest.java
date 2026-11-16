@@ -302,4 +302,42 @@ public class AgentPackCompilerTest {
         assertTrue(zip.containsKey("prompts/codegraph_tools.md"));
         assertTrue(zip.containsKey("js/conditions/isCodeGraphAvailable.js"));
     }
+
+    @Test
+    public void testStructuredConditionalCliPromptsByTrackerIncluded() throws IOException {
+        write("instructions/tracker/jira_comment_format.md", "# Jira Wiki\n");
+        write("instructions/common/markdown_output_format.md", "# Markdown\n");
+        write("instructions/tracker/jira_context.md", "# Jira Context\n");
+        write("js/conditions/isResponseToTracker.js", "function action() { return true; }\n");
+        write("js/conditions/isResponseToScm.js", "function action() { return false; }\n");
+        File entry = write("with_tracker_conditional_prompt.json", "{\n" +
+                "  \"name\": \"Teammate\",\n" +
+                "  \"params\": {\n" +
+                "    \"cliPromptsByTracker\": {\n" +
+                "      \"jira\": [\n" +
+                "        {\n" +
+                "          \"id\": \"responseFormatJiraWiki\",\n" +
+                "          \"prompt\": \"./agents/instructions/tracker/jira_comment_format.md\",\n" +
+                "          \"condition\": \"agents/js/conditions/isResponseToTracker.js\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "          \"id\": \"responseFormatMarkdown\",\n" +
+                "          \"prompt\": \"./agents/instructions/common/markdown_output_format.md\",\n" +
+                "          \"condition\": \"agents/js/conditions/isResponseToScm.js\"\n" +
+                "        },\n" +
+                "        \"./agents/instructions/tracker/jira_context.md\"\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  }\n" +
+                "}");
+        AgentPackCompiler compiler = new AgentPackCompiler(agentRoot);
+        AgentPackCompiler.PackResult result = compiler.compile(entry, "1.0.0", "abc", outDir);
+
+        Map<String, byte[]> zip = readZip(result.zipFile);
+        assertTrue(zip.containsKey("instructions/tracker/jira_comment_format.md"));
+        assertTrue(zip.containsKey("instructions/common/markdown_output_format.md"));
+        assertTrue(zip.containsKey("instructions/tracker/jira_context.md"));
+        assertTrue(zip.containsKey("js/conditions/isResponseToTracker.js"));
+        assertTrue(zip.containsKey("js/conditions/isResponseToScm.js"));
+    }
 }

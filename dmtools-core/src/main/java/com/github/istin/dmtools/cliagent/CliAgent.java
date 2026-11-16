@@ -189,7 +189,7 @@ public class CliAgent extends AbstractJob<CliAgentParams, List<ResultItem>> {
                     params.getCliCommands(),
                     params.getCliPrompt(),
                     params.getCliPromptsConfig(),
-                    params.getCliPromptsByTracker(),
+                    params.getCliPromptsByTrackerConfig(),
                     params.getCustomParams(),
                     conditionScript -> evaluateCliPromptCondition(
                             conditionScript, params, inputFolderPath, workingDirPath, resolvedTicket));
