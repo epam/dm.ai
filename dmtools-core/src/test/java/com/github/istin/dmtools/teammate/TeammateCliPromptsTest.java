@@ -353,7 +353,7 @@ class TeammateCliPromptsTest {
                 new String[]{"echo"},
                 null,
                 config,
-                null,
+                (Map<String, CliPromptsConfig>) null,
                 null,
                 cond -> "isCodeGraph.js".equals(cond));
         assertEquals(1, cmdsTrue.length);
@@ -368,7 +368,7 @@ class TeammateCliPromptsTest {
                 new String[]{"echo"},
                 null,
                 config,
-                null,
+                (Map<String, CliPromptsConfig>) null,
                 null,
                 cond -> false);
         assertEquals(1, cmdsFalse.length);
@@ -378,5 +378,54 @@ class TeammateCliPromptsTest {
         assertFalse(contentFalse.contains("codegraph instructions"));
         assertFalse(contentFalse.contains("disabled instructions"));
         assertTrue(contentFalse.contains("tail prompt"));
+    }
+
+    @Test
+    void testTeammateParams_DeserializesStructuredCliPromptsByTracker() throws Exception {
+        String json = """
+                {
+                  "cliPrompts": ["base prompt"],
+                  "cliPromptsByTracker": {
+                    "jira": [
+                      {
+                        "id": "responseFormatJiraWiki",
+                        "prompt": "jira wiki format",
+                        "condition": "agents/js/conditions/isResponseToTracker.js"
+                      },
+                      {
+                        "id": "responseFormatMarkdown",
+                        "prompt": "markdown format",
+                        "condition": "agents/js/conditions/isResponseToScm.js"
+                      },
+                      "jira context"
+                    ]
+                  }
+                }
+                """;
+        Teammate.TeammateParams params = new Gson().fromJson(json, Teammate.TeammateParams.class);
+        assertNotNull(params.getCliPromptsByTrackerConfig());
+        assertNotNull(params.getCliPromptsByTracker());
+        assertArrayEquals(
+                new String[]{"jira wiki format", "markdown format", "jira context"},
+                params.getCliPromptsByTracker().get("jira"));
+
+        com.github.istin.dmtools.common.config.ApplicationConfiguration cfg =
+                org.mockito.Mockito.mock(com.github.istin.dmtools.common.config.ApplicationConfiguration.class);
+        org.mockito.Mockito.when(cfg.getDefaultTracker()).thenReturn("jira");
+        CliCommandBuilder builder = new CliCommandBuilder(processor, cfg);
+        String[] cmds = builder.buildCommands(
+                new String[]{"echo"},
+                null,
+                params.getCliPromptsConfig(),
+                params.getCliPromptsByTrackerConfig(),
+                null,
+                cond -> cond.endsWith("isResponseToScm.js"));
+        assertEquals(1, cmds.length);
+        String promptFile = cmds[0].substring(cmds[0].indexOf('"') + 1, cmds[0].lastIndexOf('"'));
+        String content = Files.readString(Path.of(promptFile));
+        assertTrue(content.contains("base prompt"));
+        assertFalse(content.contains("jira wiki format"));
+        assertTrue(content.contains("markdown format"));
+        assertTrue(content.contains("jira context"));
     }
 }
