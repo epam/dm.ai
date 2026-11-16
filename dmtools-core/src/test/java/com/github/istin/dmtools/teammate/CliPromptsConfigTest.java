@@ -181,4 +181,13 @@ class CliPromptsConfigTest {
         assertFalse(CliPromptsConfig.isConditionMet(null));
         assertFalse(CliPromptsConfig.isConditionMet(new org.json.JSONObject().put("result", true).put("uncaughtException", true)));
     }
+
+    @Test
+    void testCliAgentParamsStructuredCliPromptsByTracker() {
+        String json = "{\"cliPromptsByTracker\":{\"jira\":[{\"id\":\"responseFormatJiraWiki\",\"prompt\":\"./jira.md\",\"condition\":\"isTracker.js\"},\"./context.md\"]}}";
+        com.github.istin.dmtools.cliagent.CliAgentParams params =
+                gson.fromJson(json, com.github.istin.dmtools.cliagent.CliAgentParams.class);
+        assertNotNull(params.getCliPromptsByTrackerConfig());
+        assertArrayEquals(new String[]{"./jira.md", "./context.md"}, params.getCliPromptsByTracker().get("jira"));
+    }
 }

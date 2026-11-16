@@ -62,7 +62,9 @@ public class CliAgentParams extends TrackerParams {
     private CliPromptsConfig cliPrompts;
 
     @SerializedName(CLI_PROMPTS_BY_TRACKER)
-    private Map<String, String[]> cliPromptsByTracker;
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private Map<String, CliPromptsConfig> cliPromptsByTracker;
 
     @SerializedName(SETUP)
     private String setup;
@@ -134,5 +136,33 @@ public class CliAgentParams extends TrackerParams {
      */
     public void setCliPromptsConfig(CliPromptsConfig cliPrompts) {
         this.cliPrompts = cliPrompts;
+    }
+
+    /**
+     * Returns cliPromptsByTracker as a map of flat string arrays for backward compatibility.
+     */
+    public Map<String, String[]> getCliPromptsByTracker() {
+        return CliPromptsConfig.toStringArrayMap(cliPromptsByTracker);
+    }
+
+    /**
+     * Sets cliPromptsByTracker from a map of plain string arrays (backward compatibility).
+     */
+    public void setCliPromptsByTracker(Map<String, String[]> cliPromptsByTracker) {
+        this.cliPromptsByTracker = CliPromptsConfig.fromStringArrayMap(cliPromptsByTracker);
+    }
+
+    /**
+     * Returns the structured cliPromptsByTracker config.
+     */
+    public Map<String, CliPromptsConfig> getCliPromptsByTrackerConfig() {
+        return cliPromptsByTracker;
+    }
+
+    /**
+     * Sets the structured cliPromptsByTracker config.
+     */
+    public void setCliPromptsByTrackerConfig(Map<String, CliPromptsConfig> cliPromptsByTracker) {
+        this.cliPromptsByTracker = cliPromptsByTracker;
     }
 }

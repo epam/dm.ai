@@ -76,7 +76,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         private CliPromptsConfig cliPromptsConfig = new CliPromptsConfig();
 
         @SerializedName("cliPromptsByTracker")
-        private Map<String, String[]> cliPromptsByTracker;
+        private Map<String, CliPromptsConfig> cliPromptsByTrackerConfig;
 
         @SerializedName("skipAIProcessing")
         private boolean skipAIProcessing = false;
@@ -234,6 +234,20 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
          */
         public void setCliPrompts(String[] cliPrompts) {
             this.cliPromptsConfig = CliPromptsConfig.fromStrings(cliPrompts);
+        }
+
+        /**
+         * Backward-compatible accessor that returns {@code cliPromptsByTracker} as a map of plain string arrays.
+         */
+        public Map<String, String[]> getCliPromptsByTracker() {
+            return CliPromptsConfig.toStringArrayMap(cliPromptsByTrackerConfig);
+        }
+
+        /**
+         * Backward-compatible mutator that accepts a map of plain string arrays.
+         */
+        public void setCliPromptsByTracker(Map<String, String[]> cliPromptsByTracker) {
+            this.cliPromptsByTrackerConfig = CliPromptsConfig.fromStringArrayMap(cliPromptsByTracker);
         }
 
     }
@@ -703,7 +717,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             cliCommands,
                             expertParams.getCliPrompt(),
                             expertParams.getCliPromptsConfig(),
-                            expertParams.getCliPromptsByTracker(),
+                            expertParams.getCliPromptsByTrackerConfig(),
                             expertParams.getCustomParams(),
                             conditionScript -> evaluateCliPromptCondition(
                                     conditionScript, expertParams, ticket, initiator, inputFolderStr));
