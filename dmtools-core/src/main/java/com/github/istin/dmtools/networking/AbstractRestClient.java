@@ -126,7 +126,7 @@ public abstract class AbstractRestClient implements RestClient {
     }
 
     private void reinitCache() throws IOException {
-        File cache = new File(getCacheFolderName());
+        File cache = resolveCacheDirectory();
         logger.info("cache folder: {}", cache.getAbsolutePath());
         if (isClearCache) {
             cache.mkdirs();
@@ -372,7 +372,7 @@ public abstract class AbstractRestClient implements RestClient {
 
     public File getCachedFile(GenericRequest genericRequest) {
         String value = getCacheFileName(genericRequest);
-        return new File(getCacheFolderName() + "/" + value);
+        return new File(resolveCacheDirectory(), value);
     }
 
     @Override
@@ -420,9 +420,9 @@ public abstract class AbstractRestClient implements RestClient {
             timeMeasurement.put(url, System.currentTimeMillis());
             if (isCacheGetRequestsEnabled && !isIgnoreCache) {
                 String value = getCacheFileName(genericRequest);
-                File cache = new File(getCacheFolderName());
+                File cache = resolveCacheDirectory();
                 cache.mkdirs();
-                File cachedFile = new File(getCacheFolderName() + "/" + value);
+                File cachedFile = new File(cache, value);
                 if (cachedFile.exists()) {
                     return FileUtils.readFileToString(cachedFile);
                 }
@@ -451,9 +451,9 @@ public abstract class AbstractRestClient implements RestClient {
                             String result = response.body() != null ? response.body().string() : null;
                             if (isCacheGetRequestsEnabled) {
                                 String value = getCacheFileName(genericRequest);
-                                File cache = new File(getCacheFolderName());
+                                File cache = resolveCacheDirectory();
                                 cache.mkdirs();
-                                File cachedFile = new File(getCacheFolderName() + "/" + value);
+                                File cachedFile = new File(cache, value);
                                 FileUtils.writeStringToFile(cachedFile, result);
                             }
                             return result;
@@ -552,8 +552,12 @@ public abstract class AbstractRestClient implements RestClient {
         return DigestUtils.md5Hex(hashValue.toString());
     }
 
+    protected File resolveCacheDirectory() {
+        return new File(PropertyReader.resolveCacheFolderPath(getCacheFolderName()));
+    }
+
     protected String getCacheFolderName() {
-        return "cache" + getClass().getSimpleName();
+        return PropertyReader.resolveCacheFolderPath("cache" + getClass().getSimpleName());
     }
 
     @Override
@@ -578,9 +582,9 @@ public abstract class AbstractRestClient implements RestClient {
 
         if (isCachePostRequestsEnabled && !genericRequest.isIgnoreCache()) {
             String value = getCacheFileName(genericRequest);
-            File cache = new File(getCacheFolderName());
+            File cache = resolveCacheDirectory();
             cache.mkdirs();
-            File cachedFile = new File(getCacheFolderName() + "/" + value);
+            File cachedFile = new File(cache, value);
             if (cachedFile.exists()) {
                 logger.info("Read From Cache: ");
                 return FileUtils.readFileToString(cachedFile);
@@ -617,9 +621,9 @@ public abstract class AbstractRestClient implements RestClient {
 
                     if (isCachePostRequestsEnabled) {
                         String value = getCacheFileName(genericRequest);
-                        File cache = new File(getCacheFolderName());
+                        File cache = resolveCacheDirectory();
                         cache.mkdirs();
-                        File cachedFile = new File(getCacheFolderName() + "/" + value);
+                        File cachedFile = new File(cache, value);
                         FileUtils.writeStringToFile(cachedFile, responseAsString);
                     }
                     return responseAsString;
@@ -707,70 +711,19 @@ public abstract class AbstractRestClient implements RestClient {
     }
     
     private String put(GenericRequest genericRequest, int retryCount) throws IOException {
-        String url = genericRequest.url();
-        if (isWaitBeforePerform) {
-            try {
-                Thread.currentThread().sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.error("Unexpected error", e);
-            }
-        }
-
-        RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
-        Request request = applyHeaders(sign(
-                new Request.Builder())
-                .url(url)
-                .header("User-Agent", "DMTools"), genericRequest)
-                .put(body)
-                .build();
-        
-        try (Response response = client.newCall(request).execute()) {
-            if (response.isSuccessful()) {
-                return response.body() != null ? response.body().string() : "";
-            } else {
-                throw AbstractRestClient.printAndCreateException(request, response);
-            }
-        } catch (IOException e) {
-            final int maxRetries = 2;
-            final int maxAttempts = maxRetries + 1;
-            logger.warn("PUT connection error for URL: {} - Error: {} (Attempt: {}/{})", url, e.getMessage(), retryCount + 1, maxAttempts);
-            
-            // Check if it's a recoverable connection error
-            boolean isRecoverableError = isRecoverableConnectionError(e);
-            
-            if (isRecoverableError && retryCount < maxRetries) {
-                logger.info("Retrying PUT request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, maxRetries);
-                try {
-                    // Exponential backoff: 200ms, 400ms, 800ms
-                    long waitTime = 200L * (long) Math.pow(2, retryCount);
-                    logger.debug("Waiting {}ms before PUT retry", waitTime);
-                    Thread.sleep(waitTime);
-                } catch (InterruptedException interruptedException) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("PUT request interrupted during retry", interruptedException);
-                }
-                logRetryResumption("PUT", url, retryCount + 2, maxAttempts);
-                return put(genericRequest, retryCount + 1);
-            } else {
-                if (!isRecoverableError) {
-                    logNonRecoverableError("PUT", url, e);
-                } else if (retryCount >= maxRetries) {
-                    logger.error("Max PUT retries ({}) exceeded for URL: {}. Final error: {}", maxRetries, url, e.getMessage());
-                }
-                throw e;
-            }
-        } finally {
-            // Let OkHttp manage connection lifecycle automatically
-        }
+        return executeMutatingWithRetries("PUT", genericRequest, retryCount);
     }
 
     @Override
     public String patch(GenericRequest genericRequest) throws IOException {
         return patch(genericRequest, 0);
     }
-    
+
     private String patch(GenericRequest genericRequest, int retryCount) throws IOException {
+        return executeMutatingWithRetries("PATCH", genericRequest, retryCount);
+    }
+
+    private String executeMutatingWithRetries(String method, GenericRequest genericRequest, int retryCount) throws IOException {
         String url = genericRequest.url();
         if (isWaitBeforePerform) {
             try {
@@ -782,13 +735,12 @@ public abstract class AbstractRestClient implements RestClient {
         }
 
         RequestBody body = RequestBody.create(JSON, genericRequest.getBody());
-        Request request = applyHeaders(sign(
+        Request.Builder signedBuilder = applyHeaders(sign(
                 new Request.Builder())
                 .url(url)
-                .header("User-Agent", "DMTools"), genericRequest)
-                .patch(body)
-                .build();
-        
+                .header("User-Agent", "DMTools"), genericRequest);
+        Request request = ("PATCH".equals(method) ? signedBuilder.patch(body) : signedBuilder.put(body)).build();
+
         try (Response response = client.newCall(request).execute()) {
             if (response.isSuccessful()) {
                 return response.body() != null ? response.body().string() : "";
@@ -798,34 +750,29 @@ public abstract class AbstractRestClient implements RestClient {
         } catch (IOException e) {
             final int maxRetries = 2;
             final int maxAttempts = maxRetries + 1;
-            logger.warn("PATCH connection error for URL: {} - Error: {} (Attempt: {}/{})", url, e.getMessage(), retryCount + 1, maxAttempts);
-            
-            // Check if it's a recoverable connection error
+            logger.warn("{} connection error for URL: {} - Error: {} (Attempt: {}/{})", method, url, e.getMessage(), retryCount + 1, maxAttempts);
+
             boolean isRecoverableError = isRecoverableConnectionError(e);
-            
             if (isRecoverableError && retryCount < maxRetries) {
-                logger.info("Retrying PATCH request after connection error: {} (Retry {}/{})", e.getClass().getSimpleName(), retryCount + 1, maxRetries);
+                logger.info("Retrying {} request after connection error: {} (Retry {}/{})", method, e.getClass().getSimpleName(), retryCount + 1, maxRetries);
                 try {
-                    // Exponential backoff: 200ms, 400ms, 800ms
                     long waitTime = 200L * (long) Math.pow(2, retryCount);
-                    logger.debug("Waiting {}ms before PATCH retry", waitTime);
+                    logger.debug("Waiting {}ms before {} retry", waitTime, method);
                     Thread.sleep(waitTime);
                 } catch (InterruptedException interruptedException) {
                     Thread.currentThread().interrupt();
-                    throw new IOException("PATCH request interrupted during retry", interruptedException);
+                    throw new IOException(method + " request interrupted during retry", interruptedException);
                 }
-                logRetryResumption("PATCH", url, retryCount + 2, maxAttempts);
-                return patch(genericRequest, retryCount + 1);
+                logRetryResumption(method, url, retryCount + 2, maxAttempts);
+                return executeMutatingWithRetries(method, genericRequest, retryCount + 1);
             } else {
                 if (!isRecoverableError) {
-                    logNonRecoverableError("PATCH", url, e);
+                    logNonRecoverableError(method, url, e);
                 } else if (retryCount >= maxRetries) {
-                    logger.error("Max PATCH retries ({}) exceeded for URL: {}. Final error: {}", maxRetries, url, e.getMessage());
+                    logger.error("Max {} retries ({}) exceeded for URL: {}. Final error: {}", method, maxRetries, url, e.getMessage());
                 }
                 throw e;
             }
-        } finally {
-            // Let OkHttp manage connection lifecycle automatically
         }
     }
 
