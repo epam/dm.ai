@@ -14,6 +14,7 @@ import com.github.istin.dmtools.common.config.ApplicationConfiguration;
 import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.context.UriToObjectFactory;
+import com.github.istin.dmtools.github.GitHubTrackerClient;
 import com.github.istin.dmtools.logging.LogCallback;
 import com.github.istin.dmtools.prompt.IPromptTemplateReader;
 import org.json.JSONObject;
@@ -124,6 +125,31 @@ public class ServerManagedIntegrationsModuleTest {
         // Assert
         assertNotNull(trackerClient);
         assertTrue(trackerClient instanceof JiraClient);
+    }
+
+    @Test
+    void testProvideTrackerClient_DefaultTrackerGitHub() throws Exception {
+        JSONObject integrations = createValidIntegrationsConfig();
+        integrations.put("DEFAULT_TRACKER", "github");
+        ServerManagedIntegrationsModule githubModule = new ServerManagedIntegrationsModule(integrations);
+
+        TrackerClient<? extends ITicket> trackerClient = githubModule.provideTrackerClient();
+
+        assertNotNull(trackerClient);
+        assertTrue(trackerClient instanceof GitHubTrackerClient);
+        assertEquals("TestOrg", ((GitHubTrackerClient) trackerClient).getDefaultWorkspace());
+        assertEquals("test-repo", ((GitHubTrackerClient) trackerClient).getDefaultRepository());
+    }
+
+    @Test
+    void testProvideTrackerClient_GitHubOnlyAutoDetected() throws Exception {
+        JSONObject integrations = new JSONObject();
+        integrations.put("github", validIntegrations.getJSONObject("github"));
+        ServerManagedIntegrationsModule githubModule = new ServerManagedIntegrationsModule(integrations);
+
+        TrackerClient<? extends ITicket> trackerClient = githubModule.provideTrackerClient();
+
+        assertTrue(trackerClient instanceof GitHubTrackerClient);
     }
 
     @Test

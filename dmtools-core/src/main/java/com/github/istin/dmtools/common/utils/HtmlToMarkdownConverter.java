@@ -337,7 +337,14 @@ public final class HtmlToMarkdownConverter {
             if (strikes.isEmpty()) {
                 return;
             }
+            List<Element> nested = strikes.stream()
+                    .filter(e -> e.parents().stream().anyMatch(p -> p.is("s, del, strike, [style~=line-through], code")))
+                    .toList();
             for (Element strike : strikes) {
+                if (nested.contains(strike)) {
+                    strike.unwrap(); // nested strike or inline code: no extra markers
+                    continue;
+                }
                 strike.prepend(STRIKE_OPEN);
                 strike.append(STRIKE_CLOSE);
                 strike.unwrap();
@@ -345,8 +352,23 @@ public final class HtmlToMarkdownConverter {
             htmlWithoutExtracted = bodyHtml(doc);
         }
 
+        /**
+         * Merges touching struck runs, drops empty ones and moves edge whitespace outside the
+         * markers (Markdown strikethrough cannot start or end with whitespace).
+         */
+        static String normalizeStrikeMarkers(String markdown) {
+            if (!markdown.contains(STRIKE_OPEN)) {
+                return markdown;
+            }
+            String result = markdown.replaceAll(STRIKE_OPEN + "(\\s*)" + STRIKE_CLOSE, "$1")
+                    .replaceAll(STRIKE_OPEN + "(\\s+)", "$1" + STRIKE_OPEN)
+                    .replaceAll("(\\s+)" + STRIKE_CLOSE, STRIKE_CLOSE + "$1")
+                    .replace(STRIKE_CLOSE + STRIKE_OPEN, "");
+            return result.replace(STRIKE_OPEN, "~~").replace(STRIKE_CLOSE, "~~");
+        }
+
         String restore(String markdown) {
-            String result = markdown.replace(STRIKE_OPEN, "~~").replace(STRIKE_CLOSE, "~~");
+            String result = normalizeStrikeMarkers(markdown);
             // Tables first: their cells may still contain code/task placeholders.
             // Descending order keeps "PREFIX1" from matching inside "PREFIX10".
             for (int i = tables.size() - 1; i >= 0; i--) {

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Pre-commit quality gate for epam/dm.ai (mirrors .github/workflows/unit-tests.yml):
+#   1. Enforces <= 2800 lines on staged .java files.
+#   2. Enforces jscpd duplication <= 2% (min-lines 10, min-tokens 50) on staged .java files.
+#
+# Activate via: git config core.hooksPath .githooks (or ./gradlew installGitHooks)
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+STAGED_JAVA=()
+while IFS= read -r f; do
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    STAGED_JAVA+=("$f")
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -- '*.java')
+
+if [ "${#STAGED_JAVA[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+MAX_LINES="${DMAI_MAX_JAVA_LINES:-2800}"
+FAILED=0
+
+echo "pre-commit: checking line count (<= ${MAX_LINES}) on ${#STAGED_JAVA[@]} staged Java file(s)..."
+for file in "${STAGED_JAVA[@]}"; do
+  LINES="$(wc -l < "$file" | tr -d '[:space:]')"
+  if [ "$LINES" -gt "$MAX_LINES" ]; then
+    echo "❌ FAIL: $file has $LINES lines (limit: $MAX_LINES)" >&2
+    FAILED=1
+  else
+    echo "✅ OK: $file ($LINES lines)"
+  fi
+done
+
+if [ "$FAILED" -ne 0 ]; then
+  exit 1
+fi
+
+JSCPD_DIR="$REPO_ROOT/.cache/jscpd-tools"
+JSCPD_BIN="$JSCPD_DIR/node_modules/.bin/jscpd"
+if ! command -v jscpd >/dev/null 2>&1 && [ ! -x "$JSCPD_BIN" ]; then
+  echo "pre-commit: installing jscpd@4 into .cache/jscpd-tools..."
+  mkdir -p "$JSCPD_DIR"
+  npm install --prefix "$JSCPD_DIR" --no-save --no-audit --no-fund jscpd@4 >/dev/null
+fi
+
+if command -v jscpd >/dev/null 2>&1; then
+  JSCPD_CMD="jscpd"
+else
+  JSCPD_CMD="$JSCPD_BIN"
+fi
+
+echo "pre-commit: checking code duplication (<= 2%) via jscpd on ${#STAGED_JAVA[@]} staged Java file(s)..."
+"$JSCPD_CMD" --min-lines 10 --min-tokens 50 --threshold 2 --format java "${STAGED_JAVA[@]}"

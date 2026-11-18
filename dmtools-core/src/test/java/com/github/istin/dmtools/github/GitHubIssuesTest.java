@@ -185,6 +185,20 @@ public class GitHubIssuesTest {
     }
 
     @Test
+    public void testPullRequestCommentsTolerates403OnPullsEndpoint() throws Exception {
+        GitHubIssues spy = spy(gitHub);
+        // A fine-grained token gets 403 instead of 404 from the pulls endpoint for a plain issue.
+        doThrow(new RestClient.RestClientException("forbidden", "{}", 403))
+                .doReturn("[{\"id\":1,\"body\":\"issue comment\",\"created_at\":\"2024-01-01T00:00:00Z\",\"user\":{\"login\":\"octocat\"}}]")
+                .when(spy).execute(any(GenericRequest.class));
+
+        List<IComment> comments = spy.pullRequestComments("acme", "widgets", "7");
+
+        assertEquals(1, comments.size());
+        assertEquals("issue comment", comments.get(0).getBody());
+    }
+
+    @Test
     public void testPullRequestCommentsRethrowsNon404() throws Exception {
         GitHubIssues spy = spy(gitHub);
         doThrow(new RestClient.RestClientException("server error", "{}", 500))

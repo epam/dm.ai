@@ -76,7 +76,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
         private CliPromptsConfig cliPromptsConfig = new CliPromptsConfig();
 
         @SerializedName("cliPromptsByTracker")
-        private Map<String, String[]> cliPromptsByTracker;
+        private Map<String, CliPromptsConfig> cliPromptsByTrackerConfig;
 
         @SerializedName("skipAIProcessing")
         private boolean skipAIProcessing = false;
@@ -234,6 +234,20 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
          */
         public void setCliPrompts(String[] cliPrompts) {
             this.cliPromptsConfig = CliPromptsConfig.fromStrings(cliPrompts);
+        }
+
+        /**
+         * Backward-compatible accessor that returns {@code cliPromptsByTracker} as a map of plain string arrays.
+         */
+        public Map<String, String[]> getCliPromptsByTracker() {
+            return CliPromptsConfig.toStringArrayMap(cliPromptsByTrackerConfig);
+        }
+
+        /**
+         * Backward-compatible mutator that accepts a map of plain string arrays.
+         */
+        public void setCliPromptsByTracker(Map<String, String[]> cliPromptsByTracker) {
+            this.cliPromptsByTrackerConfig = CliPromptsConfig.fromStringArrayMap(cliPromptsByTracker);
         }
 
     }
@@ -401,7 +415,8 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                     "TrackerClient is not configured, but inputJql is provided. " +
                     "Please configure Jira (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN) or " +
                     "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN) or " +
-                    "Rally (RALLY_PATH + RALLY_TOKEN). " +
+                    "Rally (RALLY_PATH + RALLY_TOKEN) or " +
+                    "GitHub Issues (DEFAULT_TRACKER=github + SOURCE_GITHUB_TOKEN). " +
                     "Alternatively, remove inputJql parameter if tracker integration is not needed."
                 );
             } else if (!hasCliCommands) {
@@ -702,7 +717,7 @@ public class Teammate extends AbstractJob<Teammate.TeammateParams, List<ResultIt
                             cliCommands,
                             expertParams.getCliPrompt(),
                             expertParams.getCliPromptsConfig(),
-                            expertParams.getCliPromptsByTracker(),
+                            expertParams.getCliPromptsByTrackerConfig(),
                             expertParams.getCustomParams(),
                             conditionScript -> evaluateCliPromptCondition(
                                     conditionScript, expertParams, ticket, initiator, inputFolderStr));

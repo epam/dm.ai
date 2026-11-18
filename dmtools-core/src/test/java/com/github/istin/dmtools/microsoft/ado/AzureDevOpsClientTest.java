@@ -580,14 +580,24 @@ public class AzureDevOpsClientTest {
     }
 
     @Test
-    void testUpdateTags_patchesTagsField() throws IOException {
-        mockOkHttp(buildOkResponse(200, "application/json", "ok"));
+    void testUpdateTags_patchesTagsFieldWithReplaceOp() throws IOException {
+        mockOkHttp(buildOkResponse(200, "application/json", "{\"id\":123,\"fields\":{\"System.Tags\":\"tag1; tag2\"}}"));
 
         client.updateTags("123", "tag1;tag2");
 
         JSONArray ops = new JSONArray(capturePatchedBody());
+        assertEquals("replace", ops.getJSONObject(0).getString("op"));
         assertEquals("/fields/System.Tags", ops.getJSONObject(0).getString("path"));
         assertEquals("tag1;tag2", ops.getJSONObject(0).getString("value"));
+    }
+
+    @Test
+    void testUpdateTags_throwsWhenResponseStillContainsUnwantedTags() throws IOException {
+        mockOkHttp(buildOkResponse(200, "application/json",
+                "{\"id\":123,\"fields\":{\"System.Tags\":\"tag1; tag2; zz_probe\"}}"));
+
+        IOException ex = assertThrows(IOException.class, () -> client.updateTags("123", "tag1;tag2"));
+        assertTrue(ex.getMessage().contains("zz_probe"), ex.getMessage());
     }
 
     @Test
@@ -714,17 +724,45 @@ public class AzureDevOpsClientTest {
     }
 
     @Test
-    void testDeleteLabelInTicket_removesMatchingTagCaseInsensitively() throws IOException {
+    void testDeleteLabelInTicket_removesMatchingTagCaseInsensitivelyWithReplaceOp() throws IOException {
         WorkItem item = client.createTicket(new JSONObject()
                 .put("id", 1)
                 .put("fields", new JSONObject().put("System.Tags", "alpha; Beta; gamma"))
                 .toString());
-        mockOkHttp(buildOkResponse(200, "application/json", "ok"));
+        mockOkHttp(buildOkResponse(200, "application/json",
+                "{\"id\":1,\"fields\":{\"System.Tags\":\"alpha; gamma\"}}"));
 
         client.deleteLabelInTicket(item, "BETA");
 
         JSONArray ops = new JSONArray(capturePatchedBody());
+        assertEquals("replace", ops.getJSONObject(0).getString("op"));
+        assertEquals("/fields/System.Tags", ops.getJSONObject(0).getString("path"));
         assertEquals("alpha;gamma", ops.getJSONObject(0).getString("value"));
+    }
+
+    @Test
+    void testDeleteLabelInTicket_labelNotPresent_noPatch() throws IOException {
+        WorkItem item = client.createTicket(new JSONObject()
+                .put("id", 1)
+                .put("fields", new JSONObject().put("System.Tags", "alpha; gamma"))
+                .toString());
+
+        client.deleteLabelInTicket(item, "missing");
+
+        assertNull(client.getOkHttpClient(), "no HTTP expected when label is not present");
+    }
+
+    @Test
+    void testRemoveWorkItemLabel_throwsWhenTagStillPresentInResponse() throws IOException {
+        client.setMockResponse("/_apis/wit/workitems/123", new JSONObject()
+                .put("id", 123)
+                .put("fields", new JSONObject().put("System.Tags", "alpha; zz_probe"))
+                .toString());
+        mockOkHttp(buildOkResponse(200, "application/json",
+                "{\"id\":123,\"fields\":{\"System.Tags\":\"alpha; zz_probe\"}}"));
+
+        IOException ex = assertThrows(IOException.class, () -> client.removeWorkItemLabel("123", "zz_probe"));
+        assertTrue(ex.getMessage().contains("zz_probe"), ex.getMessage());
     }
 
     // ========== ado_add_work_item_label / ado_remove_work_item_label MCP tools ==========
@@ -755,6 +793,7 @@ public class AzureDevOpsClientTest {
         client.removeWorkItemLabel("123", "beta");
 
         JSONArray ops = new JSONArray(capturePatchedBody());
+        assertEquals("replace", ops.getJSONObject(0).getString("op"));
         assertEquals("alpha;gamma", ops.getJSONObject(0).getString("value"));
     }
 

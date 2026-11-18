@@ -71,3 +71,10 @@ tasks.register('testAll') {
     group = 'verification'
     dependsOn subprojects.collect { it.tasks.named('test') }
 }
+
+tasks.register('installGitHooks', Exec) {
+    description = 'Configures git core.hooksPath to .githooks'
+    group = 'build setup'
+    commandLine 'git', 'config', 'core.hooksPath', '.githooks'
+    onlyIf { file('.githooks/pre-commit').exists() }
+}

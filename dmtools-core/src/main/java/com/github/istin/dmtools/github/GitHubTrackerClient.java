@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * {@link TrackerClient} implementation backed by GitHub issues, enabling
@@ -43,16 +44,28 @@ public class GitHubTrackerClient extends GitHubActions implements TrackerClient<
     private static final Logger logger = LogManager.getLogger(GitHubTrackerClient.class);
     private static final String UNSUPPORTED = "Not supported by the GitHub issues tracker backend: ";
 
+    private static final Pattern ISSUE_KEY = Pattern.compile(
+            "[\\w.-]+/[\\w.-]+#\\d+|gh-\\d+", Pattern.CASE_INSENSITIVE);
+
     private static GitHubTrackerClient instance;
     private final SourceCodeConfig config;
 
     public GitHubTrackerClient(String basePath, String authorization) throws IOException {
+        this(basePath, authorization, new PropertyReader());
+    }
+
+    private GitHubTrackerClient(String basePath, String authorization, PropertyReader propertyReader) throws IOException {
+        this(basePath, authorization, propertyReader.getGithubWorkspace(),
+                propertyReader.getGithubRepository(), propertyReader.getGithubBranch());
+    }
+
+    public GitHubTrackerClient(String basePath, String authorization, String workspace,
+                               String repository, String branch) throws IOException {
         super(basePath, authorization);
-        PropertyReader propertyReader = new PropertyReader();
         this.config = SourceCodeConfig.builder()
-                .branchName(propertyReader.getGithubBranch())
-                .repoName(propertyReader.getGithubRepository())
-                .workspaceName(propertyReader.getGithubWorkspace())
+                .branchName(branch)
+                .repoName(repository)
+                .workspaceName(workspace)
                 .type(SourceCodeConfig.Type.GITHUB)
                 .auth(authorization)
                 .path(basePath)
@@ -116,6 +129,14 @@ public class GitHubTrackerClient extends GitHubActions implements TrackerClient<
 
     @Override
     public List<GitHubTicket> searchAndPerform(String searchQuery, String[] fields) throws IOException {
+        List<String> keys = parseIssueKeys(searchQuery);
+        if (!keys.isEmpty()) {
+            List<GitHubTicket> byKey = new ArrayList<>();
+            for (String key : keys) {
+                byKey.add(performTicket(key, fields));
+            }
+            return byKey;
+        }
         String path = path("search/issues?q=" + encodeQuery(searchQuery) + "&per_page=100");
         GenericRequest getRequest = new GenericRequest(this, path);
         String response = execute(getRequest);
@@ -160,6 +181,20 @@ public class GitHubTrackerClient extends GitHubActions implements TrackerClient<
                 break;
             }
         }
+    }
+
+    static List<String> parseIssueKeys(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> keys = new ArrayList<>();
+        for (String token : query.trim().split("[\\s,]+")) {
+            if (!ISSUE_KEY.matcher(token).matches()) {
+                return Collections.emptyList();
+            }
+            keys.add(token);
+        }
+        return keys;
     }
 
     private String encodeQuery(String query) throws IOException {

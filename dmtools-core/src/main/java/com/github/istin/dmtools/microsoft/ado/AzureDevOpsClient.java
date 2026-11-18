@@ -544,7 +544,8 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
     }
 
     private static JSONObject fieldOp(String field, Object value) {
-        return new JSONObject().put("op", "add").put("path", "/fields/" + field).put("value", value);
+        String opType = "System.Tags".equalsIgnoreCase(field) ? "replace" : "add";
+        return new JSONObject().put("op", opType).put("path", "/fields/" + field).put("value", value);
     }
 
     /** JSON Patch op that marks a large text field as Markdown (Azure DevOps multilineFieldsFormat). */
@@ -564,9 +565,10 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
             @MCPParam(name = "tags", description = "Tags as semicolon-separated string (e.g., 'tag1;tag2;tag3')", required = true)
             String tags
     ) throws IOException {
-        return updateWorkItem(workItemId, fields -> {
-            fields.set("System.Tags", tags);
-        });
+        JSONArray ops = new JSONArray().put(fieldOp("System.Tags", tags == null ? "" : tags));
+        String response = patchWorkItem(workItemId, ops);
+        verifyTagsUpdated(workItemId, response, tags);
+        return response;
     }
 
     @MCPTool(
@@ -711,11 +713,7 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
         // Build JSON Patch operations
         JSONArray patchOps = new JSONArray();
         for (Map.Entry<String, Object> entry : updates.entrySet()) {
-            JSONObject op = new JSONObject();
-            op.put("op", "add"); // or "replace"
-            op.put("path", "/fields/" + entry.getKey());
-            op.put("value", entry.getValue());
-            patchOps.put(op);
+            patchOps.put(fieldOp(entry.getKey(), entry.getValue()));
         }
 
         String path = String.format("/%s/_apis/wit/workitems/%s", project, workItemId);
@@ -859,6 +857,9 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
     @Override
     public void deleteLabelInTicket(WorkItem ticket, String label) throws IOException {
+        if (ticket == null || label == null || label.trim().isEmpty()) {
+            return;
+        }
         JSONArray labels = ticket.getTicketLabels();
         if (labels == null) {
             return;
@@ -866,18 +867,97 @@ public abstract class AzureDevOpsClient extends AbstractRestClient implements Tr
 
         StringBuilder tagsBuilder = new StringBuilder();
         boolean first = true;
+        boolean removed = false;
         for (int i = 0; i < labels.length(); i++) {
             String tag = labels.getString(i);
-            if (!tag.equalsIgnoreCase(label)) {
+            if (!tag.equalsIgnoreCase(label.trim())) {
                 if (!first) tagsBuilder.append(";");
                 tagsBuilder.append(tag);
                 first = false;
+            } else {
+                removed = true;
             }
         }
+        if (!removed) {
+            return;
+        }
 
-        updateWorkItem(ticket.getTicketKey(), fields -> {
-            fields.set("System.Tags", tagsBuilder.toString());
+        String expectedTags = tagsBuilder.toString();
+        String response = updateWorkItem(ticket.getTicketKey(), fields -> {
+            fields.set("System.Tags", expectedTags);
         });
+        verifyTagRemoved(ticket.getTicketKey(), response, label.trim());
+    }
+
+    /**
+     * Verifies that a removed tag is no longer present in the PATCH response (when it includes
+     * {@code fields.System.Tags}); throws {@link IOException} if ADO still reports the tag.
+     */
+    private void verifyTagRemoved(String workItemId, String patchResponse, String removedLabel) throws IOException {
+        Set<String> actual = extractResponseTags(patchResponse);
+        if (actual == null) {
+            return;
+        }
+        for (String tag : actual) {
+            if (tag.equalsIgnoreCase(removedLabel)) {
+                throw new IOException("Failed to remove tag '" + removedLabel + "' from work item "
+                        + workItemId + "; System.Tags still contains: " + actual);
+            }
+        }
+    }
+
+    /**
+     * Verifies that {@code updateTags} persisted the requested tag set when the PATCH response
+     * carries {@code fields}; throws {@link IOException} on mismatch.
+     */
+    private void verifyTagsUpdated(String workItemId, String patchResponse, String requestedTags) throws IOException {
+        Set<String> actual = extractResponseTags(patchResponse);
+        if (actual == null) {
+            return;
+        }
+        Set<String> expected = parseTagSet(requestedTags);
+        if (!actual.equals(expected)) {
+            throw new IOException("Failed to update tags on work item " + workItemId
+                    + ": expected " + expected + " but ADO stored " + actual);
+        }
+    }
+
+    /**
+     * Parses {@code fields.System.Tags} from a work item JSON response. Returns {@code null} when
+     * the response is not a work item payload with a {@code fields} object (e.g. unit-test stubs).
+     */
+    static Set<String> extractResponseTags(String response) {
+        if (response == null || response.trim().isEmpty()) {
+            return null;
+        }
+        String trimmed = response.trim();
+        if (!trimmed.startsWith("{")) {
+            return null;
+        }
+        try {
+            JSONObject json = new JSONObject(trimmed);
+            JSONObject fields = json.optJSONObject("fields");
+            if (fields == null) {
+                return null;
+            }
+            return parseTagSet(fields.optString("System.Tags", ""));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    static Set<String> parseTagSet(String rawTags) {
+        Set<String> result = new LinkedHashSet<>();
+        if (rawTags == null || rawTags.trim().isEmpty()) {
+            return result;
+        }
+        for (String part : rawTags.split("[,;]")) {
+            String t = part.trim();
+            if (!t.isEmpty()) {
+                result.add(t.toLowerCase());
+            }
+        }
+        return result;
     }
 
     // ========== Link/Relationship Operations ==========

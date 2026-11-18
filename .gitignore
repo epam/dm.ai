@@ -182,4 +182,6 @@ agents/reports/cursor_usage.csv
 .codegraph/
 .cursor/
 .worktrees/
+.cache/
+
 
