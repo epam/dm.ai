@@ -1,0 +1,48 @@
+stages:
+  - quality
+  - agent
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "api" && ($DMTOOLS_FACTORY_PHASE == "validation" || $DMTOOLS_FACTORY_PHASE == "reconcile")'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: never
+
+default:
+  image: eclipse-temurin:21-jdk
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends curl git jq unzip
+    - curl -fsSL https://github.com/epam/dm.ai/releases/latest/download/install.sh | bash
+    - mkdir -p /tmp/dmtools-fa-setup
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/_common.sh -o /tmp/dmtools-fa-setup/_common.sh
+    - curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools-agents/main/setup/fa.sh -o /tmp/dmtools-fa-setup/fa.sh
+    - FA_INSTALL_DIR="$HOME/.local/bin" bash /tmp/dmtools-fa-setup/fa.sh
+    - export PATH="$HOME/.local/bin:$PATH"
+    - fa --version
+
+@@QUALITY_JOB@@
+variables:
+  DMTOOLS_PACK_REGISTRY:
+    value: https://github.com/IstiN/dmtools-agents/releases/latest/download
+    description: Agent pack registry.
+  DMTOOLS_MR_IID:
+    value: ""
+    description: Existing MR IID for a manual review/rework cycle; leave empty to reconcile issues.
+  DMTOOLS_FACTORY_LEG:
+    value: ""
+    options: ["", review, rework]
+    description: Optional explicit leg for DMTOOLS_MR_IID.
+
+poll-assigned-issues:
+  stage: agent
+  resource_group: dmtools-agent-factory
+  interruptible: false
+  timeout: 4h
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_FACTORY_PHASE == "reconcile"'
+    - if: '$CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - bash .dmtools/scripts/gitlab-factory-poll-issues.sh
