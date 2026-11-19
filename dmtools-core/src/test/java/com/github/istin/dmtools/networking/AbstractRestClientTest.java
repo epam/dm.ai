@@ -5,6 +5,7 @@ package com.github.istin.dmtools.networking;
 
 import com.github.istin.dmtools.common.networking.GenericRequest;
 import com.github.istin.dmtools.common.networking.RestClient;
+import com.github.istin.dmtools.common.utils.PropertyReader;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
@@ -15,6 +16,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.mock;
@@ -340,6 +342,7 @@ public class AbstractRestClientTest {
         String folderName = restClient.getCacheFolderName();
         assertNotNull(folderName);
         assertTrue(folderName.contains("cache"));
+        assertTrue("Default REST client cache folder must be an absolute path", new File(folderName).isAbsolute());
     }
 
     @Test
@@ -539,6 +542,21 @@ public class AbstractRestClientTest {
             assertTrue(timeout > 0);
         } catch (Exception e) {
             fail("getTimeout should not throw exception");
+        }
+    }
+
+    @Test
+    public void testGetCacheFolderName_RespectsDmtoolsCacheDirOverride() {
+        File customDir = new File(System.getProperty("java.io.tmpdir"), "dmtools-custom-cache-test");
+        PropertyReader.setOverrides(Collections.singletonMap(PropertyReader.DMTOOLS_CACHE_DIR, customDir.getAbsolutePath()));
+        try {
+            String folderName = restClient.getCacheFolderName();
+            assertEquals(customDir.getAbsolutePath(), new File(folderName).getParentFile().getAbsolutePath());
+            assertTrue(new File(folderName).getName().startsWith("cache"));
+            String alreadyAbsolute = PropertyReader.resolveCacheFolderPath(customDir.getAbsolutePath());
+            assertEquals(customDir.getAbsolutePath(), alreadyAbsolute);
+        } finally {
+            PropertyReader.clearOverrides();
         }
     }
 

@@ -63,6 +63,7 @@ public class ParentConfigResolver {
      * instead of the default array-replacement behavior.
      */
     private static final String CLI_PROMPTS_PATH = "params.cliPrompts";
+    private static final String CLI_PROMPTS_BY_TRACKER_PATH = "params.cliPromptsByTracker";
 
     private final ConfigurationMerger configurationMerger;
 
@@ -458,6 +459,13 @@ public class ParentConfigResolver {
         JSONArray childArr  = (childValue  instanceof JSONArray) ? (JSONArray) childValue  : null;
 
         if (parentArr == null && childArr == null) return;
+        if ((CLI_PROMPTS_PATH.equals(dotPath) || dotPath.startsWith(CLI_PROMPTS_BY_TRACKER_PATH + "."))
+                && (containsStructuredCliPrompts(parentArr) || containsStructuredCliPrompts(childArr))) {
+            CliPromptsConfig parentPrompts = parentArr != null ? CliPromptsConfig.fromJsonArray(parentArr) : new CliPromptsConfig();
+            CliPromptsConfig childPrompts = childArr != null ? CliPromptsConfig.fromJsonArray(childArr) : new CliPromptsConfig();
+            setValueAtPath(result, dotPath, CliPromptsConfig.toJsonArray(parentPrompts.merge(childPrompts)));
+            return;
+        }
 
         JSONArray combined = new JSONArray();
         if (parentArr != null) {
@@ -474,8 +482,24 @@ public class ParentConfigResolver {
      * If either side has no {@code cliPrompts}, the other's value (or none) is kept.
      */
     private void applyStructuredCliPromptsMerge(JSONObject merged, JSONObject parentConfig, JSONObject originalChild) {
-        Object parentValue = getValueAtPath(parentConfig, CLI_PROMPTS_PATH);
-        Object childValue  = getValueAtPath(originalChild, CLI_PROMPTS_PATH);
+        applyStructuredPromptsMergeAtPath(merged, parentConfig, originalChild, CLI_PROMPTS_PATH);
+        Object parentByTracker = getValueAtPath(parentConfig, CLI_PROMPTS_BY_TRACKER_PATH);
+        Object childByTracker  = getValueAtPath(originalChild, CLI_PROMPTS_BY_TRACKER_PATH);
+        if (parentByTracker instanceof JSONObject && childByTracker instanceof JSONObject) {
+            JSONObject pMap = (JSONObject) parentByTracker;
+            JSONObject cMap = (JSONObject) childByTracker;
+            for (String trackerKey : pMap.keySet()) {
+                if (cMap.has(trackerKey)) {
+                    applyStructuredPromptsMergeAtPath(merged, parentConfig, originalChild,
+                            CLI_PROMPTS_BY_TRACKER_PATH + "." + trackerKey);
+                }
+            }
+        }
+    }
+
+    private void applyStructuredPromptsMergeAtPath(JSONObject merged, JSONObject parentConfig, JSONObject originalChild, String path) {
+        Object parentValue = getValueAtPath(parentConfig, path);
+        Object childValue  = getValueAtPath(originalChild, path);
 
         if (!containsStructuredCliPrompts(parentValue) && !containsStructuredCliPrompts(childValue)) {
             return;
@@ -489,8 +513,8 @@ public class ParentConfigResolver {
                 : new CliPromptsConfig();
 
         CliPromptsConfig mergedPrompts = parentPrompts.merge(childPrompts);
-        setValueAtPath(merged, CLI_PROMPTS_PATH, CliPromptsConfig.toJsonArray(mergedPrompts));
-        logger.debug("Structured cliPrompts merge applied at '{}'", CLI_PROMPTS_PATH);
+        setValueAtPath(merged, path, CliPromptsConfig.toJsonArray(mergedPrompts));
+        logger.debug("Structured cliPrompts merge applied at '{}'", path);
     }
 
     private boolean containsStructuredCliPrompts(Object value) {

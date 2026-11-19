@@ -6,6 +6,7 @@ package com.github.istin.dmtools.common.utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -518,6 +519,43 @@ public class PropertyReader {
       return false;
     }
     return Boolean.parseBoolean(value);
+  }
+
+  public static final String DMTOOLS_CACHE_DIR = "DMTOOLS_CACHE_DIR";
+
+  /**
+   * Base directory where REST clients store their cache folders (e.g.
+   * {@code cacheAzureDevOpsClient}, {@code cacheBasicJiraClient}).
+   * Defaults to {@code ~/.dmtools/cache} (falling back to
+   * {@code <java.io.tmpdir>/dmtools-cache} when {@code user.home} is blank)
+   * so client caches never pollute the current working directory.
+   */
+  public String getCacheDir() {
+    String value = getValue(DMTOOLS_CACHE_DIR);
+    if (value != null && !value.trim().isEmpty()) {
+      return value.trim();
+    }
+    String userHome = System.getProperty("user.home");
+    if (userHome != null && !userHome.trim().isEmpty()) {
+      return new File(new File(userHome.trim(), ".dmtools"), "cache").getPath();
+    }
+    String tmpDir = System.getProperty("java.io.tmpdir", ".");
+    return new File(tmpDir, "dmtools-cache").getPath();
+  }
+
+  /**
+   * Resolves a client cache folder name against {@link #getCacheDir()}.
+   * If {@code folderName} is already an absolute path, returns it unchanged.
+   */
+  public static String resolveCacheFolderPath(String folderName) {
+    if (folderName == null || folderName.trim().isEmpty()) {
+      return new PropertyReader().getCacheDir();
+    }
+    File candidate = new File(folderName);
+    if (candidate.isAbsolute()) {
+      return candidate.getPath();
+    }
+    return new File(new PropertyReader().getCacheDir(), folderName).getPath();
   }
 
   /**

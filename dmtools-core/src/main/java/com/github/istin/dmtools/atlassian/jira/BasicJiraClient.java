@@ -189,4 +189,9 @@ public class BasicJiraClient extends JiraClient<Ticket> {
     public TextType getTextType() {
         return TextType.MARKDOWN;
     }
+
+    @Override
+    public String getCacheFolderName() {
+        return PropertyReader.resolveCacheFolderPath("cache" + getClass().getSimpleName());
+    }
 }
