@@ -190,6 +190,9 @@ OPENAI_TEMPERATURE=0.7  # Optional, default: -1 (don't send, use model default)
 OPENAI_MAX_TOKENS_PARAM_NAME=max_completion_tokens  # Optional, default: "max_completion_tokens"
                                                      # Use "max_tokens" for older models (gpt-3.5-turbo)
                                                      # Use empty string to skip sending this parameter
+OPENAI_EXTRA_BODY={"top_k":20,"min_p":0.0}  # Optional, single-line JSON object merged into every request body
+                                            # Overrides temperature/max tokens; cannot override model or messages
+                                            # Use for server-specific params (llama.cpp, vLLM, ...)
 
 # Gemini - API Key Mode (Public API)
 GEMINI_API_KEY=...

@@ -21,6 +21,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -51,6 +52,8 @@ public class OpenAIClient extends AbstractRestClient implements AI {
 
     @Setter
     private Metadata metadata;
+
+    private JSONObject extraBody;
 
     @Getter
     @Setter
@@ -100,6 +103,29 @@ public class OpenAIClient extends AbstractRestClient implements AI {
 
     public String getName() {
         return model;
+    }
+
+    /**
+     * Sets extra fields merged into every chat request body, overriding temperature and the
+     * max-tokens field. {@code model} and {@code messages} cannot be overridden.
+     *
+     * @param extraBodyJson JSON object, e.g. {@code {"top_k":20,"min_p":0.0}}; null or blank clears it
+     * @throws IllegalArgumentException if the value is not a JSON object
+     */
+    public void setExtraBody(String extraBodyJson) {
+        if (extraBodyJson == null || extraBodyJson.trim().isEmpty() || extraBodyJson.trim().startsWith("$")) {
+            this.extraBody = null;
+            return;
+        }
+        try {
+            this.extraBody = new JSONObject(extraBodyJson.trim());
+        } catch (JSONException e) {
+            throw new IllegalArgumentException("OPENAI_EXTRA_BODY must be a JSON object: " + e.getMessage(), e);
+        }
+    }
+
+    public JSONObject getExtraBody() {
+        return extraBody == null ? null : new JSONObject(extraBody.toString());
     }
 
     @Override
@@ -259,6 +285,16 @@ public class OpenAIClient extends AbstractRestClient implements AI {
         // Add max tokens parameter if configured (empty string = skip parameter)
         if (maxTokensParamName != null && !maxTokensParamName.trim().isEmpty()) {
             jsonObject.put(maxTokensParamName.trim(), maxTokens);
+        }
+
+        if (extraBody != null) {
+            for (String key : extraBody.keySet()) {
+                if ("model".equals(key) || "messages".equals(key)) {
+                    logger.warn("Ignoring '{}' in OPENAI_EXTRA_BODY: it cannot be overridden", key);
+                    continue;
+                }
+                jsonObject.put(key, extraBody.get(key));
+            }
         }
 
         if (metadata != null) {
