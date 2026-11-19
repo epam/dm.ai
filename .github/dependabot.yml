@@ -20,6 +20,16 @@ updates:
       # Remove this entry once a Java 17-compatible artifact is published again (or the project moves to Java 21).
       - dependency-name: "dev.toonformat:jtoon"
         versions: [">= 2.0.6"]
+      # jackson-module-blackbird 3.3.0+ (transitively loaded and registered by jtoon 2.0.5) requires Java 25+ at runtime
+      # ("Cannot register BlackbirdModule: it requires Java 25 or later, and this runtime is Java 17"). Since versions.jackson3
+      # pins jackson-core, jackson-databind, and jackson-module-blackbird in lockstep and the project baseline is Java 17,
+      # keep versions.jackson3 on the 3.2.x line (< 3.3.0).
+      - dependency-name: "tools.jackson.core:jackson-core"
+        versions: [">= 3.3.0"]
+      - dependency-name: "tools.jackson.core:jackson-databind"
+        versions: [">= 3.3.0"]
+      - dependency-name: "tools.jackson.module:jackson-module-blackbird"
+        versions: [">= 3.3.0"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
