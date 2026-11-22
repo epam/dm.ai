@@ -1,27 +1,46 @@
+# AGENTS.md
+
+High-level guide and key lessons for coding agents working in `epam/dm.ai`.
+
 ## CodeGraph
 
-CodeGraph builds a semantic knowledge graph of codebases for faster, smarter code exploration.
+If `.codegraph/` exists in the project, use `codegraph_*` tools (`codegraph_context`, `codegraph_search`, `codegraph_node`, `codegraph_callers`, `codegraph_callees`, `codegraph_trace`, `codegraph_impact`) first before falling back to broad `grep`/`read` loops.
 
-### If `.codegraph/` exists in the project
+## High-Level Structure
 
-**Answer directly with CodeGraph — don't delegate exploration to a file-reading sub-agent or a grep/read loop.** CodeGraph *is* the pre-built search index; re-deriving its answers with grep + Read repeats work it already did and costs more for the same result. For "how does X work?", architecture, trace, or where-is-X questions, answer in a handful of CodeGraph calls and stop — typically with **zero file reads**. The returned source is complete and authoritative: treat it as already read and do not re-open those files. Reach for raw Read/Grep only to confirm a specific detail CodeGraph didn't cover.
+- **`dmtools-core`**: Core Java library — Job runner (`JobRunner`), MCP tool system, tracker integrations (`TrackerClient` for Jira, ADO, GitHub, GitLab, Rally), Confluence/Figma/Teams/TestRail/Xray clients, AI providers (`AI`), and GraalJS bridge (`JobJavaScriptBridge`).
+- **`dmtools-mcp-annotations`** & **`dmtools-annotation-processor`**: Source-retention `@MCPTool` / `@MCPParam` annotations and compile-time generator producing `MCPToolRegistry`, `MCPSchemaGenerator`, and `MCPToolExecutor`.
+- **`dmtools-server`**: Spring Boot REST/OAuth2 server (`DmToolsServerApplication`).
+- **`dmtools-automation`**: Browser/mobile automation (Selenium, Playwright, Appium).
+- **`dmtools-ai-docs`**: Skill and end-user documentation (`SKILL.md`, `references/configuration/`, `references/mcp-tools/`).
+- **`landing`**: Astro/TypeScript web landing and DMTools Agent Factory setup generator (`landing/src/lib/factory.ts`).
 
-**Tool selection by intent:**
+## Build & Test Commands
 
-| Tool | Use For |
-|------|---------|
-| `codegraph_context` | Map a task / feature / area first — composes search + node + callers + callees in one call |
-| `codegraph_trace` | "How does X reach Y" — the call path, each hop's body inline (follows dynamic-dispatch hops grep can't) |
-| `codegraph_explore` | Survey several related symbols' source in ONE budget-capped call |
-| `codegraph_search` | Find a symbol by name |
-| `codegraph_callers` / `codegraph_callees` | Walk call flow one hop at a time |
-| `codegraph_impact` | Check what's affected before editing |
-| `codegraph_node` | Get a single symbol's source / signature |
+```bash
+# Build core fat JAR
+./gradlew :dmtools-core:shadowJar
 
-A direct CodeGraph answer is a handful of calls; a grep/read exploration is dozens.
+# Run unit tests (fast, mocked — mandatory before finishing changes)
+./gradlew :dmtools-core:test --tests "YourTestClass"
+./gradlew :dmtools-core:test
 
-### If `.codegraph/` does NOT exist
+# Landing / factory generator tests
+npm --prefix landing test
+```
 
-At the start of a session, ask the user if they'd like to initialize CodeGraph:
+## Key Lessons & Invariants
 
-"I notice this project doesn't have CodeGraph initialized. Would you like me to run `codegraph init -i` to build a code knowledge graph?"
+1. **Unit tests only in development & CI**: Never run `integrationTest` in regular development — it hits live external APIs and requires real credentials. Mock external clients with JUnit 5 + Mockito.
+2. **MCP tool parameter types**: `@MCPTool` methods only support `String`, `Integer`/`int`, `Long`/`long`, and `String[]`. If a client method takes `boolean`, `Date`/`Calendar`, enums, or complex objects, expose a String-parameter MCP wrapper method.
+3. **Registering new MCP integrations**: Adding a new integration requires:
+   - Annotating methods with `@MCPTool` / `@MCPParam`
+   - Registering the client in `McpCliHandler.createClientInstances()` and `getAvailableIntegrations()`
+   - Updating `dmtools-ai-docs/references/` and `docs/README-MCP.md`.
+4. **JavaScript agents & tool aliases**: GraalJS (`JobJavaScriptBridge`) resolves only canonical MCP tool names (e.g. `jira_get_ticket`, `github_list_prs`, `ado_get_work_item`). `tracker_*` aliases resolve only in the CLI (`McpCliHandler.resolveToolAlias`).
+5. **Configuration precedence**: `config.properties` (highest) → `dmtools.env` → environment variables (lowest). All keys read by `PropertyReader` are documented in `dmtools.env.example` and `dmtools-core/PROPERTIES.md`.
+6. **Thread-safe job context**: Jobs use `JobContext` thread-local storage (`JobContext.withContext(...)`) and constructor injection (Dagger 2) for isolation and testability.
+7. **Code style & quality gate**:
+   - Use package imports (no inline fully qualified class names unless resolving a name collision).
+   - English only in code and comments.
+   - Changed Java files must stay under the 2800-line quality gate limit and pass the `jscpd` duplication check.
