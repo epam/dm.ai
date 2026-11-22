@@ -269,7 +269,7 @@ OPEN_AI_API_KEY=your-openai-api-key        # OpenAI
 BEDROCK_ACCESS_KEY_ID=your-aws-key          # AWS Bedrock (Claude)
 BEDROCK_SECRET_ACCESS_KEY=your-aws-secret
 BEDROCK_REGION=us-east-1
-BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 
 # Confluence (Optional)
 CONFLUENCE_BASE_PATH=https://your-company.atlassian.net/wiki

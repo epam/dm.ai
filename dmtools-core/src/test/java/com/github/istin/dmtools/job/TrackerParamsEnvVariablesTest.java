@@ -23,7 +23,7 @@ class TrackerParamsEnvVariablesTest {
                 + "\"inputJql\": \"project = TEST\","
                 + "\"envVariables\": {"
                 + "  \"OPENAI_MODEL\": \"gpt-4o\","
-                + "  \"ANTHROPIC_MODEL\": \"claude-3-5-sonnet-20241022\""
+                + "  \"ANTHROPIC_MODEL\": \"claude-sonnet-4-5\""
                 + "}"
                 + "}";
 
@@ -32,7 +32,7 @@ class TrackerParamsEnvVariablesTest {
         assertNotNull(params.getEnvVariables());
         assertEquals(2, params.getEnvVariables().size());
         assertEquals("gpt-4o", params.getEnvVariables().get("OPENAI_MODEL"));
-        assertEquals("claude-3-5-sonnet-20241022", params.getEnvVariables().get("ANTHROPIC_MODEL"));
+        assertEquals("claude-sonnet-4-5", params.getEnvVariables().get("ANTHROPIC_MODEL"));
     }
 
     @Test
