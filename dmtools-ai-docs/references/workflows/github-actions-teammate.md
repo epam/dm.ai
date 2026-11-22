@@ -203,7 +203,7 @@ Configure these in **Settings → Secrets and variables → Actions → Variable
 | `CONFLUENCE_BASE_PATH` | Confluence URL | `https://company.atlassian.net/wiki` |
 | `CONFLUENCE_DEFAULT_SPACE` | Default Confluence space | `TEAM` |
 | `BEDROCK_REGION` | AWS region | `us-east-1` |
-| `BEDROCK_MODEL_ID` | Bedrock model | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
+| `BEDROCK_MODEL_ID` | Bedrock model | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
 | `DEFAULT_LLM` | Default AI provider | `bedrock` |
 | `DEFAULT_TRACKER` | Default tracker | `jira` |
 | `PROMPT_CHUNK_TOKEN_LIMIT` | Token limit per chunk | `4000` |
