@@ -199,11 +199,11 @@ public class GitLabTrackerClient extends GitLabIssues implements TrackerClient<G
                 && !"resolved".equalsIgnoreCase(status)
                 && !"open".equalsIgnoreCase(status) && !"opened".equalsIgnoreCase(status)
                 && !"reopen".equalsIgnoreCase(status) && !"reopened".equalsIgnoreCase(status)) {
-            return patchIssue(ref, new JSONObject().put("add_labels", "status::" + status));
+            return updateIssue(ref, new JSONObject().put("add_labels", "status::" + status));
         }
         String stateEvent = "closed".equalsIgnoreCase(status) || "done".equalsIgnoreCase(status)
                 || "resolved".equalsIgnoreCase(status) ? "close" : "reopen";
-        return patchIssue(ref, new JSONObject().put("state_event", stateEvent));
+        return updateIssue(ref, new JSONObject().put("state_event", stateEvent));
     }
 
     @Override
@@ -219,13 +219,13 @@ public class GitLabTrackerClient extends GitLabIssues implements TrackerClient<G
             throw new IOException("GitLab user not found: " + userName);
         }
         int userId = users.getJSONObject(0).getInt("id");
-        return patchIssue(ref, new JSONObject().put("assignee_ids", new JSONArray().put(userId)));
+        return updateIssue(ref, new JSONObject().put("assignee_ids", new JSONArray().put(userId)));
     }
 
     @Override
     public void deleteLabelInTicket(GitLabTicket ticket, String label) throws IOException {
         IssueRef ref = resolveIssueRef(ticket.getTicketKey());
-        patchIssue(ref, new JSONObject().put("remove_labels", label));
+        updateIssue(ref, new JSONObject().put("remove_labels", label));
     }
 
     @Override
@@ -234,7 +234,7 @@ public class GitLabTrackerClient extends GitLabIssues implements TrackerClient<G
             return;
         }
         IssueRef ref = resolveIssueRef(ticket.getTicketKey());
-        patchIssue(ref, new JSONObject().put("add_labels", label));
+        updateIssue(ref, new JSONObject().put("add_labels", label));
     }
 
     @Override
@@ -261,7 +261,7 @@ public class GitLabTrackerClient extends GitLabIssues implements TrackerClient<G
 
     @Override
     public String updateDescription(String key, String description) throws IOException {
-        return patchIssue(resolveIssueRef(key), new JSONObject().put("description", description));
+        return updateIssue(resolveIssueRef(key), new JSONObject().put("description", description));
     }
 
     @Override
@@ -361,10 +361,6 @@ public class GitLabTrackerClient extends GitLabIssues implements TrackerClient<G
     @Override
     public void setLogEnabled(boolean isLogEnabled) {
         // GitLab request logging is managed by the shared REST client.
-    }
-
-    private String patchIssue(IssueRef ref, JSONObject body) throws IOException {
-        return patch(new GenericRequest(this, issuePath(ref)).setBody(body.toString()));
     }
 
     private List<GitLabTicket> toTickets(String projectPath, JSONArray issues) {

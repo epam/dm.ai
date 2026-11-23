@@ -84,24 +84,75 @@ public class GitLabTrackerClientTest {
 
     @Test
     public void testMoveToDoneClosesIssue() throws Exception {
-        doReturn("{}").when(client).patch(any(GenericRequest.class));
+        doReturn("{}").when(client).put(any(GenericRequest.class));
 
         client.moveToStatus("group/project#42", "Done");
 
-        ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
-        verify(client).patch(captor.capture());
-        assertEquals("close", new JSONObject(captor.getValue().getBody()).getString("state_event"));
+        assertEquals("close", capturedUpdate().getString("state_event"));
     }
 
     @Test
     public void testMoveToCustomStatusAddsScopedLabel() throws Exception {
-        doReturn("{}").when(client).patch(any(GenericRequest.class));
+        doReturn("{}").when(client).put(any(GenericRequest.class));
 
         client.moveToStatus("group/project#42", "In Review");
 
+        assertEquals("status::In Review", capturedUpdate().getString("add_labels"));
+    }
+
+    @Test
+    public void testAssignToUpdatesAssignee() throws Exception {
+        doReturn("[{\"id\":123}]").when(client).execute(any(GenericRequest.class));
+        doReturn("{}").when(client).put(any(GenericRequest.class));
+
+        client.assignTo("group/project#42", "developer");
+
+        assertEquals(123, capturedUpdate().getJSONArray("assignee_ids").getInt(0));
+    }
+
+    @Test
+    public void testAddLabelUpdatesIssue() throws Exception {
+        doReturn("{}").when(client).put(any(GenericRequest.class));
+        GitLabTicket ticket = new GitLabTicket("group/project", "{\"iid\":42,\"labels\":[]}");
+
+        client.addLabelIfNotExists(ticket, "bug");
+
+        assertEquals("bug", capturedUpdate().getString("add_labels"));
+    }
+
+    @Test
+    public void testRemoveLabelUpdatesIssue() throws Exception {
+        doReturn("{}").when(client).put(any(GenericRequest.class));
+        GitLabTicket ticket = new GitLabTicket("group/project", "{\"iid\":42,\"labels\":[\"bug\"]}");
+
+        client.deleteLabelInTicket(ticket, "bug");
+
+        assertEquals("bug", capturedUpdate().getString("remove_labels"));
+    }
+
+    @Test
+    public void testUpdateDescriptionUpdatesIssue() throws Exception {
+        doReturn("{}").when(client).put(any(GenericRequest.class));
+
+        client.updateDescription("group/project#42", "Updated");
+
+        assertEquals("Updated", capturedUpdate().getString("description"));
+    }
+
+    @Test(expected = IOException.class)
+    public void testUpdatePropagatesFailure() throws Exception {
+        doThrow(new IOException("GitLab update failed")).when(client).put(any(GenericRequest.class));
+
+        client.updateDescription("group/project#42", "Updated");
+    }
+
+    private JSONObject capturedUpdate() throws IOException {
         ArgumentCaptor<GenericRequest> captor = ArgumentCaptor.forClass(GenericRequest.class);
-        verify(client).patch(captor.capture());
-        assertEquals("status::In Review", new JSONObject(captor.getValue().getBody()).getString("add_labels"));
+        verify(client).put(captor.capture());
+        verify(client, never()).patch(any(GenericRequest.class));
+        assertEquals("https://gitlab.example/api/v4/projects/group%2Fproject/issues/42",
+                captor.getValue().url());
+        return new JSONObject(captor.getValue().getBody());
     }
 
     @Test
