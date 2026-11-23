@@ -663,6 +663,14 @@ public class InMemoryConfigurationCoverageTest {
         assertEquals("max_tokens", config.getOpenAIMaxTokensParamName());
     }
 
+    @Test
+    public void testGetOpenAIExtraBodyUnsetAndSet() {
+        assertEquals(null, config.getOpenAIExtraBody());
+
+        config.setProperty("OPENAI_EXTRA_BODY", "{\"top_k\":20}");
+        assertEquals("{\"top_k\":20}", config.getOpenAIExtraBody());
+    }
+
     // ------------------------------------------------------------------
     // JSAIConfiguration
     // ------------------------------------------------------------------
