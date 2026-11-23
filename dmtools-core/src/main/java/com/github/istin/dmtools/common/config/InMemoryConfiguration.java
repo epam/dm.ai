@@ -577,6 +577,11 @@ public class InMemoryConfiguration implements ApplicationConfiguration {
         return getValue("OPENAI_MAX_TOKENS_PARAM_NAME", "max_completion_tokens");
     }
 
+    @Override
+    public String getOpenAIExtraBody() {
+        return getValue("OPENAI_EXTRA_BODY");
+    }
+
     // JSAIConfiguration
     
     @Override
