@@ -70,6 +70,44 @@ base_sha=$(printf '%s' "$diff_refs" | jq -er '.base_sha')
 head_sha=$(printf '%s' "$diff_refs" | jq -er '.head_sha')
 start_sha=$(printf '%s' "$diff_refs" | jq -er '.start_sha')
 
+review_context=$(mktemp -d)
+trap 'rm -rf "$review_context"' EXIT
+mr_diffs="$review_context/diffs.json"
+printf '[]' > "$mr_diffs"
+page=1
+while :; do
+  batch=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid/diffs?per_page=100&page=$page")
+  jq -s '.[0] + .[1]' "$mr_diffs" <(printf '%s' "$batch") > "$review_context/merged.json"
+  mv "$review_context/merged.json" "$mr_diffs"
+  [ "$(printf '%s' "$batch" | jq 'length')" -lt 100 ] && break
+  page=$((page + 1))
+done
+
+# GitLab needs both old_line and new_line for unchanged context lines, so anchors are resolved from the MR diff.
+# Prints "<old_path>\t<new_path>\t<old_line|->\t<new_line|->", or nothing when the line is not in the diff.
+resolve_diff_line() {
+  local path="$1" side="$2" line="$3" entry
+  entry=$(jq -c --arg path "$path" --arg side "$side" '
+    [.[] | select(if $side == "LEFT" then .old_path == $path else .new_path == $path end)][0] // empty' "$mr_diffs")
+  [ -n "$entry" ] || return 0
+  printf '%s' "$entry" | jq -r '.diff // ""' | awk -v side="$side" -v target="$line" \
+    -v old_path="$(printf '%s' "$entry" | jq -r '.old_path')" \
+    -v new_path="$(printf '%s' "$entry" | jq -r '.new_path')" '
+    function emit(o, n) { printf "%s\t%s\t%s\t%s\n", old_path, new_path, o, n; found = 1; exit }
+    /^@@ / {
+      split($2, o, ","); split($3, n, ",")
+      old = substr(o[1], 2) + 0; new = substr(n[1], 2) + 0; in_hunk = 1; next
+    }
+    !in_hunk { next }
+    /^\\/ { next }
+    /^\+/ { if (side == "RIGHT" && new == target) emit("-", new); new++; next }
+    /^-/ { if (side == "LEFT" && old == target) emit(old, "-"); old++; next }
+    {
+      if ((side == "RIGHT" && new == target) || (side == "LEFT" && old == target)) emit(old, new)
+      old++; new++
+    }'
+}
+
 general_body=$(cat "$general_comment")
 gitlab_api POST "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid/notes" \
   --header 'Content-Type: application/json' \
@@ -102,17 +140,30 @@ while IFS= read -r inline_comment; do
     exit 1
   fi
   comment_body=$(cat "$comment_file")
-  position=$(jq -cn \
-    --arg base_sha "$base_sha" \
-    --arg head_sha "$head_sha" \
-    --arg start_sha "$start_sha" \
-    --arg path "$file_path" \
-    --arg side "$side" \
-    --argjson line "$line" \
-    '{position: ({position_type: "text", base_sha: $base_sha, head_sha: $head_sha, start_sha: $start_sha, old_path: $path, new_path: $path} + (if $side == "LEFT" then {old_line: $line} else {new_line: $line} end))}')
-  payload=$(jq -cn --arg body "$comment_body" --argjson position "$position" '{body: $body} + $position')
+  anchor=$(resolve_diff_line "$file_path" "$side" "$line")
+  if [ -n "$anchor" ]; then
+    IFS=$'\t' read -r old_path new_path old_line new_line <<< "$anchor"
+    payload=$(jq -cn \
+      --arg body "$comment_body" \
+      --arg base_sha "$base_sha" \
+      --arg head_sha "$head_sha" \
+      --arg start_sha "$start_sha" \
+      --arg old_path "$old_path" \
+      --arg new_path "$new_path" \
+      --arg old_line "$old_line" \
+      --arg new_line "$new_line" \
+      '{body: $body, position: ({position_type: "text", base_sha: $base_sha, head_sha: $head_sha, start_sha: $start_sha, old_path: $old_path, new_path: $new_path}
+        + (if $old_line == "-" then {} else {old_line: ($old_line | tonumber)} end)
+        + (if $new_line == "-" then {} else {new_line: ($new_line | tonumber)} end))}')
+    location='inline'
+  else
+    # Lines outside the MR diff cannot be anchored; keep the finding as a resolvable MR thread.
+    payload=$(jq -cn --arg body "$comment_body" --arg path "$file_path" --arg line "$line" --arg side "$side" \
+      '{body: ("**`\($path):\($line)`**" + (if $side == "LEFT" then " (old version)" else "" end) + "\n\n" + $body)}')
+    location='general thread (line is outside the MR diff)'
+  fi
   gitlab_api POST "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$mr_iid/discussions" \
     --header 'Content-Type: application/json' \
     --data "$payload" >/dev/null
-  printf 'Posted FA review comment on %s:%s to GitLab merge request !%s.\n' "$file_path" "$line" "$mr_iid"
+  printf 'Posted FA review comment on %s:%s as %s to GitLab merge request !%s.\n' "$file_path" "$line" "$location" "$mr_iid"
 done < <(jq -c '.inlineComments[]?' "$review_json")
