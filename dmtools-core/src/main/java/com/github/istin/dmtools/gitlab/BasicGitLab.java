@@ -9,7 +9,7 @@ import com.github.istin.dmtools.common.utils.PropertyReader;
 
 import java.io.IOException;
 
-public class BasicGitLab extends GitLab {
+public class BasicGitLab extends GitLabIssues {
 
     private static SourceCodeConfig DEFAULT_CONFIG;
 
