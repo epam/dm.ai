@@ -1493,9 +1493,12 @@ describe('Issue #758 — Quality workflow in an empty repository', () => {
     assert.match(wf, /No coverage\/lcov\.info found — skipping CRAP analysis\./);
   });
 
-  it('crap4java skips gracefully when no Java build file or source files exist', () => {
+  it('crap4java skips gracefully when no Java build file or source files exist and isolates runner state (#875)', () => {
     const wf = renderQualityWorkflow(validConfig({ ciEnabled: true, qualityPreset: 'crap4java' }))!;
     assert.match(wf, /No Java build file or source files found — skipping Java build and CRAP analysis\./);
+    assert.match(wf, /overwrite-settings: false/);
+    assert.match(wf, /CRAP_DIR="\$RUNNER_TEMP\/crap4java"/);
+    assert.doesNotMatch(wf, /\/tmp\/crap4java/);
   });
 
   it('crap4go skips gracefully when go.mod, Go sources, test files, or coverage.out are missing', () => {

@@ -593,15 +593,18 @@ jobs:
         with:
           distribution: temurin
           java-version: '${ver}'
+          overwrite-settings: false
       - name: Build and run CRAP analysis (IstiN/crap4java)
         run: |
           if ( [ ! -f pom.xml ] && [ ! -f build.gradle ] && [ ! -f build.gradle.kts ] ) || [ -z "$(find . -name '*.java' -not -path './.*' -print -quit)" ]; then
             echo "No Java build file or source files found — skipping Java build and CRAP analysis."
             exit 0
           fi
-          git clone --depth 1 https://github.com/IstiN/crap4java.git /tmp/crap4java
-          mvn -q -f /tmp/crap4java/pom.xml -DskipTests package
-          java -jar /tmp/crap4java/target/crap4java-*.jar
+          CRAP_DIR="$RUNNER_TEMP/crap4java"
+          rm -rf "$CRAP_DIR"
+          git clone --depth 1 https://github.com/IstiN/crap4java.git "$CRAP_DIR"
+          mvn -q -f "$CRAP_DIR/pom.xml" -DskipTests package
+          java -jar "$CRAP_DIR"/target/crap4java-*.jar
 `;
     }
     case 'crap4py': {

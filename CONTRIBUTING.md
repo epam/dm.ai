@@ -47,7 +47,7 @@ git config core.hooksPath .githooks
 ## Submitting a Pull Request
 
 1. Fork the repository and create a feature branch from `main`.
-2. Make your changes following the code style rules in `CLAUDE.md`.
+2. Make your changes following the code style rules in `AGENTS.md`.
 3. Add or update unit tests for any new logic.
 4. Verify all tests pass: `./gradlew :dmtools-core:test`
 5. Open a pull request with a clear description of what you changed and why.
@@ -58,7 +58,7 @@ For repository positioning, GitHub About metadata, release-facing keyword alignm
 
 ## Adding a New MCP Tool
 
-See the step-by-step guide in `CLAUDE.md` under **"Adding a New MCP Tool"** and the full tool reference in `docs/README-MCP.md`.
+See `AGENTS.md` and the full tool reference in `docs/README-MCP.md`.
 
 ## Code Style
 

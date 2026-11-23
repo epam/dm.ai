@@ -18,11 +18,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class InstructionProcessorGithubIntegrationTest {
 
     private static final String BLOB_URL =
-            "https://github.com/IstiN/dmtools/blob/main/CLAUDE.md";
+            "https://github.com/IstiN/dmtools/blob/main/AGENTS.md";
 
     private static final String RAW_URL =
-            "https://raw.githubusercontent.com/IstiN/dmtools/main/CLAUDE.md";
-
+            "https://raw.githubusercontent.com/IstiN/dmtools/main/AGENTS.md";
     @TempDir
     Path tempDir;
 
@@ -37,7 +36,7 @@ class InstructionProcessorGithubIntegrationTest {
         assertNotEquals(BLOB_URL, result[0],
                 "Content should be fetched, not the original URL returned as fallback");
         assertTrue(result[0].length() > 100,
-                "Fetched content should be non-trivial (CLAUDE.md is a large file)");
+                "Fetched content should be non-trivial (AGENTS.md is a non-empty file)");
 
         System.out.println("=== Blob URL: fetched content (first 300 chars) ===");
         System.out.println(result[0].substring(0, Math.min(300, result[0].length())));
@@ -55,7 +54,7 @@ class InstructionProcessorGithubIntegrationTest {
         assertNotEquals(RAW_URL, result[0],
                 "Content should be fetched, not the original URL returned as fallback");
         assertTrue(result[0].length() > 100,
-                "Fetched content should be non-trivial (CLAUDE.md is a large file)");
+                "Fetched content should be non-trivial (AGENTS.md is a non-empty file)");
 
         System.out.println("=== Raw URL: fetched content (first 300 chars) ===");
         System.out.println(result[0].substring(0, Math.min(300, result[0].length())));
