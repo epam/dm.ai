@@ -537,6 +537,11 @@ public class PropertyReaderConfiguration implements ApplicationConfiguration {
     }
 
     @Override
+    public String getOpenAIExtraBody() {
+        return propertyReader.getOpenAIExtraBody();
+    }
+
+    @Override
     public String getDefaultLLM() {
         return propertyReader.getDefaultLLM();
     }

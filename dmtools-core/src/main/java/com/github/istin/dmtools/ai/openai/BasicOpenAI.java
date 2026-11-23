@@ -36,5 +36,6 @@ public class BasicOpenAI extends OpenAIClient {
             null, // Custom headers not supported in BasicOpenAI for now
             null  // Logger will be created by parent class
         );
+        setExtraBody(configuration.getOpenAIExtraBody());
     }
 }
