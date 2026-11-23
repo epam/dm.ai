@@ -12,6 +12,7 @@ import com.github.istin.dmtools.common.model.ITicket;
 import com.github.istin.dmtools.common.tracker.TrackerClient;
 import com.github.istin.dmtools.figma.BasicFigmaClient;
 import com.github.istin.dmtools.figma.FigmaClient;
+import com.github.istin.dmtools.gitlab.GitLabTrackerClient;
 import com.github.istin.dmtools.ai.AI;
 import com.github.istin.dmtools.job.AbstractJob;
 import com.github.istin.dmtools.microsoft.ado.BasicAzureDevOpsClient;
@@ -162,10 +163,13 @@ public class ReportGeneratorJob extends AbstractJob<
         client = tryInitTracker(BasicRallyClient::getInstance);
         if (client != null) return client;
 
+        client = tryInitTracker(GitLabTrackerClient::getInstance);
+        if (client != null) return client;
+
         throw new RuntimeException("Tracker data source is configured, but no tracker client could be initialized. " +
             "Please configure one of: JIRA (JIRA_BASE_PATH + JIRA_EMAIL + JIRA_API_TOKEN or JIRA_LOGIN_PASS_TOKEN), " +
             "ADO (ADO_ORGANIZATION + ADO_PROJECT + ADO_PAT_TOKEN), or " +
-            "Rally (RALLY_PATH + RALLY_TOKEN).");
+            "Rally (RALLY_PATH + RALLY_TOKEN), or GitLab (GITLAB_TOKEN).");
     }
 
     private TrackerClient<? extends ITicket> tryInitDefaultTracker(String defaultTracker) {
@@ -176,8 +180,10 @@ public class ReportGeneratorJob extends AbstractJob<
                 return tryInitTracker(BasicAzureDevOpsClient::getInstance);
             case "rally":
                 return tryInitTracker(BasicRallyClient::getInstance);
+            case "gitlab":
+                return tryInitTracker(GitLabTrackerClient::getInstance);
             default:
-                logger.warn("Unknown DEFAULT_TRACKER value: '{}'. Valid values: 'jira', 'ado', 'rally'", defaultTracker);
+                logger.warn("Unknown DEFAULT_TRACKER value: '{}'. Valid values: 'jira', 'ado', 'rally', 'gitlab'", defaultTracker);
                 return null;
         }
     }

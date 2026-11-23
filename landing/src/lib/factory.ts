@@ -1,15 +1,32 @@
-import { GITLAB_WORKFLOW_SOURCE } from './factory-templates/gitlab/source.ts';
 import aiTeammate from './factory-templates/github/ai-teammate.yml?raw';
 import machineSm from './factory-templates/github/machine-sm.yml?raw';
 import machineMerge from './factory-templates/github/machine-merge.yml?raw';
 import mergeTrigger from './factory-templates/github/merge-trigger.yml?raw';
 import smKicker from './factory-templates/github/sm-kicker.yml?raw';
+import gitlabMachineSm from './factory-templates/gitlab/machine-sm.yml?raw';
+import gitlabAiTeammate from './factory-templates/gitlab/ai-teammate.yml?raw';
+import gitlabToolchainScript from './factory-templates/gitlab/teammate-toolchains.sh?raw';
+import gitlabMergeScript from './factory-templates/gitlab/factory-merge.sh?raw';
 import faUniversal from './factory-templates/github/fa-universal.yml?raw';
 import dmtoolsConfig from './factory-templates/shared/config.js?raw';
 import runnerBug from './factory-templates/shared/runner-bug.json?raw';
 import runnerStory from './factory-templates/shared/runner-story.json?raw';
 import runnerRework from './factory-templates/shared/runner-rework.json?raw';
 import runnerReview from './factory-templates/shared/runner-review.json?raw';
+import {
+  GITLAB_QUALITY_FILE,
+  GITLAB_SCHEDULE_VARIABLE,
+  GITLAB_TOOLCHAIN_JOB,
+  GITLAB_MERGE_JOB,
+  gitlabPipelineStage,
+  renderGitlabPipeline,
+  renderGitlabQualityPipeline,
+  type GitlabCiSnapshot,
+  type GitlabQualityGate,
+} from './gitlab-ci.ts';
+
+export { GITLAB_QUALITY_FILE };
+export type { GitlabCiSnapshot };
 
 export type QualityPresetId = 'none' | 'crap4js' | 'crap4dart' | 'crap4java' | 'crap4py' | 'crap4go';
 
@@ -56,19 +73,35 @@ export interface FactoryConfig {
   repoPrivate?: boolean; // Greenfield repository visibility (default true = private)
   createLabels?: boolean; // default true: automatically create required factory labels
   machine: string; // GitHub login of the AI teammate
+  gitlabMultipleTeammates?: boolean;
+  gitlabAutoLifecycle?: boolean; // default true; review and rework legs run automatically
+  gitlabDev: string;
+  gitlabReviewer: string;
   ciEnabled?: boolean; // default true; false skips CI / quality gate
-  qualityPreset?: QualityPresetId; // default 'none'; when set to crap4*, generates .github/workflows/quality.yml
+  qualityPreset?: QualityPresetId; // default 'none'; crap4* generates a provider-specific quality gate
   ciFile: string; // e.g. unit-tests.yml
   ciName: string; // workflow display name, e.g. "Unit Tests"
   checks: string[]; // contexts the SM waits for (validation-checks / required_contexts)
   baseBranch: string; // branch the agents open PRs against
   runner: string; // runs-on label for the factory legs
+  gitlabRunnerTags?: string[]; // GitLab job tags for every factory job; empty uses the project's default runners
   toolchains: Partial<Record<ToolchainId, string>>; // selected toolchain -> version
   providers: ProvidersConfig;
   merge: MergeIdentity;
   faUniversal?: boolean; // default true: generate .github/workflows/fa-universal.yml (@fa interactive agent)
   faMemory?: boolean; // default true: generate .fah/config.yaml & persist repo memory under .fah/memory
 }
+
+export const GITLAB_WORKFLOW_SOURCE = {
+  repository: 'IstiN/dmtools-agentic-workflows',
+  ref: 'feat/gitlab-agent-workflows',
+} as const;
+
+/** Immutable dmtools-agentic-workflows commit pinned by the GitLab machine SM / teammate includes. */
+export const GITLAB_FACTORY_HOME_REF = 'd2f9002657abb56fc4f8bbeb62819b8811118ab3';
+
+/** Immutable dmtools-agentic-workflows commit that provides the shared GitLab CRAP quality gates. */
+export const GITLAB_QUALITY_HOME_REF = 'e941f06e61ef5ad863084cd1724a8f939e59be38';
 
 /** Who merges machine PRs: the factory PAT, a separate PAT, or a GitHub App (job-scoped token). */
 export interface MergeIdentity {
@@ -142,6 +175,20 @@ export const TOOLCHAINS: Toolchain[] = [
 
 export const RUNNERS = ['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04', 'ubuntu-slim', 'macos-latest', 'windows-latest'];
 
+/** GitLab.com hosted Linux runner tags; an empty tag list keeps the project's default runners. */
+export const GITLAB_RUNNER_TAGS = [
+  'saas-linux-small-amd64',
+  'saas-linux-medium-amd64',
+  'saas-linux-large-amd64',
+  'saas-linux-xlarge-amd64',
+  'saas-linux-2xlarge-amd64',
+  'saas-linux-small-arm64',
+  'saas-linux-medium-arm64',
+  'saas-linux-large-arm64',
+];
+
+export const defaultMergeTokenSecret = (scm: ScmId): string => scm === 'gitlab' ? 'GITLAB_MERGE_TOKEN' : 'MERGE_GITHUB_TOKEN';
+
 export interface ScmOption { id: 'github' | 'gitlab'; label: string; available: boolean }
 export type ScmId = ScmOption['id'];
 export const SCM: ScmOption[] = [
@@ -160,6 +207,10 @@ export const defaults: FactoryConfig = {
   repoPrivate: true,
   createLabels: true,
   machine: 'ai-teammate',
+  gitlabMultipleTeammates: false,
+  gitlabAutoLifecycle: true,
+  gitlabDev: 'ai-dev',
+  gitlabReviewer: 'ai-reviewer',
   ciEnabled: true,
   qualityPreset: 'none',
   ciFile: 'ci.yml',
@@ -167,6 +218,7 @@ export const defaults: FactoryConfig = {
   checks: ['test'],
   baseBranch: 'main',
   runner: 'ubuntu-latest',
+  gitlabRunnerTags: [],
   toolchains: {},
   merge: { mode: 'factory', tokenSecret: 'MERGE_GITHUB_TOKEN' },
   providers: { mode: 'default', entries: [newEntry('copilot')], reviewSeparate: false, reviewEntries: [newEntry('copilot')] },
@@ -178,6 +230,7 @@ const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const GITLAB_LOGIN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const GITLAB_REPO = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/;
+const GITLAB_RUNNER_TAG = /^[\w.:/-]{1,255}$/;
 
 export function isCiEnabled(c: FactoryConfig): boolean {
   return c.ciEnabled !== false;
@@ -196,13 +249,24 @@ export function validate(c: FactoryConfig, scm: ScmId = 'github'): Record<string
   if (!(scm === 'gitlab' ? GITLAB_REPO : REPO).test(c.repo)) {
     e.repo = scm === 'gitlab' ? 'Use group/project' : 'Use owner/name';
   }
-  if (!(scm === 'gitlab' ? GITLAB_LOGIN : LOGIN).test(c.machine)) {
+  if (scm === 'gitlab' && c.gitlabMultipleTeammates) {
+    if (!GITLAB_LOGIN.test(c.gitlabDev)) e.gitlabDev = 'Not a valid GitLab username';
+    if (!GITLAB_LOGIN.test(c.gitlabReviewer)) e.gitlabReviewer = 'Not a valid GitLab username';
+    else if (c.gitlabDev.toLowerCase() === c.gitlabReviewer.toLowerCase()) {
+      e.gitlabReviewer = 'Use different development and reviewer accounts';
+    }
+  } else if (!(scm === 'gitlab' ? GITLAB_LOGIN : LOGIN).test(c.machine)) {
     e.machine = scm === 'gitlab' ? 'Not a valid GitLab username' : 'Not a valid GitHub login';
   }
-  if (isCiEnabled(c)) {
+  if (scm === 'github' && isCiEnabled(c)) {
     if (!/^[\w.-]+\.ya?ml$/.test(c.ciFile)) e.ciFile = 'Workflow file name, e.g. ci.yml';
     if (!c.ciName.trim() || /['"\n]/.test(c.ciName)) e.ciName = 'Workflow display name (no quotes)';
     if (!c.checks.length || c.checks.some((x) => !x.trim() || /['",\n]/.test(x))) e.checks = 'At least one check name (no quotes or commas)';
+  }
+  const gitlabNodeVersion = c.toolchains.node?.match(/^(\d+)/);
+  if (scm === 'gitlab' && isCiEnabled(c) && c.qualityPreset === 'crap4js' &&
+      gitlabNodeVersion && Number(gitlabNodeVersion[1]) < 22) {
+    e.qualityVersion = 'The GitLab JavaScript quality analyzer requires Node.js 22 or newer.';
   }
   const entries = allEntries(c);
   if (!entries.length) e.providers = 'Add at least one provider';
@@ -210,9 +274,17 @@ export function validate(c: FactoryConfig, scm: ScmId = 'github'): Record<string
   else if (entries.some((x) => !/^[A-Z][A-Z0-9_]*$/.test(x.keyEnv))) e.providers = 'Key name: UPPER_SNAKE_CASE';
   else if (entries.some((x) => !/^https?:\/\/\S+$/.test(x.baseUrl))) e.providers = 'Base URL must start with http:// or https://';
   else if (keySlots(c).length > 3) e.providers = 'At most 3 distinct API keys (factory key slots)';
-  if (c.merge.mode === 'token' && !/^[A-Z][A-Z0-9_]*$/.test(c.merge.tokenSecret)) e.merge = 'Secret name: UPPER_SNAKE_CASE';
+  if (c.merge.mode === 'token' && !/^[A-Z][A-Z0-9_]*$/.test(c.merge.tokenSecret)) {
+    e.merge = scm === 'gitlab' ? 'Variable name: UPPER_SNAKE_CASE' : 'Secret name: UPPER_SNAKE_CASE';
+  }
+  if (scm === 'gitlab' && c.merge.mode === 'app') e.merge = 'GitHub Apps are not available on GitLab; use a separate token';
   if (!/^[\w./-]+$/.test(c.baseBranch) || c.baseBranch.includes('..')) e.baseBranch = 'Branch name, e.g. main';
-  if (!/^[\w.-]+$/.test(c.runner)) e.runner = 'Runner label, e.g. ubuntu-latest';
+  if (scm === 'gitlab') {
+    const tags = c.gitlabRunnerTags ?? [];
+    if (tags.length > 10 || tags.some((tag) => !GITLAB_RUNNER_TAG.test(tag)) || new Set(tags).size !== tags.length) {
+      e.runner = 'Distinct runner tags (letters, digits, . _ : / -), comma-separated';
+    }
+  } else if (!/^[\w.-]+$/.test(c.runner)) e.runner = 'Runner label, e.g. ubuntu-latest';
   return e;
 }
 
@@ -241,16 +313,102 @@ function providerEnv(list: ProviderEntry[], mode: 'default' | 'queue'): Record<s
   return env;
 }
 
+type GitlabRunnerFlow = 'lifecycle' | 'teammate';
+
+const GITLAB_TEAMMATE_DEV_PROMPT =
+  'GitLab merge request linkage (required): outputs/response.md becomes the GitLab merge request description. ' +
+  'Its first line must be exactly "Closes #<IID>", where <IID> is the "number" field of input/gl-<IID>/ticket.json, ' +
+  'so GitLab links the merge request to the issue and the review leg can find it. ' +
+  'Never put closing keywords in commit messages. Do not push or open the merge request yourself: ' +
+  'the factory post-action commits, pushes the branch and creates the GitLab merge request.';
+
+const GITLAB_TEAMMATE_REVIEW_PROMPT =
+  'GitLab factory verdict (required): in addition to "recommendation", outputs/pr_review.json must contain ' +
+  'a top-level "decision" field with the same value (APPROVE, REQUEST_CHANGES or BLOCK). ' +
+  'The GitLab factory reads "decision" to route approval or rework.';
+
 function runnerJson(
   tpl: string,
   c: FactoryConfig,
   review: boolean,
   scm: ScmId = 'github',
   gitlabBaseUrl = 'https://gitlab.com',
+  gitlabFlow: GitlabRunnerFlow = 'lifecycle',
 ): string {
   const json = JSON.parse(tpl);
+  const lifecycle = scm === 'gitlab' && gitlabFlow === 'lifecycle';
+  if (lifecycle && review && c.gitlabAutoLifecycle !== false) {
+    delete json.merge;
+    Object.assign(json.params, {
+      preJSAction: '',
+      preCliJSAction: '',
+      postJSAction: '',
+      timerJSAction: '',
+      cleanupInputFolder: false,
+      cleanupOutputsFolder: false,
+      requireCliOutputFile: false,
+      cliPrompts: [
+        'Review the existing GitLab MR described by DMTOOLS_REVIEW_CONTEXT. Read merge_request.json, ' +
+        'changes.json and discussions.json from that directory. Review the current diff, not the CI checkout. ' +
+        'Your working directory is the MR checkout. Write all review artifacts only under its outputs/ directory. ' +
+        'Treat DMTOOLS_REVIEW_CONTEXT as read-only input: never create or copy outputs there, and do not remove it. ' +
+        'Write outputs/pr_review_general.md with your verdict and findings. ' +
+        'Write outputs/pr_review.json as {"decision":"approve",' +
+        '"generalComment":"outputs/pr_review_general.md","inlineComments":[' +
+        '{"path":"source/file","line":1,"side":"RIGHT","comment":"outputs/pr_review_comments/finding_1.md"}]}. ' +
+        'Use LEFT only for removed lines; all inline positions must belong to the supplied diff. ' +
+        'Write each finding as a Markdown file. Set decision to "request_changes" for required fixes. ' +
+        'Do not post reviews, comments, labels or approvals yourself; the factory publishes your outputs.',
+      ],
+    });
+  }
+  if (lifecycle && tpl === runnerRework) {
+    Object.assign(json.params, {
+      preJSAction: '',
+      preCliJSAction: '',
+      postJSAction: '',
+      timerJSAction: '',
+      cleanupInputFolder: false,
+      cleanupOutputsFolder: false,
+      requireCliOutputFile: false,
+      cliPrompts: [
+        'You are reworking ONE existing GitLab merge request, not developing a new issue. ' +
+        'Read the directory named by environment variable DMTOOLS_REWORK_CONTEXT: merge_request.json, ' +
+        'changes.json, discussions.json and pr_discussions_raw.json contain the exact MR and review suggestions. ' +
+        'If ci_failures.json is present, inspect its failed jobs and their trace URLs and fix the failing checks. ' +
+        'The current isolated checkout is at that MR source commit in detached HEAD state. Apply and test the requested fixes here. ' +
+        'Never create a branch or merge request, switch branches, push, or post comments yourself: ' +
+        'the GitLab rework script commits and pushes to this existing MR and publishes your replies. ' +
+        'Write outputs/response.md with a factual fix/test summary. If blocked, start it with BLOCKED:. ' +
+        'Write outputs/review_replies.json as {"replies":[{"threadId":"<original threadId>",' +
+        '"inReplyToId":123,"reply":"outputs/review_replies/thread_1.md"}]}. ' +
+        'Copy threadId and rootCommentId from each open thread in pr_discussions_raw.json; ' +
+        'rootCommentId becomes inReplyToId. Write a targeted Markdown reply file for EVERY open thread, ' +
+        'explaining the fix or why a suggestion was not applied. With no open threads write {"replies":[]}.',
+      ],
+    });
+  }
   const list = review && c.providers.reviewSeparate ? c.providers.reviewEntries : c.providers.entries;
   if (json.params.customParams?.targetRepository) json.params.customParams.targetRepository.baseBranch = c.baseBranch;
+  if (scm === 'gitlab' && gitlabFlow === 'teammate') {
+    // Like GitHub, the pack's own pre/post actions branch, commit, push and publish; they select
+    // the forge (PR vs MR APIs) only via customParams.scmProvider, which defaults to GitHub.
+    json.params.customParams = {
+      ...json.params.customParams,
+      scmProvider: 'gitlab',
+      targetRepository: {
+        ...json.params.customParams?.targetRepository,
+        workingDir: '.',
+        baseBranch: c.baseBranch,
+        owner: c.repo.split('/').slice(0, -1).join('/'),
+        repo: c.repo.split('/').at(-1) ?? '',
+      },
+    };
+    const prompts = tpl === runnerBug || tpl === runnerStory
+      ? [GITLAB_TEAMMATE_DEV_PROMPT]
+      : review ? [GITLAB_TEAMMATE_REVIEW_PROMPT] : [];
+    if (prompts.length) json.params.cliPrompts = [...(json.params.cliPrompts ?? []), ...prompts];
+  }
   json.params.envVariables = {
     ...(scm === 'gitlab'
       ? {
@@ -586,20 +744,117 @@ export function renderFiles(c: FactoryConfig): FactoryFile[] {
   ];
 }
 
-export { GITLAB_WORKFLOW_SOURCE };
+export function renderGitlabMachineSmFiles(
+  c: FactoryConfig,
+  gitlabBaseUrl = 'https://gitlab.com',
+  snapshot?: GitlabCiSnapshot,
+): FactoryFile[] {
+  const qualityVersionError = validate(c, 'gitlab').qualityVersion;
+  if (qualityVersionError) throw new Error(qualityVersionError);
+  const machineAuthor = c.gitlabMultipleTeammates ? c.gitlabDev : c.machine;
+  const stage = gitlabPipelineStage(snapshot);
+  const runnerError = validate(c, 'gitlab').runner;
+  if (runnerError) throw new Error(`Invalid GitLab runner tags: ${runnerError}`);
+  const mergeError = validate(c, 'gitlab').merge;
+  if (mergeError) throw new Error(mergeError);
+  const tags = c.gitlabRunnerTags ?? [];
+  const render = (template: string) => template
+    .replace(/^@@GITLAB_RUNNER_TAGS@@\n/gm, gitlabTagsYaml(tags))
+    .replaceAll('@@FACTORY_HOME_REF@@', GITLAB_FACTORY_HOME_REF)
+    .replaceAll('@@MACHINE_AUTHOR@@', machineAuthor)
+    .replaceAll('@@GITLAB_TEAMMATES@@', c.gitlabMultipleTeammates ? 'multiple' : 'single')
+    .replaceAll('@@GITLAB_STAGE@@', JSON.stringify(stage))
+    .replace(/^@@GITLAB_REVIEWER_HANDLE_VARIABLE@@\n/gm, c.gitlabMultipleTeammates
+      ? `    GITLAB_REVIEWER_HANDLE: "${c.gitlabReviewer}"\n`
+      : '');
+  const runnerConfig = { ...c, machine: machineAuthor };
+  const quality = gitlabQualityGate(c);
+  const toolchains = gitlabTeammateToolchains(c);
+  const renderTeammate = (template: string) => render(template)
+    .replaceAll('@@GITLAB_JAVA_VERSION@@', toolchains.java)
+    .replace(/^@@GITLAB_TOOLCHAIN_JOB@@\n/m, toolchains.job)
+    .replace(/^@@GITLAB_TOOLCHAIN_BEFORE_SCRIPT@@\n/gm, toolchains.beforeScript)
+    .replace(/^@@GITLAB_MERGE_VARIABLES@@\n/m, gitlabMergeVariables(c))
+    .replace(/^@@GITLAB_MERGE_TOKEN_SCRIPT@@\n/m, c.merge.mode === 'token'
+      ? ''
+      : '    - !reference [.factory-teammate-use-dev-token, script]\n')
+    .replace(/^@@GITLAB_MERGE_SCRIPT@@\n/m, () => indent(gitlabMergeScript, 6));
+  return [
+    {
+      path: snapshot?.path ?? '.gitlab-ci.yml',
+      content: renderGitlabPipeline(render(gitlabMachineSm), snapshot, Boolean(quality)),
+    },
+    { path: 'ai-teammate.yml', content: renderTeammate(gitlabAiTeammate) },
+    { path: '.dmtools/config.js', content: fill(dmtoolsConfig, runnerConfig) },
+    { path: '.dmtools/runners/fa-bug-dev.json', content: runnerJson(runnerBug, runnerConfig, false, 'gitlab', gitlabBaseUrl, 'teammate') },
+    { path: '.dmtools/runners/fa-story-dev.json', content: runnerJson(runnerStory, runnerConfig, false, 'gitlab', gitlabBaseUrl, 'teammate') },
+    { path: '.dmtools/runners/fa-review.json', content: runnerJson(runnerReview, runnerConfig, true, 'gitlab', gitlabBaseUrl, 'teammate') },
+    { path: '.dmtools/runners/fa-rework.json', content: runnerJson(runnerRework, runnerConfig, false, 'gitlab', gitlabBaseUrl, 'teammate') },
+    ...(quality ? [{ path: GITLAB_QUALITY_FILE, content: renderGitlabQualityPipeline(quality, stage, tags) }] : []),
+  ];
+}
+
+function gitlabTagsYaml(tags: string[]): string {
+  return tags.length ? `  tags:\n${tags.map((tag) => `    - ${JSON.stringify(tag)}\n`).join('')}` : '';
+}
+
+function gitlabMergeVariables(c: FactoryConfig): string {
+  if (c.merge.mode === 'token') {
+    return `    DMTOOLS_MERGE_TOKEN: "$${c.merge.tokenSecret}"\n    DMTOOLS_MERGE_TOKEN_NAME: "${c.merge.tokenSecret}"\n`;
+  }
+  return `    DMTOOLS_MERGE_TOKEN_NAME: "${c.gitlabMultipleTeammates ? 'GITLAB_DEV_TOKEN' : 'GITLAB_TOKEN'}"\n`;
+}
+
+function indent(text: string, spaces: number): string {
+  return text.trimEnd().split('\n').map((line) => (line ? `${' '.repeat(spaces)}${line}` : '')).join('\n') + '\n';
+}
+
+/** Java selects the teammate image; other selected SDKs are installed after the parent before_script. */
+function gitlabTeammateToolchains(c: FactoryConfig): { java: string; job: string; beforeScript: string } {
+  for (const tool of TOOLCHAINS) {
+    const version = c.toolchains[tool.id];
+    if (version !== undefined && !tool.versions.includes(version)) {
+      throw new Error(`Unsupported ${tool.label} version for GitLab agent toolchains: ${version}`);
+    }
+  }
+  const java = c.toolchains.java ?? '21';
+  const installed = (['node', 'python', 'go', 'flutter'] as const).filter((id) => c.toolchains[id] !== undefined);
+  if (!installed.length) return { java, job: '', beforeScript: '' };
+  const versions = (['node', 'python', 'go', 'flutter'] as const)
+    .map((id) => `DMTOOLS_${id.toUpperCase()}_VERSION="${c.toolchains[id] ?? ''}"`)
+    .join('\n');
+  const script = indent(`${versions}\n${gitlabToolchainScript}`, 6).trimEnd();
+  return {
+    java,
+    job: `\n# Agent toolchains selected in the factory setup.\n${GITLAB_TOOLCHAIN_JOB}:\n  script:\n    - |\n${script}\n`,
+    beforeScript: `  before_script:\n    - !reference [.factory-teammate, before_script]\n    - !reference [${GITLAB_TOOLCHAIN_JOB}, script]\n`,
+  };
+}
 
 export const GITLAB_TEMPLATE_NAMES = [
   'gitlab-ci.yml',
   'gitlab-factory-poll-issues.sh',
   'gitlab-factory-publish-review.sh',
-  'gitlab-quality-crap4js.yml',
-  'gitlab-quality-crap4dart.yml',
-  'gitlab-quality-crap4java.yml',
-  'gitlab-quality-crap4py.yml',
-  'gitlab-quality-crap4go.yml',
+  'gitlab-auto-ci.yml',
+  'gitlab-factory-common.sh',
+  'gitlab-factory-job.sh',
+  'gitlab-factory-lifecycle.sh',
+  'gitlab-factory-intake.sh',
+  'gitlab-factory-rework.sh',
+  'gitlab-factory-select-teammate.sh',
 ] as const;
 
 export type GitlabTemplates = Record<typeof GITLAB_TEMPLATE_NAMES[number], string>;
+
+const GITLAB_MANAGED_FILES = new Set([
+  'ai-teammate.yml',
+  GITLAB_QUALITY_FILE,
+  '.dmtools/config.js',
+  '.dmtools/runners/fa-bug-dev.json',
+  '.dmtools/runners/fa-story-dev.json',
+  '.dmtools/runners/fa-review.json',
+  '.dmtools/runners/fa-rework.json',
+]);
 
 export async function loadGitlabTemplates(signal?: AbortSignal): Promise<GitlabTemplates> {
   const { repository, ref } = GITLAB_WORKFLOW_SOURCE;
@@ -618,27 +873,62 @@ export async function loadGitlabTemplates(signal?: AbortSignal): Promise<GitlabT
   return Object.fromEntries(entries) as GitlabTemplates;
 }
 
-function renderGitlabQualityJob(c: FactoryConfig, templates: GitlabTemplates): string | null {
+function gitlabQualityGate(c: FactoryConfig): GitlabQualityGate | null {
   if (!isCiEnabled(c)) return null;
   const preset = c.qualityPreset ?? 'none';
   if (preset === 'none') return null;
-  const jobs = {
-    crap4js: { template: templates['gitlab-quality-crap4js.yml'], version: c.toolchains.node || '22' },
-    crap4dart: { template: templates['gitlab-quality-crap4dart.yml'], version: c.toolchains.flutter || 'stable' },
-    crap4java: { template: templates['gitlab-quality-crap4java.yml'], version: c.toolchains.java || '21' },
-    crap4py: { template: templates['gitlab-quality-crap4py.yml'], version: c.toolchains.python || '3.12' },
-    crap4go: { template: templates['gitlab-quality-crap4go.yml'], version: c.toolchains.go || '1.23' },
+  const gates = {
+    crap4js: { version: c.toolchains.node || '22', image: (v: string) => `node:${v}` },
+    // Official Flutter releases track the current Dart SDK; third-party Flutter images can lag behind it.
+    crap4dart: { version: c.toolchains.flutter || 'stable', image: () => 'ubuntu:24.04' },
+    crap4java: { version: c.toolchains.java || '21', image: (v: string) => `eclipse-temurin:${v}-jdk` },
+    crap4py: { version: c.toolchains.python || '3.12', image: (v: string) => `python:${v}` },
+    crap4go: { version: c.toolchains.go || '1.23', image: (v: string) => `golang:${v}` },
   };
-  const job = jobs[preset];
-  return job.template.replaceAll('@@VERSION@@', job.version);
+  const gate = gates[preset];
+  if (!gate) throw new Error(`Unknown GitLab quality preset: ${preset}`);
+  if (!/^[\w.-]+$/.test(gate.version)) throw new Error(`Invalid GitLab quality toolchain version: ${gate.version}`);
+  const variables: Record<string, string> = {};
+  if (preset === 'crap4dart') {
+    variables.DMTOOLS_QUALITY_FLUTTER_VERSION = gate.version;
+    if (c.gitlabAutoLifecycle === false) variables.DMTOOLS_QUALITY_FLUTTER_COMMANDS = 'false';
+  }
+  return { preset, image: gate.image(gate.version), variables, ref: GITLAB_QUALITY_HOME_REF };
+}
+
+function replaceGitlabAnchor(content: string, anchor: string, replacement: string): string {
+  if (!content.includes(anchor)) {
+    throw new Error(`GitLab parent template is incompatible with factory setup: missing ${anchor.trim()}`);
+  }
+  return content.replaceAll(anchor, replacement);
 }
 
 /** GitLab projects use native GitLab CI jobs; GitHub Actions files are intentionally omitted. */
 export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, gitlabBaseUrl = 'https://gitlab.com'): FactoryFile[] {
+  if (c.gitlabMultipleTeammates) {
+    const errors = validate(c, 'gitlab');
+    if (errors.gitlabDev || errors.gitlabReviewer) {
+      throw new Error(errors.gitlabDev || errors.gitlabReviewer);
+    }
+    c = { ...c, machine: c.gitlabDev };
+  }
   const files = renderFiles(c).filter(
     (file) => !file.path.startsWith('.github/'),
   );
-  const qualityJob = renderGitlabQualityJob(c, templates);
+  const quality = gitlabQualityGate(c);
+  const qualityRules = c.gitlabAutoLifecycle === false
+    ? undefined
+    : [
+      { if: '$CI_PIPELINE_SOURCE == "api" && $DMTOOLS_FACTORY_PHASE == "validation"' },
+      { if: '$CI_PIPELINE_SOURCE == "merge_request_event"' },
+    ];
+  const qualityAfterScript = c.gitlabAutoLifecycle === false
+    ? undefined
+    : [
+      'if [ "$CI_PIPELINE_SOURCE" = api ] && [ "${DMTOOLS_FACTORY_PHASE:-}" = validation ]; then\n' +
+        '  bash .dmtools/scripts/gitlab-factory-lifecycle.sh wake\n' +
+        'fi',
+    ];
   const runnerTemplates: Record<string, string> = {
     '.dmtools/runners/fa-bug-dev.json': runnerBug,
     '.dmtools/runners/fa-story-dev.json': runnerStory,
@@ -665,11 +955,132 @@ export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, 
     {
       path: '.gitlab-ci.yml',
       content: templates['gitlab-ci.yml']
-        .replace(/^  - quality\n/m, (stage) => qualityJob ? stage : '')
-        .replaceAll('@@QUALITY_JOB@@', qualityJob ?? '')
+        .replace(/^  - quality\n/m, (stage) => quality ? stage : '')
+        .replaceAll('@@QUALITY_JOB@@', quality ? `include:\n  - local: ${GITLAB_QUALITY_FILE}\n` : '')
         .replaceAll('@@MACHINE@@', c.machine),
     },
+    ...(quality ? [{
+      path: GITLAB_QUALITY_FILE,
+      content: renderGitlabQualityPipeline(quality, 'quality', [], {
+        rules: qualityRules,
+        afterScript: qualityAfterScript,
+      }),
+    }] : []),
   ];
+  if (c.gitlabMultipleTeammates) {
+    const selector = '.dmtools/scripts/gitlab-factory-select-teammate.sh';
+    for (const file of rendered) {
+      if (file.path === '.gitlab-ci.yml') {
+        for (const job of ['poll-assigned-issues', 'ai-teammate', 'review-merge-request', 'rework-merge-request', 'merge-approved-merge-request']) {
+          const anchor = `${job}:\n  stage:`;
+          file.content = replaceGitlabAnchor(file.content, anchor,
+            `${job}:\n  variables:\n    GITLAB_TOKEN: "$${job === 'review-merge-request' || job === 'merge-approved-merge-request' ? 'GITLAB_REVIEWER_TOKEN' : 'GITLAB_DEV_TOKEN'}"\n  stage:`);
+        }
+        file.content = replaceGitlabAnchor(file.content,
+          '      dmtools run "$DMTOOLS_AGENT_CONFIG"',
+          `      . ${selector}\n      select_gitlab_teammate "$DMTOOLS_AGENT_CONFIG"\n      dmtools run "$DMTOOLS_AGENT_CONFIG"`);
+      } else if (file.path.endsWith('gitlab-factory-poll-issues.sh')) {
+        file.content = replaceGitlabAnchor(file.content, 'set -Eeuo pipefail\n',
+          `set -Eeuo pipefail\n\n. ${selector}\nselect_gitlab_teammate dev\n`);
+        file.content = replaceGitlabAnchor(file.content, '    run_agent "$config"',
+          '    select_gitlab_teammate "$config"\n    run_agent "$config"');
+        file.content = replaceGitlabAnchor(file.content, '        current_issue="!$iid"\n',
+          '        select_gitlab_teammate merge\n        current_issue="!$iid"\n');
+      }
+    }
+    rendered.push({ path: selector, content: templates['gitlab-factory-select-teammate.sh'] });
+  }
+  const reworkCommand = 'bash .dmtools/scripts/gitlab-factory-rework.sh';
+  for (const file of rendered) {
+    if (file.path === '.gitlab-ci.yml') {
+      file.content = replaceGitlabAnchor(file.content,
+        'dmtools run .dmtools/runners/fa-rework.json --inputTicketId "$CI_MERGE_REQUEST_IID"',
+        `${reworkCommand} "$CI_MERGE_REQUEST_IID"`);
+      file.content = replaceGitlabAnchor(file.content,
+        '      dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"',
+        `      if [ "$DMTOOLS_AGENT_CONFIG" = '.dmtools/runners/fa-rework.json' ]; then
+        ${reworkCommand} "$DMTOOLS_TICKET_ID"
+      else
+        dmtools run "$DMTOOLS_AGENT_CONFIG" --inputTicketId "$DMTOOLS_TICKET_ID"
+      fi`);
+    } else if (file.path.endsWith('gitlab-factory-poll-issues.sh')) {
+      file.content = replaceGitlabAnchor(file.content,
+        `    run_agent "$config" --inputTicketId "$iid"
+    if [ "$trigger" != 'agent:review' ]; then
+      publish_issue_changes "$iid" "$base_sha"`,
+        `    if [ "$trigger" = 'agent:rework' ]; then
+      related_merge_requests=$(gitlab_api GET "$CI_API_V4_URL/projects/$CI_PROJECT_ID/issues/$iid/related_merge_requests" \\
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN")
+      mr_iid=$(printf '%s' "$related_merge_requests" | jq -er '
+        [.[] | select(.state == "opened")]
+        | if length == 1 then .[0].iid
+          elif length == 0 then error("rework requires an existing open merge request linked to the issue")
+          else error("multiple open merge requests are linked to the issue; cannot choose rework target safely")
+          end
+      ')
+      ${reworkCommand} "$mr_iid"
+    elif [ "$trigger" != 'agent:review' ]; then
+      run_agent "$config" --inputTicketId "$iid"
+      publish_issue_changes "$iid" "$base_sha"`);
+      file.content = replaceGitlabAnchor(file.content,
+        '    else\n      related_merge_requests=',
+        '    else\n      run_agent "$config" --inputTicketId "$iid"\n      related_merge_requests=');
+      file.content = replaceGitlabAnchor(file.content,
+        '    run_agent "$config" --inputTicketId "$iid"\n    gitlab_api PUT',
+        `    if [ "$trigger" = 'agent:rework' ]; then
+      ${reworkCommand} "$iid"
+    else
+      run_agent "$config" --inputTicketId "$iid"
+    fi
+    gitlab_api PUT`);
+    }
+  }
+  rendered.push({ path: '.dmtools/scripts/gitlab-factory-rework.sh', content: templates['gitlab-factory-rework.sh'] });
+  if (c.gitlabAutoLifecycle !== false) {
+    const poller = rendered.find((file) => file.path.endsWith('gitlab-factory-poll-issues.sh'))!;
+    const functionsEnd = poller.content.indexOf('\npage=1\n');
+    if (functionsEnd < 0) throw new Error('GitLab parent poller is missing its intake boundary.');
+    let functions = poller.content.slice(0, functionsEnd);
+    const webhookStart = functions.indexOf("webhook_issue_iid=''");
+    const webhookEnd = functions.indexOf('log_safe()');
+    if (webhookStart < 0 || webhookEnd < webhookStart) {
+      throw new Error('GitLab parent poller is missing its webhook boundary.');
+    }
+    functions = functions.slice(0, webhookStart) + functions.slice(webhookEnd);
+    functions = functions.replace('git status --porcelain --untracked-files=all',
+      "git status --porcelain --untracked-files=all -- . ':!input' ':!outputs' ':!logs'")
+      .replace('  git add -A\n', "  git add -A -- . ':!input' ':!outputs' ':!logs'\n");
+    functions = replaceGitlabAnchor(functions,
+      `  if [ "$status" -ne 0 ]; then
+    rm -f "$output_file"
+    return "$status"
+  fi`,
+      `  if [ "$status" -ne 0 ]; then
+    if grep -Fq 'rmdir: failed to remove ' "$output_file" &&
+      grep -Fq 'Directory not empty' "$output_file" &&
+      grep -Fq 'Agent completed with exit code: 0' "$output_file" &&
+      ! grep -Eq 'Agent completed with exit code: [1-9][0-9]*|CLI command executed but did not produce output file:' "$output_file"; then
+      echo "Ignoring temporary-directory cleanup failure after successful agent completion." >&2
+      status=0
+    else
+      rm -f "$output_file"
+      return "$status"
+    fi
+  fi`);
+    functions = replaceGitlabAnchor(functions, '  echo "Created GitLab merge request: $mr_url"',
+      '  printf \'%s\' "$mr_response" | jq -er \'.iid | numbers\' > "${DMTOOLS_FACTORY_MR_FILE:?Missing MR result file}"\n' +
+      '  echo "Created GitLab merge request: $mr_url"');
+    poller.content = functions + '\n' + templates['gitlab-factory-intake.sh'];
+    const pipeline = rendered.find((file) => file.path === '.gitlab-ci.yml')!;
+    pipeline.content = templates['gitlab-auto-ci.yml']
+      .replaceAll('@@QUALITY_JOB@@', quality ? `include:\n  - local: ${GITLAB_QUALITY_FILE}\n` : '')
+      .replace('  - quality\n', quality ? '  - quality\n' : '');
+    rendered.push(
+      { path: '.dmtools/scripts/gitlab-factory-common.sh', content: templates['gitlab-factory-common.sh'] },
+      { path: '.dmtools/scripts/gitlab-factory-job.sh', content: templates['gitlab-factory-job.sh'] },
+      { path: '.dmtools/scripts/gitlab-factory-lifecycle.sh', content: templates['gitlab-factory-lifecycle.sh'].replaceAll('@@VALIDATION_ENABLED@@', quality ? 'true' : 'false') },
+    );
+  }
   for (const file of rendered) {
     if (/@@[A-Z_]+@@/.test(file.content)) {
       throw new Error(`Unresolved GitLab template placeholder in ${file.path}. Check the parent workflow templates.`);
@@ -678,6 +1089,12 @@ export function renderGitlabFiles(c: FactoryConfig, templates: GitlabTemplates, 
   return rendered;
 }
 
+function gitlabMergeChecklist(c: FactoryConfig): string {
+  if (c.merge.mode === 'token') {
+    return `- [ ] Masked variable \`${c.merge.tokenSecret}\` (project/group access token or PAT with api scope, allowed to merge into the default branch)\n`;
+  }
+  return `- [ ] Allow the factory account to merge into the default branch (protected branch: Developers + Maintainers, or add the account).\n`;
+}
 function mergeChecklist(c: FactoryConfig): string {
   if (c.merge.mode === 'token') return `- [ ] Secret \`${c.merge.tokenSecret}\` (PAT of the merge account; repo scope, allowed to merge into the protected branch)\n`;
   if (c.merge.mode === 'app') return '- [ ] GitHub App installed on this repository (Contents, Pull requests, Issues: read & write; Checks: read) and allowed to bypass/merge in the branch ruleset\n- [ ] Secrets `MERGE_APP_ID` and `MERGE_APP_PRIVATE_KEY` (App id + generated private key PEM)\n';
@@ -705,6 +1122,36 @@ ${c.createLabels !== false
 ${ciChecklist(c)}${isFaUniversalEnabled(c) ? `- [x] **FA Universal Agent** (\`.github/workflows/fa-universal.yml\`): mention \`@fa\` in any Issue or PR comment to invoke the interactive agent (single-queue session on \`fa-sess/<session_key>\`)\n` : ''}${isFaMemoryEnabled(c) ? `- [x] **Project Memory** (\`.fah/config.yaml\` → \`.fah/memory\`): durable agent knowledge persisted in the repository\n` : ''}- [ ] Optional repo variables \`AGENTS_VERSION\` / \`DMTOOLS_VERSION\` (default \`latest\`) — pin agent packs / CLI to a release tag
 
 Smoke test: assign an issue to \`${c.machine}\`${isFaUniversalEnabled(c) ? `, mention \`@fa\` in any issue/PR comment,` : ''} or dispatch **AI Teammate** with leg=dev.`;
+}
+
+export function gitlabPrBody(c: FactoryConfig, ciPath = '.gitlab-ci.yml'): string {
+  const gate = isCiEnabled(c) && c.qualityPreset && c.qualityPreset !== 'none'
+    ? `Adds the \`${c.qualityPreset}\` job in \`${GITLAB_QUALITY_FILE}\` to merge-request pipelines.`
+    : 'No quality job is generated; existing merge-request pipelines are still observed.';
+  const installed = TOOLCHAINS.filter((t) => t.id !== 'java' && c.toolchains[t.id] !== undefined)
+    .map((t) => `${t.label} ${c.toolchains[t.id]}`);
+  const runners = c.gitlabRunnerTags?.length
+    ? `Factory jobs run on GitLab runners tagged ${c.gitlabRunnerTags.map((t) => `\`${t}\``).join(', ')}.`
+    : 'Factory jobs run on the project\'s default GitLab runners (no tags).';
+  const mergeIdentity = c.merge.mode === 'token'
+    ? `the \`${c.merge.tokenSecret}\` token`
+    : `the factory token (\`${c.gitlabMultipleTeammates ? 'GITLAB_DEV_TOKEN' : 'GITLAB_TOKEN'}\`)`;
+  const toolchains = `Teammate jobs run on \`eclipse-temurin:${c.toolchains.java ?? '21'}-jdk\`${installed.length ? ` and install ${installed.join(', ')}` : ''}.`;
+  return `Sets up the DMTools GitLab factory for \`${c.repo}\` using shared parent workflows.
+
+The existing \`${ciPath}\` jobs and includes are preserved. ${gate}
+${toolchains}
+${runners}
+The \`${GITLAB_MERGE_JOB}\` merge bot runs on the factory schedule and merges (squashing unless the project disables squash) MRs labelled \`pr_approved\` and \`ai_validated\` once their current head pipeline is green, GitLab reports them mergeable, and the approval is newer than the head commit. It merges with ${mergeIdentity}.
+The factory observes the entire pipeline for the current MR head, not individual job names. Ensure the project's CI jobs run in merge-request pipelines; without a head pipeline, the factory cannot mark the MR validated.
+
+## Owner checklist
+- [ ] Configure the required masked GitLab and AI provider variables.
+- [ ] Review the generated CI configuration and confirm all required jobs run in merge-request pipelines.
+- [ ] Confirm the DMTools factory schedule runs on the default branch every 10 minutes.
+${gitlabMergeChecklist(c)}- [ ] Review and merge this setup request.
+
+Run the teammate manually on the default branch with exactly one \`FACTORY_ISSUE\` or \`FACTORY_MR\` IID.`;
 }
 
 // ---- GitHub API (browser → api.github.com, the token never leaves the page) ----
@@ -927,6 +1374,93 @@ async function gitlabRequest<T>(
   return res.json() as Promise<T>;
 }
 
+async function readGitlabRepositoryFile(
+  token: string,
+  project: string,
+  baseUrl: string,
+  path: string,
+  ref: string,
+): Promise<{ content: string; lastCommitId: string } | null> {
+  let file: { content?: string; encoding?: string; last_commit_id?: string };
+  try {
+    file = await gitlabRequest(token, baseUrl,
+      `/projects/${project}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(ref)}`);
+  } catch (error) {
+    if ((error as Error).message.startsWith('GitLab 404 ')) return null;
+    throw error;
+  }
+  if (file.encoding !== 'base64' || typeof file.content !== 'string' || !file.last_commit_id) {
+    throw new Error(`GitLab did not return base64 content and a last commit ID for ${path}.`);
+  }
+  try {
+    return {
+      content: new TextDecoder('utf-8', { fatal: true }).decode(
+        Uint8Array.from(atob(file.content.replace(/\s/g, '')), (char) => char.charCodeAt(0)),
+      ),
+      lastCommitId: file.last_commit_id,
+    };
+  } catch (error) {
+    throw new Error(`GitLab returned invalid UTF-8 or base64 content for ${path}: ${(error as Error).message}`);
+  }
+}
+
+/** Reads the actual project CI file and resolves its included configuration on the target branch. */
+export async function inspectGitlabCi(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  ref: string,
+): Promise<GitlabCiSnapshot> {
+  const project = gitlabProjectPath(repo);
+  const info = await gitlabRequest<{ default_branch: string; ci_config_path?: string | null }>(
+    token, baseUrl, `/projects/${project}`,
+  );
+  const path = info.ci_config_path?.trim() || '.gitlab-ci.yml';
+  if (!/^[\w./-]+$/.test(path) || path.startsWith('/') || path.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('GitLab factory setup requires a local project CI configuration path; external or invalid CI configuration paths are not supported.');
+  }
+  if (GITLAB_MANAGED_FILES.has(path)) {
+    throw new Error(`The GitLab project CI configuration path ${path} conflicts with a factory-managed file.`);
+  }
+  if (!info.default_branch) throw new Error('GitLab did not provide a default branch for CI inspection.');
+  const branch = ref || info.default_branch;
+  if (branch !== info.default_branch) {
+    throw new Error(`The GitLab factory requires the project default branch (${info.default_branch}); its scan and teammate dispatches run on that branch.`);
+  }
+  const branchInfo = await gitlabRequest<{ commit?: { id?: string } }>(
+    token, baseUrl, `/projects/${project}/repository/branches/${encodeURIComponent(branch)}`,
+  );
+  const revision = branchInfo.commit?.id;
+  if (!revision || !/^[0-9a-f]{40,64}$/i.test(revision)) {
+    throw new Error(`GitLab did not provide a valid commit ID for branch ${branch}.`);
+  }
+  const [ciFile, qualityFile, teammateFile] = await Promise.all([
+    readGitlabRepositoryFile(token, project, baseUrl, path, revision),
+    readGitlabRepositoryFile(token, project, baseUrl, GITLAB_QUALITY_FILE, revision),
+    readGitlabRepositoryFile(token, project, baseUrl, 'ai-teammate.yml', revision),
+  ]);
+  const content = ciFile?.content ?? null;
+  let mergedYaml: string | null = null;
+  if (content !== null) {
+    const lint = await gitlabRequest<{ valid: boolean; errors?: string[]; merged_yaml?: string }>(
+      token, baseUrl, `/projects/${project}/ci/lint?content_ref=${encodeURIComponent(revision)}`,
+    );
+    if (!lint.valid) throw new Error(`Existing GitLab CI configuration is invalid: ${(lint.errors ?? []).join('; ') || 'CI lint failed'}`);
+    if (!lint.merged_yaml) throw new Error('GitLab CI lint did not return the merged configuration.');
+    mergedYaml = lint.merged_yaml;
+  }
+  const fileVersions: Record<string, string> = {};
+  if (ciFile) fileVersions[path] = ciFile.lastCommitId;
+  if (qualityFile) fileVersions[GITLAB_QUALITY_FILE] = qualityFile.lastCommitId;
+  if (teammateFile) fileVersions['ai-teammate.yml'] = teammateFile.lastCommitId;
+  return {
+    repo, baseUrl: normalizeGitlabBaseUrl(baseUrl), path, ref: branch, revision, content, mergedYaml,
+    qualityContent: qualityFile?.content ?? null,
+    teammateContent: teammateFile?.content ?? null,
+    fileVersions,
+  };
+}
+
 /** Fetches all existing label names on a GitLab project. */
 export async function listGitlabLabels(token: string, repo: string, baseUrl: string): Promise<string[]> {
   const project = gitlabProjectPath(repo);
@@ -1070,7 +1604,8 @@ export async function ensureGitlabIssueEventWebhook(
 ): Promise<void> {
   const project = gitlabProjectPath(repo);
   const existingTriggers = await listGitlabIssueWebhookTriggers(token, project, baseUrl);
-  const reusableTrigger = existingTriggers.find((trigger) => trigger.token);
+  // GitLab only returns the first four characters of another user's trigger token.
+  const reusableTrigger = existingTriggers.find((trigger) => trigger.token && trigger.token.length > 4);
   const trigger = reusableTrigger?.token
     ? reusableTrigger
     : await gitlabRequest<{ id: number; token: string; description: string }>(
@@ -1083,7 +1618,7 @@ export async function ensureGitlabIssueEventWebhook(
           body: new URLSearchParams({ description: GITLAB_ISSUE_WEBHOOK_TRIGGER_DESCRIPTION }),
         },
       );
-  if (!trigger.token) {
+  if (!trigger.token || trigger.token.length <= 4) {
     throw new Error('GitLab did not return the factory webhook trigger token. Try setup again.');
   }
 
@@ -1106,6 +1641,7 @@ export async function ensureGitlabIssueEventWebhook(
       body: JSON.stringify({
         url: triggerUrl.toString(),
         issues_events: true,
+        merge_requests_events: true,
         push_events: false,
         enable_ssl_verification: true,
       }),
@@ -1124,6 +1660,62 @@ export async function ensureGitlabIssueEventWebhook(
     }
   }
   log(`GitLab Issue-event webhook ${currentHook ? 'updated' : 'created'} for ${ref}`);
+}
+
+export async function ensureGitlabFactorySchedule(
+  token: string,
+  repo: string,
+  baseUrl: string,
+  ref: string,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  const project = gitlabProjectPath(repo);
+  const description = 'DMTools factory reconciliation';
+  const schedules: { id: number; description: string; owner?: { id?: number } }[] = [];
+  for (let page = 1; ; page++) {
+    const batch = await gitlabRequest<{ id: number; description: string; owner?: { id?: number } }[]>(
+      token, baseUrl, `/projects/${project}/pipeline_schedules?per_page=100&page=${page}`,
+    );
+    schedules.push(...batch);
+    if (batch.length < 100) break;
+  }
+  const managed = schedules.filter((schedule) => schedule.description === description);
+  const schedule = managed[0];
+  if (schedule) {
+    const me = await gitlabRequest<{ id: number }>(token, baseUrl, '/user');
+    // GitLab lets only the schedule owner edit it or see its variables, and scheduled runs execute as the owner.
+    if (schedule.owner?.id !== me.id) {
+      await gitlabRequest(token, baseUrl, `/projects/${project}/pipeline_schedules/${schedule.id}/take_ownership`, { method: 'POST' });
+      log('Took ownership of the GitLab factory reconciliation schedule so setup can update it');
+    }
+  }
+  const saved = await gitlabRequest<{ id: number }>(token, baseUrl, `/projects/${project}/pipeline_schedules${schedule ? `/${schedule.id}` : ''}`, {
+    method: schedule ? 'PUT' : 'POST',
+    body: JSON.stringify({ description, ref, cron: '*/10 * * * *', cron_timezone: 'UTC', active: true }),
+  });
+  const scheduleId = saved.id ?? schedule?.id;
+  if (!Number.isInteger(scheduleId)) throw new Error('GitLab did not return the factory schedule ID.');
+  const details = await gitlabRequest<{ variables?: { key: string; value: string; variable_type?: string }[] }>(
+    token, baseUrl, `/projects/${project}/pipeline_schedules/${scheduleId}`,
+  );
+  if (!Array.isArray(details.variables)) throw new Error('GitLab did not return the factory schedule variables.');
+  const marker = details.variables.find((variable) => variable.key === GITLAB_SCHEDULE_VARIABLE);
+  if (marker?.value !== 'true' || marker.variable_type === 'file') {
+    await gitlabRequest(token, baseUrl,
+      `/projects/${project}/pipeline_schedules/${scheduleId}/variables${marker ? `/${GITLAB_SCHEDULE_VARIABLE}` : ''}`,
+      {
+        method: marker ? 'PUT' : 'POST',
+        body: JSON.stringify(marker
+          ? { value: 'true', variable_type: 'env_var' }
+          : { key: GITLAB_SCHEDULE_VARIABLE, value: 'true', variable_type: 'env_var' }),
+      },
+    );
+  }
+  for (const duplicate of managed.slice(1)) {
+    await gitlabRequest(token, baseUrl, `/projects/${project}/pipeline_schedules/${duplicate.id}`, { method: 'DELETE' });
+  }
+  log(`GitLab factory reconciliation schedule ${schedule ? 'updated' : 'created'} for ${ref} (every 10 minutes)`);
+  await removeGitlabIssueEventWebhook(token, repo, baseUrl, log);
 }
 
 /** Removes the factory-managed GitLab Issue-event webhook and its trigger token. */
@@ -1201,22 +1793,27 @@ export async function putGitlabVariables(
   }
 }
 
-/** Creates a GitLab branch, commits generated GitLab setup files, and opens a merge request. */
+/** Creates the GitLab machine-SM and teammate setup MR without replacing existing runner configuration. */
 export async function createGitlabMergeRequest(
   token: string,
   repo: string,
   baseUrl: string,
   c: FactoryConfig,
   log: (message: string) => void = () => {},
-  templates?: GitlabTemplates,
 ): Promise<string> {
-  const files = renderGitlabFiles(c, templates ?? await loadGitlabTemplates(), baseUrl);
+  if (c.repo !== repo) throw new Error('The GitLab project does not match the factory configuration.');
+  const errors = validate(c, 'gitlab');
+  if (Object.keys(errors).length) throw new Error(`Invalid GitLab factory configuration: ${Object.values(errors).join('; ')}`);
   const project = gitlabProjectPath(repo);
-  const projectInfo = await gitlabRequest<{ default_branch: string }>(token, baseUrl, `/projects/${project}`);
-  const base = c.baseBranch || projectInfo.default_branch;
+  const snapshot = await inspectGitlabCi(token, repo, baseUrl, c.baseBranch);
+  if (isCiEnabled(c) && (!c.qualityPreset || c.qualityPreset === 'none') && snapshot.content === null) {
+    throw new Error(`No existing GitLab CI configuration was found at ${snapshot.path}. Generate a quality gate or choose no generated gate.`);
+  }
+  const files = renderGitlabMachineSmFiles(c, baseUrl, snapshot);
+  const base = snapshot.ref;
   const fileExists = async (path: string) => {
     try {
-      await gitlabRequest(token, baseUrl, `/projects/${project}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(base)}`);
+      await gitlabRequest(token, baseUrl, `/projects/${project}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(snapshot.revision)}`);
       return true;
     } catch (error) {
       if ((error as Error).message.startsWith('GitLab 404 ')) return false;
@@ -1224,16 +1821,29 @@ export async function createGitlabMergeRequest(
     }
   };
   const existing = await Promise.all(files.map((file) => fileExists(file.path)));
+  for (const [index, file] of files.entries()) {
+    if (file.path === snapshot.path || file.path === 'ai-teammate.yml' || file.path === GITLAB_QUALITY_FILE) {
+      if (existing[index] !== Boolean(snapshot.fileVersions[file.path])) {
+        throw new Error(`${file.path} changed during GitLab CI inspection; retry setup.`);
+      }
+    }
+  }
+  const preservedRunnerFiles = files.filter((file, index) =>
+    file.path !== snapshot.path && file.path.startsWith('.dmtools/') && existing[index]);
   const branch = `chore/dmtools-factory-${Date.now().toString(36)}`;
   await gitlabRequest(token, baseUrl, `/projects/${project}/repository/branches`, {
     method: 'POST',
-    body: JSON.stringify({ branch, ref: base }),
+    body: JSON.stringify({ branch, ref: snapshot.revision }),
   });
-  const actions = files.map((file, index) => ({
-    action: existing[index] ? 'update' : 'create',
-    file_path: file.path,
-    content: file.content,
-  }));
+  const actions = files
+    .map((file, index) => ({ file, index }))
+    .filter(({ file, index }) => file.path === snapshot.path || !file.path.startsWith('.dmtools/') || !existing[index])
+    .map(({ file, index }) => ({
+      action: existing[index] ? 'update' : 'create',
+      file_path: file.path,
+      content: file.content,
+      ...(snapshot.fileVersions[file.path] ? { last_commit_id: snapshot.fileVersions[file.path] } : {}),
+    }));
   await gitlabRequest(token, baseUrl, `/projects/${project}/repository/commits`, {
     method: 'POST',
     body: JSON.stringify({
@@ -1242,14 +1852,20 @@ export async function createGitlabMergeRequest(
       actions,
     }),
   });
-  log(`committed ${files.length} GitLab setup files to ${branch}`);
+  log(`committed ${actions.length} GitLab setup files to ${branch}`);
+  if (preservedRunnerFiles.length) {
+    log(`preserved existing runner configuration files: ${preservedRunnerFiles.map((file) => file.path).join(', ')}`);
+  }
+  const runnerConfigNote = preservedRunnerFiles.length
+    ? `\n\nExisting runner configuration files were preserved and not overwritten: ${preservedRunnerFiles.map((file) => `\`${file.path}\``).join(', ')}. Verify that \`.dmtools/config.js\` points to GitLab-compatible runner files before running the pipeline.`
+    : '';
   const mr = await gitlabRequest<{ web_url: string }>(token, baseUrl, `/projects/${project}/merge_requests`, {
     method: 'POST',
     body: JSON.stringify({
       source_branch: branch,
       target_branch: base,
       title: 'chore: set up DMTools for GitLab',
-      description: `Sets up the DMTools factory for \`${repo}\` using native GitLab CI.\n\nWorkflow templates are rendered during setup from \`${GITLAB_WORKFLOW_SOURCE.repository}@${GITLAB_WORKFLOW_SOURCE.ref}\` (\`gitlab/\`). The generated files are committed here; they are not fetched at pipeline runtime.\n\nAfter merging this request, a GitLab Issue-event webhook triggers the poller pipeline for Issue events. The poller filters for open issues assigned to the configured AI teammate or labeled with \`agent:dev\`, \`agent:review\`, or \`agent:rework\`. You can also run an agent manually from **Build > Pipelines** by setting \`DMTOOLS_TICKET_ID\` and \`DMTOOLS_AGENT_CONFIG\`. Merge-request pipelines can run the review or rework agent when the corresponding label is present, and approved merge requests by \`${c.machine}\` are merged after the pipeline succeeds.\n\nThe poller requires the \`GITLAB_TOKEN\` project CI/CD variable created by this setup.`,
+      description: `${gitlabPrBody(c, snapshot.path)}${runnerConfigNote}`,
       remove_source_branch: true,
     }),
   });
@@ -1397,23 +2013,43 @@ export function requiredSecrets(
   gitlabBaseUrl = 'https://gitlab.com',
 ): { name: string; hint: string; url?: string; multiline?: boolean }[] {
   const out: { name: string; hint: string; url?: string; multiline?: boolean }[] = scm === 'gitlab'
-    ? [{
-        name: 'GITLAB_TOKEN',
-        hint: `GitLab personal access token for ${c.machine || 'the AI teammate account'} with api and write_repository scopes. ` +
-          `Its user must have Developer or higher access to ${c.repo}.`,
+    ? (c.gitlabMultipleTeammates
+      ? [
+          { name: 'GITLAB_DEV_TOKEN', account: c.gitlabDev, role: 'Development and rework.' },
+          { name: 'GITLAB_REVIEWER_TOKEN', account: c.gitlabReviewer, role: 'Code review; approves MRs for the merge bot.' },
+        ]
+      : [{ name: 'GITLAB_TOKEN', account: c.machine || 'the AI teammate account', role: '' }]
+    ).map(({ name, account, role }) => ({
+        name,
+        hint: `GitLab personal access token for ${account} with api and write_repository scopes. ` +
+          `Its user must have Developer or higher access to ${c.repo}. ${role}`,
         url: TOKEN_LINKS.setupGitlab(gitlabBaseUrl),
-      }]
+      }))
     : [{
         name: 'SOURCE_GITHUB_TOKEN',
         hint: `Classic PAT created while logged in as ${c.machine || 'the AI teammate account'} — scopes repo + workflow (workflow lets agents edit .github/workflows). The account needs write access to the repository.`,
         url: TOKEN_LINKS.agent,
       }];
+  if (scm === 'gitlab') {
+    out.push({
+      name: 'SOURCE_GITHUB_TOKEN',
+      hint: 'GitHub token used by GitHub CLI to resolve and download DMTools and agent-pack releases; it needs read access to those release repositories.',
+      url: TOKEN_LINKS.githubTokens,
+    });
+  }
   const seen = new Set<string>();
   for (const e of allEntries(c)) {
     if (seen.has(e.keyEnv)) continue;
     seen.add(e.keyEnv);
     const p = PROVIDER_PRESETS.find((x) => x.id === e.preset)!;
     out.push({ name: e.keyEnv, hint: `${p.label}: ${p.keyHelp}`, url: p.keyUrl });
+  }
+  if (scm === 'gitlab' && c.merge.mode === 'token') {
+    out.push({
+      name: c.merge.tokenSecret,
+      hint: `GitLab project/group access token (bot) or personal access token of the merge account with the api scope. It must be allowed to merge into the protected default branch.`,
+      url: TOKEN_LINKS.setupGitlab(gitlabBaseUrl),
+    });
   }
   if (scm === 'github' && c.merge.mode === 'token') out.push({ name: c.merge.tokenSecret, hint: 'Classic PAT of the merge account — repo scope; the account must be allowed to merge into the protected branch.', url: TOKEN_LINKS.merge });
   if (scm === 'github' && c.merge.mode === 'app') {
@@ -1446,6 +2082,7 @@ export const TOKEN_LINKS = {
   setup: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20setup',
   setupGitlab: (baseUrl = 'https://gitlab.com') =>
     `${normalizeGitlabBaseUrl(baseUrl)}/-/user_settings/personal_access_tokens`,
+  githubTokens: 'https://github.com/settings/tokens',
   /** SOURCE_GITHUB_TOKEN of the AI teammate: push branches incl. workflow edits, labels, PRs, issues, dispatch. */
   agent: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=DMTools%20factory%20agent',
   /** Separate merge PAT: merge PRs + labels. */

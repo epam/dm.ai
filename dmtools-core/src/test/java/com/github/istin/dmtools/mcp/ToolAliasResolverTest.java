@@ -87,6 +87,21 @@ class ToolAliasResolverTest {
     }
 
     @Test
+    @DisplayName("tracker_get_ticket routes to GitLab when DEFAULT_TRACKER=gitlab")
+    void testRoutesToGitlabViaDefaultTracker() {
+        defaultTracker("gitlab");
+        assertEquals("gitlab_get_issue", ToolAliasResolver.resolve("tracker_get_ticket", null, new PropertyReader()));
+    }
+
+    @Test
+    @DisplayName("tracker_add_label routes to GitLab when DEFAULT_TRACKER=gitlab")
+    void testTrackerAddLabelRoutesToGitlabViaDefaultTracker() {
+        defaultTracker("gitlab");
+        assertEquals("gitlab_add_issue_label",
+                ToolAliasResolver.resolve("tracker_add_label", null, new PropertyReader()));
+    }
+
+    @Test
     @DisplayName("DEFAULT_TRACKER value is case-insensitive and trimmed")
     void testDefaultTrackerCaseInsensitive() {
         defaultTracker("  ADO  ");
@@ -117,6 +132,24 @@ class ToolAliasResolverTest {
     void testGhPrefixCaseInsensitive() {
         assertEquals("github_get_issue",
                 ToolAliasResolver.resolve("tracker_get_ticket", "GH-42", new PropertyReader()));
+    }
+
+    @Test
+    @DisplayName("gl-prefixed key routes to GitLab even when DEFAULT_TRACKER=jira")
+    void testGlPrefixKeyBeatsDefaultTracker() {
+        defaultTracker("jira");
+        assertEquals("gitlab_get_issue",
+                ToolAliasResolver.resolve("tracker_get_ticket", "gl-2", new PropertyReader()));
+        assertEquals("gitlab_add_issue_label",
+                ToolAliasResolver.resolve("tracker_add_label", "gl-2", new PropertyReader()));
+    }
+
+    @Test
+    @DisplayName("Multi-segment composite group/sub/project#N key routes to GitLab")
+    void testMultiSegmentCompositeKeyRoutesToGitlab() {
+        defaultTracker("jira");
+        assertEquals("gitlab_get_issue",
+                ToolAliasResolver.resolve("tracker_get_ticket", "group/subgroup/project#42", new PropertyReader()));
     }
 
     @Test
@@ -156,7 +189,7 @@ class ToolAliasResolverTest {
         noDefaultTracker();
         String resolved = ToolAliasResolver.resolve("tracker_get_ticket", null, new PropertyReader());
         assertTrue(
-                java.util.Set.of("jira_get_ticket", "ado_get_work_item", "github_get_issue").contains(resolved),
+                java.util.Set.of("jira_get_ticket", "ado_get_work_item", "github_get_issue", "gitlab_get_issue").contains(resolved),
                 "fallback must be a registered tracker_get_ticket candidate, got: " + resolved);
     }
 
@@ -166,7 +199,7 @@ class ToolAliasResolverTest {
         defaultTracker("nonexistent");
         String resolved = ToolAliasResolver.resolve("tracker_get_ticket", null, new PropertyReader());
         assertTrue(
-                java.util.Set.of("jira_get_ticket", "ado_get_work_item", "github_get_issue").contains(resolved),
+                java.util.Set.of("jira_get_ticket", "ado_get_work_item", "github_get_issue", "gitlab_get_issue").contains(resolved),
                 "fallback must be a registered tracker_get_ticket candidate, got: " + resolved);
     }
 
