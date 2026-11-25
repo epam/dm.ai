@@ -514,6 +514,61 @@ function generateXrayTests(storyKey) {
 }
 ```
 
+## 🧜 Mermaid Index Snapshot Lookup
+
+For repositories with large `existingTestCasesJql` result sets, you can pre-build compact Mermaid-diagram snapshots of the existing test cases and store them in a separate directory or repository. `TestCasesGenerator` will then use those snapshots instead of full ticket text during the relevant-test-case search, significantly reducing token usage.
+
+### How it works
+
+1. Run `mermaid_index_generate` (or the equivalent job) against the same JQL that produces your existing test cases.
+2. Point `TestCasesGenerator` at the snapshot root with `mermaidIndexStoragePath`.
+3. During the relevant-test search, each existing test case is represented by its Mermaid snapshot if one exists; otherwise the full ticket text is used.
+4. Verification (`RelatedTestCaseAgent`) and generation (`TestCaseGeneratorAgent`) keep using the full ticket text by default. Set `useMermaidSnapshotForGeneration` to `true` to use snapshots for generation as well.
+
+### Snapshot directory layout
+
+The layout must match the output produced by `MermaidIndex` for Jira/Xray:
+
+```
+{mermaidIndexStoragePath}/
+  jira_xray/
+    {projectKey}/
+      {ticketKey}/
+        {title}.mmd
+```
+
+Example: `snapshots/jira_xray/PROJ/PROJ-123/Login test.mmd`.
+
+### Configuration
+
+```json
+{
+  "name": "TestCasesGenerator",
+  "params": {
+    "inputJql": "key in (PROJ-123)",
+    "outputType": "creation",
+    "existingTestCasesJql": "project = PROJ AND issuetype = Test",
+    "mermaidIndexStoragePath": "./mermaid-snapshots",
+    "mermaidIndexIntegration": "jira_xray",
+    "useMermaidSnapshotForGeneration": false,
+    "isFindRelated": true,
+    "isGenerateNew": true
+  }
+}
+```
+
+### Generating snapshots
+
+```bash
+# Generate snapshots for the same JQL used by TestCasesGenerator
+dmtools mermaid_index_generate \
+  --integration jira_xray \
+  --storage_path ./mermaid-snapshots \
+  --include_patterns "project = PROJ AND issuetype = Test"
+```
+
+Or run it as a job and commit `./mermaid-snapshots` to a separate repository that your CI checks out next to the main workspace.
+
 ## 🐛 Troubleshooting
 
 ### Custom Fields Not Found
