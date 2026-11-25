@@ -43,29 +43,65 @@ public class AIResponseParserTest extends TestCase {
         assertEquals("This test case needs to be deprecated once this story is delivered.", result.explanation);
     }
 
-    public void testParseBooleanWithExplanation_ThrowsOnInvalidInput() {
-        try {
-            AIResponseParser.parseBooleanWithExplanation("maybe");
-            fail("Expected IllegalArgumentException");
-        } catch (IllegalArgumentException e) {
-            // expected
-        }
+    public void testParseBooleanWithExplanation_ReturnsFalseOnInvalidInput() {
+        AIResponseParser.BooleanWithExplanation result = AIResponseParser.parseBooleanWithExplanation("maybe");
+        assertFalse(result.value);
+        assertNull(result.explanation);
+
+        AIResponseParser.BooleanWithExplanation emptyResult = AIResponseParser.parseBooleanWithExplanation("   ");
+        assertFalse(emptyResult.value);
+        assertNull(emptyResult.explanation);
+
+        AIResponseParser.BooleanWithExplanation nullResult = AIResponseParser.parseBooleanWithExplanation(null);
+        assertFalse(nullResult.value);
+        assertNull(nullResult.explanation);
+    }
+
+    public void testParseBooleanWithExplanation_MarkdownFormatting() {
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("**false**").value);
+        assertTrue(AIResponseParser.parseBooleanWithExplanation("__true__").value);
+        assertTrue(AIResponseParser.parseBooleanWithExplanation("_true_").value);
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("_false_").value);
+        assertTrue(AIResponseParser.parseBooleanResponse("__true__"));
+        assertFalse(AIResponseParser.parseBooleanResponse("__false__"));
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("*false*").value);
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("__false__").value);
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("`false`").value);
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("\"false\"").value);
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("false.").value);
+        assertFalse(AIResponseParser.parseBooleanWithExplanation("```\nfalse\n```").value);
+
+        AIResponseParser.BooleanWithExplanation boldTrue = AIResponseParser.parseBooleanWithExplanation(
+                "**true**, because it validates the login flow");
+        assertTrue(boldTrue.value);
+        assertEquals("because it validates the login flow", boldTrue.explanation);
+
+        AIResponseParser.BooleanWithExplanation codeTrue = AIResponseParser.parseBooleanWithExplanation(
+                "`true`, covers the same authentication scenario");
+        assertTrue(codeTrue.value);
+        assertEquals("covers the same authentication scenario", codeTrue.explanation);
+
+        AIResponseParser.BooleanWithExplanation multilineTrue = AIResponseParser.parseBooleanWithExplanation(
+                "**True**\nBecause the story modifies the same endpoint.");
+        assertTrue(multilineTrue.value);
+        assertEquals("Because the story modifies the same endpoint.", multilineTrue.explanation);
+
+        AIResponseParser.BooleanWithExplanation fencedTrue = AIResponseParser.parseBooleanWithExplanation(
+                "```text\ntrue, related to password reset\n```");
+        assertTrue(fencedTrue.value);
+        assertEquals("related to password reset", fencedTrue.explanation);
     }
 
     public void testParseBooleanResponse() {
-        try {
-            assertTrue(AIResponseParser.parseBooleanResponse("... true ..."));
-            assertFalse(AIResponseParser.parseBooleanResponse("... false ..."));
-
-            try {
-                AIResponseParser.parseBooleanResponse("... invalid ...");
-                fail("Expected IllegalArgumentException for invalid boolean");
-            } catch (IllegalArgumentException e) {
-                // Expected exception
-            }
-        } catch (Exception e) {
-            fail("Exception should not be thrown: " + e.getMessage());
-        }
+        assertTrue(AIResponseParser.parseBooleanResponse("... true ..."));
+        assertFalse(AIResponseParser.parseBooleanResponse("... false ..."));
+        assertTrue(AIResponseParser.parseBooleanResponse("**true**"));
+        assertFalse(AIResponseParser.parseBooleanResponse("**false**"));
+        assertTrue(AIResponseParser.parseBooleanResponse("`true`"));
+        assertFalse(AIResponseParser.parseBooleanResponse("`false`"));
+        assertFalse(AIResponseParser.parseBooleanResponse("... invalid ..."));
+        assertFalse(AIResponseParser.parseBooleanResponse(""));
+        assertFalse(AIResponseParser.parseBooleanResponse(null));
     }
 
     public void testParseCodeResponseVariations() {
