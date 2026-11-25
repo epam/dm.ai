@@ -91,4 +91,12 @@ public class RelatedTestCaseAgentTest extends BaseAgentTest<RelatedTestCaseAgent
         assertFalse(result.isRelated());
         assertNull(result.getExplanation());
     }
+
+    @Test
+    void testTransformAIResponse_MarkdownAndUnparseable() throws Exception {
+        RelatedTestCaseAgent.Params params = createTestParams();
+        assertFalse(agent.transformAIResponse(params, "**false**").isRelated());
+        assertTrue(agent.transformAIResponse(params, "`true`, related").isRelated());
+        assertFalse(agent.transformAIResponse(params, "maybe").isRelated());
+    }
 }

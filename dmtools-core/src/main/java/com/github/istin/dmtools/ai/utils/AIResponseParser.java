@@ -3,6 +3,8 @@
 
 package com.github.istin.dmtools.ai.utils;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -14,6 +16,18 @@ import java.util.regex.Pattern;
 
 public class AIResponseParser {
 
+    private static final Logger logger = LogManager.getLogger(AIResponseParser.class);
+
+    private static final Pattern BOOLEAN_WITH_EXPLANATION_PATTERN = Pattern.compile(
+            "^\\s*[*_`\"'\\[\\(>\\-\\s]*(true|false)(?![a-zA-Z0-9])[*_`\"'\\]\\)\\s.]*(?:[:,\\-\\s]\\s*(.*))?$",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+
+    private static final Pattern BOOLEAN_TOKEN_PATTERN = Pattern.compile(
+            "(?<![a-zA-Z0-9])(true|false)(?![a-zA-Z0-9])",
+            Pattern.CASE_INSENSITIVE
+    );
+
     public static class BooleanWithExplanation {
         public final boolean value;
         public final String explanation;
@@ -24,41 +38,82 @@ public class AIResponseParser {
         }
     }
 
-    public static BooleanWithExplanation parseBooleanWithExplanation(String response) throws IllegalArgumentException {
-        String trimmedResponse = response.trim();
-        Pattern pattern = Pattern.compile("^\\s*(true|false)\\b(?:\\s*,\\s*(.*))?$",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(trimmedResponse);
-
-        if (!matcher.find()) {
-            throw new IllegalArgumentException("No valid boolean value found in the response.");
-        }
-
-        String token = matcher.group(1).toLowerCase();
-        if ("true".equals(token)) {
-            String explanation = matcher.group(2) != null ? matcher.group(2).trim() : null;
-            return new BooleanWithExplanation(true, explanation != null && !explanation.isEmpty() ? explanation : null);
-        } else {
+    public static BooleanWithExplanation parseBooleanWithExplanation(String response) {
+        String trimmedResponse = stripCodeFence(response);
+        if (trimmedResponse.isEmpty()) {
+            logger.warn("No valid boolean value found in empty/null AI response; returning false.");
             return new BooleanWithExplanation(false, null);
         }
+        Matcher matcher = BOOLEAN_WITH_EXPLANATION_PATTERN.matcher(trimmedResponse);
+        if (matcher.find()) {
+            if ("true".equalsIgnoreCase(matcher.group(1))) {
+                String explanation = cleanExplanation(matcher.group(2));
+                return new BooleanWithExplanation(true, explanation);
+            } else {
+                return new BooleanWithExplanation(false, null);
+            }
+        }
+
+        Matcher fallbackMatcher = BOOLEAN_TOKEN_PATTERN.matcher(trimmedResponse);
+        if (fallbackMatcher.find()) {
+            if ("true".equalsIgnoreCase(fallbackMatcher.group(1))) {
+                String remainder = trimmedResponse.substring(fallbackMatcher.end());
+                String explanation = cleanExplanation(remainder.replaceFirst("^[*_`\"'\\]\\)\\s.,:\\-]+", ""));
+                return new BooleanWithExplanation(true, explanation);
+            } else {
+                return new BooleanWithExplanation(false, null);
+            }
+        }
+
+        logger.warn("No valid boolean value found in the AI response '{}'; returning false.", trimmedResponse);
+        return new BooleanWithExplanation(false, null);
     }
 
-    public static boolean parseBooleanResponse(String response) throws IllegalArgumentException {
-        // Convert response to lowercase to handle case insensitivity
-        String trimmedResponse = response.trim().toLowerCase();
+    private static String stripCodeFence(String response) {
+        if (response == null) {
+            return "";
+        }
+        String trimmed = response.trim();
+        if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
+            trimmed = cleanMarkdowns(trimmed);
+        }
+        return trimmed.trim();
+    }
 
-        // Find the first occurrence of "true" or "false"
-        int trueIndex = trimmedResponse.indexOf("true");
-        int falseIndex = trimmedResponse.indexOf("false");
+    private static String cleanExplanation(String rawExplanation) {
+        if (rawExplanation == null) {
+            return null;
+        }
+        String cleaned = rawExplanation.trim()
+                .replaceFirst("^[*_`\"'\\s]+", "")
+                .replaceFirst("[*_`\"'\\s]+$", "")
+                .trim();
+        return cleaned.isEmpty() ? null : cleaned;
+    }
 
-        // Determine which comes first
+    public static boolean parseBooleanResponse(String response) {
+        String trimmedResponse = stripCodeFence(response);
+        if (trimmedResponse.isEmpty()) {
+            logger.warn("No valid boolean value found in empty/null AI response; returning false.");
+            return false;
+        }
+
+        Matcher matcher = BOOLEAN_TOKEN_PATTERN.matcher(trimmedResponse);
+        if (matcher.find()) {
+            return "true".equalsIgnoreCase(matcher.group(1));
+        }
+
+        String lowerResponse = trimmedResponse.toLowerCase();
+        int trueIndex = lowerResponse.indexOf("true");
+        int falseIndex = lowerResponse.indexOf("false");
         if (trueIndex != -1 && (falseIndex == -1 || trueIndex < falseIndex)) {
             return true;
         } else if (falseIndex != -1) {
             return false;
-        } else {
-            throw new IllegalArgumentException("No valid boolean value found in the response.");
         }
+
+        logger.warn("No valid boolean value found in the AI response '{}'; returning false.", trimmedResponse);
+        return false;
     }
 
     public static JSONArray parseResponseAsJSONArray(String response) throws JSONException {
