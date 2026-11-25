@@ -122,7 +122,7 @@ public interface AI {
     class Utils {
 
         public static Boolean chatAsBoolean(AI ai, String model, String message) throws Exception {
-            return Boolean.parseBoolean(ai.chat(model, message));
+            return AIResponseParser.parseBooleanResponse(ai.chat(model, message));
         }
 
         public static JSONArray chatAsJSONArray(AI ai, String model, String message) throws Exception {
